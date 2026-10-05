@@ -15,6 +15,10 @@ Open ordinary work PRs into `develop`; keep one logical change per PR. Squash wo
 
 Promote `develop` into `staging`, then approved `staging` into `main`, through PRs merged with **Create a merge commit**. Preserve ancestry between permanent branches; do not squash or rebase promotions. CI runs for pushes and PRs on all three branches. Promotion does not deploy an environment.
 
+Strict checks require the PR head to include the latest target commit. After each `develop` to `staging` promotion, synchronize `staging` back into `develop` through a reviewed merge PR. After each `staging` to `main` promotion, synchronize `main` into `staging`, then `staging` into `develop`, through reviewed merge PRs. Use merge commits for every synchronization. A synchronization merge can itself leave histories diverged, so verify the PR head contains the latest target before every promotion or synchronization.
+
+Fetch `origin` before preparing any promotion or synchronization. A direct source-to-target PR is allowed only when the source already contains the latest target commit. Otherwise create a temporary branch from `origin/<target>`, such as `promote/staging-<version>` or `sync/<source>-to-<target>`, and run `git merge --no-ff origin/<source>` locally. Resolve conflicts, push the temporary branch, and open a PR into the target using **Create a merge commit**. Apply this procedure to routine synchronization too. Update the temporary PR head when its target advances, rerun required checks, and obtain the required independent code-owner approval. Never rewrite protected branch history.
+
 Create urgent production fixes from current `main` as `hotfix/<ticket>-<slug>`, then merge the reviewed PR into `main`. Immediately synchronize `main` into both `develop` and `staging` through separate PRs using merge commits, so the fix survives later promotions. The same required checks and review policy apply to hotfixes.
 
 ## Commits and PR titles
