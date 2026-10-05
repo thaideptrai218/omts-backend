@@ -1,5 +1,9 @@
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Omts.Api.Hosting;
 
@@ -17,9 +21,10 @@ public sealed class ConfigurationTests
     [InlineData("example.com:8080")]
     public async Task ProductionRequiresExplicitAllowedHosts(string hosts)
     {
-        await using var factory = new ApiFactory(new Dictionary<string, string?> { ["AllowedHosts"] = hosts });
-        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
+        await using WebApplication app = CreateStartupHost(new Dictionary<string, string?> { ["AllowedHosts"] = hosts });
+        OptionsValidationException exception = await Assert.ThrowsAsync<OptionsValidationException>(() => app.StartAsync());
         Assert.Contains("AllowedHosts", exception.Message);
+        Assert.False(app.Lifetime.ApplicationStarted.IsCancellationRequested);
     }
 
     [Theory]
@@ -40,9 +45,10 @@ public sealed class ConfigurationTests
     [InlineData("Hosting:RequestTimeoutSeconds", "301")]
     public async Task InvalidHostingLimitsFailStartup(string key, string value)
     {
-        await using var factory = new ApiFactory(new Dictionary<string, string?> { [key] = value });
-        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
+        await using WebApplication app = CreateStartupHost(new Dictionary<string, string?> { [key] = value });
+        OptionsValidationException exception = await Assert.ThrowsAsync<OptionsValidationException>(() => app.StartAsync());
         Assert.Contains(key, exception.Message);
+        Assert.False(app.Lifetime.ApplicationStarted.IsCancellationRequested);
     }
 
     [Fact]
@@ -74,7 +80,26 @@ public sealed class ConfigurationTests
             (await check.CheckHealthAsync(context)).Status);
     }
 
-    private sealed class TestLifetime : Microsoft.Extensions.Hosting.IHostApplicationLifetime, IDisposable
+    private static WebApplication CreateStartupHost(Dictionary<string, string?> configuration)
+    {
+        // Own startup and disposal directly so a failed entry point cannot dispose the host before its error is observed.
+        WebApplicationBuilder builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            ApplicationName = typeof(Program).Assembly.GetName().Name,
+            EnvironmentName = Environments.Production
+        });
+        builder.Configuration.Sources.Clear();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["AllowedHosts"] = "localhost"
+        });
+        builder.Configuration.AddInMemoryCollection(configuration);
+        builder.WebHost.UseTestServer();
+        builder.Services.AddPlatform(builder.Configuration, builder.Environment);
+        return builder.Build();
+    }
+
+    private sealed class TestLifetime : IHostApplicationLifetime, IDisposable
     {
         public CancellationTokenSource Started { get; } = new();
         private CancellationTokenSource Stopping { get; } = new();
