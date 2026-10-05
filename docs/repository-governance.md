@@ -16,7 +16,7 @@ Verified: 2026-10-05, using GitHub REST API through `gh`.
 
 The intended `main` policy is versioned in [.github/branch-protection-main.json](../.github/branch-protection-main.json): successful Quality/Container/PR-title checks, up-to-date branch, independent approval, code-owner review, dismissed stale reviews, final-push approval, resolved conversations, linear history, no force-pushes and no deletions. Admins are also subject to the policy.
 
-The owner selected public visibility after GitHub rejected private branch protection on the current account plan. The verified bootstrap PR is merged before applying this policy, since the sole initial owner cannot approve their own PR. Subsequent changes require an independent reviewer.
+The owner selected public visibility after GitHub rejected private branch protection on the current account plan. Verified bootstrap code and verification documentation are merged before applying this policy, since the sole initial owner cannot approve their own PR. Subsequent changes require an independent reviewer.
 
 Apply and verify the versioned policy:
 
@@ -25,7 +25,7 @@ gh api --method PUT repos/thaideptrai218/omts-backend/branches/main/protection -
 gh api repos/thaideptrai218/omts-backend/branches/main/protection
 ```
 
-Assign a second maintainer/reviewer for future changes. For an organization, use team-based CODEOWNERS and least privilege role assignments. Review emergency access and rule changes through an audited process.
+Assign a second maintainer and add them to CODEOWNERS for future changes authored by the initial owner. For an organization, use team-based CODEOWNERS and least privilege role assignments. Review emergency access and rule changes through an audited process.
 
 ## Security controls
 

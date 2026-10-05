@@ -3,7 +3,7 @@ title: OMTS backend production foundation
 description: >-
   Create a public GitHub repository and verified .NET 10 hosting and delivery
   foundation.
-status: in-progress
+status: completed
 priority: P2
 branch: ''
 tags: []
@@ -26,7 +26,7 @@ Deliver `thaideptrai218/omts-backend` with .NET 10 API, automated verification, 
 |-------|------|--------|
 | 1 | [Platform](./phase-01-platform.md) | Completed |
 | 2 | [Automation](./phase-02-automation.md) | Completed |
-| 3 | [Verification](./phase-03-verification.md) | In Progress |
+| 3 | [Verification](./phase-03-verification.md) | Completed |
 
 ## Dependencies
 
