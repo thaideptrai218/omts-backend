@@ -7,5 +7,5 @@ Read README.md and relevant docs before changing code. Follow docs/code-standard
 - Run locked restore, strict Release build, relevant tests and formatting. Fix failures without weakening checks.
 - Never commit secrets or production data. Do not log sensitive request bodies.
 - Update operational documentation when configuration, endpoints, delivery or runtime behavior changes.
-- Follow Conventional Commits and use PRs into main.
+- Follow Conventional Commits; use ordinary work PRs into develop and promotion PRs through staging into main.
 - Report verification results and unresolved decisions accurately. Do not describe an undeployed foundation as a complete production service.

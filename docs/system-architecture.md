@@ -18,6 +18,6 @@ Define persistence, transactions, concurrency, tenant isolation and migration st
 
 - .NET 10 LTS is the supported foundation; servicing versions are pinned and reviewed.
 - Public repository, selected by the owner to enable enforced branch protection; source ownership retained, no open-source license granted.
-- Trunk-based development with short-lived branches, squash PRs and Conventional Commits.
+- Protected `develop` (default integration), `staging` (UAT), and `main` (production) branches; short-lived work is squashed into `develop`, promotions preserve ancestry with merge commits, and all PR titles follow Conventional Commits.
 - Container publication is separate from deployment; infrastructure/provider remains a product decision.
 - Empty architectural layers and fabricated sample business data are excluded from the foundation.

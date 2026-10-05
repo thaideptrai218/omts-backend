@@ -2,7 +2,7 @@ name: PR conventions
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, develop, staging]
     types: [opened, edited, synchronize, reopened, ready_for_review]
 
 permissions: {}
