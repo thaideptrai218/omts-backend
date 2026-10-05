@@ -1,0 +1,29 @@
+name: Bug report
+description: Report incorrect backend behavior.
+title: 'fix: '
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Explain the incorrect result and what should happen.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include a minimal request and response, with sensitive data removed.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Commit or image digest
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Environment and evidence
+      description: Include environment, safe logs, and trace IDs. Report security issues through SECURITY.md.

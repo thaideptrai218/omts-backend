@@ -1,0 +1,138 @@
+name: Publish image
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+# Serialize releases so two dispatches cannot replace the same commit tag.
+concurrency:
+  group: publish-image
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify main CI
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      image: ${{ steps.verify.outputs.image }}
+    steps:
+      - name: Require successful push CI for this exact main commit
+        id: verify
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const branch = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+            if (branch.data.commit.sha !== context.sha) {
+              throw new Error('Main changed since dispatch. Dispatch again for the current main commit.');
+            }
+            const runs = await github.rest.actions.listWorkflowRuns({
+              owner, repo, workflow_id: 'ci.yml', branch: 'main',
+              event: 'push', head_sha: context.sha, per_page: 100
+            });
+            const latest = runs.data.workflow_runs
+              .filter(run => run.head_sha === context.sha && run.head_branch === 'main' && run.event === 'push')
+              .sort((a, b) => b.id - a.id)[0];
+            if (!latest || latest.status !== 'completed' || latest.conclusion !== 'success') {
+              throw new Error('The latest push CI run for this exact main commit must finish successfully before publication.');
+            }
+            core.setOutput('image', `ghcr.io/${owner}/${repo}`.toLowerCase());
+
+  publish:
+    name: Publish GHCR
+    needs: verify
+    if: github.ref == 'refs/heads/main' && needs.verify.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Refuse replacement of an existing commit tag
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const packageName = context.repo.repo.toLowerCase();
+            const ownerType = context.payload.repository.owner.type;
+            const route = ownerType === 'Organization'
+              ? 'GET /orgs/{owner}/packages/{package_type}/{package_name}/versions'
+              : 'GET /users/{owner}/packages/{package_type}/{package_name}/versions';
+            let versions;
+            try {
+              versions = await github.paginate(route, {
+                owner, package_type: 'container', package_name: packageName, per_page: 100
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              versions = []; // The first release has no package yet.
+            }
+            const tag = `sha-${context.sha}`;
+            if (versions.some(version => version.metadata?.container?.tags?.includes(tag))) {
+              throw new Error(`Commit tag ${tag} already exists; publication cannot replace it.`);
+            }
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push candidate image with provenance and SBOM
+        id: image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          pull: true
+          push: true
+          tags: ${{ needs.verify.outputs.image }}:candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          provenance: mode=max
+          sbom: true
+          labels: |
+            org.opencontainers.image.title=OMTS Backend
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=sha-${{ github.sha }}
+      - name: Pull the exact candidate digest
+        env:
+          IMAGE: ${{ needs.verify.outputs.image }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: docker pull "$IMAGE@$DIGEST"
+      - name: Smoke test the exact candidate digest
+        shell: pwsh
+        env:
+          IMAGE: ${{ needs.verify.outputs.image }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: ./scripts/smoke-container.ps1 -Image "$($env:IMAGE)@$($env:DIGEST)"
+      - name: Promote verified manifest and assert digest equality
+        shell: pwsh
+        env:
+          IMAGE: ${{ needs.verify.outputs.image }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          $tag = "$($env:IMAGE):sha-$($env:GITHUB_SHA)"
+          # A single source is copied intact, preserving provenance and SBOM manifests.
+          & docker buildx imagetools create --prefer-index=false --tag $tag "$($env:IMAGE)@$($env:DIGEST)"
+          if ($LASTEXITCODE -ne 0) { throw 'Manifest promotion failed.' }
+          $manifest = & docker buildx imagetools inspect $tag --format '{{json .Manifest}}'
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect promoted manifest.' }
+          $publishedDigest = ($manifest | ConvertFrom-Json).digest
+          if ($publishedDigest -ne $env:DIGEST) { throw 'Promoted image differs from the smoke-tested digest.' }
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Published verified image: $($env:IMAGE)@$publishedDigest"
+      - name: Record retained candidate
+        if: always() && steps.image.outcome == 'success'
+        env:
+          IMAGE: ${{ needs.verify.outputs.image }}
+          CANDIDATE: candidate-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          printf 'Candidate retained: `%s:%s`. Delete abandoned candidate-only GHCR versions after investigation; never delete a version carrying a `sha-` release tag.\n' "$IMAGE" "$CANDIDATE" >> "$GITHUB_STEP_SUMMARY"
