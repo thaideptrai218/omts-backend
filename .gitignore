@@ -1,0 +1,31 @@
+# Build and verification output
+**/bin/
+**/obj/
+artifacts/
+TestResults/
+**/TestResults/
+coverage/
+*.coverage
+*.coveragexml
+*.trx
+*.log
+
+# Editor and machine state
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.swp
+.DS_Store
+Thumbs.db
+
+# Credentials and private local configuration
+.env
+.env.*
+*.pfx
+*.p12
+*.pem
+*.key
+secrets.json
+appsettings.*.local.json

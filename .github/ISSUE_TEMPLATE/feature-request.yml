@@ -1,0 +1,23 @@
+name: Feature request
+description: Propose a backend capability with measurable acceptance criteria.
+title: 'feat: '
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and users
+      description: Describe the workflow and who needs it.
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Proposed behavior and acceptance criteria
+      description: Include API, authorization, persistence, and failure behavior when relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints and alternatives
+      description: Include compatibility, operations, security, and scope decisions.

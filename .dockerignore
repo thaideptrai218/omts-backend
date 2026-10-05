@@ -1,0 +1,20 @@
+# Allow only build inputs into the Docker context.
+*
+!Dockerfile
+!global.json
+!Directory.Build.props
+!Directory.Packages.props
+!nuget.config
+!src/
+!src/**
+**/bin/
+**/obj/
+**/.env
+**/.env.*
+**/*.user
+**/*.pfx
+**/*.p12
+**/*.pem
+**/*.key
+**/secrets.json
+**/appsettings.*.local.json

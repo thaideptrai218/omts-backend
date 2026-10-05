@@ -1,0 +1,23 @@
+name: PR conventions
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+jobs:
+  title:
+    name: Conventional PR title
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const title = context.payload.pull_request.title;
+            const pattern = /^(feat|fix|refactor|perf|test|build|ci|docs|chore|revert)(\([a-z0-9][a-z0-9./-]*\))?!?: \S[^\r\n]*$/;
+            if (!pattern.test(title)) {
+              core.setFailed('Use a conventional title, for example: feat(api): add order lookup or fix(api)!: change error contract.');
+            }
