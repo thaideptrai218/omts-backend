@@ -8,6 +8,7 @@ Use trunk-based development. `main` should always build and be releasable. Creat
 - `fix/<issue>-<description>`
 - `refactor/<description>`
 - `build/<description>`
+- `docs/<description>`
 - `hotfix/<issue>-<description>`
 
 Open a pull request; keep one logical change per PR. Rebase your branch when needed; never force-push `main`. Merge using squash after CI passes and review conversations are resolved. Delete merged branches. Apply urgent fixes through the same checks; define a documented incident exception if emergency bypass is needed.
@@ -16,7 +17,7 @@ Open a pull request; keep one logical change per PR. Rebase your branch when nee
 
 Use Conventional Commits: `type(scope): imperative description`.
 
-Supported types: `feat`, `fix`, `perf`, `refactor`, `test`, `build`, `ci`, `docs`, `chore`, `revert`. Examples:
+Supported types: `feat`, `fix`, `perf`, `refactor`, `test`, `build`, `ci`, `docs`, `style`, `chore`, `revert`. Examples:
 
 ```text
 feat(orders): validate order submission
