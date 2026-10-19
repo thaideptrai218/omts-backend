@@ -1051,7 +1051,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("StatusId");
 
-                    b.ToTable("FarmingZones");
+                    b.ToTable("FarmingZones", t =>
+                        {
+                            t.HasCheckConstraint("CK_FarmingZone_Coordinates", "([Latitude] IS NULL AND [Longitude] IS NULL) OR ([Latitude] BETWEEN -90 AND 90 AND [Longitude] BETWEEN -180 AND 180)");
+                        });
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.HarvestEvent", b =>
@@ -2194,9 +2197,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal?>("Latitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
                     b.Property<string>("Location")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
 
                     b.Property<string>("PhotoUrl")
                         .HasMaxLength(1000)
@@ -2231,7 +2242,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("ZoneId", "Code")
                         .IsUnique();
 
-                    b.ToTable("Rafts");
+                    b.ToTable("Rafts", t =>
+                        {
+                            t.HasCheckConstraint("CK_Raft_Coordinates", "([Latitude] IS NULL AND [Longitude] IS NULL) OR ([Latitude] BETWEEN -90 AND 90 AND [Longitude] BETWEEN -180 AND 180)");
+                        });
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.RaftLayoutVersion", b =>
