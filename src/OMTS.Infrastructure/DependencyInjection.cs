@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using OMTS.Application.Authentication;
+using OMTS.Application.Common.Interfaces;
+using OMTS.Infrastructure.Authentication;
 using OMTS.Infrastructure.Persistence;
 
 namespace OMTS.Infrastructure;
@@ -25,6 +28,11 @@ public static class DependencyInjection
 
             options.UseSqlServer(connectionString);
         });
+        services.AddScoped<IOmtsDbContext>(provider => provider.GetRequiredService<OmtsDbContext>());
+
+        services.AddOptions<JwtOptions>().Bind(configuration.GetSection(JwtOptions.SectionName));
+        services.AddSingleton<ITokenService, JwtTokenService>();
+        services.AddSingleton<IPasswordHasher, PasswordHasher>();
 
         return services;
     }
