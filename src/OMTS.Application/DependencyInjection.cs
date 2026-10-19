@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OMTS.Application.Common.Interfaces;
+using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
 
@@ -19,6 +20,8 @@ public static class DependencyInjection
         services.AddSingleton<PermissionCache>();
         services.AddSingleton<IPermissionCacheInvalidator>(provider => provider.GetRequiredService<PermissionCache>());
         services.AddScoped<PermissionService>();
+
+        services.AddScoped<AuditLogService>();
 
         return services;
     }

@@ -38,6 +38,7 @@ public static class DependencyInjection
         services.AddScoped<ILoginSessionRepository, LoginSessionRepository>();
         services.AddScoped<IAccessGrantRepository, AccessGrantRepository>();
         services.AddScoped<IFarmingZoneRepository, FarmingZoneRepository>();
+        services.AddScoped<IAuditEventRepository, AuditEventRepository>();
 
         services.AddOptions<JwtOptions>().Bind(configuration.GetSection(JwtOptions.SectionName));
         services.AddSingleton<ITokenService, JwtTokenService>();
