@@ -39,6 +39,17 @@ internal static class ConfigurationHelpers
         builder.ToTable(t => t.HasCheckConstraint($"CK_{typeof(T).Name}_{column}_Thousands", $"[{column}] % 1000 = 0"));
     }
 
+    /// <summary>Latitude/Longitude columns hold a valid WGS84 point, both set or both empty.</summary>
+    public static void HasCoordinateChecks<T>(this EntityTypeBuilder<T> builder)
+        where T : class
+    {
+        var table = typeof(T).Name;
+        builder.ToTable(t => t.HasCheckConstraint(
+            $"CK_{table}_Coordinates",
+            "([Latitude] IS NULL AND [Longitude] IS NULL) OR " +
+            "([Latitude] BETWEEN -90 AND 90 AND [Longitude] BETWEEN -180 AND 180)"));
+    }
+
     public static string ExactlyOneNotNull(params string[] columns) =>
         "(" + string.Join(" + ", columns.Select(c => $"CASE WHEN [{c}] IS NULL THEN 0 ELSE 1 END")) + ") = 1";
 }
