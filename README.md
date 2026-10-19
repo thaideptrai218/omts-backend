@@ -29,6 +29,8 @@ Prerequisites: .NET SDK 8.0 (pinned by `global.json`), SQL Server (LocalDB / Doc
 dotnet restore
 # Connection string is kept out of git via user-secrets:
 dotnet user-secrets set "ConnectionStrings:OmtsDb" "Server=localhost;Database=OMTS;User Id=sa;Password=<pwd>;TrustServerCertificate=True" --project src/OMTS.Api
+# JWT signing key (random, at least 32 bytes), e.g. from: openssl rand -base64 64
+dotnet user-secrets set "Jwt:SigningKey" "<random key>" --project src/OMTS.Api
 dotnet run --project src/OMTS.Api        # Swagger at /swagger, health at /health
 dotnet test                               # all tests
 ```
