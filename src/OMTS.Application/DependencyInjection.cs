@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OMTS.Application.Authentication;
+using OMTS.Application.Authorization;
 
 namespace OMTS.Application;
 
@@ -10,7 +11,13 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.TryAddSingleton(TimeProvider.System);
+        services.AddMemoryCache();
+
         services.AddScoped<AuthService>();
+
+        services.AddSingleton<PermissionCache>();
+        services.AddSingleton<IPermissionCacheInvalidator>(provider => provider.GetRequiredService<PermissionCache>());
+        services.AddScoped<PermissionService>();
 
         return services;
     }

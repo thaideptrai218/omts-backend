@@ -11,7 +11,10 @@ public interface IOmtsDbContext
 {
     DbSet<Account> Accounts { get; }
     DbSet<AccessGrant> AccessGrants { get; }
+    DbSet<Role> Roles { get; }
+    DbSet<RolePermission> RolePermissions { get; }
     DbSet<LoginSession> LoginSessions { get; }
+    DbSet<FarmingZone> FarmingZones { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
