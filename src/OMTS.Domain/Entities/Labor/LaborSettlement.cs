@@ -1,7 +1,9 @@
 using OMTS.Domain.Common;
-using OMTS.Domain.Statuses;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Entities.Platform;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Labor;
 
 /// <summary>
 /// E44 – Amount payable per person/contractor and period; finalizing is not paying. Becomes Fully Paid

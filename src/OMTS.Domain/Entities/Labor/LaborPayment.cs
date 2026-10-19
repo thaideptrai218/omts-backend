@@ -1,7 +1,7 @@
 using OMTS.Domain.Common;
 using OMTS.Domain.Enums;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Labor;
 
 /// <summary>
 /// E45 – Money actually paid by the cooperative; seasonal wages are paid to the contractor. A wrong

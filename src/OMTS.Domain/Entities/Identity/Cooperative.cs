@@ -1,7 +1,10 @@
 using OMTS.Domain.Common;
-using OMTS.Domain.Statuses;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Farming;
+using OMTS.Domain.Entities.Platform;
+using OMTS.Domain.Entities.Sales;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Identity;
 
 /// <summary>E01 – The party that owns zones, staff, orders and traceability data.</summary>
 public class Cooperative : AuditableEntity, IHasStatus

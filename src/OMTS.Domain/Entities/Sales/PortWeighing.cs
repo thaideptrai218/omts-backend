@@ -1,6 +1,6 @@
 using OMTS.Domain.Common;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Sales;
 
 /// <summary>
 /// E26 – Weight confirmed by the buyer at the port; the billable quantity of a delivery (BR-11).

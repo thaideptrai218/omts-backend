@@ -1,4 +1,4 @@
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Identity;
 
 /// <summary>Bank account the cooperative receives transfers on (owned by <see cref="Cooperative"/>).</summary>
 public class BankAccountInfo

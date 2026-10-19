@@ -1,7 +1,8 @@
 using OMTS.Domain.Common;
-using OMTS.Domain.Statuses;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Platform;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Cultivation;
 
 /// <summary>E13 – Seed catalog entry; not tied to one locality or supplier (BR-04).</summary>
 public class OysterSeedType : AuditableEntity, IHasStatus

@@ -1,6 +1,8 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Entities.AfterSales;
+using OMTS.Domain.Entities.Sales;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Finance;
 
 /// <summary>
 /// E36 – Credit from an approved discount, a return decision or an unallocated advance payment.

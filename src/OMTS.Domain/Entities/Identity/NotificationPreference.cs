@@ -1,6 +1,6 @@
 using OMTS.Domain.Enums;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Identity;
 
 /// <summary>One notification category/channel switch of an account (owned by <see cref="Account"/>).</summary>
 public class NotificationPreference

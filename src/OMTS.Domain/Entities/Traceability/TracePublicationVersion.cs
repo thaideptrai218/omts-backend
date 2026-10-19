@@ -1,7 +1,8 @@
 using OMTS.Domain.Common;
-using OMTS.Domain.Statuses;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Platform;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Traceability;
 
 /// <summary>
 /// E29 – Immutable public version of a lot's traceability record. A new version never overwrites an

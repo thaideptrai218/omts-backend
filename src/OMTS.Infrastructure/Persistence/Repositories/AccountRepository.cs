@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using OMTS.Application.Common.Persistence;
-using OMTS.Domain.Entities;
+using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Domain.Entities.Identity;
 
 namespace OMTS.Infrastructure.Persistence.Repositories;
 

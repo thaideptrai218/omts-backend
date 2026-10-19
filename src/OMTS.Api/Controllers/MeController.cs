@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using OMTS.Api.Authorization;
-using OMTS.Application.Authentication;
-using OMTS.Application.Authorization;
+using OMTS.Api.Filters;
+using OMTS.Application.Common.Constants;
 using OMTS.Application.Common.Interfaces;
+using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.Authorization.Dtos;
 
 namespace OMTS.Api.Controllers;
 

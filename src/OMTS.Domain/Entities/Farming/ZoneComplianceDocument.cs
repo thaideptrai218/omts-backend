@@ -1,6 +1,6 @@
 using OMTS.Domain.Common;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Farming;
 
 /// <summary>
 /// E08 – Legal document that may cover several zones. Renewal creates a new document pointing to the

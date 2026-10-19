@@ -1,6 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Domain.Common;
-using OMTS.Domain.Entities;
+using OMTS.Domain.Entities.AfterSales;
+using OMTS.Domain.Entities.Cultivation;
+using OMTS.Domain.Entities.Farming;
+using OMTS.Domain.Entities.Finance;
+using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Entities.Labor;
+using OMTS.Domain.Entities.Platform;
+using OMTS.Domain.Entities.Sales;
+using OMTS.Domain.Entities.Traceability;
 
 namespace OMTS.Infrastructure.Persistence;
 

@@ -1,6 +1,7 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Entities.Identity;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Platform;
 
 /// <summary>
 /// E46 – In-app notification. Unread while <see cref="ReadAt"/> is empty. The related record is a

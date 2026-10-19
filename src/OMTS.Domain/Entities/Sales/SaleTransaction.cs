@@ -1,6 +1,9 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Entities.AfterSales;
+using OMTS.Domain.Entities.Finance;
+using OMTS.Domain.Entities.Traceability;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Sales;
 
 /// <summary>
 /// E28 – Sale value finalized after weighing with the agreed price; at most one per order.
