@@ -1,5 +1,4 @@
-using Microsoft.EntityFrameworkCore;
-using OMTS.Application.Common.Interfaces;
+using OMTS.Application.Common.Persistence;
 using OMTS.Domain.Entities;
 using OMTS.Domain.Enums;
 using OMTS.Domain.Statuses;
@@ -8,23 +7,19 @@ namespace OMTS.Application.Authentication;
 
 /// <summary>Log in (UC02), refresh the session and log out (UC07); session rules from NFR-01.</summary>
 public sealed class AuthService(
-    IOmtsDbContext db,
+    IAccountRepository accounts,
+    ILoginSessionRepository sessions,
+    IAccessGrantRepository grants,
+    IUnitOfWork unitOfWork,
     IPasswordHasher passwordHasher,
     ITokenService tokenService,
     TimeProvider timeProvider)
 {
     public async Task<AuthResult> LoginAsync(LoginRequest request, ClientInfo client, CancellationToken cancellationToken)
     {
-        var identifier = request.Identifier.Trim();
         var now = timeProvider.GetUtcNow();
 
-        // Username, verified phone number or verified email (UC02 step 1).
-        var account = await db.Accounts.FirstOrDefaultAsync(
-            a => a.Username == identifier
-                || (a.PhoneNumber == identifier && a.PhoneVerifiedAt != null)
-                || (a.Email == identifier && a.EmailVerifiedAt != null),
-            cancellationToken);
-
+        var account = await accounts.FindByLoginIdentifierAsync(request.Identifier.Trim(), cancellationToken);
         if (account is null)
         {
             return AuthResult.Failure(AuthError.InvalidCredentials);
@@ -39,7 +34,7 @@ public sealed class AuthService(
         if (passwordCheck == PasswordCheck.Failed)
         {
             account.RegisterFailedLogin(now);
-            await db.SaveChangesAsync(cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
             return AuthResult.Failure(account.IsTemporarilyLocked(now) ? AuthError.TemporarilyLocked : AuthError.InvalidCredentials);
         }
 
@@ -75,8 +70,8 @@ public sealed class AuthService(
             UserAgent = client.UserAgent,
             IpAddress = client.IpAddress,
         };
-        db.LoginSessions.Add(session);
-        await db.SaveChangesAsync(cancellationToken);
+        sessions.Add(session);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return AuthResult.Success(BuildTokens(account, session, refreshToken));
     }
@@ -86,18 +81,15 @@ public sealed class AuthService(
         var now = timeProvider.GetUtcNow();
         var hash = tokenService.HashRefreshToken(request.RefreshToken);
 
-        var session = await db.LoginSessions
-            .Include(s => s.Account)
-            .FirstOrDefaultAsync(s => s.RefreshTokenHash == hash, cancellationToken);
-
+        var session = await sessions.GetByRefreshTokenHashAsync(hash, cancellationToken);
         if (session is null)
         {
             // A token that was already rotated is being replayed: treat it as stolen and end the session.
-            var replayed = await db.LoginSessions.FirstOrDefaultAsync(s => s.PreviousRefreshTokenHash == hash, cancellationToken);
+            var replayed = await sessions.GetByPreviousRefreshTokenHashAsync(hash, cancellationToken);
             if (replayed is not null)
             {
                 replayed.Revoke(now, "Refresh token reuse detected");
-                await db.SaveChangesAsync(cancellationToken);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
             }
 
             return AuthResult.Failure(AuthError.SessionExpired);
@@ -111,13 +103,13 @@ public sealed class AuthService(
         if (session.Account.StatusId != StatusIds.Account.Active || !await HasEffectiveAccessAsync(session.Account, now, cancellationToken))
         {
             session.Revoke(now, "Account no longer allowed to log in");
-            await db.SaveChangesAsync(cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
             return AuthResult.Failure(AuthError.AccessDenied);
         }
 
         var refreshToken = tokenService.CreateRefreshToken();
         session.Rotate(tokenService.HashRefreshToken(refreshToken), now, tokenService.GetSessionLifetime(session.ClientType).RefreshTokenLifetime);
-        await db.SaveChangesAsync(cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return AuthResult.Success(BuildTokens(session.Account, session, refreshToken));
     }
@@ -125,46 +117,26 @@ public sealed class AuthService(
     /// <summary>Revokes the current session (UC07); returns false when it no longer exists.</summary>
     public async Task<bool> LogoutAsync(Guid accountId, Guid sessionId, CancellationToken cancellationToken)
     {
-        var session = await db.LoginSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.AccountId == accountId, cancellationToken);
+        var session = await sessions.GetAsync(sessionId, accountId, cancellationToken);
         if (session is null)
         {
             return false;
         }
 
         session.Revoke(timeProvider.GetUtcNow(), "Logout");
-        await db.SaveChangesAsync(cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
         return true;
     }
 
     /// <summary>Checked on every authenticated request so revoked sessions cannot be reused (NFR-01).</summary>
-    public Task<bool> IsSessionActiveAsync(Guid accountId, Guid sessionId, CancellationToken cancellationToken)
-    {
-        var now = timeProvider.GetUtcNow();
-        return db.LoginSessions.AnyAsync(
-            s => s.Id == sessionId
-                && s.AccountId == accountId
-                && s.RevokedAt == null
-                && s.AbsoluteExpiresAt > now
-                && s.Account.StatusId == StatusIds.Account.Active,
-            cancellationToken);
-    }
+    public Task<bool> IsSessionActiveAsync(Guid accountId, Guid sessionId, CancellationToken cancellationToken) =>
+        sessions.IsActiveAsync(accountId, sessionId, timeProvider.GetUtcNow(), cancellationToken);
 
     /// <summary>Staff can log in only while they hold at least one effective zone–role pair (UC02 – 2b).</summary>
-    private async Task<bool> HasEffectiveAccessAsync(Account account, DateTimeOffset now, CancellationToken cancellationToken)
-    {
-        if (account.SubjectType != SubjectType.Staff)
-        {
-            return true;
-        }
-
-        var today = DateOnly.FromDateTime(now.UtcDateTime);
-        return await db.AccessGrants.AnyAsync(
-            g => g.AccountId == account.Id
-                && g.StatusId == StatusIds.AccessGrant.Effective
-                && g.EffectiveFrom <= today
-                && (g.EffectiveTo == null || g.EffectiveTo >= today),
-            cancellationToken);
-    }
+    private Task<bool> HasEffectiveAccessAsync(Account account, DateTimeOffset now, CancellationToken cancellationToken) =>
+        account.SubjectType != SubjectType.Staff
+            ? Task.FromResult(true)
+            : grants.HasEffectiveGrantAsync(account.Id, DateOnly.FromDateTime(now.UtcDateTime), cancellationToken);
 
     private AuthTokens BuildTokens(Account account, LoginSession session, string refreshToken)
     {
