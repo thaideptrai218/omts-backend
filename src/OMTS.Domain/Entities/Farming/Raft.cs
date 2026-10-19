@@ -15,7 +15,13 @@ public class Raft : AuditableEntity, IHasStatus
     /// <summary>Unique within the zone.</summary>
     public string Code { get; set; } = string.Empty;
 
+    /// <summary>Free-text location description.</summary>
     public string? Location { get; set; }
+
+    /// <summary>Point picked on the map (WGS84); shown on maps and the traceability page via Google Maps.</summary>
+    public decimal? Latitude { get; set; }
+    public decimal? Longitude { get; set; }
+
     public string? Size { get; set; }
     public string? PhotoUrl { get; set; }
     public string? ConditionNotes { get; set; }

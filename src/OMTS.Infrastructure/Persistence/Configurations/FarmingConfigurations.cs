@@ -14,6 +14,7 @@ internal sealed class FarmingZoneConfiguration : IEntityTypeConfiguration<Farmin
         builder.Property(x => x.Location).HasMaxLength(Lengths.Address);
         builder.Property(x => x.Latitude).HasPrecision(9, 6);
         builder.Property(x => x.Longitude).HasPrecision(9, 6);
+        builder.HasCoordinateChecks();
         builder.Property(x => x.Area).HasPrecision(18, 4);
         builder.Property(x => x.WaterMeasurementPoint).HasMaxLength(Lengths.Name);
         builder.Property(x => x.PhMin).HasPrecision(4, 2);
@@ -58,6 +59,9 @@ internal sealed class RaftConfiguration : IEntityTypeConfiguration<Raft>
         builder.Property(x => x.Code).HasMaxLength(Lengths.Code);
         builder.HasIndex(x => new { x.ZoneId, x.Code }).IsUnique();
         builder.Property(x => x.Location).HasMaxLength(Lengths.Address);
+        builder.Property(x => x.Latitude).HasPrecision(9, 6);
+        builder.Property(x => x.Longitude).HasPrecision(9, 6);
+        builder.HasCoordinateChecks();
         builder.Property(x => x.Size).HasMaxLength(Lengths.ShortText);
         builder.Property(x => x.PhotoUrl).HasMaxLength(Lengths.Url);
         builder.Property(x => x.ConditionNotes).HasMaxLength(Lengths.LongText);
