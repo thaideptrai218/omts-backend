@@ -20,14 +20,14 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var tokens = await LoginAsync(client, "owner1", Password);
 
         Assert.False(string.IsNullOrEmpty(tokens.GetProperty("refreshToken").GetString()));
-        var me = await SendAsync(client, HttpMethod.Get, "/api/auth/me", tokens);
+        var me = await SendAsync(client, HttpMethod.Get, "/api/me", tokens);
         Assert.Equal(HttpStatusCode.OK, me.StatusCode);
     }
 
     [Fact]
     public async Task Protected_endpoint_requires_a_token()
     {
-        var response = await factory.CreateClient().GetAsync("/api/auth/me");
+        var response = await factory.CreateClient().GetAsync("/api/me");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -112,7 +112,7 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         // Reuse revoked the whole session, so the newest tokens are dead too.
         var newRefresh = await client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = second.GetProperty("refreshToken").GetString() });
         Assert.Equal(HttpStatusCode.Unauthorized, newRefresh.StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync(client, HttpMethod.Get, "/api/auth/me", second)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync(client, HttpMethod.Get, "/api/me", second)).StatusCode);
     }
 
     // NFR-01: a revoked session cannot be reused, even before the access token expires.
@@ -124,7 +124,7 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var tokens = await LoginAsync(client, "owner5", Password);
 
         var logout = await SendAsync(client, HttpMethod.Post, "/api/auth/logout", tokens);
-        var me = await SendAsync(client, HttpMethod.Get, "/api/auth/me", tokens);
+        var me = await SendAsync(client, HttpMethod.Get, "/api/me", tokens);
         var refresh = await client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = tokens.GetProperty("refreshToken").GetString() });
 
         Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);

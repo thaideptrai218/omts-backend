@@ -10,7 +10,7 @@ using OMTS.Infrastructure.Persistence;
 
 namespace OMTS.Api.IntegrationTests;
 
-/// <summary>Runs the real API with an in-memory database and a test signing key.</summary>
+/// <summary>Runs the real API with an in-memory database, a test signing key and test-only endpoints.</summary>
 public sealed class AuthApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _databaseName = $"omts-auth-{Guid.NewGuid()}";
@@ -21,7 +21,11 @@ public sealed class AuthApiFactory : WebApplicationFactory<Program>
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<DbContextOptions<OmtsDbContext>>();
-            services.AddDbContext<OmtsDbContext>(options => options.UseInMemoryDatabase(_databaseName));
+            services.AddDbContext<OmtsDbContext>((provider, options) => options
+                .UseInMemoryDatabase(_databaseName)
+                .AddInterceptors(provider.GetRequiredService<PermissionCacheInvalidationInterceptor>()));
+
+            services.AddControllers().AddApplicationPart(typeof(AuthApiFactory).Assembly);
         });
     }
 
@@ -31,10 +35,7 @@ public sealed class AuthApiFactory : WebApplicationFactory<Program>
         SubjectType subjectType = SubjectType.CooperativeOwner,
         Action<Account>? configure = null)
     {
-        using var scope = Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
-        var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
-
+        var hasher = Services.GetRequiredService<IPasswordHasher>();
         var account = new Account
         {
             Username = username,
@@ -47,9 +48,62 @@ public sealed class AuthApiFactory : WebApplicationFactory<Program>
         };
         configure?.Invoke(account);
 
-        db.Accounts.Add(account);
-        await db.SaveChangesAsync();
+        await UseDbAsync(db => db.Accounts.Add(account));
         return account;
+    }
+
+    public async Task<FarmingZone> AddZoneAsync(string code)
+    {
+        var zone = new FarmingZone { Code = code, Name = $"Zone {code}" };
+        await UseDbAsync(db => db.FarmingZones.Add(zone));
+        return zone;
+    }
+
+    /// <summary>Creates a role whose permissions are the given function → actions.</summary>
+    public async Task<Role> AddRoleAsync(string name, params (string Function, bool View, bool Create, bool Edit)[] permissions)
+    {
+        var role = new Role { Name = name };
+        foreach (var (function, view, create, edit) in permissions)
+        {
+            role.Permissions.Add(new RolePermission { FunctionCode = function, CanView = view, CanCreate = create, CanEdit = edit });
+        }
+
+        await UseDbAsync(db => db.Roles.Add(role));
+        return role;
+    }
+
+    /// <summary>Grants <paramref name="role"/> in <paramref name="zone"/>, or in All zones when null.</summary>
+    public async Task<AccessGrant> GrantAsync(Account account, Role role, FarmingZone? zone)
+    {
+        var grant = new AccessGrant
+        {
+            AccountId = account.Id,
+            RoleId = role.Id,
+            ZoneId = zone?.Id,
+            ScopeType = zone is null ? AccessScopeType.AllZones : AccessScopeType.SpecificZone,
+            EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1),
+            GrantedByAccountId = account.Id,
+        };
+        await UseDbAsync(db => db.AccessGrants.Add(grant));
+        return grant;
+    }
+
+    /// <summary>Runs a change through a fresh context and saves it, as UC11/UC12 would.</summary>
+    public async Task UseDbAsync(Action<OmtsDbContext> change)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
+        change(db);
+        await db.SaveChangesAsync();
+    }
+
+    public async Task UpdateAsync<T>(Guid id, Action<T> change) where T : class
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
+        var entity = await db.Set<T>().FindAsync(id) ?? throw new InvalidOperationException($"{typeof(T).Name} {id} not found.");
+        change(entity);
+        await db.SaveChangesAsync();
     }
 }
 

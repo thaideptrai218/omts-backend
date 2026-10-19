@@ -1,5 +1,6 @@
 using Microsoft.OpenApi.Models;
 using OMTS.Api.Authentication;
+using OMTS.Api.Authorization;
 using OMTS.Application;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Infrastructure;
@@ -12,7 +13,7 @@ builder.Services.AddJwtAuthentication();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options => options.Filters.Add<AccountStateGateFilter>());
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {

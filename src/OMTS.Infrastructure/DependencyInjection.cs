@@ -15,8 +15,11 @@ public static class DependencyInjection
     /// <summary>Registers persistence and external adapters.</summary>
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddDbContext<OmtsDbContext>(options =>
+        services.AddSingleton<PermissionCacheInvalidationInterceptor>();
+        services.AddDbContext<OmtsDbContext>((provider, options) =>
         {
+            options.AddInterceptors(provider.GetRequiredService<PermissionCacheInvalidationInterceptor>());
+
             // Resolved lazily so the API can start (e.g. /health, tests) before a database is configured.
             var connectionString = configuration.GetConnectionString(ConnectionStringName);
             if (string.IsNullOrWhiteSpace(connectionString))
