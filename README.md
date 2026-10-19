@@ -33,6 +33,19 @@ dotnet run --project src/OMTS.Api        # Swagger at /swagger, health at /healt
 dotnet test                               # all tests
 ```
 
+### Database (EF Core code-first)
+
+Entities live in `OMTS.Domain`; the DbContext, configurations and migrations live in `OMTS.Infrastructure/Persistence`.
+`dotnet ef` uses `OMTS.Api` as the startup project, so it reads the same `OmtsDb` user-secret as the API — set it once per machine (see above).
+
+```bash
+dotnet tool install --global dotnet-ef   # once
+# create/update your local database from the migrations
+dotnet ef database update --project src/OMTS.Infrastructure --startup-project src/OMTS.Api
+# after changing entities or configurations
+dotnet ef migrations add <Name> --project src/OMTS.Infrastructure --startup-project src/OMTS.Api --output-dir Persistence/Migrations
+```
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) — branches, Jira keys, commit/PR rules, releases.
