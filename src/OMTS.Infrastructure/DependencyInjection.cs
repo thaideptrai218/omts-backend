@@ -1,10 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using OMTS.Application.Authentication;
-using OMTS.Application.Common.Persistence;
-using OMTS.Infrastructure.Authentication;
+using OMTS.Application.Common.Interfaces.Identity;
+using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Infrastructure.Identity;
 using OMTS.Infrastructure.Persistence;
+using OMTS.Infrastructure.Persistence.Interceptors;
 using OMTS.Infrastructure.Persistence.Repositories;
 
 namespace OMTS.Infrastructure;

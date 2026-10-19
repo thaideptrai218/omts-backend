@@ -1,7 +1,10 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Entities.Cultivation;
+using OMTS.Domain.Entities.Farming;
+using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Labor;
 
 /// <summary>
 /// E40 – Who does what work, where and when. Daily wage: exactly one of EmployeeId/WorkerId.

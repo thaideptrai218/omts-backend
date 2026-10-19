@@ -1,6 +1,6 @@
 using OMTS.Domain.Common;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Farming;
 
 /// <summary>
 /// E11 – Versioned raft layout so lane markers are re-read correctly when the raft changes (BR-02/03).

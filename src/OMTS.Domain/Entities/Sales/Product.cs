@@ -1,7 +1,8 @@
 using OMTS.Domain.Common;
-using OMTS.Domain.Statuses;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Platform;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Sales;
 
 /// <summary>E21 – Catalog product a trader orders; no price list – prices live on the sale (BR-12).</summary>
 public class Product : AuditableEntity, IHasStatus

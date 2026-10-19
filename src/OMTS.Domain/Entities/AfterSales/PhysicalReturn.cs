@@ -1,7 +1,10 @@
 using OMTS.Domain.Common;
-using OMTS.Domain.Statuses;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Platform;
+using OMTS.Domain.Entities.Sales;
+using OMTS.Domain.Entities.Traceability;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.AfterSales;
 
 /// <summary>
 /// E33 – Goods that actually came back; separate from credit/refund. “Holding Overdue” is derived

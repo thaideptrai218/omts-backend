@@ -1,7 +1,10 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Entities.Farming;
+using OMTS.Domain.Entities.Sales;
+using OMTS.Domain.Entities.Traceability;
 using OMTS.Domain.Enums;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Cultivation;
 
 /// <summary>
 /// E18 – A lane portion measured from markers A/B: seeded, planned harvest, harvested or written off.

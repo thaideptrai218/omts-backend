@@ -1,4 +1,4 @@
-using OMTS.Application.Common.Persistence;
+using OMTS.Application.Common.Interfaces.Persistence;
 
 namespace OMTS.Infrastructure.Persistence;
 
