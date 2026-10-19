@@ -1,6 +1,4 @@
-using Microsoft.EntityFrameworkCore;
-using OMTS.Application.Common.Interfaces;
-using OMTS.Domain.Statuses;
+using OMTS.Application.Common.Persistence;
 
 namespace OMTS.Application.Authorization;
 
@@ -18,7 +16,12 @@ public sealed record MyPermissions(
     IReadOnlyList<FunctionAccess> Functions,
     IReadOnlyList<GrantView> Grants);
 
-public sealed class PermissionService(IOmtsDbContext db, PermissionCache cache, TimeProvider timeProvider)
+public sealed class PermissionService(
+    IAccountRepository accounts,
+    IAccessGrantRepository grants,
+    IFarmingZoneRepository zones,
+    PermissionCache cache,
+    TimeProvider timeProvider)
 {
     /// <summary>Effective access of an account today, or null when the account does not exist.</summary>
     public async Task<AccountAccess?> GetAccessAsync(Guid accountId, CancellationToken cancellationToken)
@@ -48,13 +51,10 @@ public sealed class PermissionService(IOmtsDbContext db, PermissionCache cache, 
         }
 
         var zoneIds = access.Grants.Where(g => g.ZoneId is not null).Select(g => g.ZoneId!.Value).Distinct().ToList();
-        var zones = await db.FarmingZones.AsNoTracking()
-            .Where(z => zoneIds.Contains(z.Id))
-            .Select(z => new { z.Id, z.Code, z.Name })
-            .ToDictionaryAsync(z => z.Id, cancellationToken);
+        var zonesById = (await zones.GetByIdsAsync(zoneIds, cancellationToken)).ToDictionary(z => z.Id);
 
-        var grants = access.Grants
-            .Select(g => g.ZoneId is { } zoneId && zones.TryGetValue(zoneId, out var zone)
+        var grantViews = access.Grants
+            .Select(g => g.ZoneId is { } zoneId && zonesById.TryGetValue(zoneId, out var zone)
                 ? new GrantView(zoneId, zone.Code, zone.Name, false, g.RoleName, g.Permissions)
                 : new GrantView(g.ZoneId, null, null, g.ZoneId is null, g.RoleName, g.Permissions))
             .ToList();
@@ -83,45 +83,27 @@ public sealed class PermissionService(IOmtsDbContext db, PermissionCache cache, 
             access.RequiresPasswordChange,
             access.RequiresPhoneVerification,
             functions,
-            grants);
+            grantViews);
     }
 
     private async Task<AccountAccess?> LoadAsync(Guid accountId, DateOnly today, CancellationToken cancellationToken)
     {
-        var account = await db.Accounts.AsNoTracking()
-            .Where(a => a.Id == accountId)
-            .Select(a => new { a.SubjectType, a.MustChangePassword, PhoneVerified = a.PhoneVerifiedAt != null })
-            .FirstOrDefaultAsync(cancellationToken);
+        var account = await accounts.GetByIdAsync(accountId, cancellationToken);
         if (account is null)
         {
             return null;
         }
 
-        // Only Effective grants within their validity period; Revoked or expired ones never count (BR-19).
-        var grants = await db.AccessGrants.AsNoTracking()
-            .Where(g => g.AccountId == accountId
-                && g.StatusId == StatusIds.AccessGrant.Effective
-                && g.EffectiveFrom <= today
-                && (g.EffectiveTo == null || g.EffectiveTo >= today)
-                && g.Role.StatusId == StatusIds.Usage.InUse)
-            .Select(g => new { g.ZoneId, g.RoleId, RoleName = g.Role.Name })
-            .ToListAsync(cancellationToken);
-
-        var roleIds = grants.Select(g => g.RoleId).Distinct().ToList();
-        var permissionsByRole = (await db.RolePermissions.AsNoTracking()
-                .Where(p => roleIds.Contains(p.RoleId))
-                .ToListAsync(cancellationToken))
-            .GroupBy(p => p.RoleId)
-            .ToDictionary(
-                g => g.Key,
-                g => (IReadOnlyList<GrantedPermission>)g
+        var zoneGrants = (await grants.GetEffectiveGrantsAsync(accountId, today, cancellationToken))
+            .Select(g => new ZoneGrant(
+                g.ZoneId,
+                g.RoleId,
+                g.RoleName,
+                g.Permissions
                     .Select(p => new GrantedPermission(p.FunctionCode, p.CanView, p.CanCreate, p.CanEdit, p.CanDelete, p.OtherPermissions, p.DataScope))
-                    .ToList());
-
-        var zoneGrants = grants
-            .Select(g => new ZoneGrant(g.ZoneId, g.RoleId, g.RoleName, permissionsByRole.GetValueOrDefault(g.RoleId) ?? []))
+                    .ToList()))
             .ToList();
 
-        return new AccountAccess(accountId, account.SubjectType, account.MustChangePassword, account.PhoneVerified, zoneGrants);
+        return new AccountAccess(accountId, account.SubjectType, account.MustChangePassword, account.PhoneVerifiedAt is not null, zoneGrants);
     }
 }

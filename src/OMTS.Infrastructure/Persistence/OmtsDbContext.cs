@@ -1,11 +1,10 @@
 using Microsoft.EntityFrameworkCore;
-using OMTS.Application.Common.Interfaces;
 using OMTS.Domain.Common;
 using OMTS.Domain.Entities;
 
 namespace OMTS.Infrastructure.Persistence;
 
-public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbContext(options), IOmtsDbContext
+public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbContext(options)
 {
     // Organization, identity and access control
     public DbSet<Cooperative> Cooperatives => Set<Cooperative>();
