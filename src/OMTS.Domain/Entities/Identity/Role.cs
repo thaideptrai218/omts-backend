@@ -1,7 +1,8 @@
 using OMTS.Domain.Common;
-using OMTS.Domain.Statuses;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Platform;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Identity;
 
 /// <summary>E04 – Role defined by the Cooperative Owner (Zone Manager, Accountant…) (BR-19).</summary>
 public class Role : AuditableEntity, IHasStatus

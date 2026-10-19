@@ -1,7 +1,7 @@
 using OMTS.Domain.Common;
 using OMTS.Domain.Enums;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Identity;
 
 /// <summary>
 /// Technical entity (SDS, not part of the SRS model): one login session backing a refresh token.

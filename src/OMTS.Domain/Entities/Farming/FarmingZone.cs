@@ -1,7 +1,10 @@
 using OMTS.Domain.Common;
-using OMTS.Domain.Statuses;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Cultivation;
+using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Entities.Platform;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Farming;
 
 /// <summary>E07 – Unit organizing rafts and the scope of zone-based access (BR-01).</summary>
 public class FarmingZone : AuditableEntity, IHasStatus

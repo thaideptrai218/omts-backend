@@ -1,7 +1,8 @@
 using OMTS.Domain.Common;
-using OMTS.Domain.Statuses;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Platform;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Cultivation;
 
 /// <summary>E14 – Seed supplier reused across intakes. Cooperative-wide data (All zones roles only).</summary>
 public class SeedSupplier : AuditableEntity, IHasStatus

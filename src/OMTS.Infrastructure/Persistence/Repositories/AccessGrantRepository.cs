@@ -1,8 +1,9 @@
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
-using OMTS.Application.Common.Persistence;
-using OMTS.Domain.Entities;
-using OMTS.Domain.Statuses;
+using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Models;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Identity;
 
 namespace OMTS.Infrastructure.Persistence.Repositories;
 

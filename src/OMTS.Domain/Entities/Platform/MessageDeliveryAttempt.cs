@@ -1,8 +1,13 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.AfterSales;
+using OMTS.Domain.Entities.Finance;
+using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Entities.Sales;
+using OMTS.Domain.Entities.Traceability;
 using OMTS.Domain.Enums;
-using OMTS.Domain.Statuses;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Platform;
 
 /// <summary>
 /// E47 – One attempt to deliver a document to a trader. Exactly one of the five source document keys

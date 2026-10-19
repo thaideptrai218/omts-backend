@@ -1,6 +1,6 @@
 using OMTS.Domain.Common;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Cultivation;
 
 /// <summary>E15 – Actual source, quantity, unit and evidence of one seed receipt (BR-04).</summary>
 public class SeedReceiptLot : AuditableEntity

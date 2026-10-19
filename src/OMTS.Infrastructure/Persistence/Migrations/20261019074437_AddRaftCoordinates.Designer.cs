@@ -25,7 +25,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("OMTS.Domain.Entities.AccessGrant", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.AccessGrant", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -102,7 +102,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("AccessGrants");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Account", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.Account", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -196,7 +196,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("Accounts");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.AttendanceRecord", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.AttendanceRecord", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -268,7 +268,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.AuditEvent", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Platform.AuditEvent", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -325,7 +325,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("AuditEvents");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Contractor", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.Contractor", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -372,7 +372,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("Contractors");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Cooperative", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.Cooperative", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -443,7 +443,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("Cooperatives");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.CultivationCycle", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationCycle", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -507,7 +507,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("CultivationCycles");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.CultivationLogEntry", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationLogEntry", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -580,7 +580,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("CultivationLogEntries");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Customer", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.Customer", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -666,7 +666,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("Customers");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.CustomerCredit", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Finance.CustomerCredit", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -722,7 +722,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.CustomerReceipt", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Finance.CustomerReceipt", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -793,7 +793,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.CustomerRefund", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Finance.CustomerRefund", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -870,7 +870,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.DocumentZoneScope", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.DocumentZoneScope", b =>
                 {
                     b.Property<Guid>("DocumentId")
                         .HasColumnType("uniqueidentifier");
@@ -891,7 +891,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("DocumentZoneScopes");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Employee", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.Employee", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -969,7 +969,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("Employees");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.FarmingZone", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.FarmingZone", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1060,7 +1060,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.HarvestEvent", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Traceability.HarvestEvent", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1120,7 +1120,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("HarvestEvents");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.LaborPayment", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.LaborPayment", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1191,7 +1191,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.LaborSettlement", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.LaborSettlement", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1261,7 +1261,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Lane", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.Lane", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1307,7 +1307,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("Lanes");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.LaneSegment", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.LaneSegment", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1416,7 +1416,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.LoginSession", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.LoginSession", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1482,7 +1482,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("LoginSessions");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.MessageDeliveryAttempt", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Platform.MessageDeliveryAttempt", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1577,7 +1577,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Notification", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Platform.Notification", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1624,7 +1624,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("Notifications");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.OysterSeedType", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.OysterSeedType", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1679,7 +1679,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("OysterSeedTypes");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.PayLine", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.PayLine", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1757,7 +1757,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.PayRuleVersion", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.PayRuleVersion", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1830,7 +1830,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("PayRuleVersions");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.PhysicalReturn", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.AfterSales.PhysicalReturn", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1913,7 +1913,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("PhysicalReturns");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.PortHandover", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.PortHandover", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1981,7 +1981,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("PortHandovers");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.PortWeighing", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.PortWeighing", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -2034,7 +2034,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("PortWeighings");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Product", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.Product", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -2096,7 +2096,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("Products");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.QualityClaim", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.AfterSales.QualityClaim", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -2179,7 +2179,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("QualityClaims");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Raft", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.Raft", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -2251,7 +2251,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.RaftLayoutVersion", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.RaftLayoutVersion", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -2301,7 +2301,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("RaftLayoutVersions");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.RaftMaterialLine", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.RaftMaterialLine", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -2353,7 +2353,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.RaftMaterialRecord", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.RaftMaterialRecord", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -2422,7 +2422,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.ReceiptAllocation", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Finance.ReceiptAllocation", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -2470,7 +2470,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Role", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.Role", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -2516,7 +2516,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("Roles");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.RolePermission", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.RolePermission", b =>
                 {
                     b.Property<Guid>("RoleId")
                         .HasColumnType("uniqueidentifier");
@@ -2551,7 +2551,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("RolePermissions");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.SaleAdjustment", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.AfterSales.SaleAdjustment", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -2649,7 +2649,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.SaleTransaction", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SaleTransaction", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -2745,7 +2745,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.SalesOrder", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesOrder", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -2861,7 +2861,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("SalesOrders");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.SeasonalWorker", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.SeasonalWorker", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -2919,7 +2919,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("SeasonalWorkers");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.SeedReceiptLot", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedReceiptLot", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -2990,7 +2990,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("SeedReceiptLots");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.SeedSupplier", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedSupplier", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -3038,7 +3038,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("SeedSuppliers");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.SeedingEvent", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingEvent", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -3101,7 +3101,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("SeedingEvents");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Status", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Platform.Status", b =>
                 {
                     b.Property<int>("Id")
                         .HasColumnType("int");
@@ -3731,7 +3731,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.StatusTransition", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Platform.StatusTransition", b =>
                 {
                     b.Property<int>("Id")
                         .HasColumnType("int");
@@ -4370,7 +4370,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.TraceCorrection", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Traceability.TraceCorrection", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -4441,7 +4441,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("TraceCorrections");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.TracePublicationVersion", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Traceability.TracePublicationVersion", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -4536,7 +4536,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("TracePublicationVersions");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.TraceabilityLot", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Traceability.TraceabilityLot", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -4603,7 +4603,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("TraceabilityLots");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.VerificationCode", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.VerificationCode", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -4659,7 +4659,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("VerificationCodes");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.WaterMeasurement", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.WaterMeasurement", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -4784,7 +4784,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("WaterMeasurements");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.WorkAssignment", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.WorkAssignment", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -4888,7 +4888,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.ZoneComplianceDocument", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.ZoneComplianceDocument", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -4956,38 +4956,38 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("ZoneComplianceDocuments");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.AccessGrant", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.AccessGrant", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Account", "Account")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", "Account")
                         .WithMany("AccessGrants")
                         .HasForeignKey("AccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("GrantedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("RevokedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Role", "Role")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Role", "Role")
                         .WithMany("AccessGrants")
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.FarmingZone", "Zone")
+                    b.HasOne("OMTS.Domain.Entities.Farming.FarmingZone", "Zone")
                         .WithMany()
                         .HasForeignKey("ZoneId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -5001,15 +5001,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Zone");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Account", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.Account", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.OwnsMany("OMTS.Domain.Entities.NotificationPreference", "NotificationPreferences", b1 =>
+                    b.OwnsMany("OMTS.Domain.Entities.Identity.NotificationPreference", "NotificationPreferences", b1 =>
                         {
                             b1.Property<Guid>("AccountId")
                                 .HasColumnType("uniqueidentifier");
@@ -5046,25 +5046,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.AttendanceRecord", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.AttendanceRecord", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Contractor", "Contractor")
+                    b.HasOne("OMTS.Domain.Entities.Labor.Contractor", "Contractor")
                         .WithMany()
                         .HasForeignKey("ContractorId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Employee", "Employee")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
                         .WithMany()
                         .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("RecordedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.SeasonalWorker", "Worker")
+                    b.HasOne("OMTS.Domain.Entities.Labor.SeasonalWorker", "Worker")
                         .WithMany()
                         .HasForeignKey("WorkerId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -5076,9 +5076,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Worker");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.AuditEvent", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Platform.AuditEvent", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Account", "ActorAccount")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", "ActorAccount")
                         .WithMany()
                         .HasForeignKey("ActorAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -5086,9 +5086,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("ActorAccount");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Contractor", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.Contractor", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5097,15 +5097,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Cooperative", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.Cooperative", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.OwnsOne("OMTS.Domain.Entities.BankAccountInfo", "BankAccount", b1 =>
+                    b.OwnsOne("OMTS.Domain.Entities.Identity.BankAccountInfo", "BankAccount", b1 =>
                         {
                             b1.Property<Guid>("CooperativeId")
                                 .HasColumnType("uniqueidentifier");
@@ -5138,20 +5138,20 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.CultivationCycle", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationCycle", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.OysterSeedType", "PlannedSeedType")
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.OysterSeedType", "PlannedSeedType")
                         .WithMany()
                         .HasForeignKey("PlannedSeedTypeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Raft", "Raft")
+                    b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
                         .WithMany("CultivationCycles")
                         .HasForeignKey("RaftId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5164,25 +5164,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.CultivationLogEntry", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationLogEntry", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.CultivationCycle", "Cycle")
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.CultivationCycle", "Cycle")
                         .WithMany("LogEntries")
                         .HasForeignKey("CycleId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Lane", "Lane")
+                    b.HasOne("OMTS.Domain.Entities.Farming.Lane", "Lane")
                         .WithMany()
                         .HasForeignKey("LaneId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("RecordedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.FarmingZone", "Zone")
+                    b.HasOne("OMTS.Domain.Entities.Farming.FarmingZone", "Zone")
                         .WithMany()
                         .HasForeignKey("ZoneId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5195,25 +5195,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Zone");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Customer", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.Customer", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Account", "Account")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", "Account")
                         .WithOne("Customer")
-                        .HasForeignKey("OMTS.Domain.Entities.Customer", "AccountId")
+                        .HasForeignKey("OMTS.Domain.Entities.Sales.Customer", "AccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Cooperative", "Cooperative")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Cooperative", "Cooperative")
                         .WithMany("Customers")
                         .HasForeignKey("CooperativeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Customer", "MergedIntoCustomer")
+                    b.HasOne("OMTS.Domain.Entities.Sales.Customer", "MergedIntoCustomer")
                         .WithMany()
                         .HasForeignKey("MergedIntoCustomerId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5228,25 +5228,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.CustomerCredit", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Finance.CustomerCredit", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Customer", "Customer")
+                    b.HasOne("OMTS.Domain.Entities.Sales.Customer", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.SaleAdjustment", "SourceAdjustment")
+                    b.HasOne("OMTS.Domain.Entities.AfterSales.SaleAdjustment", "SourceAdjustment")
                         .WithMany()
                         .HasForeignKey("SourceAdjustmentId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.CustomerReceipt", "SourceReceipt")
+                    b.HasOne("OMTS.Domain.Entities.Finance.CustomerReceipt", "SourceReceipt")
                         .WithMany()
                         .HasForeignKey("SourceReceiptId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.SaleTransaction", "SourceSale")
+                    b.HasOne("OMTS.Domain.Entities.Sales.SaleTransaction", "SourceSale")
                         .WithMany()
                         .HasForeignKey("SourceSaleId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -5260,9 +5260,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("SourceSale");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.CustomerReceipt", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Finance.CustomerReceipt", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Customer", "Customer")
+                    b.HasOne("OMTS.Domain.Entities.Sales.Customer", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5271,14 +5271,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Customer");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.CustomerRefund", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Finance.CustomerRefund", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.CustomerCredit", "Credit")
+                    b.HasOne("OMTS.Domain.Entities.Finance.CustomerCredit", "Credit")
                         .WithMany("Refunds")
                         .HasForeignKey("CreditId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Customer", "Customer")
+                    b.HasOne("OMTS.Domain.Entities.Sales.Customer", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5289,15 +5289,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Customer");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.DocumentZoneScope", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.DocumentZoneScope", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.ZoneComplianceDocument", "Document")
+                    b.HasOne("OMTS.Domain.Entities.Farming.ZoneComplianceDocument", "Document")
                         .WithMany("ZoneScopes")
                         .HasForeignKey("DocumentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.FarmingZone", "Zone")
+                    b.HasOne("OMTS.Domain.Entities.Farming.FarmingZone", "Zone")
                         .WithMany("DocumentScopes")
                         .HasForeignKey("ZoneId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5308,20 +5308,20 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Zone");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Employee", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.Employee", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Account", "Account")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", "Account")
                         .WithOne("Employee")
-                        .HasForeignKey("OMTS.Domain.Entities.Employee", "AccountId")
+                        .HasForeignKey("OMTS.Domain.Entities.Identity.Employee", "AccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Cooperative", "Cooperative")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Cooperative", "Cooperative")
                         .WithMany("Employees")
                         .HasForeignKey("CooperativeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5334,15 +5334,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.FarmingZone", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.FarmingZone", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Cooperative", "Cooperative")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Cooperative", "Cooperative")
                         .WithMany("FarmingZones")
                         .HasForeignKey("CooperativeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5353,27 +5353,27 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.HarvestEvent", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Traceability.HarvestEvent", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.SalesOrder", "Order")
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesOrder", "Order")
                         .WithMany("HarvestEvents")
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("RecordedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.FarmingZone", "Zone")
+                    b.HasOne("OMTS.Domain.Entities.Farming.FarmingZone", "Zone")
                         .WithMany()
                         .HasForeignKey("ZoneId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5386,14 +5386,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Zone");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.LaborPayment", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.LaborPayment", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.LaborPayment", "OriginalPayment")
+                    b.HasOne("OMTS.Domain.Entities.Labor.LaborPayment", "OriginalPayment")
                         .WithMany()
                         .HasForeignKey("OriginalPaymentId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.LaborSettlement", "Settlement")
+                    b.HasOne("OMTS.Domain.Entities.Labor.LaborSettlement", "Settlement")
                         .WithMany("Payments")
                         .HasForeignKey("SettlementId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5404,30 +5404,30 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Settlement");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.LaborSettlement", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.LaborSettlement", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("ApprovedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Contractor", "Contractor")
+                    b.HasOne("OMTS.Domain.Entities.Labor.Contractor", "Contractor")
                         .WithMany()
                         .HasForeignKey("ContractorId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Employee", "Employee")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
                         .WithMany()
                         .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("PreparedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5440,9 +5440,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Lane", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.Lane", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Raft", "Raft")
+                    b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
                         .WithMany("Lanes")
                         .HasForeignKey("RaftId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5451,52 +5451,52 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Raft");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.LaneSegment", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.LaneSegment", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("ConfirmedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.CultivationCycle", "Cycle")
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.CultivationCycle", "Cycle")
                         .WithMany("LaneSegments")
                         .HasForeignKey("CycleId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.HarvestEvent", "HarvestEvent")
+                    b.HasOne("OMTS.Domain.Entities.Traceability.HarvestEvent", "HarvestEvent")
                         .WithMany("HarvestedSegments")
                         .HasForeignKey("HarvestEventId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Lane", "Lane")
+                    b.HasOne("OMTS.Domain.Entities.Farming.Lane", "Lane")
                         .WithMany("Segments")
                         .HasForeignKey("LaneId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.CultivationLogEntry", "Log")
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.CultivationLogEntry", "Log")
                         .WithMany()
                         .HasForeignKey("LogId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.TraceabilityLot", "Lot")
+                    b.HasOne("OMTS.Domain.Entities.Traceability.TraceabilityLot", "Lot")
                         .WithMany("SourceSegments")
                         .HasForeignKey("LotId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.SalesOrder", "Order")
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesOrder", "Order")
                         .WithMany("PlannedHarvestSegments")
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("RecordedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.SeedingEvent", "Seeding")
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.SeedingEvent", "Seeding")
                         .WithMany("SeededSegments")
                         .HasForeignKey("SeedingId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -5516,9 +5516,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Seeding");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.LoginSession", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.LoginSession", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Account", "Account")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", "Account")
                         .WithMany("LoginSessions")
                         .HasForeignKey("AccountId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5527,50 +5527,50 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Account");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.MessageDeliveryAttempt", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Platform.MessageDeliveryAttempt", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.SaleAdjustment", "Adjustment")
+                    b.HasOne("OMTS.Domain.Entities.AfterSales.SaleAdjustment", "Adjustment")
                         .WithMany()
                         .HasForeignKey("AdjustmentId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Customer", "Customer")
+                    b.HasOne("OMTS.Domain.Entities.Sales.Customer", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.SalesOrder", "Order")
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesOrder", "Order")
                         .WithMany()
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.TracePublicationVersion", "Publication")
+                    b.HasOne("OMTS.Domain.Entities.Traceability.TracePublicationVersion", "Publication")
                         .WithMany()
                         .HasForeignKey("PublicationId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.CustomerReceipt", "Receipt")
+                    b.HasOne("OMTS.Domain.Entities.Finance.CustomerReceipt", "Receipt")
                         .WithMany()
                         .HasForeignKey("ReceiptId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.MessageDeliveryAttempt", "RetryOfAttempt")
+                    b.HasOne("OMTS.Domain.Entities.Platform.MessageDeliveryAttempt", "RetryOfAttempt")
                         .WithMany()
                         .HasForeignKey("RetryOfAttemptId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.SaleTransaction", "Sale")
+                    b.HasOne("OMTS.Domain.Entities.Sales.SaleTransaction", "Sale")
                         .WithMany()
                         .HasForeignKey("SaleId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Account", "SentByAccount")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", "SentByAccount")
                         .WithMany()
                         .HasForeignKey("SentByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5595,9 +5595,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Notification", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Platform.Notification", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Account", "RecipientAccount")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", "RecipientAccount")
                         .WithMany()
                         .HasForeignKey("RecipientAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5606,9 +5606,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("RecipientAccount");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.OysterSeedType", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.OysterSeedType", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5617,34 +5617,34 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.PayLine", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.PayLine", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.WorkAssignment", "Assignment")
+                    b.HasOne("OMTS.Domain.Entities.Labor.WorkAssignment", "Assignment")
                         .WithMany()
                         .HasForeignKey("AssignmentId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.AttendanceRecord", "Attendance")
+                    b.HasOne("OMTS.Domain.Entities.Labor.AttendanceRecord", "Attendance")
                         .WithMany()
                         .HasForeignKey("AttendanceId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Employee", "Employee")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
                         .WithMany()
                         .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.PayRuleVersion", "PayRuleVersion")
+                    b.HasOne("OMTS.Domain.Entities.Labor.PayRuleVersion", "PayRuleVersion")
                         .WithMany()
                         .HasForeignKey("PayRuleVersionId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.LaborSettlement", "Settlement")
+                    b.HasOne("OMTS.Domain.Entities.Labor.LaborSettlement", "Settlement")
                         .WithMany("PayLines")
                         .HasForeignKey("SettlementId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.SeasonalWorker", "Worker")
+                    b.HasOne("OMTS.Domain.Entities.Labor.SeasonalWorker", "Worker")
                         .WithMany()
                         .HasForeignKey("WorkerId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -5662,25 +5662,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Worker");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.PayRuleVersion", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.PayRuleVersion", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("ApprovedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Employee", "Employee")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
                         .WithMany()
                         .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("EnteredByAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5691,26 +5691,26 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.PhysicalReturn", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.AfterSales.PhysicalReturn", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("AssessedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.TraceabilityLot", "Lot")
+                    b.HasOne("OMTS.Domain.Entities.Traceability.TraceabilityLot", "Lot")
                         .WithMany()
                         .HasForeignKey("LotId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.SaleTransaction", "Sale")
+                    b.HasOne("OMTS.Domain.Entities.Sales.SaleTransaction", "Sale")
                         .WithMany()
                         .HasForeignKey("SaleId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5723,20 +5723,20 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.PortHandover", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.PortHandover", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.SalesOrder", "Order")
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesOrder", "Order")
                         .WithMany("Handovers")
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.TracePublicationVersion", "PublicationAtHandover")
+                    b.HasOne("OMTS.Domain.Entities.Traceability.TracePublicationVersion", "PublicationAtHandover")
                         .WithMany()
                         .HasForeignKey("PublicationIdAtHandover")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.PortWeighing", "Weighing")
+                    b.HasOne("OMTS.Domain.Entities.Sales.PortWeighing", "Weighing")
                         .WithMany()
                         .HasForeignKey("WeighingId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5749,9 +5749,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Weighing");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.PortWeighing", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.PortWeighing", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.SalesOrder", "Order")
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesOrder", "Order")
                         .WithMany("Weighings")
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5760,9 +5760,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Order");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Product", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.Product", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5771,25 +5771,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.QualityClaim", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.AfterSales.QualityClaim", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("DecidedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("RecordedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.SaleTransaction", "Sale")
+                    b.HasOne("OMTS.Domain.Entities.Sales.SaleTransaction", "Sale")
                         .WithMany("Claims")
                         .HasForeignKey("SaleId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5800,15 +5800,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Raft", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.Raft", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.FarmingZone", "Zone")
+                    b.HasOne("OMTS.Domain.Entities.Farming.FarmingZone", "Zone")
                         .WithMany("Rafts")
                         .HasForeignKey("ZoneId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5819,9 +5819,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Zone");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.RaftLayoutVersion", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.RaftLayoutVersion", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Raft", "Raft")
+                    b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
                         .WithMany("LayoutVersions")
                         .HasForeignKey("RaftId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5830,9 +5830,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Raft");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.RaftMaterialLine", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.RaftMaterialLine", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.RaftMaterialRecord", "Record")
+                    b.HasOne("OMTS.Domain.Entities.Farming.RaftMaterialRecord", "Record")
                         .WithMany("Lines")
                         .HasForeignKey("RecordId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5841,15 +5841,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Record");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.RaftMaterialRecord", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.RaftMaterialRecord", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Raft", "Raft")
+                    b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
                         .WithMany("MaterialRecords")
                         .HasForeignKey("RaftId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Account", "RecordedByAccount")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", "RecordedByAccount")
                         .WithMany()
                         .HasForeignKey("RecordedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5860,15 +5860,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("RecordedByAccount");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.ReceiptAllocation", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Finance.ReceiptAllocation", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.CustomerReceipt", "Receipt")
+                    b.HasOne("OMTS.Domain.Entities.Finance.CustomerReceipt", "Receipt")
                         .WithMany("Allocations")
                         .HasForeignKey("ReceiptId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.SaleTransaction", "Sale")
+                    b.HasOne("OMTS.Domain.Entities.Sales.SaleTransaction", "Sale")
                         .WithMany("ReceiptAllocations")
                         .HasForeignKey("SaleId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5879,9 +5879,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Sale");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Role", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.Role", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5890,9 +5890,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.RolePermission", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.RolePermission", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Role", "Role")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Role", "Role")
                         .WithMany("Permissions")
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5901,35 +5901,35 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Role");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.SaleAdjustment", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.AfterSales.SaleAdjustment", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("ApprovedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.QualityClaim", "Claim")
+                    b.HasOne("OMTS.Domain.Entities.AfterSales.QualityClaim", "Claim")
                         .WithMany()
                         .HasForeignKey("ClaimId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("DecidedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.PortWeighing", "NewWeighing")
+                    b.HasOne("OMTS.Domain.Entities.Sales.PortWeighing", "NewWeighing")
                         .WithMany()
                         .HasForeignKey("NewWeighingId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.SaleTransaction", "Sale")
+                    b.HasOne("OMTS.Domain.Entities.Sales.SaleTransaction", "Sale")
                         .WithMany("Adjustments")
                         .HasForeignKey("SaleId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5944,32 +5944,32 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.SaleTransaction", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SaleTransaction", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Customer", "Customer")
+                    b.HasOne("OMTS.Domain.Entities.Sales.Customer", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.TraceabilityLot", "Lot")
+                    b.HasOne("OMTS.Domain.Entities.Traceability.TraceabilityLot", "Lot")
                         .WithMany("Sales")
                         .HasForeignKey("LotId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.SalesOrder", "Order")
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesOrder", "Order")
                         .WithOne("Sale")
-                        .HasForeignKey("OMTS.Domain.Entities.SaleTransaction", "OrderId")
+                        .HasForeignKey("OMTS.Domain.Entities.Sales.SaleTransaction", "OrderId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("PriceAgreedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.PortWeighing", "Weighing")
+                    b.HasOne("OMTS.Domain.Entities.Sales.PortWeighing", "Weighing")
                         .WithMany()
                         .HasForeignKey("WeighingId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -5984,42 +5984,42 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Weighing");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.SalesOrder", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesOrder", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Customer", "Customer")
+                    b.HasOne("OMTS.Domain.Entities.Sales.Customer", "Customer")
                         .WithMany("Orders")
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Product", "Product")
+                    b.HasOne("OMTS.Domain.Entities.Sales.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("RecordedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.TraceabilityLot", "SourceLot")
+                    b.HasOne("OMTS.Domain.Entities.Traceability.TraceabilityLot", "SourceLot")
                         .WithMany()
                         .HasForeignKey("SourceLotId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.PhysicalReturn", "SourceReturn")
+                    b.HasOne("OMTS.Domain.Entities.AfterSales.PhysicalReturn", "SourceReturn")
                         .WithMany("ResaleOrders")
                         .HasForeignKey("SourceReturnId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.FarmingZone", "Zone")
+                    b.HasOne("OMTS.Domain.Entities.Farming.FarmingZone", "Zone")
                         .WithMany()
                         .HasForeignKey("ZoneId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -6038,14 +6038,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Zone");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.SeasonalWorker", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.SeasonalWorker", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Employee", "Employee")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
                         .WithMany()
                         .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -6056,15 +6056,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.SeedReceiptLot", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedReceiptLot", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.OysterSeedType", "SeedType")
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.OysterSeedType", "SeedType")
                         .WithMany()
                         .HasForeignKey("SeedTypeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.SeedSupplier", "Supplier")
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.SeedSupplier", "Supplier")
                         .WithMany("ReceiptLots")
                         .HasForeignKey("SupplierId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -6075,9 +6075,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Supplier");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.SeedSupplier", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedSupplier", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -6086,21 +6086,21 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.SeedingEvent", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingEvent", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.CultivationCycle", "Cycle")
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.CultivationCycle", "Cycle")
                         .WithMany("SeedingEvents")
                         .HasForeignKey("CycleId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("RecordedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.SeedReceiptLot", "SeedLot")
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.SeedReceiptLot", "SeedLot")
                         .WithMany()
                         .HasForeignKey("SeedLotId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -6111,15 +6111,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("SeedLot");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.StatusTransition", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Platform.StatusTransition", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Status", "FromStatus")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "FromStatus")
                         .WithMany()
                         .HasForeignKey("FromStatusId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Status", "ToStatus")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "ToStatus")
                         .WithMany()
                         .HasForeignKey("ToStatusId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -6130,20 +6130,20 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("ToStatus");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.TraceCorrection", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Traceability.TraceCorrection", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("ApprovedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("CorrectedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.TraceabilityLot", "Lot")
+                    b.HasOne("OMTS.Domain.Entities.Traceability.TraceabilityLot", "Lot")
                         .WithMany("Corrections")
                         .HasForeignKey("LotId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -6152,31 +6152,31 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Lot");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.TracePublicationVersion", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Traceability.TracePublicationVersion", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.TraceabilityLot", "Lot")
+                    b.HasOne("OMTS.Domain.Entities.Traceability.TraceabilityLot", "Lot")
                         .WithMany("PublicationVersions")
                         .HasForeignKey("LotId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("PublishedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("ReviewedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("WithdrawnByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -6186,14 +6186,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.TraceabilityLot", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Traceability.TraceabilityLot", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("DisposedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.SalesOrder", "InitialOrder")
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesOrder", "InitialOrder")
                         .WithMany()
                         .HasForeignKey("InitialOrderId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -6202,9 +6202,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("InitialOrder");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.VerificationCode", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.VerificationCode", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Account", "Account")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", "Account")
                         .WithMany()
                         .HasForeignKey("AccountId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -6212,30 +6212,30 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Account");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.WaterMeasurement", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.WaterMeasurement", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("ConfirmedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.WaterMeasurement", "CorrectedFromMeasurement")
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.WaterMeasurement", "CorrectedFromMeasurement")
                         .WithMany()
                         .HasForeignKey("CorrectedFromMeasurementId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("MeasuredByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Status", "Status")
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.FarmingZone", "Zone")
+                    b.HasOne("OMTS.Domain.Entities.Farming.FarmingZone", "Zone")
                         .WithMany("WaterMeasurements")
                         .HasForeignKey("ZoneId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -6248,39 +6248,39 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Zone");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.WorkAssignment", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.WorkAssignment", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Account", null)
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("CancelledByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Contractor", "Contractor")
+                    b.HasOne("OMTS.Domain.Entities.Labor.Contractor", "Contractor")
                         .WithMany()
                         .HasForeignKey("ContractorId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.CultivationCycle", "Cycle")
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.CultivationCycle", "Cycle")
                         .WithMany()
                         .HasForeignKey("CycleId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Employee", "Employee")
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
                         .WithMany()
                         .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Raft", "Raft")
+                    b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
                         .WithMany()
                         .HasForeignKey("RaftId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.SeasonalWorker", "Worker")
+                    b.HasOne("OMTS.Domain.Entities.Labor.SeasonalWorker", "Worker")
                         .WithMany()
                         .HasForeignKey("WorkerId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.FarmingZone", "Zone")
+                    b.HasOne("OMTS.Domain.Entities.Farming.FarmingZone", "Zone")
                         .WithMany()
                         .HasForeignKey("ZoneId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -6299,9 +6299,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Zone");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.ZoneComplianceDocument", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.ZoneComplianceDocument", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.ZoneComplianceDocument", "ReplacesDocument")
+                    b.HasOne("OMTS.Domain.Entities.Farming.ZoneComplianceDocument", "ReplacesDocument")
                         .WithMany()
                         .HasForeignKey("ReplacesDocumentId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -6309,7 +6309,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("ReplacesDocument");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Account", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.Account", b =>
                 {
                     b.Navigation("AccessGrants");
 
@@ -6320,7 +6320,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("LoginSessions");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Cooperative", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.Cooperative", b =>
                 {
                     b.Navigation("Customers");
 
@@ -6329,7 +6329,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("FarmingZones");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.CultivationCycle", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationCycle", b =>
                 {
                     b.Navigation("LaneSegments");
 
@@ -6338,22 +6338,22 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("SeedingEvents");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Customer", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.Customer", b =>
                 {
                     b.Navigation("Orders");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.CustomerCredit", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Finance.CustomerCredit", b =>
                 {
                     b.Navigation("Refunds");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.CustomerReceipt", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Finance.CustomerReceipt", b =>
                 {
                     b.Navigation("Allocations");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.FarmingZone", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.FarmingZone", b =>
                 {
                     b.Navigation("DocumentScopes");
 
@@ -6362,29 +6362,29 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("WaterMeasurements");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.HarvestEvent", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Traceability.HarvestEvent", b =>
                 {
                     b.Navigation("HarvestedSegments");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.LaborSettlement", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.LaborSettlement", b =>
                 {
                     b.Navigation("PayLines");
 
                     b.Navigation("Payments");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Lane", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.Lane", b =>
                 {
                     b.Navigation("Segments");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.PhysicalReturn", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.AfterSales.PhysicalReturn", b =>
                 {
                     b.Navigation("ResaleOrders");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Raft", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.Raft", b =>
                 {
                     b.Navigation("CultivationCycles");
 
@@ -6395,19 +6395,19 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("MaterialRecords");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.RaftMaterialRecord", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.RaftMaterialRecord", b =>
                 {
                     b.Navigation("Lines");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Role", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.Role", b =>
                 {
                     b.Navigation("AccessGrants");
 
                     b.Navigation("Permissions");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.SaleTransaction", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SaleTransaction", b =>
                 {
                     b.Navigation("Adjustments");
 
@@ -6416,7 +6416,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("ReceiptAllocations");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.SalesOrder", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesOrder", b =>
                 {
                     b.Navigation("Handovers");
 
@@ -6429,17 +6429,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Weighings");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.SeedSupplier", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedSupplier", b =>
                 {
                     b.Navigation("ReceiptLots");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.SeedingEvent", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingEvent", b =>
                 {
                     b.Navigation("SeededSegments");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.TraceabilityLot", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Traceability.TraceabilityLot", b =>
                 {
                     b.Navigation("Corrections");
 
@@ -6450,7 +6450,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("SourceSegments");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.ZoneComplianceDocument", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.ZoneComplianceDocument", b =>
                 {
                     b.Navigation("ZoneScopes");
                 });

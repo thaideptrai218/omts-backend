@@ -1,7 +1,11 @@
 using OMTS.Domain.Common;
-using OMTS.Domain.Statuses;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Cultivation;
+using OMTS.Domain.Entities.Farming;
+using OMTS.Domain.Entities.Platform;
+using OMTS.Domain.Entities.Sales;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Traceability;
 
 /// <summary>
 /// E24 – Actual harvest of a day for an order. Kg at the raft is only an estimate, never a commercial

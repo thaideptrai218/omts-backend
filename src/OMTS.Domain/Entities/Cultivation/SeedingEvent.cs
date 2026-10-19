@@ -1,6 +1,6 @@
 using OMTS.Domain.Common;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Cultivation;
 
 /// <summary>E17 – One seeding session of a cycle; the seeded lane portions are its LaneSegments.</summary>
 public class SeedingEvent : AuditableEntity

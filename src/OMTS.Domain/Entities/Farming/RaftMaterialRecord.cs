@@ -1,7 +1,8 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Farming;
 
 /// <summary>
 /// E49 – Raft material costs at raft creation or when floats/lines are replaced. Exactly one Raft

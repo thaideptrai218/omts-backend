@@ -1,6 +1,6 @@
 using OMTS.Domain.Enums;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Identity;
 
 /// <summary>
 /// E05 – Permissions of a role on one function. Composite key (RoleId, FunctionCode); the function

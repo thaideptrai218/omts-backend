@@ -1,6 +1,7 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Entities.Identity;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Platform;
 
 /// <summary>
 /// E48 – Who changed what, when and why (NFR-02). Never edited or deleted. Also the history of every

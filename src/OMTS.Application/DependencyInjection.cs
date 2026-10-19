@@ -1,7 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using OMTS.Application.Authentication;
-using OMTS.Application.Authorization;
+using OMTS.Application.Common.Interfaces;
+using OMTS.Application.Features.Auth;
+using OMTS.Application.Features.Authorization;
 
 namespace OMTS.Application;
 

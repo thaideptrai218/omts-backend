@@ -1,6 +1,7 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Entities.Traceability;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Sales;
 
 /// <summary>
 /// E27 – Proof the current buyer received the goods at the port. Allowed only while the lot's

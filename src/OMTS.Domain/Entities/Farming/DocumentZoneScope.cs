@@ -1,4 +1,4 @@
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Farming;
 
 /// <summary>E09 – Links a compliance document to a zone it covers. Composite key (DocumentId, ZoneId).</summary>
 public class DocumentZoneScope

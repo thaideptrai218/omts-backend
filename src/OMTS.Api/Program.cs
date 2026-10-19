@@ -1,6 +1,7 @@
 using Microsoft.OpenApi.Models;
-using OMTS.Api.Authentication;
-using OMTS.Api.Authorization;
+using OMTS.Api.Extensions;
+using OMTS.Api.Filters;
+using OMTS.Api.Services;
 using OMTS.Application;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Infrastructure;

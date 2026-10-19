@@ -1,8 +1,10 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Platform;
+using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
-using OMTS.Domain.Statuses;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.AfterSales;
 
 /// <summary>
 /// E32 – Post-sale discount or weight-correction increase/decrease; never changes the original price.

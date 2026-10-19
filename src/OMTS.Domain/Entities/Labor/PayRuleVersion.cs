@@ -1,8 +1,10 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Entities.Platform;
 using OMTS.Domain.Enums;
-using OMTS.Domain.Statuses;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Labor;
 
 /// <summary>
 /// E42 – Monthly salary (per employee) or daily wage rate (per subject type) valid for a period. Only

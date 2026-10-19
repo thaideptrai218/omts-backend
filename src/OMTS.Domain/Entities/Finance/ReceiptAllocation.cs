@@ -1,6 +1,7 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Entities.Sales;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Finance;
 
 /// <summary>E35 – Part of a receipt allocated to a sale; total allocated ≤ amount received.</summary>
 public class ReceiptAllocation : AuditableEntity

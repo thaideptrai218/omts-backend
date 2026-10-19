@@ -1,7 +1,8 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Finance;
 
 /// <summary>E37 – Money actually paid back to a customer, per installment (BR-15/16).</summary>
 public class CustomerRefund : AuditableEntity

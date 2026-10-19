@@ -1,8 +1,13 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.AfterSales;
+using OMTS.Domain.Entities.Cultivation;
+using OMTS.Domain.Entities.Farming;
+using OMTS.Domain.Entities.Platform;
+using OMTS.Domain.Entities.Traceability;
 using OMTS.Domain.Enums;
-using OMTS.Domain.Statuses;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Sales;
 
 /// <summary>
 /// E23 – Trader order; it exists before any harvest or resale (BR-08). A first-sale order gets at most

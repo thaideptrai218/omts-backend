@@ -1,6 +1,7 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Entities.Farming;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Cultivation;
 
 /// <summary>E19 – Cultivation event/observation that is not a structured water measurement.</summary>
 public class CultivationLogEntry : AuditableEntity

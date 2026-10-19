@@ -1,6 +1,6 @@
 using OMTS.Domain.Common;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Traceability;
 
 /// <summary>E30 – Correction of a lot's source/weight data with reason and publication impact (UC39).</summary>
 public class TraceCorrection : AuditableEntity
