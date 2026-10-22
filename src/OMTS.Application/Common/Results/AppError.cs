@@ -28,6 +28,12 @@ public sealed record AppError(ErrorKind Kind, UserMessage Message, IReadOnlyDict
         UserMessages.Invalid(field),
         hint is null ? new Dictionary<string, object?> { ["field"] = field } : new Dictionary<string, object?> { ["field"] = field, ["hint"] = hint });
 
+    /// <summary>MSG01 naming the first invalid field; <c>fields</c> lists every invalid one.</summary>
+    public static AppError InvalidFields(IReadOnlyList<string> fields) => new(
+        ErrorKind.Validation,
+        UserMessages.Invalid(fields[0]),
+        new Dictionary<string, object?> { ["field"] = fields[0], ["fields"] = fields });
+
     public static readonly AppError Forbidden = new(ErrorKind.Forbidden, UserMessages.NoPermission);
 
     public static readonly AppError NotFound = new(ErrorKind.NotFound, UserMessages.NotFound);

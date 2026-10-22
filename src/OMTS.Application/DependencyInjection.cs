@@ -5,6 +5,8 @@ using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Features.AccessManagement;
 using OMTS.Application.Features.Accounts;
 using OMTS.Application.Features.Audit;
+using OMTS.Application.Features.Cooperatives;
+using OMTS.Application.Features.Employees;
 using OMTS.Application.Features.Verification;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
@@ -50,6 +52,10 @@ public static class DependencyInjection
         services.AddScoped<AccessGrantService>();
         services.AddScoped<StaffAccountService>();
         services.AddScoped<RoleService>();
+
+        // FARM-01 cooperative profile, LAB-01 employees
+        services.AddScoped<CooperativeProfileService>();
+        services.AddScoped<EmployeeService>();
 
         return services;
     }

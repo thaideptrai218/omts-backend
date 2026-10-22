@@ -1,0 +1,368 @@
+using OMTS.Application.Common;
+using OMTS.Application.Common.Concurrency;
+using OMTS.Application.Common.Interfaces;
+using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Messages;
+using OMTS.Application.Common.Results;
+using OMTS.Application.Features.AccessManagement;
+using OMTS.Application.Features.AccessManagement.Dtos;
+using OMTS.Application.Features.Audit;
+using OMTS.Application.Features.Audit.Models;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Enums;
+
+namespace OMTS.Application.Features.Employees;
+
+/// <summary>
+/// LAB-01 – the Owner keeps one profile per permanent employee and ends employment instead of deleting.
+/// The login account can be created in the same save (ACS-09 extends LAB-01); linking an account never
+/// grants permissions by itself.
+/// </summary>
+public sealed class EmployeeService(
+    IEmployeeRepository employees,
+    IAccountRepository accounts,
+    ICooperativeRepository cooperatives,
+    IFarmingZoneRepository zones,
+    StaffAccountService staffAccounts,
+    IStatusCatalog statusCatalog,
+    RowVersionGuard rowVersions,
+    AuditLogService audit,
+    IUnitOfWork unitOfWork,
+    TimeProvider timeProvider)
+{
+    public async Task<Paged<EmployeeListItem>> SearchAsync(
+        string? search, int? statusId, Guid? zoneId, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        (page, pageSize) = (Math.Max(1, page), Math.Clamp(pageSize, 1, 100));
+        var (items, total) = await employees.SearchAsync(search, statusId, zoneId, page, pageSize, cancellationToken);
+        return new Paged<EmployeeListItem>(
+            items.Select(e => new EmployeeListItem(e.Id, e.FullName, e.PhoneNumber, Zones(e), Linked(e.Account), statusCatalog.DisplayNameOf(e.StatusId))).ToList(),
+            page, pageSize, total);
+    }
+
+    public async Task<Result<EmployeeView>> GetAsync(Guid id, CancellationToken cancellationToken) =>
+        await employees.GetForEditAsync(id, cancellationToken) is { } employee ? View(employee) : AppError.NotFound;
+
+    public async Task<IReadOnlyList<LinkableAccount>> LinkableAccountsAsync(CancellationToken cancellationToken) =>
+        (await accounts.ListLinkableStaffAsync(cancellationToken))
+            .Select(a => new LinkableAccount(a.Id, a.DisplayName, a.Username, a.PhoneNumber, statusCatalog.DisplayNameOf(a.StatusId)))
+            .ToList();
+
+    public async Task<Result<EmployeeSaved>> CreateAsync(SaveEmployeeRequest request, CancellationToken cancellationToken)
+    {
+        if (await RefuseOwnerRightsAsync(request.Account, cancellationToken) is { } refused)
+        {
+            return refused;
+        }
+
+        var checkedInput = await ValidateAsync(request, null, cancellationToken);
+        if (!checkedInput.IsSuccess)
+        {
+            return checkedInput.Error!;
+        }
+
+        var input = checkedInput.Value!;
+        var cooperative = await cooperatives.GetCurrentAsync(cancellationToken)
+            ?? throw new InvalidOperationException("The cooperative has not been created yet (run the bootstrap command).");
+        var employee = new Employee { CooperativeId = cooperative.Id };
+        Apply(employee, input);
+        employees.Add(employee);
+        foreach (var zoneId in input.WorkingZoneIds)
+        {
+            employees.AddWorkingZone(new EmployeeWorkingZone { EmployeeId = employee.Id, ZoneId = zoneId });
+        }
+
+        if (await LinkAsync(employee, request.AccountId, cancellationToken) is { } linkError)
+        {
+            return linkError;
+        }
+
+        StaffAccountWithPassword? created = null;
+        if (request.Account is not null)
+        {
+            var account = await AddAccountAsync(employee, request.Account, cancellationToken);
+            if (!account.IsSuccess)
+            {
+                return account.Error!;
+            }
+
+            created = account.Value;
+        }
+
+        audit.Record(new AuditEntry("Employee.Created", nameof(Employee)) { RecordId = employee.Id, After = Snapshot(employee, input.WorkingZoneIds) });
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return await SavedAsync(employee.Id, created, cancellationToken);
+    }
+
+    public async Task<Result<EmployeeSaved>> UpdateAsync(Guid id, SaveEmployeeRequest request, CancellationToken cancellationToken)
+    {
+        var employee = await employees.GetForEditAsync(id, cancellationToken);
+        if (employee is null)
+        {
+            return AppError.NotFound;
+        }
+
+        if (request.Account is not null)
+        {
+            // A new login account for an existing employee goes through POST .../{id}/account.
+            return AppError.Invalid("Account");
+        }
+
+        var checkedInput = await ValidateAsync(request, employee.Id, cancellationToken);
+        if (!checkedInput.IsSuccess)
+        {
+            return checkedInput.Error!;
+        }
+
+        if (await rowVersions.CheckAsync(employee, request.RowVersion, cancellationToken) is { } conflict)
+        {
+            return conflict;
+        }
+
+        var input = checkedInput.Value!;
+        var before = Snapshot(employee, employee.WorkingZones.Select(w => w.ZoneId).ToList());
+        Apply(employee, input);
+        foreach (var removed in employee.WorkingZones.Where(w => !input.WorkingZoneIds.Contains(w.ZoneId)).ToList())
+        {
+            employees.RemoveWorkingZone(removed);
+        }
+
+        foreach (var zoneId in input.WorkingZoneIds.Where(z => employee.WorkingZones.All(w => w.ZoneId != z)))
+        {
+            employees.AddWorkingZone(new EmployeeWorkingZone { EmployeeId = employee.Id, ZoneId = zoneId });
+        }
+
+        if (employee.AccountId != request.AccountId && await LinkAsync(employee, request.AccountId, cancellationToken) is { } linkError)
+        {
+            return linkError;
+        }
+
+        var (changedBefore, changedAfter) = AuditDiff.Changed(before, Snapshot(employee, input.WorkingZoneIds));
+        if (changedAfter is not null)
+        {
+            audit.Record(new AuditEntry("Employee.Updated", nameof(Employee)) { RecordId = employee.Id, Before = changedBefore, After = changedAfter });
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return await SavedAsync(employee.Id, null, cancellationToken);
+    }
+
+    /// <summary>Creates the login account of an employee who has none yet; the temporary password is returned once.</summary>
+    public async Task<Result<EmployeeSaved>> CreateAccountAsync(Guid id, NewEmployeeAccount request, CancellationToken cancellationToken)
+    {
+        if (await RefuseOwnerRightsAsync(request, cancellationToken) is { } refused)
+        {
+            return refused;
+        }
+
+        var employee = await employees.GetForEditAsync(id, cancellationToken);
+        if (employee is null)
+        {
+            return AppError.NotFound;
+        }
+
+        if (employee.AccountId is not null)
+        {
+            return AppError.Invalid("Account");
+        }
+
+        var created = await AddAccountAsync(employee, request, cancellationToken);
+        if (!created.IsSuccess)
+        {
+            return created.Error!;
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return await SavedAsync(employee.Id, created.Value, cancellationToken);
+    }
+
+    /// <summary>Employed → Left. Records already made stay; work or attendance after the end date blocks it (MSG11).</summary>
+    public async Task<Result<EmploymentChanged>> EndEmploymentAsync(Guid id, EndEmploymentRequest request, CancellationToken cancellationToken)
+    {
+        if (request.EndDate is not { } endDate)
+        {
+            return AppError.Invalid("End date");
+        }
+
+        var employee = await employees.GetForEditAsync(id, cancellationToken);
+        if (employee is null)
+        {
+            return AppError.NotFound;
+        }
+
+        if (SameStatus(employee, StatusIds.Employee.Left) is { } same)
+        {
+            return same;
+        }
+
+        var later = await employees.CountLaborRecordsAfterAsync(employee.Id, endDate, cancellationToken);
+        if (later.Total > 0)
+        {
+            return AppError.Conflict(UserMessages.StillInUse(
+                later.Total, $"attendance records ({later.AttendanceCount}), work assignments ({later.AssignmentCount}) after {endDate:dd/MM/yyyy}"));
+        }
+
+        employee.StatusId = StatusIds.Employee.Left;
+        employee.EmploymentEndDate = endDate;
+        audit.RecordStatusChange(nameof(Employee), employee.Id, null, StatusIds.Employee.Working, StatusIds.Employee.Left, $"End date {endDate:yyyy-MM-dd}");
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var followUp = employee.Account is { StatusId: StatusIds.Account.Active } ? new FollowUp("review-lock", employee.Account.Id) : null;
+        return new EmploymentChanged(View(employee), followUp);
+    }
+
+    /// <summary>Left → Employed; the end date is cleared and the Owner is asked to review the linked account.</summary>
+    public async Task<Result<EmploymentChanged>> ReinstateAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var employee = await employees.GetForEditAsync(id, cancellationToken);
+        if (employee is null)
+        {
+            return AppError.NotFound;
+        }
+
+        if (SameStatus(employee, StatusIds.Employee.Working) is { } same)
+        {
+            return same;
+        }
+
+        employee.StatusId = StatusIds.Employee.Working;
+        employee.EmploymentEndDate = null;
+        audit.RecordStatusChange(nameof(Employee), employee.Id, null, StatusIds.Employee.Left, StatusIds.Employee.Working);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var followUp = employee.AccountId is { } accountId ? new FollowUp("review-access", accountId) : null;
+        return new EmploymentChanged(View(employee), followUp);
+    }
+
+    private async Task<Result<EmployeeInput>> ValidateAsync(SaveEmployeeRequest request, Guid? employeeId, CancellationToken cancellationToken)
+    {
+        if (request.AccountId is not null && request.Account is not null)
+        {
+            return AppError.Invalid("Account");
+        }
+
+        var (input, invalid) = EmployeeInput.From(request, timeProvider.Today());
+        if (input is null)
+        {
+            return AppError.InvalidFields(invalid);
+        }
+
+        var zoneRows = await zones.GetByIdsAsync(input.WorkingZoneIds, cancellationToken);
+        if (zoneRows.Count != input.WorkingZoneIds.Count || zoneRows.Any(z => z.StatusId != StatusIds.Usage.InUse))
+        {
+            return AppError.Invalid("Working zones");
+        }
+
+        if (await employees.FindSamePersonAsync(input.FullName, input.PhoneNumber, employeeId, cancellationToken) is { } same)
+        {
+            return AppError.Conflict(UserMessages.AlreadyExists("Employee profile"), new Dictionary<string, object?> { ["existingEmployeeId"] = same.Id });
+        }
+
+        return input;
+    }
+
+    private async Task<AppError?> LinkAsync(Employee employee, Guid? accountId, CancellationToken cancellationToken)
+    {
+        if (accountId is null)
+        {
+            employee.AccountId = null;
+            return null;
+        }
+
+        var account = await accounts.GetByIdAsync(accountId.Value, cancellationToken);
+        if (account is null || account.SubjectType is not (SubjectType.Staff or SubjectType.CooperativeOwner))
+        {
+            return AppError.Invalid("Account");
+        }
+
+        if (await employees.GetByAccountIdAsync(account.Id, cancellationToken) is { } linked && linked.Id != employee.Id)
+        {
+            return AppError.Conflict(UserMessages.AccountAlreadyLinked(linked.FullName), new Dictionary<string, object?> { ["existingEmployeeId"] = linked.Id });
+        }
+
+        employee.AccountId = account.Id;
+        return null;
+    }
+
+    private async Task<Result<StaffAccountWithPassword>> AddAccountAsync(Employee employee, NewEmployeeAccount request, CancellationToken cancellationToken)
+    {
+        var created = await staffAccounts.AddStaffAccountAsync(
+            new CreateStaffAccountRequest(
+                request.DisplayName ?? employee.FullName, request.Username, request.PhoneNumber ?? employee.PhoneNumber ?? string.Empty,
+                request.Email, null, request.Grants),
+            employee,
+            cancellationToken);
+
+        // LAB-01 names the duplicate "Account" whatever field collided.
+        return created.Error is { Message.Code: "MSG03" } duplicate
+            ? AppError.Conflict(UserMessages.AlreadyExists("Account"), duplicate.Details)
+            : created;
+    }
+
+    // An attempt to give Owner rights is refused before anything is added, so only its audit row is saved.
+    private async Task<AppError?> RefuseOwnerRightsAsync(NewEmployeeAccount? account, CancellationToken cancellationToken)
+    {
+        if (account?.SubjectType is not { } subjectType || subjectType == SubjectType.Staff)
+        {
+            return null;
+        }
+
+        audit.Record(new AuditEntry("Account.OwnerRightsRefused", nameof(Account)) { RecordCode = account.Username, After = new { RequestedSubjectType = subjectType.ToString() } });
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return AppError.Forbidden;
+    }
+
+    private AppError? SameStatus(Employee employee, int target)
+    {
+        if (employee.StatusId != target)
+        {
+            return null;
+        }
+
+        var name = statusCatalog.DisplayNameOf(target);
+        return AppError.Conflict(UserMessages.CannotChangeStatus("Employee", name, name, "the employee is already in this status"));
+    }
+
+    private async Task<EmployeeSaved> SavedAsync(Guid id, StaffAccountWithPassword? created, CancellationToken cancellationToken) => new(
+        View((await employees.GetForEditAsync(id, cancellationToken))!),
+        UserMessages.Saved("Employee profile").Text,
+        created?.TemporaryPassword,
+        created?.TemporaryPasswordExpiresAt);
+
+    private static void Apply(Employee employee, EmployeeInput input)
+    {
+        employee.FullName = input.FullName;
+        employee.PhoneNumber = input.PhoneNumber;
+        employee.Birthday = input.Birthday;
+        employee.Address = input.Address;
+        employee.Area = input.Area;
+        employee.Ward = input.Ward;
+        employee.OtherInformation = input.OtherInformation;
+        employee.Notes = input.Notes;
+        employee.BankAccount = input.BankAccount;
+    }
+
+    private static object Snapshot(Employee e, IReadOnlyList<Guid> zoneIds) => new
+    {
+        e.FullName, e.PhoneNumber, e.Birthday, e.Address, e.Area, e.Ward, e.OtherInformation, e.Notes, e.AccountId,
+        WorkingZoneIds = zoneIds.Order().ToList(),
+        BankAccount = e.BankAccount is { } bank
+            ? new { bank.BankName, AccountNumber = EmployeeInput.MaskAccountNumber(bank.AccountNumber), bank.AccountHolderName }
+            : null,
+    };
+
+    private EmployeeView View(Employee e) => new(
+        e.Id, e.FullName, e.PhoneNumber, e.Birthday, e.Address, e.Area, e.Ward, e.OtherInformation, e.Notes, Zones(e),
+        e.BankAccount is { } bank ? new EmployeeBankAccountView(bank.BankName, bank.AccountNumber, bank.AccountHolderName) : null,
+        Linked(e.Account),
+        statusCatalog.DisplayNameOf(e.StatusId),
+        e.EmploymentEndDate,
+        RowVersionGuard.Encode(e.RowVersion));
+
+    private static IReadOnlyList<ZoneRef> Zones(Employee e) =>
+        e.WorkingZones.Where(w => w.Zone is not null).Select(w => new ZoneRef(w.ZoneId, w.Zone.Code, w.Zone.Name)).OrderBy(z => z.Code).ToList();
+
+    private LinkedAccountView? Linked(Account? account) =>
+        account is null ? null : new LinkedAccountView(account.Id, account.Username, account.DisplayName, statusCatalog.DisplayNameOf(account.StatusId));
+}

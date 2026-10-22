@@ -26,5 +26,8 @@ public interface IAccountRepository
     Task<(IReadOnlyList<Account> Items, int Total)> SearchStaffAsync(
         string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken);
 
+    /// <summary>Staff accounts not linked to any employee profile (LAB-01 account picker), ordered by display name.</summary>
+    Task<IReadOnlyList<Account>> ListLinkableStaffAsync(CancellationToken cancellationToken);
+
     void Add(Account account);
 }
