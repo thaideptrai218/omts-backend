@@ -532,6 +532,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_FarmingZones", x => x.Id);
+                    table.CheckConstraint("CK_FarmingZone_Coordinates", "([Latitude] IS NULL AND [Longitude] IS NULL) OR ([Latitude] BETWEEN -90 AND 90 AND [Longitude] BETWEEN -180 AND 180)");
                     table.ForeignKey(
                         name: "FK_FarmingZones_Cooperatives_CooperativeId",
                         column: x => x.CooperativeId,
@@ -874,6 +875,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     ZoneId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Code = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     Location = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    Latitude = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    Longitude = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
                     Size = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
                     PhotoUrl = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
                     ConditionNotes = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: true),
@@ -887,6 +890,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Rafts", x => x.Id);
+                    table.CheckConstraint("CK_Raft_Coordinates", "([Latitude] IS NULL AND [Longitude] IS NULL) OR ([Latitude] BETWEEN -90 AND 90 AND [Longitude] BETWEEN -180 AND 180)");
                     table.ForeignKey(
                         name: "FK_Rafts_FarmingZones_ZoneId",
                         column: x => x.ZoneId,
