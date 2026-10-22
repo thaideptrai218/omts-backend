@@ -94,6 +94,53 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/test-only/zones/{zone.Id}/rafts", null)).StatusCode);
     }
 
+    // FARM-05: "Expired" is derived from EffectiveTo; the grant stops applying although its status stays Effective.
+    [Fact]
+    public async Task Expired_grant_is_denied()
+    {
+        var (zoneA, zoneB) = (await factory.AddZoneAsync(NewCode()), await factory.AddZoneAsync(NewCode()));
+        var (client, account, _, role) = await StaffSetupAsync(zoneA);
+        var yesterday = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1);
+        await factory.GrantAsync(account, role, zoneB, g =>
+        {
+            g.EffectiveFrom = yesterday.AddDays(-10);
+            g.EffectiveTo = yesterday;
+        });
+
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zoneA.Id}/rafts")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/test-only/zones/{zoneB.Id}/rafts")).StatusCode);
+    }
+
+    // ACS-10: a discontinued role no longer gives its permissions, effective on the next request.
+    [Fact]
+    public async Task Discontinued_role_is_denied_immediately()
+    {
+        var zone = await factory.AddZoneAsync(NewCode());
+        var (client, _, _, role) = await StaffSetupAsync(zone);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zone.Id}/rafts")).StatusCode);
+
+        await factory.UpdateAsync<Role>(role.Id, r => r.StatusId = StatusIds.Usage.Discontinued);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/test-only/zones/{zone.Id}/rafts")).StatusCode);
+    }
+
+    // FARM-05: permissions are the union of the roles granted in a zone, each limited to its own zone.
+    [Fact]
+    public async Task Permissions_are_the_union_of_roles_limited_to_their_zones()
+    {
+        var (zoneA, zoneB) = (await factory.AddZoneAsync(NewCode()), await factory.AddZoneAsync(NewCode()));
+        var (client, account, _, _) = await StaffSetupAsync(zoneA);
+        var creator = await factory.AddRoleAsync($"Role {NewCode()}", (PermissionFunctions.Rafts, View: true, Create: true, Edit: false));
+        await factory.GrantAsync(account, creator, zoneB);
+
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/test-only/zones/{zoneB.Id}/rafts", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsync($"/test-only/zones/{zoneA.Id}/rafts", null)).StatusCode);
+
+        // A second role in zone A adds its rights there too.
+        await factory.GrantAsync(account, creator, zoneA);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/test-only/zones/{zoneA.Id}/rafts", null)).StatusCode);
+    }
+
     // UC11 branch 1b: locking invalidates every open session.
     [Fact]
     public async Task Locked_account_is_rejected_with_an_existing_token()

@@ -23,6 +23,20 @@ jobs:
         with:
           global-json-file: global.json
 
+      # Database tests ([SqlServerFact]) run against a throwaway SQL Server; the sa password is generated
+      # per run and never stored in the repository.
+      - name: Start SQL Server for database tests
+        run: |
+          password="$(openssl rand -base64 24 | tr -d '/+=')$(openssl rand -hex 8)"
+          echo "::add-mask::$password"
+          docker run -d --name omts-sql -e ACCEPT_EULA=Y -e "MSSQL_SA_PASSWORD=$password" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+          for i in $(seq 1 60); do
+            docker logs omts-sql 2>&1 | grep -q "SQL Server is now ready for client connections" && break
+            sleep 2
+          done
+          sleep 5
+          echo "OMTS_TEST_SQLSERVER=Server=localhost,1433;User Id=sa;Password=$password;TrustServerCertificate=True" >> "$GITHUB_ENV"
+
       - run: dotnet restore OMTS.sln
       - run: dotnet build OMTS.sln -c Release --no-restore
       - run: dotnet test OMTS.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./coverage

@@ -51,6 +51,22 @@ dotnet run --project src/OMTS.Api        # Swagger at /swagger, health at /healt
 dotnet test                               # all tests
 ```
 
+API integration tests use an in-memory database. Tests marked `[SqlServerFact]` (migrations, constraints,
+transactions) need a real SQL Server and are skipped unless `OMTS_TEST_SQLSERVER` holds a server connection
+string; each test creates and drops its own database. CI starts a SQL Server container for them.
+
+```bash
+OMTS_TEST_SQLSERVER="Server=localhost;User Id=sa;Password=<pwd>;TrustServerCertificate=True" dotnet test
+```
+
+### Authentication
+
+`POST /api/auth/login` (username, verified phone or verified email) returns a 15-minute access token and a
+refresh token (7 days web / 30 days mobile, rotated on every `POST /api/auth/refresh`); `POST /api/auth/logout`
+revokes the session. `GET /api/me` and `GET /api/me/permissions` return the caller and their effective
+zone-scoped permissions. Errors are RFC 7807 problem details whose `code` is the SRS message code
+(`MSG12`, `MSG69`…) and whose `detail` is the SRS English text.
+
 ### Database (EF Core code-first)
 
 Entities live in `OMTS.Domain`; the DbContext, configurations and migrations live in `OMTS.Infrastructure/Persistence`.
