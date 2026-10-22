@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.UnitTests.Fakes;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
 
 namespace OMTS.Application.UnitTests.Features.Audit;
@@ -14,7 +15,7 @@ public class AuditLogServiceTests
     private readonly FakeAuditEventRepository _repository = new();
 
     private AuditLogService CreateService(Guid? callerId) =>
-        new(_repository, new FakeCurrentUser(callerId), new FixedTimeProvider(Now));
+        new(_repository, new FakeCurrentUser(callerId), new FakeStatusCatalog(), new FixedTimeProvider(Now));
 
     [Fact]
     public void Record_stores_actor_time_action_record_values_and_reason()
@@ -149,6 +150,35 @@ public class AuditLogServiceTests
     public void Record_requires_action_and_record_type(string action, string recordType)
     {
         Assert.ThrowsAny<ArgumentException>(() => CreateService(CallerId).Record(new AuditEntry(action, recordType)));
+        Assert.Empty(_repository.Added);
+    }
+
+    [Fact]
+    public void RecordStatusChange_writes_old_and_new_status_codes_with_the_reason()
+    {
+        var accountId = Guid.NewGuid();
+        var zoneId = Guid.NewGuid();
+
+        var auditEvent = CreateService(CallerId).RecordStatusChange(
+            "Account", accountId, "nva", StatusIds.Account.Active, StatusIds.Account.Locked, "Left the cooperative", zoneId);
+
+        Assert.Equal("Account.StatusChanged", auditEvent.Action);
+        Assert.Equal("Account", auditEvent.RecordType);
+        Assert.Equal(accountId, auditEvent.RecordId);
+        Assert.Equal("nva", auditEvent.RecordCode);
+        Assert.Equal("""{"Status":"ACTIVE"}""", auditEvent.Before);
+        Assert.Equal("""{"Status":"LOCKED"}""", auditEvent.After);
+        Assert.Equal("Left the cooperative", auditEvent.Reason);
+        Assert.Equal(zoneId, auditEvent.ZoneId);
+        Assert.Equal(CallerId, auditEvent.ActorAccountId);
+        Assert.Single(_repository.Added);
+    }
+
+    [Fact]
+    public void RecordStatusChange_requires_a_record_type()
+    {
+        Assert.ThrowsAny<ArgumentException>(() => CreateService(CallerId)
+            .RecordStatusChange(" ", Guid.NewGuid(), null, StatusIds.Usage.InUse, StatusIds.Usage.Discontinued));
         Assert.Empty(_repository.Added);
     }
 }

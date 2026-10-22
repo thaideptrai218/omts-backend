@@ -2760,6 +2760,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RecordType", "RecordId");
 
+                    b.HasIndex("ZoneId", "OccurredAt");
+
                     b.ToTable("AuditEvents");
                 });
 
@@ -2980,7 +2982,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Group = "COOPERATIVE",
                             IsFinal = false,
                             IsInitial = true,
-                            Meaning = "The System Administrator has just set up the cooperative; the profile lacks legal information.",
+                            Meaning = "Created at deployment; the Cooperative Owner has not completed the legal profile yet.",
                             SortOrder = 1
                         },
                         new
@@ -3609,29 +3611,29 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             ReasonRequired = false,
                             ToStatusId = 202,
                             TriggerEvent = "Action",
-                            UseCases = "UC09"
+                            UseCases = "FARM-01"
                         },
                         new
                         {
                             Id = 4,
-                            AllowedPerformers = "Cooperative Owner; System Administrator",
+                            AllowedPerformers = "Cooperative Owner (staff accounts); System Administrator (trader accounts, platform administration outside the cooperative app)",
                             FromStatusId = 301,
                             GuardCondition = "Lock the account.",
                             ReasonRequired = true,
                             ToStatusId = 302,
                             TriggerEvent = "Action",
-                            UseCases = "UC11, UC74"
+                            UseCases = "ACS-09"
                         },
                         new
                         {
                             Id = 5,
-                            AllowedPerformers = "Cooperative Owner; System Administrator",
+                            AllowedPerformers = "Cooperative Owner (staff accounts); System Administrator (trader accounts, platform administration outside the cooperative app)",
                             FromStatusId = 302,
-                            GuardCondition = "Unlock after verification; the System Administrator unlocks only accounts it locked itself.",
+                            GuardCondition = "Unlock after verification; trader accounts are unlocked only by the System Administrator.",
                             ReasonRequired = true,
                             ToStatusId = 301,
                             TriggerEvent = "Action",
-                            UseCases = "UC11, UC74"
+                            UseCases = "ACS-09"
                         },
                         new
                         {

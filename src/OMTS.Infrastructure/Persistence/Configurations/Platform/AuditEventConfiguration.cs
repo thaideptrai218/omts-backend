@@ -16,5 +16,7 @@ internal sealed class AuditEventConfiguration : IEntityTypeConfiguration<AuditEv
         builder.Property(x => x.ViewScope).HasMaxLength(Lengths.ShortText);
         builder.HasIndex(x => new { x.RecordType, x.RecordId });
         builder.HasIndex(x => x.OccurredAt);
+        // Audit search by zone and period (ACS-11).
+        builder.HasIndex(x => new { x.ZoneId, x.OccurredAt });
     }
 }

@@ -22,11 +22,11 @@ public sealed record AuditEntry(string Action, string RecordType)
 
     public string? Reason { get; init; }
 
-    /// <summary>Zone of the record, so the log is searched only within the permitted scope (UC75).</summary>
+    /// <summary>Zone of the record, used to search the log by zone (ACS-11).</summary>
     public Guid? ZoneId { get; init; }
 
     /// <summary>
-    /// Who acted when it is not the caller of the request, e.g. the recovered account in UC03.
+    /// Who acted when it is not the caller of the request, e.g. the recovered account in ACS-03.
     /// Defaults to the current user; empty for system or background job actions.
     /// </summary>
     public Guid? ActorAccountId { get; init; }

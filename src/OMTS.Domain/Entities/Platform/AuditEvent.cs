@@ -26,7 +26,12 @@ public class AuditEvent : Entity
     public string? Before { get; set; }
     public string? After { get; set; }
 
-    /// <summary>Zone the event belongs to, so the log is searched only within the permitted scope.</summary>
+    /// <summary>Zone the event belongs to, used to search the log by zone (ACS-11).</summary>
     public Guid? ZoneId { get; set; }
+
+    /// <summary>
+    /// Never set: since 22/10 the audit search (ACS-11) is Cooperative Owner only, so there is no view
+    /// scope to store. Kept for a later per-role audit view.
+    /// </summary>
     public string? ViewScope { get; set; }
 }

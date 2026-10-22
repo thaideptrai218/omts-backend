@@ -22,8 +22,8 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var (zoneA, zoneB) = (await factory.AddZoneAsync(NewCode()), await factory.AddZoneAsync(NewCode()));
         var client = await StaffWithGrantAsync(zoneA);
 
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zoneA.Id}/rafts")).StatusCode);
-        var otherZone = await client.GetAsync($"/test-only/zones/{zoneB.Id}/rafts");
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zoneA.Id}/water-measurements")).StatusCode);
+        var otherZone = await client.GetAsync($"/test-only/zones/{zoneB.Id}/water-measurements");
         Assert.Equal(HttpStatusCode.Forbidden, otherZone.StatusCode);
         Assert.Equal("MSG02", await ErrorCodeAsync(otherZone));
     }
@@ -34,7 +34,7 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var zone = await factory.AddZoneAsync(NewCode());
         var client = await StaffWithGrantAsync(zone);
 
-        var create = await client.PostAsync($"/test-only/zones/{zone.Id}/rafts", null);
+        var create = await client.PostAsync($"/test-only/zones/{zone.Id}/water-measurements", null);
 
         Assert.Equal(HttpStatusCode.Forbidden, create.StatusCode);
     }
@@ -46,8 +46,8 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var zone = await factory.AddZoneAsync(NewCode());
         var client = await StaffWithGrantAsync(zone: null);
 
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zone.Id}/rafts")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/test-only/seed-suppliers")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zone.Id}/water-measurements")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/test-only/supplier-payments")).StatusCode);
     }
 
     // Section 4.4: cooperative-wide data needs a role assigned at All zones.
@@ -57,7 +57,7 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var zone = await factory.AddZoneAsync(NewCode());
         var client = await StaffWithGrantAsync(zone);
 
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/test-only/seed-suppliers")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/test-only/supplier-payments")).StatusCode);
     }
 
     // BR-19: revoking applies immediately, even though the permission was just cached.
@@ -66,7 +66,7 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     {
         var zone = await factory.AddZoneAsync(NewCode());
         var (client, _, grant, _) = await StaffSetupAsync(zone);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zone.Id}/rafts")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zone.Id}/water-measurements")).StatusCode);
 
         await factory.UpdateAsync<AccessGrant>(grant.Id, g =>
         {
@@ -74,7 +74,7 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
             g.RevokedAt = DateTimeOffset.UtcNow;
         });
 
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/test-only/zones/{zone.Id}/rafts")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/test-only/zones/{zone.Id}/water-measurements")).StatusCode);
     }
 
     // BR-19: role permission edits apply immediately to every account holding the role.
@@ -83,15 +83,15 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     {
         var zone = await factory.AddZoneAsync(NewCode());
         var (client, _, _, role) = await StaffSetupAsync(zone);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsync($"/test-only/zones/{zone.Id}/rafts", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsync($"/test-only/zones/{zone.Id}/water-measurements", null)).StatusCode);
 
         await factory.UseDbAsync(db =>
         {
-            var permission = db.RolePermissions.Single(p => p.RoleId == role.Id && p.FunctionCode == PermissionFunctions.Rafts);
+            var permission = db.RolePermissions.Single(p => p.RoleId == role.Id && p.FunctionCode == PermissionFunctions.WaterMeasurements);
             permission.CanCreate = true;
         });
 
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/test-only/zones/{zone.Id}/rafts", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/test-only/zones/{zone.Id}/water-measurements", null)).StatusCode);
     }
 
     // FARM-05: "Expired" is derived from EffectiveTo; the grant stops applying although its status stays Effective.
@@ -107,8 +107,8 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
             g.EffectiveTo = yesterday;
         });
 
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zoneA.Id}/rafts")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/test-only/zones/{zoneB.Id}/rafts")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zoneA.Id}/water-measurements")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/test-only/zones/{zoneB.Id}/water-measurements")).StatusCode);
     }
 
     // ACS-10: a discontinued role no longer gives its permissions, effective on the next request.
@@ -117,11 +117,11 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     {
         var zone = await factory.AddZoneAsync(NewCode());
         var (client, _, _, role) = await StaffSetupAsync(zone);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zone.Id}/rafts")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zone.Id}/water-measurements")).StatusCode);
 
         await factory.UpdateAsync<Role>(role.Id, r => r.StatusId = StatusIds.Usage.Discontinued);
 
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/test-only/zones/{zone.Id}/rafts")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/test-only/zones/{zone.Id}/water-measurements")).StatusCode);
     }
 
     // FARM-05: permissions are the union of the roles granted in a zone, each limited to its own zone.
@@ -130,15 +130,15 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     {
         var (zoneA, zoneB) = (await factory.AddZoneAsync(NewCode()), await factory.AddZoneAsync(NewCode()));
         var (client, account, _, _) = await StaffSetupAsync(zoneA);
-        var creator = await factory.AddRoleAsync($"Role {NewCode()}", (PermissionFunctions.Rafts, View: true, Create: true, Edit: false));
+        var creator = await factory.AddRoleAsync($"Role {NewCode()}", (PermissionFunctions.WaterMeasurements, View: true, Create: true, Edit: false));
         await factory.GrantAsync(account, creator, zoneB);
 
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/test-only/zones/{zoneB.Id}/rafts", null)).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsync($"/test-only/zones/{zoneA.Id}/rafts", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/test-only/zones/{zoneB.Id}/water-measurements", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsync($"/test-only/zones/{zoneA.Id}/water-measurements", null)).StatusCode);
 
         // A second role in zone A adds its rights there too.
         await factory.GrantAsync(account, creator, zoneA);
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/test-only/zones/{zoneA.Id}/rafts", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/test-only/zones/{zoneA.Id}/water-measurements", null)).StatusCode);
     }
 
     // UC11 branch 1b: locking invalidates every open session.
@@ -150,7 +150,7 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
 
         await factory.UpdateAsync<Account>(account.Id, a => a.StatusId = StatusIds.Account.Locked);
 
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync($"/test-only/zones/{zone.Id}/rafts")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync($"/test-only/zones/{zone.Id}/water-measurements")).StatusCode);
     }
 
     [Fact]
@@ -160,9 +160,9 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var owner = await LoginAsync((await factory.AddAccountAsync(NewCode(), Password)).Username);
         var trader = await LoginAsync((await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader)).Username);
 
-        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync($"/test-only/zones/{zone.Id}/rafts")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync("/test-only/seed-suppliers")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await trader.GetAsync($"/test-only/zones/{zone.Id}/rafts")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync($"/test-only/zones/{zone.Id}/water-measurements")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync("/test-only/supplier-payments")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await trader.GetAsync($"/test-only/zones/{zone.Id}/water-measurements")).StatusCode);
     }
 
     // UC02 branch 2c: with a temporary password only UC04 endpoints (and logout) are open.
@@ -176,7 +176,7 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         });
         var client = await LoginAsync(account.Username);
 
-        var blocked = await client.GetAsync("/test-only/seed-suppliers");
+        var blocked = await client.GetAsync("/test-only/supplier-payments");
         Assert.Equal(HttpStatusCode.Forbidden, blocked.StatusCode);
         Assert.Equal("PASSWORD_CHANGE_REQUIRED", await ErrorCodeAsync(blocked));
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/me/permissions")).StatusCode);
@@ -191,14 +191,14 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var zone = await factory.AddZoneAsync(NewCode());
         var (client, account, _, _) = await StaffSetupAsync(zone, a => a.PhoneVerifiedAt = null);
 
-        var blocked = await client.GetAsync($"/test-only/zones/{zone.Id}/rafts");
+        var blocked = await client.GetAsync($"/test-only/zones/{zone.Id}/water-measurements");
         Assert.Equal(HttpStatusCode.Forbidden, blocked.StatusCode);
         Assert.Equal("MSG67", await ErrorCodeAsync(blocked));
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/test-only/verify-phone", null)).StatusCode);
 
         // Verifying the number lifts the gate right away (UC08 saves the account).
         await factory.UpdateAsync<Account>(account.Id, a => a.PhoneVerifiedAt = DateTimeOffset.UtcNow);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zone.Id}/rafts")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zone.Id}/water-measurements")).StatusCode);
     }
 
     [Fact]
@@ -209,25 +209,25 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
 
         var permissions = await client.GetFromJsonAsync<JsonElement>("/api/me/permissions");
 
-        var rafts = permissions.GetProperty("functions").EnumerateArray()
-            .Single(f => f.GetProperty("function").GetString() == PermissionFunctions.Rafts);
-        Assert.False(rafts.GetProperty("allZones").GetBoolean());
-        Assert.Equal(zone.Id, rafts.GetProperty("zoneIds")[0].GetGuid());
-        Assert.Equal(new string?[] { "View" }, rafts.GetProperty("actions").EnumerateArray().Select(a => a.GetString()));
+        var water = permissions.GetProperty("functions").EnumerateArray()
+            .Single(f => f.GetProperty("function").GetString() == PermissionFunctions.WaterMeasurements);
+        Assert.False(water.GetProperty("allZones").GetBoolean());
+        Assert.Equal(zone.Id, water.GetProperty("zoneIds")[0].GetGuid());
+        Assert.Equal(new string?[] { "View" }, water.GetProperty("actions").EnumerateArray().Select(a => a.GetString()));
         Assert.Equal(zone.Code, permissions.GetProperty("grants")[0].GetProperty("zoneCode").GetString());
     }
 
     private async Task<HttpClient> StaffWithGrantAsync(FarmingZone? zone) => (await StaffSetupAsync(zone)).Client;
 
-    /// <summary>A staff account holding a role that may only view rafts, granted in <paramref name="zone"/> (null = All zones).</summary>
+    /// <summary>A staff account holding a role that may only view water measurements, granted in <paramref name="zone"/> (null = All zones).</summary>
     private async Task<(HttpClient Client, Account Account, AccessGrant Grant, Role Role)> StaffSetupAsync(
         FarmingZone? zone, Action<Account>? configure = null)
     {
         var account = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff, configure);
         var role = await factory.AddRoleAsync(
             $"Role {NewCode()}",
-            (PermissionFunctions.Rafts, View: true, Create: false, Edit: false),
-            (PermissionFunctions.SeedSuppliers, View: true, Create: false, Edit: false));
+            (PermissionFunctions.WaterMeasurements, View: true, Create: false, Edit: false),
+            (PermissionFunctions.SupplierPayments, View: true, Create: false, Edit: false));
         var grant = await factory.GrantAsync(account, role, zone);
         return (await LoginAsync(account.Username), account, grant, role);
     }
