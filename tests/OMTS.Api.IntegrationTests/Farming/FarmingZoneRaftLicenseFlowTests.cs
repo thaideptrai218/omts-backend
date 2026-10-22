@@ -67,7 +67,8 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
         var raft = await created.Content.ReadFromJsonAsync<JsonElement>();
         var raftId = raft.GetProperty("id").GetGuid();
         Assert.Equal(1, raft.GetProperty("layoutVersion").GetInt32());
-        Assert.Equal(JsonValueKind.Null, raft.GetProperty("materialCost").ValueKind);
+        // No purchase receipt is linked to the raft yet (INP-03).
+        Assert.Equal(0, raft.GetProperty("materialCost").GetDecimal());
 
         var gap = await owner.PostAsJsonAsync($"/api/zones/{zoneId}/rafts", RaftBody(NewCode(), lanes: 2) with
         {

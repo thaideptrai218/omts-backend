@@ -284,7 +284,8 @@ public class RaftRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
 
         Assert.Equal([raftA.Id()], (await staff.Client.GetFromJsonAsync<JsonElement>($"/api/zones/{zoneA.Id()}/rafts")).EnumerateArray().Select(r => r.Id()));
         var detail = await staff.Client.GetFromJsonAsync<JsonElement>($"/api/rafts/{raftA.Id()}");
-        Assert.Equal(JsonValueKind.Null, detail.GetProperty("materialCost").ValueKind);
+        // Purchase receipts exist since OMTS-209: a raft with none costs 0.
+        Assert.Equal(0, detail.GetProperty("materialCost").GetDecimal());
         Assert.Equal(HttpStatusCode.OK, (await staff.Client.GetAsync($"/api/rafts/{raftA.Id()}/condition")).StatusCode);
 
         Assert.Equal("MSG02", await (await staff.Client.GetAsync($"/api/zones/{zoneB.Id()}/rafts")).ErrorCodeAsync());

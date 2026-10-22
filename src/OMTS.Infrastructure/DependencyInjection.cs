@@ -7,6 +7,7 @@ using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Interfaces.Reports;
 using OMTS.Application.Common.Interfaces.Storage;
 using OMTS.Infrastructure.Bootstrap;
 using OMTS.Infrastructure.HealthChecks;
@@ -19,6 +20,7 @@ using OMTS.Infrastructure.Persistence.Interceptors;
 using OMTS.Infrastructure.Persistence.Queries;
 using OMTS.Infrastructure.Persistence.Repositories;
 using OMTS.Infrastructure.Persistence.Seed;
+using OMTS.Infrastructure.Reports;
 using OMTS.Infrastructure.Storage;
 
 namespace OMTS.Infrastructure;
@@ -66,7 +68,11 @@ public static class DependencyInjection
         services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddScoped<IRaftRepository, RaftRepository>();
         services.AddScoped<IZoneLicenseRepository, ZoneLicenseRepository>();
-        services.AddScoped<IRaftMaterialCostQuery, UnavailableRaftMaterialCostQuery>();
+        services.AddScoped<IRaftMaterialCostQuery, RaftMaterialCostQuery>();
+        services.AddScoped<ISupplierRepository, SupplierRepository>();
+        services.AddScoped<IFarmingInputItemRepository, FarmingInputItemRepository>();
+        services.AddScoped<IPurchaseReceiptRepository, PurchaseReceiptRepository>();
+        services.AddScoped<ISupplierPaymentRepository, SupplierPaymentRepository>();
         services.AddSingleton<IStatusCatalog, StatusCatalog>();
 
         services.AddOptions<JwtOptions>().Bind(configuration.GetSection(JwtOptions.SectionName));
@@ -77,6 +83,7 @@ public static class DependencyInjection
 
         services.AddMessaging(configuration);
         services.AddFileStorage(configuration);
+        services.AddSingleton<ISpreadsheetWriter, ClosedXmlSpreadsheetWriter>();
 
         services.AddScoped<DeploymentBootstrapper>();
 

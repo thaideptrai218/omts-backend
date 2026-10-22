@@ -1,3 +1,4 @@
+using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Common;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
@@ -15,7 +16,7 @@ public class CultivationCycle : AuditableEntity, IHasStatus
     public Raft Raft { get; set; } = null!;
 
     public Guid? PlannedSeedTypeId { get; set; }
-    public OysterSeedType? PlannedSeedType { get; set; }
+    public FarmingInputItem? PlannedSeedType { get; set; }
 
     public DateTimeOffset OpenedAt { get; set; }
     public DateTimeOffset? ClosedAt { get; set; }

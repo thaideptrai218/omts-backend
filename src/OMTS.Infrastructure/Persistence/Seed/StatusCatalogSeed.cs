@@ -87,6 +87,13 @@ internal static class StatusCatalogSeed
         NewStatus(S.MessageDelivery.Sending, G.MessageDelivery, "SENDING", "Sending", "Handed to the channel provider, no response yet.", initial: true),
         NewStatus(S.MessageDelivery.Sent, G.MessageDelivery, "SENT", "Sent", "The provider reports successful delivery.", final: true),
         NewStatus(S.MessageDelivery.Failed, G.MessageDelivery, "FAILED", "Failed", "The provider reports an error or the response timeout expires.", final: true),
+
+        NewStatus(S.PurchaseReceipt.Draft, G.PurchaseReceipt, "DRAFT", "Draft", "Being recorded; does not count in costs, supplier debt or seed lots.", initial: true),
+        NewStatus(S.PurchaseReceipt.Completed, G.PurchaseReceipt, "COMPLETED", "Completed", "Counts in input costs and supplier debt; seed lots created; never edited."),
+        NewStatus(S.PurchaseReceipt.Cancelled, G.PurchaseReceipt, "CANCELLED", "Cancelled", "Recorded by mistake; leaves costs and supplier debt, its seed lots cannot be stocked.", final: true),
+
+        NewStatus(S.SupplierPayment.Recorded, G.SupplierPayment, "RECORDED", "Recorded", "Money paid to the supplier; reduces supplier debt.", initial: true),
+        NewStatus(S.SupplierPayment.Cancelled, G.SupplierPayment, "CANCELLED", "Cancelled", "Cancelled together with its purchase receipt.", final: true),
     ];
 
     public static readonly StatusTransition[] Transitions =
@@ -160,6 +167,11 @@ internal static class StatusCatalogSeed
 
         NewTransition(53, S.MessageDelivery.Sending, S.MessageDelivery.Sent, "UC70", SystemActor, SystemActor, "Success response from Zalo OA, Email Service or SMS Service.", false),
         NewTransition(54, S.MessageDelivery.Sending, S.MessageDelivery.Failed, "UC70", SystemActor, "System; time", "Error response or timeout.", false),
+
+        NewTransition(70, S.PurchaseReceipt.Draft, S.PurchaseReceipt.Completed, "INP-03", OwnerOrZoneManager, Action, "Full validation of supplier, zone, raft, lines and amounts passes.", false),
+        NewTransition(71, S.PurchaseReceipt.Draft, S.PurchaseReceipt.Cancelled, "INP-04", OwnerOrZoneManager, Action, "Cancel a draft that will not be completed.", true),
+        NewTransition(72, S.PurchaseReceipt.Completed, S.PurchaseReceipt.Cancelled, "INP-04", OwnerOrZoneManager, Action, "No seed lot of the receipt is stocked and the receipt has no purchase return.", true),
+        NewTransition(73, S.SupplierPayment.Recorded, S.SupplierPayment.Cancelled, "INP-04", OwnerOrZoneManager, Action, "The receipt is cancelled together with its payments.", true),
     ];
 
     private static Status NewStatus(int id, string group, string code, string displayName, string meaning, bool initial = false, bool final = false) =>

@@ -19,4 +19,6 @@ public static class StatusGroups
     public const string PayRule = "PAY_RULE";
     public const string LaborSettlement = "LABOR_SETTLEMENT";
     public const string MessageDelivery = "MESSAGE_DELIVERY";
+    public const string PurchaseReceipt = "PURCHASE_RECEIPT";
+    public const string SupplierPayment = "SUPPLIER_PAYMENT";
 }

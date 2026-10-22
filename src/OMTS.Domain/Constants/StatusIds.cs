@@ -116,6 +116,19 @@ public static class StatusIds
         public const int Paid = 1503;
     }
 
+    public static class PurchaseReceipt
+    {
+        public const int Draft = 1701;
+        public const int Completed = 1702;
+        public const int Cancelled = 1703;
+    }
+
+    public static class SupplierPayment
+    {
+        public const int Recorded = 1801;
+        public const int Cancelled = 1802;
+    }
+
     public static class MessageDelivery
     {
         public const int Sending = 1601;
