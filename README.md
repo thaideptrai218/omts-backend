@@ -116,6 +116,7 @@ created by a one-time command run on the server by the deployment operator (not 
 | Push (`Push:Provider` = `None` by default, `Fake` in Development) | `Push:Fake:FailFor` |
 | File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
 | Bootstrap (see Deployment) | `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:*`, `Bootstrap:SeedDemoData` (same as `--demo`, Development only) |
+| Rate limits per client IP and minute (behind a reverse proxy, enable forwarded headers so the client IP is seen) | `RateLimits:CodeRequestsPerMinute` (default 10: registration, recovery, resend, verify), `RateLimits:LoginsPerMinute` (default 30) |
 
 ## Contributing
 
