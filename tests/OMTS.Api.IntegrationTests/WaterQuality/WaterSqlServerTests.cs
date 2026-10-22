@@ -15,7 +15,12 @@ namespace OMTS.Api.IntegrationTests.WaterQuality;
 /// <summary>Water rules that only a real SQL Server shows: unique indexes and row versions under parallel requests, and the migration on old data.</summary>
 public class WaterSqlServerTests
 {
-    private const string MigrationBeforeWater = "20261022192618_AddCooperativeLogoAndEmployeeDetails";
+    // Migrations are regenerated on every rebase, so the one before the water migration is looked up, not named.
+    private static string MigrationBeforeWater(DbContext db)
+    {
+        var all = db.Database.GetMigrations().ToList();
+        return all[all.FindIndex(m => m.EndsWith("_AddWaterMeasurementOperations", StringComparison.Ordinal)) - 1];
+    }
 
     [SqlServerFact]
     public async Task Parallel_re_sends_of_one_client_operation_save_one_record_and_one_alert_per_recipient()
@@ -78,7 +83,7 @@ public class WaterSqlServerTests
         await using var database = SqlServerTestDatabase.Create();
         await using (var db = database.CreateContext())
         {
-            await db.GetService<IMigrator>().MigrateAsync(MigrationBeforeWater);
+            await db.GetService<IMigrator>().MigrateAsync(MigrationBeforeWater(db));
             var (cooperative, zone, account) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
             await db.Database.ExecuteSqlAsync($"INSERT INTO Cooperatives (Id, FullName, StatusId, CreatedAt) VALUES ({cooperative}, N'HTX', 201, SYSDATETIMEOFFSET())");
             await db.Database.ExecuteSqlAsync($"INSERT INTO FarmingZones (Id, CooperativeId, Code, Name, StatusId, CreatedAt) VALUES ({zone}, {cooperative}, N'Z1', N'Zone 1', 101, SYSDATETIMEOFFSET())");

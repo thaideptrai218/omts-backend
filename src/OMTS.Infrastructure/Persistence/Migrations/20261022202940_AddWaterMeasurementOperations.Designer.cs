@@ -12,7 +12,7 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(OmtsDbContext))]
-    [Migration("20261022200628_AddWaterMeasurementOperations")]
+    [Migration("20261022202940_AddWaterMeasurementOperations")]
     partial class AddWaterMeasurementOperations
     {
         /// <inheritdoc />
@@ -1955,6 +1955,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("CooperativeId");
 
                     b.HasIndex("StatusId");
+
+                    b.HasIndex("FullName", "PhoneNumber")
+                        .IsUnique()
+                        .HasFilter("[PhoneNumber] IS NOT NULL");
 
                     b.ToTable("Employees");
                 });
