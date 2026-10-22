@@ -1,0 +1,229 @@
+using System.Text.RegularExpressions;
+using OMTS.Application.Common.Interfaces.Messaging;
+using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Models;
+using OMTS.Application.Common.Results;
+using OMTS.Application.Features.Verification;
+using OMTS.Domain.Common;
+using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Enums;
+
+namespace OMTS.Application.UnitTests.Features.Verification;
+
+public partial class VerificationServiceTests
+{
+    private const string Phone = "0912345678";
+    private static readonly Guid AccountId = Guid.NewGuid();
+
+    private readonly FakeCodes _codes = new();
+    private readonly FakeSms _sms = new();
+    private readonly MutableTime _time = new(new DateTimeOffset(2026, 10, 23, 1, 0, 0, TimeSpan.Zero));
+
+    private VerificationService Service => new(_codes, _sms, new NoEmail(), new NoSave(), _time);
+
+    [Fact]
+    public async Task Code_is_valid_until_5_minutes()
+    {
+        var started = await StartAsync();
+        _time.Advance(TimeSpan.FromMinutes(5) - TimeSpan.FromSeconds(1));
+        Assert.True((await Service.VerifyAsync(started, _sms.LastCode, AccountId, default)).IsSuccess);
+
+        var second = await StartAsync(VerificationPurpose.ChangePhone);
+        _time.Advance(TimeSpan.FromMinutes(5));
+        AssertWrongCode(await Service.VerifyAsync(second, _sms.LastCode, AccountId, default));
+    }
+
+    [Fact]
+    public async Task Fifth_wrong_entry_locks_the_request()
+    {
+        var started = await StartAsync();
+        for (var i = 0; i < 4; i++)
+        {
+            AssertWrongCode(await Service.VerifyAsync(started, "000000", AccountId, default));
+        }
+
+        Assert.True((await Service.VerifyAsync(started, _sms.LastCode, AccountId, default)).IsSuccess);
+
+        var locked = await StartAsync(VerificationPurpose.ChangePhone);
+        for (var i = 0; i < 5; i++)
+        {
+            await Service.VerifyAsync(locked, "000000", AccountId, default);
+        }
+
+        AssertWrongCode(await Service.VerifyAsync(locked, _sms.LastCode, AccountId, default));
+        AssertWrongCode(await Service.ResendAsync(locked, AccountId, default));
+    }
+
+    [Fact]
+    public async Task Resend_needs_60_seconds_and_stops_after_3_sends()
+    {
+        var started = await StartAsync();
+
+        _time.Advance(TimeSpan.FromSeconds(59));
+        Assert.Equal(ErrorKind.TooManyRequests, (await Service.ResendAsync(started, AccountId, default)).Error?.Kind);
+
+        _time.Advance(TimeSpan.FromSeconds(1));
+        var second = await Service.ResendAsync(started, AccountId, default);
+        Assert.Equal(1, second.Value?.SendsLeft);
+
+        _time.Advance(TimeSpan.FromSeconds(60));
+        Assert.Equal(0, (await Service.ResendAsync(started, AccountId, default)).Value?.SendsLeft);
+
+        _time.Advance(TimeSpan.FromSeconds(60));
+        var fourth = await Service.ResendAsync(started, AccountId, default);
+        Assert.Equal(ErrorKind.TooManyRequests, fourth.Error?.Kind);
+        Assert.Equal(3, _sms.Sent);
+    }
+
+    [Fact]
+    public async Task Resent_code_replaces_the_previous_one()
+    {
+        var started = await StartAsync();
+        var firstCode = _sms.LastCode;
+        _time.Advance(TimeSpan.FromSeconds(60));
+        await Service.ResendAsync(started, AccountId, default);
+
+        if (firstCode != _sms.LastCode)
+        {
+            AssertWrongCode(await Service.VerifyAsync(started, firstCode, AccountId, default));
+        }
+
+        Assert.True((await Service.VerifyAsync(started, _sms.LastCode, AccountId, default)).IsSuccess);
+    }
+
+    [Fact]
+    public async Task Token_is_bound_to_purpose_account_and_target_and_used_once()
+    {
+        var started = await StartAsync();
+        var token = (await Service.VerifyAsync(started, _sms.LastCode, AccountId, default)).Value!.VerificationToken;
+
+        AssertWrongCode(await Service.ConsumeTokenAsync(token, [VerificationPurpose.ChangePassword], AccountId, null, default));
+        AssertWrongCode(await Service.ConsumeTokenAsync(token, [VerificationPurpose.VerifyPhone], Guid.NewGuid(), null, default));
+        AssertWrongCode(await Service.ConsumeTokenAsync(token, [VerificationPurpose.VerifyPhone], AccountId, "0987654321", default));
+        Assert.True((await Service.ConsumeTokenAsync(token, [VerificationPurpose.VerifyPhone], AccountId, Phone, default)).IsSuccess);
+        AssertWrongCode(await Service.ConsumeTokenAsync(token, [VerificationPurpose.VerifyPhone], AccountId, Phone, default));
+    }
+
+    [Fact]
+    public async Task Token_expires_after_10_minutes()
+    {
+        var started = await StartAsync();
+        var token = (await Service.VerifyAsync(started, _sms.LastCode, AccountId, default)).Value!.VerificationToken;
+
+        _time.Advance(TimeSpan.FromMinutes(10));
+
+        AssertWrongCode(await Service.ConsumeTokenAsync(token, [VerificationPurpose.VerifyPhone], AccountId, null, default));
+    }
+
+    [Fact]
+    public async Task Request_of_another_account_cannot_be_used()
+    {
+        var started = await StartAsync();
+
+        AssertWrongCode(await Service.VerifyAsync(started, _sms.LastCode, Guid.NewGuid(), default));
+        AssertWrongCode(await Service.ResendAsync(started, null, default));
+    }
+
+    [Fact]
+    public async Task Sender_failure_saves_nothing_and_answers_MSG04()
+    {
+        _sms.Fail = true;
+
+        var result = await Service.StartAsync(VerificationPurpose.VerifyPhone, VerificationChannel.Sms, Phone, AccountId, default);
+
+        Assert.Equal(ErrorKind.ServiceUnavailable, result.Error?.Kind);
+        Assert.Equal("MSG04", result.Error?.Message.Code);
+        Assert.Empty(_codes.All);
+    }
+
+    [Fact]
+    public async Task New_request_cancels_the_open_one_and_codes_are_never_returned()
+    {
+        var first = await StartAsync();
+        _time.Advance(TimeSpan.FromSeconds(61));
+        var second = await Service.StartAsync(VerificationPurpose.VerifyPhone, VerificationChannel.Sms, "0987654321", AccountId, default);
+
+        AssertWrongCode(await Service.VerifyAsync(first, _sms.Codes[0], AccountId, default));
+        Assert.DoesNotContain(_sms.LastCode, second.Value!.ToString());
+        Assert.All(_codes.All, c => Assert.DoesNotContain(_sms.LastCode, c.CodeHash));
+    }
+
+    private async Task<Guid> StartAsync(VerificationPurpose purpose = VerificationPurpose.VerifyPhone)
+    {
+        var result = await Service.StartAsync(purpose, VerificationChannel.Sms, Phone, AccountId, default);
+        Assert.True(result.IsSuccess, result.Error?.Message.Text);
+        return result.Value!.VerificationId;
+    }
+
+    private static void AssertWrongCode<T>(Result<T> result) => Assert.Equal("MSG16", result.Error?.Message.Code);
+
+    private sealed class MutableTime(DateTimeOffset start) : TimeProvider
+    {
+        private DateTimeOffset _now = start;
+
+        public void Advance(TimeSpan by) => _now += by;
+
+        public override DateTimeOffset GetUtcNow() => _now;
+    }
+
+    private sealed partial class FakeSms : ISmsSender
+    {
+        public bool Fail { get; set; }
+        public int Sent { get; private set; }
+        public List<string> Codes { get; } = [];
+        public string LastCode => Codes[^1];
+
+        public Task<DeliveryResult> SendAsync(string phoneNumber, string text, CancellationToken cancellationToken = default)
+        {
+            if (Fail)
+            {
+                return Task.FromResult(DeliveryResult.Failed("DOWN"));
+            }
+
+            Sent++;
+            Codes.Add(SixDigits().Match(text).Value);
+            return Task.FromResult(DeliveryResult.Sent("id"));
+        }
+
+        [GeneratedRegex(@"\d{6}")]
+        private static partial Regex SixDigits();
+    }
+
+    private sealed class NoEmail : IEmailSender
+    {
+        public Task<DeliveryResult> SendAsync(string to, string subject, string htmlBody, string textBody,
+            IReadOnlyList<EmailAttachment>? attachments = null, CancellationToken cancellationToken = default) =>
+            Task.FromResult(DeliveryResult.Failed("NOT_USED"));
+    }
+
+    private sealed class NoSave : IUnitOfWork
+    {
+        public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
+
+        public Task ReloadAsync(object entity, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion)
+        {
+        }
+    }
+
+    private sealed class FakeCodes : IVerificationCodeRepository
+    {
+        public List<VerificationCode> All { get; } = [];
+
+        public void Add(VerificationCode code) => All.Add(code);
+
+        public Task<VerificationCode?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
+            Task.FromResult(All.FirstOrDefault(c => c.Id == id));
+
+        public Task<VerificationCode?> GetByTokenHashAsync(string tokenHash, CancellationToken cancellationToken) =>
+            Task.FromResult(All.FirstOrDefault(c => c.TokenHash == tokenHash));
+
+        public Task<IReadOnlyList<VerificationCode>> GetOpenAsync(
+            VerificationPurpose purpose, Guid? accountId, string target, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<VerificationCode>>(All
+                .Where(c => c.Purpose == purpose && c.IsOpen && (accountId != null ? c.AccountId == accountId : c.AccountId == null && c.Target == target))
+                .OrderByDescending(c => c.CreatedAt)
+                .ToList());
+    }
+}
