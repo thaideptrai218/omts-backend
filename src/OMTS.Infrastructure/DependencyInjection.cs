@@ -18,9 +18,10 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton<PermissionCacheInvalidationInterceptor>();
+        services.AddScoped<AuditableEntityStampInterceptor>();
         services.AddDbContext<OmtsDbContext>((provider, options) =>
         {
-            options.AddInterceptors(provider.GetRequiredService<PermissionCacheInvalidationInterceptor>());
+            options.AddOmtsInterceptors(provider);
 
             // Resolved lazily so the API can start (e.g. /health, tests) before a database is configured.
             var connectionString = configuration.GetConnectionString(ConnectionStringName);
@@ -46,4 +47,13 @@ public static class DependencyInjection
 
         return services;
     }
+
+    /// <summary>
+    /// Interceptors every <see cref="OmtsDbContext"/> needs (audit stamps, permission cache invalidation);
+    /// also used by tests that swap the database provider.
+    /// </summary>
+    public static DbContextOptionsBuilder AddOmtsInterceptors(this DbContextOptionsBuilder options, IServiceProvider provider) =>
+        options.AddInterceptors(
+            provider.GetRequiredService<AuditableEntityStampInterceptor>(),
+            provider.GetRequiredService<PermissionCacheInvalidationInterceptor>());
 }

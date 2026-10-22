@@ -8,8 +8,8 @@ using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
+using OMTS.Infrastructure;
 using OMTS.Infrastructure.Persistence;
-using OMTS.Infrastructure.Persistence.Interceptors;
 
 namespace OMTS.Api.IntegrationTests.Infrastructure;
 
@@ -29,7 +29,7 @@ public sealed class AuthApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<DbContextOptions<OmtsDbContext>>();
             services.AddDbContext<OmtsDbContext>((provider, options) => options
                 .UseInMemoryDatabase(_databaseName)
-                .AddInterceptors(provider.GetRequiredService<PermissionCacheInvalidationInterceptor>()));
+                .AddOmtsInterceptors(provider));
 
             services.AddControllers().AddApplicationPart(typeof(AuthApiFactory).Assembly);
         });
@@ -79,7 +79,7 @@ public sealed class AuthApiFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>Grants <paramref name="role"/> in <paramref name="zone"/>, or in All zones when null.</summary>
-    public async Task<AccessGrant> GrantAsync(Account account, Role role, FarmingZone? zone)
+    public async Task<AccessGrant> GrantAsync(Account account, Role role, FarmingZone? zone, Action<AccessGrant>? configure = null)
     {
         var grant = new AccessGrant
         {
@@ -90,6 +90,7 @@ public sealed class AuthApiFactory : WebApplicationFactory<Program>
             EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1),
             GrantedByAccountId = account.Id,
         };
+        configure?.Invoke(grant);
         await UseDbAsync(db => db.AccessGrants.Add(grant));
         return grant;
     }
