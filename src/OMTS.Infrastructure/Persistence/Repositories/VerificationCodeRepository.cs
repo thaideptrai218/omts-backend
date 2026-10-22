@@ -15,10 +15,10 @@ internal sealed class VerificationCodeRepository(OmtsDbContext db) : IVerificati
     public Task<VerificationCode?> GetByTokenHashAsync(string tokenHash, CancellationToken cancellationToken) =>
         db.VerificationCodes.FirstOrDefaultAsync(c => c.TokenHash == tokenHash, cancellationToken);
 
-    public async Task<IReadOnlyList<VerificationCode>> GetOpenAsync(
-        VerificationPurpose purpose, Guid? accountId, string target, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<VerificationCode>> GetRecentAsync(
+        VerificationPurpose purpose, Guid? accountId, string target, DateTimeOffset since, CancellationToken cancellationToken) =>
         await db.VerificationCodes
-            .Where(c => c.Purpose == purpose && c.ConsumedAt == null && c.CancelledAt == null)
+            .Where(c => c.Purpose == purpose && c.CreatedAt >= since)
             .Where(c => accountId != null ? c.AccountId == accountId : c.AccountId == null && c.Target == target)
             .OrderByDescending(c => c.CreatedAt)
             .ToListAsync(cancellationToken);

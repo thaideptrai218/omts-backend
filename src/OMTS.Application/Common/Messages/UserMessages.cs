@@ -105,6 +105,11 @@ public static class UserMessages
             ? $"Please wait {waitSeconds} seconds before requesting a new code."
             : "No more codes can be sent for this request. Please start again.");
 
+    /// <summary>Not in the SRS list: one client sent too many requests to an anonymous endpoint (per-IP limit).</summary>
+    public static readonly UserMessage TooManyRequests = new(
+        "TOO_MANY_REQUESTS",
+        "Too many requests from this device. Please wait a minute and try again.");
+
     /// <summary>Not in the SRS list: changing the password with an email code needs a verified email (ACS-04).</summary>
     public static readonly UserMessage NoVerifiedEmail = new(
         "NO_VERIFIED_EMAIL",

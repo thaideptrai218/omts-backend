@@ -1,3 +1,4 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Persistence;
@@ -20,6 +21,11 @@ internal sealed class UnitOfWork(OmtsDbContext db) : IUnitOfWork
         catch (DbUpdateConcurrencyException exception)
         {
             throw new ConcurrencyConflictException(exception);
+        }
+        catch (DbUpdateException exception) when (exception.InnerException is SqlException { Number: 2601 or 2627 })
+        {
+            // 2601/2627: duplicate key in a unique index or constraint.
+            throw new DuplicateRecordException(exception);
         }
     }
 

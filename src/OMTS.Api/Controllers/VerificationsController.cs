@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using OMTS.Api.Common;
+using OMTS.Api.Extensions;
 using OMTS.Api.Filters;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Features.Accounts;
@@ -16,6 +18,7 @@ namespace OMTS.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/verifications")]
+[EnableRateLimiting(RateLimitingExtensions.CodeRequests)]
 [AllowAnonymous]
 public sealed class VerificationsController(
     RegistrationService registration, VerificationService verification, ICurrentUser currentUser) : ControllerBase

@@ -6,8 +6,8 @@ using OMTS.Application.Common.Messages;
 namespace OMTS.Api.Common;
 
 /// <summary>
-/// Last line of defence: an unhandled concurrency conflict becomes 409 MSG06, a file store failure 502
-/// MSG05, anything else 500 with a generic problem body. Exception details go to the log only, never to
+/// Last line of defence: an unhandled concurrency conflict becomes 409 MSG06, a duplicate 409 MSG03, a file
+/// store failure 502 MSG05, anything else 500 with a generic problem body. Exception details go to the log only, never to
 /// the client.
 /// </summary>
 internal sealed class ProblemExceptionHandler(ILogger<ProblemExceptionHandler> logger) : IExceptionHandler
@@ -19,6 +19,8 @@ internal sealed class ProblemExceptionHandler(ILogger<ProblemExceptionHandler> l
             ConcurrencyConflictException => (StatusCodes.Status409Conflict, UserMessages.ConcurrentUpdateByAnotherUser),
             // Already logged by the storage provider.
             FileStorageUnavailableException => (StatusCodes.Status502BadGateway, UserMessages.FileOperationFailed),
+            // The database message names the duplicate value (a phone, an email): it is not logged.
+            DuplicateRecordException => (StatusCodes.Status409Conflict, UserMessages.AlreadyExists("Record")),
             _ => (StatusCodes.Status500InternalServerError, UserMessages.UnexpectedError),
         };
 

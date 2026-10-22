@@ -12,7 +12,7 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(OmtsDbContext))]
-    [Migration("20261022182132_AddVerificationTokensAndPushDevices")]
+    [Migration("20261022191625_AddVerificationTokensAndPushDevices")]
     partial class AddVerificationTokensAndPushDevices
     {
         /// <inheritdoc />
@@ -2159,6 +2159,12 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<int>("SendCount")
                         .HasColumnType("int");

@@ -78,7 +78,8 @@ public sealed class RegistrationService(
             SubjectType = SubjectType.Trader,
             StatusId = StatusIds.Account.Active,
             Username = await usernames.NewTraderUsernameAsync(cancellationToken),
-            DisplayName = identifier,
+            // Display names hold 200 characters; an email may be longer.
+            DisplayName = identifier.Length > 200 ? identifier[..200] : identifier,
             PhoneNumber = isPhone ? identifier : null,
             PhoneVerifiedAt = isPhone ? now : null,
             Email = isPhone ? null : identifier,

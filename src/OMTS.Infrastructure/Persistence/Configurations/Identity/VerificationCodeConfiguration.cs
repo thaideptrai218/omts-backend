@@ -15,5 +15,6 @@ internal sealed class VerificationCodeConfiguration : IEntityTypeConfiguration<V
         builder.HasIndex(x => x.TokenHash).IsUnique();
         builder.HasIndex(x => new { x.Target, x.Purpose, x.CreatedAt });
         builder.HasIndex(x => new { x.AccountId, x.Purpose });
+        builder.Property(x => x.RowVersion).IsRowVersion();
     }
 }

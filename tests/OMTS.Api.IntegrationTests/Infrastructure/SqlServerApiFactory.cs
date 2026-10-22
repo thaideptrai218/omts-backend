@@ -26,6 +26,8 @@ public sealed class SqlServerApiFactory(SqlServerTestDatabase database, IReadOnl
         {
             ["ConnectionStrings:OmtsDb"] = database.ConnectionString,
             ["Jwt:SigningKey"] = _signingKey,
+            ["RateLimits:CodeRequestsPerMinute"] = "100000",
+            ["RateLimits:LoginsPerMinute"] = "100000",
         }.Concat(settings ?? new Dictionary<string, string?>())));
 
     public async Task<Account> AddAccountAsync(string username, string password, SubjectType subjectType = SubjectType.CooperativeOwner)

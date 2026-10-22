@@ -86,7 +86,9 @@ public sealed class PasswordRecoveryService(
         account.PasswordHash = passwordHasher.Hash(request.NewPassword);
         account.MustChangePassword = false;
         account.TemporaryPasswordIssuedAt = null;
-        account.RegisterSuccessfulLogin(now);
+        // A recovered password also lifts a temporary login lock.
+        account.FailedLoginCount = 0;
+        account.LockoutEndAt = null;
         await sessions.RevokeAllAsync(account.Id, now, "Password reset", cancellationToken);
         audit.Record(new AuditEntry("Account.PasswordReset", nameof(Account))
         {

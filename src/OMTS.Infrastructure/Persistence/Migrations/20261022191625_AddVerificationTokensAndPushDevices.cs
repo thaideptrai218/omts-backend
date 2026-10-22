@@ -31,6 +31,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 type: "datetimeoffset",
                 nullable: true);
 
+            migrationBuilder.AddColumn<byte[]>(
+                name: "RowVersion",
+                table: "VerificationCodes",
+                type: "rowversion",
+                rowVersion: true,
+                nullable: false,
+                defaultValue: new byte[0]);
+
             migrationBuilder.AddColumn<DateTimeOffset>(
                 name: "TokenConsumedAt",
                 table: "VerificationCodes",
@@ -113,6 +121,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropColumn(
                 name: "CancelledAt",
+                table: "VerificationCodes");
+
+            migrationBuilder.DropColumn(
+                name: "RowVersion",
                 table: "VerificationCodes");
 
             migrationBuilder.DropColumn(

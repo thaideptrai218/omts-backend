@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using OMTS.Api.Common;
+using OMTS.Api.Extensions;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.Accounts;
 using OMTS.Application.Features.Accounts.Dtos;
@@ -10,6 +12,7 @@ namespace OMTS.Api.Controllers;
 /// <summary>Trader registration (ACS-01) and password recovery (ACS-03); both before login.</summary>
 [ApiController]
 [Route("api/auth")]
+[EnableRateLimiting(RateLimitingExtensions.CodeRequests)]
 [AllowAnonymous]
 public sealed class AccountRecoveryController(RegistrationService registration, PasswordRecoveryService recovery) : ControllerBase
 {

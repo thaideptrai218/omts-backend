@@ -1,4 +1,5 @@
 using OMTS.Application.Common;
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
@@ -22,20 +23,41 @@ public sealed class VerificationService(
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
 {
+    /// <summary>Window of the limits that hold across requests and delivery methods of one subject.</summary>
+    public static readonly TimeSpan BudgetWindow = TimeSpan.FromHours(1);
+
+    /// <summary>New requests per purpose and subject (account, or target before registration) per hour.</summary>
+    public const int MaxRequestsPerWindow = 5;
+
+    /// <summary>Wrong codes per purpose and subject per hour, over all its requests (blocks code guessing).</summary>
+    public const int MaxFailedAttemptsPerWindow = 10;
+
     /// <summary>
     /// Opens a request and sends its code. A newer request replaces the open ones of the same purpose
-    /// (another target or delivery method); a request for the same target within 60 seconds is refused.
-    /// Nothing is saved when sending fails.
+    /// (another target or delivery method). Limits per subject, whatever the channel or target: one send per
+    /// 60 seconds, 5 requests and 10 wrong codes per hour. Nothing is saved when sending fails.
     /// </summary>
     public async Task<Result<VerificationStarted>> StartAsync(
         VerificationPurpose purpose, VerificationChannel channel, string target, Guid? accountId, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
-        var open = await codes.GetOpenAsync(purpose, accountId, target, cancellationToken);
-        if (open.FirstOrDefault(c => c.Target == target && c.Channel == channel && now < c.NextResendAt) is { } recent)
+        var recentRequests = await codes.GetRecentAsync(purpose, accountId, target, now - BudgetWindow, cancellationToken);
+        if (recentRequests.Sum(c => c.FailedAttempts) >= MaxFailedAttemptsPerWindow)
+        {
+            return TooManyAttempts();
+        }
+
+        if (recentRequests.FirstOrDefault(c => now < c.NextResendAt) is { } recent)
         {
             return TooSoon(recent, now);
         }
+
+        if (recentRequests.Count >= MaxRequestsPerWindow)
+        {
+            return OutOfRequests(recentRequests[^1].CreatedAt + BudgetWindow, now);
+        }
+
+        var open = recentRequests.Where(c => c.IsOpen).ToList();
 
         var code = SecretHashing.NewSixDigitCode();
         var request = new VerificationCode
@@ -70,7 +92,10 @@ public sealed class VerificationService(
     {
         var now = timeProvider.GetUtcNow();
         var request = await codes.GetByIdAsync(verificationId, cancellationToken);
-        if (request is null || !MayUse(request, callerAccountId) || !request.IsOpen || request.IsLocked)
+        // Recovery requests are never resent here: a new POST api/auth/recovery answers the same way whether
+        // or not the identifier exists, so this endpoint cannot tell real recovery ids from random ones.
+        if (request is null || request.Purpose == VerificationPurpose.AccountRecovery
+            || !MayUse(request, callerAccountId) || !request.IsOpen || request.IsLocked)
         {
             return WrongCode();
         }
@@ -109,10 +134,16 @@ public sealed class VerificationService(
             return WrongCode();
         }
 
+        var recentRequests = await codes.GetRecentAsync(request.Purpose, request.AccountId, request.Target, now - BudgetWindow, cancellationToken);
+        if (recentRequests.Sum(c => c.FailedAttempts) >= MaxFailedAttemptsPerWindow)
+        {
+            return TooManyAttempts();
+        }
+
         if (string.IsNullOrWhiteSpace(code) || HashCode(request.Id, code.Trim()) != request.CodeHash)
         {
             request.FailedAttempts++;
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await SaveIgnoringRaceAsync(cancellationToken);
             return WrongCode();
         }
 
@@ -120,7 +151,16 @@ public sealed class VerificationService(
         request.ConsumedAt = now;
         request.TokenHash = SecretHashing.Sha256Hex(token);
         request.TokenExpiresAt = now + VerificationCode.TokenLifetime;
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (ConcurrencyConflictException)
+        {
+            // A parallel entry changed the request first (a wrong code counted, or the same code used).
+            return WrongCode();
+        }
+
         return new VerificationTokenIssued(token, request.TokenExpiresAt.Value);
     }
 
@@ -172,6 +212,26 @@ public sealed class VerificationService(
         request.NextResendAt);
 
     private static AppError WrongCode() => new(ErrorKind.Validation, UserMessages.WrongVerificationCode);
+
+    private static AppError TooManyAttempts() => new(ErrorKind.Locked, UserMessages.TooManyAttempts);
+
+    private static AppError OutOfRequests(DateTimeOffset nextAllowed, DateTimeOffset now)
+    {
+        var wait = Math.Max(1, (int)Math.Ceiling((nextAllowed - now).TotalSeconds));
+        return new AppError(ErrorKind.TooManyRequests, UserMessages.TooManyCodeRequests(wait), new Dictionary<string, object?> { ["retryAfterSeconds"] = wait });
+    }
+
+    // A parallel wrong entry already counted: either way the attempt is refused.
+    private async Task SaveIgnoringRaceAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (ConcurrencyConflictException)
+        {
+        }
+    }
 
     public static AppError ServiceDown(VerificationChannel channel) =>
         new(ErrorKind.ServiceUnavailable, UserMessages.ServiceNotResponding(channel == VerificationChannel.Sms ? "SMS" : "Email"));

@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using OMTS.Api.Common;
+using OMTS.Api.Extensions;
 using OMTS.Api.Filters;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Messages;
@@ -14,6 +16,7 @@ namespace OMTS.Api.Controllers;
 public sealed class AuthController(AuthService authService, ICurrentUser currentUser) : ControllerBase
 {
     /// <summary>UC02 – log in with username, verified phone number or verified email.</summary>
+    [EnableRateLimiting(RateLimitingExtensions.Logins)]
     [HttpPost("login")]
     [AllowAnonymous]
     [ProducesResponseType<AuthTokens>(StatusCodes.Status200OK)]

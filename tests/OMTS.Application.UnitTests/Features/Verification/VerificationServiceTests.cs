@@ -148,6 +148,64 @@ public partial class VerificationServiceTests
         Assert.All(_codes.All, c => Assert.DoesNotContain(_sms.LastCode, c.CodeHash));
     }
 
+    // Switching target or channel does not reset the 60-second spacing of one subject.
+    [Fact]
+    public async Task Another_target_or_channel_within_60_seconds_is_refused()
+    {
+        await StartAsync(VerificationPurpose.AccountRecovery);
+        _time.Advance(TimeSpan.FromSeconds(30));
+
+        var otherTarget = await Service.StartAsync(VerificationPurpose.AccountRecovery, VerificationChannel.Sms, "0987654321", AccountId, default);
+        var otherChannel = await Service.StartAsync(VerificationPurpose.AccountRecovery, VerificationChannel.Email, "a@b.vn", AccountId, default);
+
+        Assert.Equal(ErrorKind.TooManyRequests, otherTarget.Error?.Kind);
+        Assert.Equal(ErrorKind.TooManyRequests, otherChannel.Error?.Kind);
+    }
+
+    [Fact]
+    public async Task At_most_5_requests_per_hour_for_one_subject()
+    {
+        for (var i = 0; i < VerificationService.MaxRequestsPerWindow; i++)
+        {
+            await StartAsync(VerificationPurpose.AccountRecovery);
+            _time.Advance(TimeSpan.FromSeconds(61));
+        }
+
+        var sixth = await Service.StartAsync(VerificationPurpose.AccountRecovery, VerificationChannel.Sms, Phone, AccountId, default);
+        Assert.Equal(ErrorKind.TooManyRequests, sixth.Error?.Kind);
+
+        _time.Advance(VerificationService.BudgetWindow);
+        Assert.True((await Service.StartAsync(VerificationPurpose.AccountRecovery, VerificationChannel.Sms, Phone, AccountId, default)).IsSuccess);
+    }
+
+    // New requests do not give new guesses: 10 wrong codes per hour over all requests, then MSG69.
+    [Fact]
+    public async Task Wrong_codes_are_capped_across_requests()
+    {
+        for (var request = 0; request < 2; request++)
+        {
+            var id = await StartAsync(VerificationPurpose.AccountRecovery);
+            for (var i = 0; i < 5; i++)
+            {
+                await Service.VerifyAsync(id, "000000", null, default);
+            }
+
+            _time.Advance(TimeSpan.FromSeconds(61));
+        }
+
+        var start = await Service.StartAsync(VerificationPurpose.AccountRecovery, VerificationChannel.Sms, Phone, AccountId, default);
+        Assert.Equal("MSG69", start.Error?.Message.Code);
+    }
+
+    [Fact]
+    public async Task Recovery_requests_cannot_be_resent_here()
+    {
+        var id = await StartAsync(VerificationPurpose.AccountRecovery);
+        _time.Advance(TimeSpan.FromSeconds(61));
+
+        AssertWrongCode(await Service.ResendAsync(id, null, default));
+    }
+
     private async Task<Guid> StartAsync(VerificationPurpose purpose = VerificationPurpose.VerifyPhone)
     {
         var result = await Service.StartAsync(purpose, VerificationChannel.Sms, Phone, AccountId, default);
@@ -219,10 +277,10 @@ public partial class VerificationServiceTests
         public Task<VerificationCode?> GetByTokenHashAsync(string tokenHash, CancellationToken cancellationToken) =>
             Task.FromResult(All.FirstOrDefault(c => c.TokenHash == tokenHash));
 
-        public Task<IReadOnlyList<VerificationCode>> GetOpenAsync(
-            VerificationPurpose purpose, Guid? accountId, string target, CancellationToken cancellationToken) =>
+        public Task<IReadOnlyList<VerificationCode>> GetRecentAsync(
+            VerificationPurpose purpose, Guid? accountId, string target, DateTimeOffset since, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<VerificationCode>>(All
-                .Where(c => c.Purpose == purpose && c.IsOpen && (accountId != null ? c.AccountId == accountId : c.AccountId == null && c.Target == target))
+                .Where(c => c.Purpose == purpose && c.CreatedAt >= since && (accountId != null ? c.AccountId == accountId : c.AccountId == null && c.Target == target))
                 .OrderByDescending(c => c.CreatedAt)
                 .ToList());
     }

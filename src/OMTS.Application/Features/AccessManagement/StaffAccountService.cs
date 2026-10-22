@@ -38,12 +38,9 @@ public sealed class StaffAccountService(
     {
         (page, pageSize) = (Math.Max(1, page), Math.Clamp(pageSize, 1, 100));
         var (items, total) = await accounts.SearchStaffAsync(search, statusId, page, pageSize, cancellationToken);
-        var views = new List<StaffAccountView>(items.Count);
-        foreach (var account in items)
-        {
-            views.Add(await ViewAsync(account, cancellationToken));
-        }
-
+        // One query for the linked employees of the whole page.
+        var employeeIds = await employees.GetIdsByAccountIdsAsync(items.Select(a => a.Id).ToList(), cancellationToken);
+        var views = items.Select(a => View(a, employeeIds.TryGetValue(a.Id, out var employeeId) ? employeeId : null)).ToList();
         return new Paged<StaffAccountView>(views, page, pageSize, total);
     }
 
@@ -91,7 +88,7 @@ public sealed class StaffAccountService(
         {
             audit.Record(new AuditEntry("Account.OwnerRightsRefused", nameof(Account))
             {
-                RecordCode = request.Username,
+                RecordCode = request.Username is { Length: > 100 } longName ? longName[..100] : request.Username,
                 After = new { RequestedSubjectType = subjectType.ToString() },
             });
             return AppError.Forbidden;
@@ -314,20 +311,19 @@ public sealed class StaffAccountService(
         return (name, normalizedUsername, phone, normalizedEmail);
     }
 
-    private async Task<StaffAccountView> ViewAsync(Account account, CancellationToken cancellationToken)
-    {
-        var employee = await employees.GetByAccountIdAsync(account.Id, cancellationToken);
-        return new StaffAccountView(
-            account.Id,
-            account.DisplayName,
-            account.Username,
-            account.PhoneNumber,
-            account.PhoneVerifiedAt is not null,
-            account.Email,
-            account.EmailVerifiedAt is not null,
-            statusCatalog.DisplayNameOf(account.StatusId),
-            account.MustChangePassword,
-            employee?.Id ?? (account.Employee?.Id),
-            RowVersionGuard.Encode(account.RowVersion));
-    }
+    private async Task<StaffAccountView> ViewAsync(Account account, CancellationToken cancellationToken) =>
+        View(account, (await employees.GetByAccountIdAsync(account.Id, cancellationToken))?.Id ?? account.Employee?.Id);
+
+    private StaffAccountView View(Account account, Guid? employeeId) => new(
+        account.Id,
+        account.DisplayName,
+        account.Username,
+        account.PhoneNumber,
+        account.PhoneVerifiedAt is not null,
+        account.Email,
+        account.EmailVerifiedAt is not null,
+        statusCatalog.DisplayNameOf(account.StatusId),
+        account.MustChangePassword,
+        employeeId,
+        RowVersionGuard.Encode(account.RowVersion));
 }

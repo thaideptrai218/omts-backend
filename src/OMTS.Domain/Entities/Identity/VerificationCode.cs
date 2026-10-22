@@ -45,6 +45,12 @@ public class VerificationCode : Entity
     public DateTimeOffset? TokenExpiresAt { get; set; }
     public DateTimeOffset? TokenConsumedAt { get; set; }
 
+    /// <summary>
+    /// Concurrency token: parallel wrong entries or parallel uses of one token cannot both be saved, so the
+    /// attempt limit and single use hold under races.
+    /// </summary>
+    public byte[] RowVersion { get; set; } = [];
+
     public bool IsLocked => FailedAttempts >= MaxFailedAttempts;
 
     public int SendsLeft => Math.Max(0, MaxSends - SendCount);
