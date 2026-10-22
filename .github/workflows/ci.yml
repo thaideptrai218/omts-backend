@@ -29,11 +29,15 @@ jobs:
         run: |
           password="$(openssl rand -base64 24 | tr -d '/+=')$(openssl rand -hex 8)"
           echo "::add-mask::$password"
-          docker run -d --name omts-sql -e ACCEPT_EULA=Y -e "MSSQL_SA_PASSWORD=$password" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+          docker run -d --name omts-sql -e ACCEPT_EULA=Y -e "MSSQL_SA_PASSWORD=$password" -p 127.0.0.1:1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+          ready=false
           for i in $(seq 1 60); do
-            docker logs omts-sql 2>&1 | grep -q "SQL Server is now ready for client connections" && break
+            if docker logs omts-sql 2>&1 | grep -q "SQL Server is now ready for client connections"; then ready=true; break; fi
             sleep 2
           done
+          if [ "$ready" != true ]; then
+            echo "SQL Server did not start"; docker logs omts-sql | tail -50; exit 1
+          fi
           sleep 5
           echo "OMTS_TEST_SQLSERVER=Server=localhost,1433;User Id=sa;Password=$password;TrustServerCertificate=True" >> "$GITHUB_ENV"
 

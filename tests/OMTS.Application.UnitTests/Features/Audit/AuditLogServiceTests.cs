@@ -83,6 +83,7 @@ public class AuditLogServiceTests
             OTP = secret,
             VerificationCode = secret,
             verification_code = secret,
+            CodeHash = secret,
             RefreshToken = secret,
             AccessToken = secret,
             ClientSecret = secret,

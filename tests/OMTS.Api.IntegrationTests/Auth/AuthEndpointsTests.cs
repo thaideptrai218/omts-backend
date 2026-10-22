@@ -44,8 +44,25 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var unknownUser = await PostLoginAsync(client, "nobody", Password);
 
         Assert.Equal(HttpStatusCode.Unauthorized, wrongPassword.StatusCode);
-        Assert.Equal("MSG12", await ErrorCodeAsync(wrongPassword));
-        Assert.Equal("MSG12", await ErrorCodeAsync(unknownUser));
+        Assert.Equal(HttpStatusCode.Unauthorized, unknownUser.StatusCode);
+        Assert.Equal(await wrongPassword.Content.ReadAsStringAsync(), await unknownUser.Content.ReadAsStringAsync());
+    }
+
+    // An unknown identifier is locked out like an account, so MSG69 does not reveal which identifiers exist.
+    [Fact]
+    public async Task Fifth_failure_on_an_unknown_identifier_also_answers_MSG69()
+    {
+        var client = factory.CreateClient();
+        var identifier = $"ghost-{Guid.NewGuid():N}";
+
+        for (var attempt = 1; attempt < 5; attempt++)
+        {
+            Assert.Equal("MSG12", await ErrorCodeAsync(await PostLoginAsync(client, identifier, "Wrong123")));
+        }
+
+        var fifth = await PostLoginAsync(client, identifier, "Wrong123");
+        Assert.Equal(HttpStatusCode.Locked, fifth.StatusCode);
+        Assert.Equal("MSG69", await ErrorCodeAsync(fifth));
     }
 
     // UC02 – 2e: the 5th failure locks for 15 minutes, even with the right password afterwards.
@@ -166,6 +183,44 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync(client, HttpMethod.Get, "/api/me", second)).StatusCode);
     }
 
+    // Any older token of the session (not just the previous one) is reuse and ends the session.
+    [Fact]
+    public async Task Replaying_a_token_two_rotations_old_ends_the_session()
+    {
+        await factory.AddAccountAsync("owner7", Password);
+        var client = factory.CreateClient();
+        var first = await LoginAsync(client, "owner7", Password);
+        var second = await RefreshAsync(client, first);
+        var third = await RefreshAsync(client, second);
+
+        var replay = await client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = first.GetProperty("refreshToken").GetString() });
+        var current = await client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = third.GetProperty("refreshToken").GetString() });
+
+        Assert.Equal("MSG19", await ErrorCodeAsync(replay));
+        Assert.Equal(HttpStatusCode.Unauthorized, current.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync(client, HttpMethod.Get, "/api/me", third)).StatusCode);
+    }
+
+    // A session opened with a temporary password cannot outlive the password's 24 hours through refresh.
+    [Fact]
+    public async Task Refresh_is_refused_once_the_temporary_password_has_expired()
+    {
+        var account = await factory.AddAccountAsync("temp4", Password, configure: a =>
+        {
+            a.MustChangePassword = true;
+            a.TemporaryPasswordIssuedAt = DateTimeOffset.UtcNow.AddHours(-23);
+        });
+        var client = factory.CreateClient();
+        var tokens = await LoginAsync(client, "temp4", Password);
+
+        await factory.UpdateAsync<Domain.Entities.Identity.Account>(account.Id, a => a.TemporaryPasswordIssuedAt = DateTimeOffset.UtcNow.AddHours(-25));
+        var refresh = await client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = tokens.GetProperty("refreshToken").GetString() });
+
+        Assert.Equal(HttpStatusCode.Forbidden, refresh.StatusCode);
+        Assert.Equal("MSG68", await ErrorCodeAsync(refresh));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync(client, HttpMethod.Get, "/api/me", tokens)).StatusCode);
+    }
+
     // NFR-01: a revoked session cannot be reused, even before the access token expires.
     [Fact]
     public async Task Logout_revokes_access_and_refresh_tokens()
@@ -189,6 +244,13 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     private static async Task<JsonElement> LoginAsync(HttpClient client, string identifier, string password)
     {
         var response = await PostLoginAsync(client, identifier, password);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    private static async Task<JsonElement> RefreshAsync(HttpClient client, JsonElement tokens)
+    {
+        var response = await client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = tokens.GetProperty("refreshToken").GetString() });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }

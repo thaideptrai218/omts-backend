@@ -1,3 +1,4 @@
+using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Authorization.Dtos;
 using OMTS.Application.Features.Authorization.Models;
@@ -14,7 +15,7 @@ public sealed class PermissionService(
     /// <summary>Effective access of an account today, or null when the account does not exist.</summary>
     public async Task<AccountAccess?> GetAccessAsync(Guid accountId, CancellationToken cancellationToken)
     {
-        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var today = timeProvider.Today();
         var key = cache.KeyFor(accountId, today);
         if (cache.Get(key) is { } cached)
         {

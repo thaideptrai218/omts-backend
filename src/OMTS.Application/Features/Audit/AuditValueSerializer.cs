@@ -13,7 +13,7 @@ namespace OMTS.Application.Features.Audit;
 internal static partial class AuditValueSerializer
 {
     private static readonly HashSet<string> SensitiveWords =
-        new(["password", "passwd", "pwd", "otp", "token", "secret", "credential"], StringComparer.OrdinalIgnoreCase);
+        new(["password", "passwd", "pwd", "otp", "token", "secret", "credential", "hash"], StringComparer.OrdinalIgnoreCase);
 
     private static readonly JsonSerializerOptions Options = new()
     {

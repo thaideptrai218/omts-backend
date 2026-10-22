@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -23,6 +24,22 @@ public class AuditableEntityStampTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Equal(created.CreatedAt, updated.CreatedAt);
         Assert.NotNull(updated.UpdatedAt);
         Assert.True(updated.UpdatedAt >= created.CreatedAt);
+    }
+
+    // Login bookkeeping (failure counter, last login) is not an edit of the account.
+    [Fact]
+    public async Task Login_does_not_restamp_the_account()
+    {
+        var account = await factory.AddAccountAsync($"stamp-{Guid.NewGuid():N}"[..20], "Secret123");
+        var client = factory.CreateClient();
+
+        await client.PostAsJsonAsync("/api/auth/login", new { identifier = account.Username, password = "Wrong123" });
+        await client.PostAsJsonAsync("/api/auth/login", new { identifier = account.Username, password = "Secret123" });
+
+        using var scope = factory.Services.CreateScope();
+        var stored = await scope.ServiceProvider.GetRequiredService<OmtsDbContext>().Accounts.AsNoTracking().SingleAsync(a => a.Id == account.Id);
+        Assert.NotNull(stored.LastLoginAt);
+        Assert.Null(stored.UpdatedAt);
     }
 
     private async Task<Role> LoadAsync(Guid id)

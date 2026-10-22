@@ -333,7 +333,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     AccountId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     ClientType = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     RefreshTokenHash = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: false),
-                    PreviousRefreshTokenHash = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: true),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     LastRefreshedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
                     RefreshTokenExpiresAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
@@ -2708,11 +2707,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 name: "IX_LoginSessions_AccountId",
                 table: "LoginSessions",
                 column: "AccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_LoginSessions_PreviousRefreshTokenHash",
-                table: "LoginSessions",
-                column: "PreviousRefreshTokenHash");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LoginSessions_RefreshTokenHash",

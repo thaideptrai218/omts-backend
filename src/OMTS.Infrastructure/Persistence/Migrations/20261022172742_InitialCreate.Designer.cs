@@ -12,7 +12,7 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(OmtsDbContext))]
-    [Migration("20261022163230_InitialCreate")]
+    [Migration("20261022172742_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -1969,14 +1969,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("LastRefreshedAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<string>("PreviousRefreshTokenHash")
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)");
-
                     b.Property<DateTimeOffset>("RefreshTokenExpiresAt")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<string>("RefreshTokenHash")
+                        .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
@@ -1995,8 +1992,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");
-
-                    b.HasIndex("PreviousRefreshTokenHash");
 
                     b.HasIndex("RefreshTokenHash")
                         .IsUnique();

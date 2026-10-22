@@ -17,8 +17,6 @@ public class LoginSession : Entity
 
     public string RefreshTokenHash { get; set; } = string.Empty;
 
-    /// <summary>Hash replaced by the last rotation; presenting it again signals a stolen token.</summary>
-    public string? PreviousRefreshTokenHash { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? LastRefreshedAt { get; set; }
@@ -42,7 +40,6 @@ public class LoginSession : Entity
 
     public void Rotate(string newRefreshTokenHash, DateTimeOffset now, TimeSpan refreshLifetime)
     {
-        PreviousRefreshTokenHash = RefreshTokenHash;
         RefreshTokenHash = newRefreshTokenHash;
         LastRefreshedAt = now;
         var slidingExpiry = now + refreshLifetime;

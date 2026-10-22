@@ -1,4 +1,5 @@
 using Microsoft.OpenApi.Models;
+using OMTS.Api.Common;
 using OMTS.Api.Extensions;
 using OMTS.Api.Filters;
 using OMTS.Api.Services;
@@ -14,6 +15,8 @@ builder.Services.AddJwtAuthentication();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
+builder.Services.AddExceptionHandler<ProblemExceptionHandler>();
+builder.Services.AddProblemDetails();
 builder.Services.AddControllers(options => options.Filters.Add<AccountStateGateFilter>());
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -32,6 +35,8 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddHealthChecks();
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {

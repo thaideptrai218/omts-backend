@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Persistence;
 
 namespace OMTS.Infrastructure.Persistence;
@@ -8,5 +10,18 @@ namespace OMTS.Infrastructure.Persistence;
 /// </summary>
 internal sealed class UnitOfWork(OmtsDbContext db) : IUnitOfWork
 {
-    public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => db.SaveChangesAsync(cancellationToken);
+    public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException exception)
+        {
+            throw new ConcurrencyConflictException(exception);
+        }
+    }
+
+    public Task ReloadAsync(object entity, CancellationToken cancellationToken = default) =>
+        db.Entry(entity).ReloadAsync(cancellationToken);
 }

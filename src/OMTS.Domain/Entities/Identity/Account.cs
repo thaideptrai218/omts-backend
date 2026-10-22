@@ -54,8 +54,9 @@ public class Account : AuditableEntity, IHasStatus
 
     public bool IsTemporarilyLocked(DateTimeOffset now) => LockoutEndAt > now;
 
+    /// <summary>A temporary password without an issue time is treated as expired (fail closed).</summary>
     public bool IsTemporaryPasswordExpired(DateTimeOffset now) =>
-        MustChangePassword && now - TemporaryPasswordIssuedAt > TemporaryPasswordLifetime;
+        MustChangePassword && (TemporaryPasswordIssuedAt is null || now - TemporaryPasswordIssuedAt > TemporaryPasswordLifetime);
 
     public void RegisterFailedLogin(DateTimeOffset now)
     {

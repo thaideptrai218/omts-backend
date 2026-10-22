@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Caching.Memory;
+using OMTS.Application.Common;
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Models;
@@ -8,7 +11,7 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Auth;
 
-/// <summary>Log in (UC02), refresh the session and log out (UC07); session rules from NFR-01.</summary>
+/// <summary>Log in, refresh the session and log out (ACS-02); session rules from NFR-01.</summary>
 public sealed class AuthService(
     IAccountRepository accounts,
     ILoginSessionRepository sessions,
@@ -16,90 +19,52 @@ public sealed class AuthService(
     IUnitOfWork unitOfWork,
     IPasswordHasher passwordHasher,
     ITokenService tokenService,
+    IMemoryCache memoryCache,
     TimeProvider timeProvider)
 {
+    // Concurrent logins of one account (double click, web + mobile) conflict on its row version; the
+    // loser re-reads the account and applies its change again.
+    private const int MaxSaveAttempts = 5;
+
+    private const int MaxUserAgentLength = 500;
+    private const int MaxDeviceNameLength = 200;
+    private const int MaxIpAddressLength = 64;
+
     // Verified against the password when the identifier is unknown, so an unknown identifier and a wrong
     // password take the same time and cannot be told apart (MSG12 gives no hint which field is wrong).
     private static string? _unknownAccountHash;
 
     public async Task<AuthResult> LoginAsync(LoginRequest request, ClientInfo client, CancellationToken cancellationToken)
     {
-        var now = timeProvider.GetUtcNow();
-
-        var account = await accounts.FindByLoginIdentifierAsync(request.Identifier.Trim(), cancellationToken);
+        var identifier = request.Identifier.Trim();
+        var account = await accounts.FindByLoginIdentifierAsync(identifier, cancellationToken);
         if (account is null)
         {
-            passwordHasher.Verify(_unknownAccountHash ??= passwordHasher.Hash(Guid.NewGuid().ToString()), request.Password);
-            return AuthResult.Failure(AuthError.InvalidCredentials);
+            return FailUnknownIdentifier(identifier, request.Password);
         }
 
-        if (account.IsTemporarilyLocked(now))
+        for (var attempt = 1; ; attempt++)
         {
-            return AuthResult.Failure(AuthError.TemporarilyLocked);
+            try
+            {
+                return await LoginAsync(account, request, client, cancellationToken);
+            }
+            catch (ConcurrencyConflictException) when (attempt < MaxSaveAttempts)
+            {
+                await unitOfWork.ReloadAsync(account, cancellationToken);
+            }
         }
-
-        var passwordCheck = passwordHasher.Verify(account.PasswordHash, request.Password);
-        if (passwordCheck == PasswordCheck.Failed)
-        {
-            account.RegisterFailedLogin(now);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            return AuthResult.Failure(account.IsTemporarilyLocked(now) ? AuthError.TemporarilyLocked : AuthError.InvalidCredentials);
-        }
-
-        // Status checks only after the password is proven, so they reveal nothing to a guesser.
-        if (account.StatusId != StatusIds.Account.Active || !await HasEffectiveAccessAsync(account, now, cancellationToken))
-        {
-            return AuthResult.Failure(AuthError.AccessDenied);
-        }
-
-        if (account.IsTemporaryPasswordExpired(now))
-        {
-            return AuthResult.Failure(AuthError.TemporaryPasswordExpired);
-        }
-
-        if (passwordCheck == PasswordCheck.SuccessRehashNeeded)
-        {
-            account.PasswordHash = passwordHasher.Hash(request.Password);
-        }
-
-        account.RegisterSuccessfulLogin(now);
-
-        var lifetime = tokenService.GetSessionLifetime(request.ClientType);
-        var refreshToken = tokenService.CreateRefreshToken();
-        var session = new LoginSession
-        {
-            AccountId = account.Id,
-            ClientType = request.ClientType,
-            RefreshTokenHash = tokenService.HashRefreshToken(refreshToken),
-            CreatedAt = now,
-            RefreshTokenExpiresAt = now + lifetime.RefreshTokenLifetime,
-            AbsoluteExpiresAt = now + lifetime.MaxLifetime,
-            DeviceName = request.DeviceName,
-            UserAgent = client.UserAgent,
-            IpAddress = client.IpAddress,
-        };
-        sessions.Add(session);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-
-        return AuthResult.Success(BuildTokens(account, session, refreshToken));
     }
 
     public async Task<AuthResult> RefreshAsync(RefreshRequest request, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
-        var hash = tokenService.HashRefreshToken(request.RefreshToken);
-
-        var session = await sessions.GetByRefreshTokenHashAsync(hash, cancellationToken);
+        var session = await sessions.GetByRefreshTokenHashAsync(tokenService.HashRefreshToken(request.RefreshToken), cancellationToken);
         if (session is null)
         {
-            // A token that was already rotated is being replayed: treat it as stolen and end the session.
-            var replayed = await sessions.GetByPreviousRefreshTokenHashAsync(hash, cancellationToken);
-            if (replayed is not null)
-            {
-                replayed.Revoke(now, "Refresh token reuse detected");
-                await unitOfWork.SaveChangesAsync(cancellationToken);
-            }
-
+            // Not the current token of any session: if it names a session, it is an old token being
+            // replayed, so treat it as stolen and end that session.
+            await RevokeReplayedSessionAsync(request.RefreshToken, now, cancellationToken);
             return AuthResult.Failure(AuthError.SessionExpired);
         }
 
@@ -108,21 +73,36 @@ public sealed class AuthService(
             return AuthResult.Failure(AuthError.SessionExpired);
         }
 
-        if (session.Account.StatusId != StatusIds.Account.Active || !await HasEffectiveAccessAsync(session.Account, now, cancellationToken))
+        var account = session.Account;
+        var refusal = account.StatusId != StatusIds.Account.Active || !await HasEffectiveAccessAsync(account, cancellationToken)
+            ? AuthError.AccessDenied
+            : account.IsTemporaryPasswordExpired(now) ? AuthError.TemporaryPasswordExpired : (AuthError?)null;
+        if (refusal is not null)
         {
             session.Revoke(now, "Account no longer allowed to log in");
             await unitOfWork.SaveChangesAsync(cancellationToken);
-            return AuthResult.Failure(AuthError.AccessDenied);
+            return AuthResult.Failure(refusal.Value);
         }
 
-        var refreshToken = tokenService.CreateRefreshToken();
+        var refreshToken = tokenService.CreateRefreshToken(session.Id);
         session.Rotate(tokenService.HashRefreshToken(refreshToken), now, tokenService.GetSessionLifetime(session.ClientType).RefreshTokenLifetime);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (ConcurrencyConflictException)
+        {
+            // Another request rotated the same token first: two holders of one token means reuse.
+            await unitOfWork.ReloadAsync(session, cancellationToken);
+            session.Revoke(now, "Concurrent refresh with the same token");
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return AuthResult.Failure(AuthError.SessionExpired);
+        }
 
-        return AuthResult.Success(BuildTokens(session.Account, session, refreshToken));
+        return AuthResult.Success(BuildTokens(account, session, refreshToken));
     }
 
-    /// <summary>Revokes the current session (UC07); returns false when it no longer exists.</summary>
+    /// <summary>Revokes the current session; returns false when it no longer exists.</summary>
     public async Task<bool> LogoutAsync(Guid accountId, Guid sessionId, CancellationToken cancellationToken)
     {
         var session = await sessions.GetAsync(sessionId, accountId, cancellationToken);
@@ -140,11 +120,107 @@ public sealed class AuthService(
     public Task<bool> IsSessionActiveAsync(Guid accountId, Guid sessionId, CancellationToken cancellationToken) =>
         sessions.IsActiveAsync(accountId, sessionId, timeProvider.GetUtcNow(), cancellationToken);
 
-    /// <summary>Staff can log in only while they hold at least one effective zone–role pair (UC02 – 2b).</summary>
-    private Task<bool> HasEffectiveAccessAsync(Account account, DateTimeOffset now, CancellationToken cancellationToken) =>
+    private async Task<AuthResult> LoginAsync(Account account, LoginRequest request, ClientInfo client, CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        if (account.IsTemporarilyLocked(now))
+        {
+            return AuthResult.Failure(AuthError.TemporarilyLocked);
+        }
+
+        var passwordCheck = passwordHasher.Verify(account.PasswordHash, request.Password);
+        if (passwordCheck == PasswordCheck.Failed)
+        {
+            account.RegisterFailedLogin(now);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return AuthResult.Failure(account.IsTemporarilyLocked(now) ? AuthError.TemporarilyLocked : AuthError.InvalidCredentials);
+        }
+
+        // Status checks only after the password is proven, so they reveal nothing to a guesser.
+        if (account.StatusId != StatusIds.Account.Active || !await HasEffectiveAccessAsync(account, cancellationToken))
+        {
+            return AuthResult.Failure(AuthError.AccessDenied);
+        }
+
+        if (account.IsTemporaryPasswordExpired(now))
+        {
+            return AuthResult.Failure(AuthError.TemporaryPasswordExpired);
+        }
+
+        if (passwordCheck == PasswordCheck.SuccessRehashNeeded)
+        {
+            account.PasswordHash = passwordHasher.Hash(request.Password);
+        }
+
+        // Saved before the session is added: only this save can conflict, and a retry must not leave an
+        // already added session behind.
+        account.RegisterSuccessfulLogin(now);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var lifetime = tokenService.GetSessionLifetime(request.ClientType);
+        var session = new LoginSession
+        {
+            AccountId = account.Id,
+            ClientType = request.ClientType,
+            CreatedAt = now,
+            RefreshTokenExpiresAt = now + lifetime.RefreshTokenLifetime,
+            AbsoluteExpiresAt = now + lifetime.MaxLifetime,
+            DeviceName = Truncate(request.DeviceName, MaxDeviceNameLength),
+            UserAgent = Truncate(client.UserAgent, MaxUserAgentLength),
+            IpAddress = Truncate(client.IpAddress, MaxIpAddressLength),
+        };
+        var refreshToken = tokenService.CreateRefreshToken(session.Id);
+        session.RefreshTokenHash = tokenService.HashRefreshToken(refreshToken);
+        sessions.Add(session);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return AuthResult.Success(BuildTokens(account, session, refreshToken));
+    }
+
+    /// <summary>
+    /// Unknown identifiers behave like accounts: same hashing time, and after 5 failures the same MSG69
+    /// for 15 minutes, so the lockout cannot be used to find out which identifiers exist.
+    /// </summary>
+    private AuthResult FailUnknownIdentifier(string identifier, string password)
+    {
+        passwordHasher.Verify(_unknownAccountHash ??= passwordHasher.Hash(Guid.NewGuid().ToString()), password);
+
+        var key = $"omts:unknown-login:{identifier.ToUpperInvariant()}";
+        var failures = memoryCache.Get<int>(key) + 1;
+        memoryCache.Set(key, failures, Account.TemporaryLockDuration);
+        return AuthResult.Failure(failures >= Account.MaxFailedLogins ? AuthError.TemporarilyLocked : AuthError.InvalidCredentials);
+    }
+
+    private async Task RevokeReplayedSessionAsync(string refreshToken, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        if (tokenService.ReadSessionId(refreshToken) is not { } sessionId
+            || await sessions.GetByIdAsync(sessionId, cancellationToken) is not { RevokedAt: null } replayed)
+        {
+            return;
+        }
+
+        replayed.Revoke(now, "Refresh token reuse detected");
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (ConcurrencyConflictException)
+        {
+            // The session changed meanwhile (rotated or revoked); revoke the current state.
+            await unitOfWork.ReloadAsync(replayed, cancellationToken);
+            replayed.Revoke(now, "Refresh token reuse detected");
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>Staff can log in only while they hold at least one effective zone–role pair (ACS-02).</summary>
+    private Task<bool> HasEffectiveAccessAsync(Account account, CancellationToken cancellationToken) =>
         account.SubjectType != SubjectType.Staff
             ? Task.FromResult(true)
-            : grants.HasEffectiveGrantAsync(account.Id, DateOnly.FromDateTime(now.UtcDateTime), cancellationToken);
+            : grants.HasEffectiveGrantAsync(account.Id, timeProvider.Today(), cancellationToken);
+
+    private static string? Truncate(string? value, int maxLength) =>
+        value is { Length: > 0 } && value.Length > maxLength ? value[..maxLength] : value;
 
     private AuthTokens BuildTokens(Account account, LoginSession session, string refreshToken)
     {
@@ -158,7 +234,7 @@ public sealed class AuthService(
             account.DisplayName,
             account.SubjectType,
             account.MustChangePassword,
-            // Traders and staff must verify a phone number before other functions (BR-34, UC02 – 3a).
+            // Traders and staff must verify a phone number before other functions (BR-34, ACS-02).
             PhoneVerificationRequired: account.SubjectType is SubjectType.Trader or SubjectType.Staff && account.PhoneVerifiedAt is null);
     }
 }

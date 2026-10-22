@@ -44,7 +44,15 @@ internal sealed class JwtTokenService(IOptions<JwtOptions> options, TimeProvider
         return new AccessToken(_handler.CreateToken(descriptor), expiresAt);
     }
 
-    public string CreateRefreshToken() => Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(64));
+    // "{sessionId}.{512 random bits}": the session id is not a secret, the random part is.
+    public string CreateRefreshToken(Guid sessionId) =>
+        $"{sessionId:N}.{Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(64))}";
+
+    public Guid? ReadSessionId(string refreshToken)
+    {
+        var separator = refreshToken.IndexOf('.');
+        return separator > 0 && Guid.TryParseExact(refreshToken[..separator], "N", out var sessionId) ? sessionId : null;
+    }
 
     // Refresh tokens are 512-bit random values, so a fast hash is enough (unlike passwords).
     public string HashRefreshToken(string refreshToken) =>

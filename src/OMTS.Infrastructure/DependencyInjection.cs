@@ -18,6 +18,8 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton<PermissionCacheInvalidationInterceptor>();
+        // Scoped (it reads the current user): works because AddDbContext builds the options per scope.
+        // Switching to DbContext pooling or a context factory would need another way to pass the user.
         services.AddScoped<AuditableEntityStampInterceptor>();
         services.AddDbContext<OmtsDbContext>((provider, options) =>
         {

@@ -15,8 +15,8 @@ internal sealed class LoginSessionRepository(OmtsDbContext db) : ILoginSessionRe
             .Include(s => s.Account)
             .FirstOrDefaultAsync(s => s.RefreshTokenHash == refreshTokenHash, cancellationToken);
 
-    public Task<LoginSession?> GetByPreviousRefreshTokenHashAsync(string refreshTokenHash, CancellationToken cancellationToken) =>
-        db.LoginSessions.FirstOrDefaultAsync(s => s.PreviousRefreshTokenHash == refreshTokenHash, cancellationToken);
+    public Task<LoginSession?> GetByIdAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        db.LoginSessions.FirstOrDefaultAsync(s => s.Id == sessionId, cancellationToken);
 
     public Task<bool> IsActiveAsync(Guid accountId, Guid sessionId, DateTimeOffset now, CancellationToken cancellationToken) =>
         db.LoginSessions.AnyAsync(

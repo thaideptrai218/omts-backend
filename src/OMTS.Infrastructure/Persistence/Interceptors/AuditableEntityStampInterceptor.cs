@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Domain.Common;
+using OMTS.Domain.Entities.Identity;
 
 namespace OMTS.Infrastructure.Persistence.Interceptors;
 
@@ -11,6 +13,11 @@ namespace OMTS.Infrastructure.Persistence.Interceptors;
 /// </summary>
 internal sealed class AuditableEntityStampInterceptor(ICurrentUser currentUser, TimeProvider timeProvider) : SaveChangesInterceptor
 {
+    // Login bookkeeping is not an edit of the account: it must not replace "last updated by" (an
+    // anonymous login would erase who last edited the account).
+    private static readonly HashSet<string> AccountLoginTracking =
+        [nameof(Account.FailedLoginCount), nameof(Account.LockoutEndAt), nameof(Account.LastLoginAt)];
+
     public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
     {
         Stamp(eventData.Context);
@@ -41,6 +48,8 @@ internal sealed class AuditableEntityStampInterceptor(ICurrentUser currentUser, 
                     entry.Entity.CreatedAt = now;
                     entry.Entity.CreatedBy ??= accountId;
                     break;
+                case EntityState.Modified when entry.Entity is Account && OnlyLoginTrackingChanged(entry):
+                    break;
                 case EntityState.Modified:
                     entry.Entity.UpdatedAt = now;
                     entry.Entity.UpdatedBy = accountId;
@@ -51,4 +60,7 @@ internal sealed class AuditableEntityStampInterceptor(ICurrentUser currentUser, 
             }
         }
     }
+
+    private static bool OnlyLoginTrackingChanged(EntityEntry<AuditableEntity> entry) =>
+        entry.Properties.Where(p => p.IsModified).All(p => AccountLoginTracking.Contains(p.Metadata.Name));
 }
