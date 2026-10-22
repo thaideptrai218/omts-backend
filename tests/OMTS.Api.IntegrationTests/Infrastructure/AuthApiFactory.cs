@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
@@ -14,16 +15,24 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Api.IntegrationTests.Infrastructure;
 
 /// <summary>Runs the real API with an in-memory database, a test signing key and test-only endpoints.</summary>
-public sealed class AuthApiFactory : WebApplicationFactory<Program>
+public class AuthApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _databaseName = $"omts-auth-{Guid.NewGuid()}";
 
     // Generated per test host so no key-like literal is committed (gitleaks).
     private readonly string _signingKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
 
+    /// <summary>Folder of the Local storage provider for this host; deleted with the host.</summary>
+    public string StorageRoot { get; } = Path.Combine(Path.GetTempPath(), $"omts-files-{Guid.NewGuid():N}");
+
+    /// <summary>Every log line the host wrote.</summary>
+    public CapturingLoggerProvider Logs { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Jwt:SigningKey", _signingKey);
+        builder.UseSetting("Storage:Local:RootPath", StorageRoot);
+        builder.ConfigureLogging(logging => logging.AddProvider(Logs));
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<DbContextOptions<OmtsDbContext>>();
@@ -33,6 +42,15 @@ public sealed class AuthApiFactory : WebApplicationFactory<Program>
 
             services.AddControllers().AddApplicationPart(typeof(AuthApiFactory).Assembly);
         });
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (disposing && Directory.Exists(StorageRoot))
+        {
+            Directory.Delete(StorageRoot, recursive: true);
+        }
     }
 
     public async Task<Account> AddAccountAsync(
