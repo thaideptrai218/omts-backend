@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using OMTS.Api.Common;
 using OMTS.Application.Common.Interfaces;
+using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 
@@ -53,7 +54,7 @@ public sealed class RequirePermissionAttribute(string function, PermissionAction
 
         if (access is null || !access.Allows(Function, Action, Scope, zoneId))
         {
-            context.Result = ProblemResults.Create(StatusCodes.Status403Forbidden, "MSG02", "You have no permission for this function or record.");
+            context.Result = ProblemResults.Create(StatusCodes.Status403Forbidden, UserMessages.NoPermission);
         }
     }
 }

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Filters;
 using OMTS.Api.Common;
 using OMTS.Application.Common.Interfaces;
+using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.Authorization;
 
 namespace OMTS.Api.Filters;
@@ -31,13 +32,11 @@ public sealed class AccountStateGateFilter(ICurrentUser currentUser, PermissionS
 
         if (access.RequiresPasswordChange && !metadata.OfType<AllowWhenPasswordChangeRequiredAttribute>().Any())
         {
-            context.Result = ProblemResults.Create(
-                StatusCodes.Status403Forbidden, "PASSWORD_CHANGE_REQUIRED", "Change your temporary password before using other functions.");
+            context.Result = ProblemResults.Create(StatusCodes.Status403Forbidden, UserMessages.PasswordChangeRequired);
         }
         else if (access.RequiresPhoneVerification && !metadata.OfType<AllowWhenPhoneUnverifiedAttribute>().Any())
         {
-            context.Result = ProblemResults.Create(
-                StatusCodes.Status403Forbidden, "MSG67", "A verified phone number is required before using other functions.");
+            context.Result = ProblemResults.Create(StatusCodes.Status403Forbidden, UserMessages.PhoneVerificationRequired);
         }
     }
 }

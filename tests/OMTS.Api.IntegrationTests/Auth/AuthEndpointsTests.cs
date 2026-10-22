@@ -94,6 +94,56 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal("MSG68", await ErrorCodeAsync(response));
     }
 
+    // ACS-02: a valid temporary password logs in, but only to change it.
+    [Fact]
+    public async Task Valid_temporary_password_logs_in_with_must_change_password()
+    {
+        await factory.AddAccountAsync("temp2", Password, configure: a =>
+        {
+            a.MustChangePassword = true;
+            a.TemporaryPasswordIssuedAt = DateTimeOffset.UtcNow.AddHours(-23);
+        });
+
+        var tokens = await LoginAsync(factory.CreateClient(), "temp2", Password);
+
+        Assert.True(tokens.GetProperty("mustChangePassword").GetBoolean());
+    }
+
+    // Clients map the code, but the detail is the SRS wording (MSG68 as confirmed by the PM on 22/10).
+    [Fact]
+    public async Task Login_errors_carry_the_srs_message_text()
+    {
+        await factory.AddAccountAsync("temp3", Password, configure: a =>
+        {
+            a.MustChangePassword = true;
+            a.TemporaryPasswordIssuedAt = DateTimeOffset.UtcNow.AddHours(-25);
+        });
+        var client = factory.CreateClient();
+
+        var unknown = await (await PostLoginAsync(client, "nobody", Password)).Content.ReadFromJsonAsync<JsonElement>();
+        var expired = await (await PostLoginAsync(client, "temp3", Password)).Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("The login information is incorrect. Please check and try again.", unknown.GetProperty("detail").GetString());
+        Assert.Equal(
+            "Your temporary password has expired. Staff accounts: please ask the Cooperative Owner to reset it. Cooperative Owner and trader accounts: please use Forgot password.",
+            expired.GetProperty("detail").GetString());
+    }
+
+    // ACS-02: a locked account cannot keep its session alive through refresh.
+    [Fact]
+    public async Task Refresh_is_refused_once_the_account_is_locked()
+    {
+        var account = await factory.AddAccountAsync("owner6", Password);
+        var client = factory.CreateClient();
+        var tokens = await LoginAsync(client, "owner6", Password);
+
+        await factory.UpdateAsync<Domain.Entities.Identity.Account>(account.Id, a => a.StatusId = StatusIds.Account.Locked);
+        var refresh = await client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = tokens.GetProperty("refreshToken").GetString() });
+
+        Assert.Equal(HttpStatusCode.Forbidden, refresh.StatusCode);
+        Assert.Equal("MSG13", await ErrorCodeAsync(refresh));
+    }
+
     [Fact]
     public async Task Refresh_rotates_the_token_and_replaying_the_old_one_ends_the_session()
     {

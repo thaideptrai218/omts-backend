@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using OMTS.Application.Common.Messages;
 
 namespace OMTS.Api.Common;
 
@@ -11,4 +12,6 @@ internal static class ProblemResults
         problem.Extensions["code"] = code;
         return new ObjectResult(problem) { StatusCode = status };
     }
+
+    public static ObjectResult Create(int status, UserMessage message) => Create(status, message.Code, message.Text);
 }

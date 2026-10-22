@@ -18,6 +18,10 @@ public sealed class AuthService(
     ITokenService tokenService,
     TimeProvider timeProvider)
 {
+    // Verified against the password when the identifier is unknown, so an unknown identifier and a wrong
+    // password take the same time and cannot be told apart (MSG12 gives no hint which field is wrong).
+    private static string? _unknownAccountHash;
+
     public async Task<AuthResult> LoginAsync(LoginRequest request, ClientInfo client, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
@@ -25,6 +29,7 @@ public sealed class AuthService(
         var account = await accounts.FindByLoginIdentifierAsync(request.Identifier.Trim(), cancellationToken);
         if (account is null)
         {
+            passwordHasher.Verify(_unknownAccountHash ??= passwordHasher.Hash(Guid.NewGuid().ToString()), request.Password);
             return AuthResult.Failure(AuthError.InvalidCredentials);
         }
 

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using OMTS.Api.Common;
 using OMTS.Api.Filters;
 using OMTS.Application.Common.Interfaces;
+using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Auth.Dtos;
 
@@ -54,11 +55,11 @@ public sealed class AuthController(AuthService authService, ICurrentUser current
 
         return result.Error switch
         {
-            AuthError.InvalidCredentials => ProblemResults.Create(StatusCodes.Status401Unauthorized, "MSG12", "Wrong identifier or password."),
-            AuthError.TemporarilyLocked => ProblemResults.Create(StatusCodes.Status423Locked, "MSG69", "Too many failed logins; try again in 15 minutes."),
-            AuthError.AccessDenied => ProblemResults.Create(StatusCodes.Status403Forbidden, "MSG13", "Account suspended or no longer authorized."),
-            AuthError.TemporaryPasswordExpired => ProblemResults.Create(StatusCodes.Status403Forbidden, "MSG68", "Temporary password expired; ask for a new one."),
-            _ => ProblemResults.Create(StatusCodes.Status401Unauthorized, "MSG19", "Session expired; log in again."),
+            AuthError.InvalidCredentials => ProblemResults.Create(StatusCodes.Status401Unauthorized, UserMessages.LoginIncorrect),
+            AuthError.TemporarilyLocked => ProblemResults.Create(StatusCodes.Status423Locked, UserMessages.TooManyAttempts),
+            AuthError.AccessDenied => ProblemResults.Create(StatusCodes.Status403Forbidden, UserMessages.AccountUnusable),
+            AuthError.TemporaryPasswordExpired => ProblemResults.Create(StatusCodes.Status403Forbidden, UserMessages.TemporaryPasswordExpired),
+            _ => ProblemResults.Create(StatusCodes.Status401Unauthorized, UserMessages.SessionExpired),
         };
     }
 }
