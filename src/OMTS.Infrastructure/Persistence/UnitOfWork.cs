@@ -34,4 +34,13 @@ internal sealed class UnitOfWork(OmtsDbContext db) : IUnitOfWork
 
     public void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion) =>
         db.Entry(entity).Property(e => e.RowVersion).OriginalValue = rowVersion;
+
+    public void MarkChanged(AuditableEntity entity)
+    {
+        var entry = db.Entry(entity);
+        if (entry.State == EntityState.Unchanged)
+        {
+            entry.State = EntityState.Modified;
+        }
+    }
 }

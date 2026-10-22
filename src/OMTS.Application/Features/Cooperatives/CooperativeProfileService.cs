@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using OMTS.Application.Common;
@@ -31,6 +32,11 @@ public sealed partial class CooperativeProfileService(
     public const string PublicLogoPath = "/api/public/cooperative/logo";
     private const int MaxText = 255;
     private const int MaxAddress = 500;
+    // Cooperatives.BusinessLines column length.
+    private const int MaxBusinessLinesJson = 2000;
+
+    // Stored text only (never written into HTML), so letters such as "ư" stay unescaped and fit the column.
+    private static readonly JsonSerializerOptions LinesJson = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     public async Task<Result<CooperativeProfileView>> GetAsync(CancellationToken cancellationToken) =>
         await cooperatives.GetCurrentAsync(cancellationToken) is { } cooperative ? View(cooperative) : AppError.NotFound;
@@ -67,7 +73,7 @@ public sealed partial class CooperativeProfileService(
         cooperative.Email = values.Email;
         cooperative.Website = values.Website;
         cooperative.LegalRepresentative = values.LegalRepresentative;
-        cooperative.BusinessLines = JsonSerializer.Serialize(values.BusinessLines);
+        cooperative.BusinessLines = JsonSerializer.Serialize(values.BusinessLines, LinesJson);
 
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, Snapshot(cooperative));
         if (changedAfter is not null)
@@ -186,7 +192,7 @@ public sealed partial class CooperativeProfileService(
 
         var representative = Required(request.LegalRepresentative, "Legal representative", MaxText);
         var lines = (request.BusinessLines ?? []).Select(l => l?.Trim() ?? string.Empty).ToList();
-        if (lines.Count == 0 || lines.Any(l => l.Length == 0 || l.Length > MaxText))
+        if (lines.Count == 0 || lines.Any(l => l.Length == 0 || l.Length > MaxText) || JsonSerializer.Serialize(lines, LinesJson).Length > MaxBusinessLinesJson)
         {
             invalid.Add("Business lines");
         }

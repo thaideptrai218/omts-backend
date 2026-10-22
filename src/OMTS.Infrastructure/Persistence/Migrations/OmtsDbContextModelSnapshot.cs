@@ -1939,6 +1939,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("StatusId");
 
+                    b.HasIndex("FullName", "PhoneNumber")
+                        .IsUnique()
+                        .HasFilter("[PhoneNumber] IS NOT NULL");
+
                     b.ToTable("Employees");
                 });
 

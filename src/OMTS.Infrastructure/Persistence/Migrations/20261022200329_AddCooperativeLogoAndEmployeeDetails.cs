@@ -91,6 +91,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_Employees_FullName_PhoneNumber",
+                table: "Employees",
+                columns: new[] { "FullName", "PhoneNumber" },
+                unique: true,
+                filter: "[PhoneNumber] IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_EmployeeWorkingZones_ZoneId",
                 table: "EmployeeWorkingZones",
                 column: "ZoneId");
@@ -101,6 +108,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.DropTable(
                 name: "EmployeeWorkingZones");
+
+            migrationBuilder.DropIndex(
+                name: "IX_Employees_FullName_PhoneNumber",
+                table: "Employees");
 
             migrationBuilder.DropColumn(
                 name: "BankAccount_AccountHolderName",

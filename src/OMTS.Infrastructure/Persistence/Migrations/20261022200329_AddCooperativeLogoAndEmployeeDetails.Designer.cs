@@ -12,7 +12,7 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(OmtsDbContext))]
-    [Migration("20261022192618_AddCooperativeLogoAndEmployeeDetails")]
+    [Migration("20261022200329_AddCooperativeLogoAndEmployeeDetails")]
     partial class AddCooperativeLogoAndEmployeeDetails
     {
         /// <inheritdoc />
@@ -1941,6 +1941,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("CooperativeId");
 
                     b.HasIndex("StatusId");
+
+                    b.HasIndex("FullName", "PhoneNumber")
+                        .IsUnique()
+                        .HasFilter("[PhoneNumber] IS NOT NULL");
 
                     b.ToTable("Employees");
                 });

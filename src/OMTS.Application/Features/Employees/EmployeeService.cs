@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
@@ -91,7 +92,11 @@ public sealed class EmployeeService(
         }
 
         audit.Record(new AuditEntry("Employee.Created", nameof(Employee)) { RecordId = employee.Id, After = Snapshot(employee, input.WorkingZoneIds) });
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        if (await SaveAsync(input, null, cancellationToken) is { } duplicate)
+        {
+            return duplicate;
+        }
+
         return await SavedAsync(employee.Id, created, cancellationToken);
     }
 
@@ -123,14 +128,22 @@ public sealed class EmployeeService(
         var input = checkedInput.Value!;
         var before = Snapshot(employee, employee.WorkingZones.Select(w => w.ZoneId).ToList());
         Apply(employee, input);
-        foreach (var removed in employee.WorkingZones.Where(w => !input.WorkingZoneIds.Contains(w.ZoneId)).ToList())
+        var removedZones = employee.WorkingZones.Where(w => !input.WorkingZoneIds.Contains(w.ZoneId)).ToList();
+        var addedZones = input.WorkingZoneIds.Where(z => employee.WorkingZones.All(w => w.ZoneId != z)).ToList();
+        foreach (var removed in removedZones)
         {
             employees.RemoveWorkingZone(removed);
         }
 
-        foreach (var zoneId in input.WorkingZoneIds.Where(z => employee.WorkingZones.All(w => w.ZoneId != z)))
+        foreach (var zoneId in addedZones)
         {
             employees.AddWorkingZone(new EmployeeWorkingZone { EmployeeId = employee.Id, ZoneId = zoneId });
+        }
+
+        // Working zones are rows of their own: the profile itself must still get a new version and "last updated by".
+        if (removedZones.Count > 0 || addedZones.Count > 0)
+        {
+            unitOfWork.MarkChanged(employee);
         }
 
         if (employee.AccountId != request.AccountId && await LinkAsync(employee, request.AccountId, cancellationToken) is { } linkError)
@@ -144,8 +157,34 @@ public sealed class EmployeeService(
             audit.Record(new AuditEntry("Employee.Updated", nameof(Employee)) { RecordId = employee.Id, Before = changedBefore, After = changedAfter });
         }
 
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        if (await SaveAsync(input, employee.Id, cancellationToken) is { } duplicate)
+        {
+            return duplicate;
+        }
+
         return await SavedAsync(employee.Id, null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Saves; a parallel save of the same person passes the pre-check, so the unique index refuses the second
+    /// one, which then gets the same MSG03 as the pre-check. Other duplicates are left to the exception handler.
+    /// </summary>
+    private async Task<AppError?> SaveAsync(EmployeeInput input, Guid? employeeId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return null;
+        }
+        catch (DuplicateRecordException)
+        {
+            if (await employees.FindSamePersonAsync(input.FullName, input.PhoneNumber, employeeId, cancellationToken) is { } same)
+            {
+                return AppError.Conflict(UserMessages.AlreadyExists("Employee profile"), new Dictionary<string, object?> { ["existingEmployeeId"] = same.Id });
+            }
+
+            throw;
+        }
     }
 
     /// <summary>Creates the login account of an employee who has none yet; the temporary password is returned once.</summary>

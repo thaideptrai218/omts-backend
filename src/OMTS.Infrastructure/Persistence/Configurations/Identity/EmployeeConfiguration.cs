@@ -10,6 +10,8 @@ internal sealed class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
     {
         builder.Property(x => x.FullName).HasMaxLength(Lengths.Name);
         builder.Property(x => x.PhoneNumber).HasMaxLength(Lengths.Phone);
+        // One profile per person (LAB-01): parallel saves of the same person cannot both pass the pre-check.
+        builder.HasIndex(x => new { x.FullName, x.PhoneNumber }).IsUnique().HasFilter("[PhoneNumber] IS NOT NULL");
         builder.Property(x => x.Address).HasMaxLength(Lengths.Address);
         builder.Property(x => x.Area).HasMaxLength(Lengths.Name);
         builder.Property(x => x.Ward).HasMaxLength(Lengths.Name);

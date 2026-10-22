@@ -273,6 +273,10 @@ public partial class VerificationServiceTests
         public void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion)
         {
         }
+
+        public void MarkChanged(AuditableEntity entity)
+        {
+        }
     }
 
     private sealed class Sha256Hasher : IVerificationCodeHasher
