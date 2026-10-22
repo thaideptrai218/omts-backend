@@ -12,8 +12,8 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(OmtsDbContext))]
-    [Migration("20261022172742_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20261022174457_RemovePreviousRefreshTokenHash")]
+    partial class RemovePreviousRefreshTokenHash
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
