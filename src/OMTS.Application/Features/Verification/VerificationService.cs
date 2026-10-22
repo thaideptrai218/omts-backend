@@ -142,8 +142,7 @@ public sealed class VerificationService(
 
         if (string.IsNullOrWhiteSpace(code) || HashCode(request.Id, code.Trim()) != request.CodeHash)
         {
-            request.FailedAttempts++;
-            await SaveIgnoringRaceAsync(cancellationToken);
+            await CountWrongEntryAsync(request, now, cancellationToken);
             return WrongCode();
         }
 
@@ -213,6 +212,10 @@ public sealed class VerificationService(
 
     private static AppError WrongCode() => new(ErrorKind.Validation, UserMessages.WrongVerificationCode);
 
+    // Each conflict round saves one entry and a request locks after a few, so this covers any burst the
+    // per-IP rate limiter lets through.
+    private const int MaxCountRetries = 20;
+
     private static AppError TooManyAttempts() => new(ErrorKind.Locked, UserMessages.TooManyAttempts);
 
     private static AppError OutOfRequests(DateTimeOffset nextAllowed, DateTimeOffset now)
@@ -221,15 +224,29 @@ public sealed class VerificationService(
         return new AppError(ErrorKind.TooManyRequests, UserMessages.TooManyCodeRequests(wait), new Dictionary<string, object?> { ["retryAfterSeconds"] = wait });
     }
 
-    // A parallel wrong entry already counted: either way the attempt is refused.
-    private async Task SaveIgnoringRaceAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Counts a wrong entry so that parallel entries are never lost: on a rowversion conflict the request is
+    /// reloaded and the entry counted again on the newest version, until it is saved or the request is no
+    /// longer usable (locked or used up by the parallel entries).
+    /// </summary>
+    private async Task CountWrongEntryAsync(VerificationCode request, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        try
+        for (var retry = 0; ; retry++)
         {
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch (ConcurrencyConflictException)
-        {
+            request.FailedAttempts++;
+            try
+            {
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+                return;
+            }
+            catch (ConcurrencyConflictException) when (retry < MaxCountRetries)
+            {
+                await unitOfWork.ReloadAsync(request, cancellationToken);
+                if (!request.IsUsable(now))
+                {
+                    return;
+                }
+            }
         }
     }
 
