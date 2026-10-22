@@ -124,7 +124,9 @@ public sealed class PurchaseReturnService(
             {
                 ReceiptLineId = line.Id,
                 Quantity = l.Quantity!.Value,
-                ReturnValue = PurchaseMoney.ReturnValue(l.Quantity!.Value, line.UnitPrice, figures.Payable, figures.Subtotal),
+                ReturnValue = PurchaseMoney.CappedReturnValue(
+                    l.Quantity!.Value, line, figures.Payable, figures.Subtotal,
+                    receipt.Returns.SelectMany(r => r.Lines).Where(x => x.ReceiptLineId == line.Id).Sum(x => x.ReturnValue)),
             };
         }).ToList();
 

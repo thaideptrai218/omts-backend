@@ -19,7 +19,7 @@ public sealed record PurchaseReceiptQuery(
     int? StatusId = null, DateOnly? From = null, DateOnly? To = null, string? Code = null, int Page = 1, int PageSize = 20);
 
 public sealed record PurchaseReceiptRow(
-    Guid Id, string Code, DateOnly ReceiptDate, SupplierRef Supplier, ZoneRef Zone, RaftRef? Raft, int StatusId, string Status,
+    Guid Id, string Code, DateOnly? ReceiptDate, SupplierRef Supplier, ZoneRef Zone, RaftRef? Raft, int StatusId, string Status,
     decimal Subtotal, decimal Discount, decimal Payable, decimal Returned, decimal Paid, decimal Outstanding);
 
 /// <summary>Money totals count Completed receipts only; <see cref="Count"/> is every matching receipt.</summary>
@@ -74,7 +74,7 @@ public sealed class PurchaseReceiptQueryService(
         return found.GroupBy(r => r.RaftId!.Value).Select(g =>
         {
             var first = g.First();
-            var costs = g.Select(r => new RaftCostReceipt(r.Id, r.Code, r.ReceiptDate, PurchaseMoney.RaftMaterialCost(r))).ToList();
+            var costs = g.Select(r => new RaftCostReceipt(r.Id, r.Code, r.ReceiptDate, PurchaseMoney.RaftMaterialCost(r, query.ItemId))).ToList();
             return new RaftMaterialCostRow(
                 new RaftRef(first.Raft!.Id, first.Raft.Code), new ZoneRef(first.Zone.Id, first.Zone.Code, first.Zone.Name), costs.Sum(c => c.MaterialCost), costs);
         }).OrderBy(r => r.Zone.Code).ThenBy(r => r.Raft.Code).ToList();
@@ -93,7 +93,7 @@ public sealed class PurchaseReceiptQueryService(
         var totals = Totals(rows);
         var sheetRows = rows.Select(r => (IReadOnlyList<object?>)
         [
-            r.Code, r.ReceiptDate.ToDateTime(TimeOnly.MinValue), r.Supplier.Name, r.Zone.Code, r.Raft?.Code, r.Status,
+            r.Code, r.ReceiptDate?.ToDateTime(TimeOnly.MinValue), r.Supplier.Name, r.Zone.Code, r.Raft?.Code, r.Status,
             r.Subtotal, r.Discount, r.Payable, r.Returned, r.Paid, r.Outstanding,
         ]).ToList();
         sheetRows.Add(["Total (Completed)", null, null, null, null, $"{totals.CompletedCount} / {totals.Count}",
@@ -148,7 +148,7 @@ public sealed class PurchaseReceiptQueryService(
     {
         var f = PurchaseMoney.Of(r);
         return new PurchaseReceiptRow(
-            r.Id, r.Code, r.ReceiptDate, new SupplierRef(r.Supplier.Id, r.Supplier.Name, r.Supplier.PhoneNumber),
+            r.Id, r.Code, PurchaseMoney.DateOrNull(r.ReceiptDate), new SupplierRef(r.Supplier.Id, r.Supplier.Name, r.Supplier.PhoneNumber),
             new ZoneRef(r.Zone.Id, r.Zone.Code, r.Zone.Name), r.Raft is null ? null : new RaftRef(r.Raft.Id, r.Raft.Code),
             r.StatusId, statusCatalog.DisplayNameOf(r.StatusId), f.Subtotal, f.Discount, f.Payable, f.Returned, f.Paid, f.Outstanding);
     }

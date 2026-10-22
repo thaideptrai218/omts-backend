@@ -248,6 +248,7 @@ public sealed class PurchaseReceiptService(
                 ActualSource = line.ActualSource,
                 EvidenceUrls = [.. receipt.InvoicePhotoUrls],
             };
+            receipts.AddSeedLot(line.SeedLot);
         }
 
         if (receipt.AmountPaidNow > 0)
@@ -303,11 +304,12 @@ public sealed class PurchaseReceiptService(
 
     private static string LotCode(string receiptCode, int index) => $"{receiptCode}-S{index + 1}";
 
-    private static void Apply(PurchaseReceipt receipt, SavePurchaseReceiptRequest request, IReadOnlyDictionary<Guid, FarmingInputItem> lineItems)
+    private void Apply(PurchaseReceipt receipt, SavePurchaseReceiptRequest request, IReadOnlyDictionary<Guid, FarmingInputItem> lineItems)
     {
         receipt.SupplierId = request.SupplierId!.Value;
         receipt.ZoneId = request.ZoneId!.Value;
         receipt.RaftId = request.RaftId;
+        // A Draft may have no date yet (stored as DateOnly.MinValue, shown as null); completion requires one.
         receipt.ReceiptDate = request.ReceiptDate ?? default;
         receipt.DiscountAmount = request.DiscountAmount ?? 0;
         receipt.AmountPaidNow = request.AmountPaidNow ?? 0;
@@ -317,7 +319,7 @@ public sealed class PurchaseReceiptService(
         {
             var item = lineItems[line.ItemId!.Value];
             var (quantity, unitPrice) = (line.Quantity ?? 0, line.UnitPrice ?? 0);
-            receipt.Lines.Add(new PurchaseReceiptLine
+            var added = new PurchaseReceiptLine
             {
                 ReceiptId = receipt.Id,
                 ItemId = item.Id,
@@ -327,7 +329,9 @@ public sealed class PurchaseReceiptService(
                 LineAmount = PurchaseMoney.LineAmount(quantity, unitPrice),
                 SupplierLotCode = item.Group == InputItemGroup.Seed ? Trimmed(line.SupplierLotCode) : null,
                 ActualSource = item.Group == InputItemGroup.Seed ? Trimmed(line.ActualSource) : null,
-            });
+            };
+            receipt.Lines.Add(added);
+            receipts.AddLine(added);
         }
     }
 

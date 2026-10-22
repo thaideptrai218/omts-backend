@@ -25,7 +25,8 @@ public sealed class PurchaseReceiptValidator(
         SavePurchaseReceiptRequest request, CancellationToken cancellationToken)
     {
         var invalid = new List<string>();
-        if (request.SupplierId is not { } supplierId || await suppliers.GetForEditAsync(supplierId, cancellationToken) is null)
+        // A Discontinued supplier or item cannot be selected, not even on a Draft (INP-01, INP-02).
+        if (request.SupplierId is not { } supplierId || await suppliers.GetForEditAsync(supplierId, cancellationToken) is not { StatusId: StatusIds.Usage.InUse })
         {
             invalid.Add("Supplier");
         }
@@ -40,10 +41,15 @@ public sealed class PurchaseReceiptValidator(
         var found = (await items.GetByIdsAsync(itemIds, cancellationToken)).ToDictionary(i => i.Id);
         for (var i = 0; i < lines.Count; i++)
         {
-            if (lines[i].ItemId is not { } itemId || !found.ContainsKey(itemId))
+            if (lines[i].ItemId is not { } itemId || !found.TryGetValue(itemId, out var lineItem) || lineItem.StatusId != StatusIds.Usage.InUse)
             {
                 invalid.Add($"Line {i + 1} item");
             }
+        }
+
+        if (request.RaftId is { } raftId && await rafts.GetForEditAsync(raftId, cancellationToken) is null)
+        {
+            invalid.Add("Raft");
         }
 
         if (request.DiscountAmount < 0)
@@ -63,7 +69,21 @@ public sealed class PurchaseReceiptValidator(
             CheckText(lines[i].ActualSource, $"Line {i + 1} actual source", 500, invalid);
         }
 
-        return (found, invalid.Count > 0 ? AppError.InvalidFields(invalid) : null);
+        if (invalid.Count > 0)
+        {
+            return (found, AppError.InvalidFields(invalid));
+        }
+
+        // Amounts are stored as multiples of 1,000 VND (database check), so a Draft is checked too.
+        foreach (var (amount, field) in new[] { (request.DiscountAmount ?? 0, "Discount amount"), (request.AmountPaidNow ?? 0, "Amount paid now") })
+        {
+            if (!PurchaseMoney.IsThousands(amount))
+            {
+                return (found, new AppError(ErrorKind.Validation, UserMessages.NotThousands, new Dictionary<string, object?> { ["field"] = field }));
+            }
+        }
+
+        return (found, null);
     }
 
     /// <summary>Full validation before Draft → Completed, on the receipt as it will be saved.</summary>

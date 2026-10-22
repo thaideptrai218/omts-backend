@@ -8,7 +8,7 @@ public sealed record SupplierListItem(Guid Id, string Name, SupplierType Supplie
 
 public sealed record SupplierCertificate(int Index, string Url);
 
-public sealed record SupplierReceiptRow(Guid Id, string Code, DateOnly ReceiptDate, Guid ZoneId, string Status, decimal Payable, decimal Outstanding);
+public sealed record SupplierReceiptRow(Guid Id, string Code, DateOnly? ReceiptDate, Guid ZoneId, string Status, decimal Payable, decimal Outstanding);
 
 /// <param name="Debt">Current supplier debt (INP-06): outstanding of Completed receipts − unallocated payments.</param>
 public sealed record SupplierView(

@@ -1,5 +1,6 @@
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Interfaces.Storage;
@@ -65,8 +66,12 @@ public sealed class SupplierService(
         var supplier = new Supplier();
         Apply(supplier, values);
         suppliers.Add(supplier);
-        audit.Record(new AuditEntry("Supplier.Created", RecordType) { RecordId = supplier.Id, RecordCode = supplier.Name, After = Snapshot(supplier) });
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        audit.Record(new AuditEntry("Supplier.Created", RecordType) { RecordId = supplier.Id, RecordCode = AuditCode(supplier), After = Snapshot(supplier) });
+        if (await SaveAsync(values.PhoneNumber, null, cancellationToken) is { } duplicate)
+        {
+            return duplicate;
+        }
+
         return await ViewAsync(supplier, cancellationToken);
     }
 
@@ -99,8 +104,11 @@ public sealed class SupplierService(
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, Snapshot(supplier));
         if (changedAfter is not null)
         {
-            audit.Record(new AuditEntry("Supplier.Updated", RecordType) { RecordId = supplier.Id, RecordCode = supplier.Name, Before = changedBefore, After = changedAfter });
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+            audit.Record(new AuditEntry("Supplier.Updated", RecordType) { RecordId = supplier.Id, RecordCode = AuditCode(supplier), Before = changedBefore, After = changedAfter });
+            if (await SaveAsync(values.PhoneNumber, supplier.Id, cancellationToken) is { } duplicate)
+            {
+                return duplicate;
+            }
         }
 
         return await ViewAsync(supplier, cancellationToken);
@@ -169,7 +177,7 @@ public sealed class SupplierService(
     {
         audit.Record(new AuditEntry("Supplier.Updated", RecordType)
         {
-            RecordId = supplier.Id, RecordCode = supplier.Name, Before = new { Certificates = supplier.CertificateUrls }, After = new { Certificates = keys },
+            RecordId = supplier.Id, RecordCode = AuditCode(supplier), Before = new { Certificates = supplier.CertificateUrls }, After = new { Certificates = keys },
         });
         supplier.CertificateUrls = keys;
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -195,7 +203,7 @@ public sealed class SupplierService(
         audit.Record(new AuditEntry(action, RecordType)
         {
             RecordId = supplier.Id,
-            RecordCode = supplier.Name,
+            RecordCode = AuditCode(supplier),
             Before = new { Status = statusCatalog.CodeOf(fromStatusId) },
             After = new { Status = statusCatalog.CodeOf(toStatusId) },
         });
@@ -223,10 +231,32 @@ public sealed class SupplierService(
             history.Select(r =>
             {
                 var figures = PurchaseMoney.Of(r);
-                return new SupplierReceiptRow(r.Id, r.Code, r.ReceiptDate, r.ZoneId, statusCatalog.DisplayNameOf(r.StatusId), figures.Payable, figures.Outstanding);
+                return new SupplierReceiptRow(r.Id, r.Code, PurchaseMoney.DateOrNull(r.ReceiptDate), r.ZoneId, statusCatalog.DisplayNameOf(r.StatusId), figures.Payable, figures.Outstanding);
             }).ToList(),
             RowVersionGuard.Encode(supplier.RowVersion));
     }
+
+    /// <summary>The second of two parallel saves with one phone gets the same MSG03 as the pre-check.</summary>
+    private async Task<AppError?> SaveAsync(string phoneNumber, Guid? exceptSupplierId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return null;
+        }
+        catch (DuplicateRecordException)
+        {
+            if (await suppliers.FindByPhoneAsync(phoneNumber, exceptSupplierId, cancellationToken) is { } existing)
+            {
+                return AppError.AlreadyExists("Supplier", existing.Id);
+            }
+
+            throw;
+        }
+    }
+
+    // AuditEvent.RecordCode holds 100 characters; supplier names may have 200.
+    private static string AuditCode(Supplier supplier) => supplier.Name.Length <= 100 ? supplier.Name : supplier.Name[..100];
 
     private static (Values Values, List<string> Invalid) Validate(SaveSupplierRequest request)
     {

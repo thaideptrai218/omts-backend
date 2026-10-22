@@ -1,5 +1,6 @@
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
@@ -123,9 +124,10 @@ public sealed class PurchaseReceiptCancellationService(
         }
 
         var prefix = DocumentCodes.PrefixFor(DocumentCodes.ReceiptPrefix, timeProvider.Today());
+        var used = await receipts.CountCodesAsync(prefix, cancellationToken);
         var copy = new PurchaseReceipt
         {
-            Code = DocumentCodes.Next(prefix, await receipts.CountCodesAsync(prefix, cancellationToken)),
+            Code = DocumentCodes.Next(prefix, used),
             SupplierId = source.SupplierId,
             ZoneId = source.ZoneId,
             RaftId = source.RaftId,
@@ -146,11 +148,24 @@ public sealed class PurchaseReceiptCancellationService(
         }
 
         receipts.Add(copy);
-        audit.Record(new AuditEntry("PurchaseReceipt.Copied", RecordType)
+        var copied = audit.Record(new AuditEntry("PurchaseReceipt.Copied", RecordType)
         {
             RecordId = copy.Id, RecordCode = copy.Code, ZoneId = copy.ZoneId, Before = new { SourceId = source.Id, SourceCode = source.Code },
         });
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+                break;
+            }
+            catch (DuplicateRecordException) when (attempt < 5)
+            {
+                // A parallel save took the code: the next number for the copy and its audit row.
+                copy.Code = DocumentCodes.Next(prefix, used, attempt + 1);
+                copied.RecordCode = copy.Code;
+            }
+        }
         return await views.ViewAsync(copy.Id, cancellationToken);
     }
 

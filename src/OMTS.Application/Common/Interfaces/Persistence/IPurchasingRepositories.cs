@@ -73,6 +73,12 @@ public interface IPurchaseReceiptRepository
 
     void AddReturn(PurchaseReturn purchaseReturn);
 
+    /// <summary>New rows under a tracked receipt are added explicitly: their keys are already set, so EF would
+    /// otherwise treat them as existing rows.</summary>
+    void AddLine(PurchaseReceiptLine line);
+
+    void AddSeedLot(Domain.Entities.Cultivation.SeedReceiptLot lot);
+
     /// <summary>Deletes a line of a Draft (foreign keys never cascade).</summary>
     void RemoveLine(PurchaseReceiptLine line);
 

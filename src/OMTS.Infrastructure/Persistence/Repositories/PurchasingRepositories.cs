@@ -156,7 +156,8 @@ internal sealed class PurchaseReceiptRepository(OmtsDbContext db) : IPurchaseRec
 
         if (filter.From is { } from)
         {
-            query = query.Where(r => r.ReceiptDate >= from);
+            // Drafts without a date yet are always listed.
+            query = query.Where(r => r.ReceiptDate >= from || r.ReceiptDate == DateOnly.MinValue);
         }
 
         if (filter.To is { } to)
@@ -184,6 +185,10 @@ internal sealed class PurchaseReceiptRepository(OmtsDbContext db) : IPurchaseRec
     public void AddReturn(PurchaseReturn purchaseReturn) => db.PurchaseReturns.Add(purchaseReturn);
 
     public void RemoveLine(PurchaseReceiptLine line) => db.PurchaseReceiptLines.Remove(line);
+
+    public void AddLine(PurchaseReceiptLine line) => db.PurchaseReceiptLines.Add(line);
+
+    public void AddSeedLot(Domain.Entities.Cultivation.SeedReceiptLot lot) => db.SeedReceiptLots.Add(lot);
 
     public Task<PurchaseReturn?> GetReturnAsync(Guid returnId, CancellationToken cancellationToken) =>
         db.PurchaseReturns.AsNoTracking()

@@ -26,12 +26,25 @@ public static class PurchaseMoney
 
     public static bool IsThousands(decimal amount) => amount % Thousand == 0;
 
+    /// <summary>A Draft without a date yet stores DateOnly.MinValue; the API shows null.</summary>
+    public static DateOnly? DateOrNull(DateOnly date) => date == DateOnly.MinValue ? null : date;
+
     /// <summary>Quantity × unit price, rounded to the nearest 1,000 VND.</summary>
     public static decimal LineAmount(decimal quantity, decimal unitPrice) => RoundToThousand(quantity * unitPrice);
 
     /// <summary>Value of returned goods: quantity × unit price × (payable ÷ subtotal), rounded to the nearest 1,000 VND.</summary>
     public static decimal ReturnValue(decimal quantity, decimal unitPrice, decimal payable, decimal subtotal) =>
         subtotal == 0 ? 0 : RoundToThousand(quantity * unitPrice * payable / subtotal);
+
+    /// <summary>
+    /// Return value capped by what is left of the line's payable share, so returning a line in parts never credits
+    /// more than the line is worth and its last unit can still be returned.
+    /// </summary>
+    public static decimal CappedReturnValue(decimal quantity, PurchaseReceiptLine line, decimal payable, decimal subtotal, decimal alreadyReturned)
+    {
+        var lineShare = subtotal == 0 ? 0 : RoundToThousand(line.LineAmount * payable / subtotal);
+        return Math.Min(ReturnValue(quantity, line.UnitPrice, payable, subtotal), Math.Max(0, lineShare - alreadyReturned));
+    }
 
     public static ReceiptFigures Of(PurchaseReceipt receipt)
     {
@@ -47,7 +60,8 @@ public static class PurchaseMoney
     /// Raft material cost of a receipt: its RaftMaterial line amounts less their proportional share of the
     /// discount and less the values returned from those lines (FARM-04, INP-07). Only Completed receipts count.
     /// </summary>
-    public static decimal RaftMaterialCost(PurchaseReceipt receipt)
+    /// <param name="itemId">When set, only the lines of that item count (INP-07 item filter).</param>
+    public static decimal RaftMaterialCost(PurchaseReceipt receipt, Guid? itemId = null)
     {
         if (receipt.StatusId != StatusIds.PurchaseReceipt.Completed)
         {
@@ -61,7 +75,7 @@ public static class PurchaseMoney
         }
 
         var payable = subtotal - receipt.DiscountAmount;
-        var materialLines = receipt.Lines.Where(l => l.Item.Group == InputItemGroup.RaftMaterial).Select(l => l.Id).ToHashSet();
+        var materialLines = receipt.Lines.Where(l => l.Item.Group == InputItemGroup.RaftMaterial && (itemId == null || l.ItemId == itemId)).Select(l => l.Id).ToHashSet();
         var gross = receipt.Lines.Where(l => materialLines.Contains(l.Id)).Sum(l => l.LineAmount) * payable / subtotal;
         var returned = receipt.Returns.SelectMany(r => r.Lines).Where(l => materialLines.Contains(l.ReceiptLineId)).Sum(l => l.ReturnValue);
         return RoundToThousand(gross) - returned;

@@ -28,7 +28,7 @@ public sealed class PurchaseReceiptViews(IPurchaseReceiptRepository receipts, IF
             new SupplierRef(r.Supplier.Id, r.Supplier.Name, r.Supplier.PhoneNumber),
             new ZoneRef(r.Zone.Id, r.Zone.Code, r.Zone.Name),
             r.Raft is null ? null : new RaftRef(r.Raft.Id, r.Raft.Code),
-            r.ReceiptDate,
+            PurchaseMoney.DateOrNull(r.ReceiptDate),
             figures.Subtotal, figures.Discount, figures.Payable, figures.Returned, figures.Paid, figures.Refunded, figures.Outstanding,
             r.AmountPaidNow, r.PaidNowMethod, r.Notes, photos,
             r.StatusId, statusCatalog.DisplayNameOf(r.StatusId), r.CompletedAt, r.CancelledAt, r.CancelReason, r.CopiedFromReceiptId,

@@ -60,7 +60,7 @@ public sealed record PurchaseReceiptView(
     SupplierRef Supplier,
     ZoneRef Zone,
     RaftRef? Raft,
-    DateOnly ReceiptDate,
+    DateOnly? ReceiptDate,
     decimal Subtotal,
     decimal DiscountAmount,
     decimal Payable,

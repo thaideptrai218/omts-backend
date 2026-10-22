@@ -1,4 +1,5 @@
 using OMTS.Application.Common;
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
@@ -109,7 +110,21 @@ public sealed class SupplierPaymentService(
             RecordId = payment.Id, RecordCode = receipt.Code, ZoneId = receipt.ZoneId,
             After = new { payment.Amount, payment.Method, payment.PaymentDate, payment.ReferenceCode, ReceiptId = receipt.Id },
         });
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception exception) when (key is not null && exception is DuplicateRecordException or ConcurrencyConflictException)
+        {
+            // A parallel request with the same key was saved first (unique key or the receipt row version).
+            if (await payments.FindByDeduplicationKeyAsync(key, cancellationToken) is { } saved)
+            {
+                return await ViewAsync(saved, cancellationToken);
+            }
+
+            throw;
+        }
+
         return await ViewAsync(payment, cancellationToken);
     }
 

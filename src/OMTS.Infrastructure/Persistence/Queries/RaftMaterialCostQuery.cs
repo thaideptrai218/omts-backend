@@ -16,7 +16,7 @@ internal sealed class RaftMaterialCostQuery(OmtsDbContext db) : IRaftMaterialCos
             .Where(r => r.RaftId != null && raftIds.Contains(r.RaftId.Value) && r.StatusId == StatusIds.PurchaseReceipt.Completed)
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
-        var totals = receipts.GroupBy(r => r.RaftId!.Value).ToDictionary(g => g.Key, g => g.Sum(PurchaseMoney.RaftMaterialCost));
+        var totals = receipts.GroupBy(r => r.RaftId!.Value).ToDictionary(g => g.Key, g => g.Sum(r => PurchaseMoney.RaftMaterialCost(r)));
         return raftIds.ToDictionary(id => id, id => totals.GetValueOrDefault(id));
     }
 }
