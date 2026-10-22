@@ -61,6 +61,10 @@ public sealed class AuditLogService(
         Guid? actorAccountId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(recordType);
+        if (fromStatusId == toStatusId)
+        {
+            throw new ArgumentException("A status change needs two different statuses.", nameof(toStatusId));
+        }
 
         return Record(new AuditEntry($"{recordType}.StatusChanged", recordType)
         {

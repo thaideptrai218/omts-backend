@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Enums;
@@ -13,6 +14,8 @@ internal sealed class ZoneRecipientQuery(OmtsDbContext db, TimeProvider timeProv
         Guid zoneId, string functionCode, PermissionAction action, CancellationToken cancellationToken)
     {
         var today = timeProvider.Today();
+        // Same rule as AccountAccess: cooperative-wide functions only count grants at All zones.
+        var allZonesOnly = PermissionFunctions.IsCooperativeWide(functionCode);
 
         var owners = await db.Accounts.AsNoTracking()
             .Where(a => a.SubjectType == SubjectType.CooperativeOwner && a.StatusId == StatusIds.Account.Active)
@@ -25,7 +28,7 @@ internal sealed class ZoneRecipientQuery(OmtsDbContext db, TimeProvider timeProv
                 && g.EffectiveFrom <= today
                 && (g.EffectiveTo == null || g.EffectiveTo >= today)
                 && g.Role.StatusId == StatusIds.Usage.InUse
-                && (g.ZoneId == zoneId || g.ZoneId == null)
+                && (g.ZoneId == null || (!allZonesOnly && g.ZoneId == zoneId))
                 && g.Account.SubjectType == SubjectType.Staff
                 && g.Account.StatusId == StatusIds.Account.Active)
             .Select(g => new { g.AccountId, g.RoleId })

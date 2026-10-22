@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace OMTS.Infrastructure.Storage;
@@ -14,9 +15,16 @@ public sealed class LocalFileUrlSigner
 
     private readonly byte[] _key;
 
-    public LocalFileUrlSigner(IOptions<StorageOptions> options)
+    public LocalFileUrlSigner(IOptions<StorageOptions> options, IHostEnvironment environment)
     {
         var configured = options.Value.Local.SigningKey;
+        if (string.IsNullOrEmpty(configured) && !environment.IsDevelopment())
+        {
+            // A random key would break every link after a restart or on a second instance.
+            throw new InvalidOperationException("'Storage:Local:SigningKey' must be set outside Development when Storage:Provider is Local.");
+        }
+
+        // Development without a key: links stop working after a restart, which is fine there.
         _key = string.IsNullOrEmpty(configured) ? RandomNumberGenerator.GetBytes(32) : Encoding.UTF8.GetBytes(configured);
     }
 
@@ -28,7 +36,7 @@ public sealed class LocalFileUrlSigner
 
     public bool IsValid(string key, long expires, string? signature, DateTimeOffset now)
     {
-        if (string.IsNullOrEmpty(signature) || DateTimeOffset.FromUnixTimeSeconds(expires) < now)
+        if (string.IsNullOrEmpty(signature) || expires < now.ToUnixTimeSeconds())
         {
             return false;
         }

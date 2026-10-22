@@ -1,3 +1,5 @@
+using OMTS.Application.Features.Files;
+
 namespace OMTS.Application.Common.Interfaces.Storage;
 
 /// <summary>
@@ -9,11 +11,11 @@ namespace OMTS.Application.Common.Interfaces.Storage;
 public interface IFileStorage
 {
     /// <summary>
-    /// Stores the content unchanged under a new key <c>{category}/{yyyy}/{MM}/{guid}{ext}</c>; the client
-    /// file name only gives the extension. A provider failure is returned, never thrown.
+    /// Stores the content unchanged under a new key <c>{category}/{yyyy}/{MM}/{guid}{ext}</c>. Only files
+    /// that passed <see cref="FileValidator"/> can be stored: extension and content type come from the
+    /// detected format, never from the client's file name. A provider failure is returned, never thrown.
     /// </summary>
-    Task<FileUploadResult> UploadAsync(
-        Stream content, string fileName, string contentType, string category, CancellationToken cancellationToken = default);
+    Task<FileUploadResult> UploadAsync(ValidatedFile file, string category, CancellationToken cancellationToken = default);
 
     /// <summary>The stored content, or null when the key does not exist.</summary>
     Task<Stream?> OpenReadAsync(string key, CancellationToken cancellationToken = default);

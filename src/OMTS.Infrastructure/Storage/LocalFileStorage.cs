@@ -2,6 +2,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OMTS.Application.Common.Interfaces.Storage;
+using OMTS.Application.Features.Files;
 
 namespace OMTS.Infrastructure.Storage;
 
@@ -18,18 +19,18 @@ internal sealed class LocalFileStorage(
 {
     private static readonly TimeSpan DefaultLifetime = TimeSpan.FromMinutes(10);
 
-    private string Root => Path.GetFullPath(Path.Combine(environment.ContentRootPath, options.Value.Local.RootPath));
+    private string Root => Path.TrimEndingDirectorySeparator(
+        Path.GetFullPath(Path.Combine(environment.ContentRootPath, options.Value.Local.RootPath)));
 
-    public async Task<FileUploadResult> UploadAsync(
-        Stream content, string fileName, string contentType, string category, CancellationToken cancellationToken = default)
+    public async Task<FileUploadResult> UploadAsync(ValidatedFile file, string category, CancellationToken cancellationToken = default)
     {
-        var key = StorageKeys.Create(category, fileName, timeProvider.GetUtcNow());
+        var key = StorageKeys.Create(category, file.Format, timeProvider.GetUtcNow());
         try
         {
             var path = PathOf(key);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            await using var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-            await content.CopyToAsync(file, cancellationToken);
+            await using var target = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            await file.File.Content.CopyToAsync(target, cancellationToken);
             return FileUploadResult.Stored(key);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

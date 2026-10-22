@@ -104,5 +104,25 @@ public static class FileValidator
         _ => "application/octet-stream",
     };
 
+    /// <summary>File extension of a format, used in storage keys.</summary>
+    public static string ExtensionOf(FileFormat format) => format switch
+    {
+        FileFormat.Jpeg => ".jpg",
+        FileFormat.Png => ".png",
+        FileFormat.Pdf => ".pdf",
+        FileFormat.WebP => ".webp",
+        _ => throw new ArgumentOutOfRangeException(nameof(format), format, null),
+    };
+
+    /// <summary>Content type of a stored key, from its extension; only the formats above are ever stored.</summary>
+    public static string? ContentTypeOfKey(string key) => Path.GetExtension(key).ToLowerInvariant() switch
+    {
+        ".jpg" => ContentTypeOf(FileFormat.Jpeg),
+        ".png" => ContentTypeOf(FileFormat.Png),
+        ".pdf" => ContentTypeOf(FileFormat.Pdf),
+        ".webp" => ContentTypeOf(FileFormat.WebP),
+        _ => null,
+    };
+
     private static FileValidationResult Invalid(string? fileName, string problem) => new([], fileName, problem);
 }

@@ -12,16 +12,20 @@ namespace OMTS.Infrastructure.Persistence.Interceptors;
 internal sealed class PushOutboxInterceptor(PushOutbox outbox, IPushSender pushSender, ILogger<PushOutboxInterceptor> logger)
     : SaveChangesInterceptor
 {
+    private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(10);
+
     public override int SavedChanges(SaveChangesCompletedEventData eventData, int result)
     {
-        SendPendingAsync(CancellationToken.None).GetAwaiter().GetResult();
+        SendPendingAsync().GetAwaiter().GetResult();
         return result;
     }
 
+    // The data is committed at this point: the request's cancellation must neither fail the save nor drop
+    // the remaining pushes, so sends use their own timeout instead.
     public override async ValueTask<int> SavedChangesAsync(
         SaveChangesCompletedEventData eventData, int result, CancellationToken cancellationToken = default)
     {
-        await SendPendingAsync(cancellationToken);
+        await SendPendingAsync();
         return result;
     }
 
@@ -33,20 +37,21 @@ internal sealed class PushOutboxInterceptor(PushOutbox outbox, IPushSender pushS
         return Task.CompletedTask;
     }
 
-    private async Task SendPendingAsync(CancellationToken cancellationToken)
+    private async Task SendPendingAsync()
     {
         foreach (var message in outbox.TakeAll())
         {
             try
             {
-                var result = await pushSender.SendAsync(message, cancellationToken);
+                using var timeout = new CancellationTokenSource(SendTimeout);
+                var result = await pushSender.SendAsync(message, timeout.Token);
                 if (!result.Succeeded)
                 {
                     logger.LogWarning(
                         "Push {Type} to account {Recipient} failed: {Error}", message.Type, message.RecipientAccountId, result.ErrorCode);
                 }
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception)
             {
                 logger.LogError(exception, "Push {Type} to account {Recipient} failed", message.Type, message.RecipientAccountId);
             }

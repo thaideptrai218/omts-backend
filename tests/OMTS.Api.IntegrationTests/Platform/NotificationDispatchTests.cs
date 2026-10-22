@@ -42,6 +42,25 @@ public class NotificationDispatchTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Contains(pushed, m => m.Subject == "Water alert");
     }
 
+    // Same rule as AccountAccess: a zone-level grant does not open a cooperative-wide function.
+    [Fact]
+    public async Task Cooperative_wide_function_only_counts_all_zones_grants()
+    {
+        var zone = await factory.AddZoneAsync(Code());
+        var role = await factory.AddRoleAsync($"Pay {Code()}", (PermissionFunctions.SupplierPayments, View: true, Create: false, Edit: false));
+        var zoneLevel = await factory.AddAccountAsync(Code(), "Secret123", SubjectType.Staff);
+        var allZones = await factory.AddAccountAsync(Code(), "Secret123", SubjectType.Staff);
+        await factory.GrantAsync(zoneLevel, role, zone);
+        await factory.GrantAsync(allZones, role, null);
+
+        using var scope = factory.Services.CreateScope();
+        var recipients = await scope.ServiceProvider.GetRequiredService<IZoneRecipientQuery>()
+            .GetRecipientsAsync(zone.Id, PermissionFunctions.SupplierPayments, PermissionAction.View, CancellationToken.None);
+
+        Assert.Contains(allZones.Id, recipients);
+        Assert.DoesNotContain(zoneLevel.Id, recipients);
+    }
+
     /// <summary>Recipients query + dispatch + save, as ENV-01 does for a water alert.</summary>
     internal static async Task<IReadOnlyList<Guid>> NotifyAsync(AuthApiFactory api, Guid zoneId)
     {

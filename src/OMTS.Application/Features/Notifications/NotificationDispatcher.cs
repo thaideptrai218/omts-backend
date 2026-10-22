@@ -68,8 +68,8 @@ public sealed class NotificationDispatcher(
                 {
                     RecipientAccountId = accountId,
                     Type = type,
-                    Title = title,
-                    Body = body,
+                    Title = Truncate(title, MaxTitleLength)!,
+                    Body = Truncate(body, MaxBodyLength),
                     RelatedRecordType = relatedRecordType,
                     RelatedRecordCode = relatedRecordCode,
                     CreatedAt = now,
@@ -83,6 +83,13 @@ public sealed class NotificationDispatcher(
             }
         }
     }
+
+    // Column sizes of Notification: a long text must not fail the caller's business save.
+    private const int MaxTitleLength = 200;
+    private const int MaxBodyLength = 2000;
+
+    private static string? Truncate(string? value, int maxLength) =>
+        value is not null && value.Length > maxLength ? value[..maxLength] : value;
 
     // A channel without a saved preference is on (ACS-07 defaults).
     private static bool IsEnabled(IReadOnlyList<NotificationPreference> preferences, string category, NotificationChannel channel) =>

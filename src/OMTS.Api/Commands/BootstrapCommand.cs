@@ -42,7 +42,10 @@ internal static class BootstrapCommand
         }
         catch (Exception exception)
         {
-            Console.Error.WriteLine($"Bootstrap failed: {exception.GetType().Name}: {exception.Message}");
+            // The innermost cause (e.g. a duplicate username) is what the operator needs; the password is
+            // only ever held hashed, so no secret can appear here.
+            var cause = exception.GetBaseException();
+            Console.Error.WriteLine($"Bootstrap failed: {cause.GetType().Name}: {cause.Message}");
             return DeploymentBootstrapper.Failure;
         }
     }

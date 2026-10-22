@@ -12,7 +12,7 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(OmtsDbContext))]
-    [Migration("20261022173203_AddAuditZoneIndexAndStatusTexts")]
+    [Migration("20261022175734_AddAuditZoneIndexAndStatusTexts")]
     partial class AddAuditZoneIndexAndStatusTexts
     {
         /// <inheritdoc />

@@ -85,7 +85,7 @@ dotnet ef migrations add <Name> --project src/OMTS.Infrastructure --startup-proj
 Email, SMS, push and file storage are adapters picked by configuration, so switching provider needs no code change.
 In Development the fakes keep what they "send" in memory; read it at `GET /api/dev/sms?phoneNumber=`,
 `GET /api/dev/email?to=`, `GET /api/dev/push?accountId=` (clear with `DELETE`). These endpoints answer 404 outside
-Development. Local storage writes under `src/OMTS.Api/App_Data/files` (git-ignored); for Azurite set
+Development; they are anonymous, so never expose a Development environment publicly. Local storage writes under `src/OMTS.Api/App_Data/files` (git-ignored); for Azurite set
 `Storage:Provider=AzureBlob` and `Storage:AzureBlob:ConnectionString=UseDevelopmentStorage=true`.
 
 ## Deployment
@@ -107,10 +107,10 @@ created by a one-time command run on the server by the deployment operator (not 
 
 | Area | Keys |
 |---|---|
-| Email (`Email:Provider` = `Smtp` or `Fake`) | `Email:Smtp:Host`, `Port`, `UseStartTls`, `Username`, `Password`, `FromAddress`, `FromName`, `TimeoutSeconds` |
+| Email (`Email:Provider` = `Smtp` or `Fake`; `UseStartTls=false` means no TLS, for local test servers only) | `Email:Smtp:Host`, `Port`, `UseStartTls`, `Username`, `Password`, `FromAddress`, `FromName`, `TimeoutSeconds` |
 | SMS (`Sms:Provider` = `Fake` until a provider is chosen) | `Sms:Fake:FailFor` (test numbers that fail) |
 | Push (`Push:Provider` = `Fake`) | `Push:Fake:FailFor` |
-| File storage (`Storage:Provider` = `Local` or `AzureBlob`) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
+| File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
 
 ## Contributing
 

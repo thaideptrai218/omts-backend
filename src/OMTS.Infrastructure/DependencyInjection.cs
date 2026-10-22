@@ -93,17 +93,25 @@ public static class DependencyInjection
         services.AddSingleton<FakePushSender>();
         services.AddSingleton<SmtpEmailSender>();
 
-        services.AddSingleton<IEmailSender>(provider =>
-            provider.GetRequiredService<IOptions<EmailOptions>>().Value.Provider == EmailOptions.FakeProvider
-                ? provider.GetRequiredService<FakeEmailSender>()
-                : provider.GetRequiredService<SmtpEmailSender>());
-        services.AddSingleton<ISmsSender>(provider => provider.GetRequiredService<FakeSmsSender>());
-        services.AddSingleton<IPushSender>(provider => provider.GetRequiredService<FakePushSender>());
+        services.AddSingleton<IEmailSender>(provider => provider.GetRequiredService<IOptions<EmailOptions>>().Value.Provider switch
+        {
+            EmailOptions.FakeProvider => provider.GetRequiredService<FakeEmailSender>(),
+            EmailOptions.SmtpProvider => provider.GetRequiredService<SmtpEmailSender>(),
+            var other => throw UnknownProvider(EmailOptions.SectionName, other),
+        });
+        // Only fakes exist for SMS and push until their provider tickets; any other value is a configuration error.
+        services.AddSingleton<ISmsSender>(provider => provider.GetRequiredService<IOptions<SmsOptions>>().Value.Provider == SmsOptions.FakeProvider
+            ? provider.GetRequiredService<FakeSmsSender>()
+            : throw UnknownProvider(SmsOptions.SectionName, provider.GetRequiredService<IOptions<SmsOptions>>().Value.Provider));
+        services.AddSingleton<IPushSender>(provider => provider.GetRequiredService<IOptions<PushOptions>>().Value.Provider == PushOptions.FakeProvider
+            ? provider.GetRequiredService<FakePushSender>()
+            : throw UnknownProvider(PushOptions.SectionName, provider.GetRequiredService<IOptions<PushOptions>>().Value.Provider));
 
         services.AddScoped<PushOutbox>();
         services.AddScoped<IPushOutbox>(provider => provider.GetRequiredService<PushOutbox>());
 
-        services.AddHostedService<FakeSenderStartupWarning>();
+        // Resolves the configured adapters at startup, so a configuration error stops the host right away.
+        services.AddHostedService<ExternalServicesStartupCheck>();
     }
 
     private static void AddFileStorage(this IServiceCollection services, IConfiguration configuration)
@@ -112,11 +120,16 @@ public static class DependencyInjection
         services.AddSingleton<LocalFileUrlSigner>();
         services.AddSingleton<LocalFileStorage>();
         services.AddSingleton<AzureBlobFileStorage>();
-        services.AddSingleton<IFileStorage>(provider =>
-            provider.GetRequiredService<IOptions<StorageOptions>>().Value.Provider == StorageOptions.AzureBlobProvider
-                ? provider.GetRequiredService<AzureBlobFileStorage>()
-                : provider.GetRequiredService<LocalFileStorage>());
+        services.AddSingleton<IFileStorage>(provider => provider.GetRequiredService<IOptions<StorageOptions>>().Value.Provider switch
+        {
+            StorageOptions.LocalProvider => provider.GetRequiredService<LocalFileStorage>(),
+            StorageOptions.AzureBlobProvider => provider.GetRequiredService<AzureBlobFileStorage>(),
+            var other => throw UnknownProvider(StorageOptions.SectionName, other),
+        });
     }
+
+    private static InvalidOperationException UnknownProvider(string section, string value) =>
+        new($"Unknown {section}:Provider '{value}'. See the README for the supported providers.");
 
     private static void AddReadinessChecks(this IHealthChecksBuilder builder)
     {

@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.Options;
 using OMTS.Application.Common.Interfaces.Storage;
+using OMTS.Application.Features.Files;
 using OMTS.Infrastructure.Storage;
 
 namespace OMTS.Api.Controllers;
@@ -18,16 +18,16 @@ namespace OMTS.Api.Controllers;
 [ApiExplorerSettings(IgnoreApi = true)]
 public sealed class LocalFilesController(
     IOptions<StorageOptions> options,
-    LocalFileUrlSigner signer,
+    IServiceProvider services,
     IFileStorage storage,
     TimeProvider timeProvider) : ControllerBase
 {
-    private static readonly FileExtensionContentTypeProvider ContentTypes = new();
-
     [HttpGet("{**key}")]
     public async Task<IActionResult> Download(string key, long expires, string? sig, CancellationToken cancellationToken)
     {
-        if (options.Value.Provider != StorageOptions.LocalProvider || !signer.IsValid(key, expires, sig, timeProvider.GetUtcNow()))
+        if (options.Value.Provider != StorageOptions.LocalProvider
+            || FileValidator.ContentTypeOfKey(key) is not { } contentType
+            || !services.GetRequiredService<LocalFileUrlSigner>().IsValid(key, expires, sig, timeProvider.GetUtcNow()))
         {
             return NotFound();
         }
@@ -38,7 +38,9 @@ public sealed class LocalFilesController(
             return NotFound();
         }
 
-        var contentType = ContentTypes.TryGetContentType(key, out var type) ? type : "application/octet-stream";
+        // Stored files are user uploads served from the API origin: never let a browser run them.
+        Response.Headers.XContentTypeOptions = "nosniff";
+        Response.Headers.ContentSecurityPolicy = "sandbox; default-src 'none'";
         return File(content, contentType);
     }
 }

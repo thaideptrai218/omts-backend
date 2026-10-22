@@ -5,6 +5,7 @@ using Azure.Storage.Sas;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OMTS.Application.Common.Interfaces.Storage;
+using OMTS.Application.Features.Files;
 
 namespace OMTS.Infrastructure.Storage;
 
@@ -20,28 +21,29 @@ internal sealed class AzureBlobFileStorage(
 {
     private static readonly TimeSpan DefaultLifetime = TimeSpan.FromMinutes(10);
 
-    private readonly Lazy<BlobContainerClient> _container = new(() =>
-        new BlobContainerClient(options.Value.AzureBlob.ConnectionString, options.Value.AzureBlob.Container));
-
+    private BlobContainerClient? _container;
     private bool _containerChecked;
 
-    public async Task<FileUploadResult> UploadAsync(
-        Stream content, string fileName, string contentType, string category, CancellationToken cancellationToken = default)
+    // Created on first use and not cached on failure, so a fixed connection string works without a restart.
+    private BlobContainerClient Container =>
+        _container ??= new BlobContainerClient(options.Value.AzureBlob.ConnectionString, options.Value.AzureBlob.Container);
+
+    public async Task<FileUploadResult> UploadAsync(ValidatedFile file, string category, CancellationToken cancellationToken = default)
     {
-        var key = StorageKeys.Create(category, fileName, timeProvider.GetUtcNow());
+        var key = StorageKeys.Create(category, file.Format, timeProvider.GetUtcNow());
         try
         {
             await EnsureContainerAsync(cancellationToken);
-            await _container.Value.GetBlobClient(key).UploadAsync(
-                content,
-                new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = contentType } },
+            await Container.GetBlobClient(key).UploadAsync(
+                file.File.Content,
+                new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = file.ContentType } },
                 cancellationToken);
             return FileUploadResult.Stored(key);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
-            // Network errors surface as RequestFailedException, AggregateException (after retries) or
-            // HttpRequestException; all are a failed upload for the caller (MSG05), never an exception.
+            // Network errors surface as RequestFailedException, AggregateException (after retries),
+            // HttpRequestException or a timeout; all are a failed upload for the caller (MSG05).
             logger.LogError(exception, "Blob upload of {Key} failed", key);
             return FileUploadResult.Failed("STORAGE_ERROR");
         }
@@ -51,7 +53,7 @@ internal sealed class AzureBlobFileStorage(
     {
         try
         {
-            var download = await _container.Value.GetBlobClient(key).DownloadStreamingAsync(cancellationToken: cancellationToken);
+            var download = await Container.GetBlobClient(key).DownloadStreamingAsync(cancellationToken: cancellationToken);
             return download.Value.Content;
         }
         catch (RequestFailedException exception) when (exception.Status == 404)
@@ -62,19 +64,25 @@ internal sealed class AzureBlobFileStorage(
 
     public Task<string> GetReadUrlAsync(string key, TimeSpan? lifetime = null, CancellationToken cancellationToken = default)
     {
-        var blob = _container.Value.GetBlobClient(key);
-        var uri = blob.GenerateSasUri(BlobSasPermissions.Read, timeProvider.GetUtcNow() + (lifetime ?? DefaultLifetime));
-        return Task.FromResult(uri.ToString());
+        var blob = Container.GetBlobClient(key);
+        var sas = new BlobSasBuilder(BlobSasPermissions.Read, timeProvider.GetUtcNow() + (lifetime ?? DefaultLifetime))
+        {
+            BlobContainerName = blob.BlobContainerName,
+            BlobName = blob.Name,
+            // Azurite serves plain HTTP; real accounts get HTTPS-only links.
+            Protocol = blob.Uri.Scheme == Uri.UriSchemeHttps ? SasProtocol.Https : SasProtocol.HttpsAndHttp,
+        };
+        return Task.FromResult(blob.GenerateSasUri(sas).ToString());
     }
 
     public async Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default)
     {
         try
         {
-            var response = await _container.Value.GetBlobClient(key).DeleteIfExistsAsync(cancellationToken: cancellationToken);
+            var response = await Container.GetBlobClient(key).DeleteIfExistsAsync(cancellationToken: cancellationToken);
             return response.Value;
         }
-        catch (RequestFailedException exception)
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
             logger.LogError(exception, "Blob delete of {Key} failed", key);
             return false;
@@ -88,7 +96,7 @@ internal sealed class AzureBlobFileStorage(
             return;
         }
 
-        await _container.Value.CreateIfNotExistsAsync(PublicAccessType.None, cancellationToken: cancellationToken);
+        await Container.CreateIfNotExistsAsync(PublicAccessType.None, cancellationToken: cancellationToken);
         _containerChecked = true;
     }
 }

@@ -32,6 +32,7 @@ public class AuthApiFactory : WebApplicationFactory<Program>
     {
         builder.UseSetting("Jwt:SigningKey", _signingKey);
         builder.UseSetting("Storage:Local:RootPath", StorageRoot);
+        builder.UseSetting("Storage:Local:SigningKey", _signingKey);
         builder.ConfigureLogging(logging => logging.AddProvider(Logs));
         builder.ConfigureServices(services =>
         {

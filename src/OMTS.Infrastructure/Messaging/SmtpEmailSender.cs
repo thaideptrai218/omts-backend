@@ -35,7 +35,8 @@ internal sealed class SmtpEmailSender(IOptions<EmailOptions> options, ILogger<Sm
             timeout.CancelAfter(TimeSpan.FromSeconds(smtp.TimeoutSeconds));
 
             using var client = new SmtpClient { Timeout = smtp.TimeoutSeconds * 1000 };
-            var security = smtp.UseStartTls ? SecureSocketOptions.StartTls : SecureSocketOptions.Auto;
+            // StartTls is required when enabled; false means a plain local test server (no TLS at all).
+            var security = smtp.UseStartTls ? SecureSocketOptions.StartTls : SecureSocketOptions.None;
             await client.ConnectAsync(smtp.Host, smtp.Port, security, timeout.Token);
             if (!string.IsNullOrEmpty(smtp.Username))
             {
@@ -43,7 +44,7 @@ internal sealed class SmtpEmailSender(IOptions<EmailOptions> options, ILogger<Sm
             }
 
             var response = await client.SendAsync(message, timeout.Token);
-            await client.DisconnectAsync(true, timeout.Token);
+            await DisconnectQuietlyAsync(client);
 
             logger.LogInformation("Email {MessageId} sent to {Recipient}", message.MessageId, Masking.Email(to));
             return DeliveryResult.Sent(message.MessageId ?? response);
@@ -56,8 +57,23 @@ internal sealed class SmtpEmailSender(IOptions<EmailOptions> options, ILogger<Sm
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             // Provider errors are returned, never thrown, so the caller leaves its data unchanged (MSG04).
-            logger.LogError("Email to {Recipient} failed: {Error}", Masking.Email(to), exception.GetType().Name);
+            logger.LogError("Email to {Recipient} failed: {Error} {Message}", Masking.Email(to), exception.GetType().Name, exception.Message);
             return DeliveryResult.Failed("SMTP_ERROR");
+        }
+    }
+
+    // The mail is accepted once SendAsync returns: a failing QUIT must not report it as failed (the user
+    // would retry and get a second code).
+    private static async Task DisconnectQuietlyAsync(SmtpClient client)
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await client.DisconnectAsync(true, timeout.Token);
+        }
+        catch (Exception)
+        {
+            // Ignored on purpose, see above.
         }
     }
 
