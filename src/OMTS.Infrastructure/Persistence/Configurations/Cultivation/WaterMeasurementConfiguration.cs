@@ -16,6 +16,7 @@ internal sealed class WaterMeasurementConfiguration : IEntityTypeConfiguration<W
         builder.Property(x => x.PhotoUrl).HasMaxLength(Lengths.Url);
         builder.Property(x => x.ViolatedValues).HasMaxLength(Lengths.Name);
         builder.Property(x => x.CorrectionReason).HasMaxLength(Lengths.Reason);
+        builder.Property(x => x.VoidReason).HasMaxLength(Lengths.Reason);
         foreach (var ph in new[] { nameof(WaterMeasurement.Ph), nameof(WaterMeasurement.OcrPh), nameof(WaterMeasurement.PhMinUsed), nameof(WaterMeasurement.PhMaxUsed) })
         {
             builder.Property(ph).HasPrecision(4, 2);
@@ -27,5 +28,9 @@ internal sealed class WaterMeasurementConfiguration : IEntityTypeConfiguration<W
         }
 
         builder.HasIndex(x => new { x.ZoneId, x.MeasuredAt });
+        // Offline re-sends (NFR-15): one record per device operation of an account.
+        builder.HasIndex(x => new { x.MeasuredByAccountId, x.ClientOperationId }).IsUnique();
+        // A version is corrected at most once, so a correction chain never forks (ENV-02 concurrency).
+        builder.HasIndex(x => x.CorrectedFromMeasurementId).IsUnique().HasFilter("[CorrectedFromMeasurementId] IS NOT NULL");
     }
 }

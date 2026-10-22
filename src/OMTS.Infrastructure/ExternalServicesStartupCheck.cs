@@ -3,15 +3,17 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OMTS.Application.Common.Interfaces.Messaging;
+using OMTS.Application.Common.Interfaces.Ocr;
 using OMTS.Application.Common.Interfaces.Storage;
 using OMTS.Infrastructure.Messaging;
+using OMTS.Infrastructure.Ocr;
 
 namespace OMTS.Infrastructure;
 
 /// <summary>
 /// At startup: builds every external adapter so a configuration error (unknown provider, missing Local
 /// storage signing key, plain-text SMTP outside Development) stops the host instead of failing the first
-/// user request, and warns outside Development that SMS, push or email are not really sent.
+/// user request, and warns outside Development that SMS, push, email or OCR are not really used.
 /// </summary>
 internal sealed class ExternalServicesStartupCheck(
     IServiceProvider services,
@@ -19,6 +21,7 @@ internal sealed class ExternalServicesStartupCheck(
     IOptions<SmsOptions> sms,
     IOptions<PushOptions> push,
     IOptions<EmailOptions> email,
+    IOptions<OcrProviderOptions> ocr,
     ILogger<ExternalServicesStartupCheck> logger) : IHostedService
 {
     public Task StartAsync(CancellationToken cancellationToken)
@@ -27,6 +30,7 @@ internal sealed class ExternalServicesStartupCheck(
         services.GetRequiredService<ISmsSender>();
         services.GetRequiredService<IPushSender>();
         services.GetRequiredService<IFileStorage>();
+        services.GetRequiredService<IOcrService>();
 
         if (environment.IsDevelopment())
         {
@@ -52,6 +56,11 @@ internal sealed class ExternalServicesStartupCheck(
         if (email.Value.Provider == EmailOptions.FakeProvider)
         {
             logger.LogWarning("Email provider is Fake: emails are NOT sent.");
+        }
+
+        if (ocr.Value.Provider == OcrProviderOptions.FakeProvider)
+        {
+            logger.LogWarning("OCR provider is Fake: meter photos are NOT read; users enter the values.");
         }
 
         return Task.CompletedTask;

@@ -76,12 +76,25 @@ public static class UserMessages
     public static UserMessage LicenseExpiry(string documentName, string zoneNames, int days) => new(
         "MSG25", $"Document {documentName} of zone {zoneNames} expires in {days} days or has expired.");
 
+    public static UserMessage WaterMeasurementOverdue(string zoneName) => new(
+        "MSG26", $"Zone {zoneName} has had no confirmed water measurement for more than 1 month. Please measure and record it.");
+
+    /// <param name="metricNames">The violated indicators joined by ", ", e.g. "pH, Salinity".</param>
+    public static UserMessage WaterThresholdExceeded(string metricNames, string zoneName) => new(
+        "MSG27", $"{metricNames} at zone {zoneName} exceeds the set threshold.");
+
+    public static readonly UserMessage MinimumNotLessThanMaximum = new("MSG28", "The minimum value must be less than the maximum value.");
+
     public static readonly UserMessage NotThousands = new("MSG41", "The amount must be a multiple of 1,000 VND.");
 
     public static UserMessage ExceedsLimit(string field, string limit) => new("MSG45", $"{field} exceeds the allowed limit ({limit}).");
 
     public static readonly UserMessage OldDocumentsHidden = new(
         "MSG57", "Old documents are temporarily hidden until identity verification is complete.");
+
+    public static UserMessage SomeoneIsEditing(string userName, string time) => new(
+        "MSG58",
+        $"{userName} has been editing this record since {time}. You can wait or edit anyway; if you save later, you will be shown the new version before saving.");
 
     public static readonly UserMessage QuantityOrPriceInvalid = new(
         "MSG59", "The quantity must be greater than 0 and the unit price must not be negative.");

@@ -40,6 +40,7 @@ internal static class StatusCatalogSeed
         NewStatus(S.WaterMeasurement.Draft, G.WaterMeasurement, "DRAFT", "Draft", "OCR or manually entered values not yet confirmed; not used for reports or alerts.", initial: true),
         NewStatus(S.WaterMeasurement.Confirmed, G.WaterMeasurement, "CONFIRMED", "Confirmed", "Checked against the photo and confirmed; used for alerts and reports."),
         NewStatus(S.WaterMeasurement.Superseded, G.WaterMeasurement, "SUPERSEDED", "Corrected", "Replaced by a new correction version; the old record is kept for reference.", final: true),
+        NewStatus(S.WaterMeasurement.Voided, G.WaterMeasurement, "VOIDED", "Voided", "Recorded by mistake and voided with a reason; excluded from charts, reports, exports and the overdue check.", final: true),
 
         NewStatus(S.SalesOrder.PendingReview, G.SalesOrder, "PENDING_REVIEW", "Pending Review", "The purchase request has just been sent and not yet reviewed by the cooperative.", initial: true),
         NewStatus(S.SalesOrder.AwaitingCustomer, G.SalesOrder, "AWAITING_CUSTOMER", "Awaiting Customer Agreement", "The cooperative proposes a change of quantity or time, awaiting the trader's agreement."),
@@ -167,6 +168,9 @@ internal static class StatusCatalogSeed
 
         NewTransition(53, S.MessageDelivery.Sending, S.MessageDelivery.Sent, "UC70", SystemActor, SystemActor, "Success response from Zalo OA, Email Service or SMS Service.", false),
         NewTransition(54, S.MessageDelivery.Sending, S.MessageDelivery.Failed, "UC70", SystemActor, "System; time", "Error response or timeout.", false),
+
+        NewTransition(55, S.WaterMeasurement.Draft, S.WaterMeasurement.Voided, "ENV-02", OwnerOrZoneManager, Action, "Void a wrong draft.", true),
+        NewTransition(56, S.WaterMeasurement.Confirmed, S.WaterMeasurement.Voided, "ENV-02", OwnerOrZoneManager, Action, "Void the latest version of a wrong measurement.", true),
 
         NewTransition(70, S.PurchaseReceipt.Draft, S.PurchaseReceipt.Completed, "INP-03", OwnerOrZoneManager, Action, "Full validation of supplier, zone, raft, lines and amounts passes.", false),
         NewTransition(71, S.PurchaseReceipt.Draft, S.PurchaseReceipt.Cancelled, "INP-04", OwnerOrZoneManager, Action, "Cancel a draft that will not be completed.", true),
