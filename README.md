@@ -80,6 +80,38 @@ dotnet ef database update --project src/OMTS.Infrastructure --startup-project sr
 dotnet ef migrations add <Name> --project src/OMTS.Infrastructure --startup-project src/OMTS.Api --output-dir Persistence/Migrations
 ```
 
+### External services (development)
+
+Email, SMS, push and file storage are adapters picked by configuration, so switching provider needs no code change.
+In Development the fakes keep what they "send" in memory; read it at `GET /api/dev/sms?phoneNumber=`,
+`GET /api/dev/email?to=`, `GET /api/dev/push?accountId=` (clear with `DELETE`). These endpoints answer 404 outside
+Development. Local storage writes under `src/OMTS.Api/App_Data/files` (git-ignored); for Azurite set
+`Storage:Provider=AzureBlob` and `Storage:AzureBlob:ConnectionString=UseDevelopmentStorage=true`.
+
+## Deployment
+
+There is no System Administrator inside the cooperative app: the cooperative and its first Cooperative Owner are
+created by a one-time command run on the server by the deployment operator (not reachable over HTTP).
+
+1. Set the secrets (environment variables or the hosting secret store; `__` replaces `:` in variable names):
+   `ConnectionStrings:OmtsDb`, `Jwt:SigningKey`, the provider keys below, and the bootstrap keys
+   `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:DisplayName`, `Bootstrap:Owner:Username`,
+   `Bootstrap:Owner:PhoneNumber`, `Bootstrap:Owner:Email` (optional), `Bootstrap:Owner:TemporaryPassword`.
+2. Run `dotnet OMTS.Api.dll seed --bootstrap` at handover time: it applies migrations, checks the status catalog, creates
+   the default roles (Zone Manager, Accountant) and, if no cooperative exists, the cooperative (Preliminary) and the
+   Owner with the temporary password. The temporary password expires after 24 hours and must be changed at first login.
+   Running it again changes nothing ("already initialized", exit code 0); missing secrets give exit code 1 and the
+   names of the missing keys. `--demo` also creates the demo zones `DEMO-01`/`DEMO-02` (Development only).
+3. Start the API and check `GET /health/ready`: 200 when the database, migrations, status catalog, default roles,
+   cooperative and an active Owner are all in place, else 503 listing the failing checks. `GET /health` is liveness only.
+
+| Area | Keys |
+|---|---|
+| Email (`Email:Provider` = `Smtp` or `Fake`) | `Email:Smtp:Host`, `Port`, `UseStartTls`, `Username`, `Password`, `FromAddress`, `FromName`, `TimeoutSeconds` |
+| SMS (`Sms:Provider` = `Fake` until a provider is chosen) | `Sms:Fake:FailFor` (test numbers that fail) |
+| Push (`Push:Provider` = `Fake`) | `Push:Fake:FailFor` |
+| File storage (`Storage:Provider` = `Local` or `AzureBlob`) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) — branches, Jira keys, commit/PR rules, releases.

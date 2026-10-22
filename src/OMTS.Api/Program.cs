@@ -1,4 +1,5 @@
 using Microsoft.OpenApi.Models;
+using OMTS.Api.Commands;
 using OMTS.Api.Common;
 using OMTS.Api.Extensions;
 using OMTS.Api.Filters;
@@ -7,7 +8,7 @@ using OMTS.Application;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Infrastructure;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(BootstrapCommand.HostArguments(args));
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -32,9 +33,14 @@ builder.Services.AddSwaggerGen(options =>
     options.AddSecurityDefinition("Bearer", bearer);
     options.AddSecurityRequirement(new OpenApiSecurityRequirement { [bearer] = [] });
 });
-builder.Services.AddHealthChecks();
 
 var app = builder.Build();
+
+// One-time deployment step; runs instead of the web host (see README "Deployment").
+if (BootstrapCommand.IsInvoked(args))
+{
+    return await BootstrapCommand.RunAsync(app.Services, args);
+}
 
 app.UseExceptionHandler();
 
@@ -50,9 +56,10 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapHealthChecks("/health");
+app.MapOmtsHealthChecks();
 
 app.Run();
+return 0;
 
 // Exposes the entry point to WebApplicationFactory in integration tests.
 public partial class Program;
