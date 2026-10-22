@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using OMTS.Domain.Entities.Farming;
@@ -15,7 +16,8 @@ public static class RaftLayout
 {
     public const int MaxDrawingBytes = 50 * 1024;
     private const decimal MaxLength = 99_999_999.99m;
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    // Stored text only (never written into HTML): Vietnamese marker names stay unescaped and fit the column.
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     /// <summary>Lanes 1…N with no gap or duplicate, length &gt; 0, both markers; null when invalid (field names added).</summary>
     internal static IReadOnlyList<LayoutLane>? Read(IReadOnlyList<LaneInput>? lanes, FieldCheck check)

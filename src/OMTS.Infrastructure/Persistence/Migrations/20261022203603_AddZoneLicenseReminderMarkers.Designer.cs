@@ -12,7 +12,7 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(OmtsDbContext))]
-    [Migration("20261022195117_AddZoneLicenseReminderMarkers")]
+    [Migration("20261022203603_AddZoneLicenseReminderMarkers")]
     partial class AddZoneLicenseReminderMarkers
     {
         /// <inheritdoc />
@@ -1949,6 +1949,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("CooperativeId");
 
                     b.HasIndex("StatusId");
+
+                    b.HasIndex("FullName", "PhoneNumber")
+                        .IsUnique()
+                        .HasFilter("[PhoneNumber] IS NOT NULL");
 
                     b.ToTable("Employees");
                 });

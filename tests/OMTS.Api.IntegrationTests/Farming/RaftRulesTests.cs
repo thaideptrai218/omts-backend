@@ -89,7 +89,8 @@ public class RaftRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         Assert.Equal(1, await factory.QueryAsync(db => db.RaftLayoutVersions.CountAsync(v => v.RaftId == raft.Id())));
 
         var audits = await factory.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == raft.Id()).OrderBy(e => e.OccurredAt).ToListAsync());
-        Assert.Equal(["Raft.Created", "Raft.Updated"], audits.Select(a => a.Action));
+        // A drawing-only change is audited but creates no layout version (rows of one save share a timestamp, so compare as a set).
+        Assert.Equal(["Raft.Created", "Raft.LayoutDrawingChanged", "Raft.Updated"], audits.Select(a => a.Action).Order());
         Assert.Equal(["ConditionNotes", "Size"], JsonNode.Parse(audits[1].After!)!.AsObject().Select(p => p.Key).Order());
         Assert.Equal("40 m x 20 m", JsonNode.Parse(audits[1].Before!)!["Size"]!.GetValue<string>());
     }

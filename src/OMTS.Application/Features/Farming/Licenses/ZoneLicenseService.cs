@@ -125,7 +125,11 @@ public sealed class ZoneLicenseService(
         }
 
         Apply(document, input, uploaded ?? document.EvidenceFileUrl);
-        SyncScopes(document, input);
+        if (SyncScopes(document, input))
+        {
+            // Scope rows only: the license itself must still get a new row version.
+            unitOfWork.MarkChanged(document);
+        }
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, Snapshot(document, input.ZoneIds));
         if (changedAfter is not null)
         {
@@ -251,10 +255,12 @@ public sealed class ZoneLicenseService(
         document.EvidenceFileUrl = fileKey;
     }
 
-    /// <summary>One scope row per covered zone, valid over the license dates.</summary>
-    private void SyncScopes(ZoneComplianceDocument document, ZoneLicenseInput input)
+    /// <summary>One scope row per covered zone, valid over the license dates; true when zones were added or removed.</summary>
+    private bool SyncScopes(ZoneComplianceDocument document, ZoneLicenseInput input)
     {
-        foreach (var removed in document.ZoneScopes.Where(s => !input.ZoneIds.Contains(s.ZoneId)).ToList())
+        var removedScopes = document.ZoneScopes.Where(s => !input.ZoneIds.Contains(s.ZoneId)).ToList();
+        var addedZones = input.ZoneIds.Where(id => document.ZoneScopes.All(s => s.ZoneId != id)).ToList();
+        foreach (var removed in removedScopes)
         {
             document.ZoneScopes.Remove(removed);
             licenses.RemoveScope(removed);
@@ -265,12 +271,14 @@ public sealed class ZoneLicenseService(
             (scope.ValidFrom, scope.ValidTo) = (input.EffectiveDate, input.ExpiryDate);
         }
 
-        foreach (var zoneId in input.ZoneIds.Where(id => document.ZoneScopes.All(s => s.ZoneId != id)))
+        foreach (var zoneId in addedZones)
         {
             var scope = new DocumentZoneScope { DocumentId = document.Id, ZoneId = zoneId, ValidFrom = input.EffectiveDate, ValidTo = input.ExpiryDate };
             document.ZoneScopes.Add(scope);
             licenses.AddScope(scope);
         }
+
+        return removedScopes.Count > 0 || addedZones.Count > 0;
     }
 
     private async Task<ZoneLicenseView> ViewAsync(

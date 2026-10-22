@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
@@ -29,7 +30,8 @@ public sealed class RaftService(
     RowVersionGuard rowVersions,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    ILogger<RaftService> logger)
 {
     private const string RecordType = nameof(Raft);
 
@@ -136,6 +138,12 @@ public sealed class RaftService(
             return blocked;
         }
 
+        // Lanes and layout versions are rows of their own: the raft must still get a new row version (MSG06 for stale tabs).
+        if (layoutChange.Changed)
+        {
+            unitOfWork.MarkChanged(raft);
+        }
+
         var before = Snapshot(raft);
         Apply(raft, values);
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, Snapshot(raft));
@@ -177,7 +185,20 @@ public sealed class RaftService(
             RecordId = raft.Id, RecordCode = raft.Code, ZoneId = raft.ZoneId, Before = new { raft.PhotoUrl }, After = new { PhotoUrl = uploaded.Key },
         });
         raft.PhotoUrl = uploaded.Key;
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch
+        {
+            if (!await storage.DeleteAsync(uploaded.Key!, CancellationToken.None))
+            {
+                logger.LogWarning("Raft photo {FileKey} could not be removed after a failed save.", uploaded.Key);
+            }
+
+            throw;
+        }
+
         return await ViewAsync(raft, cancellationToken);
     }
 
@@ -227,7 +248,7 @@ public sealed class RaftService(
         if (await rafts.GetOpenCycleAsync(raft.Id, cancellationToken) is { } cycle)
         {
             var name = $"cultivation cycle opened {BusinessClock.ToBusinessDate(cycle.OpenedAt):dd/MM/yyyy}";
-            return new LayoutOutcome(AppError.Conflict(UserMessages.StillInUse(1, name), new Dictionary<string, object?> { ["cycleId"] = cycle.Id }));
+            return new LayoutOutcome(AppError.Conflict(UserMessages.StillInUse(1, name), new Dictionary<string, object?> { ["cycleId"] = cycle.Id }), false);
         }
 
         var removed = raft.Lanes.Where(l => l.LaneNumber > lanes.Count).ToList();
@@ -236,7 +257,7 @@ public sealed class RaftService(
         {
             return new LayoutOutcome(AppError.Conflict(
                 UserMessages.StillInUse(inUse.Count, string.Join(", ", inUse.Select(n => $"lane {n}"))),
-                new Dictionary<string, object?> { ["laneNumbers"] = inUse }));
+                new Dictionary<string, object?> { ["laneNumbers"] = inUse }), false);
         }
 
         foreach (var lane in removed)
@@ -281,19 +302,24 @@ public sealed class RaftService(
             Before = new { Version = current?.VersionNumber, LaneCount = current?.LaneCount },
             After = new { Version = version.VersionNumber, version.LaneCount, Lanes = lanes },
         });
-        return new LayoutOutcome(null);
+        return new LayoutOutcome(null, Changed: true);
     }
 
-    /// <summary>Same lanes: only a changed drawing is written into the current version.</summary>
-    private static LayoutOutcome KeepLayout(Raft raft, IReadOnlyList<LayoutLane> lanes, string? drawing)
+    /// <summary>Same lanes: only a changed drawing is written into the current version (audited, no new version).</summary>
+    private LayoutOutcome KeepLayout(Raft raft, IReadOnlyList<LayoutLane> lanes, string? drawing)
     {
         var current = raft.LayoutVersions.MaxBy(v => v.VersionNumber);
-        if (current is not null && RaftLayout.DrawingOf(current)?.GetRawText() != drawing)
+        if (current is null || RaftLayout.DrawingOf(current)?.GetRawText() == drawing)
         {
-            current.LayoutMap = RaftLayout.Snapshot(lanes, drawing);
+            return new LayoutOutcome(null, Changed: false);
         }
 
-        return new LayoutOutcome(null);
+        current.LayoutMap = RaftLayout.Snapshot(lanes, drawing);
+        audit.Record(new AuditEntry("Raft.LayoutDrawingChanged", RecordType)
+        {
+            RecordId = raft.Id, RecordCode = raft.Code, ZoneId = raft.ZoneId, After = new { Version = current.VersionNumber, HasDrawing = drawing is not null },
+        });
+        return new LayoutOutcome(null, Changed: true);
     }
 
     private async Task<Result<RaftView>> ChangeStatusAsync(Raft raft, int newStatusId, string action, ChangeStatusRequest request, CancellationToken cancellationToken)
@@ -380,5 +406,5 @@ public sealed class RaftService(
 
     private sealed record RaftValues(string Code, decimal? Latitude, decimal? Longitude, string? Location, string Size, string? ConditionNotes);
 
-    private sealed record LayoutOutcome(AppError? Error);
+    private sealed record LayoutOutcome(AppError? Error, bool Changed);
 }

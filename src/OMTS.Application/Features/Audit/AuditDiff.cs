@@ -14,7 +14,7 @@ public static class AuditDiff
     {
         var old = JsonSerializer.SerializeToNode(before, before.GetType(), Options)!.AsObject();
         var now = JsonSerializer.SerializeToNode(after, after.GetType(), Options)!.AsObject();
-        var changed = now.Where(p => !JsonNode.DeepEquals(p.Value, old[p.Key])).Select(p => p.Key).ToList();
+        var changed = now.Where(p => !SameValue(p.Value, old[p.Key])).Select(p => p.Key).ToList();
         if (changed.Count == 0)
         {
             return (null, null);
@@ -22,6 +22,17 @@ public static class AuditDiff
 
         return (Pick(old, changed), Pick(now, changed));
     }
+
+    /// <summary>Deep equality where numbers compare by value, so 21.05 and 21.050000 are the same.</summary>
+    private static bool SameValue(JsonNode? a, JsonNode? b) => (a, b) switch
+    {
+        (null, null) => true,
+        (JsonObject x, JsonObject y) => x.Count == y.Count && x.All(p => y.ContainsKey(p.Key) && SameValue(p.Value, y[p.Key])),
+        (JsonArray x, JsonArray y) => x.Count == y.Count && x.Zip(y).All(pair => SameValue(pair.First, pair.Second)),
+        (JsonValue x, JsonValue y) when x.GetValueKind() == JsonValueKind.Number && y.GetValueKind() == JsonValueKind.Number =>
+            x.GetValue<decimal>() == y.GetValue<decimal>(),
+        _ => JsonNode.DeepEquals(a, b),
+    };
 
     private static JsonObject Pick(JsonObject source, IEnumerable<string> keys) =>
         new(keys.Select(k => KeyValuePair.Create(k, source[k]?.DeepClone())));
