@@ -73,6 +73,9 @@ public static class UserMessages
     public static UserMessage AccountAlreadyLinked(string employeeName) => new(
         "MSG24", $"This account is already linked to the employee profile {employeeName}.");
 
+    public static UserMessage LicenseExpiry(string documentName, string zoneNames, int days) => new(
+        "MSG25", $"Document {documentName} of zone {zoneNames} expires in {days} days or has expired.");
+
     public static readonly UserMessage OldDocumentsHidden = new(
         "MSG57", "Old documents are temporarily hidden until identity verification is complete.");
 
@@ -121,4 +124,8 @@ public static class UserMessages
     /// <summary>Not in the SRS list: the temporary password must be changed before other functions (ACS-02).</summary>
     public static readonly UserMessage PasswordChangeRequired = new(
         "PASSWORD_CHANGE_REQUIRED", "Please change your temporary password before using other functions.");
+
+    /// <summary>Not in the SRS list yet (FARM-03): a replaced license keeps its data for checking past validity.</summary>
+    public static UserMessage LicenseReplaced(string replacementNumber) => new(
+        "LICENSE_REPLACED", $"This license has been replaced by {replacementNumber} and can no longer be edited.");
 }

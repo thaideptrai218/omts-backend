@@ -1324,6 +1324,12 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<DateTimeOffset?>("ExpiredReminderSentAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("ExpiringReminderSentAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<DateOnly?>("ExpiryDate")
                         .HasColumnType("date");
 
@@ -1358,7 +1364,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ExpiryDate");
 
-                    b.HasIndex("ReplacesDocumentId");
+                    b.HasIndex("ReplacesDocumentId")
+                        .IsUnique()
+                        .HasFilter("[ReplacesDocumentId] IS NOT NULL");
 
                     b.ToTable("ZoneComplianceDocuments");
                 });

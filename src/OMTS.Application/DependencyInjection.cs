@@ -7,6 +7,10 @@ using OMTS.Application.Features.Accounts;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Cooperatives;
 using OMTS.Application.Features.Employees;
+using OMTS.Application.Features.Farming;
+using OMTS.Application.Features.Farming.Licenses;
+using OMTS.Application.Features.Farming.Rafts;
+using OMTS.Application.Features.Farming.Zones;
 using OMTS.Application.Features.Verification;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
@@ -56,6 +60,14 @@ public static class DependencyInjection
         // FARM-01 cooperative profile, LAB-01 employees
         services.AddScoped<CooperativeProfileService>();
         services.AddScoped<EmployeeService>();
+
+        // FARM-02 zones, FARM-03 zone licenses, FARM-04 rafts
+        services.AddScoped<FarmingLookupAccess>();
+        services.AddScoped<FarmingZoneService>();
+        services.AddScoped<ZoneLicenseService>();
+        services.AddScoped<ZoneLicenseReminderService>();
+        services.AddScoped<RaftService>();
+        services.AddScoped<RaftConditionService>();
 
         return services;
     }
