@@ -10,7 +10,10 @@ internal sealed class VerificationCodeConfiguration : IEntityTypeConfiguration<V
     {
         builder.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId);
         builder.Property(x => x.Target).HasMaxLength(Lengths.Email);
-        builder.Property(x => x.CodeHash).HasMaxLength(Lengths.Address);
+        builder.Property(x => x.CodeHash).HasMaxLength(Lengths.Hash);
+        builder.Property(x => x.TokenHash).HasMaxLength(Lengths.Hash);
+        builder.HasIndex(x => x.TokenHash).IsUnique();
         builder.HasIndex(x => new { x.Target, x.Purpose, x.CreatedAt });
+        builder.HasIndex(x => new { x.AccountId, x.Purpose });
     }
 }

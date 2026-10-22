@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Authorization.Dtos;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Domain.Enums;
 
@@ -77,6 +78,32 @@ public sealed class AccountAccess(
         return PermissionFunctions.IsCooperativeWide(function)
             ? PermittedZones.None
             : new PermittedZones(false, grants.Select(g => g.ZoneId!.Value).ToHashSet());
+    }
+
+    /// <summary>
+    /// Every catalog function the account can use, with its supported actions that are allowed and where
+    /// (menus of /api/me/permissions, dashboard tiles, the grant preview of FARM-05).
+    /// </summary>
+    public IReadOnlyList<FunctionAccess> DescribeFunctions()
+    {
+        var functions = new List<FunctionAccess>();
+        foreach (var function in PermissionFunctions.All)
+        {
+            var actions = function.SupportedActions
+                .Select(action => (action, zones: PermittedZonesFor(function.Code, action)))
+                .Where(x => !x.zones.IsEmpty)
+                .ToList();
+            if (actions.Count == 0)
+            {
+                continue;
+            }
+
+            var allZones = actions.Any(x => x.zones.AllZones);
+            var zoneIds = allZones ? new List<Guid>() : actions.SelectMany(x => x.zones.ZoneIds).Distinct().ToList();
+            functions.Add(new FunctionAccess(function.Code, function.Name, allZones, zoneIds, actions.Select(x => x.action.ToString()).ToList()));
+        }
+
+        return functions;
     }
 
     private IEnumerable<ZoneGrant> GrantsFor(string function, PermissionAction action) =>

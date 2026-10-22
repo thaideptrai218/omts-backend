@@ -55,6 +55,12 @@ public static class DependencyInjection
         services.AddScoped<IAuditEventRepository, AuditEventRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IZoneRecipientQuery, ZoneRecipientQuery>();
+        services.AddScoped<IVerificationCodeRepository, VerificationCodeRepository>();
+        services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<ICooperativeRepository, CooperativeRepository>();
+        services.AddScoped<IPushDeviceRepository, PushDeviceRepository>();
+        services.AddScoped<IEmployeeRepository, EmployeeRepository>();
+        services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddSingleton<IStatusCatalog, StatusCatalog>();
 
         services.AddOptions<JwtOptions>().Bind(configuration.GetSection(JwtOptions.SectionName));

@@ -48,30 +48,13 @@ public sealed class PermissionService(
                 : new GrantView(g.ZoneId, null, null, g.ZoneId is null, g.RoleName, g.Permissions))
             .ToList();
 
-        var functions = new List<FunctionAccess>();
-        foreach (var function in PermissionFunctions.All)
-        {
-            var actions = Enum.GetValues<PermissionAction>()
-                .Select(action => (action, zones: access.PermittedZonesFor(function.Code, action)))
-                .Where(x => !x.zones.IsEmpty)
-                .ToList();
-            if (actions.Count == 0)
-            {
-                continue;
-            }
-
-            var allZones = actions.Any(x => x.zones.AllZones);
-            var permittedZoneIds = allZones ? new List<Guid>() : actions.SelectMany(x => x.zones.ZoneIds).Distinct().ToList();
-            functions.Add(new FunctionAccess(function.Code, function.Name, allZones, permittedZoneIds, actions.Select(x => x.action.ToString()).ToList()));
-        }
-
         return new MyPermissions(
             access.AccountId,
             access.SubjectType.ToString(),
             access.IsCooperativeOwner,
             access.RequiresPasswordChange,
             access.RequiresPhoneVerification,
-            functions,
+            access.DescribeFunctions(),
             grantViews);
     }
 

@@ -1,7 +1,11 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
+using OMTS.Application.Features.AccessManagement;
+using OMTS.Application.Features.Accounts;
 using OMTS.Application.Features.Audit;
+using OMTS.Application.Features.Verification;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Notifications;
@@ -25,6 +29,24 @@ public static class DependencyInjection
 
         services.AddScoped<AuditLogService>();
         services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
+        services.AddScoped<RowVersionGuard>();
+
+        // ACS – personal accounts
+        services.AddScoped<VerificationService>();
+        services.AddScoped<TraderCustomerLinker>();
+        services.AddScoped<UsernameGenerator>();
+        services.AddScoped<RegistrationService>();
+        services.AddScoped<PasswordRecoveryService>();
+        services.AddScoped<PasswordChangeService>();
+        services.AddScoped<PhoneVerificationService>();
+        services.AddScoped<ProfileService>();
+        services.AddScoped<NotificationPreferenceService>();
+        services.AddScoped<PushDeviceService>();
+
+        // ACS – Owner's management of staff accounts, zone access and roles
+        services.AddScoped<AccessGrantService>();
+        services.AddScoped<StaffAccountService>();
+        services.AddScoped<RoleService>();
 
         return services;
     }

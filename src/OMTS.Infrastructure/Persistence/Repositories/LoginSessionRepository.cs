@@ -27,5 +27,14 @@ internal sealed class LoginSessionRepository(OmtsDbContext db) : ILoginSessionRe
                 && s.Account.StatusId == StatusIds.Account.Active,
             cancellationToken);
 
+    public async Task RevokeAllAsync(Guid accountId, DateTimeOffset now, string reason, CancellationToken cancellationToken)
+    {
+        var open = await db.LoginSessions.Where(s => s.AccountId == accountId && s.RevokedAt == null).ToListAsync(cancellationToken);
+        foreach (var session in open)
+        {
+            session.Revoke(now, reason);
+        }
+    }
+
     public void Add(LoginSession session) => db.LoginSessions.Add(session);
 }

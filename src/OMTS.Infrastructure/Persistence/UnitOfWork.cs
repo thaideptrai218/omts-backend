@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Domain.Common;
 
 namespace OMTS.Infrastructure.Persistence;
 
@@ -24,4 +25,7 @@ internal sealed class UnitOfWork(OmtsDbContext db) : IUnitOfWork
 
     public Task ReloadAsync(object entity, CancellationToken cancellationToken = default) =>
         db.Entry(entity).ReloadAsync(cancellationToken);
+
+    public void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion) =>
+        db.Entry(entity).Property(e => e.RowVersion).OriginalValue = rowVersion;
 }

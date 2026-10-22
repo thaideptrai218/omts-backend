@@ -3,6 +3,7 @@ using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Models;
+using OMTS.Application.Common.Validation;
 using OMTS.Application.Features.Auth.Dtos;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
@@ -37,7 +38,8 @@ public sealed class AuthService(
     public async Task<AuthResult> LoginAsync(LoginRequest request, ClientInfo client, CancellationToken cancellationToken)
     {
         var identifier = request.Identifier.Trim();
-        var account = await accounts.FindByLoginIdentifierAsync(identifier, cancellationToken);
+        var account = await accounts.FindByLoginIdentifierAsync(
+            identifier, PhoneNumbers.Normalize(identifier), EmailAddresses.Normalize(identifier), cancellationToken);
         if (account is null)
         {
             return FailUnknownIdentifier(identifier, request.Password);
@@ -165,15 +167,26 @@ public sealed class AuthService(
         account.RegisterSuccessfulLogin(now);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var lifetime = tokenService.GetSessionLifetime(request.ClientType);
+        return AuthResult.Success(await CreateSessionAsync(account, request.ClientType, request.DeviceName, client, cancellationToken));
+    }
+
+    /// <summary>
+    /// Opens a new login session for an account whose identity is already proven (login, or right after a
+    /// password change that revoked every other session) and saves it.
+    /// </summary>
+    public async Task<AuthTokens> CreateSessionAsync(
+        Account account, ClientType clientType, string? deviceName, ClientInfo client, CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        var lifetime = tokenService.GetSessionLifetime(clientType);
         var session = new LoginSession
         {
             AccountId = account.Id,
-            ClientType = request.ClientType,
+            ClientType = clientType,
             CreatedAt = now,
             RefreshTokenExpiresAt = now + lifetime.RefreshTokenLifetime,
             AbsoluteExpiresAt = now + lifetime.MaxLifetime,
-            DeviceName = Truncate(request.DeviceName, MaxDeviceNameLength),
+            DeviceName = Truncate(deviceName, MaxDeviceNameLength),
             UserAgent = Truncate(client.UserAgent, MaxUserAgentLength),
             IpAddress = Truncate(client.IpAddress, MaxIpAddressLength),
         };
@@ -182,7 +195,7 @@ public sealed class AuthService(
         sessions.Add(session);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return AuthResult.Success(BuildTokens(account, session, refreshToken));
+        return BuildTokens(account, session, refreshToken);
     }
 
     /// <summary>

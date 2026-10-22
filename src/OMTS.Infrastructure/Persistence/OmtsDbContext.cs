@@ -23,6 +23,7 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<AccessGrant> AccessGrants => Set<AccessGrant>();
     public DbSet<LoginSession> LoginSessions => Set<LoginSession>();
     public DbSet<VerificationCode> VerificationCodes => Set<VerificationCode>();
+    public DbSet<PushDevice> PushDevices => Set<PushDevice>();
 
     // Farming zones and rafts
     public DbSet<FarmingZone> FarmingZones => Set<FarmingZone>();

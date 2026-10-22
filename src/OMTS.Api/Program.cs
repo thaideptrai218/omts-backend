@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Microsoft.OpenApi.Models;
 using OMTS.Api.Commands;
 using OMTS.Api.Common;
@@ -18,7 +19,9 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
 builder.Services.AddExceptionHandler<ProblemExceptionHandler>();
 builder.Services.AddProblemDetails();
-builder.Services.AddControllers(options => options.Filters.Add<AccountStateGateFilter>());
+builder.Services.AddControllers(options => options.Filters.Add<AccountStateGateFilter>())
+    // Enums travel by name ("Sms", "Web", "View"); numbers are still accepted.
+    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
