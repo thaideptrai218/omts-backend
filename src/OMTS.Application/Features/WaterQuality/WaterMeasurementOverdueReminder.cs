@@ -27,9 +27,9 @@ public sealed class WaterMeasurementOverdueReminder(
     {
         var now = timeProvider.GetUtcNow();
         var reminded = 0;
-        foreach (var (zone, latestConfirmed) in await measurements.ListInUseZonesWithLatestConfirmedAsync(cancellationToken))
+        foreach (var (zone, latestConfirmed, confirmedAt) in await measurements.ListInUseZonesWithLatestConfirmedAsync(cancellationToken))
         {
-            if (!WaterOverdueRule.NeedsReminder(latestConfirmed ?? zone.CreatedAt, zone.WaterOverdueRemindedAt, today))
+            if (!WaterOverdueRule.NeedsReminder(latestConfirmed ?? zone.CreatedAt, zone.WaterOverdueRemindedAt, today, confirmedAt))
             {
                 continue;
             }

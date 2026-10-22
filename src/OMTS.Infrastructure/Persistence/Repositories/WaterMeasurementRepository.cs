@@ -92,11 +92,13 @@ internal sealed class WaterMeasurementRepository(OmtsDbContext db) : IWaterMeasu
         var latest = await db.WaterMeasurements.AsNoTracking()
             .Where(m => m.StatusId == StatusIds.WaterMeasurement.Confirmed)
             .GroupBy(m => m.ZoneId)
-            .Select(g => new { ZoneId = g.Key, MeasuredAt = g.Max(m => m.MeasuredAt) })
-            .ToDictionaryAsync(x => x.ZoneId, x => x.MeasuredAt, cancellationToken);
+            .Select(g => g.OrderByDescending(m => m.MeasuredAt).Select(m => new { m.ZoneId, m.MeasuredAt, m.ConfirmedAt }).First())
+            .ToDictionaryAsync(x => x.ZoneId, cancellationToken);
 
         return zones
-            .Select(z => new ZoneLatestWaterMeasurement(z, latest.TryGetValue(z.Id, out var measuredAt) ? measuredAt : null))
+            .Select(z => latest.TryGetValue(z.Id, out var m)
+                ? new ZoneLatestWaterMeasurement(z, m.MeasuredAt, m.ConfirmedAt)
+                : new ZoneLatestWaterMeasurement(z, null))
             .ToList();
     }
 

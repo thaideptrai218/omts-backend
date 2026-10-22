@@ -5,7 +5,8 @@ using OMTS.Domain.Entities.Farming;
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
 /// <summary>A zone with the measurement time of its latest Confirmed water measurement (overdue reminder).</summary>
-public sealed record ZoneLatestWaterMeasurement(FarmingZone Zone, DateTimeOffset? LatestConfirmedMeasuredAt);
+/// <param name="LatestConfirmedAt">When the latest measurement (by measured time) was confirmed.</param>
+public sealed record ZoneLatestWaterMeasurement(FarmingZone Zone, DateTimeOffset? LatestConfirmedMeasuredAt, DateTimeOffset? LatestConfirmedAt = null);
 
 /// <summary>
 /// Water measurements (ENV-01…ENV-03) and the water data of zones (thresholds ENV-04, overdue marker).
