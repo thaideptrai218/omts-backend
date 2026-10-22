@@ -227,4 +227,68 @@ public class AcsSqlServerTests
         await using var db = database.CreateContext();
         return await query(db);
     }
+
+
+    // Ten parallel wrong entries on one code: every wrong entry must count, so the request locks and the
+    // right code is refused afterwards.
+    [SqlServerFact]
+    public async Task Parallel_wrong_entries_are_not_lost_and_lock_the_request()
+    {
+        await using var database = SqlServerTestDatabase.Create();
+        await MigrateAsync(database);
+        await using var api = new SqlServerApiFactory(database);
+        var anonymous = api.CreateClient();
+        var phone = NewPhone();
+        var verificationId = await VerificationIdAsync(await anonymous.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }));
+        var code = SmsCode(api, phone);
+        var wrong = WrongCodeFor(code);
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 10)
+            .Select(_ => anonymous.PostAsJsonAsync($"/api/verifications/{verificationId}/verify", new { code = wrong })));
+
+        Assert.All(responses, r => Assert.NotEqual(HttpStatusCode.InternalServerError, r.StatusCode));
+        var persisted = await ReadAsync(database, db => db.VerificationCodes.Where(c => c.Id == verificationId).Select(c => c.FailedAttempts).SingleAsync());
+        Assert.True(persisted >= VerificationCode.MaxFailedAttempts, $"only {persisted} of 10 wrong entries were saved");
+        var right = await anonymous.PostAsJsonAsync($"/api/verifications/{verificationId}/verify", new { code });
+        Assert.Equal(HttpStatusCode.BadRequest, right.StatusCode);
+    }
+
+
+    [SqlServerFact]
+    public async Task Parallel_staff_creations_do_not_log_the_duplicate_username()
+    {
+        await using var database = SqlServerTestDatabase.Create();
+        await MigrateAsync(database);
+        await using var api = new SqlServerApiFactory(database);
+        var owner = await api.AddAccountAsync(NewCode(), Password);
+        var client = await LoginAsync(api, owner.Username);
+        var (zoneId, roleId) = await SeedZoneAndRoleAsync(database);
+        var username = $"s{NewCode()}";
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 4)
+            .Select(_ => client.PostAsJsonAsync("/api/accounts", StaffBody(username, zoneId, roleId))));
+
+        Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Created);
+        Assert.DoesNotContain(api.Logs.Lines, line => line.Contains(username));
+    }
+
+    [SqlServerFact]
+    public async Task Parallel_registrations_do_not_log_the_duplicate_phone()
+    {
+        await using var database = SqlServerTestDatabase.Create();
+        await MigrateAsync(database);
+        await using var api = new SqlServerApiFactory(database);
+        await SeedCooperativeAsync(database);
+        var phone = NewPhone();
+        var anonymous = api.CreateClient();
+        var first = await VerifiedTokenAsync(api, anonymous, phone);
+        await BackdateRequestAsync(database, first.VerificationId);
+        var second = await VerifiedTokenAsync(api, anonymous, phone);
+
+        var responses = await Task.WhenAll(new[] { first.Token, second.Token }
+            .Select(token => RegisterAsync(anonymous, phone, token)));
+
+        Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Created);
+        Assert.DoesNotContain(api.Logs.Lines, line => line.Contains(phone));
+    }
 }
