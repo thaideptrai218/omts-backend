@@ -8,6 +8,9 @@ public static class UserMessages
 {
     public static readonly UserMessage NoPermission = new("MSG02", "You do not have permission to perform this action.");
 
+    public static readonly UserMessage FileOperationFailed = new(
+        "MSG05", "The file operation could not be completed. The source data has not changed; please try again.");
+
     public static UserMessage ConcurrentUpdate(string userName, string time) => new(
         "MSG06",
         $"The data was just updated by {userName} at {time}. Your changes have not been saved; please review the new version and then save again or cancel.");

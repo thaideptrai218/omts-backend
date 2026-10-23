@@ -81,6 +81,7 @@ public class FileStorageTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
     [InlineData("Storage:Local:SigningKey", "")]
     [InlineData("Sms:Provider", "Twilio")]
     [InlineData("Storage:Provider", "Dropbox")]
+    [InlineData("Email:Smtp:Security", "None")]
     public void Invalid_storage_or_messaging_configuration_stops_the_host_in_production(string key, string value)
     {
         using var production = factory.WithWebHostBuilder(b => b.UseEnvironment("Production").UseSetting(key, value));

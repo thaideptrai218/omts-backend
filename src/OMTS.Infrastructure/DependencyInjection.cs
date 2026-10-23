@@ -99,13 +99,20 @@ public static class DependencyInjection
             EmailOptions.SmtpProvider => provider.GetRequiredService<SmtpEmailSender>(),
             var other => throw UnknownProvider(EmailOptions.SectionName, other),
         });
-        // Only fakes exist for SMS and push until their provider tickets; any other value is a configuration error.
-        services.AddSingleton<ISmsSender>(provider => provider.GetRequiredService<IOptions<SmsOptions>>().Value.Provider == SmsOptions.FakeProvider
-            ? provider.GetRequiredService<FakeSmsSender>()
-            : throw UnknownProvider(SmsOptions.SectionName, provider.GetRequiredService<IOptions<SmsOptions>>().Value.Provider));
-        services.AddSingleton<IPushSender>(provider => provider.GetRequiredService<IOptions<PushOptions>>().Value.Provider == PushOptions.FakeProvider
-            ? provider.GetRequiredService<FakePushSender>()
-            : throw UnknownProvider(PushOptions.SectionName, provider.GetRequiredService<IOptions<PushOptions>>().Value.Provider));
+        // Only fakes exist for SMS and push until their provider tickets. The fake is configured for Development
+        // only; elsewhere the default "None" fails every send, so nothing pretends a code or alert was delivered.
+        services.AddSingleton<ISmsSender>(provider => provider.GetRequiredService<IOptions<SmsOptions>>().Value.Provider switch
+        {
+            SmsOptions.FakeProvider => provider.GetRequiredService<FakeSmsSender>(),
+            SmsOptions.NoneProvider => ActivatorUtilities.CreateInstance<UnconfiguredSmsSender>(provider),
+            var other => throw UnknownProvider(SmsOptions.SectionName, other),
+        });
+        services.AddSingleton<IPushSender>(provider => provider.GetRequiredService<IOptions<PushOptions>>().Value.Provider switch
+        {
+            PushOptions.FakeProvider => provider.GetRequiredService<FakePushSender>(),
+            PushOptions.NoneProvider => ActivatorUtilities.CreateInstance<UnconfiguredPushSender>(provider),
+            var other => throw UnknownProvider(PushOptions.SectionName, other),
+        });
 
         services.AddScoped<PushOutbox>();
         services.AddScoped<IPushOutbox>(provider => provider.GetRequiredService<PushOutbox>());
@@ -135,8 +142,10 @@ public static class DependencyInjection
     {
         foreach (var kind in Enum.GetValues<ReadinessCheckKind>())
         {
-            builder.AddTypeActivatedCheck<DeploymentReadinessCheck>(
-                ToCheckName(kind), failureStatus: null, tags: [DeploymentReadinessCheck.Tag], args: [kind]);
+            var tags = kind is ReadinessCheckKind.Database or ReadinessCheckKind.Migrations
+                ? new[] { DeploymentReadinessCheck.Tag, DeploymentReadinessCheck.DatabaseTag }
+                : new[] { DeploymentReadinessCheck.Tag };
+            builder.AddTypeActivatedCheck<DeploymentReadinessCheck>(ToCheckName(kind), failureStatus: null, tags: tags, args: [kind]);
         }
     }
 

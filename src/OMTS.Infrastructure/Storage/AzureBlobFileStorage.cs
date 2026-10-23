@@ -4,6 +4,7 @@ using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Storage;
 using OMTS.Application.Features.Files;
 
@@ -60,6 +61,11 @@ internal sealed class AzureBlobFileStorage(
         {
             return null;
         }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogError(exception, "Blob read of {Key} failed", key);
+            throw new FileStorageUnavailableException(key, exception);
+        }
     }
 
     public Task<string> GetReadUrlAsync(string key, TimeSpan? lifetime = null, CancellationToken cancellationToken = default)
@@ -72,7 +78,16 @@ internal sealed class AzureBlobFileStorage(
             // Azurite serves plain HTTP; real accounts get HTTPS-only links.
             Protocol = blob.Uri.Scheme == Uri.UriSchemeHttps ? SasProtocol.Https : SasProtocol.HttpsAndHttp,
         };
-        return Task.FromResult(blob.GenerateSasUri(sas).ToString());
+        try
+        {
+            return Task.FromResult(blob.GenerateSasUri(sas).ToString());
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
+        {
+            // A connection string without an account key cannot sign SAS links.
+            logger.LogError(exception, "Read URL for {Key} could not be signed", key);
+            throw new FileStorageUnavailableException(key, exception);
+        }
     }
 
     public async Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default)

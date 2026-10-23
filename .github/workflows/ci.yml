@@ -41,6 +41,13 @@ jobs:
           sleep 5
           echo "OMTS_TEST_SQLSERVER=Server=localhost,1433;User Id=sa;Password=$password;TrustServerCertificate=True" >> "$GITHUB_ENV"
 
+      # Blob storage tests ([AzuriteFact]) run the production storage provider against Azurite.
+      - name: Start Azurite for blob storage tests
+        run: |
+          docker run -d --name omts-azurite -p 127.0.0.1:10000:10000 mcr.microsoft.com/azure-storage/azurite \
+            azurite-blob --blobHost 0.0.0.0 --skipApiVersionCheck
+          echo "OMTS_TEST_AZURITE=UseDevelopmentStorage=true" >> "$GITHUB_ENV"
+
       - run: dotnet restore OMTS.sln
       - run: dotnet build OMTS.sln -c Release --no-restore
       - run: dotnet test OMTS.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./coverage

@@ -17,10 +17,16 @@ public interface IFileStorage
     /// </summary>
     Task<FileUploadResult> UploadAsync(ValidatedFile file, string category, CancellationToken cancellationToken = default);
 
-    /// <summary>The stored content, or null when the key does not exist.</summary>
+    /// <summary>
+    /// The stored content, or null when the key does not exist. A provider failure throws
+    /// <see cref="Exceptions.FileStorageUnavailableException"/> (502 MSG05 at the API).
+    /// </summary>
     Task<Stream?> OpenReadAsync(string key, CancellationToken cancellationToken = default);
 
-    /// <summary>A URL that allows reading the file until it expires (default 10 minutes).</summary>
+    /// <summary>
+    /// A URL that allows reading the file until it expires (default 10 minutes). A provider failure throws
+    /// <see cref="Exceptions.FileStorageUnavailableException"/>.
+    /// </summary>
     Task<string> GetReadUrlAsync(string key, TimeSpan? lifetime = null, CancellationToken cancellationToken = default);
 
     /// <summary>Removes the file; false when it did not exist or the provider failed.</summary>

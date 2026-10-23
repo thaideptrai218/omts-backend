@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Storage;
 using OMTS.Application.Features.Files;
 
@@ -43,8 +44,16 @@ internal sealed class LocalFileStorage(
     public Task<Stream?> OpenReadAsync(string key, CancellationToken cancellationToken = default)
     {
         var path = StorageKeys.IsValid(key) ? PathOf(key) : null;
-        Stream? stream = path is not null && File.Exists(path) ? File.OpenRead(path) : null;
-        return Task.FromResult(stream);
+        try
+        {
+            Stream? stream = path is not null && File.Exists(path) ? File.OpenRead(path) : null;
+            return Task.FromResult(stream);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogError(exception, "Local storage read of {Key} failed", key);
+            throw new FileStorageUnavailableException(key, exception);
+        }
     }
 
     public Task<string> GetReadUrlAsync(string key, TimeSpan? lifetime = null, CancellationToken cancellationToken = default) =>

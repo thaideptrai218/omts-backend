@@ -27,6 +27,9 @@ internal sealed class DeploymentReadinessCheck(OmtsDbContext db, ReadinessCheckK
 {
     public const string Tag = "ready";
 
+    /// <summary>Database and migrations only: what a platform readiness or load-balancer probe needs.</summary>
+    public const string DatabaseTag = "db";
+
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
         try

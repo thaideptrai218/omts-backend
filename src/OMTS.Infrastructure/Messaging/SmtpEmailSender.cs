@@ -35,8 +35,12 @@ internal sealed class SmtpEmailSender(IOptions<EmailOptions> options, ILogger<Sm
             timeout.CancelAfter(TimeSpan.FromSeconds(smtp.TimeoutSeconds));
 
             using var client = new SmtpClient { Timeout = smtp.TimeoutSeconds * 1000 };
-            // StartTls is required when enabled; false means a plain local test server (no TLS at all).
-            var security = smtp.UseStartTls ? SecureSocketOptions.StartTls : SecureSocketOptions.None;
+            var security = smtp.Security switch
+            {
+                SmtpSecurity.SslOnConnect => SecureSocketOptions.SslOnConnect,
+                SmtpSecurity.None => SecureSocketOptions.None,
+                _ => SecureSocketOptions.StartTls,
+            };
             await client.ConnectAsync(smtp.Host, smtp.Port, security, timeout.Token);
             if (!string.IsNullOrEmpty(smtp.Username))
             {
@@ -57,7 +61,9 @@ internal sealed class SmtpEmailSender(IOptions<EmailOptions> options, ILogger<Sm
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             // Provider errors are returned, never thrown, so the caller leaves its data unchanged (MSG04).
-            logger.LogError("Email to {Recipient} failed: {Error} {Message}", Masking.Email(to), exception.GetType().Name, exception.Message);
+            // Never the exception message: a rejected-recipient reply echoes the full address.
+            logger.LogError("Email to {Recipient} failed: {Error} {SmtpStatus}", Masking.Email(to), exception.GetType().Name,
+                exception is SmtpCommandException command ? $"{command.ErrorCode} {(int)command.StatusCode}" : null);
             return DeliveryResult.Failed("SMTP_ERROR");
         }
     }

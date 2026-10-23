@@ -10,8 +10,8 @@ namespace OMTS.Infrastructure;
 
 /// <summary>
 /// At startup: builds every external adapter so a configuration error (unknown provider, missing Local
-/// storage signing key outside Development) stops the host instead of failing the first user request,
-/// and warns outside Development that SMS, push or email are only faked.
+/// storage signing key, plain-text SMTP outside Development) stops the host instead of failing the first
+/// user request, and warns outside Development that SMS, push or email are not really sent.
 /// </summary>
 internal sealed class ExternalServicesStartupCheck(
     IServiceProvider services,
@@ -33,14 +33,20 @@ internal sealed class ExternalServicesStartupCheck(
             return Task.CompletedTask;
         }
 
-        if (sms.Value.Provider == SmsOptions.FakeProvider)
+        if (email.Value.Provider == EmailOptions.SmtpProvider && email.Value.Smtp.Security == SmtpSecurity.None)
         {
-            logger.LogWarning("SMS provider is Fake: SMS messages (verification codes) are NOT sent.");
+            throw new InvalidOperationException(
+                "Email:Smtp:Security 'None' sends credentials in clear text and is allowed in Development only. Use StartTls or SslOnConnect.");
         }
 
-        if (push.Value.Provider == PushOptions.FakeProvider)
+        if (sms.Value.Provider is SmsOptions.FakeProvider or SmsOptions.NoneProvider)
         {
-            logger.LogWarning("Push provider is Fake: push notifications are NOT sent.");
+            logger.LogWarning("SMS provider is {Provider}: SMS messages (verification codes) are NOT sent, so phone verification cannot complete.", sms.Value.Provider);
+        }
+
+        if (push.Value.Provider is PushOptions.FakeProvider or PushOptions.NoneProvider)
+        {
+            logger.LogWarning("Push provider is {Provider}: push notifications are NOT sent (in-app notifications still are).", push.Value.Provider);
         }
 
         if (email.Value.Provider == EmailOptions.FakeProvider)

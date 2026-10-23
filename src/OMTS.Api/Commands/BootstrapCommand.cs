@@ -12,15 +12,17 @@ internal static class BootstrapCommand
     private const string BootstrapFlag = "--bootstrap";
     private const string DemoFlag = "--demo";
 
-    public static bool IsInvoked(string[] args) => args.Length > 0 && args[0] == Name;
+    // Anywhere in the arguments (host options such as --environment may come first). The bootstrap flag on
+    // its own also counts, so a mistyped command fails with the usage text instead of starting the web host.
+    public static bool IsInvoked(string[] args) => args.Contains(Name) || args.Contains(BootstrapFlag);
 
     /// <summary>Arguments left for the host (e.g. --environment), without the command and its flags.</summary>
     public static string[] HostArguments(string[] args) =>
-        IsInvoked(args) ? args.Skip(1).Where(a => a is not (BootstrapFlag or DemoFlag)).ToArray() : args;
+        IsInvoked(args) ? args.Where(a => a is not (Name or BootstrapFlag or DemoFlag)).ToArray() : args;
 
     public static async Task<int> RunAsync(IServiceProvider services, string[] args)
     {
-        if (!args.Contains(BootstrapFlag))
+        if (!args.Contains(Name) || !args.Contains(BootstrapFlag))
         {
             Console.Error.WriteLine($"Usage: dotnet OMTS.Api.dll {Name} {BootstrapFlag} [{DemoFlag}]");
             return DeploymentBootstrapper.Failure;

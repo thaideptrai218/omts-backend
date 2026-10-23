@@ -129,7 +129,7 @@ public class BootstrapTests
         Assert.Equal(DeploymentBootstrapper.Failure, refused.ExitCode);
     }
 
-    private static WebApplicationFactory<Program> WithSecrets(AuthApiFactory api) => api.WithWebHostBuilder(b => b
+    internal static WebApplicationFactory<Program> WithSecrets(AuthApiFactory api) => api.WithWebHostBuilder(b => b
         .UseSetting(BootstrapSettings.CooperativeFullNameKey, "HTX Nuôi trồng thủy sản Trung Nam")
         .UseSetting(BootstrapSettings.OwnerDisplayNameKey, "Chủ nhiệm HTX")
         .UseSetting(BootstrapSettings.OwnerUsernameKey, "owner")
