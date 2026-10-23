@@ -1,8 +1,8 @@
 namespace OMTS.Domain.Entities.Platform;
 
 /// <summary>
-/// E51 – Status catalog value. Codes are fixed by the SRS (BR-29); the System Administrator only edits
-/// display name, meaning, order and color (UC73). Ids are listed in <see cref="Constants.StatusIds"/>.
+/// E51 – Status catalog value. Codes are fixed by the SRS (BR-29); display texts change only through
+/// seed-data migrations. Ids are listed in <see cref="Constants.StatusIds"/>.
 /// </summary>
 public class Status
 {

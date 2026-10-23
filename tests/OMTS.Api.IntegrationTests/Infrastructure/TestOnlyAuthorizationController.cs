@@ -11,17 +11,17 @@ namespace OMTS.Api.IntegrationTests.Infrastructure;
 [Route("test-only")]
 public sealed class TestOnlyAuthorizationController : ControllerBase
 {
-    [HttpGet("zones/{zoneId:guid}/rafts")]
-    [RequirePermission(PermissionFunctions.Rafts, PermissionAction.View)]
-    public IActionResult ViewRafts(Guid zoneId) => Ok(new { zoneId });
+    [HttpGet("zones/{zoneId:guid}/water-measurements")]
+    [RequirePermission(PermissionFunctions.WaterMeasurements, PermissionAction.View)]
+    public IActionResult ViewWaterMeasurements(Guid zoneId) => Ok(new { zoneId });
 
-    [HttpPost("zones/{zoneId:guid}/rafts")]
-    [RequirePermission(PermissionFunctions.Rafts, PermissionAction.Create)]
-    public IActionResult CreateRaft(Guid zoneId) => Ok(new { zoneId });
+    [HttpPost("zones/{zoneId:guid}/water-measurements")]
+    [RequirePermission(PermissionFunctions.WaterMeasurements, PermissionAction.Create)]
+    public IActionResult CreateWaterMeasurement(Guid zoneId) => Ok(new { zoneId });
 
-    [HttpGet("seed-suppliers")]
-    [RequirePermission(PermissionFunctions.SeedSuppliers, PermissionAction.View, PermissionScope.AllZones)]
-    public IActionResult ViewSuppliers() => Ok();
+    [HttpGet("supplier-payments")]
+    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.View, PermissionScope.AllZones)]
+    public IActionResult ViewSupplierPayments() => Ok();
 
     [HttpPost("change-password")]
     [Authorize]

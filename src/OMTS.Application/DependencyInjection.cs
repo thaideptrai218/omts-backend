@@ -4,6 +4,7 @@ using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.Notifications;
 
 namespace OMTS.Application;
 
@@ -23,6 +24,7 @@ public static class DependencyInjection
         services.AddScoped<PermissionService>();
 
         services.AddScoped<AuditLogService>();
+        services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
 
         return services;
     }

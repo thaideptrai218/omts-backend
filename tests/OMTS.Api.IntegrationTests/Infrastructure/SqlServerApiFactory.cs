@@ -15,7 +15,8 @@ namespace OMTS.Api.IntegrationTests.Infrastructure;
 /// Runs the real API on a real SQL Server database (rowversion, constraints, transactions), for the
 /// behaviour the in-memory provider cannot show. Use only from <see cref="SqlServerFactAttribute"/> tests.
 /// </summary>
-public sealed class SqlServerApiFactory(SqlServerTestDatabase database) : WebApplicationFactory<Program>
+public sealed class SqlServerApiFactory(SqlServerTestDatabase database, IReadOnlyDictionary<string, string?>? settings = null)
+    : WebApplicationFactory<Program>
 {
     private readonly string _signingKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
 
@@ -25,7 +26,7 @@ public sealed class SqlServerApiFactory(SqlServerTestDatabase database) : WebApp
         {
             ["ConnectionStrings:OmtsDb"] = database.ConnectionString,
             ["Jwt:SigningKey"] = _signingKey,
-        }));
+        }.Concat(settings ?? new Dictionary<string, string?>())));
 
     public async Task<Account> AddAccountAsync(string username, string password, SubjectType subjectType = SubjectType.CooperativeOwner)
     {

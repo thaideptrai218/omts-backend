@@ -17,6 +17,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="OMTS.Api.IntegrationTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\OMTS.Application\OMTS.Application.csproj" />
     <ProjectReference Include="..\OMTS.Infrastructure\OMTS.Infrastructure.csproj" />
   </ItemGroup>

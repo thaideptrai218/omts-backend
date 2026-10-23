@@ -1,12 +1,22 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Identity;
+using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Interfaces.Storage;
+using OMTS.Infrastructure.Bootstrap;
+using OMTS.Infrastructure.HealthChecks;
 using OMTS.Infrastructure.Identity;
+using OMTS.Infrastructure.Messaging;
+using OMTS.Infrastructure.Messaging.Fakes;
 using OMTS.Infrastructure.Persistence;
 using OMTS.Infrastructure.Persistence.Interceptors;
 using OMTS.Infrastructure.Persistence.Repositories;
+using OMTS.Infrastructure.Persistence.Seed;
+using OMTS.Infrastructure.Storage;
 
 namespace OMTS.Infrastructure;
 
@@ -21,6 +31,7 @@ public static class DependencyInjection
         // Scoped (it reads the current user): works because AddDbContext builds the options per scope.
         // Switching to DbContext pooling or a context factory would need another way to pass the user.
         services.AddScoped<AuditableEntityStampInterceptor>();
+        services.AddScoped<PushOutboxInterceptor>();
         services.AddDbContext<OmtsDbContext>((provider, options) =>
         {
             options.AddOmtsInterceptors(provider);
@@ -42,20 +53,103 @@ public static class DependencyInjection
         services.AddScoped<IAccessGrantRepository, AccessGrantRepository>();
         services.AddScoped<IFarmingZoneRepository, FarmingZoneRepository>();
         services.AddScoped<IAuditEventRepository, AuditEventRepository>();
+        services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<IZoneRecipientQuery, ZoneRecipientQuery>();
+        services.AddSingleton<IStatusCatalog, StatusCatalog>();
 
         services.AddOptions<JwtOptions>().Bind(configuration.GetSection(JwtOptions.SectionName));
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddSingleton<IPasswordHasher, PasswordHasher>();
 
+        services.AddMessaging(configuration);
+        services.AddFileStorage(configuration);
+
+        services.AddScoped<DeploymentBootstrapper>();
+        services.AddHealthChecks().AddReadinessChecks();
+
         return services;
     }
 
     /// <summary>
-    /// Interceptors every <see cref="OmtsDbContext"/> needs (audit stamps, permission cache invalidation);
-    /// also used by tests that swap the database provider.
+    /// Interceptors every <see cref="OmtsDbContext"/> needs (audit stamps, permission cache invalidation,
+    /// push after commit); also used by tests that swap the database provider.
     /// </summary>
     public static DbContextOptionsBuilder AddOmtsInterceptors(this DbContextOptionsBuilder options, IServiceProvider provider) =>
         options.AddInterceptors(
             provider.GetRequiredService<AuditableEntityStampInterceptor>(),
-            provider.GetRequiredService<PermissionCacheInvalidationInterceptor>());
+            provider.GetRequiredService<PermissionCacheInvalidationInterceptor>(),
+            provider.GetRequiredService<PushOutboxInterceptor>());
+
+    // Providers are picked when first resolved, from the final configuration (tests and environments
+    // override it after this method runs).
+    private static void AddMessaging(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<EmailOptions>().Bind(configuration.GetSection(EmailOptions.SectionName));
+        services.AddOptions<SmsOptions>().Bind(configuration.GetSection(SmsOptions.SectionName));
+        services.AddOptions<PushOptions>().Bind(configuration.GetSection(PushOptions.SectionName));
+
+        services.AddSingleton<FakeEmailSender>();
+        services.AddSingleton<FakeSmsSender>();
+        services.AddSingleton<FakePushSender>();
+        services.AddSingleton<SmtpEmailSender>();
+
+        services.AddSingleton<IEmailSender>(provider => provider.GetRequiredService<IOptions<EmailOptions>>().Value.Provider switch
+        {
+            EmailOptions.FakeProvider => provider.GetRequiredService<FakeEmailSender>(),
+            EmailOptions.SmtpProvider => provider.GetRequiredService<SmtpEmailSender>(),
+            var other => throw UnknownProvider(EmailOptions.SectionName, other),
+        });
+        // Only fakes exist for SMS and push until their provider tickets. The fake is configured for Development
+        // only; elsewhere the default "None" fails every send, so nothing pretends a code or alert was delivered.
+        services.AddSingleton<ISmsSender>(provider => provider.GetRequiredService<IOptions<SmsOptions>>().Value.Provider switch
+        {
+            SmsOptions.FakeProvider => provider.GetRequiredService<FakeSmsSender>(),
+            SmsOptions.NoneProvider => ActivatorUtilities.CreateInstance<UnconfiguredSmsSender>(provider),
+            var other => throw UnknownProvider(SmsOptions.SectionName, other),
+        });
+        services.AddSingleton<IPushSender>(provider => provider.GetRequiredService<IOptions<PushOptions>>().Value.Provider switch
+        {
+            PushOptions.FakeProvider => provider.GetRequiredService<FakePushSender>(),
+            PushOptions.NoneProvider => ActivatorUtilities.CreateInstance<UnconfiguredPushSender>(provider),
+            var other => throw UnknownProvider(PushOptions.SectionName, other),
+        });
+
+        services.AddScoped<PushOutbox>();
+        services.AddScoped<IPushOutbox>(provider => provider.GetRequiredService<PushOutbox>());
+
+        // Resolves the configured adapters at startup, so a configuration error stops the host right away.
+        services.AddHostedService<ExternalServicesStartupCheck>();
+    }
+
+    private static void AddFileStorage(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<StorageOptions>().Bind(configuration.GetSection(StorageOptions.SectionName));
+        services.AddSingleton<LocalFileUrlSigner>();
+        services.AddSingleton<LocalFileStorage>();
+        services.AddSingleton<AzureBlobFileStorage>();
+        services.AddSingleton<IFileStorage>(provider => provider.GetRequiredService<IOptions<StorageOptions>>().Value.Provider switch
+        {
+            StorageOptions.LocalProvider => provider.GetRequiredService<LocalFileStorage>(),
+            StorageOptions.AzureBlobProvider => provider.GetRequiredService<AzureBlobFileStorage>(),
+            var other => throw UnknownProvider(StorageOptions.SectionName, other),
+        });
+    }
+
+    private static InvalidOperationException UnknownProvider(string section, string value) =>
+        new($"Unknown {section}:Provider '{value}'. See the README for the supported providers.");
+
+    private static void AddReadinessChecks(this IHealthChecksBuilder builder)
+    {
+        foreach (var kind in Enum.GetValues<ReadinessCheckKind>())
+        {
+            var tags = kind is ReadinessCheckKind.Database or ReadinessCheckKind.Migrations
+                ? new[] { DeploymentReadinessCheck.Tag, DeploymentReadinessCheck.DatabaseTag }
+                : new[] { DeploymentReadinessCheck.Tag };
+            builder.AddTypeActivatedCheck<DeploymentReadinessCheck>(ToCheckName(kind), failureStatus: null, tags: tags, args: [kind]);
+        }
+    }
+
+    // "StatusCatalog" → "status-catalog", the name listed by /health/ready when the check fails.
+    private static string ToCheckName(ReadinessCheckKind kind) =>
+        string.Concat(kind.ToString().Select((c, i) => i > 0 && char.IsUpper(c) ? $"-{char.ToLowerInvariant(c)}" : char.ToLowerInvariant(c).ToString()));
 }

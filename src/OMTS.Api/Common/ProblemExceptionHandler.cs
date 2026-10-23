@@ -6,16 +6,21 @@ using OMTS.Application.Common.Messages;
 namespace OMTS.Api.Common;
 
 /// <summary>
-/// Last line of defence: an unhandled concurrency conflict becomes 409 MSG06, anything else 500 with a
-/// generic problem body. Exception details go to the log only, never to the client.
+/// Last line of defence: an unhandled concurrency conflict becomes 409 MSG06, a file store failure 502
+/// MSG05, anything else 500 with a generic problem body. Exception details go to the log only, never to
+/// the client.
 /// </summary>
 internal sealed class ProblemExceptionHandler(ILogger<ProblemExceptionHandler> logger) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
-        var (status, message) = exception is ConcurrencyConflictException
-            ? (StatusCodes.Status409Conflict, UserMessages.ConcurrentUpdateByAnotherUser)
-            : (StatusCodes.Status500InternalServerError, UserMessages.UnexpectedError);
+        var (status, message) = exception switch
+        {
+            ConcurrencyConflictException => (StatusCodes.Status409Conflict, UserMessages.ConcurrentUpdateByAnotherUser),
+            // Already logged by the storage provider.
+            FileStorageUnavailableException => (StatusCodes.Status502BadGateway, UserMessages.FileOperationFailed),
+            _ => (StatusCodes.Status500InternalServerError, UserMessages.UnexpectedError),
+        };
 
         if (status == StatusCodes.Status500InternalServerError)
         {

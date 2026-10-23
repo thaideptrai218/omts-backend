@@ -12,7 +12,8 @@ internal static class StatusCatalogSeed
 {
     private const string Owner = "Cooperative Owner";
     private const string OwnerOrZoneManager = "Cooperative Owner; Zone Manager";
-    private const string OwnerOrAdmin = "Cooperative Owner; System Administrator";
+    private const string OwnerForStaffAdminForTraders =
+        "Cooperative Owner (staff accounts); System Administrator (trader accounts, platform administration outside the cooperative app)";
     private const string SystemActor = "System";
     private const string Action = "Action";
 
@@ -21,7 +22,7 @@ internal static class StatusCatalogSeed
         NewStatus(S.Usage.InUse, G.Usage, "IN_USE", "In Use", "Selectable for new records.", initial: true),
         NewStatus(S.Usage.Discontinued, G.Usage, "OUT_OF_USE", "Discontinued", "Not shown when selecting new records; old data stays unchanged."),
 
-        NewStatus(S.Cooperative.Draft, G.Cooperative, "DRAFT", "Preliminary", "The System Administrator has just set up the cooperative; the profile lacks legal information.", initial: true),
+        NewStatus(S.Cooperative.Draft, G.Cooperative, "DRAFT", "Preliminary", "Created at deployment; the Cooperative Owner has not completed the legal profile yet.", initial: true),
         NewStatus(S.Cooperative.Completed, G.Cooperative, "COMPLETED", "Completed", "The Cooperative Owner has entered all mandatory cooperative profile information."),
 
         NewStatus(S.Account.Active, G.Account, "ACTIVE", "Active", "Can log in according to effective zone–role pairs.", initial: true),
@@ -93,10 +94,10 @@ internal static class StatusCatalogSeed
         NewTransition(1, S.Usage.InUse, S.Usage.Discontinued, "UC12, UC15, UC18, UC20, UC22, UC42, UC55", OwnerOrZoneManager, Action, "Not blocked by the entity's Discontinued condition (section 3.4.3).", false),
         NewTransition(2, S.Usage.Discontinued, S.Usage.InUse, "UC12, UC15, UC18, UC20, UC22, UC42, UC55", OwnerOrZoneManager, Action, "Return the item to use.", false),
 
-        NewTransition(3, S.Cooperative.Draft, S.Cooperative.Completed, "UC09", Owner, Action, "All mandatory fields of the cooperative profile are filled.", false),
+        NewTransition(3, S.Cooperative.Draft, S.Cooperative.Completed, "FARM-01", Owner, Action, "All mandatory fields of the cooperative profile are filled.", false),
 
-        NewTransition(4, S.Account.Active, S.Account.Locked, "UC11, UC74", OwnerOrAdmin, Action, "Lock the account.", true),
-        NewTransition(5, S.Account.Locked, S.Account.Active, "UC11, UC74", OwnerOrAdmin, Action, "Unlock after verification; the System Administrator unlocks only accounts it locked itself.", true),
+        NewTransition(4, S.Account.Active, S.Account.Locked, "ACS-09", OwnerForStaffAdminForTraders, Action, "Lock the account.", true),
+        NewTransition(5, S.Account.Locked, S.Account.Active, "ACS-09", OwnerForStaffAdminForTraders, Action, "Unlock after verification; trader accounts are unlocked only by the System Administrator.", true),
 
         NewTransition(6, S.Employee.Working, S.Employee.Left, "UC10", Owner, Action, "The employee leaves.", false),
         NewTransition(7, S.Employee.Left, S.Employee.Working, "UC10", Owner, Action, "The employee returns to work.", false),
