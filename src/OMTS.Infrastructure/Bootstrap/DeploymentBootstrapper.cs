@@ -8,6 +8,7 @@ using OMTS.Application.Features.Audit.Models;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
+using OMTS.Infrastructure.Bootstrap.Demo;
 using OMTS.Infrastructure.Persistence;
 using OMTS.Infrastructure.Persistence.Seed;
 
@@ -28,7 +29,8 @@ public sealed class DeploymentBootstrapper(
     IHostEnvironment environment,
     IPasswordHasher passwordHasher,
     AuditLogService audit,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    IServiceProvider services)
 {
     public const int Success = 0;
     public const int Failure = 1;
@@ -76,20 +78,24 @@ public sealed class DeploymentBootstrapper(
         {
             cooperative = CreateCooperativeAndOwner(settings);
             messages.Add($"Cooperative created (Preliminary) with Cooperative Owner '{settings.OwnerUsername}'. " +
-                "The temporary password expires in 24 hours and must be changed at first login.");
+                (seedDemoData
+                    ? "Demo mode: the Owner gets the fixed demo password instead."
+                    : "The temporary password expires in 24 hours and must be changed at first login."));
         }
         else
         {
             messages.Add("Cooperative already initialized; nothing changed.");
         }
 
+        await db.SaveChangesAsync(cancellationToken);
+
         if (seedDemoData)
         {
-            var zones = await DemoDataSeeder.SeedAsync(db, cooperative.Id, cancellationToken);
-            messages.Add(zones.Count == 0 ? "Demo zones already exist." : $"Demo zones created: {string.Join(", ", zones)}.");
+            // After the save above: the demo steps act as the Owner, which must exist in the database. The
+            // lines never contain a password.
+            messages.AddRange(await DemoDataSeeder.SeedAsync(services, settings.OwnerUsername, cooperative.Id, cancellationToken));
         }
 
-        await db.SaveChangesAsync(cancellationToken);
         return new BootstrapOutcome(Success, messages);
     }
 
