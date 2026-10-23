@@ -1,8 +1,8 @@
 using OMTS.Application.Common;
 using OMTS.Application.Common.Exceptions;
+using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Persistence;
-using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Models;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Verification.Dtos;
@@ -18,6 +18,8 @@ namespace OMTS.Application.Features.Verification;
 /// </summary>
 public sealed class VerificationService(
     IVerificationCodeRepository codes,
+    VerificationThrottle throttle,
+    IVerificationCodeHasher codeHasher,
     ISmsSender smsSender,
     IEmailSender emailSender,
     IUnitOfWork unitOfWork,
@@ -34,30 +36,20 @@ public sealed class VerificationService(
 
     /// <summary>
     /// Opens a request and sends its code. A newer request replaces the open ones of the same purpose
-    /// (another target or delivery method). Limits per subject, whatever the channel or target: one send per
-    /// 60 seconds, 5 requests and 10 wrong codes per hour. Nothing is saved when sending fails.
+    /// (another target or delivery method). Limits: see <see cref="VerificationThrottle"/>. The request is
+    /// saved before its code is sent, so parallel starts of one subject cannot all send: a start that finds
+    /// another fresh request backs off with 429. When sending fails the request is removed again, so a failed
+    /// send changes nothing.
     /// </summary>
     public async Task<Result<VerificationStarted>> StartAsync(
         VerificationPurpose purpose, VerificationChannel channel, string target, Guid? accountId, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
         var recentRequests = await codes.GetRecentAsync(purpose, accountId, target, now - BudgetWindow, cancellationToken);
-        if (recentRequests.Sum(c => c.FailedAttempts) >= MaxFailedAttemptsPerWindow)
+        if (await throttle.CheckStartAsync(recentRequests, channel, target, now, cancellationToken) is { } refused)
         {
-            return TooManyAttempts();
+            return refused;
         }
-
-        if (recentRequests.FirstOrDefault(c => now < c.NextResendAt) is { } recent)
-        {
-            return TooSoon(recent, now);
-        }
-
-        if (recentRequests.Count >= MaxRequestsPerWindow)
-        {
-            return OutOfRequests(recentRequests[^1].CreatedAt + BudgetWindow, now);
-        }
-
-        var open = recentRequests.Where(c => c.IsOpen).ToList();
 
         var code = SecretHashing.NewSixDigitCode();
         var request = new VerificationCode
@@ -70,24 +62,27 @@ public sealed class VerificationService(
             LastSentAt = now,
             ExpiresAt = now + VerificationCode.Lifetime,
         };
-        request.CodeHash = HashCode(request.Id, code);
-
-        if (!(await SendAsync(channel, target, code, cancellationToken)).Succeeded)
-        {
-            return ServiceDown(channel);
-        }
-
-        foreach (var previous in open)
-        {
-            previous.CancelledAt = now;
-        }
-
+        request.CodeHash = codeHasher.Hash(request.Id, code);
         codes.Add(request);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var parallel = (await codes.GetRecentAsync(purpose, accountId, target, now - VerificationCode.ResendInterval, cancellationToken))
+            .FirstOrDefault(c => c.Id != request.Id);
+        if (parallel is not null || !(await SendAsync(channel, target, code, cancellationToken)).Succeeded)
+        {
+            codes.Remove(request);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return parallel is not null ? VerificationErrors.WaitBeforeNewRequest(parallel, now) : ServiceDown(channel);
+        }
+
+        await CancelAsync(recentRequests.Where(c => c.IsOpen).ToList(), now, cancellationToken);
         return Started(request);
     }
 
-    /// <summary>Sends a new code for the same request; the old code stops working. At most 3 sends, 60 s apart.</summary>
+    /// <summary>
+    /// Sends a new code for the same request; the old code stops working. At most 3 sends, 60 s apart. The
+    /// send is recorded before the code goes out, so parallel resends of one request send once.
+    /// </summary>
     public async Task<Result<VerificationStarted>> ResendAsync(Guid verificationId, Guid? callerAccountId, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
@@ -97,26 +92,44 @@ public sealed class VerificationService(
         if (request is null || request.Purpose == VerificationPurpose.AccountRecovery
             || !MayUse(request, callerAccountId) || !request.IsOpen || request.IsLocked)
         {
-            return WrongCode();
+            return VerificationErrors.WrongCode();
         }
 
         if (!request.CanResend(now))
         {
-            return TooSoon(request, now);
+            return VerificationErrors.TooSoon(request, now);
         }
 
-        var code = SecretHashing.NewSixDigitCode();
-        if (!(await SendAsync(request.Channel, request.Target, code, cancellationToken)).Succeeded)
+        if (await throttle.CheckSendAsync(request.Channel, request.Target, now, cancellationToken) is { } refused)
         {
-            // The current code stays valid until its expiry.
-            return ServiceDown(request.Channel);
+            return refused;
         }
 
-        request.CodeHash = HashCode(request.Id, code);
+        var previous = (request.CodeHash, request.SendCount, request.LastSentAt, request.ExpiresAt);
+        var code = SecretHashing.NewSixDigitCode();
+        request.CodeHash = codeHasher.Hash(request.Id, code);
         request.SendCount++;
         request.LastSentAt = now;
         request.ExpiresAt = now + VerificationCode.Lifetime;
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (ConcurrencyConflictException)
+        {
+            // A parallel resend (or entry) changed the request first.
+            await unitOfWork.ReloadAsync(request, cancellationToken);
+            return VerificationErrors.TooSoon(request, now);
+        }
+
+        if (!(await SendAsync(request.Channel, request.Target, code, cancellationToken)).Succeeded)
+        {
+            // The previous code stays valid until its expiry, unless the request changed meanwhile.
+            (request.CodeHash, request.SendCount, request.LastSentAt, request.ExpiresAt) = previous;
+            await SaveQuietlyAsync(cancellationToken);
+            return ServiceDown(request.Channel);
+        }
+
         return Started(request);
     }
 
@@ -131,19 +144,19 @@ public sealed class VerificationService(
         var request = await codes.GetByIdAsync(verificationId, cancellationToken);
         if (request is null || !MayUse(request, callerAccountId) || !request.IsUsable(now))
         {
-            return WrongCode();
+            return VerificationErrors.WrongCode();
         }
 
         var recentRequests = await codes.GetRecentAsync(request.Purpose, request.AccountId, request.Target, now - BudgetWindow, cancellationToken);
         if (recentRequests.Sum(c => c.FailedAttempts) >= MaxFailedAttemptsPerWindow)
         {
-            return TooManyAttempts();
+            return VerificationErrors.TooManyAttempts();
         }
 
-        if (string.IsNullOrWhiteSpace(code) || HashCode(request.Id, code.Trim()) != request.CodeHash)
+        if (string.IsNullOrWhiteSpace(code) || !codeHasher.Matches(request.Id, code.Trim(), request.CodeHash))
         {
             await CountWrongEntryAsync(request, now, cancellationToken);
-            return WrongCode();
+            return VerificationErrors.WrongCode();
         }
 
         var token = SecretHashing.NewToken();
@@ -157,7 +170,7 @@ public sealed class VerificationService(
         catch (ConcurrencyConflictException)
         {
             // A parallel entry changed the request first (a wrong code counted, or the same code used).
-            return WrongCode();
+            return VerificationErrors.WrongCode();
         }
 
         return new VerificationTokenIssued(token, request.TokenExpiresAt.Value);
@@ -185,12 +198,14 @@ public sealed class VerificationService(
             || (!anyAccount && request.AccountId != accountId)
             || (expectedTarget is not null && request.Target != expectedTarget))
         {
-            return WrongCode();
+            return VerificationErrors.WrongCode();
         }
 
         request.TokenConsumedAt = now;
         return request;
     }
+
+    public static AppError ServiceDown(VerificationChannel channel) => VerificationErrors.ServiceDown(channel);
 
     // Registration and recovery run before login; every other request belongs to its account only.
     private static bool MayUse(VerificationCode request, Guid? callerAccountId) =>
@@ -201,7 +216,41 @@ public sealed class VerificationService(
             ? smsSender.SendAsync(target, VerificationTexts.Sms(code), cancellationToken)
             : emailSender.SendAsync(target, VerificationTexts.EmailSubject, VerificationTexts.EmailHtml(code), VerificationTexts.EmailText(code), cancellationToken: cancellationToken);
 
-    private static string HashCode(Guid requestId, string code) => SecretHashing.Sha256Hex($"{requestId:N}:{code}");
+    /// <summary>The replaced requests stop working; a parallel change of one of them is re-applied on its newest version.</summary>
+    private async Task CancelAsync(IReadOnlyList<VerificationCode> replaced, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        foreach (var previous in replaced)
+        {
+            previous.CancelledAt = now;
+        }
+
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (ConcurrencyConflictException)
+        {
+            foreach (var previous in replaced)
+            {
+                await unitOfWork.ReloadAsync(previous, cancellationToken);
+                previous.CancelledAt ??= now;
+            }
+
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private async Task SaveQuietlyAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (ConcurrencyConflictException)
+        {
+            // The request changed meanwhile (an entry was counted): it keeps its newest state.
+        }
+    }
 
     private static VerificationStarted Started(VerificationCode request) => new(
         request.Id,
@@ -210,19 +259,9 @@ public sealed class VerificationService(
         request.SendsLeft,
         request.NextResendAt);
 
-    private static AppError WrongCode() => new(ErrorKind.Validation, UserMessages.WrongVerificationCode);
-
     // Each conflict round saves one entry and a request locks after a few, so this covers any burst the
     // per-IP rate limiter lets through.
     private const int MaxCountRetries = 20;
-
-    private static AppError TooManyAttempts() => new(ErrorKind.Locked, UserMessages.TooManyAttempts);
-
-    private static AppError OutOfRequests(DateTimeOffset nextAllowed, DateTimeOffset now)
-    {
-        var wait = Math.Max(1, (int)Math.Ceiling((nextAllowed - now).TotalSeconds));
-        return new AppError(ErrorKind.TooManyRequests, UserMessages.TooManyCodeRequests(wait), new Dictionary<string, object?> { ["retryAfterSeconds"] = wait });
-    }
 
     /// <summary>
     /// Counts a wrong entry so that parallel entries are never lost: on a rowversion conflict the request is
@@ -248,17 +287,5 @@ public sealed class VerificationService(
                 }
             }
         }
-    }
-
-    public static AppError ServiceDown(VerificationChannel channel) =>
-        new(ErrorKind.ServiceUnavailable, UserMessages.ServiceNotResponding(channel == VerificationChannel.Sms ? "SMS" : "Email"));
-
-    private static AppError TooSoon(VerificationCode request, DateTimeOffset now)
-    {
-        var wait = request.SendsLeft == 0 ? 0 : Math.Max(1, (int)Math.Ceiling((request.NextResendAt - now).TotalSeconds));
-        return new AppError(
-            ErrorKind.TooManyRequests,
-            UserMessages.TooManyCodeRequests(wait),
-            new Dictionary<string, object?> { ["retryAfterSeconds"] = wait, ["sendsLeft"] = request.SendsLeft });
     }
 }

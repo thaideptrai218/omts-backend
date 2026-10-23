@@ -32,6 +32,12 @@ public sealed class PhoneVerificationService(
             return AppError.NotFound;
         }
 
+        // A verified phone is changed through contact-changes, which asks for the current password.
+        if (account.PhoneVerifiedAt is not null)
+        {
+            return AppError.Invalid("Phone number");
+        }
+
         var input = request.PhoneNumber ?? (account.SubjectType == SubjectType.Staff ? account.PhoneNumber : null);
         var phone = PhoneNumbers.Normalize(input);
         if (phone is null || await IsUsedByAnotherAccountAsync(phone, account.Id, cancellationToken))

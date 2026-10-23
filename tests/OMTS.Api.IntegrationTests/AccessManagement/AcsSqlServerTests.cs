@@ -69,9 +69,30 @@ public class AcsSqlServerTests
         Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Created);
         var refused = responses.Single(r => r.StatusCode != HttpStatusCode.Created);
         Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
-        var code = await refused.ErrorCodeAsync();
-        Assert.True(code is "MSG03" or "MSG14", $"unexpected refusal {code}");
+        Assert.Equal("MSG14", await refused.ErrorCodeAsync());
         Assert.Equal(1, await ReadAsync(database, db => db.Accounts.CountAsync(a => a.PhoneNumber == phone)));
+    }
+
+    // Parallel "send me a code" requests of one subject (double tap, script): one SMS goes out, the others
+    // back off with 429; none is a 500.
+    [SqlServerFact]
+    public async Task Parallel_code_requests_of_one_subject_send_one_sms()
+    {
+        await using var database = SqlServerTestDatabase.Create();
+        await MigrateAsync(database);
+        await using var api = new SqlServerApiFactory(database);
+        var phone = NewPhone();
+        var anonymous = api.CreateClient();
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 5)
+            .Select(_ => anonymous.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone })));
+
+        Assert.True(responses.Count(r => r.StatusCode == HttpStatusCode.Created) <= 1);
+        Assert.All(responses.Where(r => r.StatusCode != HttpStatusCode.Created), r => Assert.Equal(HttpStatusCode.TooManyRequests, r.StatusCode));
+        Assert.True(api.Services.GetRequiredService<FakeSmsSender>().Inbox.List(phone).Count <= 1);
+        Assert.Equal(
+            api.Services.GetRequiredService<FakeSmsSender>().Inbox.List(phone).Count,
+            await ReadAsync(database, db => db.VerificationCodes.CountAsync(c => c.Target == phone)));
     }
 
     // One token, three parallel registrations: at most one consumes it; the others are refused, none is a 500.

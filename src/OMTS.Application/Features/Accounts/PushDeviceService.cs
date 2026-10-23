@@ -1,5 +1,7 @@
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Features.Audit;
+using OMTS.Application.Features.Audit.Models;
 using OMTS.Domain.Entities.Identity;
 
 namespace OMTS.Application.Features.Accounts;
@@ -8,11 +10,14 @@ namespace OMTS.Application.Features.Accounts;
 public sealed record RegisterPushDeviceRequest(string Token, string Platform, bool PermissionGranted);
 
 /// <summary>ACS-07 – registers the Expo push token of the device the user is logged in on.</summary>
-public sealed class PushDeviceService(IPushDeviceRepository devices, IUnitOfWork unitOfWork, TimeProvider timeProvider)
+public sealed class PushDeviceService(IPushDeviceRepository devices, AuditLogService audit, IUnitOfWork unitOfWork, TimeProvider timeProvider)
 {
     private static readonly string[] Platforms = ["ios", "android", "web"];
 
-    /// <summary>Re-registering a token updates it; a token registered by another account moves to this one.</summary>
+    /// <summary>
+    /// Re-registering a token updates it; a token registered by another account moves to this one (the
+    /// device logged in with another account) and the move is audited.
+    /// </summary>
     public async Task<Result<Done>> RegisterAsync(Guid accountId, RegisterPushDeviceRequest request, CancellationToken cancellationToken)
     {
         var token = request.Token?.Trim();
@@ -35,6 +40,16 @@ public sealed class PushDeviceService(IPushDeviceRepository devices, IUnitOfWork
         }
         else
         {
+            if (device.AccountId != accountId)
+            {
+                audit.Record(new AuditEntry("PushDevice.Moved", nameof(PushDevice))
+                {
+                    RecordId = device.Id,
+                    Before = new { device.AccountId },
+                    After = new { AccountId = accountId },
+                });
+            }
+
             device.AccountId = accountId;
             device.Platform = platform;
             device.PermissionGranted = request.PermissionGranted;

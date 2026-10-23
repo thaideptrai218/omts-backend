@@ -1,3 +1,5 @@
+using OMTS.Api.Extensions;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OMTS.Api.Common;
@@ -35,6 +37,7 @@ public sealed class MeProfileController(
 
     /// <summary>Sends a code to a new email or phone number (MSG62); the old one stays until verified.</summary>
     [HttpPost("contact-changes")]
+    [EnableRateLimiting(RateLimitingExtensions.CodeRequests)]
     [ProducesResponseType<ContactChangeStarted>(StatusCodes.Status201Created)]
     public async Task<IActionResult> StartContactChange(StartContactChangeRequest request, CancellationToken cancellationToken) =>
         (await profiles.StartContactChangeAsync(AccountId, request, cancellationToken)).ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));

@@ -40,7 +40,8 @@ public sealed record ContactConfirmed(string Contact, bool OldDocumentsHidden, s
 
 public sealed record UpdateProfileRequest(string DisplayName, string? RowVersion, string? Username = null);
 
-public sealed record StartContactChangeRequest(VerificationChannel Channel, string Target);
+/// <param name="CurrentPassword">Required: a stolen session alone must not be able to take over the account's contacts.</param>
+public sealed record StartContactChangeRequest(VerificationChannel Channel, string Target, string? CurrentPassword = null);
 
 public sealed record ProfileView(
     Guid AccountId,

@@ -17,6 +17,7 @@ builder.Services.AddJwtAuthentication();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
+builder.Services.AddOmtsForwardedHeaders(builder.Configuration);
 builder.Services.AddOmtsRateLimiting(builder.Configuration);
 builder.Services.AddExceptionHandler<ProblemExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -46,6 +47,8 @@ if (BootstrapCommand.IsInvoked(args))
     return await BootstrapCommand.RunAsync(app.Services, args);
 }
 
+// First: the client IP of a request through a trusted proxy is what the rate limits and logs see.
+app.UseForwardedHeaders();
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())

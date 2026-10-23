@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using OMTS.Api.Common;
+using OMTS.Api.Extensions;
 using OMTS.Api.Filters;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Features.Accounts;
@@ -29,11 +31,13 @@ public sealed class MeSecurityController(
 
     /// <summary>Sends a ChangePassword code to the verified email (NO_VERIFIED_EMAIL guidance without one).</summary>
     [HttpPost("password/code")]
+    [EnableRateLimiting(RateLimitingExtensions.CodeRequests)]
     [ProducesResponseType<VerificationStarted>(StatusCodes.Status201Created)]
     public async Task<IActionResult> SendPasswordCode(CancellationToken cancellationToken) =>
         (await passwords.SendEmailCodeAsync(currentUser.AccountId!.Value, cancellationToken)).ToActionResult(v => StatusCode(StatusCodes.Status201Created, v));
 
     [HttpPost("phone-verification")]
+    [EnableRateLimiting(RateLimitingExtensions.CodeRequests)]
     [ProducesResponseType<VerificationStarted>(StatusCodes.Status201Created)]
     public async Task<IActionResult> StartPhoneVerification(StartPhoneVerificationRequest request, CancellationToken cancellationToken) =>
         (await phones.StartAsync(currentUser.AccountId!.Value, request, cancellationToken)).ToActionResult(v => StatusCode(StatusCodes.Status201Created, v));

@@ -9,6 +9,14 @@ internal sealed class VerificationCodeRepository(OmtsDbContext db) : IVerificati
 {
     public void Add(VerificationCode code) => db.VerificationCodes.Add(code);
 
+    public void Remove(VerificationCode code) => db.VerificationCodes.Remove(code);
+
+    public async Task<int> CountSendsToTargetAsync(string target, DateTimeOffset since, CancellationToken cancellationToken) =>
+        await db.VerificationCodes.Where(c => c.Target == target && c.LastSentAt >= since).SumAsync(c => (int?)c.SendCount, cancellationToken) ?? 0;
+
+    public async Task<int> CountSmsSendsAsync(DateTimeOffset since, CancellationToken cancellationToken) =>
+        await db.VerificationCodes.Where(c => c.Channel == VerificationChannel.Sms && c.LastSentAt >= since).SumAsync(c => (int?)c.SendCount, cancellationToken) ?? 0;
+
     public Task<VerificationCode?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         db.VerificationCodes.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
 

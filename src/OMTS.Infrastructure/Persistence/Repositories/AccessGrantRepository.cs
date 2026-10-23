@@ -53,12 +53,11 @@ internal sealed class AccessGrantRepository(OmtsDbContext db) : IAccessGrantRepo
                 && (g.EffectiveTo == null || g.EffectiveTo >= from),
             cancellationToken);
 
-    public async Task<IReadOnlyList<AccessGrant>> GetEffectiveForRoleAsync(Guid roleId, DateOnly today, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<AccessGrant>> GetCurrentOrFutureForRoleAsync(Guid roleId, DateOnly today, CancellationToken cancellationToken) =>
         await db.AccessGrants.AsNoTracking()
             .Include(g => g.Account)
             .Where(g => g.RoleId == roleId
                 && g.StatusId == StatusIds.AccessGrant.Effective
-                && g.EffectiveFrom <= today
                 && (g.EffectiveTo == null || g.EffectiveTo >= today))
             .ToListAsync(cancellationToken);
 

@@ -32,11 +32,14 @@ public static class DependencyInjection
         services.AddScoped<RowVersionGuard>();
 
         // ACS – personal accounts
+        services.AddScoped<VerificationThrottle>();
         services.AddScoped<VerificationService>();
         services.AddScoped<TraderCustomerLinker>();
         services.AddScoped<UsernameGenerator>();
         services.AddScoped<RegistrationService>();
         services.AddScoped<PasswordRecoveryService>();
+        services.AddScoped<CurrentPasswordProof>();
+        services.AddScoped<ContactChangeNotifier>();
         services.AddScoped<PasswordChangeService>();
         services.AddScoped<PhoneVerificationService>();
         services.AddScoped<ProfileService>();

@@ -40,7 +40,7 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         var client = await factory.LoginAsync(owner.Username);
         var email = $"new-{NewCode()}@mail.com";
 
-        var started = await (await client.PostAsJsonAsync("/api/me/contact-changes", new { channel = "Email", target = email })).Content.ReadFromJsonAsync<JsonElement>();
+        var started = await (await client.PostAsJsonAsync("/api/me/contact-changes", new { channel = "Email", target = email, currentPassword = Password })).Content.ReadFromJsonAsync<JsonElement>();
         var message = started.GetProperty("message").GetString();
         var before = await client.GetFromJsonAsync<JsonElement>("/api/me/profile");
         var token = await VerifyAsync(client, started.GetProperty("verification").GetProperty("verificationId").GetGuid(), factory.LastEmailCode(email));
@@ -79,7 +79,7 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         await factory.UseDbAsync(db => db.Customers.AddRange(own, offline));
         var client = await factory.LoginAsync(trader.Username);
 
-        var started = await client.PostAsJsonAsync("/api/me/contact-changes", new { channel = "Sms", target = phone });
+        var started = await client.PostAsJsonAsync("/api/me/contact-changes", new { channel = "Sms", target = phone, currentPassword = Password });
         var token = await VerifyAsync(client, await VerificationIdAsync(started), factory.LastSmsCode(phone));
         await client.PostAsJsonAsync("/api/me/contact-changes/confirm", new { verificationToken = token });
 

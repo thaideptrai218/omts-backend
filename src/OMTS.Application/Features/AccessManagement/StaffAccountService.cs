@@ -161,7 +161,7 @@ public sealed class StaffAccountService(
             return fields.Error!;
         }
 
-        if (await rowVersions.CheckAsync(account, request.RowVersion, cancellationToken) is { } conflict)
+        if (await rowVersions.CheckAccountEditAsync(account, request.RowVersion, cancellationToken) is { } conflict)
         {
             return conflict;
         }
@@ -325,5 +325,5 @@ public sealed class StaffAccountService(
         statusCatalog.DisplayNameOf(account.StatusId),
         account.MustChangePassword,
         employeeId,
-        RowVersionGuard.Encode(account.RowVersion));
+        AccountEditVersion.Of(account));
 }

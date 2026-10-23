@@ -34,7 +34,8 @@ public sealed class RoleService(
     public async Task<Result<RoleView>> GetAsync(Guid id, CancellationToken cancellationToken) =>
         await roles.GetByIdAsync(id, cancellationToken) is { } role ? View(role) : AppError.NotFound;
 
-    public async Task<Result<RoleView>> CreateAsync(SaveRoleRequest request, CancellationToken cancellationToken)
+    /// <param name="beforeSave">Extra records for the same save (the copy's audit row).</param>
+    public async Task<Result<RoleView>> CreateAsync(SaveRoleRequest request, CancellationToken cancellationToken, Action<Role>? beforeSave = null)
     {
         var checkedRequest = await ValidateAsync(request, null, cancellationToken);
         if (!checkedRequest.IsSuccess)
@@ -56,6 +57,7 @@ public sealed class RoleService(
             RecordCode = role.Name,
             After = new { role.Name, role.Description, Permissions = RoleMatrix.View(role) },
         });
+        beforeSave?.Invoke(role);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return View(role);
     }
@@ -108,17 +110,17 @@ public sealed class RoleService(
             return AppError.NotFound;
         }
 
-        var created = await CreateAsync(new SaveRoleRequest(request.Name, request.Description ?? source.Description, RoleMatrix.ToInputs(source)), cancellationToken);
-        if (created.IsSuccess)
-        {
-            audit.Record(new AuditEntry("Role.Copied", nameof(Role)) { RecordId = created.Value!.Id, RecordCode = created.Value.Name, After = new { CopiedFrom = source.Name } });
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-
-        return created;
+        // Recorded before the create's save, so the role and "Role.Copied" are stored together or not at all.
+        return await CreateAsync(
+            new SaveRoleRequest(request.Name, request.Description ?? source.Description, RoleMatrix.ToInputs(source)),
+            cancellationToken,
+            role => audit.Record(new AuditEntry("Role.Copied", nameof(Role)) { RecordId = role.Id, RecordCode = role.Name, After = new { CopiedFrom = source.Name } }));
     }
 
-    /// <summary>In Use → Discontinued only when no Effective grant uses the role (MSG11 lists the holders).</summary>
+    /// <summary>
+    /// In Use → Discontinued only when no Effective grant uses the role, including grants that start later
+    /// (they would silently never apply). MSG11 counts and lists the accounts holding them.
+    /// </summary>
     public async Task<Result<RoleView>> DiscontinueAsync(Guid id, CancellationToken cancellationToken)
     {
         var role = await roles.GetByIdAsync(id, cancellationToken);
@@ -127,11 +129,11 @@ public sealed class RoleService(
             return AppError.NotFound;
         }
 
-        var holders = await grants.GetEffectiveForRoleAsync(role.Id, timeProvider.Today(), cancellationToken);
+        var holders = await grants.GetCurrentOrFutureForRoleAsync(role.Id, timeProvider.Today(), cancellationToken);
         if (holders.Count > 0)
         {
             var names = holders.Select(g => g.Account.DisplayName).Distinct().ToList();
-            return AppError.Conflict(UserMessages.StillInUse(holders.Count, string.Join(", ", names)));
+            return AppError.Conflict(UserMessages.StillInUse(names.Count, string.Join(", ", names)));
         }
 
         return await ChangeStatusAsync(role, StatusIds.Usage.InUse, StatusIds.Usage.Discontinued, cancellationToken);
@@ -150,7 +152,7 @@ public sealed class RoleService(
             return AppError.NotFound;
         }
 
-        var holders = await grants.GetEffectiveForRoleAsync(id, timeProvider.Today(), cancellationToken);
+        var holders = await grants.GetCurrentOrFutureForRoleAsync(id, timeProvider.Today(), cancellationToken);
         return new RoleImpact(
             holders.Select(g => g.AccountId).Distinct().Count(),
             holders.Where(g => g.ZoneId is not null).Select(g => g.ZoneId).Distinct().Count(),

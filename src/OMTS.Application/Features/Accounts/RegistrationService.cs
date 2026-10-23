@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
@@ -96,7 +97,15 @@ public sealed class RegistrationService(
             ActorAccountId = trader.Id,
             After = new { trader.Username, trader.SubjectType, trader.PhoneNumber, trader.Email, CustomerId = customer.Id, OldDocumentsHidden = hidden },
         });
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DuplicateRecordException)
+        {
+            // A parallel registration took the phone or email between the check above and this save.
+            return AppError.Conflict(UserMessages.CannotRegister);
+        }
 
         return new TraderRegistered(trader.Id, trader.Username, hidden, hidden ? UserMessages.OldDocumentsHidden.Text : null);
     }

@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
@@ -18,7 +20,9 @@ public sealed class RateLimitOptions
 
 /// <summary>
 /// Per-IP limits on top of the per-account limits of ACS-02/ACS-06, so one client cannot pump SMS to many
-/// numbers or try many accounts. Behind a reverse proxy, configure forwarded headers so the client IP is seen.
+/// numbers or try many accounts. Behind a reverse proxy, list it in <c>ForwardedHeaders:KnownProxies</c> or
+/// <c>KnownNetworks</c> so the client IP is seen (see ForwardedHeadersSetup); an IPv6 client is limited per
+/// /64, the block one subscriber usually holds.
 /// </summary>
 public static class RateLimitingExtensions
 {
@@ -51,7 +55,29 @@ public static class RateLimitingExtensions
     {
         var limit = permits(context.RequestServices.GetRequiredService<IOptions<RateLimitOptions>>().Value);
         return RateLimitPartition.GetFixedWindowLimiter(
-            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            ClientKey(context.Connection.RemoteIpAddress),
             _ => new FixedWindowRateLimiterOptions { PermitLimit = limit, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 });
+    }
+
+    internal static string ClientKey(IPAddress? address)
+    {
+        if (address is null)
+        {
+            return "unknown";
+        }
+
+        if (address.IsIPv4MappedToIPv6)
+        {
+            address = address.MapToIPv4();
+        }
+
+        if (address.AddressFamily != AddressFamily.InterNetworkV6)
+        {
+            return address.ToString();
+        }
+
+        var bytes = address.GetAddressBytes();
+        Array.Clear(bytes, 8, 8);
+        return $"{new IPAddress(bytes)}/64";
     }
 }

@@ -2,6 +2,7 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Common.Messages;
 using OMTS.Domain.Common;
+using OMTS.Domain.Entities.Identity;
 
 namespace OMTS.Application.Common.Concurrency;
 
@@ -28,15 +29,32 @@ public sealed class RowVersionGuard(IAccountRepository accounts, IUnitOfWork uni
         return null;
     }
 
+    /// <summary>
+    /// The same check for account forms (profile, staff account), against <see cref="AccountEditVersion"/>:
+    /// logins write the account row, so its row version would make every open form stale. A login between
+    /// this read and the save still fails that save (the database checks the row version read here).
+    /// </summary>
+    public async Task<AppError?> CheckAccountEditAsync(Account account, string? editVersion, CancellationToken cancellationToken)
+    {
+        if (editVersion is null)
+        {
+            return AppError.Invalid("RowVersion");
+        }
+
+        return editVersion == AccountEditVersion.Of(account)
+            ? null
+            : await ConflictAsync(account, cancellationToken, AccountEditVersion.Of(account));
+    }
+
     /// <summary>MSG06 for an entity someone else changed.</summary>
-    public async Task<AppError> ConflictAsync(AuditableEntity entity, CancellationToken cancellationToken)
+    public async Task<AppError> ConflictAsync(AuditableEntity entity, CancellationToken cancellationToken, string? currentVersion = null)
     {
         var editorId = entity.UpdatedBy ?? entity.CreatedBy;
         var editor = editorId is { } id ? await accounts.GetByIdAsync(id, cancellationToken) : null;
         var time = BusinessClock.Format(entity.UpdatedAt ?? entity.CreatedAt);
         return AppError.Conflict(
             UserMessages.ConcurrentUpdate(editor?.DisplayName ?? "another user", time),
-            new Dictionary<string, object?> { ["currentRowVersion"] = Encode(entity.RowVersion) });
+            new Dictionary<string, object?> { ["currentRowVersion"] = currentVersion ?? Encode(entity.RowVersion) });
     }
 
     public static string Encode(byte[] rowVersion) => Convert.ToBase64String(rowVersion);

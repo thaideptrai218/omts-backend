@@ -1,4 +1,7 @@
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Models;
@@ -19,7 +22,14 @@ public partial class VerificationServiceTests
     private readonly FakeSms _sms = new();
     private readonly MutableTime _time = new(new DateTimeOffset(2026, 10, 23, 1, 0, 0, TimeSpan.Zero));
 
-    private VerificationService Service => new(_codes, _sms, new NoEmail(), new NoSave(), _time);
+    private VerificationService Service => new(
+        _codes,
+        new VerificationThrottle(_codes, Options.Create(new VerificationLimitOptions()), NullLogger<VerificationThrottle>.Instance),
+        new Sha256Hasher(),
+        _sms,
+        new NoEmail(),
+        new NoSave(),
+        _time);
 
     [Fact]
     public async Task Code_is_valid_until_5_minutes()
@@ -265,11 +275,27 @@ public partial class VerificationServiceTests
         }
     }
 
+    private sealed class Sha256Hasher : IVerificationCodeHasher
+    {
+        public string Hash(Guid requestId, string code) =>
+            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{requestId:N}:{code}")));
+
+        public bool Matches(Guid requestId, string code, string storedHash) => Hash(requestId, code) == storedHash;
+    }
+
     private sealed class FakeCodes : IVerificationCodeRepository
     {
         public List<VerificationCode> All { get; } = [];
 
         public void Add(VerificationCode code) => All.Add(code);
+
+        public void Remove(VerificationCode code) => All.Remove(code);
+
+        public Task<int> CountSendsToTargetAsync(string target, DateTimeOffset since, CancellationToken cancellationToken) =>
+            Task.FromResult(All.Where(c => c.Target == target && c.LastSentAt >= since).Sum(c => c.SendCount));
+
+        public Task<int> CountSmsSendsAsync(DateTimeOffset since, CancellationToken cancellationToken) =>
+            Task.FromResult(All.Where(c => c.Channel == VerificationChannel.Sms && c.LastSentAt >= since).Sum(c => c.SendCount));
 
         public Task<VerificationCode?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult(All.FirstOrDefault(c => c.Id == id));

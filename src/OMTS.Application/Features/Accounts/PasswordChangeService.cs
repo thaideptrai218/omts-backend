@@ -28,6 +28,7 @@ public sealed class PasswordChangeService(
     ILoginSessionRepository sessions,
     VerificationService verification,
     AuthService authService,
+    CurrentPasswordProof currentPassword,
     IPasswordHasher passwordHasher,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
@@ -91,24 +92,7 @@ public sealed class PasswordChangeService(
     {
         if (!string.IsNullOrEmpty(request.CurrentPassword))
         {
-            // Wrong current passwords count like failed logins, so a stolen session cannot guess the
-            // password: the 5th failure blocks for 15 minutes (MSG69).
-            var now = timeProvider.GetUtcNow();
-            if (account.IsTemporarilyLocked(now))
-            {
-                return new AppError(ErrorKind.Locked, UserMessages.TooManyAttempts);
-            }
-
-            if (passwordHasher.Verify(account.PasswordHash, request.CurrentPassword) != PasswordCheck.Failed)
-            {
-                return null;
-            }
-
-            account.RegisterFailedLogin(now);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            return account.IsTemporarilyLocked(now)
-                ? new AppError(ErrorKind.Locked, UserMessages.TooManyAttempts)
-                : new AppError(ErrorKind.Validation, UserMessages.WrongCurrentPassword);
+            return await currentPassword.CheckAsync(account, request.CurrentPassword, cancellationToken);
         }
 
         if (string.IsNullOrEmpty(request.VerificationToken))

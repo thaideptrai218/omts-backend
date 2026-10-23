@@ -23,7 +23,8 @@ public interface IAccessGrantRepository
         Guid accountId, Guid? zoneId, Guid roleId, DateOnly from, DateOnly? to, CancellationToken cancellationToken);
 
     /// <summary>Effective, not expired grants using the role, with their account loaded.</summary>
-    Task<IReadOnlyList<AccessGrant>> GetEffectiveForRoleAsync(Guid roleId, DateOnly today, CancellationToken cancellationToken);
+    /// <summary>Effective grants of the role that apply today or will apply later (not yet started), with their accounts.</summary>
+    Task<IReadOnlyList<AccessGrant>> GetCurrentOrFutureForRoleAsync(Guid roleId, DateOnly today, CancellationToken cancellationToken);
 
     void Add(AccessGrant grant);
 }

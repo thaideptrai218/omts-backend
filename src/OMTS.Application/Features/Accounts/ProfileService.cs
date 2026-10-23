@@ -15,14 +15,17 @@ namespace OMTS.Application.Features.Accounts;
 public sealed record ContactChangeStarted(Verification.Dtos.VerificationStarted Verification, string Message);
 
 /// <summary>
-/// ACS-05 – the holder edits their own profile. A new email or phone number replaces the old one only once
-/// its code is verified; username, subject type, roles and zones are read-only here.
+/// ACS-05 – the holder edits their own profile. A new email or phone number needs the current password and
+/// replaces the old one only once its code is verified; the previous verified contact is told. Username,
+/// subject type, roles and zones are read-only here.
 /// </summary>
 public sealed class ProfileService(
     IAccountRepository accounts,
     IAccessGrantRepository grants,
     VerificationService verification,
     TraderCustomerLinker customerLinker,
+    CurrentPasswordProof currentPassword,
+    ContactChangeNotifier notifier,
     RowVersionGuard rowVersions,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
@@ -56,7 +59,7 @@ public sealed class ProfileService(
             return new AppError(ErrorKind.Unauthorized, UserMessages.SessionExpired);
         }
 
-        if (await rowVersions.CheckAsync(account, request.RowVersion, cancellationToken) is { } conflict)
+        if (await rowVersions.CheckAccountEditAsync(account, request.RowVersion, cancellationToken) is { } conflict)
         {
             return conflict;
         }
@@ -85,6 +88,11 @@ public sealed class ProfileService(
         if (account is null)
         {
             return AppError.NotFound;
+        }
+
+        if (await currentPassword.CheckAsync(account, request.CurrentPassword, cancellationToken) is { } refused)
+        {
+            return refused;
         }
 
         var target = ContactInputs.Normalize(request.Channel, request.Target);
@@ -135,6 +143,9 @@ public sealed class ProfileService(
 
         var now = timeProvider.GetUtcNow();
         var hidden = false;
+        var previous = channel == VerificationChannel.Sms
+            ? account.PhoneVerifiedAt is null ? null : account.PhoneNumber
+            : account.EmailVerifiedAt is null ? null : account.Email;
         object before;
         if (channel == VerificationChannel.Sms)
         {
@@ -158,6 +169,7 @@ public sealed class ProfileService(
             After = channel == VerificationChannel.Sms ? new { account.PhoneNumber } : new { account.Email },
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await notifier.NotifyPreviousContactAsync(channel, previous, target, cancellationToken);
         return new ContactConfirmed(target, hidden, hidden ? UserMessages.OldDocumentsHidden.Text : UserMessages.Saved("Personal profile").Text);
     }
 
@@ -183,6 +195,6 @@ public sealed class ProfileService(
             account.PhoneNumber,
             account.PhoneVerifiedAt is not null,
             effective.Select(g => new ProfileGrantView(g.Role.Name, g.ZoneId, g.Zone?.Name, g.ZoneId is null)).ToList(),
-            RowVersionGuard.Encode(account.RowVersion));
+            AccountEditVersion.Of(account));
     }
 }
