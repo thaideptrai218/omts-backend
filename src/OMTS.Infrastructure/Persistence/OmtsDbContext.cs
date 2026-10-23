@@ -84,6 +84,7 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<PayLine> PayLines => Set<PayLine>();
     public DbSet<LaborSettlement> LaborSettlements => Set<LaborSettlement>();
     public DbSet<LaborPayment> LaborPayments => Set<LaborPayment>();
+    public DbSet<Payroll> Payrolls => Set<Payroll>();
 
     // System
     public DbSet<Notification> Notifications => Set<Notification>();
