@@ -1,4 +1,5 @@
-# Only src/ and Directory.Build.props are copied into the image; keep everything else out of the build context.
+# Only src/, global.json and Directory.Build.props are copied into the image; keep everything else out of the
+# build context.
 **/bin/
 **/obj/
 **/TestResults/

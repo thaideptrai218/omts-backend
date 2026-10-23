@@ -3,8 +3,9 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /source
 
-# Restore from the project files only, so this layer is reused while only code changes.
-COPY Directory.Build.props ./
+# Restore from the project files only, so this layer is reused while only code changes. global.json pins the
+# same SDK feature band as CI.
+COPY global.json Directory.Build.props ./
 COPY src/OMTS.Domain/OMTS.Domain.csproj src/OMTS.Domain/
 COPY src/OMTS.Application/OMTS.Application.csproj src/OMTS.Application/
 COPY src/OMTS.Infrastructure/OMTS.Infrastructure.csproj src/OMTS.Infrastructure/

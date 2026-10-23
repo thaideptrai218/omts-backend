@@ -12,8 +12,7 @@ public sealed record BootstrapSettings(
     string? OwnerUsername,
     string? OwnerPhoneNumber,
     string? OwnerEmail,
-    string? OwnerTemporaryPassword,
-    bool SeedDemoData)
+    string? OwnerTemporaryPassword)
 {
     public const string CooperativeFullNameKey = "Bootstrap:Cooperative:FullName";
     public const string OwnerDisplayNameKey = "Bootstrap:Owner:DisplayName";
@@ -21,7 +20,6 @@ public sealed record BootstrapSettings(
     public const string OwnerPhoneNumberKey = "Bootstrap:Owner:PhoneNumber";
     public const string OwnerEmailKey = "Bootstrap:Owner:Email";
     public const string OwnerTemporaryPasswordKey = "Bootstrap:Owner:TemporaryPassword";
-    public const string SeedDemoDataKey = "Bootstrap:SeedDemoData";
 
     public static BootstrapSettings From(IConfiguration configuration) => new(
         configuration[CooperativeFullNameKey],
@@ -29,8 +27,7 @@ public sealed record BootstrapSettings(
         configuration[OwnerUsernameKey],
         configuration[OwnerPhoneNumberKey],
         configuration[OwnerEmailKey],
-        configuration[OwnerTemporaryPasswordKey],
-        configuration.GetValue<bool>(SeedDemoDataKey));
+        configuration[OwnerTemporaryPasswordKey]);
 
     /// <summary>Names (never values) of the required keys that are not set.</summary>
     public IReadOnlyList<string> MissingKeys() =>

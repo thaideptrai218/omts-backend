@@ -40,9 +40,11 @@ public sealed class DeploymentBootstrapper(
         var messages = new List<string>();
         var settings = BootstrapSettings.From(configuration);
 
-        if (seedDemoData && !CanSeedDemoData(settings))
+        // The demo data gives well-known passwords to the Owner and staff accounts: Development only, with no
+        // switch that opens it anywhere else.
+        if (seedDemoData && !environment.IsDevelopment())
         {
-            return new BootstrapOutcome(Failure, ["Demo data is refused outside Development (set Bootstrap:SeedDemoData=true only in test)."]);
+            return new BootstrapOutcome(Failure, ["Demo data is refused outside Development."]);
         }
 
         if (db.Database.IsRelational())
@@ -98,9 +100,6 @@ public sealed class DeploymentBootstrapper(
 
         return new BootstrapOutcome(Success, messages);
     }
-
-    private bool CanSeedDemoData(BootstrapSettings settings) =>
-        !environment.IsProduction() && (environment.IsDevelopment() || settings.SeedDemoData);
 
     private async Task<int> MissingStatusCatalogRowsAsync(CancellationToken cancellationToken)
     {

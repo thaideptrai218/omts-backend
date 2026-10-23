@@ -17,6 +17,7 @@ namespace OMTS.Api.IntegrationTests.Platform;
 public class DemoDataSeedTests
 {
     private const string DemoPassword = "Demo@1234";
+    private const string OwnerTemporaryPassword = "Temp2026ab";
 
     // Every table the demo seed writes to.
     private static readonly (string Table, Func<OmtsDbContext, Task<int>> Count)[] SeededTables =
@@ -53,7 +54,7 @@ public class DemoDataSeedTests
                 [BootstrapSettings.OwnerDisplayNameKey] = "Nguyễn Văn Hải",
                 [BootstrapSettings.OwnerUsernameKey] = "owner",
                 [BootstrapSettings.OwnerPhoneNumberKey] = "0900000001",
-                [BootstrapSettings.OwnerTemporaryPasswordKey] = "Temp2026ab",
+                [BootstrapSettings.OwnerTemporaryPasswordKey] = OwnerTemporaryPassword,
                 ["Storage:Local:RootPath"] = storageRoot,
             });
 
@@ -66,7 +67,7 @@ public class DemoDataSeedTests
             Assert.Equal(DeploymentBootstrapper.Success, second.ExitCode);
             Assert.Equal(afterFirst, afterSecond);
             Assert.All(second.Messages.Where(m => m.StartsWith("Demo ")), m => Assert.EndsWith("already there.", m));
-            Assert.DoesNotContain(first.Messages.Concat(second.Messages), m => m.Contains(DemoPassword));
+            Assert.DoesNotContain(first.Messages.Concat(second.Messages), m => m.Contains(DemoPassword) || m.Contains(OwnerTemporaryPassword));
 
             await AssertDemoDataAsync(api);
             await AssertLoginBranchesAsync(api);
@@ -80,16 +81,20 @@ public class DemoDataSeedTests
         }
     }
 
-    [Fact]
-    public async Task Demo_flag_is_refused_outside_development_and_creates_nothing()
+    // Any environment but Development, and no setting reopens it (the old Bootstrap:SeedDemoData switch is gone).
+    [Theory]
+    [InlineData("Production")]
+    [InlineData("Staging")]
+    public async Task Demo_flag_is_refused_outside_development_and_creates_nothing(string environment)
     {
-        await using var production = BootstrapTests.WithSecrets(new AuthApiFactory()).WithWebHostBuilder(b => b.UseEnvironment("Production"));
+        await using var host = BootstrapTests.WithSecrets(new AuthApiFactory())
+            .WithWebHostBuilder(b => b.UseEnvironment(environment).UseSetting("Bootstrap:SeedDemoData", "true"));
 
-        var refused = await RunAsync(production);
+        var refused = await RunAsync(host);
 
         Assert.Equal(DeploymentBootstrapper.Failure, refused.ExitCode);
         Assert.Contains(refused.Messages, m => m.Contains("refused outside Development"));
-        using var scope = production.Services.CreateScope();
+        using var scope = host.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
         Assert.False(await db.Cooperatives.AnyAsync());
         Assert.False(await db.FarmingZones.AnyAsync());
@@ -150,9 +155,25 @@ public class DemoDataSeedTests
         Assert.Equal(HttpStatusCode.OK, unverified.Status);
         Assert.True(unverified.Body.GetProperty("phoneVerificationRequired").GetBoolean());
 
-        // Locked trader, and staff whose only grant has expired: refused after the password is proven.
-        Assert.Equal(HttpStatusCode.Forbidden, (await LoginAsync("thuonglai2")).Status);
-        Assert.Equal(HttpStatusCode.Forbidden, (await LoginAsync("nhanvien.hethan")).Status);
+        // Locked trader, and staff whose only grant has expired: refused with MSG13 after the password is proven. The
+        // message does not say why, so the data shows each account is refused for its own reason.
+        foreach (var username in new[] { "thuonglai2", "nhanvien.hethan" })
+        {
+            var (status, body) = await LoginAsync(username);
+            Assert.Equal(HttpStatusCode.Forbidden, status);
+            Assert.Equal("MSG13", body.GetProperty("code").GetString());
+        }
+
+        using var scope = api.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
+        var locked = await db.Accounts.SingleAsync(a => a.Username == "thuonglai2");
+        Assert.Equal(StatusIds.Account.Locked, locked.StatusId);
+        var expired = await db.Accounts.SingleAsync(a => a.Username == "nhanvien.hethan");
+        Assert.Equal(StatusIds.Account.Active, expired.StatusId);
+        var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime);
+        var grants = await db.AccessGrants.Where(g => g.AccountId == expired.Id).ToListAsync();
+        Assert.NotEmpty(grants);
+        Assert.All(grants, g => Assert.True(g.EffectiveTo < today));
     }
 
     private static async Task<IReadOnlyDictionary<string, int>> CountsAsync(SqlServerApiFactory api)
