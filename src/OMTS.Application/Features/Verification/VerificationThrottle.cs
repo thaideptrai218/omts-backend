@@ -60,9 +60,21 @@ public sealed class VerificationThrottle(
     }
 
     /// <summary>Null when one more code may be sent to the target (first send or resend).</summary>
-    public async Task<AppError?> CheckSendAsync(VerificationChannel channel, string target, DateTimeOffset now, CancellationToken cancellationToken)
+    public Task<AppError?> CheckSendAsync(VerificationChannel channel, string target, DateTimeOffset now, CancellationToken cancellationToken) =>
+        CheckCountsAsync(channel, target, now, alreadySaved: 0, cancellationToken);
+
+    /// <summary>
+    /// The same limits once this send is saved (counted among the sends): null when it still fits. Parallel
+    /// sends that all passed <see cref="CheckSendAsync"/> see each other here, and the ones over the limit
+    /// back off without sending.
+    /// </summary>
+    public Task<AppError?> CheckSavedSendAsync(VerificationChannel channel, string target, DateTimeOffset now, CancellationToken cancellationToken) =>
+        CheckCountsAsync(channel, target, now, alreadySaved: 1, cancellationToken);
+
+    private async Task<AppError?> CheckCountsAsync(
+        VerificationChannel channel, string target, DateTimeOffset now, int alreadySaved, CancellationToken cancellationToken)
     {
-        if (await codes.CountSendsToTargetAsync(target, now - VerificationService.BudgetWindow, cancellationToken) >= MaxSendsPerTargetPerWindow)
+        if (await codes.CountSendsToTargetAsync(target, now - VerificationService.BudgetWindow, cancellationToken) - alreadySaved >= MaxSendsPerTargetPerWindow)
         {
             return VerificationErrors.OutOfRequests(now + VerificationService.BudgetWindow, now);
         }
@@ -73,7 +85,7 @@ public sealed class VerificationThrottle(
         }
 
         var limit = options.Value.DailySmsLimit;
-        if (await codes.CountSmsSendsAsync(now - SmsCeilingWindow, cancellationToken) < limit)
+        if (await codes.CountSmsSendsAsync(now - SmsCeilingWindow, cancellationToken) - alreadySaved < limit)
         {
             return null;
         }

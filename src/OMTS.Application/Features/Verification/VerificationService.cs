@@ -46,9 +46,9 @@ public sealed class VerificationService(
     {
         var now = timeProvider.GetUtcNow();
         var recentRequests = await codes.GetRecentAsync(purpose, accountId, target, now - BudgetWindow, cancellationToken);
-        if (await throttle.CheckStartAsync(recentRequests, channel, target, now, cancellationToken) is { } refused)
+        if (await throttle.CheckStartAsync(recentRequests, channel, target, now, cancellationToken) is { } limited)
         {
-            return refused;
+            return limited;
         }
 
         var code = SecretHashing.NewSixDigitCode();
@@ -68,11 +68,14 @@ public sealed class VerificationService(
 
         var parallel = (await codes.GetRecentAsync(purpose, accountId, target, now - VerificationCode.ResendInterval, cancellationToken))
             .FirstOrDefault(c => c.Id != request.Id);
-        if (parallel is not null || !(await SendAsync(channel, target, code, cancellationToken)).Succeeded)
+        var refused = parallel is not null
+            ? VerificationErrors.WaitBeforeNewRequest(parallel, now)
+            : await throttle.CheckSavedSendAsync(channel, target, now, cancellationToken);
+        if (refused is not null || !(await SendAsync(channel, target, code, cancellationToken)).Succeeded)
         {
             codes.Remove(request);
             await unitOfWork.SaveChangesAsync(cancellationToken);
-            return parallel is not null ? VerificationErrors.WaitBeforeNewRequest(parallel, now) : ServiceDown(channel);
+            return refused ?? ServiceDown(channel);
         }
 
         await CancelAsync(recentRequests.Where(c => c.IsOpen).ToList(), now, cancellationToken);
@@ -122,12 +125,13 @@ public sealed class VerificationService(
             return VerificationErrors.TooSoon(request, now);
         }
 
-        if (!(await SendAsync(request.Channel, request.Target, code, cancellationToken)).Succeeded)
+        var overLimit = await throttle.CheckSavedSendAsync(request.Channel, request.Target, now, cancellationToken);
+        if (overLimit is not null || !(await SendAsync(request.Channel, request.Target, code, cancellationToken)).Succeeded)
         {
             // The previous code stays valid until its expiry, unless the request changed meanwhile.
             (request.CodeHash, request.SendCount, request.LastSentAt, request.ExpiresAt) = previous;
             await SaveQuietlyAsync(cancellationToken);
-            return ServiceDown(request.Channel);
+            return overLimit ?? ServiceDown(request.Channel);
         }
 
         return Started(request);

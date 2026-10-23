@@ -56,6 +56,13 @@ public sealed class PhoneVerificationService(
             return AppError.NotFound;
         }
 
+        // A token issued while the phone was unverified cannot replace a phone verified meanwhile (that is a
+        // contact change, which needs the current password).
+        if (account.PhoneVerifiedAt is not null)
+        {
+            return AppError.Invalid("Phone number");
+        }
+
         var token = await verification.ConsumeTokenAsync(request.VerificationToken, [VerificationPurpose.VerifyPhone], account.Id, null, cancellationToken);
         if (!token.IsSuccess)
         {

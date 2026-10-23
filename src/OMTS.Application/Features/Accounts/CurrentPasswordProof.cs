@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
@@ -33,10 +34,31 @@ public sealed class CurrentPasswordProof(IPasswordHasher passwordHasher, IUnitOf
             return null;
         }
 
-        account.RegisterFailedLogin(now);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        // Parallel wrong entries conflict on the account row version: the loser re-reads the account and
+        // counts its failure again, so a burst is counted in full and locks like failed logins do.
+        for (var attempt = 1; ; attempt++)
+        {
+            account.RegisterFailedLogin(now);
+            try
+            {
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+                break;
+            }
+            catch (ConcurrencyConflictException) when (attempt < MaxSaveAttempts)
+            {
+                await unitOfWork.ReloadAsync(account, cancellationToken);
+                if (account.IsTemporarilyLocked(now))
+                {
+                    break;
+                }
+            }
+        }
+
         return account.IsTemporarilyLocked(now)
             ? new AppError(ErrorKind.Locked, UserMessages.TooManyAttempts)
             : new AppError(ErrorKind.Validation, UserMessages.WrongCurrentPassword);
     }
+
+    // Each conflict round saves one entry; the per-IP limiter caps the burst well below this.
+    private const int MaxSaveAttempts = 20;
 }
