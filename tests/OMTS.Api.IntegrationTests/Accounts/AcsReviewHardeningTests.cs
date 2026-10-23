@@ -73,7 +73,8 @@ public class AcsReviewHardeningTests(AuthApiFactory factory) : IClassFixture<Aut
     public async Task Logins_do_not_make_the_profile_or_staff_form_stale()
     {
         var owner = await factory.AddAccountAsync(NewCode(), Password);
-        var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
+        // Usernames need a letter; a random hex code can be all digits.
+        var staff = await factory.AddAccountAsync($"s{NewCode()}", Password, SubjectType.Staff);
         var zone = await factory.AddZoneAsync(NewCode());
         await factory.GrantAsync(staff, await factory.AddRoleAsync($"R {NewCode()}", ("WATER_MEASUREMENTS", true, false, false)), zone);
         var client = await factory.LoginAsync(owner.Username);
