@@ -37,6 +37,64 @@ tests/
 Dependencies point inward only; tests in `tests/` guard this rule. Conventions: one type per file,
 namespace = folder path, interfaces (ports) live under `Application/Common/Interfaces`.
 
+## Run with Docker (web, mobile and QA)
+
+Only Docker Desktop (or Docker Engine with Compose v2) is needed: no .NET SDK, SQL Server or user-secrets.
+
+```bash
+cp .env.example .env            # local-only values; .env is git-ignored, never commit it
+docker compose up -d --build    # first run builds the image and seeds the database (a few minutes)
+```
+
+Compose starts SQL Server, runs `seed --bootstrap --demo` once (migrations, the cooperative and the demo data of an
+oyster cooperative in Vân Đồn, Quảng Ninh) and then starts the API in Development. The seed is idempotent: it runs again
+on every `docker compose up` and creates nothing twice.
+
+| What | Where |
+|---|---|
+| API | `http://localhost:8080` |
+| Swagger | `http://localhost:8080/swagger` |
+| Health | `http://localhost:8080/health/db` (database), `http://localhost:8080/health/ready` (deployment complete) |
+| SQL Server (this PC only) | `localhost,1433`, user `sa`, password `MSSQL_SA_PASSWORD` from `.env` |
+
+**Demo logins.** Every account below uses the password `Demo@1234`. It exists only in this local demo data.
+
+| Username | Role | Zone | What happens at login |
+|---|---|---|---|
+| `owner` | Cooperative Owner | all | Normal login |
+| `quanlyvung1` | Zone Manager | DEMO-01 | Normal login |
+| `quanlyvung2` | Zone Manager | DEMO-02 | Normal login |
+| `ketoan` | Accountant | all zones | Normal login |
+| `thuonglai1` | Trader (Active) | – | Normal login |
+| `thuonglai2` | Trader (Locked) | – | Refused: the account is locked |
+| `nhanvien.doimk` | Zone Manager | DEMO-01 | Logged in with `mustChangePassword = true` (change it first) |
+| `nhanvien.chuaxacthuc` | Zone Manager | DEMO-02 | Logged in with `phoneVerificationRequired = true` (verify the phone first) |
+| `nhanvien.hethan` | Zone Manager | DEMO-01, grant expired | Refused: no zone–role grant in effect |
+
+The demo data also holds the cooperative profile, the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued),
+license documents (valid, expiring within 30 days, expired), about 10 rafts with lanes per zone, 8 employees (one Left),
+5 suppliers, 15 farming input items and 20 purchase receipts of the last 3 months with payments, discounts and a return.
+Phone numbers are fake (`0900 000 0xx`).
+
+**Verification codes.** SMS, email and push use the fake providers: nothing leaves the machine, and what would have been
+sent stays in memory until the API restarts. Read it at `GET /api/dev/sms?phoneNumber=0900000015` (the phone of
+`nhanvien.chuaxacthuc`),
+`GET /api/dev/email?to=<address>` and `GET /api/dev/push?accountId=<id>` (also in Swagger). `docker compose logs -f api`
+shows each fake message's id and masked recipient, never the code. These endpoints are anonymous: keep this environment
+on your local network.
+
+**Phone on the same Wi-Fi.** The API listens on every interface of the PC. Find the PC's LAN IP (`ipconfig` on Windows,
+`ipconfig getifaddr en0` on macOS) and point the mobile app at `http://<LAN IP>:8080`. If the phone cannot connect, allow
+inbound TCP 8080 in the PC's firewall. The Android emulator reaches the PC at `http://10.0.2.2:8080`.
+
+**Web app.** In Development `Cors:AllowedOrigins` allows `http://localhost:3000`, so the Next.js dev server can call the
+API from the browser.
+
+**Update, reset, stop.**
+- `docker compose up -d --build`: after a pull. It rebuilds the image, and the seed applies new migrations.
+- `docker compose down -v`: deletes the database and the stored files. The next `up` seeds a fresh copy.
+- `docker compose down`: stops everything and keeps the data.
+
 ## Getting started
 
 Prerequisites: .NET SDK 8.0 (pinned by `global.json`), SQL Server (LocalDB / Docker / Azure SQL).
@@ -102,7 +160,8 @@ created by a one-time command run on the server by the deployment operator (not 
    Owner with the temporary password. The temporary password expires after 24 hours and must be changed at first login.
    Running it again creates nothing that already exists ("already initialized", exit code 0); only a default role
    whose name no longer exists (for example after a rename) is created again. Missing secrets give exit code 1 and the
-   names of the missing keys. `--demo` also creates the demo zones `DEMO-01`/`DEMO-02` (Development only).
+   names of the missing keys. `--demo` also seeds the demo data of "Run with Docker" (Development only; refused
+   in any other environment).
 3. Start the API and check `GET /health/ready`: 200 when the database, migrations, status catalog, default roles,
    cooperative and an active Owner are all in place, else 503 listing the failing checks. This is a post-deployment
    verification, **not** a platform probe: it depends on data the Owner can change (renaming a default role or locking the
