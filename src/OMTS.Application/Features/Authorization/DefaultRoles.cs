@@ -32,7 +32,8 @@ public static class DefaultRoles
             new(SalesInvoices, [PermissionAction.View]),
             new(PurchaseReceipts, [PermissionAction.View]),
             new(HarvestLots, [PermissionAction.View]),
-            // Suppliers are read to pick the payee of a supplier payment (INP-06).
+            // Suppliers are read to pick the payee of a supplier payment (INP-06, OMTS-209). The §I.4.4 matrix still
+            // shows INP-01 as No for the Accountant; raised with the BA on OMTS-118.
             new(Suppliers, [PermissionAction.View]),
             new(DashboardDailyRevenue), new(DashboardReceivables),
         ]);

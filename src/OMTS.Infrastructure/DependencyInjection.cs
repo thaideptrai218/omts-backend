@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using OMTS.Application.Features.Verification;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Interfaces.Messaging;
@@ -55,10 +56,18 @@ public static class DependencyInjection
         services.AddScoped<IAuditEventRepository, AuditEventRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IZoneRecipientQuery, ZoneRecipientQuery>();
+        services.AddScoped<IVerificationCodeRepository, VerificationCodeRepository>();
+        services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<ICooperativeRepository, CooperativeRepository>();
+        services.AddScoped<IPushDeviceRepository, PushDeviceRepository>();
+        services.AddScoped<IEmployeeRepository, EmployeeRepository>();
+        services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddSingleton<IStatusCatalog, StatusCatalog>();
 
         services.AddOptions<JwtOptions>().Bind(configuration.GetSection(JwtOptions.SectionName));
         services.AddSingleton<ITokenService, JwtTokenService>();
+        services.AddSingleton<IVerificationCodeHasher, HmacVerificationCodeHasher>();
+        services.AddOptions<VerificationLimitOptions>().Bind(configuration.GetSection(VerificationLimitOptions.SectionName));
         services.AddSingleton<IPasswordHasher, PasswordHasher>();
 
         services.AddMessaging(configuration);

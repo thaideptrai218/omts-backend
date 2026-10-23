@@ -12,4 +12,8 @@ public static class BusinessClock
 
     /// <summary>Today's business date.</summary>
     public static DateOnly Today(this TimeProvider timeProvider) => ToBusinessDate(timeProvider.GetUtcNow());
+
+    /// <summary>Local time as shown in messages, e.g. MSG06 "at 14:05 23/10/2026".</summary>
+    public static string Format(DateTimeOffset instant) =>
+        instant.ToOffset(UtcOffset).ToString("HH:mm dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
 }

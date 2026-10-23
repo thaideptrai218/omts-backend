@@ -1,4 +1,5 @@
 using OMTS.Application.Common.Exceptions;
+using OMTS.Domain.Common;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
@@ -13,4 +14,7 @@ public interface IUnitOfWork
 
     /// <summary>Re-reads a tracked record from the database, dropping its unsaved changes (retry after a conflict).</summary>
     Task ReloadAsync(object entity, CancellationToken cancellationToken = default);
+
+    /// <summary>The save must fail if the record's row version is no longer the one the client edited.</summary>
+    void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion);
 }

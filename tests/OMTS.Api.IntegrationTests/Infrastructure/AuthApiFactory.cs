@@ -33,6 +33,9 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jwt:SigningKey", _signingKey);
         builder.UseSetting("Storage:Local:RootPath", StorageRoot);
         builder.UseSetting("Storage:Local:SigningKey", _signingKey);
+        // Every test client shares one IP; RateLimitTests lowers these to check the limiter itself.
+        builder.UseSetting("RateLimits:CodeRequestsPerMinute", "100000");
+        builder.UseSetting("RateLimits:LoginsPerMinute", "100000");
         builder.ConfigureLogging(logging => logging.AddProvider(Logs));
         builder.ConfigureServices(services =>
         {

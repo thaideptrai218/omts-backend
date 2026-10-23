@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
@@ -20,13 +21,21 @@ public sealed class SqlServerApiFactory(SqlServerTestDatabase database, IReadOnl
 {
     private readonly string _signingKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
 
-    protected override void ConfigureWebHost(IWebHostBuilder builder) =>
+    /// <summary>Every log line the host wrote, to check that secrets and duplicate values stay out of the logs.</summary>
+    public CapturingLoggerProvider Logs { get; } = new();
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
         // Added last, so it wins over a developer's user-secrets.
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["ConnectionStrings:OmtsDb"] = database.ConnectionString,
             ["Jwt:SigningKey"] = _signingKey,
+            ["RateLimits:CodeRequestsPerMinute"] = "100000",
+            ["RateLimits:LoginsPerMinute"] = "100000",
         }.Concat(settings ?? new Dictionary<string, string?>())));
+        builder.ConfigureLogging(logging => logging.AddProvider(Logs));
+    }
 
     public async Task<Account> AddAccountAsync(string username, string password, SubjectType subjectType = SubjectType.CooperativeOwner)
     {

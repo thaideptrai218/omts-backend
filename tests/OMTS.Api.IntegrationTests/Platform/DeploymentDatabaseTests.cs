@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
@@ -63,7 +64,8 @@ public class DeploymentDatabaseTests
         var saved = await AddRoleWithAuditAsync(api, "Harvest team");
         var duplicate = new Role { Name = "Harvest team" };
 
-        await Assert.ThrowsAnyAsync<DbUpdateException>(() => AddRoleWithAuditAsync(api, duplicate.Name));
+        // The unique index on Roles.Name refuses it; the unit of work reports it as a duplicate (409 MSG03).
+        await Assert.ThrowsAsync<DuplicateRecordException>(() => AddRoleWithAuditAsync(api, duplicate.Name));
 
         await using var check = database.CreateContext();
         var audited = await check.AuditEvents.Where(e => e.Action == "Role.Created").Select(e => e.RecordId).ToListAsync();

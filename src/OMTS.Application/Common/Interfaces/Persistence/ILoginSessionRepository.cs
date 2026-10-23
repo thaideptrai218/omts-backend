@@ -15,5 +15,8 @@ public interface ILoginSessionRepository
     /// <summary>Not revoked, within its absolute lifetime, and the account is still Active (NFR-01).</summary>
     Task<bool> IsActiveAsync(Guid accountId, Guid sessionId, DateTimeOffset now, CancellationToken cancellationToken);
 
+    /// <summary>Revokes every open session of the account (password change/reset, lock); saved with the caller's change.</summary>
+    Task RevokeAllAsync(Guid accountId, DateTimeOffset now, string reason, CancellationToken cancellationToken);
+
     void Add(LoginSession session);
 }
