@@ -18,6 +18,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
 builder.Services.AddOmtsForwardedHeaders(builder.Configuration);
+builder.Services.AddOmtsCors(builder.Configuration);
 builder.Services.AddOmtsRateLimiting(builder.Configuration);
 builder.Services.AddExceptionHandler<ProblemExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -57,8 +58,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// Redirects only when an HTTPS port is known (an HTTPS endpoint, or ASPNETCORE_HTTPS_PORTS / https_port); the
+// Docker image listens on plain HTTP 8080 only, so its requests are served as they are.
 app.UseHttpsRedirection();
 
+// Before the rate limiter and authentication, so browser preflight requests are answered without a token.
+app.UseOmtsCors();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
