@@ -73,6 +73,8 @@ public sealed class RaftService(
 
         var check = new FieldCheck();
         check.Check(zone.StatusId == StatusIds.Usage.InUse, "Zone");
+        // The zone must still be In Use when this save commits: a parallel discontinue then fails with MSG06.
+        unitOfWork.MarkChanged(zone);
         var values = Read(request, check, out var lanes, out var drawing);
         if (!check.IsValid)
         {
@@ -238,6 +240,8 @@ public sealed class RaftService(
             return WrongStatus(raft, StatusIds.Usage.InUse, "the raft is already in use");
         }
 
+        // As on create: the zone row is part of this save, so a parallel zone discontinue fails with MSG06.
+        unitOfWork.MarkChanged(raft.Zone);
         return raft.Zone.StatusId == StatusIds.Usage.InUse
             ? await ChangeStatusAsync(raft, StatusIds.Usage.InUse, "Raft.Reactivated", request, cancellationToken)
             : WrongStatus(raft, StatusIds.Usage.InUse, "the zone is discontinued");
@@ -252,7 +256,7 @@ public sealed class RaftService(
         }
 
         var removed = raft.Lanes.Where(l => l.LaneNumber > lanes.Count).ToList();
-        var inUse = removed.Count == 0 ? [] : await rafts.LanesWithSegmentsAsync(removed.Select(l => l.Id).ToList(), cancellationToken);
+        var inUse = removed.Count == 0 ? [] : await rafts.LanesInUseAsync(removed.Select(l => l.Id).ToList(), cancellationToken);
         if (inUse.Count > 0)
         {
             return new LayoutOutcome(AppError.Conflict(
@@ -309,7 +313,7 @@ public sealed class RaftService(
     private LayoutOutcome KeepLayout(Raft raft, IReadOnlyList<LayoutLane> lanes, string? drawing)
     {
         var current = raft.LayoutVersions.MaxBy(v => v.VersionNumber);
-        if (current is null || RaftLayout.DrawingOf(current)?.GetRawText() == drawing)
+        if (current is null || RaftLayout.SameDrawing(current, drawing))
         {
             return new LayoutOutcome(null, Changed: false);
         }

@@ -14,6 +14,12 @@ public sealed class ZoneLicenseReminderOptions
 
     /// <summary>Daily run time in the business time zone (UTC+7).</summary>
     public TimeOnly RunAt { get; set; } = new(7, 0);
+
+    /// <summary>
+    /// A host that starts after today's run time (deploy, restart) runs once at start, so that day is not
+    /// skipped. Safe because a notice already sent is never sent again.
+    /// </summary>
+    public bool CatchUpOnStart { get; set; } = true;
 }
 
 /// <summary>
@@ -28,7 +34,7 @@ public sealed class ZoneLicenseReminderJob(IServiceScopeFactory scopes, ILogger<
         IReadOnlyList<Guid> candidates;
         using (var scope = scopes.CreateScope())
         {
-            candidates = await scope.ServiceProvider.GetRequiredService<ZoneLicenseReminderService>().CandidateIdsAsync(cancellationToken);
+            candidates = await scope.ServiceProvider.GetRequiredService<ZoneLicenseReminderService>().CandidateIdsAsync(today, cancellationToken);
         }
 
         var sent = 0;
@@ -61,9 +67,15 @@ internal sealed class ZoneLicenseReminderHostedService(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var catchUp = options.Value.CatchUpOnStart && IsPastRunTime(timeProvider.GetUtcNow(), options.Value.RunAt);
         while (!stoppingToken.IsCancellationRequested)
         {
-            await Task.Delay(DelayUntilNextRun(timeProvider.GetUtcNow(), options.Value.RunAt), timeProvider, stoppingToken);
+            if (!catchUp)
+            {
+                await Task.Delay(DelayUntilNextRun(timeProvider.GetUtcNow(), options.Value.RunAt), timeProvider, stoppingToken);
+            }
+
+            catchUp = false;
             try
             {
                 var sent = await job.RunOnceAsync(timeProvider.Today(), stoppingToken);
@@ -75,6 +87,9 @@ internal sealed class ZoneLicenseReminderHostedService(
             }
         }
     }
+
+    internal static bool IsPastRunTime(DateTimeOffset nowUtc, TimeOnly runAt) =>
+        TimeOnly.FromTimeSpan(nowUtc.ToOffset(BusinessClock.UtcOffset).TimeOfDay) >= runAt;
 
     internal static TimeSpan DelayUntilNextRun(DateTimeOffset nowUtc, TimeOnly runAt)
     {

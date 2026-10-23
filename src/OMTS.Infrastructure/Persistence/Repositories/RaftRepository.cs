@@ -1,3 +1,4 @@
+using OMTS.Application.Common;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Domain.Constants;
@@ -40,16 +41,21 @@ internal sealed class RaftRepository(OmtsDbContext db) : IRaftRepository
         }
 
         // Open on that date: opened by its end and not closed before it starts (business dates, UTC+7).
-        var dayEnd = new DateTimeOffset(date.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7));
-        var dayStart = new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7));
+        var dayEnd = new DateTimeOffset(date.AddDays(1).ToDateTime(TimeOnly.MinValue), BusinessClock.UtcOffset);
+        var dayStart = new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), BusinessClock.UtcOffset);
         return await db.CultivationCycles.AsNoTracking()
             .Where(c => c.RaftId == raftId && c.OpenedAt < dayEnd && (c.ClosedAt == null || c.ClosedAt >= dayStart))
             .OrderByDescending(c => c.OpenedAt)
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<int>> LanesWithSegmentsAsync(IReadOnlyCollection<Guid> laneIds, CancellationToken cancellationToken) =>
-        await db.LaneSegments.Where(s => laneIds.Contains(s.LaneId)).Select(s => s.Lane.LaneNumber).Distinct().OrderBy(n => n).ToListAsync(cancellationToken);
+    public async Task<IReadOnlyList<int>> LanesInUseAsync(IReadOnlyCollection<Guid> laneIds, CancellationToken cancellationToken) =>
+        await db.Lanes
+            .Where(l => laneIds.Contains(l.Id)
+                && (db.LaneSegments.Any(s => s.LaneId == l.Id) || db.CultivationLogEntries.Any(e => e.LaneId == l.Id)))
+            .Select(l => l.LaneNumber)
+            .OrderBy(n => n)
+            .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<LaneSegmentDetail>> SegmentsAsync(Guid cycleId, DateOnly date, CancellationToken cancellationToken)
     {

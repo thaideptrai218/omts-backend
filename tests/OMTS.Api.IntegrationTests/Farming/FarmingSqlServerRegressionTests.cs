@@ -9,11 +9,11 @@ using static OMTS.Api.IntegrationTests.Farming.FarmingTestKit;
 namespace OMTS.Api.IntegrationTests.Farming;
 
 /// <summary>
-/// PENDING (product bugs found in the OMTS-210 QA review; not compiled until fixed, rename to .cs to run):
+/// Regressions of product bugs found in the OMTS-210 QA review (fixed in this PR), on SQL Server:
 /// a lane layout or zone list change does not move the record's rowversion, markers in Vietnamese overflow
 /// their column, and SQL Server decimals are audited as changed when they are not.
 /// </summary>
-public class FarmingSqlServerProductBugTests
+public class FarmingSqlServerRegressionTests
 {
     // FARM-04 "Stale rowVersion → 409 MSG06": only Lane/RaftLayoutVersion rows change, so the Raft rowversion stays
     // the same and a second editor holding the old version silently replaces the first editor's layout.

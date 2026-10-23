@@ -75,7 +75,18 @@ public static class RaftLayout
             ["lanes"] = JsonSerializer.SerializeToNode(lanes, Json),
             ["layoutDrawing"] = drawing is null ? null : JsonNode.Parse(drawing),
         };
-        return snapshot.ToJsonString();
+        // Same options as the markers: Vietnamese labels are stored as they are, not as \u escapes.
+        return snapshot.ToJsonString(Json);
+    }
+
+    /// <summary>
+    /// True when the request's drawing is the version's drawing, compared as JSON values: escaping and
+    /// whitespace do not count as a change (a notes-only edit must not record a drawing change).
+    /// </summary>
+    public static bool SameDrawing(RaftLayoutVersion version, string? drawing)
+    {
+        var stored = version.LayoutMap is { } map ? JsonNode.Parse(map)?["layoutDrawing"] : null;
+        return JsonNode.DeepEquals(stored, drawing is null ? null : JsonNode.Parse(drawing));
     }
 
     public static IReadOnlyList<LayoutLane> LanesOf(RaftLayoutVersion version) =>

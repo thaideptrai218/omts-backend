@@ -18,9 +18,9 @@ public sealed class ZoneLicenseReminderService(
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
 {
-    /// <summary>Licenses with an expiry date that have not been replaced.</summary>
-    public async Task<IReadOnlyList<Guid>> CandidateIdsAsync(CancellationToken cancellationToken) =>
-        (await licenses.ListReminderCandidatesAsync(cancellationToken)).Select(d => d.Id).ToList();
+    /// <summary>Unreplaced licenses with a notice due on <paramref name="today"/>; <see cref="RemindAsync"/> re-checks each one.</summary>
+    public Task<IReadOnlyList<Guid>> CandidateIdsAsync(DateOnly today, CancellationToken cancellationToken) =>
+        licenses.ListReminderCandidateIdsAsync(today, LicenseStateRules.ExpiringSoonDays, cancellationToken);
 
     /// <summary>Sends the notice that is due on <paramref name="today"/>, if any; true when one was sent.</summary>
     public async Task<bool> RemindAsync(Guid documentId, DateOnly today, CancellationToken cancellationToken)

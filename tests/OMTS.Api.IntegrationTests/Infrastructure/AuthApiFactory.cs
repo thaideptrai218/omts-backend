@@ -36,6 +36,8 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         // Every test client shares one IP; RateLimitTests lowers these to check the limiter itself.
         builder.UseSetting("RateLimits:CodeRequestsPerMinute", "100000");
         builder.UseSetting("RateLimits:LoginsPerMinute", "100000");
+        // Background jobs never run on their own in tests; tests call them directly.
+        builder.UseSetting("Jobs:ZoneLicenseReminder:CatchUpOnStart", "false");
         builder.ConfigureLogging(logging => logging.AddProvider(Logs));
         builder.ConfigureServices(services =>
         {

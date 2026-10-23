@@ -36,8 +36,11 @@ public interface IRaftRepository
     /// <summary>The given cycle of the raft, or the cycle that was open on the date.</summary>
     Task<CultivationCycle?> FindCycleAsync(Guid raftId, Guid? cycleId, DateOnly date, CancellationToken cancellationToken);
 
-    /// <summary>Lane numbers among <paramref name="laneIds"/> that have a segment in any cycle.</summary>
-    Task<IReadOnlyList<int>> LanesWithSegmentsAsync(IReadOnlyCollection<Guid> laneIds, CancellationToken cancellationToken);
+    /// <summary>
+    /// Lane numbers among <paramref name="laneIds"/> that records point to: a segment in any cycle or a
+    /// cultivation log entry (both keep their lane, so such a lane cannot be removed).
+    /// </summary>
+    Task<IReadOnlyList<int>> LanesInUseAsync(IReadOnlyCollection<Guid> laneIds, CancellationToken cancellationToken);
 
     /// <summary>Segments of a cycle dated up to <paramref name="date"/>.</summary>
     Task<IReadOnlyList<LaneSegmentDetail>> SegmentsAsync(Guid cycleId, DateOnly date, CancellationToken cancellationToken);

@@ -33,11 +33,16 @@ internal sealed class ZoneLicenseRepository(OmtsDbContext db) : IZoneLicenseRepo
             .ToList();
     }
 
-    public async Task<IReadOnlyList<ZoneComplianceDocument>> ListReminderCandidatesAsync(CancellationToken cancellationToken) =>
-        await db.ZoneComplianceDocuments
-            .Include(d => d.ZoneScopes).ThenInclude(s => s.Zone)
-            .Where(d => d.ExpiryDate != null && !db.ZoneComplianceDocuments.Any(r => r.ReplacesDocumentId == d.Id))
+    public async Task<IReadOnlyList<Guid>> ListReminderCandidateIdsAsync(DateOnly today, int expiringSoonDays, CancellationToken cancellationToken)
+    {
+        var soon = today.AddDays(expiringSoonDays);
+        return await db.ZoneComplianceDocuments.AsNoTracking()
+            .Where(d => d.ExpiryDate != null && d.ExpiryDate <= soon
+                && (d.ExpiringReminderSentAt == null || (d.ExpiryDate < today && d.ExpiredReminderSentAt == null))
+                && !db.ZoneComplianceDocuments.Any(r => r.ReplacesDocumentId == d.Id))
+            .Select(d => d.Id)
             .ToListAsync(cancellationToken);
+    }
 
     public void Add(ZoneComplianceDocument document) => db.ZoneComplianceDocuments.Add(document);
 

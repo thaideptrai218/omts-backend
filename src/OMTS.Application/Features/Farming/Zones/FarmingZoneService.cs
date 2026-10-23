@@ -34,7 +34,8 @@ public sealed class FarmingZoneService(
 
     public async Task<Paged<FarmingZoneListItem>> SearchAsync(string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken)
     {
-        (page, pageSize) = (Math.Max(page, 1), Math.Clamp(pageSize, 1, MaxPageSize));
+        // The upper bound keeps (page - 1) * pageSize inside int.
+        (page, pageSize) = (Math.Clamp(page, 1, int.MaxValue / MaxPageSize), Math.Clamp(pageSize, 1, MaxPageSize));
         var visible = await lookupAccess.VisibleZonesAsync(cancellationToken);
         var (items, total) = await zones.SearchAsync(search, statusId, visible, page, pageSize, cancellationToken);
         var badges = await BadgesAsync(items.Select(i => i.Zone.Id).ToList(), visible, cancellationToken);

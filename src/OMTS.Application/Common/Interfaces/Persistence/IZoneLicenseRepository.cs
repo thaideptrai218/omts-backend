@@ -17,7 +17,8 @@ public interface IZoneLicenseRepository
     Task<IReadOnlyList<LicenseWithReplacements>> ListCoveringAsync(IReadOnlyCollection<Guid> zoneIds, CancellationToken cancellationToken);
 
     /// <summary>Licenses with an expiry date that have not been replaced, with zone scopes (reminder job), tracked.</summary>
-    Task<IReadOnlyList<ZoneComplianceDocument>> ListReminderCandidatesAsync(CancellationToken cancellationToken);
+    /// <summary>Ids of unreplaced licenses with a reminder due on <paramref name="today"/> (expiring within the window, or expired, and not yet told).</summary>
+    Task<IReadOnlyList<Guid>> ListReminderCandidateIdsAsync(DateOnly today, int expiringSoonDays, CancellationToken cancellationToken);
 
     void Add(ZoneComplianceDocument document);
 
