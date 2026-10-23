@@ -81,7 +81,7 @@ public sealed class PurchaseReturnService(
         }
 
         var (refund, debtReduction) = (request.RefundAmount ?? 0, request.DebtReductionAmount ?? 0);
-        if (refund > 0 && request.RefundMethod is null)
+        if ((refund > 0 && request.RefundMethod is null) || (request.RefundMethod is { } method && !Enum.IsDefined(method)))
         {
             invalid.Add("Refund method");
         }
@@ -111,7 +111,9 @@ public sealed class PurchaseReturnService(
             return AppError.InvalidFields(invalid.Distinct().ToList());
         }
 
-        if (await CheckQuantitiesAsync(receipt, lines, cancellationToken) is { } quantityError)
+        var stocked = await receipts.StockedAsync(receipt.Lines.Select(l => l.Id).ToList(), cancellationToken);
+        var returned = receipt.Returns.SelectMany(r => r.Lines).GroupBy(l => l.ReceiptLineId).ToDictionary(g => g.Key, g => g.Sum(l => l.Quantity));
+        if (CheckQuantities(receipt, lines, stocked, returned) is { } quantityError)
         {
             return quantityError;
         }
@@ -129,6 +131,16 @@ public sealed class PurchaseReturnService(
                     receipt.Returns.SelectMany(r => r.Lines).Where(x => x.ReceiptLineId == line.Id).Sum(x => x.ReturnValue)),
             };
         }).ToList();
+
+        // Rounded line shares can add up to more than the payable amount: fit the total to what the receipt has left.
+        // Exactly the rest only when this return brings back everything received: goods already stocked stay paid for.
+        var nothingLeft = receipt.Lines.All(l =>
+            returned.GetValueOrDefault(l.Id) + lines.Where(x => x.ReceiptLineId == l.Id).Sum(x => x.Quantity!.Value) >= l.Quantity);
+        var fitted = PurchaseMoney.FitToReceipt(returnLines.Select(l => l.ReturnValue).ToList(), figures.Payable - figures.Returned, nothingLeft);
+        for (var i = 0; i < returnLines.Count; i++)
+        {
+            returnLines[i].ReturnValue = fitted[i];
+        }
 
         if (AmountError(refund, debtReduction, returnLines.Sum(l => l.ReturnValue), figures) is { } amountError)
         {
@@ -184,10 +196,9 @@ public sealed class PurchaseReturnService(
             found.Lines.Select(l => new PurchaseReturnLineView(l.ReceiptLineId, l.ReceiptLine.Item.Code, l.ReceiptLine.Item.Name, l.ReceiptLine.Unit, l.Quantity, l.ReturnValue)).ToList());
     }
 
-    private async Task<AppError?> CheckQuantitiesAsync(PurchaseReceipt receipt, IReadOnlyList<ReturnLineInput> lines, CancellationToken cancellationToken)
+    private static AppError? CheckQuantities(
+        PurchaseReceipt receipt, IReadOnlyList<ReturnLineInput> lines, IReadOnlyDictionary<Guid, (decimal Stocked, bool UnknownQuantity)> stocked, IReadOnlyDictionary<Guid, decimal> returned)
     {
-        var stocked = await receipts.StockedAsync(receipt.Lines.Select(l => l.Id).ToList(), cancellationToken);
-        var returned = receipt.Returns.SelectMany(r => r.Lines).GroupBy(l => l.ReceiptLineId).ToDictionary(g => g.Key, g => g.Sum(l => l.Quantity));
         for (var i = 0; i < lines.Count; i++)
         {
             var line = receipt.Lines.First(l => l.Id == lines[i].ReceiptLineId);

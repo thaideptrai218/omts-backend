@@ -82,10 +82,23 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
         await db.PurchaseReceiptLines.AnyAsync(l => l.ItemId == itemId, cancellationToken)
         || await db.CultivationCycles.AnyAsync(c => c.PlannedSeedTypeId == itemId, cancellationToken);
 
+    public async Task<IReadOnlySet<Guid>> UsedAmongAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken)
+    {
+        if (itemIds.Count == 0)
+        {
+            return new HashSet<Guid>();
+        }
+
+        var onReceipts = await db.PurchaseReceiptLines.Where(l => itemIds.Contains(l.ItemId)).Select(l => l.ItemId).Distinct().ToListAsync(cancellationToken);
+        var onCycles = await db.CultivationCycles.Where(c => c.PlannedSeedTypeId != null && itemIds.Contains(c.PlannedSeedTypeId.Value))
+            .Select(c => c.PlannedSeedTypeId!.Value).Distinct().ToListAsync(cancellationToken);
+        return onReceipts.Concat(onCycles).ToHashSet();
+    }
+
     public void Add(FarmingInputItem item) => db.FarmingInputItems.Add(item);
 }
 
-internal sealed class PurchaseReceiptRepository(OmtsDbContext db) : IPurchaseReceiptRepository
+internal sealed partial class PurchaseReceiptRepository(OmtsDbContext db) : IPurchaseReceiptRepository
 {
     public Task<PurchaseReceipt?> GetForEditAsync(Guid receiptId, CancellationToken cancellationToken) =>
         db.PurchaseReceipts
@@ -116,68 +129,9 @@ internal sealed class PurchaseReceiptRepository(OmtsDbContext db) : IPurchaseRec
             .ToDictionary(g => g.Key, g => (g.Sum(r => r.SeedQuantity ?? 0), g.Any(r => r.SeedQuantity is null)));
     }
 
-    public async Task<IReadOnlyList<PurchaseReceipt>> SearchAsync(PurchaseReceiptFilter filter, CancellationToken cancellationToken)
-    {
-        var query = WithFigures(db.PurchaseReceipts.AsNoTracking()).Include(r => r.Supplier).Include(r => r.Zone).Include(r => r.Raft).AsQueryable();
-        if (!filter.Zones.AllZones)
-        {
-            query = query.Where(r => filter.Zones.ZoneIds.Contains(r.ZoneId));
-        }
-
-        if (filter.ItemGroup is { } group)
-        {
-            query = query.Where(r => r.Lines.Any(l => l.Item.Group == group));
-        }
-
-        if (filter.ItemId is { } itemId)
-        {
-            query = query.Where(r => r.Lines.Any(l => l.ItemId == itemId));
-        }
-
-        if (filter.ZoneId is { } zoneId)
-        {
-            query = query.Where(r => r.ZoneId == zoneId);
-        }
-
-        if (filter.RaftId is { } raftId)
-        {
-            query = query.Where(r => r.RaftId == raftId);
-        }
-
-        if (filter.SupplierId is { } supplierId)
-        {
-            query = query.Where(r => r.SupplierId == supplierId);
-        }
-
-        if (filter.StatusId is { } statusId)
-        {
-            query = query.Where(r => r.StatusId == statusId);
-        }
-
-        if (filter.From is { } from)
-        {
-            // Drafts without a date yet are always listed.
-            query = query.Where(r => r.ReceiptDate >= from || r.ReceiptDate == DateOnly.MinValue);
-        }
-
-        if (filter.To is { } to)
-        {
-            query = query.Where(r => r.ReceiptDate <= to);
-        }
-
-        if (!string.IsNullOrWhiteSpace(filter.Code))
-        {
-            var code = filter.Code.Trim();
-            query = query.Where(r => r.Code.Contains(code));
-        }
-
-        return await query.OrderByDescending(r => r.ReceiptDate).ThenByDescending(r => r.Code).ToListAsync(cancellationToken);
-    }
-
-    public async Task<IReadOnlyList<PurchaseReceipt>> CompletedOfSuppliersAsync(IReadOnlyCollection<Guid>? supplierIds, CancellationToken cancellationToken) =>
-        await WithFigures(db.PurchaseReceipts.AsNoTracking()).Include(r => r.Supplier)
-            .Where(r => r.StatusId == StatusIds.PurchaseReceipt.Completed && (supplierIds == null || supplierIds.Contains(r.SupplierId)))
-            .OrderBy(r => r.ReceiptDate)
+    public async Task<IReadOnlyList<PurchaseReceipt>> SearchAsync(PurchaseReceiptFilter filter, CancellationToken cancellationToken) =>
+        await Filtered(filter, WithFigures(db.PurchaseReceipts.AsNoTracking()).Include(r => r.Supplier).Include(r => r.Zone).Include(r => r.Raft))
+            .OrderByDescending(r => r.ReceiptDate).ThenByDescending(r => r.Code)
             .ToListAsync(cancellationToken);
 
     public void Add(PurchaseReceipt receipt) => db.PurchaseReceipts.Add(receipt);

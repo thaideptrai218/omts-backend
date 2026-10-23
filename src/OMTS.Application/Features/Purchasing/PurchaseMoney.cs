@@ -46,6 +46,26 @@ public static class PurchaseMoney
         return Math.Min(ReturnValue(quantity, line.UnitPrice, payable, subtotal), Math.Max(0, lineShare - alreadyReturned));
     }
 
+    /// <summary>
+    /// Receipt-level cap of one return: the values never add up to more than what is left of the payable amount
+    /// (payable − already returned), and the return that leaves nothing returnable is worth exactly that rest, so the
+    /// rounding of the per-line shares never blocks the last return. The difference goes on the last lines.
+    /// </summary>
+    public static decimal[] FitToReceipt(IReadOnlyList<decimal> values, decimal remaining, bool leavesNothingReturnable)
+    {
+        var fitted = values.ToArray();
+        remaining = Math.Max(0, remaining);
+        var difference = (leavesNothingReturnable ? remaining : Math.Min(fitted.Sum(), remaining)) - fitted.Sum();
+        for (var i = fitted.Length - 1; i >= 0 && difference != 0; i--)
+        {
+            var adjusted = Math.Max(0, fitted[i] + difference);
+            difference -= adjusted - fitted[i];
+            fitted[i] = adjusted;
+        }
+
+        return fitted;
+    }
+
     public static ReceiptFigures Of(PurchaseReceipt receipt)
     {
         var subtotal = receipt.Lines.Sum(l => l.LineAmount);

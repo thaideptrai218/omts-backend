@@ -33,6 +33,9 @@ public interface IFarmingInputItemRepository
     /// <summary>True when the item is on a receipt line or is the planned seed of a cultivation cycle.</summary>
     Task<bool> IsUsedAsync(Guid itemId, CancellationToken cancellationToken);
 
+    /// <summary>Which of the items are used by a receipt line or a cycle plan (two grouped queries for a whole list).</summary>
+    Task<IReadOnlySet<Guid>> UsedAmongAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken);
+
     void Add(FarmingInputItem item);
 }
 
@@ -63,11 +66,21 @@ public interface IPurchaseReceiptRepository
     /// <summary>Per seed line: stocked quantity, and whether a seeding without a quantity uses the lot (counts as fully stocked).</summary>
     Task<IReadOnlyDictionary<Guid, (decimal Stocked, bool UnknownQuantity)>> StockedAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken);
 
-    /// <summary>Matching receipts with lines, returns and payments, newest first, untracked.</summary>
+    /// <summary>Matching receipts with lines, returns and payments, newest first, untracked (raft material cost only: it needs the lines).</summary>
     Task<IReadOnlyList<PurchaseReceipt>> SearchAsync(PurchaseReceiptFilter filter, CancellationToken cancellationToken);
 
-    /// <summary>Completed receipts of the suppliers (or all suppliers when null), with lines, returns and payments.</summary>
-    Task<IReadOnlyList<PurchaseReceipt>> CompletedOfSuppliersAsync(IReadOnlyCollection<Guid>? supplierIds, CancellationToken cancellationToken);
+    /// <summary>One page (1-based) of matching receipts with figures computed in SQL, newest first, and the totals of all matches.</summary>
+    Task<(IReadOnlyList<ReceiptFigureRow> Items, ReceiptFigureTotals Totals)> PageFiguresAsync(
+        PurchaseReceiptFilter filter, int page, int pageSize, CancellationToken cancellationToken);
+
+    /// <summary>Matching receipts with figures computed in SQL, newest first, at most <paramref name="take"/> when set.</summary>
+    Task<IReadOnlyList<ReceiptFigureRow>> ListFiguresAsync(PurchaseReceiptFilter filter, int? take, CancellationToken cancellationToken);
+
+    /// <summary>Completed receipts of one supplier with figures, oldest first.</summary>
+    Task<IReadOnlyList<ReceiptFigureRow>> CompletedFiguresOfSupplierAsync(Guid supplierId, CancellationToken cancellationToken);
+
+    /// <summary>Per supplier (or all when null) the sums over its Completed receipts, computed in SQL.</summary>
+    Task<IReadOnlyList<SupplierDebtFigures>> SupplierDebtFiguresAsync(IReadOnlyCollection<Guid>? supplierIds, CancellationToken cancellationToken);
 
     void Add(PurchaseReceipt receipt);
 

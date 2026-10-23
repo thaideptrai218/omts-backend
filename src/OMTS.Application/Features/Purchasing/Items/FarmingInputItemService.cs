@@ -43,7 +43,8 @@ public sealed class FarmingInputItemService(
         }
 
         var found = await items.ListAsync(search, group, statusId, cancellationToken);
-        return found.Select(i => View(i, isUsed: false)).ToList();
+        var used = await items.UsedAmongAsync(found.Select(i => i.Id).ToList(), cancellationToken);
+        return found.Select(i => View(i, used.Contains(i.Id))).ToList();
     }
 
     public async Task<Result<FarmingInputItemView>> GetAsync(Guid itemId, CancellationToken cancellationToken)

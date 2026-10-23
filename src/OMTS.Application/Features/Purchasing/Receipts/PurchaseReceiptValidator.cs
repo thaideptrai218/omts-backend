@@ -20,6 +20,10 @@ public sealed class PurchaseReceiptValidator(
     IFarmingInputItemRepository items,
     TimeProvider timeProvider)
 {
+    // Upper bounds well inside decimal(18,0) / decimal(18,3), also for the sum of many lines.
+    private const decimal MaxAmount = 100_000_000_000_000m;
+    private const decimal MaxQuantity = 1_000_000_000m;
+
     /// <summary>Request shape checks shared by drafts and completion; returns the items of the lines.</summary>
     public async Task<(IReadOnlyDictionary<Guid, FarmingInputItem> Items, AppError? Error)> CheckDraftAsync(
         SavePurchaseReceiptRequest request, CancellationToken cancellationToken)
@@ -47,19 +51,25 @@ public sealed class PurchaseReceiptValidator(
             }
         }
 
-        if (request.RaftId is { } raftId && await rafts.GetForEditAsync(raftId, cancellationToken) is null)
+        // The raft belongs to the receipt's zone (the caller's grant is checked for that zone), also on a Draft.
+        if (request.RaftId is { } raftId && (await rafts.GetForEditAsync(raftId, cancellationToken) is not { } raft || (request.ZoneId is { } raftZone && raft.ZoneId != raftZone)))
         {
             invalid.Add("Raft");
         }
 
-        if (request.DiscountAmount < 0)
+        if (request.DiscountAmount is < 0 or > MaxAmount)
         {
             invalid.Add("Discount amount");
         }
 
-        if (request.AmountPaidNow < 0)
+        if (request.AmountPaidNow is < 0 or > MaxAmount)
         {
             invalid.Add("Amount paid now");
+        }
+
+        if (request.PaidNowMethod is { } paidNowMethod && !Enum.IsDefined(paidNowMethod))
+        {
+            invalid.Add("Paid now method");
         }
 
         CheckText(request.Notes, "Notes", 1000, invalid);
@@ -72,6 +82,16 @@ public sealed class PurchaseReceiptValidator(
         if (invalid.Count > 0)
         {
             return (found, AppError.InvalidFields(invalid));
+        }
+
+        // Stored as decimal(18,3) quantities and decimal(18,0) prices: refuse what the database would round or overflow.
+        var badDraftLine = lines.ToList().FindIndex(l =>
+            (l.Quantity is { } q && (q <= 0 || q > MaxQuantity || decimal.Round(q, 3) != q))
+            || (l.UnitPrice is { } p && (p < 0 || p > MaxAmount || decimal.Truncate(p) != p))
+            || (l.Quantity is { } lq && l.UnitPrice is { } lp && lq * lp > MaxAmount));
+        if (badDraftLine >= 0)
+        {
+            return (found, new AppError(ErrorKind.Validation, UserMessages.QuantityOrPriceInvalid, new Dictionary<string, object?> { ["field"] = $"Line {badDraftLine + 1}" }));
         }
 
         // Amounts are stored as multiples of 1,000 VND (database check), so a Draft is checked too.

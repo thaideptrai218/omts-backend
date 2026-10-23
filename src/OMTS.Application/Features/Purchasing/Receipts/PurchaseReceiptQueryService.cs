@@ -43,6 +43,9 @@ public sealed class PurchaseReceiptQueryService(
     IStatusCatalog statusCatalog,
     TimeProvider timeProvider)
 {
+    /// <summary>Longest list, export and cost period, so one request never reads the whole history.</summary>
+    public const int MaxPeriodYears = 5;
+
     public async Task<Result<PurchaseReceiptSearchResult>> SearchAsync(PurchaseReceiptQuery query, CancellationToken cancellationToken)
     {
         var filter = await FilterAsync(query, PermissionAction.View, cancellationToken);
@@ -51,14 +54,14 @@ public sealed class PurchaseReceiptQueryService(
             return filter.Error!;
         }
 
-        var found = await receipts.SearchAsync(filter.Value!, cancellationToken);
-        var (page, pageSize) = (Math.Max(query.Page, 1), Math.Clamp(query.PageSize, 1, 100));
-        var rows = found.Select(Row).ToList();
+        // Paging and totals are computed by the database; the page number is capped so the offset cannot overflow.
+        var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / 100), Math.Clamp(query.PageSize, 1, 100));
+        var (found, totals) = await receipts.PageFiguresAsync(filter.Value!, page, pageSize, cancellationToken);
         return new PurchaseReceiptSearchResult(
-            new Paged<PurchaseReceiptRow>(rows.Skip((page - 1) * pageSize).Take(pageSize).ToList(), page, pageSize, rows.Count),
-            Totals(rows),
+            new Paged<PurchaseReceiptRow>(found.Select(Row).ToList(), page, pageSize, totals.Count),
+            Totals(totals),
             filter.Value!.From!.Value, filter.Value.To!.Value,
-            rows.Count == 0 ? UserMessages.NoData("purchase receipts").Text : null);
+            totals.Count == 0 ? UserMessages.NoData("purchase receipts").Text : null);
     }
 
     /// <summary>Raft material cost per raft with the Completed receipts behind it (filters zone, raft, period, item).</summary>
@@ -89,7 +92,7 @@ public sealed class PurchaseReceiptQueryService(
             return filter.Error!;
         }
 
-        var rows = (await receipts.SearchAsync(filter.Value!, cancellationToken)).Select(Row).ToList();
+        var rows = (await receipts.ListFiguresAsync(filter.Value!, null, cancellationToken)).Select(Row).ToList();
         var totals = Totals(rows);
         var sheetRows = rows.Select(r => (IReadOnlyList<object?>)
         [
@@ -139,19 +142,23 @@ public sealed class PurchaseReceiptQueryService(
             return AppError.Invalid("From date");
         }
 
+        if (to > from.AddYears(MaxPeriodYears))
+        {
+            return AppError.Invalid("To date", $"The period is at most {MaxPeriodYears} years.");
+        }
+
         return new PurchaseReceiptFilter(zones, query.ItemGroup, query.ItemId, query.ZoneId, query.RaftId, query.SupplierId, query.StatusId, from, to, query.Code);
     }
 
     private static bool Allows(PermittedZones zones, Guid zoneId) => zones.AllZones || zones.ZoneIds.Contains(zoneId);
 
-    private PurchaseReceiptRow Row(PurchaseReceipt r)
-    {
-        var f = PurchaseMoney.Of(r);
-        return new PurchaseReceiptRow(
-            r.Id, r.Code, PurchaseMoney.DateOrNull(r.ReceiptDate), new SupplierRef(r.Supplier.Id, r.Supplier.Name, r.Supplier.PhoneNumber),
-            new ZoneRef(r.Zone.Id, r.Zone.Code, r.Zone.Name), r.Raft is null ? null : new RaftRef(r.Raft.Id, r.Raft.Code),
-            r.StatusId, statusCatalog.DisplayNameOf(r.StatusId), f.Subtotal, f.Discount, f.Payable, f.Returned, f.Paid, f.Outstanding);
-    }
+    private PurchaseReceiptRow Row(ReceiptFigureRow r) => new(
+        r.Id, r.Code, PurchaseMoney.DateOrNull(r.ReceiptDate), new SupplierRef(r.SupplierId, r.SupplierName, r.SupplierPhone),
+        new ZoneRef(r.ZoneId, r.ZoneCode, r.ZoneName), r.RaftId is { } raftId ? new RaftRef(raftId, r.RaftCode!) : null,
+        r.StatusId, statusCatalog.DisplayNameOf(r.StatusId), r.Subtotal, r.Discount, r.Payable, r.Returned, r.Paid, r.Outstanding);
+
+    private static PurchaseReceiptTotals Totals(ReceiptFigureTotals t) =>
+        new(t.Count, t.CompletedCount, t.Subtotal, t.Discount, t.Payable, t.Returned, t.Paid, t.Outstanding);
 
     private static PurchaseReceiptTotals Totals(IReadOnlyList<PurchaseReceiptRow> rows)
     {

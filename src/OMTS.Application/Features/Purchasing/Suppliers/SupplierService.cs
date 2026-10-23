@@ -34,6 +34,9 @@ public sealed class SupplierService(
     AuditLogService audit,
     IUnitOfWork unitOfWork)
 {
+    /// <summary>Receipts listed on the supplier detail (newest first).</summary>
+    public const int ReceiptHistoryLimit = 50;
+
     private const string RecordType = nameof(Supplier);
     private const int MaxCertificates = 10;
 
@@ -215,8 +218,9 @@ public sealed class SupplierService(
     {
         // Receipt history only from zones whose receipts the caller may view; the debt is cooperative-wide.
         var visible = await zoneAccess.PermittedZonesAsync(PermissionFunctions.PurchaseReceipts, PermissionAction.View, cancellationToken);
-        var history = visible.IsEmpty ? [] : await receipts.SearchAsync(new PurchaseReceiptFilter(visible, SupplierId: supplier.Id), cancellationToken);
-        var completed = await receipts.CompletedOfSuppliersAsync([supplier.Id], cancellationToken);
+        // The latest receipts only (figures summed by SQL), so the detail does not slow down as history grows.
+        var history = visible.IsEmpty ? [] : await receipts.ListFiguresAsync(new PurchaseReceiptFilter(visible, SupplierId: supplier.Id), ReceiptHistoryLimit, cancellationToken);
+        var completed = (await receipts.SupplierDebtFiguresAsync([supplier.Id], cancellationToken)).FirstOrDefault();
         var unallocated = await payments.UnallocatedAsync([supplier.Id], cancellationToken);
         var certificates = new List<SupplierCertificate>();
         for (var i = 0; i < supplier.CertificateUrls.Count; i++)
@@ -228,11 +232,8 @@ public sealed class SupplierService(
             supplier.Id, supplier.Name, supplier.SupplierType, supplier.PhoneNumber, supplier.OtherContacts, certificates,
             supplier.StatusId, statusCatalog.DisplayNameOf(supplier.StatusId),
             SupplierDebts.Debt(completed, unallocated.GetValueOrDefault(supplier.Id)),
-            history.Select(r =>
-            {
-                var figures = PurchaseMoney.Of(r);
-                return new SupplierReceiptRow(r.Id, r.Code, PurchaseMoney.DateOrNull(r.ReceiptDate), r.ZoneId, statusCatalog.DisplayNameOf(r.StatusId), figures.Payable, figures.Outstanding);
-            }).ToList(),
+            history.Select(r => new SupplierReceiptRow(
+                r.Id, r.Code, PurchaseMoney.DateOrNull(r.ReceiptDate), r.ZoneId, statusCatalog.DisplayNameOf(r.StatusId), r.Payable, r.Outstanding)).ToList(),
             RowVersionGuard.Encode(supplier.RowVersion));
     }
 

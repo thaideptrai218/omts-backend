@@ -315,8 +315,13 @@ public class PurchaseReceiptRulesTests(AuthApiFactory factory) : IClassFixture<A
         var world = await factory.WorldAsync();
         var first = await world.Owner.CreateReceiptAsync(world.Body());
         var second = await world.Owner.CreateReceiptAsync(world.Body());
-        static int Number(JsonElement r) => int.Parse(r.GetProperty("code").GetString()![^3..]);
-        Assert.Equal(Number(first) + 1, Number(second));
-        Assert.StartsWith($"PR-{Today:yyyyMMdd}-", second.GetProperty("code").GetString());
+        static string Code(JsonElement r) => r.GetProperty("code").GetString()!;
+        static int Number(string code) => int.Parse(code[^3..]);
+        static string Day(string code) => code[..^3];
+        var (firstCode, secondCode) = (Code(first), Code(second));
+        // The day is the server's: when the two saves straddle midnight (UTC+7) the sequence starts again at 001.
+        Assert.Matches(@"^PR-\d{8}-\d{3}$", secondCode);
+        Assert.Equal(Day(firstCode) == Day(secondCode) ? Number(firstCode) + 1 : 1, Number(secondCode));
+        Assert.Contains(Day(secondCode), new[] { $"PR-{Today:yyyyMMdd}-", $"PR-{Today.AddDays(-1):yyyyMMdd}-" });
     }
 }

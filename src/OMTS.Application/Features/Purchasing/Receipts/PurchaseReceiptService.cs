@@ -95,7 +95,7 @@ public sealed class PurchaseReceiptService(
             return AppError.NotFound;
         }
 
-        if (await EditableDraftAsync(receipt, request.ZoneId, request.RowVersion, cancellationToken) is { } refused)
+        if (await EditableDraftAsync(receipt, request.ZoneId, request.RowVersion, cancellationToken, requireRowVersion: true) is { } refused)
         {
             return refused;
         }
@@ -155,7 +155,7 @@ public sealed class PurchaseReceiptService(
         return await views.ViewAsync(receipt.Id, cancellationToken);
     }
 
-    /// <summary>Invoice photos (JPEG, PNG or PDF, 10 MB, 10 per save) added to any receipt the caller may edit.</summary>
+    /// <summary>Invoice photos (JPEG, PNG or PDF, 10 MB, 10 per save) added to a Draft receipt the caller may edit (MSG61 otherwise).</summary>
     public async Task<Result<PurchaseReceiptView>> AddInvoicePhotosAsync(Guid receiptId, IReadOnlyList<IncomingFile> files, CancellationToken cancellationToken)
     {
         var receipt = await receipts.GetForEditAsync(receiptId, cancellationToken);
@@ -167,6 +167,14 @@ public sealed class PurchaseReceiptService(
         if (!await zoneAccess.AllowsAsync(PermissionFunctions.PurchaseReceipts, PermissionAction.Edit, receipt.ZoneId, cancellationToken))
         {
             return AppError.Forbidden;
+        }
+
+        // A Completed receipt is never edited, and its seed lots copied the photos at completion.
+        if (receipt.StatusId != StatusIds.PurchaseReceipt.Draft)
+        {
+            return AppError.Conflict(UserMessages.CannotChangeStatus(
+                "Purchase receipt", statusCatalog.DisplayNameOf(receipt.StatusId), statusCatalog.DisplayNameOf(receipt.StatusId),
+                "invoice photos can only be added to a Draft receipt"));
         }
 
         var validated = FileValidator.Validate(files, FileRules.Documents);
@@ -198,7 +206,7 @@ public sealed class PurchaseReceiptService(
     }
 
     private async Task<AppError?> EditableDraftAsync(
-        PurchaseReceipt receipt, Guid? newZoneId, string? rowVersion, CancellationToken cancellationToken, int toStatusId = StatusIds.PurchaseReceipt.Draft)
+        PurchaseReceipt receipt, Guid? newZoneId, string? rowVersion, CancellationToken cancellationToken, int toStatusId = StatusIds.PurchaseReceipt.Draft, bool requireRowVersion = false)
     {
         foreach (var zoneId in new[] { receipt.ZoneId, newZoneId ?? receipt.ZoneId }.Distinct())
         {
@@ -216,7 +224,8 @@ public sealed class PurchaseReceiptService(
                 "only a Draft receipt can be edited or completed"));
         }
 
-        return rowVersion is null ? null : await rowVersions.CheckAsync(receipt, rowVersion, cancellationToken);
+        // A draft edit replaces every line, so it must say which version it read (MSG01 when missing); complete is guarded by status.
+        return rowVersion is null && !requireRowVersion ? null : await rowVersions.CheckAsync(receipt, rowVersion, cancellationToken);
     }
 
     /// <summary>Draft → Completed: full validation, seed lots for seed lines, the paid-now payment.</summary>
