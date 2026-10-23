@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Features.AccessManagement;
@@ -37,6 +38,7 @@ public static class DependencyInjection
         services.AddSingleton<IPermissionCacheInvalidator>(provider => provider.GetRequiredService<PermissionCache>());
         services.AddScoped<PermissionService>();
 
+        services.AddScoped<AmbientActor>();
         services.AddScoped<AuditLogService>();
         services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
         services.AddScoped<RowVersionGuard>();
