@@ -17,4 +17,7 @@ public interface IUnitOfWork
 
     /// <summary>The save must fail if the record's row version is no longer the one the client edited.</summary>
     void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion);
+
+    /// <summary>Saves the record as changed (new row version, updated by/at) although only related rows changed.</summary>
+    void MarkChanged(AuditableEntity entity);
 }

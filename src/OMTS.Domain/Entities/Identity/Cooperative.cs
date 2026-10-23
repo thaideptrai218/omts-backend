@@ -19,7 +19,14 @@ public class Cooperative : AuditableEntity, IHasStatus
     public string? Email { get; set; }
     public string? Website { get; set; }
     public string? LegalRepresentative { get; set; }
+    /// <summary>JSON array of business line texts (at least one once the profile is Completed).</summary>
     public string? BusinessLines { get; set; }
+
+    /// <summary>
+    /// Storage key of the logo shown on the public provenance page. Old logo files are never deleted, since
+    /// published provenance versions may still reference them.
+    /// </summary>
+    public string? LogoUrl { get; set; }
 
     /// <summary>Used to build the VietQR payment QR (UC48); never shown on the traceability page.</summary>
     public BankAccountInfo? BankAccount { get; set; }

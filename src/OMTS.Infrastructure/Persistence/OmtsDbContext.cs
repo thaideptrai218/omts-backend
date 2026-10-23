@@ -18,6 +18,7 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<Cooperative> Cooperatives => Set<Cooperative>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<EmployeeWorkingZone> EmployeeWorkingZones => Set<EmployeeWorkingZone>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<AccessGrant> AccessGrants => Set<AccessGrant>();

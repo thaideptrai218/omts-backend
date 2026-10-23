@@ -26,4 +26,13 @@ public class Employee : AuditableEntity, IHasStatus
 
     public int StatusId { get; set; } = StatusIds.Employee.Working;
     public Status Status { get; set; } = null!;
+
+    /// <summary>Set when the employment ends (Employed → Left), cleared when the person returns (LAB-01).</summary>
+    public DateOnly? EmploymentEndDate { get; set; }
+
+    /// <summary>Where the wage is paid; all three fields or none.</summary>
+    public BankAccountInfo? BankAccount { get; set; }
+
+    /// <summary>Zones the person usually works in (pickers of LAB-03/LAB-04); grants no permission.</summary>
+    public ICollection<EmployeeWorkingZone> WorkingZones { get; set; } = [];
 }

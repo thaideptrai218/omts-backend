@@ -16,6 +16,10 @@ public sealed record FileRules(IReadOnlySet<FileFormat> AllowedFormats, long Max
     /// <summary>Photos (raft, meter, evidence): JPEG or PNG, stored unchanged since they may be OCR evidence.</summary>
     public static readonly FileRules Photos = new(new HashSet<FileFormat> { FileFormat.Jpeg, FileFormat.Png }, TenMegabytes, 10);
 
+    /// <summary>Cooperative logo (FARM-01): PNG, JPEG or WebP, at most 2 MB.</summary>
+    public static readonly FileRules Logo =
+        new(new HashSet<FileFormat> { FileFormat.Png, FileFormat.Jpeg, FileFormat.WebP }, 2L * 1024 * 1024, 1);
+
     /// <summary>Documents (licenses, invoices, certificates): JPEG, PNG or PDF.</summary>
     public static readonly FileRules Documents =
         new(new HashSet<FileFormat> { FileFormat.Jpeg, FileFormat.Png, FileFormat.Pdf }, TenMegabytes, 10);
