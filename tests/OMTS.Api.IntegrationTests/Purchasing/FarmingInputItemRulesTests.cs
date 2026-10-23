@@ -211,7 +211,7 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
         await factory.UpdateAsync<FarmingInputItem>(id, i => i.RowVersion = [0, 0, 0, 0, 0, 0, 9, 2]);
         var stale = await owner.PutAsJsonAsync($"/api/farming-input-items/{id}", new
         {
-            code = view.GetProperty("code").GetString(), name = "Late change", group = "Other", unit = "bag", rowVersion = view.GetProperty("rowVersion").GetString(),
+            code = view.GetProperty("code").GetString(), name = "Late change", group = "Other", unit = "bag", rowVersion = "AAAAAAAACQA=",
         });
         await stale.ProblemAsync(HttpStatusCode.Conflict, "MSG06");
         Assert.Equal("Cage 60 cm", (await factory.QueryAsync(db => db.FarmingInputItems.SingleAsync(i => i.Id == id))).Name);

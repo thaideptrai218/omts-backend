@@ -250,11 +250,11 @@ public class PurchaseReceiptRulesTests(AuthApiFactory factory) : IClassFixture<A
 
         var stale = await world.Owner.PutAsJsonAsync($"/api/purchase-receipts/{draft.Id()}", world.Body(new LineBody(world.Other, 7, 10_000)) with
         {
-            RowVersion = draft.GetProperty("rowVersion").GetString(),
+            RowVersion = "AAAAAAAACQA=",
         });
         // The row-version check answers (naming who saved and the current version), not a failed save.
         Assert.True((await stale.ProblemAsync(HttpStatusCode.Conflict, "MSG06")).TryGetProperty("currentRowVersion", out _));
-        var staleComplete = await world.Owner.PostAsJsonAsync($"/api/purchase-receipts/{draft.Id()}/complete", new { rowVersion = draft.GetProperty("rowVersion").GetString() });
+        var staleComplete = await world.Owner.PostAsJsonAsync($"/api/purchase-receipts/{draft.Id()}/complete", new { rowVersion = "AAAAAAAACQA=" });
         Assert.True((await staleComplete.ProblemAsync(HttpStatusCode.Conflict, "MSG06")).TryGetProperty("currentRowVersion", out _));
 
         var kept = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{draft.Id()}");

@@ -197,7 +197,7 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
 
         var stale = await owner.PutAsJsonAsync($"/api/suppliers/{id}", new
         {
-            name = "My change", supplierType = "Seed", phoneNumber = view.GetProperty("phoneNumber").GetString(), rowVersion = view.GetProperty("rowVersion").GetString(),
+            name = "My change", supplierType = "Seed", phoneNumber = view.GetProperty("phoneNumber").GetString(), rowVersion = "AAAAAAAACQA=",
         });
 
         await stale.ProblemAsync(HttpStatusCode.Conflict, "MSG06");

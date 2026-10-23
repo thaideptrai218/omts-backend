@@ -114,6 +114,9 @@ public sealed class PurchaseReceiptService(
         }
 
         Apply(receipt, request, lineItems);
+        // Lines are rows of their own: a lines-only edit must still give the receipt a new row version, so a
+        // second editor holding the old one gets MSG06 instead of overwriting it.
+        unitOfWork.MarkChanged(receipt);
         if (request.Complete && await CompleteAsync(receipt, lineItems, cancellationToken) is { } error)
         {
             return error;
