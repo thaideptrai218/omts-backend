@@ -19,7 +19,10 @@ using OMTS.Application.Features.Verification;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Notifications;
+using OMTS.Application.Features.LaborCost;
 using OMTS.Application.Features.WaterQuality;
+using OMTS.Application.Features.Workforce;
+using OMTS.Application.Features.WorkTracking;
 
 namespace OMTS.Application;
 
@@ -97,6 +100,36 @@ public static class DependencyInjection
         services.AddScoped<WaterMeasurementQueryService>();
         services.AddScoped<WaterThresholdService>();
         services.AddScoped<WaterMeasurementOverdueReminder>();
+
+        // LAB-02…LAB-10 workforce, attendance, pay rates, payroll, wage payments and personal pay
+        services.AddScoped<LaborEvidence>();
+        services.AddScoped<SeasonalWorkerService>();
+        services.AddScoped<TeamService>();
+        services.AddScoped<LaborPickerService>();
+        services.AddScoped<PayrollPeriodLock>();
+        services.AddScoped<WorkAssignmentRules>();
+        services.AddScoped<WorkAssignmentViews>();
+        services.AddScoped<WorkAssignmentNotifier>();
+        services.AddScoped<WorkAssignmentService>();
+        services.AddScoped<WorkAssignmentQueryService>();
+        services.AddScoped<PieceworkCompletionService>();
+        services.AddScoped<AttendanceRowExpander>();
+        services.AddScoped<AttendanceSheetQuery>();
+        services.AddScoped<AttendanceSheetService>();
+        services.AddScoped<PayRateViews>();
+        services.AddScoped<PayRateDrafts>();
+        services.AddScoped<PayRateService>();
+        services.AddScoped<PayRateQueryService>();
+        services.AddScoped<PayslipViews>();
+        services.AddScoped<PayrollBuilder>();
+        services.AddScoped<PayrollSync>();
+        services.AddScoped<PayrollQueryService>();
+        services.AddScoped<PayrollPreparationService>();
+        services.AddScoped<PayrollFinalizationService>();
+        services.AddScoped<WagePaymentService>();
+        services.AddScoped<SalaryAdvanceService>();
+        services.AddScoped<PaymentReversalService>();
+        services.AddScoped<PersonalPayService>();
 
         return services;
     }

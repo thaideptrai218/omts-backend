@@ -97,6 +97,15 @@ The OCR Service of the water meter photos (ENV-01) is only faked until its provi
 measurement for more than one calendar month gets one MSG26 reminder per overdue period (Owners and the zone's staff
 with View on `WATER_MEASUREMENTS`).
 
+### Workforce and payroll (LAB-02…LAB-10)
+
+Payroll is per calendar month (`/api/payrolls/{YYYY-MM}`); computed pay lines are rounded up to 1,000 VND. Finalizing a
+month (Owner) locks the work assignments, attendance and piecework confirmations dated in it: changes answer 409
+`PERIOD_LOCKED` (no SRS message code yet) until the Owner reopens the month. Evidence photos (attendance, piecework,
+payment receipts) are JPEG/PNG, at most 5 MB each and 5 per record. The `AddWorkforceAndPayroll` migration refuses a
+database that still holds attendance, pay rates, payslips, payments or task contracts of the old labor model (no API
+wrote them before); seasonal workers, teams and daily-wage assignments are kept.
+
 ## Deployment
 
 There is no System Administrator inside the cooperative app: the cooperative and its first Cooperative Owner are

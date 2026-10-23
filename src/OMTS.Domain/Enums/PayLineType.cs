@@ -1,11 +1,13 @@
 namespace OMTS.Domain.Enums;
 
-/// <summary>Kind of pay line before aggregation (E43).</summary>
+/// <summary>Kind of payslip line (E43, LAB-07). Deduction and AdvanceDeduction lower the net pay; the others are earnings.</summary>
 public enum PayLineType
 {
     DailyWage,
     MonthlySalary,
-    TaskContract,
-    Addition,
+    Piecework,
+    Allowance,
     Deduction,
+    Addition,
+    AdvanceDeduction,
 }

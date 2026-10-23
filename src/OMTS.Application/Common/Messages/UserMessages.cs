@@ -89,6 +89,18 @@ public static class UserMessages
 
     public static UserMessage ExceedsLimit(string field, string limit) => new("MSG45", $"{field} exceeds the allowed limit ({limit}).");
 
+    public static UserMessage AlreadyAssigned(string employeeName, string date) => new(
+        "MSG49", $"{employeeName} has already been assigned on {date}. Do you want to continue saving?");
+
+    public static readonly UserMessage PayBasisIncomplete = new(
+        "MSG50", "Attendance or the effective salary/rate is incomplete, so it cannot be finalized yet.");
+
+    public static readonly UserMessage AccountNotLinkedToEmployee = new(
+        "MSG51", "The account is not clearly linked to an employee profile, so personal information cannot be displayed yet.");
+
+    public static UserMessage EmployeeHasLeft(string employeeName, string date) => new(
+        "MSG72", $"{employeeName} has left since {date}. Work cannot be assigned or attendance recorded from this date.");
+
     public static readonly UserMessage OldDocumentsHidden = new(
         "MSG57", "Old documents are temporarily hidden until identity verification is complete.");
 
@@ -137,6 +149,11 @@ public static class UserMessages
     public static readonly UserMessage NoVerifiedEmail = new(
         "NO_VERIFIED_EMAIL",
         "Your account has no verified email. Add and verify an email in your profile, or log out and use Forgot password with your verified phone number; staff accounts without a verified contact can ask the Cooperative Owner.");
+
+    /// <summary>Not in the SRS list yet (OMTS-212): the month of the record has a finalized payroll (LAB-08 period lock).</summary>
+    public static UserMessage PeriodLocked(string period) => new(
+        "PERIOD_LOCKED",
+        $"The payroll of {period} has been finalized. Work, attendance and pay of this period can no longer be changed.");
 
     /// <summary>Not in the SRS list: an unexpected server error; details are only in the server log.</summary>
     public static readonly UserMessage UnexpectedError = new("UNEXPECTED_ERROR", "An unexpected error occurred. Please try again later.");

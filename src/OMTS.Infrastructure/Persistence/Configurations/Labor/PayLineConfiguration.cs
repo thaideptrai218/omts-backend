@@ -14,7 +14,9 @@ internal sealed class PayLineConfiguration : IEntityTypeConfiguration<PayLine>
         builder.HasOne(x => x.Assignment).WithMany().HasForeignKey(x => x.AssignmentId);
         builder.HasOne(x => x.PayRuleVersion).WithMany().HasForeignKey(x => x.PayRuleVersionId);
         builder.HasOne(x => x.Settlement).WithMany(s => s.PayLines).HasForeignKey(x => x.SettlementId);
+        builder.Property(x => x.Description).HasMaxLength(Lengths.Address);
         builder.Property(x => x.Reason).HasMaxLength(Lengths.Reason);
         builder.HasThousandVndCheck(nameof(PayLine.Amount));
+        builder.ToTable(t => t.HasCheckConstraint("CK_PayLine_Amount_NotNegative", "[Amount] >= 0"));
     }
 }

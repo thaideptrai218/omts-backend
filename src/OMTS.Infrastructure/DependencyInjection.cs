@@ -76,6 +76,12 @@ public static class DependencyInjection
         services.AddScoped<IPurchaseReceiptRepository, PurchaseReceiptRepository>();
         services.AddScoped<ISupplierPaymentRepository, SupplierPaymentRepository>();
         services.AddScoped<IWaterMeasurementRepository, WaterMeasurementRepository>();
+        services.AddScoped<IWorkforceRepository, WorkforceRepository>();
+        services.AddScoped<IWorkAssignmentRepository, WorkAssignmentRepository>();
+        services.AddScoped<IAttendanceRepository, AttendanceRepository>();
+        services.AddScoped<IPayRateRepository, PayRateRepository>();
+        services.AddScoped<IPayrollRepository, PayrollRepository>();
+        services.AddScoped<ILaborPaymentRepository, LaborPaymentRepository>();
         services.AddSingleton<IStatusCatalog, StatusCatalog>();
 
         services.AddOptions<JwtOptions>().Bind(configuration.GetSection(JwtOptions.SectionName));

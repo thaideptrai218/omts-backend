@@ -6,8 +6,8 @@ using OMTS.Domain.Entities.Platform;
 namespace OMTS.Domain.Entities.Labor;
 
 /// <summary>
-/// E39 – Seasonal worker identity for daily wages; needs no account. Duplicates are identified by
-/// full name + phone number, or by citizen ID when present.
+/// E39 – Seasonal worker or crew leader without a login account (LAB-02). Duplicates are identified by full
+/// name + phone number, or by citizen ID. Cooperative-wide: not tied to a zone.
 /// </summary>
 public class SeasonalWorker : AuditableEntity, IHasStatus
 {
@@ -18,6 +18,10 @@ public class SeasonalWorker : AuditableEntity, IHasStatus
     public string FullName { get; set; } = string.Empty;
     public string? PhoneNumber { get; set; }
     public string? CitizenId { get; set; }
+
+    /// <summary>Current team; attendance keeps the team of each day, so changing it affects only future rows.</summary>
+    public Guid? ContractorId { get; set; }
+    public Contractor? Contractor { get; set; }
 
     public int StatusId { get; set; } = StatusIds.Usage.InUse;
     public Status Status { get; set; } = null!;

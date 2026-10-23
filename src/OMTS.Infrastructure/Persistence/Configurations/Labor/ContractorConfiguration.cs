@@ -11,5 +11,9 @@ internal sealed class ContractorConfiguration : IEntityTypeConfiguration<Contrac
         builder.Property(x => x.Name).HasMaxLength(Lengths.Name);
         builder.Property(x => x.PhoneNumber).HasMaxLength(Lengths.Phone);
         builder.Property(x => x.OtherContacts).HasMaxLength(Lengths.Address);
+        builder.HasOne(x => x.Leader).WithMany().HasForeignKey(x => x.LeaderWorkerId);
+
+        // Team names are unique ignoring case (the default SQL Server collation is case-insensitive).
+        builder.HasIndex(x => x.Name).IsUnique();
     }
 }
