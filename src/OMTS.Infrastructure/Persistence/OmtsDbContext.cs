@@ -1,3 +1,4 @@
+using OMTS.Domain.Entities.Purchasing;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Domain.Common;
 using OMTS.Domain.Entities.AfterSales;
@@ -33,12 +34,15 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<Raft> Rafts => Set<Raft>();
     public DbSet<RaftLayoutVersion> RaftLayoutVersions => Set<RaftLayoutVersion>();
     public DbSet<Lane> Lanes => Set<Lane>();
-    public DbSet<RaftMaterialRecord> RaftMaterialRecords => Set<RaftMaterialRecord>();
-    public DbSet<RaftMaterialLine> RaftMaterialLines => Set<RaftMaterialLine>();
 
     // Seed, cultivation and water measurements
-    public DbSet<OysterSeedType> OysterSeedTypes => Set<OysterSeedType>();
-    public DbSet<SeedSupplier> SeedSuppliers => Set<SeedSupplier>();
+    public DbSet<FarmingInputItem> FarmingInputItems => Set<FarmingInputItem>();
+    public DbSet<Supplier> Suppliers => Set<Supplier>();
+    public DbSet<PurchaseReceipt> PurchaseReceipts => Set<PurchaseReceipt>();
+    public DbSet<PurchaseReceiptLine> PurchaseReceiptLines => Set<PurchaseReceiptLine>();
+    public DbSet<PurchaseReturn> PurchaseReturns => Set<PurchaseReturn>();
+    public DbSet<PurchaseReturnLine> PurchaseReturnLines => Set<PurchaseReturnLine>();
+    public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
     public DbSet<SeedReceiptLot> SeedReceiptLots => Set<SeedReceiptLot>();
     public DbSet<CultivationCycle> CultivationCycles => Set<CultivationCycle>();
     public DbSet<SeedingEvent> SeedingEvents => Set<SeedingEvent>();

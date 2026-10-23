@@ -14,6 +14,9 @@ public enum ErrorKind
     TooManyRequests,
     ServiceUnavailable,
     BadGateway,
+
+    /// <summary>The server could not complete the operation (e.g. generating an export file).</summary>
+    Internal,
 }
 
 /// <summary>

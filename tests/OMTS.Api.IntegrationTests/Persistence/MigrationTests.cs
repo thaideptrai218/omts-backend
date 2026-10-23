@@ -1,3 +1,6 @@
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
+using OMTS.Domain.Entities.Platform;
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
@@ -21,8 +24,8 @@ public class MigrationTests
             await db.Database.MigrateAsync();
 
             Assert.Empty(await db.Database.GetPendingMigrationsAsync());
-            Assert.Equal(53, await db.Statuses.CountAsync());
-            Assert.Equal(54, await db.StatusTransitions.CountAsync());
+            Assert.Equal(db.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(Status))!.GetSeedData().Count(), await db.Statuses.CountAsync());
+            Assert.Equal(db.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(StatusTransition))!.GetSeedData().Count(), await db.StatusTransitions.CountAsync());
             var cascadingKeys = await db.Database
                 .SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM sys.foreign_keys WHERE delete_referential_action <> 0")
                 .SingleAsync();

@@ -34,6 +34,7 @@ internal static class ResultHttpExtensions
         ErrorKind.TooManyRequests => StatusCodes.Status429TooManyRequests,
         ErrorKind.ServiceUnavailable => StatusCodes.Status503ServiceUnavailable,
         ErrorKind.BadGateway => StatusCodes.Status502BadGateway,
+        ErrorKind.Internal => StatusCodes.Status500InternalServerError,
         _ => StatusCodes.Status500InternalServerError,
     };
 }

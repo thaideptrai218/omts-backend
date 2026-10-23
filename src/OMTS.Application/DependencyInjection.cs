@@ -11,6 +11,10 @@ using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Farming.Licenses;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Application.Features.Farming.Zones;
+using OMTS.Application.Features.Purchasing.Items;
+using OMTS.Application.Features.Purchasing.Payments;
+using OMTS.Application.Features.Purchasing.Receipts;
+using OMTS.Application.Features.Purchasing.Suppliers;
 using OMTS.Application.Features.Verification;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
@@ -68,6 +72,19 @@ public static class DependencyInjection
         services.AddScoped<ZoneLicenseReminderService>();
         services.AddScoped<RaftService>();
         services.AddScoped<RaftConditionService>();
+
+        // INP – suppliers, farming inputs, purchase receipts, returns and supplier payments
+        services.AddScoped<ZoneAccessGuard>();
+        services.AddScoped<SupplierService>();
+        services.AddScoped<FarmingInputItemService>();
+        services.AddScoped<PurchaseReceiptValidator>();
+        services.AddScoped<PurchaseReceiptViews>();
+        services.AddScoped<PurchaseReceiptService>();
+        services.AddScoped<PurchaseReceiptCancellationService>();
+        services.AddScoped<PurchaseReturnService>();
+        services.AddScoped<PurchaseReceiptQueryService>();
+        services.AddScoped<SupplierPaymentService>();
+        services.AddScoped<SupplierDebtService>();
 
         return services;
     }

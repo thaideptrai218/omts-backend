@@ -76,8 +76,15 @@ public static class UserMessages
     public static UserMessage LicenseExpiry(string documentName, string zoneNames, int days) => new(
         "MSG25", $"Document {documentName} of zone {zoneNames} expires in {days} days or has expired.");
 
+    public static readonly UserMessage NotThousands = new("MSG41", "The amount must be a multiple of 1,000 VND.");
+
+    public static UserMessage ExceedsLimit(string field, string limit) => new("MSG45", $"{field} exceeds the allowed limit ({limit}).");
+
     public static readonly UserMessage OldDocumentsHidden = new(
         "MSG57", "Old documents are temporarily hidden until identity verification is complete.");
+
+    public static readonly UserMessage QuantityOrPriceInvalid = new(
+        "MSG59", "The quantity must be greater than 0 and the unit price must not be negative.");
 
     public static UserMessage CannotChangeStatus(string entity, string currentStatus, string newStatus, string reason) => new(
         "MSG61", $"Cannot change {entity} from “{currentStatus}” to “{newStatus}”: {reason}.");
