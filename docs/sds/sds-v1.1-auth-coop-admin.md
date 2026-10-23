@@ -1,7 +1,8 @@
 # OMTS SDS v1.1 – AUTH, COOP and ADMIN detailed design
 
 Report 4 (Software Design Specification) part for the account, cooperative and platform-administration
-modules, written from the backend code (branches OMTS-208, OMTS-200, OMTS-198, OMTS-199; PRs #5–#8).
+modules, written from the backend code (branches OMTS-208, OMTS-200, OMTS-198, OMTS-199; PRs #5–#8,
+including the fixes of their 23/10 reviews). Keep it updated in the PRs that change these modules.
 
 | Old UC (SRS v5.8) | SRS 22/10 §I.4 | Backend |
 |---|---|---|
@@ -42,6 +43,10 @@ classDiagram
     class MeSecurityController { +ChangePassword() +SendPasswordCode() +StartPhoneVerification() }
     class AuthService { +LoginAsync() +RefreshAsync() +LogoutAsync() +CreateSessionAsync() }
     class VerificationService { +StartAsync() +ResendAsync() +VerifyAsync() +ConsumeTokenAsync() }
+    class VerificationThrottle { +CheckStartAsync() +CheckSendAsync() }
+    class IVerificationCodeHasher { <<interface>> +Hash() +Matches() }
+    class ProfileService { +UpdateAsync() +StartContactChangeAsync() +ConfirmContactChangeAsync() }
+    class CurrentPasswordProof { +CheckAsync() }
     class RegistrationService { +RegisterAsync() }
     class PasswordRecoveryService { +StartAsync() +ResetAsync() }
     class PasswordChangeService { +ChangeAsync() +SendCodeAsync() }
@@ -69,6 +74,11 @@ classDiagram
     AuthService --> ILoginSessionRepository
     AuthService --> IAccountRepository
     VerificationService --> IVerificationCodeRepository
+    VerificationService --> VerificationThrottle
+    VerificationService --> IVerificationCodeHasher
+    ProfileService --> CurrentPasswordProof
+    ProfileService --> VerificationService
+    PasswordChangeService --> CurrentPasswordProof
     AuthService --> IUnitOfWork
     ITokenService <|.. JwtTokenService
     IPasswordHasher <|.. PasswordHasher
@@ -81,14 +91,15 @@ classDiagram
 ```mermaid
 classDiagram
     direction LR
-    class CooperativeProfileService { +GetAsync() +UpdateAsync() +UploadLogoAsync() }
-    class EmployeeService { +SearchAsync() +CreateAsync() +UpdateAsync() +EndEmploymentAsync() +CreateAccountAsync() }
-    class StaffAccountService { +CreateAsync() +UpdateAsync() +LockAsync() +UnlockAsync() +ResetPasswordAsync() }
+    class CooperativeProfileService { +GetAsync() +UpdateAsync() +UploadLogoAsync() +RemoveLogoAsync() +OpenLogoAsync() +OpenLogoFileAsync() }
+    class EmployeeService { +SearchAsync() +LinkableAccountsAsync() +CreateAsync() +UpdateAsync() +EndEmploymentAsync() +ReinstateAsync() +CreateAccountAsync() }
+    class StaffAccountService { +CreateAsync() +UpdateAsync() +LockAsync() +UnlockAsync() +ResetPasswordAsync() +RefuseOtherSubjectType() }
     class AccessGrantService { +GrantAsync() +RevokeAsync() +PreviewAsync() }
     class RoleService { +CreateAsync() +UpdateAsync() +CopyAsync() +DiscontinueAsync() +ImpactAsync() }
     class PermissionService { +GetAccessAsync() }
     class AccountAccess { +IsCooperativeOwner +Allows() +PermittedZonesFor() +DescribeFunctions() }
-    class PermissionCache { 5 min, versioned key }
+    class PermissionCache
+    note for PermissionCache "5 minutes, key carries a version bumped on every grant, role or account change"
     class RequirePermissionAttribute { Function; Action; Scope }
     class RequireCooperativeOwnerAttribute
     class AuditLogService { +Record() +RecordStatusChange() }
@@ -288,19 +299,19 @@ All routes are JSON over HTTPS. Errors are `application/problem+json` with `code
 | POST /api/verifications/{id}/resend, /verify | anonymous or signed in, per-IP limit | ACS-06 |
 | POST /api/auth/register | anonymous, per-IP limit | ACS-01 |
 | POST /api/auth/recovery, /api/auth/recovery/reset | anonymous, per-IP limit | ACS-03 |
-| POST /api/me/password, /api/me/password/code | signed in | ACS-04 |
-| POST /api/me/phone-verification, /confirm | signed in | ACS-02 branch, ACS-06 |
-| GET/PUT /api/me/profile; POST /api/me/contact-changes, /confirm | signed in | ACS-05 |
+| POST /api/me/password; POST /api/me/password/code (per-IP limit) | signed in | ACS-04 |
+| POST /api/me/phone-verification (per-IP limit, unverified phone only), /confirm | signed in | ACS-02 branch, ACS-06 |
+| GET/PUT /api/me/profile; POST /api/me/contact-changes (current password, per-IP limit), /confirm | signed in | ACS-05 |
 | GET/PUT /api/me/notification-preferences; POST/DELETE /api/me/devices | signed in | ACS-07 |
 | GET /api/me/permissions | signed in | menus, dashboard tiles |
 | GET/POST /api/accounts; GET/PUT /api/accounts/{id}; POST …/lock, …/unlock, …/reset-password | Cooperative Owner | ACS-09 |
 | GET/POST /api/accounts/{id}/grants; POST …/grants/{grantId}/revoke; POST /api/accounts/permission-preview | Cooperative Owner | FARM-05 |
 | GET /api/permission-functions; GET/POST /api/roles; GET/PUT /api/roles/{id}; POST …/copy, …/discontinue, …/reactivate; GET …/impact | Cooperative Owner | ACS-10 |
 | GET/PUT /api/cooperative/profile; POST/DELETE /api/cooperative/profile/logo | Cooperative Owner | FARM-01 |
-| GET /api/public/cooperative/logo | anonymous | provenance page |
+| GET /api/public/cooperative/logo (current logo); GET /api/public/cooperative/logos/{yyyy}/{MM}/{file} (one logo file, the URL the profile returns and a published version stores) | anonymous | provenance page |
 | GET/POST /api/employees; GET /api/employees/linkable-accounts; GET/PUT /api/employees/{id}; POST …/account, …/end-employment, …/reinstate | Cooperative Owner | LAB-01, ACS-09 |
 | GET /api/files/local/{key} | signed, expiring URL | file downloads (Local storage) |
-| GET /health, /health/ready | anonymous | deployment |
+| GET /health (liveness), /health/db (database + migrations, for platform probes), /health/ready (post-deployment verification) | anonymous | deployment |
 | `dotnet OMTS.Api.dll seed --bootstrap [--demo]` | deployment command | cooperative + first Owner (old UC72) |
 
 ## 6. Security mechanisms (NFR-01)
@@ -309,16 +320,18 @@ All routes are JSON over HTTPS. Errors are `application/problem+json` with `code
 |---|---|
 | Passwords | ASP.NET Core Identity `PasswordHasher` (PBKDF2, per-password salt, versioned format, rehash on success when the format is old). Policy checked by `PasswordPolicy`. Never logged or audited. |
 | Temporary passwords | 10 random characters, valid 24 h, must be changed at first login (`MustChangePassword`); returned once in the create/reset response only. |
-| Login throttling | 5 wrong passwords → 15-minute lock (`LockoutEndAt`); unknown identifiers counted in memory the same way; per-IP fixed-window limiter on login (default 30/min). A wrong current password in ACS-04 counts too. |
+| Login throttling | 5 wrong passwords → 15-minute lock (`LockoutEndAt`); unknown identifiers counted the same way in a dedicated, size-limited memory cache (`UnknownLoginCounter`), and a locked account takes the same hashing time as a locked unknown identifier. Identifier (254) and password (128) are length-limited before any hashing or query. Per-IP fixed-window limiter on login (default 30/min). A wrong current password in ACS-04 and ACS-05 counts too. |
 | Access token | JWT HS256, 15 minutes, 30 s clock skew; claims: subject (account id), session id, token id, username, subject type. Permissions are not in the token: they are read per request (cached 5 min, invalidated on every grant/role/account change), so role edits apply at once. The signing key comes from configuration (user-secrets / pipeline secret), at least 32 bytes. |
-| Refresh token / sessions | One `LoginSession` per login; refresh token = `{sessionId}.{512 random bits}`, stored as SHA-256 only. Each refresh rotates it; reuse of an old token revokes the session. Web 7 d sliding / 30 d absolute, mobile 30 d / 90 d. Logout revokes the session; password change, reset and lock revoke all sessions. |
-| Verification codes | 6 digits from a CSPRNG, stored as SHA-256(requestId:code), valid 5 min, 5 wrong entries lock the request, at most 3 sends 60 s apart per request and 5 per hour per purpose + account/target, 10 wrong entries per hour → MSG69. The verified result is a single-use 32-byte token (10 min, stored hashed) bound to purpose, account and target. Per-IP limiter on code endpoints (default 10/min). |
-| Authorization | `RequirePermissionAttribute` (function, action, scope: zone from the route, any zone, or All zones) and `RequireCooperativeOwnerAttribute`; handlers re-check the zone of the record they load, so a record of zone B is never opened with a grant on zone A. |
-| Concurrency | `RowVersion` on every edited record (MSG06 with who saved last); unique indexes back every duplicate rule (SQL 2601/2627 → MSG03, never a 500). |
+| Refresh token / sessions | One `LoginSession` per login; refresh token = `{sessionId}.{512 random bits}.{HMAC}`, stored as SHA-256 only; the HMAC proves the server issued it, so a made-up token naming a session cannot end it. Each refresh rotates it; reuse of an old token revokes the session. Web 7 d sliding / 30 d absolute, mobile 30 d / 90 d. Logout revokes the session; password change, reset and lock revoke all sessions. |
+| Verification codes | 6 digits from a CSPRNG, stored as HMAC-SHA256(requestId:code) with a server key (`IVerificationCodeHasher`), compared in constant time; valid 5 min, 5 wrong entries lock the request, at most 3 sends 60 s apart per request and 5 per hour per purpose + account/target, 10 wrong entries per hour → MSG69. `VerificationThrottle` adds 10 sends per hour to one number or address across accounts and a system-wide daily SMS ceiling (`Verification:DailySmsLimit`, MSG04 and a critical log entry). A request is saved before its code is sent, so parallel starts or resends of one subject send once. The verified result is a single-use 32-byte token (10 min, stored hashed) bound to purpose, account and target. Per-IP limiter (default 10/min, IPv6 per /64) on every endpoint that sends or checks a code. |
+| Contact changes | Changing or adding an email or phone (ACS-05) needs the current password, then a code to the new contact; the previous verified contact is told after the change. Phone verification after login applies to an unverified phone only. |
+| Authorization | `RequirePermissionAttribute` (function, action, scope: zone from the route, any zone, or All zones) and `RequireCooperativeOwnerAttribute`; handlers re-check the zone of the record they load, so a record of zone B is never opened with a grant on zone A. The Owner manages Staff accounts only: Owner and Trader accounts are refused (403 MSG02) by `StaffAccountService`, and a request for Owner rights (ACS-09 or LAB-01, one rule: `RefuseOtherSubjectType`) is refused and audited. Trader accounts are locked or unlocked by the System Administrator outside the app (no endpoint). A role cannot be discontinued while an Effective grant, current or future, uses it. |
+| Concurrency | Edit forms send back the `rowVersion` they read (MSG06 with who saved last). Account forms (own profile, staff account) compare an edit version that logins do not change (`AccountEditVersion`). End employment and reinstate accept it optionally (older clients); `POST /api/employees/{id}/account` and the logo upload/remove take none and rely on the database concurrency token. Unique indexes back every duplicate rule (SQL 2601/2627 → MSG03, never a 500). |
 | Audit | `AuditEvents` row in the same save as the change (before/after of changed fields, reason); no password, code or token. Bank numbers are masked. |
 | Logs | Only masked recipients and message ids for SMS/email; EF Core save-error and exception-middleware logs are off so duplicate values (phones, emails) never reach the log; every 500 is logged by `ProblemExceptionHandler` without client details. |
-| Files | Type detected from content (magic bytes), size limits, private storage, short-lived signed read URLs, `nosniff` and sandbox CSP on downloads. |
-| Transport | `UseHttpsRedirection`; TLS (and HSTS) are terminated at the hosting reverse proxy, which must forward the client IP for the rate limiters. The API never returns exception details to clients. |
+| Files | Type detected from content (magic bytes), size limits, private storage, short-lived signed read URLs, `nosniff` and sandbox CSP on downloads. The deliberate exception is the cooperative logo, public by design: the anonymous current-logo endpoint and the per-file logo URLs, which reach logo files only. A store failure while reading answers 502 MSG05. |
+| External services | Outside Development SMS and push default to `None` (every send fails, so callers answer MSG04 instead of pretending a code was sent); the fakes are configured for Development only. SMTP runs with `StartTls` or `SslOnConnect`; `None` stops the host outside Development. |
+| Transport | `UseHttpsRedirection`; TLS (and HSTS) are terminated at the hosting reverse proxy. X-Forwarded-For is trusted only from the proxies in `ForwardedHeaders:KnownProxies`/`KnownNetworks` (and loopback), so the rate limiters see the real client and a client cannot choose its bucket. The API never returns exception details to clients. |
 
 ## 7. ADMIN – deployment bootstrap (old UC72)
 
@@ -328,4 +341,4 @@ Platform administration is outside the app since SRS 22/10. `seed --bootstrap` d
 2. Creates the default roles (Zone Manager, Accountant) if missing.
 3. If no cooperative exists, creates the cooperative (Preliminary) and the first Cooperative Owner from the `Bootstrap:*` secrets, with a 24 h temporary password and system audit rows.
 
-It is idempotent. Missing secrets give exit code 1 and the names of the keys. `GET /health/ready` stays 503 until the database, migrations, catalog, default roles, cooperative and an active Owner are in place.
+A re-run creates nothing that already exists (a default role whose name no longer exists is created again). Missing secrets give exit code 1 and the names of the keys. `GET /health/ready` stays 503 until the database, migrations, catalog, default roles, cooperative and an active Owner are in place; since that depends on data the Owner can change, platform probes use `GET /health/db` instead.

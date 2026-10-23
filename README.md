@@ -121,6 +121,11 @@ created by a one-time command run on the server by the deployment operator (not 
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG04 and a critical log entry is written (one number or address gets at most 10 codes per hour) | `Verification:DailySmsLimit` (default 500) |
 | Zone license reminder (FARM-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`) |
 
+## Design documents
+
+`docs/sds/` holds the detailed design (SDS) of the modules, written from this code. A PR that changes a
+documented module updates its SDS part in the same PR.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) — branches, Jira keys, commit/PR rules, releases.
