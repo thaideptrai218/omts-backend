@@ -39,10 +39,11 @@ namespace = folder path, interfaces (ports) live under `Application/Common/Inter
 
 ## Run with Docker (web, mobile and QA)
 
-Only Docker Desktop (or Docker Engine with Compose v2) is needed: no .NET SDK, SQL Server or user-secrets.
+Only Docker Desktop (or Docker Engine with Compose v2) is needed: no .NET SDK, SQL Server or user-secrets. Ports 8080
+and 1433 of the PC must be free. A local SQL Server default instance already listens on 1433: stop it first.
 
 ```bash
-cp .env.example .env            # local-only values; .env is git-ignored, never commit it
+cp .env.example .env            # cmd.exe: copy .env.example .env. Local-only values; .env is git-ignored, never commit it
 docker compose up -d --build    # first run builds the image and seeds the database (a few minutes)
 ```
 
@@ -77,22 +78,41 @@ bootstrap temporary password. To get every demo login back, reset the environmen
 The demo data also holds the cooperative profile, the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued),
 license documents (valid, expiring within 30 days, expired), about 10 rafts with lanes per zone, 8 employees (one Left),
 5 suppliers, 15 farming input items and 20 purchase receipts of the last 3 months with payments, discounts and a return.
-Phone numbers are fake (`0900 000 0xx`). Dates are set relative to the day of the first seed and are not moved
-afterwards. After a few weeks the "expiring" license has expired; `docker compose down -v` gives fresh dates.
+Phone numbers are fake (`0900 000 0xx`).
 
-**Verification codes.** SMS, email and push use the fake providers: nothing leaves the machine, and what would have been
-sent stays in memory until the API restarts. Read it at `GET /api/dev/sms?phoneNumber=0900000015` (the phone of
-`nhanvien.chuaxacthuc`),
-`GET /api/dev/email?to=<address>` and `GET /api/dev/push?accountId=<id>` (also in Swagger). `docker compose logs -f api`
-shows each fake message's id and masked recipient, never the code. These endpoints are anonymous: keep this environment
-on your local network.
+Dates are set relative to the day of the first seed and are not moved afterwards:
+- After a few weeks the "expiring" license has expired. `docker compose down -v` gives fresh dates.
+- Receipt codes carry the seed date (`PR-<seed date>-nnn`), not the receipt date.
+- The receipt list shows the current calendar year by default. Seeded in January–March, part of the history is in the
+  previous year: pass `from`/`to` to see it.
+
+**Verification codes.** SMS, email and push use the fake providers: nothing leaves the machine. What would have been
+sent stays in memory until the API restarts. Read it in the dev inbox, also listed in Swagger:
+- `GET /api/dev/sms?phoneNumber=`
+- `GET /api/dev/email?to=`
+- `GET /api/dev/push?accountId=`
+
+`docker compose logs -f api` shows each fake message's id and masked recipient, never the code.
+
+For example, `nhanvien.chuaxacthuc` (phone `0900000015`) logs in with `phoneVerificationRequired = true`, and its
+business calls answer MSG67 until the phone is verified. Logging in sends no code; with that login's access token:
+1. `POST /api/me/phone-verification` with `{}` sends the code.
+2. `GET /api/dev/sms?phoneNumber=0900000015` shows it.
+3. `POST /api/verifications/{id}/verify` with `{ "code": "…" }` returns a verification token.
+4. `POST /api/me/phone-verification/confirm` with `{ "verificationToken": "…" }` completes it.
+
+The dev inbox is anonymous, so anyone on the same network can read the codes. Run this environment only on a network
+you trust, never on public Wi-Fi.
 
 **Phone on the same Wi-Fi.** The API listens on every interface of the PC. Find the PC's LAN IP (`ipconfig` on Windows,
 `ipconfig getifaddr en0` on macOS) and point the mobile app at `http://<LAN IP>:8080`. If the phone cannot connect, allow
-inbound TCP 8080 in the PC's firewall. The Android emulator reaches the PC at `http://10.0.2.2:8080`.
+inbound TCP 8080 in the PC's firewall. The Android emulator reaches the PC at `http://10.0.2.2:8080`. File links (license
+documents, raft drawings, invoice photos) are relative, signed paths such as `/api/files/local/...?expires=…&sig=…`.
+Prefix them with the API base URL.
 
 **Web app.** In Development `Cors:AllowedOrigins` allows `http://localhost:3000`, so the Next.js dev server can call the
-API from the browser.
+API from the browser. For another origin, add a line such as `Cors__AllowedOrigins__1: http://192.168.1.10:3000` under
+`environment` in `docker-compose.yml`, then run `docker compose up -d`.
 
 **Update, reset, stop.**
 - `docker compose up -d --build`: after a pull. It rebuilds the image, and the seed applies new migrations.
