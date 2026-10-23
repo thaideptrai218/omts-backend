@@ -18,7 +18,7 @@ internal sealed class DemoOwnerStep : IDemoSeedStep
     public async Task<int> RunAsync(DemoSeedContext context, CancellationToken cancellationToken)
     {
         var owner = await context.Db.Accounts.FindAsync([context.OwnerId], cancellationToken) ?? throw new InvalidOperationException("Owner not found.");
-        if (!owner.MustChangePassword)
+        if (!owner.MustChangePassword || await context.DemoLoginAlreadySetAsync(owner.Id, cancellationToken))
         {
             return 0;
         }
@@ -27,7 +27,7 @@ internal sealed class DemoOwnerStep : IDemoSeedStep
         owner.MustChangePassword = false;
         owner.TemporaryPasswordIssuedAt = null;
         owner.PhoneVerifiedAt ??= context.Now;
-        context.Get<AuditLogService>().Record(new AuditEntry("Account.DemoCredentialsSet", nameof(Account))
+        context.Get<AuditLogService>().Record(new AuditEntry(DemoSeedContext.DemoLoginSetAction, nameof(Account))
         {
             RecordId = owner.Id,
             RecordCode = owner.Username,

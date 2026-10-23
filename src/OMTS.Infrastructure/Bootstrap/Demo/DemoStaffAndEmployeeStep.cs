@@ -79,24 +79,24 @@ internal sealed class DemoStaffAndEmployeeStep : IDemoSeedStep
     }
 
     /// <summary>
-    /// Replaces the random temporary password with the demo one, unless the account was already set up (or the
-    /// person changed the password since). Recorded in the audit log without any secret.
+    /// Replaces the random temporary password of the account's creation with the demo one, once per account: an
+    /// earlier run's audit row means the demo login is set, and a later reset by the Owner or a changed password
+    /// stays. Recorded in the audit log without any secret.
     /// </summary>
     private static async Task SetDemoCredentialsAsync(DemoSeedContext context, DemoEmployeePlan plan, string hash, CancellationToken cancellationToken)
     {
         var account = await context.Db.Accounts.SingleAsync(a => a.Username == plan.Username, cancellationToken);
-        var mustChange = plan.Login == DemoLoginKind.MustChangePassword;
-        var pending = account.MustChangePassword && (!mustChange || account.TemporaryPasswordIssuedAt != NeverExpiresIssuedAt);
-        if (!pending)
+        if (!account.MustChangePassword || await context.DemoLoginAlreadySetAsync(account.Id, cancellationToken))
         {
             return;
         }
 
+        var mustChange = plan.Login == DemoLoginKind.MustChangePassword;
         account.PasswordHash = hash;
         account.MustChangePassword = mustChange;
         account.TemporaryPasswordIssuedAt = mustChange ? NeverExpiresIssuedAt : null;
         account.PhoneVerifiedAt = plan.Login == DemoLoginKind.PhoneUnverified ? null : context.Now;
-        context.Get<AuditLogService>().Record(new AuditEntry("Account.DemoCredentialsSet", nameof(Account))
+        context.Get<AuditLogService>().Record(new AuditEntry(DemoSeedContext.DemoLoginSetAction, nameof(Account))
         {
             RecordId = account.Id,
             RecordCode = account.Username,

@@ -166,6 +166,51 @@ public class DemoDataSeedQaTests
         }
     }
 
+    // An Owner's reset of a demo staff password (ACS-09), and a phone verified since, are real use: a rerun keeps
+    // both instead of putting the demo login back (the reset sets MustChangePassword again, as a first run would).
+    [SqlServerFact]
+    public async Task Demo_rerun_keeps_an_owner_reset_of_a_staff_password_and_a_phone_verified_since()
+    {
+        await using var host = new DemoHost();
+        await RunAsync(host.App, demo: true);
+        string[] usernames = ["nhanvien.chuaxacthuc", "quanlyvung1"];
+        using (var scope = host.App.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
+            (await db.Accounts.SingleAsync(a => a.Username == "nhanvien.chuaxacthuc")).PhoneVerifiedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync();
+        }
+
+        var client = host.App.CreateClient();
+        var owner = host.App.CreateClient();
+        owner.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", (await LoginAsync(client, "owner", DemoPassword)).Body.GetProperty("accessToken").GetString());
+        var temporary = new Dictionary<string, string>();
+        foreach (var username in usernames)
+        {
+            using var scope = host.App.Services.CreateScope();
+            var id = await scope.ServiceProvider.GetRequiredService<OmtsDbContext>().Accounts.Where(a => a.Username == username).Select(a => a.Id).SingleAsync();
+            var reset = await owner.PostAsync($"/api/accounts/{id}/reset-password", null);
+            Assert.True(reset.StatusCode == HttpStatusCode.OK, await reset.Content.ReadAsStringAsync());
+            temporary[username] = (await reset.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("temporaryPassword").GetString()!;
+        }
+
+        var before = await AccountStatesAsync(host.App, usernames);
+        var rerun = await RunAsync(host.App, demo: true);
+        var after = await AccountStatesAsync(host.App, usernames);
+
+        Assert.Equal(DeploymentBootstrapper.Success, rerun.ExitCode);
+        Assert.Equal(before, after);
+        Assert.All(after, a => Assert.NotNull(a.PhoneVerifiedAt));
+        foreach (var username in usernames)
+        {
+            var login = await LoginAsync(client, username, temporary[username]);
+            Assert.Equal(HttpStatusCode.OK, login.Status);
+            Assert.True(login.Body.GetProperty("mustChangePassword").GetBoolean(), username);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await LoginAsync(client, username, DemoPassword)).Status);
+        }
+    }
+
     // The seed's ambient Owner must never become the caller of an HTTP request: only the access token counts.
     [Fact]
     public void Current_user_reads_the_ambient_actor_only_outside_an_http_request()

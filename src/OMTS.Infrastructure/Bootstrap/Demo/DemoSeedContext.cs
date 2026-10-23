@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Application.Common.Results;
 using OMTS.Infrastructure.Persistence;
@@ -12,6 +13,9 @@ internal sealed class DemoSeedContext(IServiceProvider services, OmtsDbContext d
 {
     public const string Password = "Demo@1234";
 
+    /// <summary>Audit action written when an account gets its demo login; at most once per account.</summary>
+    public const string DemoLoginSetAction = "Account.DemoCredentialsSet";
+
     public OmtsDbContext Db { get; } = db;
     public Guid CooperativeId { get; } = cooperativeId;
     public Guid OwnerId { get; } = ownerId;
@@ -21,6 +25,14 @@ internal sealed class DemoSeedContext(IServiceProvider services, OmtsDbContext d
     public DateOnly Today { get; } = DateOnly.FromDateTime(now.ToOffset(TimeSpan.FromHours(7)).DateTime);
 
     public T Get<T>() where T : notnull => services.GetRequiredService<T>();
+
+    /// <summary>
+    /// Whether an earlier run already gave this account its demo login. From then on, whatever happens to the
+    /// account (a password reset by the Owner, a changed password, a verified phone) is real use that a rerun
+    /// must not undo.
+    /// </summary>
+    public Task<bool> DemoLoginAlreadySetAsync(Guid accountId, CancellationToken cancellationToken) =>
+        Db.AuditEvents.AnyAsync(e => e.Action == DemoLoginSetAction && e.RecordId == accountId, cancellationToken);
 
     /// <summary>The value of a successful service call; a refusal stops the seed with the service's own message.</summary>
     public static T Ensure<T>(Result<T> result, string what) =>
