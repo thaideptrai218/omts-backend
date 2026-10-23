@@ -23,6 +23,9 @@ public interface IPayrollRepository
 
     Task<IReadOnlySet<string>> GetFinalizedPeriodsAsync(IReadOnlyCollection<string> periods, CancellationToken cancellationToken);
 
+    /// <summary>The earliest finalized period (key like 2026-09) that overlaps [from, to], to = null meaning no end; null when none.</summary>
+    Task<string?> GetFirstFinalizedPeriodOverlappingAsync(DateOnly from, DateOnly? to, CancellationToken cancellationToken);
+
     /// <summary>The payslip with its payroll, tracked.</summary>
     Task<LaborSettlement?> GetSettlementAsync(Guid id, CancellationToken cancellationToken);
 

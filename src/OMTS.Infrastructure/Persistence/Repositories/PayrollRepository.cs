@@ -33,6 +33,13 @@ internal sealed class PayrollRepository(OmtsDbContext db) : IPayrollRepository
                 .Select(p => p.Period)
                 .ToListAsync(cancellationToken)).ToHashSet();
 
+    public Task<string?> GetFirstFinalizedPeriodOverlappingAsync(DateOnly from, DateOnly? to, CancellationToken cancellationToken) =>
+        db.Payrolls.AsNoTracking()
+            .Where(p => p.FinalizedAt != null && p.PeriodEnd >= from && (to == null || p.PeriodStart <= to))
+            .OrderBy(p => p.PeriodStart)
+            .Select(p => p.Period)
+            .FirstOrDefaultAsync(cancellationToken);
+
     public Task<LaborSettlement?> GetSettlementAsync(Guid id, CancellationToken cancellationToken) =>
         WithPayee(db.LaborSettlements).AsSplitQuery().FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
 

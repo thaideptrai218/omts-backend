@@ -66,7 +66,7 @@ public sealed class AttendanceSheetService(
             return locked;
         }
 
-        var (entries, errors) = await expander.ExpandAsync(zoneId, rows, date,cancellationToken);
+        var (entries, errors) = await expander.ExpandAsync(rows, date, cancellationToken);
         var existing = await attendance.ListForPeopleAsync(
             date, entries.Where(e => e.Employee is not null).Select(e => e.Employee!.Id).ToList(),
             entries.Where(e => e.Worker is not null).Select(e => e.Worker!.Id).ToList(), cancellationToken);
@@ -82,9 +82,15 @@ public sealed class AttendanceSheetService(
             var stale = record is not null && record.ZoneId == zoneId && Changed(record, entry)
                 ? await rowVersions.CheckAsync(record, rowVersion, cancellationToken)
                 : null;
+            // Employed in the zone is only required to create or change a record: an unchanged row of an employee who
+            // has since left the zone still saves (as an unchanged assignee of an assignment edit does).
+            var notInZone = entry.Employee is { } employee && (record is null || Changed(record, entry))
+                ? LaborPersonRules.CheckForZone(employee, zoneId, date)
+                : null;
             var problem = record switch
             {
                 not null when record.ZoneId != zoneId => AppError.AlreadyExists($"Attendance of {entry.Name} on {LaborInputRules.Date(date)}", record.Id),
+                _ when notInZone is not null => notInZone,
                 not null when stale is not null => stale,
                 null when entry.Worker is { StatusId: not StatusIds.Usage.InUse } => AppError.Invalid("Worker"),
                 not null when Changed(record, entry) && entry.Reason is null => AppError.Invalid("Reason", "Changing a saved attendance record needs a reason."),

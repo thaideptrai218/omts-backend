@@ -1,6 +1,7 @@
 using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.LaborCost.Calculation;
@@ -21,6 +22,8 @@ public sealed class SalaryAdvanceService(
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
 {
+    public const int MaxPageSize = 100;
+
     public async Task<Result<AdvanceView>> RecordAsync(RecordAdvanceRequest request, CancellationToken cancellationToken)
     {
         if ((request.EmployeeId is null) == (request.WorkerId is null))
@@ -77,17 +80,37 @@ public sealed class SalaryAdvanceService(
             After = new { advance.EmployeeId, advance.WorkerId, advance.Recipient, advance.AmountPaid, advance.PaymentDate, Method = advance.Method.ToString() },
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return (await ListAsync(false, request.EmployeeId, request.WorkerId, cancellationToken)).First(a => a.Id == advance.Id);
+        var own = await ViewsAsync(await payments.ListAdvancesOfAsync(
+            request.EmployeeId is { } e ? [e] : [], request.WorkerId is { } w ? [w] : [], cancellationToken), cancellationToken);
+        return own.First(a => a.Id == advance.Id);
     }
 
-    /// <summary>Advances (reversals not listed), oldest first; <paramref name="outstandingOnly"/> keeps those with an amount not yet deducted.</summary>
-    public async Task<IReadOnlyList<AdvanceView>> ListAsync(bool outstandingOnly, Guid? employeeId, Guid? workerId, CancellationToken cancellationToken)
+    /// <summary>
+    /// A page of advances (reversals not listed), oldest first; <paramref name="outstandingOnly"/> keeps those with an amount not
+    /// yet deducted. Without a person the page is read from the database; the outstanding filter depends on what payrolls
+    /// deducted, so that combination still reads every advance and pages the result.
+    /// </summary>
+    public async Task<Paged<AdvanceView>> ListAsync(
+        bool outstandingOnly, Guid? employeeId, Guid? workerId, int page, int pageSize, CancellationToken cancellationToken)
     {
+        (page, pageSize) = (Math.Clamp(page, 1, int.MaxValue / MaxPageSize), Math.Clamp(pageSize, 1, MaxPageSize));
+        if (employeeId is null && workerId is null && !outstandingOnly)
+        {
+            var (items, total) = await payments.PageAdvancesAsync(page, pageSize, cancellationToken);
+            // The remaining amount of an advance depends on the person's earlier ones: view all advances of the page's people.
+            var related = await payments.ListAdvancesOfAsync(
+                items.Where(i => i.EmployeeId is not null).Select(i => i.EmployeeId!.Value).Distinct().ToList(),
+                items.Where(i => i.WorkerId is not null).Select(i => i.WorkerId!.Value).Distinct().ToList(), cancellationToken);
+            var byId = (await ViewsAsync(related, cancellationToken)).ToDictionary(v => v.Id);
+            return new Paged<AdvanceView>(items.Select(i => byId[i.Id]).ToList(), page, pageSize, total);
+        }
+
         var records = employeeId is null && workerId is null
             ? await payments.ListAllAdvancesAsync(cancellationToken)
             : await payments.ListAdvancesOfAsync(employeeId is { } e ? [e] : [], workerId is { } w ? [w] : [], cancellationToken);
         var views = await ViewsAsync(records, cancellationToken);
-        return outstandingOnly ? views.Where(v => v.Remaining > 0).ToList() : views;
+        var filtered = outstandingOnly ? views.Where(v => v.Remaining > 0).ToList() : views.ToList();
+        return new Paged<AdvanceView>(filtered.Skip((page - 1) * pageSize).Take(pageSize).ToList(), page, pageSize, filtered.Count);
     }
 
     /// <summary>Views of advance records with their remaining amounts.</summary>

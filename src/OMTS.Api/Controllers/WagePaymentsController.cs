@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OMTS.Api.Common;
 using OMTS.Api.Filters;
+using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.LaborCost;
@@ -74,12 +75,13 @@ public sealed class WagePaymentsController(
     public async Task<IActionResult> AddDocuments(Guid id, [FromForm] List<IFormFile>? files, CancellationToken cancellationToken) =>
         (await reversals.AddDocumentsAsync(id, await files.ToIncomingFilesAsync(cancellationToken), cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Advances, optionally only <c>outstanding=true</c> ones and of one <c>employeeId</c> or <c>workerId</c>.</summary>
+    /// <summary>Advances, optionally only <c>outstanding=true</c> ones and of one <c>employeeId</c> or <c>workerId</c>; paged (<c>pageSize</c> at most 100, default 20).</summary>
     [HttpGet("api/salary-advances")]
     [RequirePermission(PermissionFunctions.Payroll, View, AllZones)]
-    [ProducesResponseType<IReadOnlyList<AdvanceView>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Advances(bool outstanding = false, Guid? employeeId = null, Guid? workerId = null, CancellationToken cancellationToken = default) =>
-        Ok(await advances.ListAsync(outstanding, employeeId, workerId, cancellationToken));
+    [ProducesResponseType<Paged<AdvanceView>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Advances(
+        bool outstanding = false, Guid? employeeId = null, Guid? workerId = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default) =>
+        Ok(await advances.ListAsync(outstanding, employeeId, workerId, page, pageSize, cancellationToken));
 
     /// <summary>Example: <c>{"workerId":"…","amount":500000,"paymentDate":"2026-10-20","method":"Cash"}</c>.</summary>
     [HttpPost("api/salary-advances")]

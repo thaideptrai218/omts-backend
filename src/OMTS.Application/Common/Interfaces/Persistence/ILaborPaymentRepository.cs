@@ -21,6 +21,9 @@ public interface ILaborPaymentRepository
     /// <summary>Every advance record (reversals included), with person and deducting payslip, not tracked.</summary>
     Task<IReadOnlyList<LaborPayment>> ListAllAdvancesAsync(CancellationToken cancellationToken);
 
+    /// <summary>One page (1-based) of the advances (reversal records excluded), oldest first, and the total count, not tracked.</summary>
+    Task<(IReadOnlyList<LaborPayment> Items, int Total)> PageAdvancesAsync(int page, int pageSize, CancellationToken cancellationToken);
+
     /// <summary>What finalized payrolls already deducted from the advances of the people.</summary>
     Task<DeductedAdvanceTotals> GetDeductedAdvanceTotalsAsync(
         IReadOnlyCollection<Guid> employeeIds, IReadOnlyCollection<Guid> workerIds, CancellationToken cancellationToken);

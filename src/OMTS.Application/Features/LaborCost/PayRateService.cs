@@ -127,19 +127,9 @@ public sealed class PayRateService(
             return input.Error!;
         }
 
-        // New dates must stay out of finalized months (dates the edit leaves unchanged are not checked again).
-        List<DateOnly> newDates = [];
-        if (input.Value!.ValidFrom != version.ValidFrom)
-        {
-            newDates.Add(input.Value.ValidFrom);
-        }
-
-        if (input.Value.ValidTo is { } newEnd && newEnd != version.ValidTo)
-        {
-            newDates.Add(newEnd);
-        }
-
-        if (newDates.Count > 0 && await drafts.CheckDatesOpenAsync(newDates, cancellationToken) is { } locked)
+        // A date change may not make the version overlap any finalized month, even one it already overlapped.
+        var datesChanged = input.Value!.ValidFrom != version.ValidFrom || input.Value.ValidTo != version.ValidTo;
+        if (datesChanged && await drafts.CheckRangeOpenAsync(input.Value.ValidFrom, input.Value.ValidTo, cancellationToken) is { } locked)
         {
             return locked;
         }

@@ -93,8 +93,12 @@ public class PayRateFinalizedMonthTests(AuthApiFactory factory) : IClassFixture<
         var month = Spaced();
         var used = await OpenEndedUsedByFinalizedAsync(w, employee.Id, month);
 
-        // Starts in the open month before: the lock passes, but closing the old version on its last day cuts the finalized month.
-        var problem = await (await w.Owner.PostAsJsonAsync(PayRates, new { employeeId = employee.Id, salaryType = "MonthlyFixed", amount = 6_000_000, validFrom = month.Start.AddDays(-5) }))
+        // Bounded to the open month before (an open-ended one would itself cover the finalized month): the lock passes,
+        // but closing the old version the day before cuts the finalized month it priced.
+        var problem = await (await w.Owner.PostAsJsonAsync(PayRates, new
+        {
+            employeeId = employee.Id, salaryType = "MonthlyFixed", amount = 6_000_000, validFrom = month.Start.AddDays(-5), validTo = month.Start.AddDays(-1),
+        }))
             .ProblemAsync(HttpStatusCode.Conflict, "MSG11");
 
         Assert.Contains($"finalized payslips {month.Label}", problem.GetProperty("detail").GetString());

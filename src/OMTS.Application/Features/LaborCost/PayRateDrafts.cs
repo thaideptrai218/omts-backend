@@ -12,8 +12,8 @@ public sealed record PayRateDraft(PayRuleVersion Version, PayRuleVersion? Closes
 
 /// <summary>
 /// LAB-06 checks of one new version: the person (Employed employee or In Use worker), the rate rules and the timeline
-/// (an earlier open-ended version is closed on ValidFrom − 1 day; any other overlap is MSG03). A version never starts or
-/// ends in a finalized month (PERIOD_LOCKED) and never closes one that a finalized payslip used (MSG11).
+/// (an earlier open-ended version is closed on ValidFrom − 1 day; any other overlap is MSG03). A new or re-dated version never
+/// overlaps a finalized month (PERIOD_LOCKED) and never closes one that a finalized payslip used (MSG11).
 /// </summary>
 public sealed class PayRateDrafts(IPayRateRepository rates, IWorkforceRepository workforce, PayrollPeriodLock periodLock)
 {
@@ -42,7 +42,7 @@ public sealed class PayRateDrafts(IPayRateRepository rates, IWorkforceRepository
             return input.Error!;
         }
 
-        if (await CheckDatesOpenAsync(input.Value!.ValidTo is { } end ? [input.Value.ValidFrom, end] : [input.Value.ValidFrom], cancellationToken) is { } locked)
+        if (await CheckRangeOpenAsync(input.Value!.ValidFrom, input.Value.ValidTo, cancellationToken) is { } locked)
         {
             return locked;
         }
@@ -71,9 +71,9 @@ public sealed class PayRateDrafts(IPayRateRepository rates, IWorkforceRepository
         return new PayRateDraft(version, closes, input.Value);
     }
 
-    /// <summary>PERIOD_LOCKED when one of the dates is in a month whose payroll is finalized.</summary>
-    public Task<AppError?> CheckDatesOpenAsync(IEnumerable<DateOnly> dates, CancellationToken cancellationToken) =>
-        periodLock.CheckAsync(dates, cancellationToken);
+    /// <summary>PERIOD_LOCKED when [validFrom, validTo or open end] overlaps any finalized month: a new or re-dated version never covers one.</summary>
+    public Task<AppError?> CheckRangeOpenAsync(DateOnly validFrom, DateOnly? validTo, CancellationToken cancellationToken) =>
+        periodLock.CheckRangeAsync(validFrom, validTo, cancellationToken);
 
     /// <summary>MSG11: the version is used by finalized payslips of these periods (keys like 2026-09).</summary>
     public static AppError UsedByFinalized(IReadOnlyCollection<string> periods) =>

@@ -29,7 +29,23 @@ public sealed class PayrollPeriodLock(IPayrollRepository payrolls, IUnitOfWork u
         return PayrollPeriodLockRule.FirstLocked(list, finalized) is { } locked ? Locked(locked) : null;
     }
 
-    public Task<AppError?> CheckAsync(DateOnly date, CancellationToken cancellationToken) => CheckAsync([date], cancellationToken);
+    /// <summary>
+    /// PERIOD_LOCKED when [from, to] (to = null: open-ended) overlaps any finalized month, not only at its ends: a pay rate
+    /// must not cover a finalized month it was not part of. Also marks the draft payrolls at both ends (see above).
+    /// </summary>
+    public async Task<AppError?> CheckRangeAsync(DateOnly from, DateOnly? to, CancellationToken cancellationToken)
+    {
+        if (await CheckAsync(to is { } end ? [from, end] : [from], cancellationToken) is { } locked)
+        {
+            return locked;
+        }
+
+        return await payrolls.GetFirstFinalizedPeriodOverlappingAsync(from, to, cancellationToken) is { } key && PayrollPeriod.TryParse(key, out var period)
+            ? Locked(period)
+            : null;
+    }
+
+    public Task<AppError?> CheckAsync(DateOnly date,CancellationToken cancellationToken) => CheckAsync([date], cancellationToken);
 
     public static AppError Locked(PayrollPeriod period) =>
         AppError.Conflict(UserMessages.PeriodLocked(period.Label), new Dictionary<string, object?> { ["period"] = period.Key });

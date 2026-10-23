@@ -160,7 +160,7 @@ public class PayrollPreparationTests(AuthApiFactory factory) : IClassFixture<Aut
         var outstanding = await ExpectAsync(await w.Owner.GetAsync($"/api/salary-advances?outstanding=true&workerId={worker.Id}"), HttpStatusCode.OK);
 
         Assert.Equal((900_000m, 0m), (slip.GetProperty("advanceDeduction").GetDecimal(), slip.GetProperty("net").GetDecimal()));
-        var rows = outstanding.EnumerateArray().ToDictionary(a => a.GetProperty("id").GetGuid(), a => a.GetProperty("remaining").GetDecimal());
+        var rows = outstanding.GetProperty("items").EnumerateArray().ToDictionary(a => a.GetProperty("id").GetGuid(), a => a.GetProperty("remaining").GetDecimal());
         Assert.Equal(100_000m, rows[advance.GetProperty("id").GetGuid()]);
         Assert.Equal(200_000m, rows[lateAdvance.GetProperty("id").GetGuid()]);
     }
@@ -190,5 +190,5 @@ public class PayrollPreparationTests(AuthApiFactory factory) : IClassFixture<Aut
 
     private static async Task<JsonElement> AdvanceAsync(LaborWorld w, Guid workerId, Guid advanceId) =>
         (await ExpectAsync(await w.Owner.GetAsync($"/api/salary-advances?workerId={workerId}"), HttpStatusCode.OK))
-            .EnumerateArray().Single(a => a.GetProperty("id").GetGuid() == advanceId);
+            .GetProperty("items").EnumerateArray().Single(a => a.GetProperty("id").GetGuid() == advanceId);
 }

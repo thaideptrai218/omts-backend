@@ -110,7 +110,7 @@ public class LaborPayrollWorkedExampleTests(AuthApiFactory factory) : IClassFixt
         var (accountant, _) = await AccountantAsync();
         var worker = await w.AddWorkerAsync();
         var first = await ExpectAsync(await accountant.PostAsJsonAsync("/api/pay-rates",
-            new { workerId = worker.Id, salaryType = "DailyWage", amount = 300_000, validFrom = month.Start }), HttpStatusCode.Created);
+            new { workerId = worker.Id, salaryType = "DailyWage", amount = 300_000, validFrom = month.Start, validTo = month.Day(15) }), HttpStatusCode.Created);
         var second = await ExpectAsync(await accountant.PostAsJsonAsync("/api/pay-rates",
             new { workerId = worker.Id, salaryType = "DailyWage", amount = 350_000, validFrom = month.Day(16), validTo = month.End }), HttpStatusCode.Created);
         foreach (var (day, result) in new[] { (10, "Present"), (20, "Present"), (21, "PaidLeave"), (22, "UnpaidLeave") })
@@ -120,13 +120,13 @@ public class LaborPayrollWorkedExampleTests(AuthApiFactory factory) : IClassFixt
 
         var slip = (await w.CreatePayrollAsync(month, accountant)).PayslipOf(worker.Id);
 
-        var firstId = first.GetProperty("rate").GetProperty("id").GetGuid();
-        Assert.Equal((firstId, month.Day(15).ToString("yyyy-MM-dd")),
-            (second.GetProperty("closedPrevious").GetProperty("id").GetGuid(), second.GetProperty("closedPrevious").GetProperty("validTo").GetString()));
+        // The first rate is bounded to the first half: an open-ended one would cover the finalized months of this class's other tests
+        // (automatic closing is covered in PayRateTests).
+        Assert.Equal(month.Day(15).ToString("yyyy-MM-dd"), first.GetProperty("rate").GetProperty("validTo").GetString());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, second.GetProperty("closedPrevious").ValueKind);
         Assert.Equal([300_000m, 350_000m, 350_000m],
             Lines(slip, "DailyWage").OrderBy(l => l.GetProperty("payDate").GetString()).Select(l => l.GetProperty("amount").GetDecimal()));
         Assert.Equal(1_000_000m, slip.GetProperty("net").GetDecimal());
-        Assert.Contains(await factory.AuditOfAsync(firstId), e => e.Action == "PayRuleVersion.Closed");
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public class LaborPayrollWorkedExampleTests(AuthApiFactory factory) : IClassFixt
         // The second draft still deducts 300,000; finalize recomputes it against the 200,000 left.
         var refreshed = (await ExpectAsync(await w.Owner.PostAsync($"/api/payrolls/{second.Key}/finalize", null), HttpStatusCode.OK)).PayslipOf(worker.Id);
         var after = (await ExpectAsync(await w.Owner.GetAsync($"/api/salary-advances?workerId={worker.Id}"), HttpStatusCode.OK))
-            .EnumerateArray().Single(a => a.GetProperty("id").GetGuid() == advance.GetProperty("id").GetGuid());
+            .GetProperty("items").EnumerateArray().Single(a => a.GetProperty("id").GetGuid() == advance.GetProperty("id").GetGuid());
 
         // Both drafts saw 500,000 outstanding and capped it at 300,000; only 200,000 is left once the first month is final.
         Assert.Equal((300_000m, 300_000m), (firstDraft.GetProperty("advanceDeduction").GetDecimal(), secondDraft.GetProperty("advanceDeduction").GetDecimal()));

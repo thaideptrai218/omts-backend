@@ -29,6 +29,14 @@ internal sealed class LaborPaymentRepository(OmtsDbContext db) : ILaborPaymentRe
     public async Task<IReadOnlyList<LaborPayment>> ListAllAdvancesAsync(CancellationToken cancellationToken) =>
         await Advances(db.LaborPayments.AsNoTracking()).ToListAsync(cancellationToken);
 
+    public async Task<(IReadOnlyList<LaborPayment> Items, int Total)> PageAdvancesAsync(int page, int pageSize, CancellationToken cancellationToken)
+    {
+        var total = await db.LaborPayments.AsNoTracking().CountAsync(p => p.IsAdvance && p.OriginalPaymentId == null, cancellationToken);
+        var items = await Advances(db.LaborPayments.AsNoTracking()).Where(p => p.OriginalPaymentId == null)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        return (items, total);
+    }
+
     public async Task<DeductedAdvanceTotals> GetDeductedAdvanceTotalsAsync(
         IReadOnlyCollection<Guid> employeeIds, IReadOnlyCollection<Guid> workerIds, CancellationToken cancellationToken)
     {
