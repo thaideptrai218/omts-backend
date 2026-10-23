@@ -38,6 +38,7 @@ builder.Services.AddSwaggerGen(options =>
         Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" },
     };
     options.AddSecurityDefinition("Bearer", bearer);
+    options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, $"{typeof(Program).Assembly.GetName().Name}.xml"));
     options.AddSecurityRequirement(new OpenApiSecurityRequirement { [bearer] = [] });
 });
 

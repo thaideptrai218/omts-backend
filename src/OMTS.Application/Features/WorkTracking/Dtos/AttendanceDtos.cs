@@ -9,6 +9,7 @@ namespace OMTS.Application.Features.WorkTracking.Dtos;
 /// </summary>
 /// <param name="TeamOfDayId">Worker rows only: team of the day (default: the current team of the worker).</param>
 /// <param name="Reason">Required when the row changes an attendance record already saved.</param>
+/// <param name="RowVersion">The version of the saved record the row was read from; an older one answers MSG06.</param>
 public sealed record SaveAttendanceRow(
     Guid? EmployeeId,
     Guid? WorkerId,
@@ -17,7 +18,8 @@ public sealed record SaveAttendanceRow(
     decimal? Hours = null,
     Guid? TeamOfDayId = null,
     string? Notes = null,
-    string? Reason = null);
+    string? Reason = null,
+    string? RowVersion = null);
 
 public sealed record SaveAttendanceRequest(IReadOnlyList<SaveAttendanceRow>? Rows);
 

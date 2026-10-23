@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
@@ -28,6 +29,7 @@ public sealed class AttendanceSheetService(
     AttendanceSheetQuery sheets,
     LaborEvidence evidence,
     PayrollPeriodLock periodLock,
+    RowVersionGuard rowVersions,
     ZoneAccessGuard zoneAccess,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
@@ -72,8 +74,13 @@ public sealed class AttendanceSheetService(
         foreach (var entry in entries)
         {
             var record = existing.FirstOrDefault(r => (r.EmployeeId ?? r.WorkerId) == (entry.Employee?.Id ?? entry.Worker!.Id));
+            var rowVersion = entry.Index < rows.Count ? rows[entry.Index].RowVersion : null;
+            var stale = record is not null && rowVersion is not null && Changed(record, entry)
+                ? await rowVersions.CheckAsync(record, rowVersion, cancellationToken)
+                : null;
             var problem = record switch
             {
+                not null when stale is not null => stale,
                 not null when record.ZoneId != zoneId => AppError.AlreadyExists($"Attendance of {entry.Name} on {LaborInputRules.Date(date)}", record.Id),
                 null when entry.Worker is { StatusId: not StatusIds.Usage.InUse } => AppError.Invalid("Worker"),
                 not null when Changed(record, entry) && entry.Reason is null => AppError.Invalid("Reason", "Changing a saved attendance record needs a reason."),

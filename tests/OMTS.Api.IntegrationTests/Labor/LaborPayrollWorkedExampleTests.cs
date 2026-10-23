@@ -153,7 +153,7 @@ public class LaborPayrollWorkedExampleTests(AuthApiFactory factory) : IClassFixt
     }
 
     [Fact]
-    public async Task An_advance_deducted_by_two_drafts_is_never_deducted_twice_the_later_month_must_be_refreshed()
+    public async Task An_advance_deducted_by_two_drafts_is_never_deducted_twice_finalize_recomputes_the_later_month()
     {
         var w = await factory.WorldAsync();
         var (first, second) = ConsecutiveMonths();
@@ -170,22 +170,20 @@ public class LaborPayrollWorkedExampleTests(AuthApiFactory factory) : IClassFixt
         var secondDraft = (await w.CreatePayrollAsync(second)).PayslipOf(worker.Id);
         await ExpectAsync(await w.Owner.PostAsync($"/api/payrolls/{first.Key}/finalize", null), HttpStatusCode.OK);
 
-        var stale = await (await w.Owner.PostAsync($"/api/payrolls/{second.Key}/finalize", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG45");
-        var refreshed = (await ExpectAsync(await w.Owner.PostAsync($"/api/payrolls/{second.Key}/refresh", null), HttpStatusCode.OK)).PayslipOf(worker.Id);
-        await ExpectAsync(await w.Owner.PostAsync($"/api/payrolls/{second.Key}/finalize", null), HttpStatusCode.OK);
+        // The second draft still deducts 300,000; finalize recomputes it against the 200,000 left.
+        var refreshed = (await ExpectAsync(await w.Owner.PostAsync($"/api/payrolls/{second.Key}/finalize", null), HttpStatusCode.OK)).PayslipOf(worker.Id);
         var after = (await ExpectAsync(await w.Owner.GetAsync($"/api/salary-advances?workerId={worker.Id}"), HttpStatusCode.OK))
             .EnumerateArray().Single(a => a.GetProperty("id").GetGuid() == advance.GetProperty("id").GetGuid());
 
         // Both drafts saw 500,000 outstanding and capped it at 300,000; only 200,000 is left once the first month is final.
         Assert.Equal((300_000m, 300_000m), (firstDraft.GetProperty("advanceDeduction").GetDecimal(), secondDraft.GetProperty("advanceDeduction").GetDecimal()));
-        Assert.Equal(200_000m, stale.GetProperty("limit").GetDecimal());
         Assert.Equal((200_000m, 100_000m), (refreshed.GetProperty("advanceDeduction").GetDecimal(), refreshed.GetProperty("net").GetDecimal()));
         Assert.Equal((0m, refreshed.GetProperty("id").GetGuid(), second.Key),
             (after.GetProperty("remaining").GetDecimal(), after.GetProperty("deductedInPayslipId").GetGuid(), after.GetProperty("deductedInPeriod").GetString()));
     }
 
     [Fact]
-    public async Task An_advance_reversed_after_the_draft_blocks_finalize_until_refresh_and_draft_rates_follow_an_edit()
+    public async Task An_advance_reversed_after_the_draft_and_a_rate_edit_are_picked_up_by_finalize()
     {
         var w = await factory.WorldAsync();
         var month = NewMonth();
@@ -204,12 +202,10 @@ public class LaborPayrollWorkedExampleTests(AuthApiFactory factory) : IClassFixt
             rowVersion = rate.GetProperty("rate").GetProperty("rowVersion").GetString(),
         }), HttpStatusCode.OK);
 
-        var stale = await (await w.Owner.PostAsync($"/api/payrolls/{month.Key}/finalize", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG45");
-        var refreshed = (await ExpectAsync(await accountant.PostAsync($"/api/payrolls/{month.Key}/refresh", null), HttpStatusCode.OK)).PayslipOf(worker.Id);
-        await ExpectAsync(await w.Owner.PostAsync($"/api/payrolls/{month.Key}/finalize", null), HttpStatusCode.OK);
+        // Finalize recomputes the draft: the reversed advance is no longer deducted and the edited rate applies.
+        var refreshed = (await ExpectAsync(await w.Owner.PostAsync($"/api/payrolls/{month.Key}/finalize", null), HttpStatusCode.OK)).PayslipOf(worker.Id);
 
         Assert.Equal((100_000m, 200_000m), (draft.GetProperty("advanceDeduction").GetDecimal(), draft.GetProperty("net").GetDecimal()));
-        Assert.Equal(0m, stale.GetProperty("limit").GetDecimal());
         Assert.Equal((0m, 320_000m), (refreshed.GetProperty("advanceDeduction").GetDecimal(), refreshed.GetProperty("net").GetDecimal()));
     }
 

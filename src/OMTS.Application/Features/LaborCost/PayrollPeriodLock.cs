@@ -8,14 +8,24 @@ namespace OMTS.Application.Features.LaborCost;
 /// Period lock shared by LAB-03/04/05/07 (set by LAB-08): a date in a month whose payroll is finalized answers
 /// 409 PERIOD_LOCKED. Reopening the payroll unlocks the month.
 /// </summary>
-public sealed class PayrollPeriodLock(IPayrollRepository payrolls)
+public sealed class PayrollPeriodLock(IPayrollRepository payrolls, IUnitOfWork unitOfWork)
 {
-    /// <summary>Null when every date is in an open month.</summary>
+    /// <summary>
+    /// Null when every date is in an open month. A draft payroll of such a month is marked changed in the caller's
+    /// save, so a finalize that commits in between makes the save fail (MSG06) instead of slipping a record into a
+    /// locked month, and a save that commits first makes the finalize retry with that record included.
+    /// </summary>
     public async Task<AppError?> CheckAsync(IEnumerable<DateOnly> dates, CancellationToken cancellationToken)
     {
         var list = dates.Distinct().ToList();
         var periods = list.Select(d => PayrollPeriod.Of(d).Key).Distinct().ToList();
-        var finalized = await payrolls.GetFinalizedPeriodsAsync(periods, cancellationToken);
+        var month = await payrolls.ListByPeriodsAsync(periods, cancellationToken);
+        var finalized = month.Where(p => p.IsFinalized).Select(p => p.Period).ToHashSet();
+        foreach (var draft in month.Where(p => !p.IsFinalized))
+        {
+            unitOfWork.MarkChanged(draft);
+        }
+
         return PayrollPeriodLockRule.FirstLocked(list, finalized) is { } locked ? Locked(locked) : null;
     }
 

@@ -18,6 +18,9 @@ public interface IPayrollRepository
     Task<IReadOnlyList<Payroll>> ListAsync(int? year, CancellationToken cancellationToken);
 
     /// <summary>Which of the periods have a finalized payroll (period lock).</summary>
+    /// <summary>The payrolls of these periods (no payslips), tracked.</summary>
+    Task<IReadOnlyList<Payroll>> ListByPeriodsAsync(IReadOnlyCollection<string> periods, CancellationToken cancellationToken);
+
     Task<IReadOnlySet<string>> GetFinalizedPeriodsAsync(IReadOnlyCollection<string> periods, CancellationToken cancellationToken);
 
     /// <summary>The payslip with its payroll, tracked.</summary>

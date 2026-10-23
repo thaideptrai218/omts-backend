@@ -22,6 +22,8 @@ public sealed class PayrollFinalizationService(
     IPayrollRepository payrolls,
     ILaborPaymentRepository payments,
     PayrollQueryService queries,
+    PayrollBuilder builder,
+    PayrollSync sync,
     INotificationDispatcher notifications,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
@@ -44,25 +46,33 @@ public sealed class PayrollFinalizationService(
             return CannotChange(period, Approved, Approved, "the payroll is already finalized");
         }
 
-        var missing = payroll.Settlements.Where(s => s.MissingRateDates.Count > 0)
+        // The draft may be older than the attendance, rates and piecework of the month: recompute it first (manual
+        // lines are kept), so finalize approves exactly what the sources say today.
+        // Saved as a refresh first: replaced lines leave the payslips only once saved, and a refusal below (MSG50)
+        // then shows the up-to-date draft.
+        sync.Apply(payroll, await builder.ComputeAsync(period, payroll.Settlements.Select(PayslipViews.KeyOf).ToList(), cancellationToken), payroll.PreparedByAccountId);
+        unitOfWork.MarkChanged(payroll);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        var settlements = payroll.Settlements.ToList();
+        var missing = settlements.Where(s => s.MissingRateDates.Count > 0)
             .Select(s => new { Payee = PayslipViews.Payee(s), Dates = s.MissingRateDates.Order().ToList() })
             .ToList();
-        if (payroll.Settlements.Count == 0 || missing.Count > 0)
+        if (settlements.Count == 0 || missing.Count > 0)
         {
             return AppError.Conflict(UserMessages.PayBasisIncomplete, new Dictionary<string, object?>
             {
-                ["empty"] = payroll.Settlements.Count == 0,
+                ["empty"] = settlements.Count == 0,
                 ["missing"] = missing,
             });
         }
 
-        var people = payroll.Settlements.Where(s => s.ContractorId is null).ToList();
+        var people = settlements.Where(s => s.ContractorId is null).ToList();
         var employeeIds = people.Where(s => s.EmployeeId is not null).Select(s => s.EmployeeId!.Value).ToList();
         var workerIds = people.Where(s => s.WorkerId is not null).Select(s => s.WorkerId!.Value).ToList();
         var advances = await payments.ListAdvancesOfAsync(employeeIds, workerIds, cancellationToken);
         var deducted = await payments.GetDeductedAdvanceTotalsAsync(employeeIds, workerIds, cancellationToken);
         var now = timeProvider.GetUtcNow();
-        foreach (var settlement in payroll.Settlements)
+        foreach (var settlement in settlements)
         {
             var advanceLine = settlement.PayLines.Where(l => l.LineType == PayLineType.AdvanceDeduction).Sum(l => l.Amount);
             if (advanceLine > 0 && MarkDeductedAdvances(settlement, advances, deducted, advanceLine) is { } stale)
@@ -78,7 +88,7 @@ public sealed class PayrollFinalizationService(
         (payroll.ReturnReason, payroll.ReturnedAt, payroll.ReturnedByAccountId) = (null, null, null);
         audit.Record(new AuditEntry("Payroll.Finalized", nameof(Payroll))
         {
-            RecordId = payroll.Id, RecordCode = payroll.Period, After = new { Payslips = payroll.Settlements.Count, Net = payroll.Settlements.Sum(s => s.TotalObligation) },
+            RecordId = payroll.Id, RecordCode = payroll.Period, After = new { Payslips = settlements.Count, Net = settlements.Sum(s => s.TotalObligation) },
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return await queries.DetailAsync(payroll, cancellationToken);

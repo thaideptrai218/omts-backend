@@ -22,6 +22,9 @@ internal sealed class PayrollRepository(OmtsDbContext db) : IPayrollRepository
         return await WithPayslips(query).AsSplitQuery().OrderByDescending(p => p.Period).ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Payroll>> ListByPeriodsAsync(IReadOnlyCollection<string> periods, CancellationToken cancellationToken) =>
+        periods.Count == 0 ? [] : await db.Payrolls.Where(p => periods.Contains(p.Period)).ToListAsync(cancellationToken);
+
     public async Task<IReadOnlySet<string>> GetFinalizedPeriodsAsync(IReadOnlyCollection<string> periods, CancellationToken cancellationToken) =>
         periods.Count == 0
             ? new HashSet<string>()
