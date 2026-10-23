@@ -37,6 +37,12 @@ internal sealed class ExternalServicesStartupCheck(
             return Task.CompletedTask;
         }
 
+        if (ocr.Value.Provider == OcrProviderOptions.FakeProvider)
+        {
+            // The fake invents readings: outside Development it would put fabricated values into production data.
+            throw new InvalidOperationException("Ocr:Provider=Fake is only allowed in Development; leave it unset to read nothing (MSG04, manual entry).");
+        }
+
         if (email.Value.Provider == EmailOptions.SmtpProvider && email.Value.Smtp.Security == SmtpSecurity.None)
         {
             throw new InvalidOperationException(
@@ -58,14 +64,7 @@ internal sealed class ExternalServicesStartupCheck(
             logger.LogWarning("Email provider is Fake: emails are NOT sent.");
         }
 
-        if (ocr.Value.Provider == OcrProviderOptions.FakeProvider)
-        {
-            logger.LogWarning("OCR provider is Fake: meter readings are FABRICATED, not read from the photo. Do not use outside development.");
-        }
-        else
-        {
-            logger.LogWarning("OCR provider '{Provider}' is not configured: meter photos are NOT read; users enter the values.", ocr.Value.Provider);
-        }
+        logger.LogWarning("OCR provider '{Provider}' is not configured: meter photos are NOT read; users enter the values.", ocr.Value.Provider);
 
         return Task.CompletedTask;
     }

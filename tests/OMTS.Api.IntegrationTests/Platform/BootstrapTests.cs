@@ -117,7 +117,7 @@ public class BootstrapTests
     public async Task Demo_zones_are_seeded_once_in_development_and_refused_in_production()
     {
         await using var development = WithSecrets(new AuthApiFactory());
-        await using var production = WithSecrets(new AuthApiFactory()).WithWebHostBuilder(b => b.UseEnvironment("Production"));
+        await using var production = WithSecrets(new AuthApiFactory()).WithWebHostBuilder(b => b.UseEnvironment("Production").UseSetting("Ocr:Provider", ""));
 
         await RunAsync(development, demo: true);
         await RunAsync(development, demo: true);
