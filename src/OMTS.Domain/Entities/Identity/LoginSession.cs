@@ -17,7 +17,6 @@ public class LoginSession : Entity
 
     public string RefreshTokenHash { get; set; } = string.Empty;
 
-
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? LastRefreshedAt { get; set; }
 

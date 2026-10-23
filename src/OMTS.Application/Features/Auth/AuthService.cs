@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Caching.Memory;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Identity;
@@ -19,7 +18,7 @@ public sealed class AuthService(
     IUnitOfWork unitOfWork,
     IPasswordHasher passwordHasher,
     ITokenService tokenService,
-    IMemoryCache memoryCache,
+    UnknownLoginCounter unknownLogins,
     TimeProvider timeProvider)
 {
     // Concurrent logins of one account (double click, web + mobile) conflict on its row version; the
@@ -79,8 +78,7 @@ public sealed class AuthService(
             : account.IsTemporaryPasswordExpired(now) ? AuthError.TemporaryPasswordExpired : (AuthError?)null;
         if (refusal is not null)
         {
-            session.Revoke(now, "Account no longer allowed to log in");
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await RevokeAsync(session, now, "Account no longer allowed to log in", cancellationToken);
             return AuthResult.Failure(refusal.Value);
         }
 
@@ -125,6 +123,8 @@ public sealed class AuthService(
         var now = timeProvider.GetUtcNow();
         if (account.IsTemporarilyLocked(now))
         {
+            // Hashed like a locked unknown identifier, so the answer time does not tell them apart.
+            VerifyAgainstDummyHash(request.Password);
             return AuthResult.Failure(AuthError.TemporarilyLocked);
         }
 
@@ -183,11 +183,9 @@ public sealed class AuthService(
     /// </summary>
     private AuthResult FailUnknownIdentifier(string identifier, string password)
     {
-        passwordHasher.Verify(_unknownAccountHash ??= passwordHasher.Hash(Guid.NewGuid().ToString()), password);
+        VerifyAgainstDummyHash(password);
 
-        var key = $"omts:unknown-login:{identifier.ToUpperInvariant()}";
-        var failures = memoryCache.Get<int>(key) + 1;
-        memoryCache.Set(key, failures, Account.TemporaryLockDuration);
+        var failures = unknownLogins.RegisterFailure(identifier);
         return AuthResult.Failure(failures >= Account.MaxFailedLogins ? AuthError.TemporarilyLocked : AuthError.InvalidCredentials);
     }
 
@@ -199,7 +197,12 @@ public sealed class AuthService(
             return;
         }
 
-        replayed.Revoke(now, "Refresh token reuse detected");
+        await RevokeAsync(replayed, now, "Refresh token reuse detected", cancellationToken);
+    }
+
+    private async Task RevokeAsync(LoginSession session, DateTimeOffset now, string reason, CancellationToken cancellationToken)
+    {
+        session.Revoke(now, reason);
         try
         {
             await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -207,11 +210,14 @@ public sealed class AuthService(
         catch (ConcurrencyConflictException)
         {
             // The session changed meanwhile (rotated or revoked); revoke the current state.
-            await unitOfWork.ReloadAsync(replayed, cancellationToken);
-            replayed.Revoke(now, "Refresh token reuse detected");
+            await unitOfWork.ReloadAsync(session, cancellationToken);
+            session.Revoke(now, reason);
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
     }
+
+    private void VerifyAgainstDummyHash(string password) =>
+        passwordHasher.Verify(_unknownAccountHash ??= passwordHasher.Hash(Guid.NewGuid().ToString()), password);
 
     /// <summary>Staff can log in only while they hold at least one effective zone–role pair (ACS-02).</summary>
     private Task<bool> HasEffectiveAccessAsync(Account account, CancellationToken cancellationToken) =>

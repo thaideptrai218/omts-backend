@@ -44,14 +44,35 @@ internal sealed class JwtTokenService(IOptions<JwtOptions> options, TimeProvider
         return new AccessToken(_handler.CreateToken(descriptor), expiresAt);
     }
 
-    // "{sessionId}.{512 random bits}": the session id is not a secret, the random part is.
-    public string CreateRefreshToken(Guid sessionId) =>
-        $"{sessionId:N}.{Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(64))}";
+    // "{sessionId}.{512 random bits}.{MAC}": the session id is not a secret (it is in every access token) and
+    // the random part is. The MAC proves the server issued the token, so a made-up token naming someone's
+    // session cannot end it through the reuse check (only a token that was really issued counts as replayed).
+    public string CreateRefreshToken(Guid sessionId)
+    {
+        var body = $"{sessionId:N}.{Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(64))}";
+        return $"{body}.{Mac(body)}";
+    }
 
     public Guid? ReadSessionId(string refreshToken)
     {
         var separator = refreshToken.IndexOf('.');
-        return separator > 0 && Guid.TryParseExact(refreshToken[..separator], "N", out var sessionId) ? sessionId : null;
+        var macSeparator = refreshToken.LastIndexOf('.');
+        if (separator <= 0 || macSeparator <= separator
+            || !CryptographicOperations.FixedTimeEquals(
+                Encoding.ASCII.GetBytes(Mac(refreshToken[..macSeparator])),
+                Encoding.ASCII.GetBytes(refreshToken[(macSeparator + 1)..])))
+        {
+            return null;
+        }
+
+        return Guid.TryParseExact(refreshToken[..separator], "N", out var sessionId) ? sessionId : null;
+    }
+
+    // Keyed with a key derived from the JWT signing key, so the two uses never share a key.
+    private string Mac(string body)
+    {
+        var key = HMACSHA256.HashData(options.Value.CreateSigningKey().Key, "omts-refresh-token-mac"u8);
+        return Base64UrlEncoder.Encode(HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(body)));
     }
 
     // Refresh tokens are 512-bit random values, so a fast hash is enough (unlike passwords).

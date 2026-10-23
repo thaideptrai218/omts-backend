@@ -15,6 +15,7 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddMemoryCache();
 
+        services.AddSingleton(_ => new UnknownLoginCounter());
         services.AddScoped<AuthService>();
 
         services.AddSingleton<PermissionCache>();
