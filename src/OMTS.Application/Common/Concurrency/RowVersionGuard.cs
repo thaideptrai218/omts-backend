@@ -15,7 +15,9 @@ public sealed class RowVersionGuard(IAccountRepository accounts, IUnitOfWork uni
     /// <summary>Null when the client edited the current version (the save is then also checked by the database).</summary>
     public async Task<AppError?> CheckAsync(AuditableEntity entity, string? rowVersion, CancellationToken cancellationToken)
     {
-        if (!TryDecode(rowVersion, out var expected))
+        // An empty version was never issued for a saved row (SQL Server always has one): invalid input, not a
+        // stale screen. (The in-memory test provider issues empty versions, which still match.)
+        if (!TryDecode(rowVersion, out var expected) || (expected.Length == 0 && entity.RowVersion.Length > 0))
         {
             return AppError.Invalid("RowVersion");
         }
