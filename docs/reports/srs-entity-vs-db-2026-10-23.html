@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entity SRS và bảng DB</title>
+<style>
+:root{
+  --bg:#f7f7f5;--surface:#ffffff;--text:#1d1f23;--muted:#5d6370;--border:#e2e3e6;
+  --accent:#2f5d8a;--ok:#2e7d4f;--ok-bg:#e8f4ec;--warn:#9a6400;--warn-bg:#fdf3e1;
+  --del:#b3362f;--del-bg:#fbeceb;--add:#2f5d8a;--add-bg:#e7eff8;--tech:#6b6f78;--tech-bg:#efeff1;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16181c;--surface:#1f2228;--text:#e6e7ea;--muted:#9aa0ab;--border:#30343c;
+    --accent:#7fb0e0;--ok:#6fcf97;--ok-bg:#1d3326;--warn:#f0b75a;--warn-bg:#3a2e17;
+    --del:#f08a82;--del-bg:#3d201e;--add:#8dbbe8;--add-bg:#1c2b3c;--tech:#a7abb3;--tech-bg:#2a2d33;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16181c;--surface:#1f2228;--text:#e6e7ea;--muted:#9aa0ab;--border:#30343c;
+  --accent:#7fb0e0;--ok:#6fcf97;--ok-bg:#1d3326;--warn:#f0b75a;--warn-bg:#3a2e17;
+  --del:#f08a82;--del-bg:#3d201e;--add:#8dbbe8;--add-bg:#1c2b3c;--tech:#a7abb3;--tech-bg:#2a2d33;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
+main{max-width:960px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:1.7rem;margin:0 0 4px;line-height:1.25}
+h2{font-size:1.2rem;margin:40px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.sub{color:var(--muted);margin:0 0 24px}
+code{font:0.88em Consolas,"Cascadia Mono",monospace;background:var(--tech-bg);padding:1px 5px;border-radius:4px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:8px 0 20px}
+.tile{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.tile .n{font-size:1.9rem;font-weight:650;line-height:1.1}
+.tile .l{color:var(--muted);font-size:.85rem;margin-top:4px}
+.tile.ok .n{color:var(--ok)} .tile.warn .n{color:var(--warn)} .tile.del .n{color:var(--del)} .tile.add .n{color:var(--add)}
+.eq{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:1.05rem}
+.eq .chip{padding:4px 12px;border-radius:999px;font-weight:600}
+.c-srs{background:var(--tech-bg)} .c-del{background:var(--del-bg);color:var(--del)} .c-add{background:var(--add-bg);color:var(--add)} .c-db{background:var(--ok-bg);color:var(--ok)}
+.bar{display:flex;height:22px;border-radius:6px;overflow:hidden;margin:14px 0 6px;border:1px solid var(--border)}
+.bar span{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.85rem;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.93rem}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.03em}
+tr:last-child td{border-bottom:none}
+.tag{display:inline-block;font-size:.78rem;font-weight:600;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.t-yes{background:var(--add-bg);color:var(--add)} .t-no{background:var(--tech-bg);color:var(--tech)}
+.t-ren{background:var(--warn-bg);color:var(--warn)} .t-del{background:var(--del-bg);color:var(--del)}
+ol li,ul li{margin:4px 0}
+.note{background:var(--warn-bg);border-left:3px solid var(--warn);padding:10px 14px;border-radius:6px;margin:12px 0}
+.small{font-size:.85rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+<h1>Đối chiếu entity SRS với bảng database</h1>
+<p class="sub">OMTS · Lập ngày 23/10/2026 · So sánh ở mức tên bảng</p>
+
+<h2>1. Tóm tắt</h2>
+<div class="tiles">
+  <div class="tile"><div class="n">52</div><div class="l">Entity trong SRS</div></div>
+  <div class="tile"><div class="n">59</div><div class="l">Bảng trên <code>develop</code></div></div>
+  <div class="tile ok"><div class="n">48</div><div class="l">Khớp tên</div></div>
+  <div class="tile warn"><div class="n">2</div><div class="l">Lệch tên</div></div>
+  <div class="tile del"><div class="n">2</div><div class="l">SRS có, DB đã bỏ</div></div>
+  <div class="tile add"><div class="n">9</div><div class="l">DB có, SRS chưa có</div></div>
+</div>
+
+<div class="eq">
+  <span class="chip c-srs">52 entity</span><span>−</span>
+  <span class="chip c-del">2 đã bỏ</span><span>+</span>
+  <span class="chip c-add">9 bảng mới</span><span>=</span>
+  <span class="chip c-db">59 bảng</span>
+</div>
+<div class="bar" role="img" aria-label="59 bảng: 48 khớp, 2 đổi tên, 6 cần thêm vào SRS, 3 kỹ thuật">
+  <span style="width:81.4%;background:var(--ok)"></span>
+  <span style="width:3.4%;background:var(--warn)"></span>
+  <span style="width:10.2%;background:var(--add)"></span>
+  <span style="width:5.0%;background:var(--tech)"></span>
+</div>
+<div class="legend">
+  <span><i style="background:var(--ok)"></i>48 khớp tên</span>
+  <span><i style="background:var(--warn)"></i>2 đổi tên</span>
+  <span><i style="background:var(--add)"></i>6 cần thêm vào SRS</span>
+  <span><i style="background:var(--tech)"></i>3 kỹ thuật (mô tả ở SDS)</span>
+</div>
+
+<p><strong>Nguyên nhân chính:</strong></p>
+<ol>
+  <li><strong>Mô hình dữ liệu trong SRS chưa cập nhật phần INP.</strong> SRS vẫn dùng ERD-FULL v11 (09/10). Change log ngày 22/10 đã thêm các UC INP nhưng ghi rõ sơ đồ chưa được cập nhật. Code đã làm INP trong PR #12.</li>
+  <li><strong>SRS cố ý không mô hình hóa dữ liệu kỹ thuật.</strong> Mục I.3.2 ghi rằng phiên đăng nhập, mã xác minh và các dữ liệu kỹ thuật khác được mô tả ở SDS.</li>
+  <li><strong>Danh sách khu làm việc của nhân viên chưa có trong entity Employee.</strong> UC LAB-01 có nhắc đến "working zones", nhưng E03 Employee không có thuộc tính này. Code tạo bảng riêng <code>EmployeeWorkingZones</code>.</li>
+</ol>
+
+<h2>2. Lệch tên (2)</h2>
+<div class="card"><table>
+  <tr><th>SRS</th><th>Database</th><th>Thay đổi</th></tr>
+  <tr><td>E13 OysterSeedType</td><td><code>FarmingInputItems</code></td><td><span class="tag t-ren">Đổi tên</span> Mở rộng từ loại giống thành danh mục vật tư chung, có nhóm (giống, vật tư bè, …) và đơn vị tính</td></tr>
+  <tr><td>E14 SeedSupplier</td><td><code>Suppliers</code></td><td><span class="tag t-ren">Đổi tên</span> Mở rộng từ nhà cung cấp giống thành nhà cung cấp chung, có loại, chứng nhận, SĐT không trùng</td></tr>
+</table></div>
+<p class="small">Nguồn: mô tả commit của PR #12 (<code>48ae1e0</code>): "SeedSupplier → Supplier, OysterSeedType → FarmingInputItem".</p>
+
+<h2>3. SRS có, database đã bỏ (2)</h2>
+<div class="card"><table>
+  <tr><th>SRS</th><th>Lý do</th></tr>
+  <tr><td>E49 RaftMaterialRecord</td><td><span class="tag t-del">Đã bỏ</span> Chi phí vật tư bè giờ lấy từ phiếu nhập đã hoàn tất (<code>PurchaseReceipts</code>) có dòng thuộc nhóm vật tư <code>RaftMaterial</code>.</td></tr>
+  <tr><td>E50 RaftMaterialLine</td><td><span class="tag t-del">Đã bỏ</span> Bị thay thế bởi <code>PurchaseReceiptLines</code>.</td></tr>
+</table></div>
+
+<h2>4. Database có, SRS chưa có (9)</h2>
+<div class="card"><table>
+  <tr><th>Bảng</th><th>Nhóm</th><th>Có cần thêm vào SRS?</th></tr>
+  <tr><td><code>PurchaseReceipts</code></td><td>INP – phiếu nhập</td><td><span class="tag t-yes">Có</span></td></tr>
+  <tr><td><code>PurchaseReceiptLines</code></td><td>INP – dòng phiếu nhập</td><td><span class="tag t-yes">Có</span></td></tr>
+  <tr><td><code>PurchaseReturns</code></td><td>INP – phiếu trả hàng nhà cung cấp</td><td><span class="tag t-yes">Có</span></td></tr>
+  <tr><td><code>PurchaseReturnLines</code></td><td>INP – dòng phiếu trả</td><td><span class="tag t-yes">Có</span></td></tr>
+  <tr><td><code>SupplierPayments</code></td><td>INP – thanh toán nhà cung cấp</td><td><span class="tag t-yes">Có</span></td></tr>
+  <tr><td><code>EmployeeWorkingZones</code></td><td>Nhân sự – nhân viên làm ở những khu nào</td><td><span class="tag t-yes">Có</span> thêm entity hoặc thuộc tính trên E03 Employee</td></tr>
+  <tr><td><code>LoginSessions</code></td><td>Kỹ thuật – phiên đăng nhập</td><td><span class="tag t-no">Không</span> mô tả ở SDS</td></tr>
+  <tr><td><code>VerificationCodes</code></td><td>Kỹ thuật – mã xác minh email/SĐT</td><td><span class="tag t-no">Không</span> mô tả ở SDS</td></tr>
+  <tr><td><code>PushDevices</code></td><td>Kỹ thuật – thiết bị nhận thông báo push</td><td><span class="tag t-no">Không</span> mô tả ở SDS</td></tr>
+</table></div>
+
+<h2>5. Khớp tên (48)</h2>
+<div class="card"><table>
+  <tr><th>Nhóm SRS</th><th>Entity → bảng (dạng số nhiều)</th></tr>
+  <tr><td>Tổ chức, tài khoản, phân quyền (6)</td><td>Cooperative, Account, Employee, Role, RolePermission, AccessGrant</td></tr>
+  <tr><td>Khu nuôi, bè (6/8)</td><td>FarmingZone, ZoneComplianceDocument, DocumentZoneScope, Raft, RaftLayoutVersion, Lane</td></tr>
+  <tr><td>Giống, vụ nuôi, đo nước (6/8)</td><td>SeedReceiptLot, CultivationCycle, SeedingEvent, LaneSegment, CultivationLogEntry, WaterMeasurement</td></tr>
+  <tr><td>Đơn hàng, bán hàng (6)</td><td>Product, Customer, SalesOrder, SaleTransaction, PortWeighing, PortHandover</td></tr>
+  <tr><td>Thu hoạch, truy xuất (4)</td><td>HarvestEvent, TraceabilityLot, TracePublicationVersion, TraceCorrection</td></tr>
+  <tr><td>Sau bán hàng (3)</td><td>QualityClaim, SaleAdjustment, PhysicalReturn</td></tr>
+  <tr><td>Tài chính khách hàng (4)</td><td>CustomerReceipt, ReceiptAllocation, CustomerCredit, CustomerRefund</td></tr>
+  <tr><td>Lao động (8)</td><td>Contractor, SeasonalWorker, WorkAssignment, AttendanceRecord, PayRuleVersion, PayLine, LaborSettlement, LaborPayment</td></tr>
+  <tr><td>Hệ thống (5)</td><td>Notification, MessageDeliveryAttempt, AuditEvent, Status, StatusTransition</td></tr>
+</table></div>
+
+<h2>6. Nhánh đang review</h2>
+<div class="card"><table>
+  <tr><th>Nhánh</th><th>Thay đổi bảng so với <code>develop</code></th></tr>
+  <tr><td><code>feature/OMTS-212-lab</code> (LAB)</td><td>Thêm bảng <strong><code>Payrolls</code></strong> (bảng lương theo kỳ). SRS chưa có entity này.</td></tr>
+  <tr><td><code>feature/OMTS-211-env</code> (ENV)</td><td>Không thêm bảng mới, dùng bảng <code>WaterMeasurements</code> đã có.</td></tr>
+</table></div>
+<div class="note">
+  <strong>Lưu ý khi merge:</strong>
+  <ul>
+    <li>Hai nhánh này tách ra trước khi PR INP được merge, nên snapshot của chúng vẫn còn 4 bảng cũ: <code>SeedSuppliers</code>, <code>OysterSeedTypes</code>, <code>RaftMaterialRecords</code>, <code>RaftMaterialLines</code>.</li>
+    <li>Cần cập nhật hai nhánh theo <code>develop</code> và tạo lại migration trên nền <code>develop</code> trước khi merge. Nếu không, 4 bảng cũ có thể bị tạo lại.</li>
+    <li>Sau khi merge nhánh LAB, database sẽ có <strong>60 bảng</strong>.</li>
+  </ul>
+</div>
+
+<h2>7. Đề xuất cập nhật SRS</h2>
+<ol>
+  <li><strong>Đổi tên</strong> E13 OysterSeedType → FarmingInputItem và E14 SeedSupplier → Supplier. Cập nhật mục đích, thuộc tính và quan hệ theo phạm vi vật tư chung.</li>
+  <li><strong>Bỏ</strong> E49 RaftMaterialRecord và E50 RaftMaterialLine. Ghi rõ chi phí vật tư bè lấy từ phiếu nhập.</li>
+  <li><strong>Thêm 5 entity INP:</strong> PurchaseReceipt, PurchaseReceiptLine, PurchaseReturn, PurchaseReturnLine, SupplierPayment.</li>
+  <li><strong>Thêm khu làm việc của nhân viên:</strong> entity <code>EmployeeWorkingZone</code> hoặc thuộc tính trên E03 Employee, cho khớp với mô tả UC LAB-01.</li>
+  <li><strong>Thêm Payroll</strong> khi nhánh LAB được merge.</li>
+  <li><strong>Vẽ lại ERD-FULL</strong> (đang là v11, 52 entity, 101 quan hệ) và cập nhật số entity, số quan hệ trong mục 3.1 và 3.2.</li>
+  <li><strong>Rà các chỗ còn nhắc entity cũ:</strong>
+    <ul>
+      <li>OysterSeedType: 6 chỗ ở mục I, 2 chỗ ở mục V.</li>
+      <li>SeedSupplier: 5 chỗ ở mục I.</li>
+      <li>RaftMaterialRecord: 7 chỗ ở mục I, 2 chỗ ở mục V.</li>
+      <li>RaftMaterialLine: 5 chỗ ở mục I, 2 chỗ ở mục V.</li>
+      <li>Các chỗ này gồm bảng phân loại trạng thái ở mục 3.4, quan hệ của E02 Account, và E15 SeedReceiptLot.</li>
+    </ul>
+  </li>
+  <li><strong>Bổ sung nhóm trạng thái</strong> <code>PURCHASE_RECEIPT</code> và <code>SUPPLIER_PAYMENT</code> cùng các chuyển trạng thái tương ứng vào bảng 3.4. Code đã có các nhóm này theo mô tả commit của PR #12.</li>
+</ol>
+<p>Sau khi cập nhật theo các đề xuất 1–6, số entity trong SRS sẽ là 52 − 2 + 5 + 1 + 1 = <strong>57</strong>. Con số này bằng 60 bảng (sau khi merge LAB) trừ 3 bảng kỹ thuật.</p>
+
+<h2>Nguồn đối chiếu</h2>
+<ul class="small">
+  <li><strong>SRS:</strong> <code>Downloads\omts-srs-md\md\03-i-overall-requirements.md</code>, mục 3.1 và 3.2 (E01–E52)</li>
+  <li><strong>Database:</strong> <code>OmtsDbContextModelSnapshot.cs</code>, nhánh <code>develop</code> tại commit <code>48ae1e0</code> (23/10/2026). Nhánh đang review: <code>feature/OMTS-211-env</code>, <code>feature/OMTS-212-lab</code>.</li>
+  <li><strong>Quy ước:</strong> database đặt tên bảng ở dạng số nhiều (<code>Account</code> → <code>Accounts</code>), không tính là lệch tên. Bảng <code>__EFMigrationsHistory</code> không được tính. Báo cáo không so đến mức cột.</li>
+</ul>
+</main>
+</body>
+</html>
