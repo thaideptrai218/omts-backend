@@ -65,3 +65,11 @@ jobs:
           name: coverage-report
           path: coverage-report
           if-no-files-found: ignore
+
+  # The API image of docker-compose.yml is built (never pushed), so the Dockerfile cannot silently break.
+  docker-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the API image
+        run: docker build --pull -t omts-api:ci .
