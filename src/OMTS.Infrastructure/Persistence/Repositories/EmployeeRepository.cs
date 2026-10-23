@@ -30,7 +30,9 @@ internal sealed class EmployeeRepository(OmtsDbContext db) : IEmployeeRepository
         if (!string.IsNullOrWhiteSpace(search))
         {
             var text = search.Trim();
-            query = query.Where(e => e.FullName.Contains(text) || (e.PhoneNumber != null && e.PhoneNumber.Contains(text)));
+            // Phones are stored as 0xxxxxxxxx: a search typed as +84… or 84… matches them too.
+            var phone = text.StartsWith("+84", StringComparison.Ordinal) ? $"0{text[3..]}" : text;
+            query = query.Where(e => e.FullName.Contains(text) || (e.PhoneNumber != null && (e.PhoneNumber.Contains(text) || e.PhoneNumber.Contains(phone))));
         }
 
         if (statusId is not null)

@@ -29,7 +29,17 @@ public sealed partial class CooperativeProfileService(
     AuditLogService audit,
     IUnitOfWork unitOfWork)
 {
+    /// <summary>The current logo (whatever it is when the page is opened).</summary>
     public const string PublicLogoPath = "/api/public/cooperative/logo";
+
+    /// <summary>
+    /// One logo file, addressed by its storage path below <see cref="LogoCategory"/>: the URL never changes
+    /// meaning, so a published provenance version that stored it keeps the logo of its publication time.
+    /// Old logo files are never deleted.
+    /// </summary>
+    public const string PublicLogoFilesPath = "/api/public/cooperative/logos";
+
+    private const string LogoCategory = "cooperative-logos";
     private const int MaxText = 255;
     private const int MaxAddress = 500;
     // Cooperatives.BusinessLines column length.
@@ -107,7 +117,7 @@ public sealed partial class CooperativeProfileService(
             return AppError.Invalid("Logo");
         }
 
-        var uploaded = await storage.UploadAsync(checkedFile.Files[0], "cooperative-logos", cancellationToken);
+        var uploaded = await storage.UploadAsync(checkedFile.Files[0], LogoCategory, cancellationToken);
         if (!uploaded.Succeeded)
         {
             return new AppError(ErrorKind.BadGateway, UserMessages.FileOperationFailed);
@@ -117,14 +127,27 @@ public sealed partial class CooperativeProfileService(
     }
 
     public async Task<Result<CooperativeProfileView>> RemoveLogoAsync(CancellationToken cancellationToken) =>
-        await cooperatives.GetCurrentAsync(cancellationToken) is { } cooperative
-            ? await SetLogoAsync(cooperative, null, cancellationToken)
-            : AppError.NotFound;
+        await cooperatives.GetCurrentAsync(cancellationToken) switch
+        {
+            null => AppError.NotFound,
+            // Nothing to remove: no change, no audit row.
+            { LogoUrl: null } cooperative => View(cooperative),
+            var cooperative => await SetLogoAsync(cooperative, null, cancellationToken),
+        };
 
-    /// <summary>The logo file for the public page, or null when there is none.</summary>
-    public async Task<(Stream Content, string ContentType)?> OpenLogoAsync(CancellationToken cancellationToken)
+    /// <summary>The current logo file for the public page, or null when there is none.</summary>
+    public async Task<(Stream Content, string ContentType)?> OpenLogoAsync(CancellationToken cancellationToken) =>
+        await OpenAsync((await cooperatives.GetCurrentAsync(cancellationToken))?.LogoUrl, cancellationToken);
+
+    /// <summary>
+    /// One logo file by its path below the logo category ("2026/10/{id}.png"), current or replaced. Only
+    /// logo files can be reached: the category is fixed here and the path must have the storage key shape.
+    /// </summary>
+    public async Task<(Stream Content, string ContentType)?> OpenLogoFileAsync(string path, CancellationToken cancellationToken) =>
+        LogoFilePattern().IsMatch(path) ? await OpenAsync($"{LogoCategory}/{path}", cancellationToken) : null;
+
+    private async Task<(Stream Content, string ContentType)?> OpenAsync(string? key, CancellationToken cancellationToken)
     {
-        var key = (await cooperatives.GetCurrentAsync(cancellationToken))?.LogoUrl;
         if (key is null || FileValidator.ContentTypeOfKey(key) is not { } contentType || await storage.OpenReadAsync(key, cancellationToken) is not { } content)
         {
             return null;
@@ -210,8 +233,10 @@ public sealed partial class CooperativeProfileService(
 
     private CooperativeProfileView View(Cooperative c)
     {
-        // A version suffix so browsers fetch a replaced logo again.
-        var logoUrl = c.LogoUrl is null ? null : $"{PublicLogoPath}?v={SecretHashing.Sha256Hex(c.LogoUrl)[..12]}";
+        // The URL of this very file: a replaced logo gets a new URL, and the old one keeps working.
+        var logoUrl = c.LogoUrl is { } key && key.StartsWith($"{LogoCategory}/", StringComparison.Ordinal)
+            ? $"{PublicLogoFilesPath}/{key[(LogoCategory.Length + 1)..]}"
+            : null;
         return new CooperativeProfileView(
             c.Id, c.FullName, c.TaxCode, c.OfficeAddress, c.PhoneNumber, c.Email, c.Website, c.LegalRepresentative, Lines(c), logoUrl,
             statusCatalog.DisplayNameOf(c.StatusId),
@@ -223,6 +248,9 @@ public sealed partial class CooperativeProfileService(
         string FullName, string TaxCode, string OfficeAddress, string PhoneNumber, string? Email, string? Website,
         string LegalRepresentative, IReadOnlyList<string> BusinessLines);
 
-    [GeneratedRegex(@"\A\d{10}(-\d{3})?\z")]
+    [GeneratedRegex(@"\A[0-9]{10}(-[0-9]{3})?\z")]
     private static partial Regex TaxCodePattern();
+
+    [GeneratedRegex(@"\A[0-9]{4}/[0-9]{2}/[a-f0-9]{32}\.(jpg|png|webp)\z")]
+    private static partial Regex LogoFilePattern();
 }

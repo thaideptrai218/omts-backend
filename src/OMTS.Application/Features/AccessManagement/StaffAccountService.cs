@@ -78,20 +78,35 @@ public sealed class StaffAccountService(
     }
 
     /// <summary>
+    /// Only Staff accounts are created here and in LAB-01: a request for another subject type (Owner rights)
+    /// is refused with 403 and audited. The caller saves the audit row.
+    /// </summary>
+    public AppError? RefuseOtherSubjectType(SubjectType? requested, string? username)
+    {
+        if (requested is not { } subjectType || subjectType == SubjectType.Staff)
+        {
+            return null;
+        }
+
+        audit.Record(new AuditEntry("Account.OwnerRightsRefused", nameof(Account))
+        {
+            // AuditEvents.RecordCode holds 100 characters.
+            RecordCode = username is { Length: > 100 } longName ? longName[..100] : username,
+            After = new { RequestedSubjectType = subjectType.ToString() },
+        });
+        return AppError.Forbidden;
+    }
+
+    /// <summary>
     /// Validates and adds a staff account with its zone–role grants (and the employee link) to the unit of
     /// work without saving, so LAB-01 can save employee, account, grants and link together.
     /// </summary>
     public async Task<Result<StaffAccountWithPassword>> AddStaffAccountAsync(
         CreateStaffAccountRequest request, Employee? employee, CancellationToken cancellationToken)
     {
-        if (request.SubjectType is { } subjectType && subjectType != SubjectType.Staff)
+        if (RefuseOtherSubjectType(request.SubjectType, request.Username) is { } refused)
         {
-            audit.Record(new AuditEntry("Account.OwnerRightsRefused", nameof(Account))
-            {
-                RecordCode = request.Username is { Length: > 100 } longName ? longName[..100] : request.Username,
-                After = new { RequestedSubjectType = subjectType.ToString() },
-            });
-            return AppError.Forbidden;
+            return refused;
         }
 
         var fields = await ValidateFieldsAsync(request.DisplayName, request.Username, request.PhoneNumber, request.Email, null, cancellationToken);

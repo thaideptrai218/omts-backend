@@ -62,4 +62,22 @@ public sealed class CooperativeProfileController(CooperativeProfileService profi
         Response.Headers.XContentTypeOptions = "nosniff";
         return File(logo.Content, logo.ContentType);
     }
+
+    /// <summary>
+    /// One logo file, current or replaced (anonymous). This is the URL the profile returns and a published
+    /// provenance version stores: it always shows the same image.
+    /// </summary>
+    [HttpGet(CooperativeProfileService.PublicLogoFilesPath + "/{year}/{month}/{file}")]
+    [AllowAnonymous]
+    [ResponseCache(Duration = 86400)]
+    public async Task<IActionResult> PublicLogoFile(string year, string month, string file, CancellationToken cancellationToken)
+    {
+        if (await profiles.OpenLogoFileAsync($"{year}/{month}/{file}", cancellationToken) is not { } logo)
+        {
+            return NotFound();
+        }
+
+        Response.Headers.XContentTypeOptions = "nosniff";
+        return File(logo.Content, logo.ContentType);
+    }
 }

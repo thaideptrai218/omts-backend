@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using OMTS.Api.Common;
 using OMTS.Api.Filters;
 using OMTS.Application.Features.AccessManagement.Dtos;
@@ -54,6 +55,7 @@ public sealed class EmployeesController(EmployeeService employees) : ControllerB
 
     [HttpPost("{id:guid}/reinstate")]
     [ProducesResponseType<EmploymentChanged>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Reinstate(Guid id, CancellationToken cancellationToken) =>
-        (await employees.ReinstateAsync(id, cancellationToken)).ToActionResult(Ok);
+    public async Task<IActionResult> Reinstate(
+        Guid id, [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] ReinstateEmployeeRequest? request, CancellationToken cancellationToken) =>
+        (await employees.ReinstateAsync(id, request?.RowVersion, cancellationToken)).ToActionResult(Ok);
 }

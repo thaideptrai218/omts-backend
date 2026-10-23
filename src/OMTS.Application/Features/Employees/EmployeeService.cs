@@ -219,7 +219,8 @@ public sealed class EmployeeService(
     /// <summary>Employed → Left. Records already made stay; work or attendance after the end date blocks it (MSG11).</summary>
     public async Task<Result<EmploymentChanged>> EndEmploymentAsync(Guid id, EndEmploymentRequest request, CancellationToken cancellationToken)
     {
-        if (request.EndDate is not { } endDate)
+        // Ending is effective at once (status Left), so the end date is today or earlier.
+        if (request.EndDate is not { } endDate || endDate > timeProvider.Today())
         {
             return AppError.Invalid("End date");
         }
@@ -228,6 +229,11 @@ public sealed class EmployeeService(
         if (employee is null)
         {
             return AppError.NotFound;
+        }
+
+        if (request.RowVersion is not null && await rowVersions.CheckAsync(employee, request.RowVersion, cancellationToken) is { } stale)
+        {
+            return stale;
         }
 
         if (SameStatus(employee, StatusIds.Employee.Left) is { } same)
@@ -252,12 +258,17 @@ public sealed class EmployeeService(
     }
 
     /// <summary>Left → Employed; the end date is cleared and the Owner is asked to review the linked account.</summary>
-    public async Task<Result<EmploymentChanged>> ReinstateAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<Result<EmploymentChanged>> ReinstateAsync(Guid id, string? rowVersion, CancellationToken cancellationToken)
     {
         var employee = await employees.GetForEditAsync(id, cancellationToken);
         if (employee is null)
         {
             return AppError.NotFound;
+        }
+
+        if (rowVersion is not null && await rowVersions.CheckAsync(employee, rowVersion, cancellationToken) is { } stale)
+        {
+            return stale;
         }
 
         if (SameStatus(employee, StatusIds.Employee.Working) is { } same)
@@ -333,23 +344,23 @@ public sealed class EmployeeService(
             employee,
             cancellationToken);
 
-        // LAB-01 names the duplicate "Account" whatever field collided.
-        return created.Error is { Message.Code: "MSG03" } duplicate
+        // LAB-01 names a username or phone collision "Account"; other duplicates (a repeated zone–role row) keep their message.
+        return created.Error is { } duplicate
+            && (duplicate.Message == UserMessages.AlreadyExists("Username") || duplicate.Message == UserMessages.AlreadyExists("Phone number"))
             ? AppError.Conflict(UserMessages.AlreadyExists("Account"), duplicate.Details)
             : created;
     }
 
-    // An attempt to give Owner rights is refused before anything is added, so only its audit row is saved.
+    // An attempt to give Owner rights is refused (the ACS rule) before anything is added, so only its audit row is saved.
     private async Task<AppError?> RefuseOwnerRightsAsync(NewEmployeeAccount? account, CancellationToken cancellationToken)
     {
-        if (account?.SubjectType is not { } subjectType || subjectType == SubjectType.Staff)
+        if (account is null || staffAccounts.RefuseOtherSubjectType(account.SubjectType, account.Username) is not { } refused)
         {
             return null;
         }
 
-        audit.Record(new AuditEntry("Account.OwnerRightsRefused", nameof(Account)) { RecordCode = account.Username, After = new { RequestedSubjectType = subjectType.ToString() } });
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return AppError.Forbidden;
+        return refused;
     }
 
     private AppError? SameStatus(Employee employee, int target)

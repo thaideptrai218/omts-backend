@@ -35,7 +35,11 @@ public sealed record SaveEmployeeRequest(
     NewEmployeeAccount? Account = null,
     string? RowVersion = null);
 
-public sealed record EndEmploymentRequest(DateOnly? EndDate);
+/// <param name="RowVersion">The version the screen was read from; an older one answers MSG06 (optional for older clients).</param>
+public sealed record EndEmploymentRequest(DateOnly? EndDate, string? RowVersion = null);
+
+/// <param name="RowVersion">The version the screen was read from; an older one answers MSG06 (optional for older clients).</param>
+public sealed record ReinstateEmployeeRequest(string? RowVersion = null);
 
 public sealed record ZoneRef(Guid Id, string Code, string Name);
 
