@@ -21,9 +21,10 @@ public sealed class AuthService(
     UnknownLoginCounter unknownLogins,
     TimeProvider timeProvider)
 {
-    // Concurrent logins of one account (double click, web + mobile) conflict on its row version; the
-    // loser re-reads the account and applies its change again.
-    private const int MaxSaveAttempts = 5;
+    // Concurrent logins of one account (double click, web + mobile, a burst of guesses) conflict on its row
+    // version; the loser re-reads the account and applies its outcome again. Each round saves one of them,
+    // so this covers any burst the per-IP limiter lets through.
+    private const int MaxSaveAttempts = 20;
 
     private const int MaxUserAgentLength = 500;
     private const int MaxDeviceNameLength = 200;
@@ -42,11 +43,25 @@ public sealed class AuthService(
             return FailUnknownIdentifier(identifier, request.Password);
         }
 
+        // Hashed once: a retry re-applies the outcome to the re-read account, it does not hash again.
+        PasswordCheck? passwordCheck = null;
         for (var attempt = 1; ; attempt++)
         {
             try
             {
-                return await LoginAsync(account, request, client, cancellationToken);
+                if (account.IsTemporarilyLocked(timeProvider.GetUtcNow()))
+                {
+                    // Hashed like a locked unknown identifier, so the answer time does not tell them apart.
+                    if (passwordCheck is null)
+                    {
+                        VerifyAgainstDummyHash(request.Password);
+                    }
+
+                    return AuthResult.Failure(AuthError.TemporarilyLocked);
+                }
+
+                passwordCheck ??= passwordHasher.Verify(account.PasswordHash, request.Password);
+                return await LoginAsync(account, request, passwordCheck.Value, client, cancellationToken);
             }
             catch (ConcurrencyConflictException) when (attempt < MaxSaveAttempts)
             {
@@ -118,17 +133,10 @@ public sealed class AuthService(
     public Task<bool> IsSessionActiveAsync(Guid accountId, Guid sessionId, CancellationToken cancellationToken) =>
         sessions.IsActiveAsync(accountId, sessionId, timeProvider.GetUtcNow(), cancellationToken);
 
-    private async Task<AuthResult> LoginAsync(Account account, LoginRequest request, ClientInfo client, CancellationToken cancellationToken)
+    private async Task<AuthResult> LoginAsync(
+        Account account, LoginRequest request, PasswordCheck passwordCheck, ClientInfo client, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
-        if (account.IsTemporarilyLocked(now))
-        {
-            // Hashed like a locked unknown identifier, so the answer time does not tell them apart.
-            VerifyAgainstDummyHash(request.Password);
-            return AuthResult.Failure(AuthError.TemporarilyLocked);
-        }
-
-        var passwordCheck = passwordHasher.Verify(account.PasswordHash, request.Password);
         if (passwordCheck == PasswordCheck.Failed)
         {
             account.RegisterFailedLogin(now);

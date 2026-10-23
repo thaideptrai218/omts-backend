@@ -7,13 +7,16 @@ namespace OMTS.Application.Features.Auth;
 /// Failed-login counts of identifiers that match no account (they are locked out like accounts, see
 /// <see cref="AuthService"/>). The identifiers come from anonymous callers, so the counts live in their own
 /// cache with a fixed number of entries: made-up identifiers cannot grow server memory, and the shared cache
-/// (permissions) is never evicted by them. When the cache is full a new identifier is simply not counted.
+/// (permissions) is never evicted by them. When the cache is full a new identifier is simply not counted:
+/// nothing is evicted early (no compaction), so flooding cannot reset the count of an identifier being guessed.
+/// Counting is serialised, so parallel failures of one identifier are all counted.
 /// </summary>
 public sealed class UnknownLoginCounter(int maxIdentifiers = UnknownLoginCounter.DefaultMaxIdentifiers) : IDisposable
 {
     public const int DefaultMaxIdentifiers = 100_000;
 
-    private readonly MemoryCache _cache = new(new MemoryCacheOptions { SizeLimit = maxIdentifiers });
+    private readonly MemoryCache _cache = new(new MemoryCacheOptions { SizeLimit = maxIdentifiers, CompactionPercentage = 0 });
+    private readonly object _gate = new();
 
     /// <summary>Number of identifiers currently counted (never more than the limit).</summary>
     public int Count => _cache.Count;
@@ -22,13 +25,16 @@ public sealed class UnknownLoginCounter(int maxIdentifiers = UnknownLoginCounter
     public int RegisterFailure(string identifier)
     {
         var key = identifier.ToUpperInvariant();
-        var failures = _cache.Get<int>(key) + 1;
-        _cache.Set(key, failures, new MemoryCacheEntryOptions
+        lock (_gate)
         {
-            Size = 1,
-            AbsoluteExpirationRelativeToNow = Account.TemporaryLockDuration,
-        });
-        return failures;
+            var failures = _cache.Get<int>(key) + 1;
+            _cache.Set(key, failures, new MemoryCacheEntryOptions
+            {
+                Size = 1,
+                AbsoluteExpirationRelativeToNow = Account.TemporaryLockDuration,
+            });
+            return failures;
+        }
     }
 
     public void Dispose() => _cache.Dispose();
