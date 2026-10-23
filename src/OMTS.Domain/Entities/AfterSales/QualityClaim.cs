@@ -1,8 +1,10 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Platform;
+using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
-using OMTS.Domain.Statuses;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.AfterSales;
 
 /// <summary>
 /// E31 – Complaint awaiting decision; by itself it neither reduces debt nor means goods came back (BR-15).

@@ -1,7 +1,6 @@
-using OMTS.Domain.Entities;
-using OMTS.Domain.Statuses;
-using G = OMTS.Domain.Statuses.StatusGroups;
-using S = OMTS.Domain.Statuses.StatusIds;
+using OMTS.Domain.Entities.Platform;
+using G = OMTS.Domain.Constants.StatusGroups;
+using S = OMTS.Domain.Constants.StatusIds;
 
 namespace OMTS.Infrastructure.Persistence.Seed;
 

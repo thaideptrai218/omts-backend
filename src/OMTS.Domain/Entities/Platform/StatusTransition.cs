@@ -1,4 +1,4 @@
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Platform;
 
 /// <summary>
 /// E52 – A permitted status transition (Table 3.4-2 and the two USAGE transitions). Any transition not

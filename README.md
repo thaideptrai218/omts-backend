@@ -11,15 +11,31 @@ Sibling repos: [omts-web](https://github.com/thaideptrai218/omts-web) · [omts-m
 
 ```
 src/
-  OMTS.Domain/          Entities, value objects, business rules. No dependencies.
-  OMTS.Application/     Use cases and ports (interfaces). Depends on Domain.
-  OMTS.Infrastructure/  EF Core DbContext, external adapters (e.g. National Traceability Portal). Depends on Application.
-  OMTS.Api/             HTTP endpoints, DI composition root. Depends on Application + Infrastructure.
+  OMTS.Domain/                 No dependencies.
+    Common/                    Entity, AuditableEntity, IHasStatus
+    Constants/                 StatusIds, StatusGroups (fixed Status catalog)
+    Enums/
+    Entities/<Group>/          52 SRS entities by group: Identity, Farming, Cultivation, Sales,
+                               Traceability, AfterSales, Finance, Labor, Platform
+  OMTS.Application/            Use cases and ports. Depends on Domain only (no EF Core).
+    Common/Interfaces/         Ports: Persistence/ (IUnitOfWork, I*Repository), Identity/, ICurrentUser
+    Common/Models/             Types the ports exchange (AccessToken, EffectiveGrant, ...)
+    Common/Constants/
+    Features/<Feature>/        Services of a feature, with Dtos/ (API contracts) and Models/
+  OMTS.Infrastructure/         Implements the ports. Depends on Application.
+    Identity/                  JWT tokens, password hashing
+    Persistence/               OmtsDbContext, UnitOfWork
+      Configurations/<Group>/  One <Entity>Configuration per entity, same groups as Domain
+      Repositories/  Interceptors/  Seed/  Migrations/
+  OMTS.Api/                    HTTP endpoints, DI composition root.
+    Controllers/  Filters/  Extensions/  Services/  Common/
 tests/
-  OMTS.Domain.UnitTests/  OMTS.Application.UnitTests/  OMTS.Api.IntegrationTests/
+  OMTS.Domain.UnitTests/  OMTS.Application.UnitTests/
+  OMTS.Api.IntegrationTests/   Infrastructure/ (test host, test-only endpoints), one folder per feature
 ```
 
-Dependencies point inward only; tests in `tests/` guard this rule.
+Dependencies point inward only; tests in `tests/` guard this rule. Conventions: one type per file,
+namespace = folder path, interfaces (ports) live under `Application/Common/Interfaces`.
 
 ## Getting started
 
@@ -29,9 +45,27 @@ Prerequisites: .NET SDK 8.0 (pinned by `global.json`), SQL Server (LocalDB / Doc
 dotnet restore
 # Connection string is kept out of git via user-secrets:
 dotnet user-secrets set "ConnectionStrings:OmtsDb" "Server=localhost;Database=OMTS;User Id=sa;Password=<pwd>;TrustServerCertificate=True" --project src/OMTS.Api
+# JWT signing key (random, at least 32 bytes), e.g. from: openssl rand -base64 64
+dotnet user-secrets set "Jwt:SigningKey" "<random key>" --project src/OMTS.Api
 dotnet run --project src/OMTS.Api        # Swagger at /swagger, health at /health
 dotnet test                               # all tests
 ```
+
+API integration tests use an in-memory database. Tests marked `[SqlServerFact]` (migrations, constraints,
+transactions) need a real SQL Server and are skipped unless `OMTS_TEST_SQLSERVER` holds a server connection
+string; each test creates and drops its own database. CI starts a SQL Server container for them.
+
+```bash
+OMTS_TEST_SQLSERVER="Server=localhost;User Id=sa;Password=<pwd>;TrustServerCertificate=True" dotnet test
+```
+
+### Authentication
+
+`POST /api/auth/login` (username, verified phone or verified email) returns a 15-minute access token and a
+refresh token (7 days web / 30 days mobile, rotated on every `POST /api/auth/refresh`); `POST /api/auth/logout`
+revokes the session. `GET /api/me` and `GET /api/me/permissions` return the caller and their effective
+zone-scoped permissions. Errors are RFC 7807 problem details whose `code` is the SRS message code
+(`MSG12`, `MSG69`…) and whose `detail` is the SRS English text.
 
 ### Database (EF Core code-first)
 

@@ -1,7 +1,8 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Labor;
 
 /// <summary>
 /// E41 – Attendance of one person on one day (exactly one of EmployeeId/WorkerId). The contractor of

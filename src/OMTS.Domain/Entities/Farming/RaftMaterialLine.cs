@@ -1,7 +1,7 @@
 using OMTS.Domain.Common;
 using OMTS.Domain.Enums;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Farming;
 
 /// <summary>E50 – One material line of a raft material record; quantity &gt; 0, unit price ≥ 0 (BR-27).</summary>
 public class RaftMaterialLine : Entity

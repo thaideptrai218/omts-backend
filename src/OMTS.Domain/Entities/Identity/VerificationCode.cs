@@ -1,7 +1,7 @@
 using OMTS.Domain.Common;
 using OMTS.Domain.Enums;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Identity;
 
 /// <summary>
 /// Technical entity (SDS): a 6-digit code proving possession of a phone number or email (UC08).

@@ -1,7 +1,8 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Labor;
 
 /// <summary>
 /// E43 – One wage/salary line before aggregation: daily wage, monthly salary, task contract,

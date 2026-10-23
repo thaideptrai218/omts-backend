@@ -1,6 +1,8 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Entities.Cultivation;
+using OMTS.Domain.Entities.Sales;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Traceability;
 
 /// <summary>
 /// E25 – Lot/QR formed by one first-sale order (BR-09); reused across later sales through returns

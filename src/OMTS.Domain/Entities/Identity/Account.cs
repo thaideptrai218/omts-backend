@@ -1,8 +1,10 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Platform;
+using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
-using OMTS.Domain.Statuses;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Identity;
 
 /// <summary>E02 – A person who can log in; the subject that receives zone–role pairs.</summary>
 public class Account : AuditableEntity, IHasStatus
@@ -52,8 +54,9 @@ public class Account : AuditableEntity, IHasStatus
 
     public bool IsTemporarilyLocked(DateTimeOffset now) => LockoutEndAt > now;
 
+    /// <summary>A temporary password without an issue time is treated as expired (fail closed).</summary>
     public bool IsTemporaryPasswordExpired(DateTimeOffset now) =>
-        MustChangePassword && now - TemporaryPasswordIssuedAt > TemporaryPasswordLifetime;
+        MustChangePassword && (TemporaryPasswordIssuedAt is null || now - TemporaryPasswordIssuedAt > TemporaryPasswordLifetime);
 
     public void RegisterFailedLogin(DateTimeOffset now)
     {

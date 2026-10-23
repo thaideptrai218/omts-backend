@@ -1,7 +1,8 @@
 using OMTS.Domain.Common;
-using OMTS.Domain.Statuses;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Platform;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Identity;
 
 /// <summary>E03 – Personnel profile for work assignment, attendance and pay; separate from the login account.</summary>
 public class Employee : AuditableEntity, IHasStatus

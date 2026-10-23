@@ -1,7 +1,8 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Finance;
 
 /// <summary>
 /// E34 – Money actually received from a customer, including advance payments (BR-13, BR-24).

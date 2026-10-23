@@ -1,8 +1,10 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Farming;
+using OMTS.Domain.Entities.Platform;
 using OMTS.Domain.Enums;
-using OMTS.Domain.Statuses;
 
-namespace OMTS.Domain.Entities;
+namespace OMTS.Domain.Entities.Identity;
 
 /// <summary>
 /// E06 – A zone–role pair assigned to an account. Effective permissions are the union of the roles'
