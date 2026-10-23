@@ -13,6 +13,9 @@ public sealed record WaterPeriod(DateOnly From, DateOnly To)
     public const string FromField = "From";
     public const string ToField = "To";
 
+    /// <summary>Earliest accepted <c>from</c>/<c>to</c>.</summary>
+    public static readonly DateOnly Earliest = new(2000, 1, 1);
+
     /// <summary>Start of <see cref="From"/> in local time.</summary>
     public DateTimeOffset FromInstant => StartOf(From);
 
@@ -24,12 +27,14 @@ public sealed record WaterPeriod(DateOnly From, DateOnly To)
     /// <summary><c>to</c> defaults to today and <c>from</c> to <paramref name="defaultFrom"/>(to); from after to is invalid (MSG01).</summary>
     public static Result<WaterPeriod> Parse(string? from, string? to, DateOnly today, Func<DateOnly, DateOnly> defaultFrom)
     {
-        if (!TryParse(to, out var parsedTo))
+        // Dates outside [2000-01-01, today + 1 year] are refused (MSG01) so no instant or period count overflows.
+        var latest = today.AddYears(1);
+        if (!TryParse(to, out var parsedTo) || parsedTo < Earliest || parsedTo > latest)
         {
             return AppError.Invalid(ToField);
         }
 
-        if (!TryParse(from, out var parsedFrom))
+        if (!TryParse(from, out var parsedFrom) || parsedFrom < Earliest || parsedFrom > latest)
         {
             return AppError.Invalid(FromField);
         }

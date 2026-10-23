@@ -171,13 +171,15 @@ public static class DependencyInjection
         services.AddOptions<OcrOptions>().Bind(configuration.GetSection(OcrOptions.SectionName));
         services.AddOptions<OcrProviderOptions>().Bind(configuration.GetSection(OcrProviderOptions.SectionName));
         services.AddSingleton<FakeOcrService>();
-        // Only the fake exists until the real OCR provider ticket; any other value is a configuration error.
+        services.AddSingleton<NotConfiguredOcrService>();
+        // Only the fake (Development/tests) exists until the real OCR provider ticket. Unset or unknown fails
+        // closed: no readings, MSG04 and manual entry, instead of fabricated values.
         services.AddSingleton<IOcrService>(provider =>
         {
             var name = provider.GetRequiredService<IOptions<OcrProviderOptions>>().Value.Provider;
             return name == OcrProviderOptions.FakeProvider
                 ? provider.GetRequiredService<FakeOcrService>()
-                : throw UnknownProvider(OcrProviderOptions.SectionName, name);
+                : provider.GetRequiredService<NotConfiguredOcrService>();
         });
     }
 

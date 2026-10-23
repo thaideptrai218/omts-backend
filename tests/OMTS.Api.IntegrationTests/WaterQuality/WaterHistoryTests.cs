@@ -103,6 +103,13 @@ public class WaterHistoryTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
     [InlineData("?from=2026-13-01", "From")]
     [InlineData("?status=Deleted", "Status")]
     [InlineData("export?from=2026-10-05&to=2026-10-01", "From")]
+    // Extreme dates used to overflow DateTimeOffset (500); the month chart is capped at 10 years.
+    [InlineData("?from=0001-01-01", "From")]
+    [InlineData("?to=9999-12-31", "To")]
+    [InlineData("chart?from=0001-01-01", "From")]
+    [InlineData("chart?to=9999-12-31&groupBy=day", "To")]
+    [InlineData("export?from=1999-12-31", "From")]
+    [InlineData("chart?from=2000-01-01&to=2026-10-01&groupBy=month", "Group by")]
     public async Task Invalid_filters_are_MSG01(string query, string field)
     {
         var z = await api.ZoneAsync();
@@ -112,6 +119,34 @@ public class WaterHistoryTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("MSG01", await response.ErrorCodeAsync());
         Assert.Equal(field, (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
+    }
+
+    [Fact]
+    public async Task A_ten_year_month_chart_and_the_earliest_date_are_still_accepted()
+    {
+        var z = await api.ZoneAsync();
+        var from = DateOnly.FromDateTime(DateTime.UtcNow).AddYears(-10);
+
+        var chart = await z.Owner.GetAsync($"{z.Base}/chart?from={from:yyyy-MM-dd}&groupBy=month");
+        var list = await z.Owner.GetAsync($"{z.Base}?from=2000-01-01");
+
+        Assert.Equal(HttpStatusCode.OK, chart.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(int.MaxValue)]
+    [InlineData(21474837)]
+    public async Task A_huge_page_is_clamped_instead_of_overflowing_the_offset(int page)
+    {
+        var z = await api.ZoneAsync();
+
+        var response = await z.Owner.GetAsync($"{z.Base}?status=All&page={page}");
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(body.GetProperty("page").GetInt32() <= int.MaxValue / 100);
+        Assert.Equal(0, body.GetProperty("items").GetArrayLength());
     }
 
     [Fact]

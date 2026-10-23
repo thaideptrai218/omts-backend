@@ -31,6 +31,7 @@ public sealed class WaterMeasurementQueryService(
     ILogger<WaterMeasurementQueryService> logger)
 {
     public const int MaxPageSize = 100;
+    public const int MaxChartYears = 10;
     public const string StatusField = "Status";
     public const string GroupByField = "Group by";
 
@@ -46,7 +47,8 @@ public sealed class WaterMeasurementQueryService(
         }
 
         var (_, period, statusIds) = filter.Value!;
-        var (page, pageSize) = (Math.Max(1, query.Page), Math.Clamp(query.PageSize, 1, MaxPageSize));
+        // The page is capped so (page - 1) * pageSize cannot overflow into a negative OFFSET.
+        var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
         var (items, total) = await measurements.SearchAsync(zoneId, period.FromInstant, period.ToExclusive, statusIds, page, pageSize, cancellationToken);
         return new Paged<WaterMeasurementListItem>(await views.ListItemsAsync(items, cancellationToken), page, pageSize, total);
     }
@@ -94,6 +96,11 @@ public sealed class WaterMeasurementQueryService(
         if (grouping == WaterChartGrouping.Day && period.Value!.Days > WaterChartBuilder.MaxDays)
         {
             return AppError.Invalid(GroupByField, $"Grouping by day covers at most {WaterChartBuilder.MaxDays} days.");
+        }
+
+        if (grouping == WaterChartGrouping.Month && period.Value!.From.AddYears(MaxChartYears) < period.Value.To)
+        {
+            return AppError.Invalid(GroupByField, $"Grouping by month covers at most {MaxChartYears} years.");
         }
 
         var samples = await ConfirmedSamplesAsync(zoneId, period.Value!, cancellationToken);

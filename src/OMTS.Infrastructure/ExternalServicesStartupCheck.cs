@@ -60,7 +60,11 @@ internal sealed class ExternalServicesStartupCheck(
 
         if (ocr.Value.Provider == OcrProviderOptions.FakeProvider)
         {
-            logger.LogWarning("OCR provider is Fake: meter photos are NOT read; users enter the values.");
+            logger.LogWarning("OCR provider is Fake: meter readings are FABRICATED, not read from the photo. Do not use outside development.");
+        }
+        else
+        {
+            logger.LogWarning("OCR provider '{Provider}' is not configured: meter photos are NOT read; users enter the values.", ocr.Value.Provider);
         }
 
         return Task.CompletedTask;
