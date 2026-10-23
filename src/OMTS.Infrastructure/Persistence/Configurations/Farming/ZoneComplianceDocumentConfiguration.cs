@@ -17,5 +17,7 @@ internal sealed class ZoneComplianceDocumentConfiguration : IEntityTypeConfigura
         builder.HasIndex(x => x.ExpiryDate);
 
         builder.HasOne(x => x.ReplacesDocument).WithMany().HasForeignKey(x => x.ReplacesDocumentId);
+        // A license is replaced at most once: parallel replaces cannot both succeed (FARM-03).
+        builder.HasIndex(x => x.ReplacesDocumentId).IsUnique();
     }
 }

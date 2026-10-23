@@ -21,4 +21,10 @@ public class ZoneComplianceDocument : AuditableEntity
     public ZoneComplianceDocument? ReplacesDocument { get; set; }
 
     public ICollection<DocumentZoneScope> ZoneScopes { get; set; } = [];
+
+    /// <summary>When the 30-day expiry reminder was sent (FARM-03 reminder job); cleared when the expiry date changes.</summary>
+    public DateTimeOffset? ExpiringReminderSentAt { get; set; }
+
+    /// <summary>When the "expired" reminder was sent; cleared when the expiry date changes.</summary>
+    public DateTimeOffset? ExpiredReminderSentAt { get; set; }
 }

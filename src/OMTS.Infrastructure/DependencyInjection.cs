@@ -11,10 +11,12 @@ using OMTS.Application.Common.Interfaces.Storage;
 using OMTS.Infrastructure.Bootstrap;
 using OMTS.Infrastructure.HealthChecks;
 using OMTS.Infrastructure.Identity;
+using OMTS.Infrastructure.Jobs;
 using OMTS.Infrastructure.Messaging;
 using OMTS.Infrastructure.Messaging.Fakes;
 using OMTS.Infrastructure.Persistence;
 using OMTS.Infrastructure.Persistence.Interceptors;
+using OMTS.Infrastructure.Persistence.Queries;
 using OMTS.Infrastructure.Persistence.Repositories;
 using OMTS.Infrastructure.Persistence.Seed;
 using OMTS.Infrastructure.Storage;
@@ -62,6 +64,9 @@ public static class DependencyInjection
         services.AddScoped<IPushDeviceRepository, PushDeviceRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
         services.AddScoped<IRoleRepository, RoleRepository>();
+        services.AddScoped<IRaftRepository, RaftRepository>();
+        services.AddScoped<IZoneLicenseRepository, ZoneLicenseRepository>();
+        services.AddScoped<IRaftMaterialCostQuery, UnavailableRaftMaterialCostQuery>();
         services.AddSingleton<IStatusCatalog, StatusCatalog>();
 
         services.AddOptions<JwtOptions>().Bind(configuration.GetSection(JwtOptions.SectionName));
@@ -74,6 +79,11 @@ public static class DependencyInjection
         services.AddFileStorage(configuration);
 
         services.AddScoped<DeploymentBootstrapper>();
+
+        // FARM-03 expiring zone license reminder (formerly JOB-06)
+        services.AddOptions<ZoneLicenseReminderOptions>().Bind(configuration.GetSection(ZoneLicenseReminderOptions.SectionName));
+        services.AddSingleton<ZoneLicenseReminderJob>();
+        services.AddHostedService<ZoneLicenseReminderHostedService>();
         services.AddHealthChecks().AddReadinessChecks();
 
         return services;
