@@ -1,4 +1,5 @@
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.LaborCost.Dtos;
 using OMTS.Domain.Constants;
@@ -11,9 +12,10 @@ public sealed record PayRateDraft(PayRuleVersion Version, PayRuleVersion? Closes
 
 /// <summary>
 /// LAB-06 checks of one new version: the person (Employed employee or In Use worker), the rate rules and the timeline
-/// (an earlier open-ended version is closed on ValidFrom − 1 day; any other overlap is MSG03).
+/// (an earlier open-ended version is closed on ValidFrom − 1 day; any other overlap is MSG03). A version never starts or
+/// ends in a finalized month (PERIOD_LOCKED) and never closes one that a finalized payslip used (MSG11).
 /// </summary>
-public sealed class PayRateDrafts(IPayRateRepository rates, IWorkforceRepository workforce)
+public sealed class PayRateDrafts(IPayRateRepository rates, IWorkforceRepository workforce, PayrollPeriodLock periodLock)
 {
     public async Task<Result<PayRateDraft>> PrepareAsync(PayPersonRef person, PayRateBody? body, CancellationToken cancellationToken)
     {
@@ -40,6 +42,11 @@ public sealed class PayRateDrafts(IPayRateRepository rates, IWorkforceRepository
             return input.Error!;
         }
 
+        if (await CheckDatesOpenAsync(input.Value!.ValidTo is { } end ? [input.Value.ValidFrom, end] : [input.Value.ValidFrom], cancellationToken) is { } locked)
+        {
+            return locked;
+        }
+
         var existing = await rates.ListForPersonAsync(person.EmployeeId, person.WorkerId, cancellationToken);
         var placement = PayRateTimeline.Place(Spans(existing), input.Value!.ValidFrom, input.Value.ValidTo, null, closeOpenEnded: true);
         if (placement.OverlapsId is { } overlapId)
@@ -47,9 +54,30 @@ public sealed class PayRateDrafts(IPayRateRepository rates, IWorkforceRepository
             return AppError.AlreadyExists(PayRateService.ObjectName, overlapId);
         }
 
+        var closes = existing.FirstOrDefault(v => v.Id == placement.ClosesId);
+        if (closes is not null)
+        {
+            // Closing on ValidFrom − 1 day must not cut into a finalized month that this version priced.
+            var closedOn = input.Value.ValidFrom.AddDays(-1);
+            var cut = (await rates.GetFinalizedPeriodsUsingAsync([closes.Id], cancellationToken)).GetValueOrDefault(closes.Id)?
+                .Where(key => PayrollPeriod.TryParse(key, out var period) && period.End > closedOn).ToList();
+            if (cut is { Count: > 0 })
+            {
+                return UsedByFinalized(cut);
+            }
+        }
+
         var version = new PayRuleVersion { EmployeeId = person.EmployeeId, WorkerId = person.WorkerId };
-        return new PayRateDraft(version, existing.FirstOrDefault(v => v.Id == placement.ClosesId), input.Value);
+        return new PayRateDraft(version, closes, input.Value);
     }
+
+    /// <summary>PERIOD_LOCKED when one of the dates is in a month whose payroll is finalized.</summary>
+    public Task<AppError?> CheckDatesOpenAsync(IEnumerable<DateOnly> dates, CancellationToken cancellationToken) =>
+        periodLock.CheckAsync(dates, cancellationToken);
+
+    /// <summary>MSG11: the version is used by finalized payslips of these periods (keys like 2026-09).</summary>
+    public static AppError UsedByFinalized(IReadOnlyCollection<string> periods) =>
+        AppError.Conflict(UserMessages.StillInUse(periods.Count, "finalized payslips " + string.Join(", ", periods.Select(PayrollPeriod.LabelOf))));
 
     public static List<RateSpan> Spans(IEnumerable<PayRuleVersion> versions) =>
         versions.Select(v => new RateSpan(v.Id, v.ValidFrom, v.ValidTo)).ToList();

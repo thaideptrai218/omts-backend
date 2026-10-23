@@ -182,7 +182,7 @@ public sealed class WorkAssignmentService(
             return raftError;
         }
 
-        var assignee = await rules.ResolveAssigneeAsync(request.EmployeeId, request.WorkerId, request.TeamId, input.WorkDate, current, cancellationToken);
+        var assignee = await rules.ResolveAssigneeAsync(zoneId, request.EmployeeId, request.WorkerId, request.TeamId, input.WorkDate, current, cancellationToken);
         if (!assignee.IsSuccess)
         {
             return assignee.Error!;

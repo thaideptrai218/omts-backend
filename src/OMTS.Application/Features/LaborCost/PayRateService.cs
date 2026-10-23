@@ -52,6 +52,7 @@ public sealed class PayRateService(
 
         var prepared = new List<PayRateDraft>();
         var failures = new List<BulkFailure>();
+        AppError? firstError = null;
         for (var i = 0; i < people.Count; i++)
         {
             var one = await PrepareAsync(people[i], request.Rate, cancellationToken);
@@ -61,6 +62,8 @@ public sealed class PayRateService(
                 continue;
             }
 
+            firstError ??= one.Error;
+
             var field = one.Error!.Details?.GetValueOrDefault("field") as string;
             failures.Add(new BulkFailure(i, people[i].EmployeeId ?? people[i].WorkerId ?? Guid.Empty, null, one.Error.Message.Code, one.Error.Message.Text, field));
         }
@@ -68,8 +71,7 @@ public sealed class PayRateService(
         if (failures.Count > 0)
         {
             var first = failures[0];
-            var kind = first.Code is "MSG03" ? ErrorKind.Conflict : ErrorKind.Validation;
-            return new AppError(kind, new UserMessage(first.Code, first.Message), new Dictionary<string, object?> { ["failures"] = failures, ["field"] = first.Field });
+            return new AppError(firstError!.Kind,new UserMessage(first.Code, first.Message), new Dictionary<string, object?> { ["failures"] = failures, ["field"] = first.Field });
         }
 
         var saved = prepared.Select(Add).ToList();
@@ -104,7 +106,7 @@ public sealed class PayRateService(
         var used = (await rates.GetFinalizedPeriodsUsingAsync([version.Id], cancellationToken)).GetValueOrDefault(version.Id) ?? [];
         if (used.Count > 0)
         {
-            return AppError.Conflict(UserMessages.StillInUse(used.Count, "finalized payslips " + string.Join(", ", used.Select(PayrollPeriod.LabelOf))));
+            return PayRateDrafts.UsedByFinalized(used);
         }
 
         var reasonInvalid = new List<string>();
@@ -123,6 +125,23 @@ public sealed class PayRateService(
         if (!input.IsSuccess)
         {
             return input.Error!;
+        }
+
+        // New dates must stay out of finalized months (dates the edit leaves unchanged are not checked again).
+        List<DateOnly> newDates = [];
+        if (input.Value!.ValidFrom != version.ValidFrom)
+        {
+            newDates.Add(input.Value.ValidFrom);
+        }
+
+        if (input.Value.ValidTo is { } newEnd && newEnd != version.ValidTo)
+        {
+            newDates.Add(newEnd);
+        }
+
+        if (newDates.Count > 0 && await drafts.CheckDatesOpenAsync(newDates, cancellationToken) is { } locked)
+        {
+            return locked;
         }
 
         var others = await rates.ListForPersonAsync(version.EmployeeId, version.WorkerId, cancellationToken);

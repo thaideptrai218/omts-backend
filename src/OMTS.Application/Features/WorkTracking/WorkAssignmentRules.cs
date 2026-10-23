@@ -17,9 +17,12 @@ public sealed record ResolvedAssignee(Employee? Employee, SeasonalWorker? Worker
 /// <summary>LAB-03 lookups: raft and cycle of the zone, the assignee, and the duplicate person–date warning (MSG49).</summary>
 public sealed class WorkAssignmentRules(IWorkAssignmentRepository assignments, IWorkforceRepository workforce)
 {
-    /// <summary>The assignee; an unchanged assignee of an edit is accepted even if it was discontinued since.</summary>
+    /// <summary>
+    /// The assignee; an unchanged assignee of an edit is accepted even if it was discontinued since. A new or changed
+    /// employee must be Working in the zone (MSG01 "Employee"), MSG72 first for a Left employee.
+    /// </summary>
     public async Task<Result<ResolvedAssignee>> ResolveAssigneeAsync(
-        Guid? employeeId, Guid? workerId, Guid? teamId, DateOnly workDate, WorkAssignment? current, CancellationToken cancellationToken)
+        Guid zoneId, Guid? employeeId, Guid? workerId, Guid? teamId, DateOnly workDate, WorkAssignment? current, CancellationToken cancellationToken)
     {
         var unchanged = current is not null && current.EmployeeId == employeeId && current.WorkerId == workerId && current.ContractorId == teamId;
         if (employeeId is { } eid)
@@ -30,7 +33,8 @@ public sealed class WorkAssignmentRules(IWorkAssignmentRepository assignments, I
                 return AppError.Invalid("Employee");
             }
 
-            return LaborPersonRules.LeftOn(employee, workDate) is { } left ? left : new ResolvedAssignee(employee, null, null);
+            var problem = unchanged ? LaborPersonRules.LeftOn(employee, workDate) : LaborPersonRules.CheckForZone(employee, zoneId, workDate);
+            return problem is not null ? problem : new ResolvedAssignee(employee, null, null);
         }
 
         if (workerId is { } wid)

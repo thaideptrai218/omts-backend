@@ -90,6 +90,6 @@ internal sealed class WorkAssignmentRepository(OmtsDbContext db) : IWorkAssignme
     private static IQueryable<WorkAssignment> WithAssignees(IQueryable<WorkAssignment> query) =>
         query.Include(a => a.Zone)
             .Include(a => a.Employee).ThenInclude(e => e!.Account)
-            .Include(a => a.Worker)
+            .Include(a => a.Worker).ThenInclude(w => w!.Contractor)
             .Include(a => a.Contractor);
 }

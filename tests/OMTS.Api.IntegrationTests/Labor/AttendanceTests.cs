@@ -165,11 +165,12 @@ public class AttendanceTests(AuthApiFactory factory) : IClassFixture<AuthApiFact
         var (creator, _) = await factory.StaffAsync(w.Zone, (PermissionFunctions.Attendance, true, true, false, false));
         await ExpectAsync(await creator.PutAsJsonAsync(Sheet(w, date), new { rows = new[] { new { workerId = worker.Id, result = "Present" } } }), HttpStatusCode.OK);
 
-        var noReason = await (await w.Owner.PutAsJsonAsync(Sheet(w, date), new { rows = new[] { new { workerId = worker.Id, result = "PaidLeave" } } }))
+        var rowVersion = await w.AttendanceVersionAsync(date, worker.Id);
+        var noReason = await (await w.Owner.PutAsJsonAsync(Sheet(w, date), new { rows = new[] { new { workerId = worker.Id, result = "PaidLeave", rowVersion } } }))
             .ProblemAsync(HttpStatusCode.BadRequest, "MSG01");
-        var noRight = await creator.PutAsJsonAsync(Sheet(w, date), new { rows = new[] { new { workerId = worker.Id, result = "PaidLeave", reason = "Nghỉ phép" } } });
+        var noRight = await creator.PutAsJsonAsync(Sheet(w, date), new { rows = new[] { new { workerId = worker.Id, result = "PaidLeave", reason = "Nghỉ phép", rowVersion } } });
         var unchanged = await creator.PutAsJsonAsync(Sheet(w, date), new { rows = new[] { new { workerId = worker.Id, result = "Present" } } });
-        await ExpectAsync(await w.Owner.PutAsJsonAsync(Sheet(w, date), new { rows = new[] { new { workerId = worker.Id, result = "PaidLeave", reason = "Nghỉ phép" } } }), HttpStatusCode.OK);
+        await ExpectAsync(await w.Owner.PutAsJsonAsync(Sheet(w, date), new { rows = new[] { new { workerId = worker.Id, result = "PaidLeave", reason = "Nghỉ phép", rowVersion } } }), HttpStatusCode.OK);
 
         Assert.Equal("Reason", noReason.Field());
         await noRight.ProblemAsync(HttpStatusCode.Forbidden, "MSG02");

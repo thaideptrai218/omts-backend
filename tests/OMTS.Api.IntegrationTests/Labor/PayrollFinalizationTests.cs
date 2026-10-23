@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.LaborCost;
 using OMTS.Application.Features.Notifications;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Labor;
@@ -32,6 +33,29 @@ public class PayrollFinalizationTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal(System.Text.Json.JsonValueKind.Null, finalized.GetProperty("returnReason").ValueKind);
         await locked.ProblemAsync(HttpStatusCode.Conflict, "PERIOD_LOCKED");
         Assert.Contains(await factory.AuditOfAsync(slip.GetProperty("id").GetGuid()), e => e.Action == "LaborSettlement.StatusChanged");
+    }
+
+    [Fact]
+    public async Task The_recompute_done_by_finalize_is_audited_as_Payroll_Refreshed_even_when_finalize_is_refused()
+    {
+        var w = await factory.WorldAsync();
+        var (refused, done) = (NewMonth(), NewMonth());
+        var worker = await w.AddWorkerAsync();
+        var employee = await w.AddEmployeeAsync();
+        await w.AddAttendanceAsync(refused.Day(4), null, worker.Id);
+        await w.AddRateAsync(done, employee.Id, null, SalaryType.MonthlyFixed, 6_000_000);
+        await w.CreatePayrollAsync(refused);
+        await w.CreatePayrollAsync(done);
+        Task<List<string>> ActionsAsync(PayrollPeriod month) => factory.QueryAsync(db =>
+            db.AuditEvents.AsNoTracking().Where(e => e.RecordCode == month.Key).OrderBy(e => e.OccurredAt).Select(e => e.Action).ToListAsync());
+
+        await (await w.Owner.PostAsync($"/api/payrolls/{refused.Key}/finalize", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG50");
+        await ExpectAsync(await w.Owner.PostAsync($"/api/payrolls/{done.Key}/finalize", null), HttpStatusCode.OK);
+
+        Assert.Equal(1, (await ActionsAsync(refused)).Count(a => a == "Payroll.Refreshed"));
+        var actions = await ActionsAsync(done);
+        Assert.Equal(1, actions.Count(a => a == "Payroll.Refreshed"));
+        Assert.True(actions.IndexOf("Payroll.Refreshed") < actions.IndexOf("Payroll.Finalized"));
     }
 
     [Fact]

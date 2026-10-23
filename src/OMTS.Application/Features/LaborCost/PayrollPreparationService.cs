@@ -151,7 +151,8 @@ public sealed class PayrollPreparationService(
         AppError.Conflict(UserMessages.AlreadyExists($"Payroll {period.Label}"),
             new Dictionary<string, object?> { ["existingId"] = existing.Id, ["period"] = existing.Period });
 
-    private static object Summary(Payroll p, IReadOnlyList<LaborSettlement> payslips) => new
+    /// <summary>Before/after figures of the Payroll.Created and Payroll.Refreshed audit entries (also written by finalize).</summary>
+    internal static object Summary(Payroll p, IReadOnlyList<LaborSettlement> payslips) => new
     {
         p.Period, Payslips = payslips.Count, Net = payslips.Sum(s => s.TotalObligation),
         MissingRates = payslips.Count(s => s.MissingRateDates.Count > 0),

@@ -9,7 +9,10 @@ namespace OMTS.Application.Features.WorkTracking.Dtos;
 /// </summary>
 /// <param name="TeamOfDayId">Worker rows only: team of the day (default: the current team of the worker).</param>
 /// <param name="Reason">Required when the row changes an attendance record already saved.</param>
-/// <param name="RowVersion">The version of the saved record the row was read from; an older one answers MSG06.</param>
+/// <param name="RowVersion">
+/// The version of the saved record the row was read from; required when the row changes a saved record (MSG01 when
+/// missing), an older one answers MSG06. Not used by team rows, see <see cref="SaveAttendanceRequest.MemberRowVersions"/>.
+/// </param>
 public sealed record SaveAttendanceRow(
     Guid? EmployeeId,
     Guid? WorkerId,
@@ -21,7 +24,13 @@ public sealed record SaveAttendanceRow(
     string? Reason = null,
     string? RowVersion = null);
 
-public sealed record SaveAttendanceRequest(IReadOnlyList<SaveAttendanceRow>? Rows);
+/// <param name="MemberRowVersions">
+/// Team rows only: worker id → rowVersion of the member's saved record, for every member whose saved record the team
+/// row would change (a missing version is MSG01, a stale one MSG06).
+/// </param>
+public sealed record SaveAttendanceRequest(
+    IReadOnlyList<SaveAttendanceRow>? Rows,
+    IReadOnlyDictionary<Guid, string>? MemberRowVersions = null);
 
 /// <summary>Why one row of the sheet was refused; nothing of the sheet is saved then.</summary>
 public sealed record AttendanceRowError(int Index, string? Person, string Code, string Message, string? Field);

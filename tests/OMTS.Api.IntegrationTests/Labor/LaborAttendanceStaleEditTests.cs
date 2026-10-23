@@ -12,7 +12,8 @@ namespace OMTS.Api.IntegrationTests.Labor;
 
 /// <summary>
 /// Common rule "Stale RowVersion → 409 MSG06" on LAB-04: two managers editing the same saved attendance record from the same
-/// sheet must not silently overwrite each other. PENDING: sheet rows carry no rowVersion, the last save wins.
+/// sheet must not silently overwrite each other. Every sheet row carries its record's rowVersion; a row that changes a saved
+/// record without one is MSG01, team rows send <c>memberRowVersions</c> (see LaborAttendanceRowVersionTests).
 /// </summary>
 public class LaborAttendanceStaleEditTests
 {
@@ -31,9 +32,12 @@ public class LaborAttendanceStaleEditTests
         var read = JsonDocument.Parse(await (await owner.GetAsync($"/api/zones/{zone.Id}/attendance?date=2026-08-05")).Content.ReadAsStringAsync()).RootElement;
         var rowVersion = read.GetProperty("rows")[0].GetProperty("rowVersion").GetString();
 
+        var withoutVersion = await owner.PutAsJsonAsync(sheet, new { rows = new[] { new { workerId = worker.Id, result = "PaidLeave", reason = "Ốm" } } });
         var first = await owner.PutAsJsonAsync(sheet, new { rows = new[] { new { workerId = worker.Id, result = "PaidLeave", reason = "Ốm", rowVersion } } });
         var stale = await owner.PutAsJsonAsync(sheet, new { rows = new[] { new { workerId = worker.Id, result = "UnpaidLeave", reason = "Vắng", rowVersion } } });
 
+        Assert.Equal(HttpStatusCode.BadRequest, withoutVersion.StatusCode);
+        Assert.Equal("MSG01", await withoutVersion.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
         Assert.Equal("MSG06", await stale.ErrorCodeAsync());

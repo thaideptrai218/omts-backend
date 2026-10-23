@@ -11,12 +11,12 @@ namespace OMTS.Application.Features.LaborCost;
 
 /// <summary>
 /// LAB-10 – staff (any employee account, the Owner included) see their own attendance, finalized payslips and advances,
-/// read-only. The employee is the one linked to the caller's account; the records of seasonal workers linked to that
-/// employee are included. Draft payslips, even their totals, are never returned; another person's payslip is not found.
+/// read-only. The employee is the one linked to the caller's account and only records owned by that employee are shown:
+/// the worker→employee link of a seasonal worker is editable by LABOR_WORKERS users, so it never grants access to wages.
+/// Draft payslips, even their totals, are never returned; another person's payslip is not found.
 /// </summary>
 public sealed class PersonalPayService(
     IEmployeeRepository employees,
-    IWorkforceRepository workforce,
     IAttendanceRepository attendance,
     IPayrollRepository payrolls,
     ILaborPaymentRepository payments,
@@ -41,8 +41,8 @@ public sealed class PersonalPayService(
             return me.Error!;
         }
 
-        var (employee, workerIds) = me.Value;
-        var items = (await attendance.ListForEmployeeAsync(employee.Id, workerIds, start, end, cancellationToken))
+        var employee = me.Value!;
+        var items = (await attendance.ListForEmployeeAsync(employee.Id, [], start, end, cancellationToken))
             .Select(r => new MyAttendanceItem(r.WorkDate, r.Zone.Name, r.Result, r.Hours, r.Notes))
             .ToList();
         return List(items, "attendance");
@@ -56,8 +56,8 @@ public sealed class PersonalPayService(
             return me.Error!;
         }
 
-        var (employee, workerIds) = me.Value;
-        var items = (await payrolls.ListFinalizedForEmployeeAsync(employee.Id, workerIds, year ?? timeProvider.Today().Year, cancellationToken))
+        var employee = me.Value!;
+        var items = (await payrolls.ListFinalizedForEmployeeAsync(employee.Id, [], year ?? timeProvider.Today().Year, cancellationToken))
             .Select(s =>
             {
                 var totals = PayslipViews.TotalsOf(s);
@@ -77,10 +77,10 @@ public sealed class PersonalPayService(
             return me.Error!;
         }
 
-        var (employee, workerIds) = me.Value;
+        var employee = me.Value!;
         var payslip = await payrolls.GetSettlementAsync(id, cancellationToken);
         var mine = payslip is not null
-            && (payslip.EmployeeId == employee.Id || (payslip.WorkerId is { } workerId && workerIds.Contains(workerId)))
+            && payslip.EmployeeId == employee.Id
             && payslip.StatusId != StatusIds.LaborSettlement.Draft;
         return mine ? await views.ViewAsync(payslip!, payslip!.Payroll.Period, cancellationToken) : AppError.NotFound;
     }
@@ -93,13 +93,13 @@ public sealed class PersonalPayService(
             return me.Error!;
         }
 
-        var (employee, workerIds) = me.Value;
-        var records = await payments.ListAdvancesOfAsync([employee.Id], workerIds, cancellationToken);
+        var employee = me.Value!;
+        var records = await payments.ListAdvancesOfAsync([employee.Id], [], cancellationToken);
         return List(await advances.ViewsAsync(records, cancellationToken), "salary advances");
     }
 
-    /// <summary>The employee linked to the caller's account and the workers linked to that employee; MSG51 when not exactly one.</summary>
-    private async Task<Result<(Employee Employee, IReadOnlyList<Guid> WorkerIds)>> MeAsync(CancellationToken cancellationToken)
+    /// <summary>The employee linked to the caller's account; MSG51 when there is none.</summary>
+    private async Task<Result<Employee>> MeAsync(CancellationToken cancellationToken)
     {
         var employee = currentUser.AccountId is { } accountId ? await employees.GetByAccountIdAsync(accountId, cancellationToken) : null;
         if (employee is null)
@@ -107,7 +107,7 @@ public sealed class PersonalPayService(
             return AppError.Conflict(UserMessages.AccountNotLinkedToEmployee);
         }
 
-        return (employee, await workforce.GetWorkerIdsOfEmployeeAsync(employee.Id, cancellationToken));
+        return employee;
     }
 
     private static MyList<T> List<T>(IReadOnlyList<T> items, string objectName) =>

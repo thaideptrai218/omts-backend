@@ -23,7 +23,7 @@ public sealed record AttendanceEntry(
 public sealed class AttendanceRowExpander(IWorkforceRepository workforce)
 {
     public async Task<(List<AttendanceEntry> Entries, List<AttendanceRowError> Errors)> ExpandAsync(
-        IReadOnlyList<SaveAttendanceRow> rows, DateOnly date, CancellationToken cancellationToken)
+        Guid zoneId, IReadOnlyList<SaveAttendanceRow> rows, DateOnly date, CancellationToken cancellationToken)
     {
         var employees = (await workforce.GetEmployeesAsync(Ids(rows, r => r.EmployeeId), cancellationToken)).ToDictionary(e => e.Id);
         var workers = (await workforce.GetWorkersAsync(Ids(rows, r => r.WorkerId), cancellationToken)).ToDictionary(w => w.Id);
@@ -81,7 +81,7 @@ public sealed class AttendanceRowExpander(IWorkforceRepository workforce)
             {
                 var problem = !employees.TryGetValue(employeeId, out var employee) ? AppError.Invalid("Employee")
                     : row.TeamOfDayId is not null ? AppError.Invalid("Team of the day")
-                    : LaborPersonRules.LeftOn(employee, date);
+                    : LaborPersonRules.CheckForZone(employee, zoneId, date);
                 if (problem is not null)
                 {
                     errors.Add(Error(index, employee?.FullName, problem));

@@ -62,7 +62,7 @@ public sealed class AttendanceSheetQuery(
             }
             else if (assignment.Worker is { } w)
             {
-                var team = w.ContractorId is { } tid ? await TeamOfAsync(tid, cancellationToken) : null;
+                var team = w.Contractor is { } own ? new TeamRef(own.Id, own.Name) : null;
                 suggestions.TryAdd(w.Id, Suggested("Worker", w.Id, w.FullName, team, assignment.Id));
             }
             else if (assignment.Contractor is { } t)
@@ -76,9 +76,6 @@ public sealed class AttendanceSheetQuery(
 
         return suggestions.Values.OrderBy(s => s.Name).ToList();
     }
-
-    private async Task<TeamRef?> TeamOfAsync(Guid teamId, CancellationToken cancellationToken) =>
-        (await workforce.GetTeamsAsync([teamId], cancellationToken)).FirstOrDefault() is { } t ? new TeamRef(t.Id, t.Name) : null;
 
     public async Task<AttendanceSheetRow> RowAsync(AttendanceRecord r, CancellationToken cancellationToken) => new(
         r.Id, false, r.EmployeeId is not null ? "Employee" : "Worker", (r.EmployeeId ?? r.WorkerId)!.Value,

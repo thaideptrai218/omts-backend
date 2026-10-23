@@ -23,18 +23,18 @@ public class PayRateTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory
 
         var first = await ExpectAsync(await w.Owner.PostAsJsonAsync(PayRates, new
         {
-            employeeId = employee.Id, salaryType = "PerWorkingDay", amount = 8_000_000, standardWorkingDays = 26, validFrom = "2025-01-01",
+            employeeId = employee.Id, salaryType = "PerWorkingDay", amount = 8_000_000, standardWorkingDays = 26, validFrom = "2015-01-01",
             components = new[] { new { kind = "Allowance", name = "Lunch", amount = 30_000, basis = "PerPaidDay" } },
         }), HttpStatusCode.Created);
         var second = await ExpectAsync(await w.Owner.PostAsJsonAsync(PayRates, new
         {
-            employeeId = employee.Id, salaryType = "MonthlyFixed", amount = 9_000_000, validFrom = "2025-07-01",
+            employeeId = employee.Id, salaryType = "MonthlyFixed", amount = 9_000_000, validFrom = "2015-07-01",
         }), HttpStatusCode.Created);
 
         var firstId = first.GetProperty("rate").GetProperty("id").GetGuid();
         Assert.Equal("Approved", first.GetProperty("rate").GetProperty("status").GetString());
         Assert.Equal("Lunch", first.GetProperty("rate").GetProperty("components")[0].GetProperty("name").GetString());
-        Assert.Equal((firstId, "2025-06-30"), (second.GetProperty("closedPrevious").GetProperty("id").GetGuid(), second.GetProperty("closedPrevious").GetProperty("validTo").GetString()));
+        Assert.Equal((firstId, "2015-06-30"), (second.GetProperty("closedPrevious").GetProperty("id").GetGuid(), second.GetProperty("closedPrevious").GetProperty("validTo").GetString()));
         Assert.Contains(await factory.AuditOfAsync(firstId), e => e.Action == "PayRuleVersion.Closed");
         var history = await ExpectAsync(await w.Owner.GetAsync($"{PayRates}?employeeId={employee.Id}"), HttpStatusCode.OK);
         Assert.Equal(2, history.GetArrayLength());
@@ -47,10 +47,10 @@ public class PayRateTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory
         var worker = await w.AddWorkerAsync();
         var closed = await ExpectAsync(await w.Owner.PostAsJsonAsync(PayRates, new
         {
-            workerId = worker.Id, salaryType = "DailyWage", amount = 300_000, validFrom = "2025-01-01", validTo = "2025-06-30",
+            workerId = worker.Id, salaryType = "DailyWage", amount = 300_000, validFrom = "2015-01-01", validTo = "2015-06-30",
         }), HttpStatusCode.Created);
 
-        var problem = await (await w.Owner.PostAsJsonAsync(PayRates, new { workerId = worker.Id, salaryType = "DailyWage", amount = 320_000, validFrom = "2025-06-01" }))
+        var problem = await (await w.Owner.PostAsJsonAsync(PayRates, new { workerId = worker.Id, salaryType = "DailyWage", amount = 320_000, validFrom = "2015-06-01" }))
             .ProblemAsync(HttpStatusCode.Conflict, "MSG03");
 
         Assert.StartsWith("Pay rate already exists.", problem.GetProperty("detail").GetString());
@@ -64,11 +64,11 @@ public class PayRateTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory
         var worker = await w.AddWorkerAsync();
         var employee = await w.AddEmployeeAsync();
 
-        var odd = await (await w.Owner.PostAsJsonAsync(PayRates, new { workerId = worker.Id, salaryType = "DailyWage", amount = 300_500, validFrom = "2025-01-01" }))
+        var odd = await (await w.Owner.PostAsJsonAsync(PayRates, new { workerId = worker.Id, salaryType = "DailyWage", amount = 300_500, validFrom = "2015-01-01" }))
             .ProblemAsync(HttpStatusCode.BadRequest, "MSG41");
-        var monthly = await (await w.Owner.PostAsJsonAsync(PayRates, new { workerId = worker.Id, salaryType = "MonthlyFixed", amount = 5_000_000, validFrom = "2025-01-01" }))
+        var monthly = await (await w.Owner.PostAsJsonAsync(PayRates, new { workerId = worker.Id, salaryType = "MonthlyFixed", amount = 5_000_000, validFrom = "2015-01-01" }))
             .ProblemAsync(HttpStatusCode.BadRequest, "MSG01");
-        var noDays = await (await w.Owner.PostAsJsonAsync(PayRates, new { employeeId = employee.Id, salaryType = "PerWorkingDay", amount = 5_000_000, validFrom = "2025-01-01" }))
+        var noDays = await (await w.Owner.PostAsJsonAsync(PayRates, new { employeeId = employee.Id, salaryType = "PerWorkingDay", amount = 5_000_000, validFrom = "2015-01-01" }))
             .ProblemAsync(HttpStatusCode.BadRequest, "MSG01");
 
         Assert.Equal("The amount must be a multiple of 1,000 VND.", odd.GetProperty("detail").GetString());
@@ -120,7 +120,7 @@ public class PayRateTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory
         var first = await w.AddWorkerAsync();
         var second = await w.AddWorkerAsync();
         var discontinued = await w.AddWorkerAsync(configure: x => x.StatusId = StatusIds.Usage.Discontinued);
-        var rate = new { salaryType = "DailyWage", amount = 310_000, validFrom = "2025-03-01" };
+        var rate = new { salaryType = "DailyWage", amount = 310_000, validFrom = "2015-03-01" };
 
         var refused = await (await w.Owner.PostAsJsonAsync($"{PayRates}/bulk", new
         {

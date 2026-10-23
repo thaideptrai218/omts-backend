@@ -50,8 +50,13 @@ public sealed class PayrollFinalizationService(
         // lines are kept), so finalize approves exactly what the sources say today.
         // Saved as a refresh first: replaced lines leave the payslips only once saved, and a refusal below (MSG50)
         // then shows the up-to-date draft.
-        sync.Apply(payroll, await builder.ComputeAsync(period, payroll.Settlements.Select(PayslipViews.KeyOf).ToList(), cancellationToken), payroll.PreparedByAccountId);
+        var summaryBefore = PayrollPreparationService.Summary(payroll, payroll.Settlements.ToList());
+        var recomputed = sync.Apply(payroll, await builder.ComputeAsync(period, payroll.Settlements.Select(PayslipViews.KeyOf).ToList(), cancellationToken), payroll.PreparedByAccountId);
         unitOfWork.MarkChanged(payroll);
+        audit.Record(new AuditEntry("Payroll.Refreshed", nameof(Payroll))
+        {
+            RecordId = payroll.Id, RecordCode = payroll.Period, Before = summaryBefore, After = PayrollPreparationService.Summary(payroll, recomputed),
+        });
         await unitOfWork.SaveChangesAsync(cancellationToken);
         var settlements = payroll.Settlements.ToList();
         var missing = settlements.Where(s => s.MissingRateDates.Count > 0)

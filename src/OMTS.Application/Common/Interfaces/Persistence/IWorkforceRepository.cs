@@ -23,11 +23,8 @@ public interface IWorkforceRepository
     Task<SeasonalWorker?> FindSameWorkerAsync(
         string fullName, string? phoneNumber, string? citizenId, Guid? exceptWorkerId, CancellationToken cancellationToken);
 
-    /// <summary>Employees with their linked account, tracked.</summary>
+    /// <summary>Employees with their linked account and working zones, tracked.</summary>
     Task<IReadOnlyList<Employee>> GetEmployeesAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
-
-    /// <summary>Workers linked to the employee (the same person doing seasonal work).</summary>
-    Task<IReadOnlyList<Guid>> GetWorkerIdsOfEmployeeAsync(Guid employeeId, CancellationToken cancellationToken);
 
     /// <summary>Employed employees with this full name (case-insensitive) and phone.</summary>
     Task<IReadOnlyList<Employee>> FindEmployedSamePersonAsync(string fullName, string phoneNumber, CancellationToken cancellationToken);

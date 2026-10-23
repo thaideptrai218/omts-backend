@@ -19,4 +19,21 @@ public static class LaborPersonRules
                 UserMessages.EmployeeHasLeft(employee.FullName, LaborInputRules.Date(end)),
                 new Dictionary<string, object?> { ["employeeId"] = employee.Id, ["employmentEndDate"] = end })
             : null;
+
+    /// <summary>
+    /// The employee of a zone's work or attendance: MSG72 for a Left employee on or after the end date, otherwise 400
+    /// MSG01 "Employee" unless the employee is Working (or still employed on that day, i.e. Left later) and has the zone
+    /// among their working zones (the pickers already list only those).
+    /// </summary>
+    public static AppError? CheckForZone(Employee employee, Guid zoneId, DateOnly day)
+    {
+        if (LeftOn(employee, day) is { } left)
+        {
+            return left;
+        }
+
+        var employed = employee.StatusId == StatusIds.Employee.Working
+            || (employee.StatusId == StatusIds.Employee.Left && employee.EmploymentEndDate > day);
+        return employed && employee.WorkingZones.Any(w => w.ZoneId == zoneId) ? null : AppError.Invalid("Employee");
+    }
 }

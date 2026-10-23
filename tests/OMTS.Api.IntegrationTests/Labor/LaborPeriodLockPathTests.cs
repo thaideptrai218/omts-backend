@@ -112,8 +112,9 @@ public class LaborPeriodLockPathTests(AuthApiFactory factory) : IClassFixture<Au
         await w.FinalizeMonthAsync(month);
         await ExpectAsync(await w.Owner.PostAsJsonAsync($"/api/payrolls/{month.Key}/reopen", new { reason = "Thiếu khoán" }), HttpStatusCode.OK);
 
+        var rowVersion = await w.AttendanceVersionAsync(month.Day(3), worker.Id);
         await ExpectAsync(await w.Owner.PutAsJsonAsync(SheetOf(w, month.Day(3)),
-            new { rows = new[] { new { workerId = worker.Id, result = "PaidLeave", reason = "Nghỉ phép có lương" } } }), HttpStatusCode.OK);
+            new { rows = new[] { new { workerId = worker.Id, result = "PaidLeave", reason = "Nghỉ phép có lương", rowVersion } } }), HttpStatusCode.OK);
         await ExpectAsync(await w.Owner.PostAsJsonAsync($"{w.Assignments}/{piece.Id}/completion", new { completedQuantity = 37, completionDate = month.Day(5) }), HttpStatusCode.OK);
         var refreshed = await ExpectAsync(await w.Owner.PostAsync($"/api/payrolls/{month.Key}/refresh", null), HttpStatusCode.OK);
         await ExpectAsync(await w.Owner.PostAsync($"/api/payrolls/{month.Key}/finalize", null), HttpStatusCode.OK);

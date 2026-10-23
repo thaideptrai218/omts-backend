@@ -66,7 +66,7 @@ public sealed class AttendanceSheetService(
             return locked;
         }
 
-        var (entries, errors) = await expander.ExpandAsync(rows, date, cancellationToken);
+        var (entries, errors) = await expander.ExpandAsync(zoneId, rows, date,cancellationToken);
         var existing = await attendance.ListForPeopleAsync(
             date, entries.Where(e => e.Employee is not null).Select(e => e.Employee!.Id).ToList(),
             entries.Where(e => e.Worker is not null).Select(e => e.Worker!.Id).ToList(), cancellationToken);
@@ -74,14 +74,18 @@ public sealed class AttendanceSheetService(
         foreach (var entry in entries)
         {
             var record = existing.FirstOrDefault(r => (r.EmployeeId ?? r.WorkerId) == (entry.Employee?.Id ?? entry.Worker!.Id));
-            var rowVersion = entry.Index < rows.Count ? rows[entry.Index].RowVersion : null;
-            var stale = record is not null && rowVersion is not null && Changed(record, entry)
+            // Changing a saved record needs the version the client read: the row's own, or for a team row the member's.
+            var fromTeam = rows[entry.Index].TeamId is not null;
+            var rowVersion = fromTeam
+                ? request.MemberRowVersions?.GetValueOrDefault(entry.Worker!.Id)
+                : rows[entry.Index].RowVersion;
+            var stale = record is not null && record.ZoneId == zoneId && Changed(record, entry)
                 ? await rowVersions.CheckAsync(record, rowVersion, cancellationToken)
                 : null;
             var problem = record switch
             {
-                not null when stale is not null => stale,
                 not null when record.ZoneId != zoneId => AppError.AlreadyExists($"Attendance of {entry.Name} on {LaborInputRules.Date(date)}", record.Id),
+                not null when stale is not null => stale,
                 null when entry.Worker is { StatusId: not StatusIds.Usage.InUse } => AppError.Invalid("Worker"),
                 not null when Changed(record, entry) && entry.Reason is null => AppError.Invalid("Reason", "Changing a saved attendance record needs a reason."),
                 _ => null,

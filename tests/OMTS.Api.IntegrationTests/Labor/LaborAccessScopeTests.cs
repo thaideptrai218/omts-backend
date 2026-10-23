@@ -130,7 +130,7 @@ public class LaborAccessScopeTests(AuthApiFactory factory) : IClassFixture<AuthA
     }
 
     [Fact]
-    public async Task Personal_pay_shows_the_caller_s_own_linked_worker_records_but_never_a_colleague_s()
+    public async Task Personal_pay_shows_only_the_callers_own_employee_records_never_a_linked_worker_s_nor_a_colleague_s()
     {
         var w = await factory.WorldAsync();
         var (me, client, _) = await w.AddEmployeeWithAccountAsync();
@@ -144,17 +144,21 @@ public class LaborAccessScopeTests(AuthApiFactory factory) : IClassFixture<AuthA
             await w.AddAttendanceAsync(month.Day(6), null, worker.Id);
         }
 
+        await w.AddRateAsync(month, me.Id, null, SalaryType.DailyWage, 200_000);
+        await w.AddAttendanceAsync(month.Day(7), me.Id, null);
         var payroll = await w.CreatePayrollAsync(month);
         await ExpectAsync(await w.Owner.PostAsync($"/api/payrolls/{month.Key}/finalize", null), HttpStatusCode.OK);
 
         var list = await ExpectAsync(await client.GetAsync($"/api/me/pay/payslips?year={month.Year}"), HttpStatusCode.OK);
         var other = await client.GetAsync($"/api/me/pay/payslips/{payroll.PayslipOf(theirs.Id).GetProperty("id").GetGuid()}");
+        var linked = await client.GetAsync($"/api/me/pay/payslips/{payroll.PayslipOf(mine.Id).GetProperty("id").GetGuid()}");
         var attendance = await ExpectAsync(await client.GetAsync($"/api/me/pay/attendance?from={month.Start:yyyy-MM-dd}&to={month.End:yyyy-MM-dd}"), HttpStatusCode.OK);
         var tooLong = await client.GetAsync($"/api/me/pay/attendance?from={month.Start:yyyy-MM-dd}&to={month.Start.AddDays(400):yyyy-MM-dd}");
 
-        Assert.Equal([payroll.PayslipOf(mine.Id).GetProperty("id").GetGuid()], list.GetProperty("items").EnumerateArray().Select(p => p.GetProperty("id").GetGuid()));
+        Assert.Equal([payroll.PayslipOf(me.Id).GetProperty("id").GetGuid()], list.GetProperty("items").EnumerateArray().Select(p => p.GetProperty("id").GetGuid()));
         await other.ProblemAsync(HttpStatusCode.NotFound, "NOT_FOUND");
-        Assert.Single(attendance.GetProperty("items").EnumerateArray());
+        await linked.ProblemAsync(HttpStatusCode.NotFound, "NOT_FOUND");
+        Assert.Equal([month.Day(7).ToString("yyyy-MM-dd")], attendance.GetProperty("items").EnumerateArray().Select(a => a.GetProperty("date").GetString()));
         await tooLong.ProblemAsync(HttpStatusCode.BadRequest, "MSG01");
     }
 

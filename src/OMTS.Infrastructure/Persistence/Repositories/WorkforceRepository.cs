@@ -48,10 +48,7 @@ internal sealed class WorkforceRepository(OmtsDbContext db) : IWorkforceReposito
         ids.Count == 0 ? [] : await db.SeasonalWorkers.Include(w => w.Contractor).Where(w => ids.Contains(w.Id)).ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<Employee>> GetEmployeesAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
-        ids.Count == 0 ? [] : await db.Employees.Include(e => e.Account).Where(e => ids.Contains(e.Id)).ToListAsync(cancellationToken);
-
-    public async Task<IReadOnlyList<Guid>> GetWorkerIdsOfEmployeeAsync(Guid employeeId, CancellationToken cancellationToken) =>
-        await db.SeasonalWorkers.AsNoTracking().Where(w => w.EmployeeId == employeeId).Select(w => w.Id).ToListAsync(cancellationToken);
+        ids.Count == 0 ? [] : await db.Employees.Include(e => e.Account).Include(e => e.WorkingZones).Where(e => ids.Contains(e.Id)).ToListAsync(cancellationToken);
 
     public Task<SeasonalWorker?> FindSameWorkerAsync(
         string fullName, string? phoneNumber, string? citizenId, Guid? exceptWorkerId, CancellationToken cancellationToken)

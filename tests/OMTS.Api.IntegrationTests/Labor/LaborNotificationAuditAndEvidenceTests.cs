@@ -144,7 +144,8 @@ public class LaborNotificationAuditAndEvidenceTests(AuthApiFactory factory) : IC
         var (accountant, accountantAccount) = await factory.StaffAsync(null,
             (PermissionFunctions.PayRules, true, true, true, false), (PermissionFunctions.Payroll, true, true, true, false));
         await ExpectAsync(await w.Owner.PutAsJsonAsync(SheetOf(w, month.Day(3)), new { rows = new[] { new { workerId = worker.Id, result = "Present" } } }), HttpStatusCode.OK);
-        await ExpectAsync(await w.Owner.PutAsJsonAsync(SheetOf(w, month.Day(3)), new { rows = new[] { new { workerId = worker.Id, result = "PaidLeave", reason = "Ốm" } } }), HttpStatusCode.OK);
+        var rowVersion = await w.AttendanceVersionAsync(month.Day(3), worker.Id);
+        await ExpectAsync(await w.Owner.PutAsJsonAsync(SheetOf(w, month.Day(3)), new { rows = new[] { new { workerId = worker.Id, result = "PaidLeave", reason = "Ốm", rowVersion } } }), HttpStatusCode.OK);
         var recordId = await factory.QueryAsync(db => db.AttendanceRecords.Where(r => r.WorkerId == worker.Id).Select(r => r.Id).SingleAsync());
         await ExpectAsync(await w.Owner.PostAsync($"{w.Attendance}/records/{recordId}/evidence", Files(Png())), HttpStatusCode.OK);
         var first = await ExpectAsync(await accountant.PostAsJsonAsync("/api/pay-rates",
