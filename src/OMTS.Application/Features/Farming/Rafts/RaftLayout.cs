@@ -86,8 +86,20 @@ public static class RaftLayout
     public static bool SameDrawing(RaftLayoutVersion version, string? drawing)
     {
         var stored = version.LayoutMap is { } map ? JsonNode.Parse(map)?["layoutDrawing"] : null;
-        return JsonNode.DeepEquals(stored, drawing is null ? null : JsonNode.Parse(drawing));
+        return SameJson(stored, drawing is null ? null : JsonNode.Parse(drawing));
     }
+
+    // JsonNode.DeepEquals compares numbers by their text (1 ≠ 1.0); a drawing is compared by value.
+    private static bool SameJson(JsonNode? a, JsonNode? b) => (a, b) switch
+    {
+        (null, null) => true,
+        (JsonObject x, JsonObject y) => x.Count == y.Count
+            && x.All(p => y.TryGetPropertyValue(p.Key, out var other) && SameJson(p.Value, other)),
+        (JsonArray x, JsonArray y) => x.Count == y.Count && x.Zip(y).All(p => SameJson(p.First, p.Second)),
+        (JsonValue x, JsonValue y) when x.GetValueKind() == JsonValueKind.Number && y.GetValueKind() == JsonValueKind.Number
+            => x.TryGetValue<decimal>(out var m) && y.TryGetValue<decimal>(out var n) ? m == n : JsonNode.DeepEquals(x, y),
+        _ => JsonNode.DeepEquals(a, b),
+    };
 
     public static IReadOnlyList<LayoutLane> LanesOf(RaftLayoutVersion version) =>
         version.LayoutMap is { } map && JsonNode.Parse(map)?["lanes"] is JsonArray lanes
