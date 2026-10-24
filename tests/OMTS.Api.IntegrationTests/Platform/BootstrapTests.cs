@@ -125,7 +125,8 @@ public class BootstrapTests
 
         using var scope = development.Services.CreateScope();
         var codes = await scope.ServiceProvider.GetRequiredService<OmtsDbContext>().FarmingZones.Select(z => z.Code).ToListAsync();
-        Assert.Equal(["DEMO-01", "DEMO-02"], codes.Order());
+        // Two In Use zones and one Discontinued zone; the second run created nothing more.
+        Assert.Equal(["DEMO-01", "DEMO-02", "DEMO-03"], codes.Order());
         Assert.Equal(DeploymentBootstrapper.Failure, refused.ExitCode);
     }
 

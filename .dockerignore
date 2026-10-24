@@ -1,0 +1,22 @@
+# Only src/, global.json and Directory.Build.props are copied into the image; keep everything else out of the
+# build context.
+**/bin/
+**/obj/
+**/TestResults/
+**/App_Data/
+**/*.user
+**/secrets.json
+**/appsettings.*.local.json
+.git/
+.github/
+.vs/
+.vscode/
+.idea/
+coverage*/
+tests/
+docs/
+plans/
+.env
+.env.*
+docker-compose*.yml
+Dockerfile

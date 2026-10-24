@@ -1,0 +1,68 @@
+# Local environment for web, mobile and QA: SQL Server, a one-shot seed (migrations, cooperative, demo data) and the
+# API in Development on http://<this PC>:8080. Secrets come from .env (copy .env.example); see README "Run with Docker".
+name: omts
+
+x-api: &api
+  build: .
+  image: omts-api:local
+  environment:
+    ASPNETCORE_ENVIRONMENT: Development
+    ConnectionStrings__OmtsDb: "Server=sqlserver,1433;Database=OMTS;User Id=sa;Password=${MSSQL_SA_PASSWORD:?set it in .env};TrustServerCertificate=True"
+    Jwt__SigningKey: ${JWT_SIGNING_KEY:?set it in .env}
+    # Signed download links point at the API itself (/api/files/local/...), so phones and browsers can open them.
+    Storage__Provider: Local
+    Storage__Local__SigningKey: ${STORAGE_SIGNING_KEY:?set it in .env}
+    # Nothing leaves the machine: codes and notifications are kept in the dev inbox (GET /api/dev/sms, /email, /push).
+    Email__Provider: Fake
+    Sms__Provider: Fake
+    Push__Provider: Fake
+    Ocr__Provider: Fake
+    # Demo cooperative and first Owner (fake data); the seed gives the Owner the demo password listed in the README.
+    Bootstrap__Cooperative__FullName: "Hợp tác xã Nuôi hàu Vân Đồn"
+    Bootstrap__Owner__DisplayName: "Nguyễn Văn Hải"
+    Bootstrap__Owner__Username: owner
+    Bootstrap__Owner__PhoneNumber: "0900000001"
+    Bootstrap__Owner__TemporaryPassword: ${OWNER_TEMPORARY_PASSWORD:?set it in .env}
+  volumes:
+    - files:/app/App_Data
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?set it in .env}
+    # Reachable from this PC only (SSMS, Azure Data Studio), never from the network.
+    ports:
+      - "127.0.0.1:1433:1433"
+    volumes:
+      - sqlserver:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -b -Q \"SELECT 1\" > /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  # Runs once: migrations, status catalog, default roles, cooperative and Owner, then the demo data. Idempotent.
+  seed:
+    <<: *api
+    command: ["seed", "--bootstrap", "--demo"]
+    restart: "no"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
+  api:
+    <<: *api
+    # All interfaces, so a phone on the same Wi-Fi reaches http://<this PC's LAN IP>:8080.
+    ports:
+      - "0.0.0.0:8080:8080"
+    restart: unless-stopped
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+
+volumes:
+  sqlserver:
+  files:
