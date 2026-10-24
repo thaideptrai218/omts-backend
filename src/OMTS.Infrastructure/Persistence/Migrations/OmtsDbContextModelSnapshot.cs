@@ -681,6 +681,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("AlertedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<Guid>("ClientOperationId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTimeOffset?>("ConfirmedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -779,6 +782,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("VoidReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<Guid>("ZoneId")
                         .HasColumnType("uniqueidentifier");
 
@@ -786,11 +793,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ConfirmedByAccountId");
 
-                    b.HasIndex("CorrectedFromMeasurementId");
-
-                    b.HasIndex("MeasuredByAccountId");
+                    b.HasIndex("CorrectedFromMeasurementId")
+                        .IsUnique()
+                        .HasFilter("[CorrectedFromMeasurementId] IS NOT NULL");
 
                     b.HasIndex("StatusId");
+
+                    b.HasIndex("MeasuredByAccountId", "ClientOperationId")
+                        .IsUnique()
+                        .HasFilter("[MeasuredByAccountId] IS NOT NULL");
 
                     b.HasIndex("ZoneId", "MeasuredAt");
 
@@ -893,6 +904,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<string>("WaterMeasurementPoint")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("WaterOverdueRemindedAt")
+                        .HasColumnType("datetimeoffset");
 
                     b.HasKey("Id");
 
@@ -2996,6 +3010,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
+                            Id = 704,
+                            Code = "VOIDED",
+                            DisplayName = "Voided",
+                            Group = "WATER_MEASUREMENT",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "Recorded by mistake and voided with a reason; excluded from charts, reports, exports and the overdue check.",
+                            SortOrder = 4
+                        },
+                        new
+                        {
                             Id = 801,
                             Code = "PENDING_REVIEW",
                             DisplayName = "Pending Review",
@@ -4105,6 +4130,28 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             ToStatusId = 1603,
                             TriggerEvent = "System; time",
                             UseCases = "UC70"
+                        },
+                        new
+                        {
+                            Id = 55,
+                            AllowedPerformers = "Cooperative Owner; Zone Manager",
+                            FromStatusId = 701,
+                            GuardCondition = "Void a wrong draft.",
+                            ReasonRequired = true,
+                            ToStatusId = 704,
+                            TriggerEvent = "Action",
+                            UseCases = "ENV-02"
+                        },
+                        new
+                        {
+                            Id = 56,
+                            AllowedPerformers = "Cooperative Owner; Zone Manager",
+                            FromStatusId = 702,
+                            GuardCondition = "Void the latest version of a wrong measurement.",
+                            ReasonRequired = true,
+                            ToStatusId = 704,
+                            TriggerEvent = "Action",
+                            UseCases = "ENV-02"
                         },
                         new
                         {

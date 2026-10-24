@@ -29,6 +29,12 @@ public class FarmingZone : AuditableEntity, IHasStatus
     public decimal? SalinityMin { get; set; }
     public decimal? SalinityMax { get; set; }
 
+    /// <summary>
+    /// When the overdue water measurement reminder (MSG26) was last sent; one reminder per overdue period,
+    /// the period ending with a newer confirmed measurement.
+    /// </summary>
+    public DateTimeOffset? WaterOverdueRemindedAt { get; set; }
+
     public int StatusId { get; set; } = StatusIds.Usage.InUse;
     public Status Status { get; set; } = null!;
 

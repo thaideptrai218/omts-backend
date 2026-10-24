@@ -24,7 +24,9 @@ builder.Services.AddExceptionHandler<ProblemExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers(options => options.Filters.Add<AccountStateGateFilter>())
     // Enums travel by name ("Sms", "Web", "View"); numbers are still accepted.
-    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()))
+    // Unreadable values answer 400 MSG01 like every other invalid field.
+    .ConfigureApiBehaviorOptions(options => options.InvalidModelStateResponseFactory = InvalidModelStateResponse.Create);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
