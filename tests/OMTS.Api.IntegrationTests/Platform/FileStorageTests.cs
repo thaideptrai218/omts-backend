@@ -84,9 +84,20 @@ public class FileStorageTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
     [InlineData("Email:Smtp:Security", "None")]
     public void Invalid_storage_or_messaging_configuration_stops_the_host_in_production(string key, string value)
     {
-        using var production = factory.WithWebHostBuilder(b => b.UseEnvironment("Production").UseSetting(key, value));
+        // The test host forces the fake OCR, which is itself refused in Production: unset it so only `key` can stop the host.
+        using var production = factory.WithWebHostBuilder(b => b.UseEnvironment("Production").UseSetting("Ocr:Provider", "").UseSetting(key, value));
 
         Assert.ThrowsAny<InvalidOperationException>(() => production.CreateClient());
+    }
+
+    [Fact]
+    public void The_fake_ocr_provider_stops_the_host_outside_development()
+    {
+        using var production = factory.WithWebHostBuilder(b => b.UseEnvironment("Production").UseSetting("Ocr:Provider", "Fake"));
+
+        var failure = Assert.ThrowsAny<InvalidOperationException>(() => production.CreateClient());
+
+        Assert.Contains("Ocr:Provider=Fake", failure.Message);
     }
 
     private IFileStorage Storage => factory.Services.GetRequiredService<IFileStorage>();

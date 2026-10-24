@@ -6,6 +6,7 @@ using OMTS.Application.Features.Verification;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Interfaces.Messaging;
+using OMTS.Application.Common.Interfaces.Ocr;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Interfaces.Reports;
 using OMTS.Application.Common.Interfaces.Storage;
@@ -15,6 +16,7 @@ using OMTS.Infrastructure.Identity;
 using OMTS.Infrastructure.Jobs;
 using OMTS.Infrastructure.Messaging;
 using OMTS.Infrastructure.Messaging.Fakes;
+using OMTS.Infrastructure.Ocr;
 using OMTS.Infrastructure.Persistence;
 using OMTS.Infrastructure.Persistence.Interceptors;
 using OMTS.Infrastructure.Persistence.Queries;
@@ -73,6 +75,7 @@ public static class DependencyInjection
         services.AddScoped<IFarmingInputItemRepository, FarmingInputItemRepository>();
         services.AddScoped<IPurchaseReceiptRepository, PurchaseReceiptRepository>();
         services.AddScoped<ISupplierPaymentRepository, SupplierPaymentRepository>();
+        services.AddScoped<IWaterMeasurementRepository, WaterMeasurementRepository>();
         services.AddSingleton<IStatusCatalog, StatusCatalog>();
 
         services.AddOptions<JwtOptions>().Bind(configuration.GetSection(JwtOptions.SectionName));
@@ -83,7 +86,9 @@ public static class DependencyInjection
 
         services.AddMessaging(configuration);
         services.AddFileStorage(configuration);
+        services.AddOcr(configuration);
         services.AddSingleton<ISpreadsheetWriter, ClosedXmlSpreadsheetWriter>();
+        services.AddHostedService<WaterMeasurementOverdueJob>();
 
         services.AddScoped<DeploymentBootstrapper>();
 
@@ -158,6 +163,23 @@ public static class DependencyInjection
             StorageOptions.LocalProvider => provider.GetRequiredService<LocalFileStorage>(),
             StorageOptions.AzureBlobProvider => provider.GetRequiredService<AzureBlobFileStorage>(),
             var other => throw UnknownProvider(StorageOptions.SectionName, other),
+        });
+    }
+
+    private static void AddOcr(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<OcrOptions>().Bind(configuration.GetSection(OcrOptions.SectionName));
+        services.AddOptions<OcrProviderOptions>().Bind(configuration.GetSection(OcrProviderOptions.SectionName));
+        services.AddSingleton<FakeOcrService>();
+        services.AddSingleton<NotConfiguredOcrService>();
+        // Only the fake (Development/tests) exists until the real OCR provider ticket. Unset or unknown fails
+        // closed: no readings, MSG04 and manual entry, instead of fabricated values.
+        services.AddSingleton<IOcrService>(provider =>
+        {
+            var name = provider.GetRequiredService<IOptions<OcrProviderOptions>>().Value.Provider;
+            return name == OcrProviderOptions.FakeProvider
+                ? provider.GetRequiredService<FakeOcrService>()
+                : provider.GetRequiredService<NotConfiguredOcrService>();
         });
     }
 

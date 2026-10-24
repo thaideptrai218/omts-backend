@@ -60,7 +60,7 @@ public class MessagingTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
     [Fact]
     public async Task Dev_inboxes_do_not_exist_outside_development()
     {
-        await using var production = factory.WithWebHostBuilder(b => b.UseEnvironment("Production"));
+        await using var production = factory.WithWebHostBuilder(b => b.UseEnvironment("Production").UseSetting("Ocr:Provider", ""));
         var client = production.CreateClient();
 
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/dev/sms")).StatusCode);

@@ -47,6 +47,7 @@ public static class StatusIds
         public const int Draft = 701;
         public const int Confirmed = 702;
         public const int Superseded = 703;
+        public const int Voided = 704;
     }
 
     public static class SalesOrder

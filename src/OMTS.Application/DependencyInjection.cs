@@ -19,6 +19,7 @@ using OMTS.Application.Features.Verification;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Notifications;
+using OMTS.Application.Features.WaterQuality;
 
 namespace OMTS.Application;
 
@@ -85,6 +86,17 @@ public static class DependencyInjection
         services.AddScoped<PurchaseReceiptQueryService>();
         services.AddScoped<SupplierPaymentService>();
         services.AddScoped<SupplierDebtService>();
+
+        // ENV-01…ENV-04 water quality monitoring and the overdue measurement reminder
+        services.AddSingleton<EditingPresenceTracker>();
+        services.AddScoped<WaterMeterRecognizer>();
+        services.AddScoped<WaterAlertService>();
+        services.AddScoped<WaterMeasurementViewBuilder>();
+        services.AddScoped<WaterMeasurementRecordingService>();
+        services.AddScoped<WaterMeasurementCorrectionService>();
+        services.AddScoped<WaterMeasurementQueryService>();
+        services.AddScoped<WaterThresholdService>();
+        services.AddScoped<WaterMeasurementOverdueReminder>();
 
         return services;
     }
