@@ -46,13 +46,16 @@ public class WaterOverdueReminderTests
     [Fact]
     public async Task One_calendar_month_is_on_time_one_day_more_is_overdue()
     {
+        // A pinned mid-month day: one month back is the same day number there (from 31/10 it would be 30/09,
+        // already overdue; WaterOverdueMonthEndQaTests covers the month ends).
+        var today = new DateOnly(2026, 6, 15);
         await using var api = new WaterApiFactory();
         var onTime = await api.ZoneAsync();
         var late = await api.ZoneAsync();
-        await AddAsync(api, onTime.Zone, StatusIds.WaterMeasurement.Confirmed, LocalMorning(Today.AddMonths(-1)));
-        await AddAsync(api, late.Zone, StatusIds.WaterMeasurement.Confirmed, LocalMorning(Today.AddMonths(-1).AddDays(-1)));
+        await AddAsync(api, onTime.Zone, StatusIds.WaterMeasurement.Confirmed, LocalMorning(today.AddMonths(-1)));
+        await AddAsync(api, late.Zone, StatusIds.WaterMeasurement.Confirmed, LocalMorning(today.AddMonths(-1).AddDays(-1)));
 
-        Assert.Equal(1, await RunAsync(api, Today));
+        Assert.Equal(1, await RunAsync(api, today));
 
         Assert.Empty(await RemindersAsync(api, onTime.Zone));
         Assert.NotEmpty(await RemindersAsync(api, late.Zone));
