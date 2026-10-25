@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Models;
 using OMTS.Application.Common.Validation;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
@@ -52,6 +53,12 @@ public sealed class OwnerPasswordReset(
                 _ when !string.IsNullOrWhiteSpace(settings.OwnerUsername) => $"No Cooperative Owner has the username set in {BootstrapSettings.OwnerUsernameKey}.",
                 _ => $"Several Cooperative Owners exist; set {BootstrapSettings.OwnerUsernameKey} to choose one.",
             });
+        }
+
+        // The key is the bootstrap's own: a value left in place would hand out the expired password again.
+        if (passwordHasher.Verify(owner.PasswordHash, settings.OwnerTemporaryPassword) != PasswordCheck.Failed)
+        {
+            return Fail($"{BootstrapSettings.OwnerTemporaryPasswordKey} is the Owner's current password; set a new value first.");
         }
 
         var now = timeProvider.GetUtcNow();

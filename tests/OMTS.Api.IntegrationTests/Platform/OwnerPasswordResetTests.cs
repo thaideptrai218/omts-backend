@@ -80,6 +80,21 @@ public class OwnerPasswordResetTests
         Assert.Equal(before, await OwnerHashAsync(api));
     }
 
+    // The bootstrap's key left in place would hand out the expired temporary password again.
+    [Fact]
+    public async Task The_Owners_current_password_is_refused_as_the_new_one()
+    {
+        await using var api = BootstrapTests.WithSecrets(new AuthApiFactory());
+        await BootstrapAsync(api);
+        var before = await OwnerHashAsync(api);
+
+        var outcome = await ResetAsync(api);
+
+        Assert.Equal(DeploymentBootstrapper.Failure, outcome.ExitCode);
+        Assert.Equal("Bootstrap:Owner:TemporaryPassword is the Owner's current password; set a new value first.", Assert.Single(outcome.Messages));
+        Assert.Equal(before, await OwnerHashAsync(api));
+    }
+
     [Fact]
     public async Task Configured_username_that_is_not_an_Owner_is_refused()
     {

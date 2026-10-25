@@ -200,7 +200,8 @@ created by a one-time command run on the server by the deployment operator (not 
    An Owner who cannot log in (for example after missing the 24-hour window) is recovered with
    `dotnet OMTS.Api.dll seed --reset-owner-password`. It sets `Bootstrap:Owner:TemporaryPassword` (from configuration, never
    from the command line, so it never lands in shell history) as a new 24-hour temporary password that must be changed at
-   first login, ends every session of the Owner and writes an audit row. With several Owners, `Bootstrap:Owner:Username`
+   first login, ends every session of the Owner and writes an audit row. Set a new value first: the Owner's current
+   (expired) password is refused. With several Owners, `Bootstrap:Owner:Username`
    chooses one. Without an Owner, or without a valid password, it changes nothing and exits with code 1.
 3. Start the API and check `GET /health/ready`: 200 when the database, migrations, status catalog, default roles,
    cooperative and an active Owner are all in place, else 503 listing the failing checks. This is a post-deployment

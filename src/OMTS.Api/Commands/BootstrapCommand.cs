@@ -54,7 +54,7 @@ internal static class BootstrapCommand
             // The innermost cause (e.g. a duplicate username) is what the operator needs; the password is
             // only ever held hashed, so no secret can appear here.
             var cause = exception.GetBaseException();
-            Console.Error.WriteLine($"Bootstrap failed: {cause.GetType().Name}: {cause.Message}");
+            Console.Error.WriteLine($"{(reset ? "Owner password reset" : "Bootstrap")} failed: {cause.GetType().Name}: {cause.Message}");
             return DeploymentBootstrapper.Failure;
         }
     }
