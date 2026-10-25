@@ -76,7 +76,7 @@ public class AuthApiFactory : WebApplicationFactory<Program>
             DisplayName = username,
             PasswordHash = hasher.Hash(password),
             SubjectType = subjectType,
-            PhoneNumber = $"09{Random.Shared.Next(10000000, 99999999)}",
+            PhoneNumber = AcsTestKit.NewPhone(),
             PhoneVerifiedAt = DateTimeOffset.UtcNow,
             StatusId = StatusIds.Account.Active,
         };
