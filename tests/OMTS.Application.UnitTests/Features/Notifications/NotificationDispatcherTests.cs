@@ -14,6 +14,7 @@ public class NotificationDispatcherTests
 
     private readonly FakeNotificationRepository _notifications = new();
     private readonly FakePushOutbox _outbox = new();
+    private readonly FakePushDeviceRepository _devices = new();
 
     [Fact]
     public async Task Non_mandatory_type_follows_each_accounts_channel_preferences()
@@ -57,9 +58,27 @@ public class NotificationDispatcherTests
         Assert.Single(_outbox.Messages);
     }
 
+    [Fact]
+    public async Task Push_carries_only_the_recipients_deliverable_device_tokens()
+    {
+        var withDevices = Guid.NewGuid();
+        var withoutDevice = Guid.NewGuid();
+        _notifications.Preferences[withDevices] = [];
+        _notifications.Preferences[withoutDevice] = [];
+        _devices.Deliverable.AddRange([Device(withDevices, "phone"), Device(withDevices, "tablet"), Device(Guid.NewGuid(), "someone-else")]);
+
+        await NotifyAsync([withDevices, withoutDevice], NotificationTypes.WorkAssignment, isMandatory: false);
+
+        Assert.Equal(["phone", "tablet"], _outbox.Messages.Single(m => m.RecipientAccountId == withDevices).DeviceTokens);
+        Assert.Empty(_outbox.Messages.Single(m => m.RecipientAccountId == withoutDevice).DeviceTokens);
+        Assert.Equal(Now, _devices.AskedAt);
+    }
+
     private Task NotifyAsync(IReadOnlyCollection<Guid> recipients, string type, bool isMandatory) =>
-        new NotificationDispatcher(_notifications, _outbox, new FixedTimeProvider(Now))
+        new NotificationDispatcher(_notifications, _devices, _outbox, new FixedTimeProvider(Now))
             .NotifyAsync(recipients, type, "Title", "Body", "Record", "R-1", isMandatory, CancellationToken.None);
+
+    private static PushDevice Device(Guid accountId, string token) => new() { AccountId = accountId, Token = token, PermissionGranted = true };
 
     private static NotificationPreference Off(string category, NotificationChannel channel) =>
         new() { Category = category, Channel = channel, Enabled = false };
@@ -82,5 +101,25 @@ public class NotificationDispatcherTests
         public List<PushMessage> Messages { get; } = [];
 
         public void Enqueue(PushMessage message) => Messages.Add(message);
+    }
+
+    /// <summary>The rows it holds are the deliverable ones; the session rule is tested against the database.</summary>
+    private sealed class FakePushDeviceRepository : IPushDeviceRepository
+    {
+        public List<PushDevice> Deliverable { get; } = [];
+        public DateTimeOffset? AskedAt { get; private set; }
+
+        public Task<IReadOnlyList<PushDevice>> ListDeliverableAsync(
+            IReadOnlyCollection<Guid> accountIds, DateTimeOffset now, CancellationToken cancellationToken)
+        {
+            AskedAt = now;
+            return Task.FromResult<IReadOnlyList<PushDevice>>(Deliverable.Where(d => accountIds.Contains(d.AccountId)).ToList());
+        }
+
+        public Task<PushDevice?> GetByTokenAsync(string token, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public void Add(PushDevice device) => throw new NotSupportedException();
+
+        public void Remove(PushDevice device) => throw new NotSupportedException();
     }
 }

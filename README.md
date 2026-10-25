@@ -166,7 +166,9 @@ dotnet ef migrations add <Name> --project src/OMTS.Infrastructure --startup-proj
 
 Email, SMS, push, OCR and file storage are adapters picked by configuration, so switching provider needs no code change.
 In Development the fakes keep what they "send" in memory; read it at `GET /api/dev/sms?phoneNumber=`,
-`GET /api/dev/email?to=`, `GET /api/dev/push?accountId=` (clear with `DELETE`). These endpoints answer 404 outside
+`GET /api/dev/email?to=`, `GET /api/dev/push?accountId=` (clear with `DELETE`). Every push is kept, and its `devices`
+lists the tokens a real provider would deliver to: those registered (`POST /api/me/devices`) by a session that is still
+logged in. These endpoints answer 404 outside
 Development; they are anonymous, so never expose a Development environment publicly. Local storage writes under `src/OMTS.Api/App_Data/files` (git-ignored); for Azurite set
 `Storage:Provider=AzureBlob` and `Storage:AzureBlob:ConnectionString=UseDevelopmentStorage=true`.
 The OCR Service of the water meter photos (ENV-01) is only faked until its provider ticket: the fake answers with

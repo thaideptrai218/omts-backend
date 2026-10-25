@@ -4,12 +4,18 @@ namespace OMTS.Domain.Entities.Identity;
 
 /// <summary>
 /// Technical entity (SDS): a device registered for push notifications with its Expo push token (ACS-07).
-/// Push is an eligible channel only while the account has at least one device that allows notifications.
+/// The device receives push only while the login session that registered it is still logged in, so logging out of
+/// one device (or any revocation of its session) stops its notifications. Push is an eligible channel only
+/// while the account has at least one such device that allows notifications.
 /// </summary>
 public class PushDevice : Entity
 {
     public Guid AccountId { get; set; }
     public Account Account { get; set; } = null!;
+
+    /// <summary>Session of the latest registration; empty for devices registered before sessions were bound.</summary>
+    public Guid? LoginSessionId { get; set; }
+    public LoginSession? LoginSession { get; set; }
 
     public string Token { get; set; } = string.Empty;
 

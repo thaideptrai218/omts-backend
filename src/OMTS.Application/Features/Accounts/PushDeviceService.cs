@@ -15,10 +15,11 @@ public sealed class PushDeviceService(IPushDeviceRepository devices, AuditLogSer
     private static readonly string[] Platforms = ["ios", "android", "web"];
 
     /// <summary>
-    /// Re-registering a token updates it; a token registered by another account moves to this one (the
-    /// device logged in with another account) and the move is audited.
+    /// Binds the token to the caller's login session: the device receives push until that session ends.
+    /// Re-registering a token updates it and binds it to the new session; a token registered by another
+    /// account moves to this one (the device logged in with another account) and the move is audited.
     /// </summary>
-    public async Task<Result<Done>> RegisterAsync(Guid accountId, RegisterPushDeviceRequest request, CancellationToken cancellationToken)
+    public async Task<Result<Done>> RegisterAsync(Guid accountId, Guid sessionId, RegisterPushDeviceRequest request, CancellationToken cancellationToken)
     {
         var token = request.Token?.Trim();
         if (string.IsNullOrEmpty(token) || token.Length > 500)
@@ -36,7 +37,16 @@ public sealed class PushDeviceService(IPushDeviceRepository devices, AuditLogSer
         var device = await devices.GetByTokenAsync(token, cancellationToken);
         if (device is null)
         {
-            devices.Add(new PushDevice { AccountId = accountId, Token = token, Platform = platform, PermissionGranted = request.PermissionGranted, RegisteredAt = now, LastSeenAt = now });
+            devices.Add(new PushDevice
+            {
+                AccountId = accountId,
+                LoginSessionId = sessionId,
+                Token = token,
+                Platform = platform,
+                PermissionGranted = request.PermissionGranted,
+                RegisteredAt = now,
+                LastSeenAt = now,
+            });
         }
         else
         {
@@ -51,6 +61,7 @@ public sealed class PushDeviceService(IPushDeviceRepository devices, AuditLogSer
             }
 
             device.AccountId = accountId;
+            device.LoginSessionId = sessionId;
             device.Platform = platform;
             device.PermissionGranted = request.PermissionGranted;
             device.LastSeenAt = now;

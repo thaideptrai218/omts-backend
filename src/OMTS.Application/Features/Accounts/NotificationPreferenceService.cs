@@ -26,7 +26,8 @@ public sealed record NotificationPreferencesSaved(IReadOnlyList<CategoryPreferen
 public sealed class NotificationPreferenceService(
     IAccountRepository accounts,
     IPushDeviceRepository devices,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    TimeProvider timeProvider)
 {
     private static readonly NotificationChannel[] OfferedChannels =
         [NotificationChannel.InApp, NotificationChannel.Push, NotificationChannel.Email, NotificationChannel.Zalo];
@@ -147,7 +148,7 @@ public sealed class NotificationPreferenceService(
     }
 
     private async Task<bool> HasPushDeviceAsync(Guid accountId, CancellationToken cancellationToken) =>
-        (await devices.ListForAccountAsync(accountId, cancellationToken)).Any(d => d.PermissionGranted);
+        (await devices.ListDeliverableAsync([accountId], timeProvider.GetUtcNow(), cancellationToken)).Count > 0;
 
     private static string ChannelName(NotificationChannel channel) => channel == NotificationChannel.Zalo ? "Zalo OA" : channel.ToString();
 }
