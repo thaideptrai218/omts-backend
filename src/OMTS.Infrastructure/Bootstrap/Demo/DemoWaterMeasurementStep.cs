@@ -10,8 +10,8 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 /// ENV-01…ENV-04: the thresholds and the 30 days of water measurements of <see cref="DemoWaterPlans"/> for each In Use
 /// demo zone, through the threshold, recording and correction services, so alerts, threshold snapshots, version chains
 /// and audit rows come from the normal rules. A measurement is found by zone and device operation id (one per planned
-/// day); its date is relative to the first seed day, which a later run reads back from the stored measurements, so a
-/// rerun creates nothing and moves no date, and an interrupted run is completed on the same days.
+/// day); its date is relative to the first seed day, which a later run reads back from the stored measurements of any
+/// zone, so a rerun creates nothing and moves no date, and an interrupted run is completed on the same days.
 /// </summary>
 internal sealed class DemoWaterMeasurementStep : IDemoSeedStep
 {
@@ -19,16 +19,32 @@ internal sealed class DemoWaterMeasurementStep : IDemoSeedStep
 
     public async Task<int> RunAsync(DemoSeedContext context, CancellationToken cancellationToken)
     {
+        var firstSeedDay = await FirstSeedDayAsync(context, cancellationToken);
         var created = 0;
         foreach (var zoneCode in DemoWaterPlans.Zones)
         {
             var zoneId = await context.Db.FarmingZones.Where(z => z.Code == zoneCode).Select(z => z.Id).SingleAsync(cancellationToken);
             await SetThresholdsOnceAsync(context, zoneId, zoneCode, cancellationToken);
-            created += await RecordMissingDaysAsync(context, zoneId, zoneCode, cancellationToken);
+            created += await RecordMissingDaysAsync(context, zoneId, zoneCode, firstSeedDay, cancellationToken);
             created += await CorrectAndVoidAsync(context, zoneId, zoneCode, cancellationToken);
         }
 
         return created;
+    }
+
+    /// <summary>The first seed day: read back from any stored demo reading of any zone (an interrupted run), else today.</summary>
+    private static async Task<DateOnly> FirstSeedDayAsync(DemoSeedContext context, CancellationToken cancellationToken)
+    {
+        var daysByOperation = DemoWaterPlans.Zones
+            .SelectMany(zone => Enumerable.Range(1, DemoWaterPlans.Days).Select(daysAgo => (Id: DemoWaterPlans.OperationId(zone, daysAgo), DaysAgo: daysAgo)))
+            .ToDictionary(x => x.Id, x => x.DaysAgo);
+        var operationIds = daysByOperation.Keys.ToList();
+        var stored = await context.Db.WaterMeasurements.AsNoTracking()
+            .Where(m => operationIds.Contains(m.ClientOperationId))
+            .Select(m => new { m.ClientOperationId, m.MeasuredAt })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return stored is null ? context.Today : BusinessClock.ToBusinessDate(stored.MeasuredAt).AddDays(daysByOperation[stored.ClientOperationId]);
     }
 
     /// <summary>ENV-04, once per zone: any threshold change already audited (by an earlier run or by the Owner) is kept.</summary>
@@ -42,24 +58,21 @@ internal sealed class DemoWaterMeasurementStep : IDemoSeedStep
         DemoSeedContext.Ensure(await context.Get<WaterThresholdService>().SetAsync(zoneId, DemoWaterPlans.Thresholds, cancellationToken), $"thresholds of {zoneCode}");
     }
 
-    private static async Task<int> RecordMissingDaysAsync(DemoSeedContext context, Guid zoneId, string zoneCode, CancellationToken cancellationToken)
+    private static async Task<int> RecordMissingDaysAsync(
+        DemoSeedContext context, Guid zoneId, string zoneCode, DateOnly firstSeedDay, CancellationToken cancellationToken)
     {
         var daysByOperation = Enumerable.Range(1, DemoWaterPlans.Days).ToDictionary(d => DemoWaterPlans.OperationId(zoneCode, d));
         var operationIds = daysByOperation.Keys.ToList();
         var stored = await context.Db.WaterMeasurements.AsNoTracking()
             .Where(m => m.ZoneId == zoneId && operationIds.Contains(m.ClientOperationId))
-            .Select(m => new { m.ClientOperationId, m.MeasuredAt })
+            .Select(m => m.ClientOperationId)
             .ToListAsync(cancellationToken);
 
-        // The first seed day: read back from any stored demo reading, else today.
-        var firstSeedDay = stored.Count == 0
-            ? context.Today
-            : BusinessClock.ToBusinessDate(stored[0].MeasuredAt).AddDays(daysByOperation[stored[0].ClientOperationId]);
         var recording = context.Get<WaterMeasurementRecordingService>();
         var created = 0;
         foreach (var (operationId, daysAgo) in daysByOperation)
         {
-            if (stored.Any(m => m.ClientOperationId == operationId))
+            if (stored.Contains(operationId))
             {
                 continue;
             }
