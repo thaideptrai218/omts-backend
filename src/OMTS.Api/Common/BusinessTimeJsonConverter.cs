@@ -16,10 +16,13 @@ internal sealed class BusinessTimeJsonConverter : JsonConverter<DateTimeOffset>
     {
         if (reader.TokenType == JsonTokenType.String)
         {
-            // The reader's own ISO 8601 parser tells whether an offset was sent: none gives an Unspecified kind.
+            // The reader's own ISO 8601 parser tells whether an offset was sent: none gives an Unspecified kind. Such a
+            // value is never read with the server's offset, even when it has no UTC instant (start of year 1).
             if (reader.TryGetDateTime(out var parsed) && parsed.Kind == DateTimeKind.Unspecified)
             {
-                return BusinessClock.FromLocal(parsed);
+                return BusinessClock.TryFromLocal(parsed, out var local)
+                    ? local
+                    : throw new JsonException("The date and time is before the first representable instant.");
             }
 
             if (reader.TryGetDateTimeOffset(out var instant))
