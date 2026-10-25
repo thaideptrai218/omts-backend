@@ -76,7 +76,7 @@ internal static partial class InvariantFormValues
             return false;
         }
 
-        result = new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), BusinessClock.UtcOffset);
+        result = BusinessClock.FromLocal(local);
         return true;
     }
 

@@ -59,7 +59,7 @@ public sealed class ZoneWaterMeasurementsController(
 
     /// <summary>
     /// The same as the JSON variant as multipart, with an optional <c>photo</c> (offline sync of a photographed
-    /// measurement); numbers use a dot, times are ISO 8601 (local time when no offset is given).
+    /// measurement); numbers use a dot, times are ISO 8601 (Vietnam time, UTC+7, when no offset is given).
     /// </summary>
     [HttpPost("with-photo")]
     [RequirePermission(PermissionFunctions.WaterMeasurements, PermissionAction.Create)]

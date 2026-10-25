@@ -10,6 +10,12 @@ public static class BusinessClock
 
     public static DateOnly ToBusinessDate(DateTimeOffset instant) => DateOnly.FromDateTime(instant.ToOffset(UtcOffset).DateTime);
 
+    /// <summary>
+    /// A date and time sent without a UTC offset, read as business local time (UTC+7) and never as the server's time
+    /// zone or UTC: "2026-10-20T08:00" is 08:00 in Vietnam (01:00Z). Every time the API reads uses this rule.
+    /// </summary>
+    public static DateTimeOffset FromLocal(DateTime local) => new(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), UtcOffset);
+
     /// <summary>Today's business date.</summary>
     public static DateOnly Today(this TimeProvider timeProvider) => ToBusinessDate(timeProvider.GetUtcNow());
 
