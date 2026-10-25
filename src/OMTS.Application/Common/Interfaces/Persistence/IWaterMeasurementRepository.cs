@@ -6,7 +6,14 @@ namespace OMTS.Application.Common.Interfaces.Persistence;
 
 /// <summary>A zone with the measurement time of its latest Confirmed water measurement (overdue reminder).</summary>
 /// <param name="LatestConfirmedAt">When the latest measurement (by measured time) was confirmed.</param>
-public sealed record ZoneLatestWaterMeasurement(FarmingZone Zone, DateTimeOffset? LatestConfirmedMeasuredAt, DateTimeOffset? LatestConfirmedAt = null);
+/// <param name="LatestId">Id of that measurement.</param>
+/// <param name="LatestIsCorrection">Whether that measurement is a correction version (ENV-02).</param>
+public sealed record ZoneLatestWaterMeasurement(
+    FarmingZone Zone,
+    DateTimeOffset? LatestConfirmedMeasuredAt,
+    DateTimeOffset? LatestConfirmedAt = null,
+    Guid? LatestId = null,
+    bool LatestIsCorrection = false);
 
 /// <summary>
 /// Water measurements (ENV-01…ENV-03) and the water data of zones (thresholds ENV-04, overdue marker).
@@ -40,6 +47,9 @@ public interface IWaterMeasurementRepository
 
     /// <summary>Every In Use zone (tracked) with its latest Confirmed measurement time; Draft, Corrected and Voided do not count.</summary>
     Task<IReadOnlyList<ZoneLatestWaterMeasurement>> ListInUseZonesWithLatestConfirmedAsync(CancellationToken cancellationToken);
+
+    /// <summary>The zone's latest Confirmed measurement by measured time (not tracked), the one its overdue period starts at.</summary>
+    Task<WaterMeasurement?> GetLatestConfirmedAsync(Guid zoneId, CancellationToken cancellationToken);
 
     /// <summary>Display names of the given accounts that exist.</summary>
     Task<IReadOnlyDictionary<Guid, string>> GetAccountNamesAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken cancellationToken);
