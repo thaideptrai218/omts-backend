@@ -29,16 +29,22 @@ public class EmployeeAccountUnlinkTests(AuthApiFactory factory) : IClassFixture<
         var saved = await CreateAsync(owner, Profile(name, phone, zone.Id, b => b["accountId"] = first.Id));
         var id = IdOf(saved);
 
-        Dictionary<string, object?> Edit(Action<Dictionary<string, object?>>? change = null) =>
-            Profile(name, phone, zone.Id, b => { b["notes"] = "Edited"; b["rowVersion"] = RowVersionOf(saved); change?.Invoke(b); });
+        // Each edit sends the version the previous one returned, as the screen would.
+        async Task<JsonElement> EditAsync(JsonElement read, Action<Dictionary<string, object?>>? change = null) =>
+            await (await owner.PutAsJsonAsync($"/api/employees/{id}", Profile(name, phone, zone.Id, b =>
+            {
+                b["notes"] = "Edited";
+                b["rowVersion"] = RowVersionOf(read);
+                change?.Invoke(b);
+            }))).ReadAsync(HttpStatusCode.OK);
 
-        var missing = await owner.PutAsJsonAsync($"/api/employees/{id}", Edit());
-        var explicitNull = await owner.PutAsJsonAsync($"/api/employees/{id}", Edit(b => b["accountId"] = null));
-        var relinked = await owner.PutAsJsonAsync($"/api/employees/{id}", Edit(b => b["accountId"] = second.Id));
+        var missing = await EditAsync(saved);
+        var explicitNull = await EditAsync(missing, b => b["accountId"] = null);
+        var relinked = await EditAsync(explicitNull, b => b["accountId"] = second.Id);
 
-        Assert.Equal(first.Id, AccountOf(await missing.ReadAsync(HttpStatusCode.OK))?.GetProperty("id").GetGuid());
-        Assert.Equal(first.Id, AccountOf(await explicitNull.ReadAsync(HttpStatusCode.OK))?.GetProperty("id").GetGuid());
-        Assert.Equal(second.Id, AccountOf(await relinked.ReadAsync(HttpStatusCode.OK))?.GetProperty("id").GetGuid());
+        Assert.Equal(first.Id, AccountOf(missing)?.GetProperty("id").GetGuid());
+        Assert.Equal(first.Id, AccountOf(explicitNull)?.GetProperty("id").GetGuid());
+        Assert.Equal(second.Id, AccountOf(relinked)?.GetProperty("id").GetGuid());
         Assert.Equal(second.Id, await factory.QueryAsync(db => db.Employees.Where(e => e.Id == id).Select(e => e.AccountId).SingleAsync()));
         // The notes edit, then the new link; the edits without accountId never touched the link.
         var updates = await UpdatesAsync(id);
