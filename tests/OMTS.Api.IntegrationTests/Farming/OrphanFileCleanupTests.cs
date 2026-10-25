@@ -62,7 +62,7 @@ public class OrphanFileCleanupTests
         Assert.Equal(0, await factory.Services.GetRequiredService<OrphanFileCleanupJob>().RunOnceAsync(DateTimeOffset.UtcNow.AddDays(2)));
 
         Assert.Equal(new[] { photo, license }.Order(), AllKeys(factory).Order());
-        Assert.Equal(2, factory.Logs.Lines.Count(l => l.StartsWith("Warning:") && l.Contains("skipped: no record points to any of its 1 old files")));
+        Assert.Equal(2, factory.Logs.Lines.Count(l => l.StartsWith("Warning:") && l.Contains("skipped: none of its 1 stored files is referenced")));
     }
 
     // The referenced keys are read from SQL Server; every file counts as old here, so only the reference decides.

@@ -18,6 +18,7 @@ public sealed class OrphanFileCleanupService(IFileStorage storage, IStoredFileRe
     /// <summary>
     /// Deletes the category's files written before <paramref name="writtenBefore"/> that no record points to, and
     /// returns how many were deleted. Younger files are kept: their upload may still wait for the save pointing to it.
+    /// When no stored file of the category at all is referenced, nothing is deleted (a warning is logged).
     /// </summary>
     public async Task<int> CleanAsync(string category, DateTimeOffset writtenBefore, CancellationToken cancellationToken)
     {
@@ -26,7 +27,8 @@ public sealed class OrphanFileCleanupService(IFileStorage storage, IStoredFileRe
             throw new ArgumentOutOfRangeException(nameof(category), category, "Only raft photos and license files are cleaned up.");
         }
 
-        var old = (await storage.ListAsync(category, cancellationToken)).Where(f => f.LastModified < writtenBefore).ToList();
+        var stored = await storage.ListAsync(category, cancellationToken);
+        var old = stored.Where(f => f.LastModified < writtenBefore).ToList();
         if (old.Count == 0)
         {
             return 0;
@@ -34,11 +36,13 @@ public sealed class OrphanFileCleanupService(IFileStorage storage, IStoredFileRe
 
         // Read after the listing: a record saved in between points to a file younger than the grace period.
         var referenced = await references.ReferencedKeysAsync(category, cancellationToken);
-        if (referenced.Count == 0)
+        if (!stored.Any(f => referenced.Contains(f.Key)))
         {
-            // No record points to any file of the category: rather a wrong or empty database for this storage than a
-            // real clean-up, so nothing is deleted.
-            logger.LogWarning("Orphan file clean-up of {Category} skipped: no record points to any of its {Count} old files.", category, old.Count);
+            // Not one stored file (old or new) is referenced: the database belongs to another environment, or is empty,
+            // rather than this storage being full of orphans. Deleting would empty the folder, so nothing is deleted.
+            logger.LogWarning(
+                "Orphan file clean-up of {Category} skipped: none of its {Count} stored files is referenced by the database; check that this environment has a storage of its own.",
+                category, stored.Count);
             return 0;
         }
 

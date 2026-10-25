@@ -182,9 +182,13 @@ with View on `WATER_MEASUREMENTS`).
 A replaced raft photo or license file is removed right after the save, and the upload of a failed save right away.
 `OrphanFileCleanupJob` runs every day at 03:00 (Asia/Ho_Chi_Minh) and deletes what such a removal left behind: raft
 photos (`raft-photos/`) and license files (`zone-licenses/`) that no raft or license points to and that were written more
-than the grace period (24 hours) ago. No other storage folder is scanned, so cooperative logos are kept for ever. Give
-every environment its own `Storage:AzureBlob:Container` (or `Storage:Local:RootPath`): the job deletes the files its own
-database does not know. A run that finds no file of a folder referenced at all deletes nothing and logs a warning.
+than the grace period (24 hours) ago. No other storage folder is scanned, so cooperative logos are kept for ever.
+
+**Every environment must use its own storage container (`Storage:AzureBlob:Container`) or folder
+(`Storage:Local:RootPath`); never share one between environments.** The job deletes the files its own database does not
+point to, so on a shared storage it would delete the files of the other environment. As a safeguard only, a folder in
+which not one stored file (old or new) is referenced by the database is skipped: nothing is deleted there and a warning
+is logged.
 
 ## Deployment
 
@@ -214,7 +218,7 @@ created by a one-time command run on the server by the deployment operator (not 
 | SMS (`Sms:Provider` = `None`, the default: nothing is sent and phone verification cannot complete; `Fake` keeps messages in the dev inbox and is set in Development only) | `Sms:Fake:FailFor` (test numbers that fail) |
 | Push (`Push:Provider` = `None` by default, `Fake` in Development) | `Push:Fake:FailFor` |
 | OCR (`Ocr:Provider` unset by default: meter photos are not read and the values are entered by hand (MSG04); `Fake` invents readings, so it is set in Development only and stops the host elsewhere) | `Ocr:TimeoutSeconds` (default 15), `Ocr:UncertainBelow` (default 0.8), `Ocr:Fake:Mode` (`Success`, `Fail`, `Timeout`), `Ocr:Fake:Ph`, `Ocr:Fake:Salinity`, `Ocr:Fake:Confidence` |
-| File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
+| File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development; one container or folder per environment, see Background jobs) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
 | Bootstrap (see Deployment) | `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:*` |
 | Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30) |
 | CORS: the web app calls the API from the browser. Set its origin in every deployed environment; empty means no CORS. Development allows `http://localhost:3000`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`) |
