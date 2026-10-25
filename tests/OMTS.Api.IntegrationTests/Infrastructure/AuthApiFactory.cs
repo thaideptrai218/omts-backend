@@ -20,8 +20,9 @@ public class AuthApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _databaseName = $"omts-auth-{Guid.NewGuid()}";
 
-    // Every host this factory builds (KestrelApiFactory builds two) sees the same in-memory database.
-    private readonly InMemoryDatabaseRoot _databaseRoot = new();
+    // One root for every factory, so every host a factory builds (KestrelApiFactory builds two) sees the same
+    // database by name. A root per factory would make EF build an internal service provider per factory.
+    private static readonly InMemoryDatabaseRoot DatabaseRoot = new();
 
     // Generated per test host so no key-like literal is committed (gitleaks).
     private readonly string _signingKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
@@ -47,7 +48,7 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         {
             services.RemoveAll<DbContextOptions<OmtsDbContext>>();
             services.AddDbContext<OmtsDbContext>((provider, options) => options
-                .UseInMemoryDatabase(_databaseName, _databaseRoot)
+                .UseInMemoryDatabase(_databaseName, DatabaseRoot)
                 .AddOmtsInterceptors(provider));
 
             services.AddControllers().AddApplicationPart(typeof(AuthApiFactory).Assembly);
