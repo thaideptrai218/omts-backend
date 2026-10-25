@@ -41,6 +41,7 @@ public static class DependencyInjection
 
         services.AddScoped<AmbientActor>();
         services.AddScoped<AuditLogService>();
+        services.AddScoped<StatusChangeService>();
         services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
         services.AddScoped<RowVersionGuard>();
 

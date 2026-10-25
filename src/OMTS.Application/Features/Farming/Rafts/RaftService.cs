@@ -28,6 +28,7 @@ public sealed class RaftService(
     IFileStorage storage,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
+    StatusChangeService statusChanges,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider,
@@ -328,34 +329,13 @@ public sealed class RaftService(
 
     private async Task<Result<RaftView>> ChangeStatusAsync(Raft raft, int newStatusId, string action, ChangeStatusRequest request, CancellationToken cancellationToken)
     {
-        var reason = request.Reason?.Trim();
-        if (reason?.Length > 1000)
-        {
-            return AppError.Invalid("Reason");
-        }
-
-        if (await rowVersions.CheckAsync(raft, request.RowVersion, cancellationToken) is { } conflict)
-        {
-            return conflict;
-        }
-
-        var oldStatusId = raft.StatusId;
-        raft.StatusId = newStatusId;
-        audit.Record(new AuditEntry(action, RecordType)
-        {
-            RecordId = raft.Id,
-            RecordCode = raft.Code,
-            ZoneId = raft.ZoneId,
-            Before = new { Status = statusCatalog.CodeOf(oldStatusId) },
-            After = new { Status = statusCatalog.CodeOf(newStatusId) },
-            Reason = string.IsNullOrEmpty(reason) ? null : reason,
-        });
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return await ViewAsync(raft, cancellationToken);
+        var entry = new AuditEntry(action, RecordType) { RecordId = raft.Id, RecordCode = raft.Code, ZoneId = raft.ZoneId };
+        return await statusChanges.ChangeAsync(raft, newStatusId, entry, request.Reason, request.RowVersion, cancellationToken) is { } error
+            ? error
+            : await ViewAsync(raft, cancellationToken);
     }
 
-    private AppError WrongStatus(Raft raft, int newStatusId, string reason) => AppError.Conflict(UserMessages.CannotChangeStatus(
-        "raft", statusCatalog.DisplayNameOf(raft.StatusId), statusCatalog.DisplayNameOf(newStatusId), reason));
+    private AppError WrongStatus(Raft raft, int newStatusId, string reason) => statusChanges.WrongStatus("raft", raft, newStatusId, reason);
 
     private static AppError Duplicate(Guid existingId) => new(
         ErrorKind.Conflict,
