@@ -25,7 +25,10 @@ internal static partial class StorageKeys
     /// <summary>True for keys this class could have produced (no "..", no absolute paths, known extension).</summary>
     public static bool IsValid(string key) => ValidKey().IsMatch(key);
 
-    /// <summary>The category as <see cref="Create"/> writes it, checked before it is used as a folder or prefix to list.</summary>
+    /// <summary>
+    /// Key prefix <c>{category}/</c> of a category's files, to list them. The category must already be written as
+    /// <see cref="Create"/> writes it, since it becomes a folder or a blob prefix.
+    /// </summary>
     public static string ListPrefix(string category) =>
         CategoryName().IsMatch(category) ? $"{category}/" : throw new ArgumentException("Invalid storage category.", nameof(category));
 

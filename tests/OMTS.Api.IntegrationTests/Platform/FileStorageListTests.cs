@@ -67,7 +67,8 @@ public class FileStorageListTests
     private static void AssertListed(List<string> photos, IReadOnlyList<StoredFile> listed)
     {
         Assert.Equal(photos.Order(), listed.Select(f => f.Key).Order());
-        Assert.All(listed, f => Assert.InRange(f.LastModified, DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddMinutes(1)));
+        // A real write time, not a default value; wide enough for an emulator clock a little off.
+        Assert.All(listed, f => Assert.InRange(f.LastModified, DateTimeOffset.UtcNow.AddHours(-1), DateTimeOffset.UtcNow.AddHours(1)));
         Assert.All(listed, f => Assert.Equal(TimeSpan.Zero, f.LastModified.Offset));
     }
 

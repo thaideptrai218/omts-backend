@@ -8,4 +8,7 @@ public interface IStoredFileReferenceQuery
     /// known column throws, so nothing is ever cleaned up on a guess.
     /// </summary>
     Task<IReadOnlySet<string>> ReferencedKeysAsync(string category, CancellationToken cancellationToken);
+
+    /// <summary>True when a record of the key's category column points to the key, as stored in the database.</summary>
+    Task<bool> IsReferencedAsync(string key, CancellationToken cancellationToken);
 }

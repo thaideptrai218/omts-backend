@@ -8,6 +8,7 @@ namespace OMTS.Application.Features.Files;
 /// Removes FARM files no record points to: a removal that failed after a replace or a failed save, or a host that
 /// stopped between upload and save. Only <see cref="Categories"/> are scanned. Cooperative logos never are: every
 /// logo file is kept, since published traceability versions show the logo of their publication time (FARM-01).
+/// Each environment needs a storage container (or folder) of its own: files its database does not know are deleted.
 /// </summary>
 public sealed class OrphanFileCleanupService(IFileStorage storage, IStoredFileReferenceQuery references, ILogger<OrphanFileCleanupService> logger)
 {
@@ -33,6 +34,14 @@ public sealed class OrphanFileCleanupService(IFileStorage storage, IStoredFileRe
 
         // Read after the listing: a record saved in between points to a file younger than the grace period.
         var referenced = await references.ReferencedKeysAsync(category, cancellationToken);
+        if (referenced.Count == 0)
+        {
+            // No record points to any file of the category: rather a wrong or empty database for this storage than a
+            // real clean-up, so nothing is deleted.
+            logger.LogWarning("Orphan file clean-up of {Category} skipped: no record points to any of its {Count} old files.", category, old.Count);
+            return 0;
+        }
+
         var deleted = 0;
         foreach (var orphan in old.Where(f => !referenced.Contains(f.Key)))
         {

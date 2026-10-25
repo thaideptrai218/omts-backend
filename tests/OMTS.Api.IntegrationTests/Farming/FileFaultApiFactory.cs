@@ -14,15 +14,23 @@ namespace OMTS.Api.IntegrationTests.Farming;
 /// <summary>Switches the next save or the file removals of a <see cref="FileFaultApiFactory"/> host to fail.</summary>
 public sealed class FileFaults
 {
-    private Exception? _nextSave;
+    private (Exception Failure, bool AfterCommit)? _nextSave;
 
     /// <summary>Every <see cref="IFileStorage.DeleteAsync"/> throws, as a provider bug would.</summary>
     public bool DeleteThrows { get; set; }
 
     /// <summary>The next save throws <paramref name="failure"/> and saves nothing.</summary>
-    public void FailNextSave(Exception failure) => _nextSave = failure;
+    public void FailNextSave(Exception failure) => _nextSave = (failure, false);
 
-    internal Exception? TakeSaveFailure() => Interlocked.Exchange(ref _nextSave, null);
+    /// <summary>The next save is committed, then throws <paramref name="failure"/> (a reply lost after the commit).</summary>
+    public void FailNextSaveAfterCommit(Exception failure) => _nextSave = (failure, true);
+
+    internal (Exception Failure, bool AfterCommit)? TakeSaveFailure()
+    {
+        var next = _nextSave;
+        _nextSave = null;
+        return next;
+    }
 }
 
 /// <summary>The real API (in-memory database, Local storage) whose unit of work and file removals can be made to fail.</summary>
@@ -43,8 +51,20 @@ public sealed class FileFaultApiFactory : AuthApiFactory
 
     private sealed class FaultyUnitOfWork(IUnitOfWork inner, FileFaults faults) : IUnitOfWork
     {
-        public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) =>
-            faults.TakeSaveFailure() is { } failure ? throw failure : inner.SaveChangesAsync(cancellationToken);
+        public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            if (faults.TakeSaveFailure() is not { } fault)
+            {
+                return await inner.SaveChangesAsync(cancellationToken);
+            }
+
+            if (fault.AfterCommit)
+            {
+                await inner.SaveChangesAsync(cancellationToken);
+            }
+
+            throw fault.Failure;
+        }
 
         public Task ReloadAsync(object entity, CancellationToken cancellationToken = default) => inner.ReloadAsync(entity, cancellationToken);
 

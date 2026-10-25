@@ -182,7 +182,9 @@ with View on `WATER_MEASUREMENTS`).
 A replaced raft photo or license file is removed right after the save, and the upload of a failed save right away.
 `OrphanFileCleanupJob` runs every day at 03:00 (Asia/Ho_Chi_Minh) and deletes what such a removal left behind: raft
 photos (`raft-photos/`) and license files (`zone-licenses/`) that no raft or license points to and that were written more
-than the grace period (24 hours) ago. No other storage folder is scanned, so cooperative logos are kept for ever.
+than the grace period (24 hours) ago. No other storage folder is scanned, so cooperative logos are kept for ever. Give
+every environment its own `Storage:AzureBlob:Container` (or `Storage:Local:RootPath`): the job deletes the files its own
+database does not know. A run that finds no file of a folder referenced at all deletes nothing and logs a warning.
 
 ## Deployment
 

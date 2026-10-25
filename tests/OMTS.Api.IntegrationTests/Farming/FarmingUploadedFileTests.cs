@@ -106,6 +106,27 @@ public class FarmingUploadedFileTests
         Assert.Equal([current], StoredKeys(factory, FileCategories.RaftPhotos));
     }
 
+    [Fact]
+    public async Task A_save_failing_after_its_commit_keeps_the_file_the_record_points_to()
+    {
+        using var factory = new FileFaultApiFactory();
+        var owner = await factory.OwnerAsync();
+        var raftId = (await owner.Client.CreateRaftAsync((await owner.Client.CreateZoneAsync()).Id())).Id();
+        await (await UploadPhotoAsync(owner, raftId)).ReadAsync(HttpStatusCode.OK);
+        var first = await PhotoKeyAsync(factory, raftId);
+
+        factory.Faults.FailNextSaveAfterCommit(DatabaseDown);
+        Assert.Equal(HttpStatusCode.InternalServerError, (await UploadPhotoAsync(owner, raftId)).StatusCode);
+
+        var saved = await PhotoKeyAsync(factory, raftId);
+        Assert.NotEqual(first, saved);
+        Assert.Contains(saved, StoredKeys(factory, FileCategories.RaftPhotos));
+        Assert.Contains(factory.Logs.Lines, l => l.Contains("is kept: the failed save was committed"));
+        // The request failed, so the replaced photo stayed; the clean-up removes it once it is old enough.
+        Assert.Equal(1, await factory.Services.GetRequiredService<OrphanFileCleanupJob>().RunOnceAsync(DateTimeOffset.UtcNow.AddDays(2)));
+        Assert.Equal([saved], StoredKeys(factory, FileCategories.RaftPhotos));
+    }
+
     private static Task<HttpResponseMessage> UploadPhotoAsync(Actor owner, Guid raftId) =>
         owner.Client.PostAsync($"/api/rafts/{raftId}/photo", new MultipartFormDataContent { { FileContent(Png), "file", "raft.png" } });
 

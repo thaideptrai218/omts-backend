@@ -50,6 +50,21 @@ public class OrphanFileCleanupTests
         Assert.Contains($"{FileCategories.RaftPhotos}/notes.txt", AllKeys(factory));
     }
 
+    // A database that knows none of the files (wrong or empty database for this storage) deletes nothing.
+    [Fact]
+    public async Task A_database_pointing_to_no_file_of_a_category_deletes_nothing()
+    {
+        using var factory = new AuthApiFactory();
+        var storage = factory.Services.GetRequiredService<IFileStorage>();
+        var photo = await StoreAsync(storage, FileCategories.RaftPhotos, Png);
+        var license = await StoreAsync(storage, FileCategories.ZoneLicenses, Pdf);
+
+        Assert.Equal(0, await factory.Services.GetRequiredService<OrphanFileCleanupJob>().RunOnceAsync(DateTimeOffset.UtcNow.AddDays(2)));
+
+        Assert.Equal(new[] { photo, license }.Order(), AllKeys(factory).Order());
+        Assert.Equal(2, factory.Logs.Lines.Count(l => l.StartsWith("Warning:") && l.Contains("skipped: no record points to any of its 1 old files")));
+    }
+
     // The referenced keys are read from SQL Server; every file counts as old here, so only the reference decides.
     [SqlServerFact]
     public async Task Referenced_files_are_read_from_sql_server_and_kept()
