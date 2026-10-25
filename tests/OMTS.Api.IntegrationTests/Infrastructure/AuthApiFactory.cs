@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OMTS.Application.Common.Interfaces.Identity;
@@ -18,6 +19,9 @@ namespace OMTS.Api.IntegrationTests.Infrastructure;
 public class AuthApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _databaseName = $"omts-auth-{Guid.NewGuid()}";
+
+    // Every host this factory builds (KestrelApiFactory builds two) sees the same in-memory database.
+    private readonly InMemoryDatabaseRoot _databaseRoot = new();
 
     // Generated per test host so no key-like literal is committed (gitleaks).
     private readonly string _signingKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
@@ -43,7 +47,7 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         {
             services.RemoveAll<DbContextOptions<OmtsDbContext>>();
             services.AddDbContext<OmtsDbContext>((provider, options) => options
-                .UseInMemoryDatabase(_databaseName)
+                .UseInMemoryDatabase(_databaseName, _databaseRoot)
                 .AddOmtsInterceptors(provider));
 
             services.AddControllers().AddApplicationPart(typeof(AuthApiFactory).Assembly);
