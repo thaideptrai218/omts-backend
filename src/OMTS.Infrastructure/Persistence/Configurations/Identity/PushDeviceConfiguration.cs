@@ -9,8 +9,9 @@ internal sealed class PushDeviceConfiguration : IEntityTypeConfiguration<PushDev
     public void Configure(EntityTypeBuilder<PushDevice> builder)
     {
         builder.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId);
-        // Sessions are revoked, never deleted; NoAction also avoids a second cascade path from Accounts.
-        builder.HasOne(x => x.LoginSession).WithMany().HasForeignKey(x => x.LoginSessionId).OnDelete(DeleteBehavior.NoAction);
+        // Sessions are revoked, never deleted; the global Restrict rule (OmtsDbContext) also avoids a second
+        // cascade path from Accounts.
+        builder.HasOne(x => x.LoginSession).WithMany().HasForeignKey(x => x.LoginSessionId);
         builder.Property(x => x.Token).HasMaxLength(Lengths.Address);
         // One device token belongs to one account: re-registering on another account moves it.
         builder.HasIndex(x => x.Token).IsUnique();

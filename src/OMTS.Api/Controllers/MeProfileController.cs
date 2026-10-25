@@ -59,7 +59,8 @@ public sealed class MeProfileController(
 
     /// <summary>
     /// Registers the Expo push token of this device for the current login session: call it after every
-    /// login. Logging out of the session stops the device's notifications.
+    /// login and at every app start. Logging out of the session stops the device's notifications; a password
+    /// change on this device keeps them.
     /// </summary>
     [HttpPost("devices")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

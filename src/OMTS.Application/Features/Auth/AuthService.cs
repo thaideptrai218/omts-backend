@@ -16,6 +16,7 @@ public sealed class AuthService(
     IAccountRepository accounts,
     ILoginSessionRepository sessions,
     IAccessGrantRepository grants,
+    IPushDeviceRepository pushDevices,
     IUnitOfWork unitOfWork,
     IPasswordHasher passwordHasher,
     ITokenService tokenService,
@@ -174,8 +175,13 @@ public sealed class AuthService(
     /// Opens a new login session for an account whose identity is already proven (login, or right after a
     /// password change that revoked every other session) and saves it.
     /// </summary>
+    /// <param name="replacesSessionId">
+    /// The caller's session that a password change just revoked: the push devices it registered belong to this
+    /// device and move to the new session, so the device keeps its notifications.
+    /// </param>
     public async Task<AuthTokens> CreateSessionAsync(
-        Account account, ClientType clientType, string? deviceName, ClientInfo client, CancellationToken cancellationToken)
+        Account account, ClientType clientType, string? deviceName, ClientInfo client, CancellationToken cancellationToken,
+        Guid? replacesSessionId = null)
     {
         var now = timeProvider.GetUtcNow();
         var lifetime = tokenService.GetSessionLifetime(clientType);
@@ -193,6 +199,14 @@ public sealed class AuthService(
         var refreshToken = tokenService.CreateRefreshToken(session.Id);
         session.RefreshTokenHash = tokenService.HashRefreshToken(refreshToken);
         sessions.Add(session);
+        if (replacesSessionId is { } replaced)
+        {
+            foreach (var device in await pushDevices.ListForSessionAsync(replaced, cancellationToken))
+            {
+                device.LoginSessionId = session.Id;
+            }
+        }
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return BuildTokens(account, session, refreshToken);

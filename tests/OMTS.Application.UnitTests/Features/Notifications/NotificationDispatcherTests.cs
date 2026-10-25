@@ -118,6 +118,8 @@ public class NotificationDispatcherTests
 
         public Task<PushDevice?> GetByTokenAsync(string token, CancellationToken cancellationToken) => throw new NotSupportedException();
 
+        public Task<IReadOnlyList<PushDevice>> ListForSessionAsync(Guid sessionId, CancellationToken cancellationToken) => throw new NotSupportedException();
+
         public void Add(PushDevice device) => throw new NotSupportedException();
 
         public void Remove(PushDevice device) => throw new NotSupportedException();

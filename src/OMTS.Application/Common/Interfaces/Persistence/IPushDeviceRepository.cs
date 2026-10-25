@@ -9,8 +9,12 @@ public interface IPushDeviceRepository
     /// <summary>
     /// Devices that receive push now: notifications allowed and the app still logged in with the registering
     /// session (not revoked, and its refresh token, which never outlives the absolute expiry, not expired).
+    /// Read-only rows.
     /// </summary>
     Task<IReadOnlyList<PushDevice>> ListDeliverableAsync(IReadOnlyCollection<Guid> accountIds, DateTimeOffset now, CancellationToken cancellationToken);
+
+    /// <summary>Devices registered by the session, tracked for an update.</summary>
+    Task<IReadOnlyList<PushDevice>> ListForSessionAsync(Guid sessionId, CancellationToken cancellationToken);
 
     void Add(PushDevice device);
 

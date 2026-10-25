@@ -12,6 +12,7 @@ internal sealed class PushDeviceRepository(OmtsDbContext db) : IPushDeviceReposi
     public async Task<IReadOnlyList<PushDevice>> ListDeliverableAsync(
         IReadOnlyCollection<Guid> accountIds, DateTimeOffset now, CancellationToken cancellationToken) =>
         await db.PushDevices
+            .AsNoTracking()
             .Where(d => accountIds.Contains(d.AccountId)
                 && d.PermissionGranted
                 && d.LoginSession != null
@@ -19,6 +20,9 @@ internal sealed class PushDeviceRepository(OmtsDbContext db) : IPushDeviceReposi
                 && d.LoginSession.RevokedAt == null
                 && d.LoginSession.RefreshTokenExpiresAt > now)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<PushDevice>> ListForSessionAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        await db.PushDevices.Where(d => d.LoginSessionId == sessionId).ToListAsync(cancellationToken);
 
     public void Add(PushDevice device) => db.PushDevices.Add(device);
 
