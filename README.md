@@ -78,11 +78,15 @@ bootstrap temporary password. To get every demo login back, reset the environmen
 The demo data also holds the cooperative profile, the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued),
 license documents (valid, expiring within 30 days, expired), about 10 rafts with lanes per zone, 8 employees (one Left),
 5 suppliers, 15 farming input items and 20 purchase receipts of the last 3 months with payments, discounts and a return.
-Phone numbers are fake (`0900 000 0xx`).
+`DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰) and one water measurement a day for the
+30 days before the seed day: three readings outside the thresholds (with their alerts), one corrected reading (a salinity
+of 2.6 ‰ fixed to 26.0 ‰) and one voided reading. Phone numbers are fake (`0900 000 0xx`).
 
 Dates are set relative to the day of the first seed and are not moved afterwards:
 - After a few weeks the "expiring" license has expired. `docker compose down -v` gives fresh dates.
 - Receipt codes carry the seed date (`PR-<seed date>-nnn`), not the receipt date.
+- The last water measurement is from the day before the seed: a month later without new ones, the zones are overdue and
+  get the 06:00 reminder (MSG26).
 - The receipt list shows the current calendar year by default. Seeded in January–March, part of the history is in the
   previous year: pass `from`/`to` to see it.
 

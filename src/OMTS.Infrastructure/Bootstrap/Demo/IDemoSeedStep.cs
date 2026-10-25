@@ -1,9 +1,9 @@
 namespace OMTS.Infrastructure.Bootstrap.Demo;
 
 /// <summary>
-/// One idempotent part of the Development demo data (zones, licenses, receipts…). A later module (water
-/// measurements, workers, payroll) adds its own step to <see cref="DemoDataSeeder"/>; steps run in order
-/// and each one finds its rows by business code, so a second run creates nothing.
+/// One idempotent part of the Development demo data (zones, licenses, receipts, water measurements…). A later
+/// module (workers, payroll) adds its own step to <see cref="DemoDataSeeder"/>; steps run in order and each one
+/// finds its rows by business code, so a second run creates nothing.
 /// </summary>
 internal interface IDemoSeedStep
 {

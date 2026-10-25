@@ -48,6 +48,8 @@ public class DemoDataSeedQaTests
         ("SeedReceiptLots", db => db.SeedReceiptLots.CountAsync()),
         ("SupplierPayments", db => db.SupplierPayments.CountAsync()),
         ("PurchaseReturns", db => db.PurchaseReturns.CountAsync()),
+        ("WaterMeasurements", db => db.WaterMeasurements.CountAsync()),
+        ("Notifications", db => db.Notifications.CountAsync()),
         ("AuditEvents", db => db.AuditEvents.CountAsync()),
     ];
 
@@ -73,6 +75,7 @@ public class DemoDataSeedQaTests
         Assert.Same(clock, host.App.Services.GetRequiredService<TimeProvider>());
         Assert.Contains(dates, d => d.StartsWith("license "));
         Assert.Contains(dates, d => d.StartsWith("receipt "));
+        Assert.Contains(dates, d => d.StartsWith("water "));
         // The probe used below does see updates: the first run discontinued zones and rafts, completed receipts…
         Assert.NotEmpty(await UpdatedSinceAsync(host.App, start));
 
@@ -115,7 +118,7 @@ public class DemoDataSeedQaTests
         Assert.Equal(DeploymentBootstrapper.Success, demo.ExitCode);
         Assert.Contains(demo.Messages, m => m.Contains("already initialized"));
         // Every step had work to do, the Owner's login included.
-        Assert.Equal(10, demo.Messages.Count(m => m.StartsWith("Demo ")));
+        Assert.Equal(11, demo.Messages.Count(m => m.StartsWith("Demo ")));
         Assert.All(demo.Messages.Where(m => m.StartsWith("Demo ")), m => Assert.EndsWith("created.", m));
         Assert.Equal(1, demoCounts["Cooperatives"]);
         Assert.Equal(3, demoCounts["FarmingZones"]);
@@ -298,6 +301,7 @@ public class DemoDataSeedQaTests
         var returns = await db.PurchaseReturns.Select(r => new { r.Id, r.ReturnDate }).ToListAsync();
         var grants = await db.AccessGrants.Select(g => new { g.Id, g.EffectiveFrom, g.EffectiveTo }).ToListAsync();
         var employees = await db.Employees.Select(e => new { e.Id, e.StatusId, e.EmploymentEndDate }).ToListAsync();
+        var water = await db.WaterMeasurements.Select(m => new { m.Id, m.MeasuredAt, m.StatusId, m.ConfirmedAt }).ToListAsync();
 
         return licenses.Select(x => $"license {x}")
             .Concat(receipts.Select(x => $"receipt {x}"))
@@ -305,6 +309,7 @@ public class DemoDataSeedQaTests
             .Concat(returns.Select(x => $"return {x}"))
             .Concat(grants.Select(x => $"grant {x}"))
             .Concat(employees.Select(x => $"employee {x}"))
+            .Concat(water.Select(x => $"water {x}"))
             .Order(StringComparer.Ordinal)
             .ToList();
     }
