@@ -146,7 +146,8 @@ public sealed class EmployeeService(
             unitOfWork.MarkChanged(employee);
         }
 
-        if (employee.AccountId != request.AccountId && await LinkAsync(employee, request.AccountId, cancellationToken) is { } linkError)
+        // A missing accountId keeps the link, so a form without the account field never unlinks; DELETE .../{id}/account does.
+        if (request.AccountId is { } accountId && employee.AccountId != accountId && await LinkAsync(employee, accountId, cancellationToken) is { } linkError)
         {
             return linkError;
         }
@@ -214,6 +215,38 @@ public sealed class EmployeeService(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return await SavedAsync(employee.Id, created.Value, cancellationToken);
+    }
+
+    /// <summary>
+    /// Removes the link to the login account, audited like a link change on edit; the account and its grants stay as
+    /// they are. Without a link nothing changes and no audit row is written, so a repeated call answers the same.
+    /// A given <paramref name="rowVersion"/> older than the profile answers MSG06.
+    /// </summary>
+    public async Task<Result<EmployeeSaved>> UnlinkAccountAsync(Guid id, string? rowVersion, CancellationToken cancellationToken)
+    {
+        var employee = await employees.GetForEditAsync(id, cancellationToken);
+        if (employee is null)
+        {
+            return AppError.NotFound;
+        }
+
+        if (employee.AccountId is not { } accountId)
+        {
+            return await SavedAsync(employee.Id, null, cancellationToken);
+        }
+
+        if (rowVersion is not null && await rowVersions.CheckAsync(employee, rowVersion, cancellationToken) is { } stale)
+        {
+            return stale;
+        }
+
+        employee.AccountId = null;
+        audit.Record(new AuditEntry("Employee.Updated", nameof(Employee))
+        {
+            RecordId = employee.Id, Before = new { AccountId = accountId }, After = new { AccountId = (Guid?)null },
+        });
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return await SavedAsync(employee.Id, null, cancellationToken);
     }
 
     /// <summary>Employed → Left. Records already made stay; work or attendance after the end date blocks it (MSG11).</summary>
@@ -312,11 +345,11 @@ public sealed class EmployeeService(
         return input;
     }
 
+    /// <summary>Links the Staff/Owner account; no <paramref name="accountId"/> changes nothing.</summary>
     private async Task<AppError?> LinkAsync(Employee employee, Guid? accountId, CancellationToken cancellationToken)
     {
         if (accountId is null)
         {
-            employee.AccountId = null;
             return null;
         }
 

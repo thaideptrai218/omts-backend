@@ -38,6 +38,7 @@ public sealed class EmployeesController(EmployeeService employees) : ControllerB
     public async Task<IActionResult> Create(SaveEmployeeRequest request, CancellationToken cancellationToken) =>
         (await employees.CreateAsync(request, cancellationToken)).ToActionResult(e => StatusCode(StatusCodes.Status201Created, e));
 
+    /// <summary>A missing or null <c>accountId</c> keeps the linked account; unlink with <c>DELETE .../{id}/account</c>.</summary>
     [HttpPut("{id:guid}")]
     [ProducesResponseType<EmployeeSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Update(Guid id, SaveEmployeeRequest request, CancellationToken cancellationToken) =>
@@ -47,6 +48,18 @@ public sealed class EmployeesController(EmployeeService employees) : ControllerB
     [ProducesResponseType<EmployeeSaved>(StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateAccount(Guid id, NewEmployeeAccount request, CancellationToken cancellationToken) =>
         (await employees.CreateAccountAsync(id, request, cancellationToken)).ToActionResult(e => StatusCode(StatusCodes.Status201Created, e));
+
+    /// <summary>
+    /// Unlinks the login account (the account and its grants stay) and returns the saved profile with its new
+    /// <c>rowVersion</c>. Without a linked account nothing changes and the profile is returned as it is.
+    /// </summary>
+    /// <param name="id">The employee.</param>
+    /// <param name="rowVersion">Optional, URL-encoded: the version the screen was read from; an older one answers MSG06.</param>
+    /// <param name="cancellationToken">Request aborted.</param>
+    [HttpDelete("{id:guid}/account")]
+    [ProducesResponseType<EmployeeSaved>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> UnlinkAccount(Guid id, [FromQuery] string? rowVersion, CancellationToken cancellationToken) =>
+        (await employees.UnlinkAccountAsync(id, rowVersion, cancellationToken)).ToActionResult(Ok);
 
     [HttpPost("{id:guid}/end-employment")]
     [ProducesResponseType<EmploymentChanged>(StatusCodes.Status200OK)]
