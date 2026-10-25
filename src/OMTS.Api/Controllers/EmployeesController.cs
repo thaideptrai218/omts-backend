@@ -54,7 +54,9 @@ public sealed class EmployeesController(EmployeeService employees) : ControllerB
     /// <c>rowVersion</c>. Without a linked account nothing changes and the profile is returned as it is.
     /// </summary>
     /// <param name="id">The employee.</param>
-    /// <param name="rowVersion">Optional, URL-encoded: the version the screen was read from; an older one answers MSG06.</param>
+    /// <param name="rowVersion">
+    /// Optional, URL-encoded: the version the screen was read from. Not base64: MSG01; older than the profile: MSG06.
+    /// </param>
     /// <param name="cancellationToken">Request aborted.</param>
     [HttpDelete("{id:guid}/account")]
     [ProducesResponseType<EmployeeSaved>(StatusCodes.Status200OK)]

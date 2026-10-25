@@ -220,10 +220,16 @@ public sealed class EmployeeService(
     /// <summary>
     /// Removes the link to the login account, audited like a link change on edit; the account and its grants stay as
     /// they are. Without a link nothing changes and no audit row is written, so a repeated call answers the same.
-    /// A given <paramref name="rowVersion"/> older than the profile answers MSG06.
+    /// A given <paramref name="rowVersion"/> that is not base64 answers MSG01 in every case; one older than the
+    /// profile answers MSG06 when there is a link to remove.
     /// </summary>
     public async Task<Result<EmployeeSaved>> UnlinkAccountAsync(Guid id, string? rowVersion, CancellationToken cancellationToken)
     {
+        if (rowVersion is not null && !RowVersionGuard.IsWellFormed(rowVersion))
+        {
+            return AppError.Invalid("RowVersion");
+        }
+
         var employee = await employees.GetForEditAsync(id, cancellationToken);
         if (employee is null)
         {

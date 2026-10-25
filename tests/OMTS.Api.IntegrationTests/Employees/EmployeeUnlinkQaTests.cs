@@ -110,20 +110,25 @@ public class EmployeeUnlinkQaTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Null(await AccountIdAsync(id));
     }
 
-    // Pins the current answers: a malformed version is checked only while a link exists (see the QA report).
+    // A malformed version is MSG01 whether or not an account is still linked; only a well-formed one is ignored once unlinked.
     [Fact]
-    public async Task A_malformed_row_version_is_refused_while_linked_and_ignored_once_unlinked()
+    public async Task A_malformed_row_version_is_refused_whether_or_not_an_account_is_linked()
     {
         var (owner, zone, _) = await SetupAsync(factory);
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
         var id = IdOf(await CreateAsync(owner, Profile($"Malformed {NewCode()}", NewPhone(), zone.Id, b => b["accountId"] = staff.Id)));
 
         var linked = await owner.DeleteAsync($"/api/employees/{id}/account?rowVersion=not-base64");
+        Assert.Equal(HttpStatusCode.BadRequest, linked.StatusCode);
         Assert.Equal("RowVersion", await FieldAsync(linked));
         Assert.Equal(staff.Id, await AccountIdAsync(id));
 
         await (await owner.DeleteAsync($"/api/employees/{id}/account")).ReadAsync(HttpStatusCode.OK);
-        await (await owner.DeleteAsync($"/api/employees/{id}/account?rowVersion=not-base64")).ReadAsync(HttpStatusCode.OK);
+        var unlinked = await owner.DeleteAsync($"/api/employees/{id}/account?rowVersion=not-base64");
+        Assert.Equal(HttpStatusCode.BadRequest, unlinked.StatusCode);
+        Assert.Equal("MSG01", await unlinked.ErrorCodeAsync());
+        Assert.Equal("RowVersion", await FieldAsync(unlinked));
+        await (await owner.DeleteAsync($"/api/employees/{id}/account?rowVersion={Uri.EscapeDataString("AAAAAAAAB9E=")}")).ReadAsync(HttpStatusCode.OK);
         Assert.Single(await factory.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == id && e.Action == "Employee.Updated").ToListAsync()));
     }
 

@@ -61,6 +61,9 @@ public sealed class RowVersionGuard(IAccountRepository accounts, IUnitOfWork uni
 
     public static string Encode(byte[] rowVersion) => Convert.ToBase64String(rowVersion);
 
+    /// <summary>True when <paramref name="rowVersion"/> can be read as a row version (base64), whatever its value.</summary>
+    public static bool IsWellFormed(string rowVersion) => TryDecode(rowVersion, out _);
+
     private static bool TryDecode(string? value, out byte[] bytes)
     {
         bytes = [];
