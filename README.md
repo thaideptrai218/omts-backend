@@ -79,8 +79,9 @@ The demo data also holds the cooperative profile, the zones `DEMO-01`/`DEMO-02` 
 license documents (valid, expiring within 30 days, expired), about 10 rafts with lanes per zone, 8 employees (one Left),
 5 suppliers, 15 farming input items and 20 purchase receipts of the last 3 months with payments, discounts and a return.
 `DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰) and one water measurement a day for the
-30 days before the seed day: three readings outside the thresholds (with their alerts), one corrected reading (a salinity
-of 2.6 ‰ fixed to 26.0 ‰) and one voided reading. Phone numbers are fake (`0900 000 0xx`).
+30 days before the seed day: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
+26.0 ‰) and one voided reading. The mistyped 2.6 ‰ alerted before its correction, so the inboxes hold four sets of water
+alerts. Phone numbers are fake (`0900 000 0xx`).
 
 Dates are set relative to the day of the first seed and are not moved afterwards:
 - After a few weeks the "expiring" license has expired. `docker compose down -v` gives fresh dates.
@@ -185,8 +186,9 @@ The OCR Service of the water meter photos (ENV-01) is only faked until its provi
 
 `WaterMeasurementOverdueJob` runs every day at 06:00 (Asia/Ho_Chi_Minh): each In Use zone without a Confirmed water
 measurement for more than one calendar month gets one MSG26 reminder per overdue period (Owners and the zone's staff
-with View on `WATER_MEASUREMENTS`). Like the zone license reminder (07:00), a host that starts after the run time runs
-it once at start, so a restart never skips a day; a reminder already sent is never sent again.
+with View on `WATER_MEASUREMENTS`). Like the zone license reminder (07:00), a host started after the run time runs it
+once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A reminder already
+sent is never sent again.
 
 ## Deployment
 
