@@ -57,6 +57,8 @@ public sealed class WaterMeasurementCorrectionService(
             return refused;
         }
 
+        // A correction that moves the answer to the last overdue reminder before the zone's other measurements re-arms it.
+        await overdue.BeforeCorrectionAsync(current, request.MeasuredAt!.Value, cancellationToken);
         var accountId = CallerId();
         var next = new WaterMeasurement
         {

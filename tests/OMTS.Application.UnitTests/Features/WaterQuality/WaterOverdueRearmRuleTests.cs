@@ -48,14 +48,32 @@ public class WaterOverdueRearmRuleTests
         Assert.True(WaterOverdueRule.NeedsReminder(realDay.MeasuredAt, Reminded, Today, realDay.ConfirmedAt));
     }
 
+    // Lead decision A: compared with every earlier version (the earliest one on or after its day), not only the one it corrects.
     [Fact]
-    public void Each_correction_is_compared_with_the_version_it_corrects()
+    public void Each_correction_is_compared_with_all_earlier_versions_of_its_chain()
     {
         var first = Version(new(2026, 8, 20, 8, 0, 0, Local), confirmedAt: new(2026, 8, 20, 8, 5, 0, Local));
         var earlier = Version(new(2026, 8, 10, 8, 0, 0, Local), confirmedAt: new(2026, 8, 21, 8, 0, 0, Local));
         var laterThanEarlier = Version(new(2026, 8, 15, 8, 0, 0, Local), confirmedAt: new(2026, 8, 22, 8, 0, 0, Local));
+        var later = Version(new(2026, 8, 30, 8, 0, 0, Local), confirmedAt: new(2026, 8, 30, 8, 5, 0, Local));
+        var backBetween = Version(new(2026, 8, 25, 8, 0, 0, Local), confirmedAt: new(2026, 8, 31, 8, 0, 0, Local));
 
-        Assert.Equal(laterThanEarlier.ConfirmedAt, WaterOverdueRule.PeriodKnownAt([first, earlier, laterThanEarlier]));
+        // 08-20 → 08-10 → 08-15: still before 08-20, the same measurement as the first version.
+        Assert.Equal(first.ConfirmedAt, WaterOverdueRule.PeriodKnownAt([first, earlier, laterThanEarlier]));
+        // 08-20 → 08-30 → 08-25: before 08-30 but after 08-20, known since the 08-30 version.
+        Assert.Equal(later.ConfirmedAt, WaterOverdueRule.PeriodKnownAt([first, later, backBetween]));
+    }
+
+    // The job reads the latest version and then its chain: a correction saved in between is ignored.
+    [Fact]
+    public void Versions_after_the_one_read_are_ignored()
+    {
+        var first = Version(new(2026, 8, 20, 8, 0, 0, Local), confirmedAt: new(2026, 8, 20, 8, 5, 0, Local));
+        var savedLater = Version(new(2026, 9, 20, 8, 0, 0, Local), confirmedAt: Reminded.AddDays(1));
+
+        Assert.Equal(first.ConfirmedAt, WaterOverdueRule.PeriodKnownAt([first, savedLater], upTo: first.Id));
+        Assert.Equal(savedLater.ConfirmedAt, WaterOverdueRule.PeriodKnownAt([first, savedLater]));
+        Assert.Null(WaterOverdueRule.PeriodKnownAt([]));
     }
 
     [Fact]

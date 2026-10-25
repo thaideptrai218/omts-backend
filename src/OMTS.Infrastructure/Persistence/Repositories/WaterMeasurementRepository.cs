@@ -92,7 +92,7 @@ internal sealed class WaterMeasurementRepository(OmtsDbContext db) : IWaterMeasu
         var latest = await db.WaterMeasurements.AsNoTracking()
             .Where(m => m.StatusId == StatusIds.WaterMeasurement.Confirmed)
             .GroupBy(m => m.ZoneId)
-            .Select(g => g.OrderByDescending(m => m.MeasuredAt)
+            .Select(g => g.OrderByDescending(m => m.MeasuredAt).ThenByDescending(m => m.ConfirmedAt).ThenByDescending(m => m.Id)
                 .Select(m => new { m.ZoneId, m.MeasuredAt, m.ConfirmedAt, m.Id, IsCorrection = m.CorrectedFromMeasurementId != null })
                 .First())
             .ToDictionaryAsync(x => x.ZoneId, cancellationToken);
@@ -104,11 +104,12 @@ internal sealed class WaterMeasurementRepository(OmtsDbContext db) : IWaterMeasu
             .ToList();
     }
 
-    public Task<WaterMeasurement?> GetLatestConfirmedAsync(Guid zoneId, CancellationToken cancellationToken) =>
-        db.WaterMeasurements.AsNoTracking()
+    public async Task<IReadOnlyList<WaterMeasurement>> ListLatestConfirmedAsync(Guid zoneId, int count, CancellationToken cancellationToken) =>
+        await db.WaterMeasurements.AsNoTracking()
             .Where(m => m.ZoneId == zoneId && m.StatusId == StatusIds.WaterMeasurement.Confirmed)
-            .OrderByDescending(m => m.MeasuredAt)
-            .FirstOrDefaultAsync(cancellationToken);
+            .OrderByDescending(m => m.MeasuredAt).ThenByDescending(m => m.ConfirmedAt).ThenByDescending(m => m.Id)
+            .Take(count)
+            .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyDictionary<Guid, string>> GetAccountNamesAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken cancellationToken)
     {

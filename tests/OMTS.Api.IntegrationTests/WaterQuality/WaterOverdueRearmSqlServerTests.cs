@@ -6,8 +6,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common;
+using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Notifications;
 using OMTS.Application.Features.WaterQuality;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Identity;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
@@ -50,6 +53,29 @@ public class WaterOverdueRearmSqlServerTests
         Assert.Equal(2, await check.Notifications.CountAsync(n => n.Type == NotificationTypes.WaterMeasurementOverdue && n.RelatedRecordCode == zone.Code));
     }
 
+    // Two Confirmed measurements taken at the same time: the later confirmation is the zone's latest, every time.
+    [SqlServerFact]
+    public async Task Measurements_taken_at_the_same_time_are_ordered_by_confirmation_on_sql_server()
+    {
+        await using var database = SqlServerTestDatabase.Create();
+        var zone = await SeedZoneAsync(database);
+        var measuredAt = DateTimeOffset.UtcNow.AddDays(-3);
+        var (first, second) = (Confirmed(zone, measuredAt, measuredAt.AddHours(1)), Confirmed(zone, measuredAt, measuredAt.AddHours(2)));
+        await using (var db = database.CreateContext())
+        {
+            // The later confirmation is inserted first, so the insert order cannot decide.
+            db.WaterMeasurements.AddRange(second, first);
+            await db.SaveChangesAsync();
+        }
+
+        await using var api = new SqlServerApiFactory(database);
+        using var scope = api.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IWaterMeasurementRepository>();
+
+        Assert.Equal(new[] { second.Id, first.Id }, (await repository.ListLatestConfirmedAsync(zone.Id, 2, default)).Select(m => m.Id));
+        Assert.Equal(second.Id, (await repository.ListInUseZonesWithLatestConfirmedAsync(default)).Single(z => z.Zone.Id == zone.Id).LatestId);
+    }
+
     [SqlServerFact]
     public async Task Time_without_offset_is_stored_as_vietnam_time_on_sql_server()
     {
@@ -67,6 +93,17 @@ public class WaterOverdueRearmSqlServerTests
         Assert.Equal(new DateTimeOffset(day.ToDateTime(new TimeOnly(1, 0)), TimeSpan.Zero), stored);
         Assert.Equal(BusinessClock.UtcOffset, stored.Offset);
     }
+
+    private static WaterMeasurement Confirmed(FarmingZone zone, DateTimeOffset measuredAt, DateTimeOffset confirmedAt) => new()
+    {
+        ZoneId = zone.Id,
+        MeasuredAt = measuredAt,
+        ConfirmedAt = confirmedAt,
+        Ph = 7.5m,
+        Salinity = 20m,
+        ClientOperationId = Guid.NewGuid(),
+        StatusId = StatusIds.WaterMeasurement.Confirmed,
+    };
 
     private static async Task<JsonElement> RecordAsync(HttpClient owner, FarmingZone zone, object body)
     {

@@ -53,10 +53,11 @@ public sealed class WaterMeasurementOverdueReminder(
         return reminded;
     }
 
-    // A correction (ENV-02) is confirmed now but keeps the reminder state of the version it corrects unless it moved
-    // the measurement to a later day (WaterOverdueRule.PeriodKnownAt); only read when a reminder was already sent.
+    // A correction (ENV-02) is confirmed now but keeps the reminder state of an earlier version unless it moved the
+    // measurement later than all of them (WaterOverdueRule.PeriodKnownAt); only read when a reminder was already sent.
+    // The chain stops at the version read above, so a correction saved in between is not mixed in.
     private async Task<DateTimeOffset?> PeriodKnownAtAsync(ZoneLatestWaterMeasurement latest, CancellationToken cancellationToken) =>
         latest is { LatestIsCorrection: true, LatestId: { } id, Zone.WaterOverdueRemindedAt: not null }
-            ? WaterOverdueRule.PeriodKnownAt(await measurements.GetVersionChainAsync(id, cancellationToken))
+            ? WaterOverdueRule.PeriodKnownAt(await measurements.GetVersionChainAsync(id, cancellationToken), upTo: id)
             : latest.LatestConfirmedAt;
 }

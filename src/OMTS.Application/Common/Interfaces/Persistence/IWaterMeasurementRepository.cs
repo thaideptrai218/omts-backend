@@ -45,11 +45,17 @@ public interface IWaterMeasurementRepository
     Task<IReadOnlyList<WaterMeasurement>> ListAsync(
         Guid zoneId, DateTimeOffset from, DateTimeOffset toExclusive, IReadOnlyCollection<int> statusIds, CancellationToken cancellationToken);
 
-    /// <summary>Every In Use zone (tracked) with its latest Confirmed measurement time; Draft, Corrected and Voided do not count.</summary>
+    /// <summary>
+    /// Every In Use zone (tracked) with its latest Confirmed measurement time; Draft, Corrected and Voided do not count.
+    /// Measurements taken at the same time are ordered by confirmation, then id, so the latest one is always the same.
+    /// </summary>
     Task<IReadOnlyList<ZoneLatestWaterMeasurement>> ListInUseZonesWithLatestConfirmedAsync(CancellationToken cancellationToken);
 
-    /// <summary>The zone's latest Confirmed measurement by measured time (not tracked), the one its overdue period starts at.</summary>
-    Task<WaterMeasurement?> GetLatestConfirmedAsync(Guid zoneId, CancellationToken cancellationToken);
+    /// <summary>
+    /// The zone's <paramref name="count"/> latest Confirmed measurements (not tracked), latest first, in the order of
+    /// <see cref="ListInUseZonesWithLatestConfirmedAsync"/>: the first is the one its overdue period starts at.
+    /// </summary>
+    Task<IReadOnlyList<WaterMeasurement>> ListLatestConfirmedAsync(Guid zoneId, int count, CancellationToken cancellationToken);
 
     /// <summary>Display names of the given accounts that exist.</summary>
     Task<IReadOnlyDictionary<Guid, string>> GetAccountNamesAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken cancellationToken);
