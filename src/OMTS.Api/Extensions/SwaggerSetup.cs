@@ -23,8 +23,6 @@ public static class SwaggerSetup
         };
         options.AddSecurityDefinition("Bearer", bearer);
         options.AddSecurityRequirement(new OpenApiSecurityRequirement { [bearer] = [] });
-        // Form fields as the clients send them ("documentType", "zoneIds"), like the JSON bodies; binding ignores case.
-        options.DescribeAllParametersInCamelCase();
 
         foreach (var assembly in DocumentedAssemblies)
         {

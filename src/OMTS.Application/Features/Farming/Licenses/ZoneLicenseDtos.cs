@@ -36,7 +36,7 @@ public sealed record SaveZoneLicenseRequest
     /// <example>Nuôi hàu bè tại vùng biển xã Đông Xá, Vân Đồn</example>
     public string? LegalScope { get; init; }
 
-    /// <summary>Covered zones: repeat the <c>zoneIds</c> form field once per zone.</summary>
+    /// <summary>Covered zones: repeat this form field once per zone (the name ignores case, e.g. <c>zoneIds</c>).</summary>
     /// <example>["3fa85f64-5717-4562-b3fc-2c963f66afa6"]</example>
     public List<Guid>? ZoneIds { get; init; }
 
