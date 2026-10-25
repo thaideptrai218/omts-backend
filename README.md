@@ -149,6 +149,10 @@ revokes the session. `GET /api/me` and `GET /api/me/permissions` return the call
 zone-scoped permissions. Errors are RFC 7807 problem details whose `code` is the SRS message code
 (`MSG12`, `MSG69`…) and whose `detail` is the SRS English text.
 
+Dates and times are ISO 8601. A time sent without a UTC offset (`2026-10-20T08:00:00`, in JSON or a multipart field)
+is Vietnam time (UTC+7), never the server's time zone or UTC; `Z` or an offset such as `+07:00` is kept. Responses always
+carry the offset. Business dates (`from`/`to` filters, receipt dates) are Vietnam dates.
+
 ### Database (EF Core code-first)
 
 Entities live in `OMTS.Domain`; the DbContext, configurations and migrations live in `OMTS.Infrastructure/Persistence`.
