@@ -88,7 +88,6 @@ public static class DependencyInjection
         services.AddFileStorage(configuration);
         services.AddOcr(configuration);
         services.AddSingleton<ISpreadsheetWriter, ClosedXmlSpreadsheetWriter>();
-        services.AddHostedService<WaterMeasurementOverdueJob>();
 
         services.AddScoped<DeploymentBootstrapper>();
 
@@ -96,6 +95,10 @@ public static class DependencyInjection
         services.AddOptions<ZoneLicenseReminderOptions>().Bind(configuration.GetSection(ZoneLicenseReminderOptions.SectionName));
         services.AddSingleton<ZoneLicenseReminderJob>();
         services.AddHostedService<ZoneLicenseReminderHostedService>();
+
+        // Overdue water measurement reminder (formerly JOB-05)
+        services.AddOptions<WaterMeasurementOverdueOptions>().Bind(configuration.GetSection(WaterMeasurementOverdueOptions.SectionName));
+        services.AddHostedService<WaterMeasurementOverdueJob>();
         services.AddHealthChecks().AddReadinessChecks();
 
         return services;

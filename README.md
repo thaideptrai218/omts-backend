@@ -177,7 +177,8 @@ The OCR Service of the water meter photos (ENV-01) is only faked until its provi
 
 `WaterMeasurementOverdueJob` runs every day at 06:00 (Asia/Ho_Chi_Minh): each In Use zone without a Confirmed water
 measurement for more than one calendar month gets one MSG26 reminder per overdue period (Owners and the zone's staff
-with View on `WATER_MEASUREMENTS`).
+with View on `WATER_MEASUREMENTS`). Like the zone license reminder (07:00), a host that starts after the run time runs
+it once at start, so a restart never skips a day; a reminder already sent is never sent again.
 
 ## Deployment
 
@@ -213,7 +214,8 @@ created by a one-time command run on the server by the deployment operator (not 
 | CORS: the web app calls the API from the browser. Set its origin in every deployed environment; empty means no CORS. Development allows `http://localhost:3000`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`) |
 | Reverse proxy: X-Forwarded-For is trusted only from these addresses (and loopback), so the limits see the real client | `ForwardedHeaders:KnownProxies` (e.g. `10.0.0.4`), `ForwardedHeaders:KnownNetworks` (e.g. `10.0.0.0/24`) |
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG04 and a critical log entry is written (one number or address gets at most 10 codes per hour) | `Verification:DailySmsLimit` (default 500) |
-| Zone license reminder (FARM-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`) |
+| Zone license reminder (FARM-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
+| Overdue water measurement reminder (ENV-01, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
 
 ## Contributing
 
