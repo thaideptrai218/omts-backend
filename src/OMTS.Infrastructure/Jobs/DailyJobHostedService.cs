@@ -8,7 +8,8 @@ namespace OMTS.Infrastructure.Jobs;
 /// Runs a job once a day at <see cref="IDailyJobOptions.RunAt"/> business local time (UTC+7), shared by the zone
 /// license reminder and the overdue water measurement reminder. With <see cref="IDailyJobOptions.CatchUpOnStart"/> a
 /// host started after today's run time runs it once at start. A failed run is logged and the next one is tomorrow;
-/// the jobs send each notice once per period, so a catch-up or a missed day never sends anything twice.
+/// the jobs send each notice once per period, so a catch-up or a missed day never sends anything twice. Stopping the
+/// host ends the job without an error, even when the run that was in progress fails.
 /// </summary>
 internal abstract class DailyJobHostedService(IDailyJobOptions options, TimeProvider timeProvider, ILogger logger) : BackgroundService
 {
@@ -25,17 +26,22 @@ internal abstract class DailyJobHostedService(IDailyJobOptions options, TimeProv
         var catchUp = options.CatchUpOnStart && IsPastRunTime(timeProvider.GetUtcNow(), options.RunAt);
         while (!stoppingToken.IsCancellationRequested)
         {
-            if (!catchUp)
-            {
-                await Task.Delay(DelayUntilNextRun(timeProvider.GetUtcNow(), options.RunAt), timeProvider, stoppingToken);
-            }
-
-            catchUp = false;
             try
             {
+                if (!catchUp)
+                {
+                    await Task.Delay(DelayUntilNextRun(timeProvider.GetUtcNow(), options.RunAt), timeProvider, stoppingToken);
+                }
+
+                catchUp = false;
                 await RunOnceAsync(timeProvider.Today(), stoppingToken);
             }
-            catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
+            catch (Exception) when (stoppingToken.IsCancellationRequested)
+            {
+                // The host is stopping: whatever the wait or the run threw, the job ends quietly.
+                return;
+            }
+            catch (Exception exception)
             {
                 logger.LogError(exception, "{Job} run failed.", JobName);
             }

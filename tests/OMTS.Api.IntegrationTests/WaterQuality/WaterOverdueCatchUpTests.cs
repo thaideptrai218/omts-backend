@@ -67,6 +67,21 @@ public class WaterOverdueCatchUpTests
         Assert.False(options.CatchUpOnStart);
     }
 
+    // A run that fails because the host is stopping (a closed connection, not a cancellation) ends the job quietly.
+    [Fact]
+    public async Task Run_failing_while_the_host_stops_ends_the_job_without_an_error()
+    {
+        var logs = new CapturingLoggerProvider();
+        var job = new FailsWhenStoppedJob(new FixedClock(new DateTimeOffset(Today.ToDateTime(new TimeOnly(8, 0)), BusinessClock.UtcOffset)), logs.CreateLogger("job"));
+
+        await job.StartAsync(CancellationToken.None);
+        await job.Started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await job.StopAsync(CancellationToken.None);
+
+        Assert.Equal(TaskStatus.RanToCompletion, job.ExecuteTask!.Status);
+        Assert.DoesNotContain(logs.Lines, l => l.StartsWith("Error"));
+    }
+
     /// <summary>Starts a job with catch-up on, waits until it has logged <paramref name="runs"/> runs in total, then stops it.</summary>
     private static async Task StartAndWaitForRunsAsync(WaterApiFactory api, TimeProvider clock, int runs)
     {
@@ -88,6 +103,30 @@ public class WaterOverdueCatchUpTests
         finally
         {
             await job.StopAsync(CancellationToken.None);
+        }
+    }
+
+    private sealed record CatchUp(TimeOnly RunAt, bool CatchUpOnStart) : IDailyJobOptions;
+
+    /// <summary>Catches up at start, waits for the stop, then fails with a non-cancellation error.</summary>
+    private sealed class FailsWhenStoppedJob(TimeProvider clock, ILogger logger)
+        : DailyJobHostedService(new CatchUp(new TimeOnly(6, 0), CatchUpOnStart: true), clock, logger)
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        protected override string JobName => "Stopping job";
+
+        protected override async Task RunOnceAsync(DateOnly today, CancellationToken cancellationToken)
+        {
+            Started.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw new InvalidOperationException("The connection was closed by the stopping host.");
+            }
         }
     }
 
