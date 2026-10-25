@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using Microsoft.OpenApi.Models;
 using OMTS.Api.Commands;
 using OMTS.Api.Common;
 using OMTS.Api.Extensions;
@@ -28,19 +27,7 @@ builder.Services.AddControllers(options => options.Filters.Add<AccountStateGateF
     // Unreadable values answer 400 MSG01 like every other invalid field.
     .ConfigureApiBehaviorOptions(options => options.InvalidModelStateResponseFactory = InvalidModelStateResponse.Create);
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
-{
-    var bearer = new OpenApiSecurityScheme
-    {
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT",
-        Description = "Access token from POST /api/auth/login",
-        Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" },
-    };
-    options.AddSecurityDefinition("Bearer", bearer);
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement { [bearer] = [] });
-});
+builder.Services.AddOmtsSwagger();
 
 var app = builder.Build();
 

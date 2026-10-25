@@ -5,6 +5,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>7d411920-193a-4e1b-83ec-b463c8e3492b</UserSecretsId>
+    <!-- XML comments feed Swagger (Extensions/SwaggerSetup). Not every public member needs one: CS1591 is off. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
