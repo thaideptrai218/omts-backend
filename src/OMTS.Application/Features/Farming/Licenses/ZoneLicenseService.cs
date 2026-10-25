@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces.Persistence;
@@ -16,20 +15,20 @@ namespace OMTS.Application.Features.Farming.Licenses;
 /// <summary>
 /// FARM-03 – zone licenses (Cooperative Owner only, checked by the API filter): create, view, edit and
 /// replace; never deleted. One document may cover several zones. The file is uploaded first, so a storage
-/// failure saves nothing, and an upload whose database save fails is removed again.
+/// failure saves nothing; an upload whose database save fails is removed again, and a file replaced by an edit is
+/// removed once the edit is saved (<see cref="UploadedFileSaver"/>).
 /// </summary>
 public sealed class ZoneLicenseService(
     IZoneLicenseRepository licenses,
     IFarmingZoneRepository zones,
     IFileStorage storage,
+    UploadedFileSaver fileSaver,
     RowVersionGuard rowVersions,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
-    TimeProvider timeProvider,
-    ILogger<ZoneLicenseService> logger)
+    TimeProvider timeProvider)
 {
     private const string RecordType = "ZoneLicense";
-    private const string FileCategory = "zone-licenses";
 
     public async Task<Result<ZoneLicenseOverviewView>> ListForZoneAsync(Guid zoneId, DateOnly? asOf, CancellationToken cancellationToken)
     {
@@ -81,7 +80,7 @@ public sealed class ZoneLicenseService(
         {
             RecordId = document.Id, RecordCode = document.DocumentNumber, ZoneId = input.ZoneIds[0], After = Snapshot(document, input.ZoneIds),
         });
-        await SaveOrRemoveUploadAsync(uploaded, cancellationToken);
+        await fileSaver.SaveAsync(uploaded, null, cancellationToken);
         return await ViewAsync(document, checkedInput.Zones, null, timeProvider.Today(), cancellationToken);
     }
 
@@ -118,6 +117,7 @@ public sealed class ZoneLicenseService(
         }
 
         var before = Snapshot(document, document.ZoneScopes.Select(s => s.ZoneId).ToList());
+        var replacedFile = uploaded is null ? null : document.EvidenceFileUrl;
         if (document.ExpiryDate != input.ExpiryDate)
         {
             document.ExpiringReminderSentAt = null;
@@ -139,11 +139,14 @@ public sealed class ZoneLicenseService(
             });
         }
 
-        await SaveOrRemoveUploadAsync(uploaded, cancellationToken);
+        await fileSaver.SaveAsync(uploaded, replacedFile, cancellationToken);
         return await ViewAsync(document, checkedInput.Zones, null, timeProvider.Today(), cancellationToken);
     }
 
-    /// <summary>Renewal or replacement: a new license pointing to the latest one of its chain, which stays unchanged.</summary>
+    /// <summary>
+    /// Renewal or replacement: a new license pointing to the latest one of its chain, which stays unchanged with its
+    /// own file.
+    /// </summary>
     public async Task<Result<ZoneLicenseView>> ReplaceAsync(Guid documentId, SaveZoneLicenseRequest request, IncomingFile? file, CancellationToken cancellationToken)
     {
         var old = await licenses.GetForEditAsync(documentId, cancellationToken);
@@ -188,7 +191,7 @@ public sealed class ZoneLicenseService(
             Before = new { ReplacedDocumentId = old.Id, ReplacedDocumentNumber = old.DocumentNumber },
             After = Snapshot(document, input.ZoneIds),
         });
-        await SaveOrRemoveUploadAsync(uploaded, cancellationToken);
+        await fileSaver.SaveAsync(uploaded, null, cancellationToken);
         return await ViewAsync(document, checkedInput.Zones, null, timeProvider.Today(), cancellationToken);
     }
 
@@ -222,25 +225,8 @@ public sealed class ZoneLicenseService(
 
     private async Task<string?> UploadAsync(ValidatedFile file, CancellationToken cancellationToken)
     {
-        var result = await storage.UploadAsync(file, FileCategory, cancellationToken);
+        var result = await storage.UploadAsync(file, FileCategories.ZoneLicenses, cancellationToken);
         return result.Succeeded ? result.Key : null;
-    }
-
-    private async Task SaveOrRemoveUploadAsync(string? uploadedKey, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch
-        {
-            if (uploadedKey is not null && !await storage.DeleteAsync(uploadedKey, CancellationToken.None))
-            {
-                logger.LogWarning("License file {FileKey} could not be removed after a failed save.", uploadedKey);
-            }
-
-            throw;
-        }
     }
 
     private static void Apply(ZoneComplianceDocument document, ZoneLicenseInput input, string? fileKey)

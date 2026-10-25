@@ -34,6 +34,7 @@ public sealed class SqlServerApiFactory(SqlServerTestDatabase database, IReadOnl
             ["RateLimits:CodeRequestsPerMinute"] = "100000",
             ["RateLimits:LoginsPerMinute"] = "100000",
             ["Jobs:ZoneLicenseReminder:CatchUpOnStart"] = "false",
+            ["Jobs:OrphanFileCleanup:Enabled"] = "false",
         }.Concat(settings ?? new Dictionary<string, string?>())));
         builder.ConfigureLogging(logging => logging.AddProvider(Logs));
     }

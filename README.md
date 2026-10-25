@@ -179,6 +179,11 @@ The OCR Service of the water meter photos (ENV-01) is only faked until its provi
 measurement for more than one calendar month gets one MSG26 reminder per overdue period (Owners and the zone's staff
 with View on `WATER_MEASUREMENTS`).
 
+A replaced raft photo or license file is removed right after the save, and the upload of a failed save right away.
+`OrphanFileCleanupJob` runs every day at 03:00 (Asia/Ho_Chi_Minh) and deletes what such a removal left behind: raft
+photos (`raft-photos/`) and license files (`zone-licenses/`) that no raft or license points to and that were written more
+than the grace period (24 hours) ago. No other storage folder is scanned, so cooperative logos are kept for ever.
+
 ## Deployment
 
 There is no System Administrator inside the cooperative app: the cooperative and its first Cooperative Owner are
@@ -214,6 +219,7 @@ created by a one-time command run on the server by the deployment operator (not 
 | Reverse proxy: X-Forwarded-For is trusted only from these addresses (and loopback), so the limits see the real client | `ForwardedHeaders:KnownProxies` (e.g. `10.0.0.4`), `ForwardedHeaders:KnownNetworks` (e.g. `10.0.0.0/24`) |
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG04 and a critical log entry is written (one number or address gets at most 10 codes per hour) | `Verification:DailySmsLimit` (default 500) |
 | Zone license reminder (FARM-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`) |
+| Orphan raft photo and license file clean-up (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
 
 ## Contributing
 

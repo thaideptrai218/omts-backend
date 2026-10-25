@@ -15,4 +15,7 @@ internal sealed class FailingFileStorage : IFileStorage
         Task.FromResult("about:blank");
 
     public Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+    public Task<IReadOnlyList<StoredFile>> ListAsync(string category, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<StoredFile>>([]);
 }
