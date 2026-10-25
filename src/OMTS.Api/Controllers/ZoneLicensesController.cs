@@ -33,6 +33,7 @@ public sealed class ZoneLicensesController(ZoneLicenseService licenses) : Contro
     [HttpPost("api/zone-licenses")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(MaxRequestBytes)]
+    [UploadField("File")]
     [ProducesResponseType<ZoneLicenseView>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Create([FromForm] SaveZoneLicenseRequest request, IFormFile? file, CancellationToken cancellationToken) =>
         (await licenses.CreateAsync(request, await IncomingAsync(file, cancellationToken), cancellationToken))
@@ -42,6 +43,7 @@ public sealed class ZoneLicensesController(ZoneLicenseService licenses) : Contro
     [HttpPut("api/zone-licenses/{id:guid}")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(MaxRequestBytes)]
+    [UploadField("File")]
     [ProducesResponseType<ZoneLicenseView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Update(Guid id, [FromForm] SaveZoneLicenseRequest request, IFormFile? file, CancellationToken cancellationToken) =>
         (await licenses.UpdateAsync(id, request, await IncomingAsync(file, cancellationToken), cancellationToken)).ToActionResult(Ok);
@@ -50,6 +52,7 @@ public sealed class ZoneLicensesController(ZoneLicenseService licenses) : Contro
     [HttpPost("api/zone-licenses/{id:guid}/replace")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(MaxRequestBytes)]
+    [UploadField("File")]
     [ProducesResponseType<ZoneLicenseView>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Replace(Guid id, [FromForm] SaveZoneLicenseRequest request, IFormFile? file, CancellationToken cancellationToken) =>
         (await licenses.ReplaceAsync(id, request, await IncomingAsync(file, cancellationToken), cancellationToken))

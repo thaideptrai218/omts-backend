@@ -43,6 +43,7 @@ public sealed class RaftsController(RaftService rafts, RaftConditionService cond
     [HttpPost("api/rafts/{raftId:guid}/photo")]
     [RequireCooperativeOwner]
     [RequestSizeLimit(11 * 1024 * 1024)]
+    [UploadField("Photo")]
     [ProducesResponseType<RaftView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> UploadPhoto(Guid raftId, IFormFile? file, CancellationToken cancellationToken)
     {

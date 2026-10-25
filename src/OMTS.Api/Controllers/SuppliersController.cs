@@ -59,6 +59,7 @@ public sealed class SuppliersController(SupplierService suppliers, SupplierDebtS
     [HttpPost("{id:guid}/certificates")]
     [RequirePermission(PermissionFunctions.Suppliers, PermissionAction.Edit, PermissionScope.AnyZone)]
     [RequestSizeLimit(105 * 1024 * 1024)]
+    [UploadField("Certificate")]
     [ProducesResponseType<SupplierView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> AddCertificates(Guid id, [FromForm] IFormFileCollection files, CancellationToken cancellationToken) =>
         (await suppliers.AddCertificatesAsync(id, await IncomingAsync(files, cancellationToken), cancellationToken)).ToActionResult(Ok);

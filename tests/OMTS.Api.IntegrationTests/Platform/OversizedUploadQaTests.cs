@@ -20,16 +20,16 @@ public class OversizedUploadQaTests(KestrelApiFactory api) : IClassFixture<Kestr
 
     // Sent with Expect: 100-continue, so the bodies (up to 106 MB) are never built in memory nor sent.
     [Theory]
-    [InlineData("api/zones/{0}/water-measurements/with-photo", "photo", 13)]
-    [InlineData("api/rafts/{0}/photo", "file", 12)]
-    [InlineData("api/zone-licenses/{0}/replace", "file", 12)]
-    [InlineData("api/suppliers/{0}/certificates", "files", 106)]
-    [InlineData("api/purchase-receipts/{0}/invoice-photos", "files", 106)]
-    public async Task Every_upload_endpoint_answers_400_MSG01_on_its_file_field(string path, string field, int megabytes)
+    [InlineData("api/zones/{0}/water-measurements/with-photo", "photo", "Photo", 13)]
+    [InlineData("api/rafts/{0}/photo", "file", "Photo", 12)]
+    [InlineData("api/zone-licenses/{0}/replace", "file", "File", 12)]
+    [InlineData("api/suppliers/{0}/certificates", "files", "Certificate", 106)]
+    [InlineData("api/purchase-receipts/{0}/invoice-photos", "files", "Invoice photos", 106)]
+    public async Task Every_upload_endpoint_answers_400_MSG01_on_its_file_field(string path, string multipartName, string field, int megabytes)
     {
         using var client = await OwnerOnKestrelAsync();
 
-        using var response = await UploadAsync(client, string.Format(path, Guid.NewGuid()), field, megabytes * Megabyte, expectContinue: true);
+        using var response = await UploadAsync(client, string.Format(path, Guid.NewGuid()), multipartName, megabytes * Megabyte, expectContinue: true);
 
         var problem = await ProblemAsync(response);
         Assert.Equal((HttpStatusCode.BadRequest, "MSG01", field), (response.StatusCode, Text(problem, "code"), Text(problem, "field")));
@@ -44,12 +44,11 @@ public class OversizedUploadQaTests(KestrelApiFactory api) : IClassFixture<Kestr
         using var response = await UploadAsync(client, Logo, "file", 4 * Megabyte, expectContinue: false, knownLength: false);
 
         var problem = await ProblemAsync(response);
-        Assert.Equal((HttpStatusCode.BadRequest, "MSG01", "file"), (response.StatusCode, Text(problem, "code"), Text(problem, "field")));
+        Assert.Equal((HttpStatusCode.BadRequest, "MSG01", "Logo"), (response.StatusCode, Text(problem, "code"), Text(problem, "field")));
     }
 
-    // A browser sends the whole body (no Expect: 100-continue). The filter lets Kestrel drain at most twice the
-    // limit (6 MB for the 3 MB logo endpoint); a 7 MB phone photo picked as the logo is cut off with a
-    // connection reset while it is still being sent, so the client never reads the 400 (spec: "must answer 400").
+    // A browser sends the whole body (no Expect: 100-continue). A 7 MB phone photo picked as the logo (limit 3 MB)
+    // is discarded by Kestrel within the drain allowance, so the browser still reads the 400.
     [Fact]
     public async Task A_browser_upload_of_a_logo_over_twice_the_limit_still_reads_400_MSG01()
     {
@@ -58,7 +57,7 @@ public class OversizedUploadQaTests(KestrelApiFactory api) : IClassFixture<Kestr
         using var response = await UploadAsync(client, Logo, "file", 7 * Megabyte, expectContinue: false);
 
         var problem = await ProblemAsync(response);
-        Assert.Equal((HttpStatusCode.BadRequest, "MSG01", "file"), (response.StatusCode, Text(problem, "code"), Text(problem, "field")));
+        Assert.Equal((HttpStatusCode.BadRequest, "MSG01", "Logo"), (response.StatusCode, Text(problem, "code"), Text(problem, "field")));
     }
 
     // One mistake (the logo is too big), one answer: the 2.5 MB logo refused by the logo rules (2 MB) and the

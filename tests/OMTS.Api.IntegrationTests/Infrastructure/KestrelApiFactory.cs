@@ -16,13 +16,16 @@ public sealed class KestrelApiFactory : AuthApiFactory
 {
     private IHost? _kestrelHost;
 
-    /// <summary>A client of the Kestrel host (not of TestServer).</summary>
+    /// <summary>
+    /// A client of the Kestrel host (not of TestServer). It waits up to 30 s for "100 Continue" (HttpClient's
+    /// default is 1 s), so under load a refused body is still never sent.
+    /// </summary>
     public HttpClient CreateKestrelClient()
     {
         // Builds both hosts on first use.
         _ = Services;
         var address = _kestrelHost!.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First();
-        return new HttpClient { BaseAddress = new Uri(address) };
+        return new HttpClient(new SocketsHttpHandler { Expect100ContinueTimeout = TimeSpan.FromSeconds(30) }) { BaseAddress = new Uri(address) };
     }
 
     protected override IHost CreateHost(IHostBuilder builder)

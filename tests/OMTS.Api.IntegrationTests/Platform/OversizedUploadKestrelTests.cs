@@ -26,7 +26,7 @@ public class OversizedUploadKestrelTests
 
         using var response = await UploadAsync(client, "/api/cooperative/profile/logo", "file", 4 * 1024 * 1024, expectContinue);
 
-        await AssertInvalidFileAsync(response, "file");
+        await AssertInvalidFileAsync(response, "Logo");
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public class OversizedUploadKestrelTests
 
         using var response = await UploadAsync(client, "/api/zone-licenses", "file", 12 * 1024 * 1024, expectContinue: true);
 
-        await AssertInvalidFileAsync(response, "file");
+        await AssertInvalidFileAsync(response, "File");
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public class OversizedUploadKestrelTests
 
         using var response = await UploadAsync(client, $"/api/zones/{Guid.NewGuid()}/water-measurements/recognize", "photo", 13 * 1024 * 1024, expectContinue: true);
 
-        await AssertInvalidFileAsync(response, "photo");
+        await AssertInvalidFileAsync(response, "Photo");
     }
 
     private static async Task<HttpClient> LoginOnKestrelAsync(KestrelApiFactory api, string username)
