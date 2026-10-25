@@ -88,6 +88,9 @@ public static partial class AcsTestKit
         return await query(scope.ServiceProvider.GetRequiredService<OmtsDbContext>());
     }
 
+    /// <summary>A password that meets the policy (letters and a digit), new for each call.</summary>
+    public static string NewPassword() => $"Pw{Guid.NewGuid():N}"[..12] + "7";
+
     private static string CodeIn(string text) => SixDigits().Match(text).Value;
 
     [GeneratedRegex(@"\d{6}")]
