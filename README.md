@@ -166,7 +166,9 @@ dotnet ef migrations add <Name> --project src/OMTS.Infrastructure --startup-proj
 
 Email, SMS, push, OCR and file storage are adapters picked by configuration, so switching provider needs no code change.
 In Development the fakes keep what they "send" in memory; read it at `GET /api/dev/sms?phoneNumber=`,
-`GET /api/dev/email?to=`, `GET /api/dev/push?accountId=` (clear with `DELETE`). These endpoints answer 404 outside
+`GET /api/dev/email?to=`, `GET /api/dev/push?accountId=` (clear with `DELETE`). Every push is kept, and its `devices`
+lists the tokens a real provider would deliver to: those registered (`POST /api/me/devices`) by a session that is still
+logged in. These endpoints answer 404 outside
 Development; they are anonymous, so never expose a Development environment publicly. Local storage writes under `src/OMTS.Api/App_Data/files` (git-ignored); for Azurite set
 `Storage:Provider=AzureBlob` and `Storage:AzureBlob:ConnectionString=UseDevelopmentStorage=true`.
 The OCR Service of the water meter photos (ENV-01) is only faked until its provider ticket: the fake answers with
@@ -195,6 +197,12 @@ created by a one-time command run on the server by the deployment operator (not 
    whose name no longer exists (for example after a rename) is created again. Missing secrets give exit code 1 and the
    names of the missing keys. `--demo` also seeds the demo data of "Run with Docker" (Development only; refused
    in any other environment).
+   An Owner who cannot log in (for example after missing the 24-hour window) is recovered with
+   `dotnet OMTS.Api.dll seed --reset-owner-password`. It sets `Bootstrap:Owner:TemporaryPassword` (from configuration, never
+   from the command line, so it never lands in shell history) as a new 24-hour temporary password that must be changed at
+   first login, ends every session of the Owner and writes an audit row. Set a new value first: the Owner's current
+   (expired) password is refused. With several Owners, `Bootstrap:Owner:Username`
+   chooses one. Without an Owner, or without a valid password, it changes nothing and exits with code 1.
 3. Start the API and check `GET /health/ready`: 200 when the database, migrations, status catalog, default roles,
    cooperative and an active Owner are all in place, else 503 listing the failing checks. This is a post-deployment
    verification, **not** a platform probe: it depends on data the Owner can change (renaming a default role or locking the

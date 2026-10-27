@@ -57,11 +57,15 @@ public sealed class MeProfileController(
     public async Task<IActionResult> SaveNotificationPreferences(SaveNotificationPreferencesRequest request, CancellationToken cancellationToken) =>
         (await preferences.SaveAsync(AccountId, request, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Registers the Expo push token of this device.</summary>
+    /// <summary>
+    /// Registers the Expo push token of this device for the current login session: call it after every
+    /// login and at every app start. Logging out of the session stops the device's notifications; a password
+    /// change on this device keeps them.
+    /// </summary>
     [HttpPost("devices")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> RegisterDevice(RegisterPushDeviceRequest request, CancellationToken cancellationToken) =>
-        (await devices.RegisterAsync(AccountId, request, cancellationToken)).ToActionResult(_ => NoContent());
+        (await devices.RegisterAsync(AccountId, currentUser.SessionId!.Value, request, cancellationToken)).ToActionResult(_ => NoContent());
 
     [HttpDelete("devices/{token}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

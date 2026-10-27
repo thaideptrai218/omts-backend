@@ -16,7 +16,13 @@ public static partial class AcsTestKit
 {
     public const string Password = "Secret123";
 
-    public static string NewPhone() => $"09{Random.Shared.Next(10_000_000, 99_999_999)}";
+    // A random start plus a counter: unique for the whole test run (random numbers met about once in 10,000
+    // runs), and different between runs.
+    private static int _phoneSequence = Random.Shared.Next(0, PhoneRange);
+    private const int PhoneRange = 90_000_000;
+
+    /// <summary>A valid mobile number ("09" + 8 digits) no other call of this run returns.</summary>
+    public static string NewPhone() => $"09{10_000_000 + (int)((uint)Interlocked.Increment(ref _phoneSequence) % PhoneRange)}";
 
     public static string NewCode() => Guid.NewGuid().ToString("N")[..10];
 
@@ -87,6 +93,9 @@ public static partial class AcsTestKit
         using var scope = factory.Services.CreateScope();
         return await query(scope.ServiceProvider.GetRequiredService<OmtsDbContext>());
     }
+
+    /// <summary>A password that meets the policy (letters and a digit), new for each call.</summary>
+    public static string NewPassword() => $"Pw{Guid.NewGuid():N}"[..12] + "7";
 
     private static string CodeIn(string text) => SixDigits().Match(text).Value;
 

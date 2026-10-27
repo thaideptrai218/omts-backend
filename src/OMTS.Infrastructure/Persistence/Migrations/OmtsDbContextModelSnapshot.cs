@@ -1838,6 +1838,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("LastSeenAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<Guid?>("LoginSessionId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("PermissionGranted")
                         .HasColumnType("bit");
 
@@ -1857,6 +1860,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");
+
+                    b.HasIndex("LoginSessionId");
 
                     b.HasIndex("Token")
                         .IsUnique();
@@ -6152,7 +6157,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OMTS.Domain.Entities.Identity.LoginSession", "LoginSession")
+                        .WithMany()
+                        .HasForeignKey("LoginSessionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Account");
+
+                    b.Navigation("LoginSession");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.Role", b =>

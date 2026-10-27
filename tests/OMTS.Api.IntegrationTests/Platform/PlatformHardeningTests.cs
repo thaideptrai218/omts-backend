@@ -48,7 +48,7 @@ public class PlatformHardeningTests
 
         var sms = await production.Services.GetRequiredService<ISmsSender>().SendAsync("0912000222", "code 123456");
         var push = await production.Services.GetRequiredService<IPushSender>().SendAsync(
-            new PushMessage(Guid.NewGuid(), "Test", "Title", null, null, null));
+            new PushMessage(Guid.NewGuid(), "Test", "Title", null, null, null, []));
 
         Assert.False(sms.Succeeded);
         Assert.Equal("NOT_CONFIGURED", sms.ErrorCode);

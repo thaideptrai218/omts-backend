@@ -91,6 +91,7 @@ public static class DependencyInjection
         services.AddHostedService<WaterMeasurementOverdueJob>();
 
         services.AddScoped<DeploymentBootstrapper>();
+        services.AddScoped<OwnerPasswordReset>();
 
         // FARM-03 expiring zone license reminder (formerly JOB-06)
         services.AddOptions<ZoneLicenseReminderOptions>().Bind(configuration.GetSection(ZoneLicenseReminderOptions.SectionName));

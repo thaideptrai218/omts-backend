@@ -22,7 +22,11 @@ builder.Services.AddOmtsCors(builder.Configuration);
 builder.Services.AddOmtsRateLimiting(builder.Configuration);
 builder.Services.AddExceptionHandler<ProblemExceptionHandler>();
 builder.Services.AddProblemDetails();
-builder.Services.AddControllers(options => options.Filters.Add<AccountStateGateFilter>())
+builder.Services.AddControllers(options =>
+    {
+        options.Filters.Add<AccountStateGateFilter>();
+        options.Filters.Add<OversizedUploadFilter>();
+    })
     // Enums travel by name ("Sms", "Web", "View"); numbers are still accepted.
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()))
     // Unreadable values answer 400 MSG01 like every other invalid field.

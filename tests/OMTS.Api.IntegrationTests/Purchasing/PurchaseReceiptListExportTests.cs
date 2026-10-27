@@ -34,7 +34,10 @@ public class PurchaseReceiptListExportTests(AuthApiFactory factory) : IClassFixt
         var cancelled = await world.CompletedAsync(0, 0, new LineBody(world.Other, 1, 800_000));
         await (await world.Owner.CancelAsync(cancelled.Id(), "Wrong", null)).ReadAsync(HttpStatusCode.OK);
 
-        var all = await SearchAsync(world.Owner, $"supplierId={world.SupplierId}");
+        // The receipts are dated up to 2 days back, so the default "this year" period would miss them on 1–2
+        // January: the period is pinned, and the default is checked on its own below.
+        var period = $"from={Today.AddDays(-2):yyyy-MM-dd}&to={Today:yyyy-MM-dd}";
+        var all = await SearchAsync(world.Owner, $"supplierId={world.SupplierId}&{period}");
         // Newest receipt date first, then the higher code of the day first.
         Assert.Equal([cancelled.Id(), draft.Id(), material.Id(), seed.Id()], Ids(all));
         var totals = all.GetProperty("totals");
@@ -43,8 +46,9 @@ public class PurchaseReceiptListExportTests(AuthApiFactory factory) : IClassFixt
             (1_500_000m, 100_000m, 1_400_000m, 90_000m, 300_000m, 1_010_000m),
             (totals.Money("subtotal"), totals.Money("discount"), totals.Money("payable"), totals.Money("returned"), totals.Money("paid"), totals.Money("outstanding")));
         Assert.Equal(JsonValueKind.Null, all.GetProperty("message").ValueKind);
+        var defaults = await SearchAsync(world.Owner, $"supplierId={world.SupplierId}");
         Assert.Equal((new DateOnly(Today.Year, 1, 1).ToString("yyyy-MM-dd"), new DateOnly(Today.Year, 12, 31).ToString("yyyy-MM-dd")),
-            (all.GetProperty("from").GetString(), all.GetProperty("to").GetString()));
+            (defaults.GetProperty("from").GetString(), defaults.GetProperty("to").GetString()));
 
         var row = all.GetProperty("page").GetProperty("items").EnumerateArray().Single(r => r.Id() == seed.Id());
         Assert.Equal((seed.GetProperty("code").GetString(), world.SupplierId, world.Zone.Id, "Completed"),
@@ -54,17 +58,17 @@ public class PurchaseReceiptListExportTests(AuthApiFactory factory) : IClassFixt
         Assert.Equal(world.Raft.Id, all.GetProperty("page").GetProperty("items").EnumerateArray().Single(r => r.Id() == material.Id()).GetProperty("raft").Id());
 
         // Totals cover the whole filtered set, not the page.
-        var page = await SearchAsync(world.Owner, $"supplierId={world.SupplierId}&page=2&pageSize=3");
+        var page = await SearchAsync(world.Owner, $"supplierId={world.SupplierId}&{period}&page=2&pageSize=3");
         Assert.Equal([seed.Id()], Ids(page));
         Assert.Equal((4, 1_400_000m), (page.GetProperty("page").GetProperty("total").GetInt32(), page.GetProperty("totals").Money("payable")));
 
-        Assert.Equal([seed.Id()], Ids(await SearchAsync(world.Owner, $"supplierId={world.SupplierId}&itemGroup=Seed")));
-        Assert.Equal([material.Id()], Ids(await SearchAsync(world.Owner, $"supplierId={world.SupplierId}&itemId={world.Material}")));
-        Assert.Equal([material.Id()], Ids(await SearchAsync(world.Owner, $"supplierId={world.SupplierId}&raftId={world.Raft.Id}")));
-        Assert.Equal([draft.Id()], Ids(await SearchAsync(world.Owner, $"supplierId={world.SupplierId}&statusId={StatusIds.PurchaseReceipt.Draft}")));
+        Assert.Equal([seed.Id()], Ids(await SearchAsync(world.Owner, $"supplierId={world.SupplierId}&{period}&itemGroup=Seed")));
+        Assert.Equal([material.Id()], Ids(await SearchAsync(world.Owner, $"supplierId={world.SupplierId}&{period}&itemId={world.Material}")));
+        Assert.Equal([material.Id()], Ids(await SearchAsync(world.Owner, $"supplierId={world.SupplierId}&{period}&raftId={world.Raft.Id}")));
+        Assert.Equal([draft.Id()], Ids(await SearchAsync(world.Owner, $"supplierId={world.SupplierId}&{period}&statusId={StatusIds.PurchaseReceipt.Draft}")));
         Assert.Equal([seed.Id()], Ids(await SearchAsync(world.Owner, $"supplierId={world.SupplierId}&from={Today.AddDays(-2):yyyy-MM-dd}&to={Today.AddDays(-2):yyyy-MM-dd}")));
-        Assert.Equal([material.Id()], Ids(await SearchAsync(world.Owner, $"code={material.GetProperty("code").GetString()![3..]}&supplierId={world.SupplierId}")));
-        Assert.Equal(4, Ids(await SearchAsync(world.Owner, $"supplierId={world.SupplierId}&zoneId={world.Zone.Id}")).Count);
+        Assert.Equal([material.Id()], Ids(await SearchAsync(world.Owner, $"code={material.GetProperty("code").GetString()![3..]}&supplierId={world.SupplierId}&{period}")));
+        Assert.Equal(4, Ids(await SearchAsync(world.Owner, $"supplierId={world.SupplierId}&{period}&zoneId={world.Zone.Id}")).Count);
     }
 
     [Fact]

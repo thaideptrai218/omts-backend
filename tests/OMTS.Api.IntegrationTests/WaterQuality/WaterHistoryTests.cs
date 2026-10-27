@@ -4,6 +4,7 @@ using System.Text.Json;
 using ClosedXML.Excel;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Reports;
 
 namespace OMTS.Api.IntegrationTests.WaterQuality;
@@ -125,7 +126,9 @@ public class WaterHistoryTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
     public async Task A_ten_year_month_chart_and_the_earliest_date_are_still_accepted()
     {
         var z = await api.ZoneAsync();
-        var from = DateOnly.FromDateTime(DateTime.UtcNow).AddYears(-10);
+        // The business date (UTC+7), as the API counts the ten years: the UTC date is a day behind it between
+        // 00:00 and 07:00 Vietnam time.
+        var from = TimeProvider.System.Today().AddYears(-10);
 
         var chart = await z.Owner.GetAsync($"{z.Base}/chart?from={from:yyyy-MM-dd}&groupBy=month");
         var list = await z.Owner.GetAsync($"{z.Base}?from=2000-01-01");

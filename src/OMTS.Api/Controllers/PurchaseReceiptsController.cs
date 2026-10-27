@@ -69,6 +69,7 @@ public sealed class PurchaseReceiptsController(
     [HttpPost(Receipts + "/{id:guid}/invoice-photos")]
     [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Edit, PermissionScope.AnyZone)]
     [RequestSizeLimit(105 * 1024 * 1024)]
+    [UploadField("Invoice photos")]
     [ProducesResponseType<PurchaseReceiptView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> AddInvoicePhotos(Guid id, [FromForm] IFormFileCollection files, CancellationToken cancellationToken) =>
         (await receipts.AddInvoicePhotosAsync(id, await SuppliersController.IncomingAsync(files, cancellationToken), cancellationToken)).ToActionResult(Ok);

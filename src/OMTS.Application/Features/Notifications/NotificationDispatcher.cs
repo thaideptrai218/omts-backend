@@ -28,6 +28,7 @@ public interface INotificationDispatcher
 
 public sealed class NotificationDispatcher(
     INotificationRepository notifications,
+    IPushDeviceRepository devices,
     IPushOutbox pushOutbox,
     TimeProvider timeProvider) : INotificationDispatcher
 {
@@ -54,6 +55,7 @@ public sealed class NotificationDispatcher(
         var mandatory = isMandatory || NotificationCategories.Mandatory.Contains(category);
         var preferences = await notifications.GetPreferencesAsync(recipients, cancellationToken);
         var now = timeProvider.GetUtcNow();
+        var pushRecipients = new List<Guid>();
 
         foreach (var accountId in recipients)
         {
@@ -79,8 +81,20 @@ public sealed class NotificationDispatcher(
 
             if (mandatory || IsEnabled(accountPreferences, category, NotificationChannel.Push))
             {
-                pushOutbox.Enqueue(new PushMessage(accountId, type, title, body, relatedRecordType, relatedRecordCode));
+                pushRecipients.Add(accountId);
             }
+        }
+
+        if (pushRecipients.Count == 0)
+        {
+            return;
+        }
+
+        // One query for every recipient: the devices still logged in with the session that registered them.
+        var tokens = (await devices.ListDeliverableAsync(pushRecipients, now, cancellationToken)).ToLookup(d => d.AccountId, d => d.Token);
+        foreach (var accountId in pushRecipients)
+        {
+            pushOutbox.Enqueue(new PushMessage(accountId, type, title, body, relatedRecordType, relatedRecordCode, tokens[accountId].ToList()));
         }
     }
 
