@@ -25,6 +25,7 @@ public sealed class FarmingZoneService(
     FarmingLookupAccess lookupAccess,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
+    StatusChangeService statusChanges,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
@@ -180,34 +181,13 @@ public sealed class FarmingZoneService(
     private async Task<Result<FarmingZoneView>> ChangeStatusAsync(
         FarmingZone zone, int newStatusId, string action, ChangeStatusRequest request, CancellationToken cancellationToken)
     {
-        var reason = request.Reason?.Trim();
-        if (reason?.Length > 1000)
-        {
-            return AppError.Invalid("Reason");
-        }
-
-        if (await rowVersions.CheckAsync(zone, request.RowVersion, cancellationToken) is { } conflict)
-        {
-            return conflict;
-        }
-
-        var oldStatusId = zone.StatusId;
-        zone.StatusId = newStatusId;
-        audit.Record(new AuditEntry(action, RecordType)
-        {
-            RecordId = zone.Id,
-            RecordCode = zone.Code,
-            ZoneId = zone.Id,
-            Before = new { Status = statusCatalog.CodeOf(oldStatusId) },
-            After = new { Status = statusCatalog.CodeOf(newStatusId) },
-            Reason = string.IsNullOrEmpty(reason) ? null : reason,
-        });
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return await ViewAsync(zone, cancellationToken);
+        var entry = new AuditEntry(action, RecordType) { RecordId = zone.Id, RecordCode = zone.Code, ZoneId = zone.Id };
+        return await statusChanges.ChangeAsync(zone, newStatusId, entry, request.Reason, request.RowVersion, cancellationToken) is { } error
+            ? error
+            : await ViewAsync(zone, cancellationToken);
     }
 
-    private AppError WrongStatus(FarmingZone zone, int newStatusId, string reason) => AppError.Conflict(UserMessages.CannotChangeStatus(
-        "farming zone", statusCatalog.DisplayNameOf(zone.StatusId), statusCatalog.DisplayNameOf(newStatusId), reason));
+    private AppError WrongStatus(FarmingZone zone, int newStatusId, string reason) => statusChanges.WrongStatus("farming zone", zone, newStatusId, reason);
 
     private static AppError Duplicate(Guid existingId) => new(
         ErrorKind.Conflict,

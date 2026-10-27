@@ -181,6 +181,17 @@ The OCR Service of the water meter photos (ENV-01) is only faked until its provi
 measurement for more than one calendar month gets one MSG26 reminder per overdue period (Owners and the zone's staff
 with View on `WATER_MEASUREMENTS`).
 
+A replaced raft photo or license file is removed right after the save, and the upload of a failed save right away.
+`OrphanFileCleanupJob` runs every day at 03:00 (Asia/Ho_Chi_Minh) and deletes what such a removal left behind: raft
+photos (`raft-photos/`) and license files (`zone-licenses/`) that no raft or license points to and that were written more
+than the grace period (24 hours) ago. No other storage folder is scanned, so cooperative logos are kept for ever.
+
+**Every environment must use its own storage container (`Storage:AzureBlob:Container`) or folder
+(`Storage:Local:RootPath`); never share one between environments.** The job deletes the files its own database does not
+point to, so on a shared storage it would delete the files of the other environment. As a safeguard only, a folder in
+which not one stored file (old or new) is referenced by the database is skipped: nothing is deleted there and a warning
+is logged.
+
 ## Deployment
 
 There is no System Administrator inside the cooperative app: the cooperative and its first Cooperative Owner are
@@ -215,13 +226,14 @@ created by a one-time command run on the server by the deployment operator (not 
 | SMS (`Sms:Provider` = `None`, the default: nothing is sent and phone verification cannot complete; `Fake` keeps messages in the dev inbox and is set in Development only) | `Sms:Fake:FailFor` (test numbers that fail) |
 | Push (`Push:Provider` = `None` by default, `Fake` in Development) | `Push:Fake:FailFor` |
 | OCR (`Ocr:Provider` unset by default: meter photos are not read and the values are entered by hand (MSG04); `Fake` invents readings, so it is set in Development only and stops the host elsewhere) | `Ocr:TimeoutSeconds` (default 15), `Ocr:UncertainBelow` (default 0.8), `Ocr:Fake:Mode` (`Success`, `Fail`, `Timeout`), `Ocr:Fake:Ph`, `Ocr:Fake:Salinity`, `Ocr:Fake:Confidence` |
-| File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
+| File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development; one container or folder per environment, see Background jobs) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
 | Bootstrap (see Deployment) | `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:*` |
 | Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30) |
 | CORS: the web app calls the API from the browser. Set its origin in every deployed environment; empty means no CORS. Development allows `http://localhost:3000`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`) |
 | Reverse proxy: X-Forwarded-For is trusted only from these addresses (and loopback), so the limits see the real client | `ForwardedHeaders:KnownProxies` (e.g. `10.0.0.4`), `ForwardedHeaders:KnownNetworks` (e.g. `10.0.0.0/24`) |
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG04 and a critical log entry is written (one number or address gets at most 10 codes per hour) | `Verification:DailySmsLimit` (default 500) |
 | Zone license reminder (FARM-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`) |
+| Orphan raft photo and license file clean-up (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
 
 ## Contributing
 

@@ -84,6 +84,30 @@ internal sealed class LocalFileStorage(
         }
     }
 
+    public Task<IReadOnlyList<StoredFile>> ListAsync(string category, CancellationToken cancellationToken = default)
+    {
+        var prefix = StorageKeys.ListPrefix(category);
+        var root = Root;
+        var folder = Path.Combine(root, category);
+        try
+        {
+            // Files this provider did not write (no storage key shape) are never listed, so never cleaned up.
+            IReadOnlyList<StoredFile> files = !Directory.Exists(folder)
+                ? []
+                : Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
+                    .Select(path => (Path: path, Key: Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/')))
+                    .Where(file => file.Key.StartsWith(prefix, StringComparison.Ordinal) && StorageKeys.IsValid(file.Key))
+                    .Select(file => new StoredFile(file.Key, new DateTimeOffset(File.GetLastWriteTimeUtc(file.Path), TimeSpan.Zero)))
+                    .ToList();
+            return Task.FromResult(files);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogError(exception, "Local storage listing of {Category} failed", category);
+            throw new FileStorageUnavailableException(prefix, exception);
+        }
+    }
+
     private string PathOf(string key)
     {
         var root = Root;

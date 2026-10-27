@@ -104,6 +104,35 @@ internal sealed class AzureBlobFileStorage(
         }
     }
 
+    public async Task<IReadOnlyList<StoredFile>> ListAsync(string category, CancellationToken cancellationToken = default)
+    {
+        var prefix = StorageKeys.ListPrefix(category);
+        var files = new List<StoredFile>();
+        try
+        {
+            await foreach (var blob in Container.GetBlobsAsync(prefix: prefix, cancellationToken: cancellationToken))
+            {
+                // Blobs this provider did not write (no storage key shape) are never listed, so never cleaned up.
+                if (StorageKeys.IsValid(blob.Name) && blob.Properties.LastModified is { } lastModified)
+                {
+                    files.Add(new StoredFile(blob.Name, lastModified.ToUniversalTime()));
+                }
+            }
+
+            return files;
+        }
+        catch (RequestFailedException exception) when (exception.Status == 404)
+        {
+            // No container yet: nothing was ever uploaded.
+            return [];
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogError(exception, "Blob listing of {Category} failed", category);
+            throw new FileStorageUnavailableException(prefix, exception);
+        }
+    }
+
     private async Task EnsureContainerAsync(CancellationToken cancellationToken)
     {
         if (_containerChecked)

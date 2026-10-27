@@ -31,6 +31,12 @@ public interface IFileStorage
 
     /// <summary>Removes the file; false when it did not exist or the provider failed.</summary>
     Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Every stored file of the category (keys <c>{category}/...</c> this adapter produced), for the orphan file
+    /// clean-up. A provider failure throws <see cref="Exceptions.FileStorageUnavailableException"/>.
+    /// </summary>
+    Task<IReadOnlyList<StoredFile>> ListAsync(string category, CancellationToken cancellationToken = default);
 }
 
 public sealed record FileUploadResult(bool Succeeded, string? Key, string? ErrorCode)
@@ -39,3 +45,6 @@ public sealed record FileUploadResult(bool Succeeded, string? Key, string? Error
 
     public static FileUploadResult Failed(string errorCode) => new(false, null, errorCode);
 }
+
+/// <param name="LastModified">When the file was written (UTC); a file is never rewritten after its upload.</param>
+public sealed record StoredFile(string Key, DateTimeOffset LastModified);
