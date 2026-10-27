@@ -262,7 +262,8 @@ public class RaftRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         Assert.NotNull(withPhoto.GetProperty("photoUrl").GetString());
         var jpeg = await (await Upload(Jpeg, "raft.jpeg")).ReadAsync(HttpStatusCode.OK);
         Assert.NotEqual(withPhoto.Text("photoUrl"), jpeg.Text("photoUrl"));
-        Assert.Equal(before + 2, factory.StoredFiles("raft-photos").Count);
+        // Both were stored; the replaced one is removed once the JPEG is saved (OMTS-214), so one file is added.
+        Assert.Equal(before + 1, factory.StoredFiles("raft-photos").Count);
 
         var photoAudits = await factory.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == raft.Id() && e.Action == "Raft.Updated").OrderBy(e => e.OccurredAt).ToListAsync());
         Assert.Equal(2, photoAudits.Count);

@@ -35,7 +35,7 @@ public class MigrationTests
         // Added last, so it wins over a developer's user-secrets.
         await using var api = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
-                new Dictionary<string, string?> { ["ConnectionStrings:OmtsDb"] = database.ConnectionString })));
+                new Dictionary<string, string?> { ["ConnectionStrings:OmtsDb"] = database.ConnectionString, ["Jobs:OrphanFileCleanup:Enabled"] = "false" })));
         var client = api.CreateClient();
 
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/health")).StatusCode);

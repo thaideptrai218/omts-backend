@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using Microsoft.OpenApi.Models;
 using OMTS.Api.Commands;
 using OMTS.Api.Common;
 using OMTS.Api.Extensions;
@@ -22,7 +21,11 @@ builder.Services.AddOmtsCors(builder.Configuration);
 builder.Services.AddOmtsRateLimiting(builder.Configuration);
 builder.Services.AddExceptionHandler<ProblemExceptionHandler>();
 builder.Services.AddProblemDetails();
-builder.Services.AddControllers(options => options.Filters.Add<AccountStateGateFilter>())
+builder.Services.AddControllers(options =>
+    {
+        options.Filters.Add<AccountStateGateFilter>();
+        options.Filters.Add<OversizedUploadFilter>();
+    })
     // Enums travel by name ("Sms", "Web", "View"); numbers are still accepted.
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()))
     // Unreadable values answer 400 MSG01 like every other invalid field.
@@ -30,19 +33,7 @@ builder.Services.AddControllers(options => options.Filters.Add<AccountStateGateF
 // A time sent without a UTC offset is Vietnam time (UTC+7), in JSON bodies and in Swagger.
 builder.Services.AddOmtsBusinessTime();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
-{
-    var bearer = new OpenApiSecurityScheme
-    {
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT",
-        Description = "Access token from POST /api/auth/login",
-        Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" },
-    };
-    options.AddSecurityDefinition("Bearer", bearer);
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement { [bearer] = [] });
-});
+builder.Services.AddOmtsSwagger();
 
 var app = builder.Build();
 

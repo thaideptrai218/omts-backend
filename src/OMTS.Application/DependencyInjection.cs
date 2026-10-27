@@ -12,6 +12,7 @@ using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Farming.Licenses;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Application.Features.Farming.Zones;
+using OMTS.Application.Features.Files;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
@@ -41,6 +42,7 @@ public static class DependencyInjection
 
         services.AddScoped<AmbientActor>();
         services.AddScoped<AuditLogService>();
+        services.AddScoped<StatusChangeService>();
         services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
         services.AddScoped<RowVersionGuard>();
 
@@ -75,6 +77,8 @@ public static class DependencyInjection
         services.AddScoped<ZoneLicenseReminderService>();
         services.AddScoped<RaftService>();
         services.AddScoped<RaftConditionService>();
+        services.AddScoped<UploadedFileSaver>();
+        services.AddScoped<OrphanFileCleanupService>();
 
         // INP – suppliers, farming inputs, purchase receipts, returns and supplier payments
         services.AddScoped<ZoneAccessGuard>();

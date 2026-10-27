@@ -20,6 +20,9 @@ public class BootstrapTests
 {
     private const string TemporaryPassword = "Temp2026ab";
 
+    /// <summary>The Owner's temporary password that <see cref="WithSecrets"/> configures.</summary>
+    internal static string OwnerTemporaryPassword => TemporaryPassword;
+
     [Fact]
     public async Task Readiness_is_red_before_the_bootstrap_and_green_after_it()
     {

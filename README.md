@@ -175,7 +175,9 @@ dotnet ef migrations add <Name> --project src/OMTS.Infrastructure --startup-proj
 
 Email, SMS, push, OCR and file storage are adapters picked by configuration, so switching provider needs no code change.
 In Development the fakes keep what they "send" in memory; read it at `GET /api/dev/sms?phoneNumber=`,
-`GET /api/dev/email?to=`, `GET /api/dev/push?accountId=` (clear with `DELETE`). These endpoints answer 404 outside
+`GET /api/dev/email?to=`, `GET /api/dev/push?accountId=` (clear with `DELETE`). Every push is kept, and its `devices`
+lists the tokens a real provider would deliver to: those registered (`POST /api/me/devices`) by a session that is still
+logged in. These endpoints answer 404 outside
 Development; they are anonymous, so never expose a Development environment publicly. Local storage writes under `src/OMTS.Api/App_Data/files` (git-ignored); for Azurite set
 `Storage:Provider=AzureBlob` and `Storage:AzureBlob:ConnectionString=UseDevelopmentStorage=true`.
 The OCR Service of the water meter photos (ENV-01) is only faked until its provider ticket: the fake answers with
@@ -189,6 +191,17 @@ measurement for more than one calendar month gets one MSG26 reminder per overdue
 with View on `WATER_MEASUREMENTS`). Like the zone license reminder (07:00), a host started after the run time runs it
 once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A reminder already
 sent is never sent again.
+
+A replaced raft photo or license file is removed right after the save, and the upload of a failed save right away.
+`OrphanFileCleanupJob` runs every day at 03:00 (Asia/Ho_Chi_Minh) and deletes what such a removal left behind: raft
+photos (`raft-photos/`) and license files (`zone-licenses/`) that no raft or license points to and that were written more
+than the grace period (24 hours) ago. No other storage folder is scanned, so cooperative logos are kept for ever.
+
+**Every environment must use its own storage container (`Storage:AzureBlob:Container`) or folder
+(`Storage:Local:RootPath`); never share one between environments.** The job deletes the files its own database does not
+point to, so on a shared storage it would delete the files of the other environment. As a safeguard only, a folder in
+which not one stored file (old or new) is referenced by the database is skipped: nothing is deleted there and a warning
+is logged.
 
 ## Deployment
 
@@ -206,6 +219,12 @@ created by a one-time command run on the server by the deployment operator (not 
    whose name no longer exists (for example after a rename) is created again. Missing secrets give exit code 1 and the
    names of the missing keys. `--demo` also seeds the demo data of "Run with Docker" (Development only; refused
    in any other environment).
+   An Owner who cannot log in (for example after missing the 24-hour window) is recovered with
+   `dotnet OMTS.Api.dll seed --reset-owner-password`. It sets `Bootstrap:Owner:TemporaryPassword` (from configuration, never
+   from the command line, so it never lands in shell history) as a new 24-hour temporary password that must be changed at
+   first login, ends every session of the Owner and writes an audit row. Set a new value first: the Owner's current
+   (expired) password is refused. With several Owners, `Bootstrap:Owner:Username`
+   chooses one. Without an Owner, or without a valid password, it changes nothing and exits with code 1.
 3. Start the API and check `GET /health/ready`: 200 when the database, migrations, status catalog, default roles,
    cooperative and an active Owner are all in place, else 503 listing the failing checks. This is a post-deployment
    verification, **not** a platform probe: it depends on data the Owner can change (renaming a default role or locking the
@@ -218,7 +237,7 @@ created by a one-time command run on the server by the deployment operator (not 
 | SMS (`Sms:Provider` = `None`, the default: nothing is sent and phone verification cannot complete; `Fake` keeps messages in the dev inbox and is set in Development only) | `Sms:Fake:FailFor` (test numbers that fail) |
 | Push (`Push:Provider` = `None` by default, `Fake` in Development) | `Push:Fake:FailFor` |
 | OCR (`Ocr:Provider` unset by default: meter photos are not read and the values are entered by hand (MSG04); `Fake` invents readings, so it is set in Development only and stops the host elsewhere) | `Ocr:TimeoutSeconds` (default 15), `Ocr:UncertainBelow` (default 0.8), `Ocr:Fake:Mode` (`Success`, `Fail`, `Timeout`), `Ocr:Fake:Ph`, `Ocr:Fake:Salinity`, `Ocr:Fake:Confidence` |
-| File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
+| File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development; one container or folder per environment, see Background jobs) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
 | Bootstrap (see Deployment) | `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:*` |
 | Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30) |
 | CORS: the web app calls the API from the browser. Set its origin in every deployed environment; empty means no CORS. Development allows `http://localhost:3000`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`) |
@@ -226,6 +245,7 @@ created by a one-time command run on the server by the deployment operator (not 
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG04 and a critical log entry is written (one number or address gets at most 10 codes per hour) | `Verification:DailySmsLimit` (default 500) |
 | Zone license reminder (FARM-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
 | Overdue water measurement reminder (ENV-01, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
+| Orphan raft photo and license file clean-up (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
 
 ## Contributing
 

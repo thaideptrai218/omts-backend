@@ -32,6 +32,7 @@ public sealed class ZoneWaterMeasurementsController(
     [HttpPost("recognize")]
     [RequirePermission(PermissionFunctions.WaterMeasurements, PermissionAction.Create)]
     [RequestSizeLimit(MaxUploadBytes)]
+    [UploadField(WaterMeasurementRecordingService.PhotoField)]
     [Consumes("multipart/form-data")]
     [ProducesResponseType<RecognitionResult>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Recognize(Guid zoneId, IFormFile? photo, [FromForm] string? clientOperationId, CancellationToken cancellationToken)
@@ -64,6 +65,7 @@ public sealed class ZoneWaterMeasurementsController(
     [HttpPost("with-photo")]
     [RequirePermission(PermissionFunctions.WaterMeasurements, PermissionAction.Create)]
     [RequestSizeLimit(MaxUploadBytes)]
+    [UploadField(WaterMeasurementRecordingService.PhotoField)]
     [Consumes("multipart/form-data")]
     [ProducesResponseType<WaterMeasurementDetail>(StatusCodes.Status201Created)]
     [ProducesResponseType<WaterMeasurementDetail>(StatusCodes.Status200OK)]

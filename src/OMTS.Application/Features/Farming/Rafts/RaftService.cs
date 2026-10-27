@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
@@ -26,12 +25,13 @@ public sealed class RaftService(
     IRaftMaterialCostQuery materialCosts,
     FarmingLookupAccess lookupAccess,
     IFileStorage storage,
+    UploadedFileSaver fileSaver,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
+    StatusChangeService statusChanges,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
-    TimeProvider timeProvider,
-    ILogger<RaftService> logger)
+    TimeProvider timeProvider)
 {
     private const string RecordType = nameof(Raft);
 
@@ -161,7 +161,10 @@ public sealed class RaftService(
         return await ViewAsync(raft, cancellationToken);
     }
 
-    /// <summary>JPEG/PNG photo, at most 10 MB, stored unchanged; a storage failure changes nothing (MSG05).</summary>
+    /// <summary>
+    /// JPEG/PNG photo, at most 10 MB, stored unchanged; a storage failure changes nothing (MSG05). The replaced
+    /// photo file is removed once the new one is saved.
+    /// </summary>
     public async Task<Result<RaftView>> UploadPhotoAsync(Guid raftId, IncomingFile file, CancellationToken cancellationToken)
     {
         var raft = await rafts.GetForEditAsync(raftId, cancellationToken);
@@ -176,31 +179,19 @@ public sealed class RaftService(
             return AppError.Invalid("Photo");
         }
 
-        var uploaded = await storage.UploadAsync(validated.Files[0], "raft-photos", cancellationToken);
+        var uploaded = await storage.UploadAsync(validated.Files[0], FileCategories.RaftPhotos, cancellationToken);
         if (!uploaded.Succeeded)
         {
             return new AppError(ErrorKind.BadGateway, UserMessages.FileOperationFailed);
         }
 
+        var replaced = raft.PhotoUrl;
         audit.Record(new AuditEntry("Raft.Updated", RecordType)
         {
             RecordId = raft.Id, RecordCode = raft.Code, ZoneId = raft.ZoneId, Before = new { raft.PhotoUrl }, After = new { PhotoUrl = uploaded.Key },
         });
         raft.PhotoUrl = uploaded.Key;
-        try
-        {
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch
-        {
-            if (!await storage.DeleteAsync(uploaded.Key!, CancellationToken.None))
-            {
-                logger.LogWarning("Raft photo {FileKey} could not be removed after a failed save.", uploaded.Key);
-            }
-
-            throw;
-        }
-
+        await fileSaver.SaveAsync(uploaded.Key, replaced, cancellationToken);
         return await ViewAsync(raft, cancellationToken);
     }
 
@@ -328,34 +319,13 @@ public sealed class RaftService(
 
     private async Task<Result<RaftView>> ChangeStatusAsync(Raft raft, int newStatusId, string action, ChangeStatusRequest request, CancellationToken cancellationToken)
     {
-        var reason = request.Reason?.Trim();
-        if (reason?.Length > 1000)
-        {
-            return AppError.Invalid("Reason");
-        }
-
-        if (await rowVersions.CheckAsync(raft, request.RowVersion, cancellationToken) is { } conflict)
-        {
-            return conflict;
-        }
-
-        var oldStatusId = raft.StatusId;
-        raft.StatusId = newStatusId;
-        audit.Record(new AuditEntry(action, RecordType)
-        {
-            RecordId = raft.Id,
-            RecordCode = raft.Code,
-            ZoneId = raft.ZoneId,
-            Before = new { Status = statusCatalog.CodeOf(oldStatusId) },
-            After = new { Status = statusCatalog.CodeOf(newStatusId) },
-            Reason = string.IsNullOrEmpty(reason) ? null : reason,
-        });
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return await ViewAsync(raft, cancellationToken);
+        var entry = new AuditEntry(action, RecordType) { RecordId = raft.Id, RecordCode = raft.Code, ZoneId = raft.ZoneId };
+        return await statusChanges.ChangeAsync(raft, newStatusId, entry, request.Reason, request.RowVersion, cancellationToken) is { } error
+            ? error
+            : await ViewAsync(raft, cancellationToken);
     }
 
-    private AppError WrongStatus(Raft raft, int newStatusId, string reason) => AppError.Conflict(UserMessages.CannotChangeStatus(
-        "raft", statusCatalog.DisplayNameOf(raft.StatusId), statusCatalog.DisplayNameOf(newStatusId), reason));
+    private AppError WrongStatus(Raft raft, int newStatusId, string reason) => statusChanges.WrongStatus("raft", raft, newStatusId, reason);
 
     private static AppError Duplicate(Guid existingId) => new(
         ErrorKind.Conflict,

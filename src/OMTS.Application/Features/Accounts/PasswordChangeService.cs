@@ -51,8 +51,9 @@ public sealed class PasswordChangeService(
         return await verification.StartAsync(VerificationPurpose.ChangePassword, VerificationChannel.Email, account.Email, account.Id, cancellationToken);
     }
 
+    /// <param name="sessionId">The caller's session: its push devices move to the new session of this device.</param>
     public async Task<Result<PasswordChanged>> ChangeAsync(
-        Guid accountId, ChangePasswordRequest request, ClientInfo client, CancellationToken cancellationToken)
+        Guid accountId, Guid? sessionId, ChangePasswordRequest request, ClientInfo client, CancellationToken cancellationToken)
     {
         var account = await accounts.GetByIdAsync(accountId, cancellationToken);
         if (account is null)
@@ -84,7 +85,7 @@ public sealed class PasswordChangeService(
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var tokens = await authService.CreateSessionAsync(account, request.ClientType, request.DeviceName, client, cancellationToken);
+        var tokens = await authService.CreateSessionAsync(account, request.ClientType, request.DeviceName, client, cancellationToken, sessionId);
         return new PasswordChanged(tokens, UserMessages.PasswordChanged.Text);
     }
 

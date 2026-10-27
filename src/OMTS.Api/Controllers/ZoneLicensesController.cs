@@ -30,26 +30,43 @@ public sealed class ZoneLicensesController(ZoneLicenseService licenses) : Contro
     public async Task<IActionResult> Get(Guid id, DateOnly? asOf, CancellationToken cancellationToken) =>
         (await licenses.GetAsync(id, asOf, cancellationToken)).ToActionResult(Ok);
 
+    /// <summary>Uploads a license: the form fields below plus its document in <c>file</c> (required).</summary>
+    /// <param name="request">The license fields, one form field each.</param>
+    /// <param name="file">The license document: PDF, JPEG or PNG, at most 10 MB.</param>
+    /// <param name="cancellationToken">Request aborted.</param>
     [HttpPost("api/zone-licenses")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(MaxRequestBytes)]
+    [UploadField("File")]
     [ProducesResponseType<ZoneLicenseView>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Create([FromForm] SaveZoneLicenseRequest request, IFormFile? file, CancellationToken cancellationToken) =>
         (await licenses.CreateAsync(request, await IncomingAsync(file, cancellationToken), cancellationToken))
             .ToActionResult(l => StatusCode(StatusCodes.Status201Created, l));
 
-    /// <summary>Corrects a license that has not been replaced; <c>file</c> is optional here.</summary>
+    /// <summary>
+    /// Corrects a license that has not been replaced; <c>rowVersion</c> is required and <c>file</c> is optional here
+    /// (a new file replaces the stored one).
+    /// </summary>
     [HttpPut("api/zone-licenses/{id:guid}")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(MaxRequestBytes)]
+    [UploadField("File")]
     [ProducesResponseType<ZoneLicenseView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Update(Guid id, [FromForm] SaveZoneLicenseRequest request, IFormFile? file, CancellationToken cancellationToken) =>
         (await licenses.UpdateAsync(id, request, await IncomingAsync(file, cancellationToken), cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Renewal: a new license replacing this one; zones default to the replaced license's zones.</summary>
+    /// <summary>
+    /// Renewal: a new license replacing this one, with its own document in <c>file</c> (required). Empty
+    /// <c>documentType</c> and <c>zoneIds</c> keep those of the replaced license; no <c>rowVersion</c>.
+    /// </summary>
+    /// <param name="id">The license being replaced.</param>
+    /// <param name="request">The new license's fields, one form field each.</param>
+    /// <param name="file">The new license document: PDF, JPEG or PNG, at most 10 MB.</param>
+    /// <param name="cancellationToken">Request aborted.</param>
     [HttpPost("api/zone-licenses/{id:guid}/replace")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(MaxRequestBytes)]
+    [UploadField("File")]
     [ProducesResponseType<ZoneLicenseView>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Replace(Guid id, [FromForm] SaveZoneLicenseRequest request, IFormFile? file, CancellationToken cancellationToken) =>
         (await licenses.ReplaceAsync(id, request, await IncomingAsync(file, cancellationToken), cancellationToken))

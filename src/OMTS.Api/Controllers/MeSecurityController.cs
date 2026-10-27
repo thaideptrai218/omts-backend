@@ -27,7 +27,7 @@ public sealed class MeSecurityController(
     [HttpPost("password")]
     [ProducesResponseType<PasswordChanged>(StatusCodes.Status200OK)]
     public async Task<IActionResult> ChangePassword(ChangePasswordRequest request, CancellationToken cancellationToken) =>
-        (await passwords.ChangeAsync(currentUser.AccountId!.Value, request, HttpContext.ClientInfo(), cancellationToken)).ToActionResult(Ok);
+        (await passwords.ChangeAsync(currentUser.AccountId!.Value, currentUser.SessionId, request, HttpContext.ClientInfo(), cancellationToken)).ToActionResult(Ok);
 
     /// <summary>Sends a ChangePassword code to the verified email (NO_VERIFIED_EMAIL guidance without one).</summary>
     [HttpPost("password/code")]

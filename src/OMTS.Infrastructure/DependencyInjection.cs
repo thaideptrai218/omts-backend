@@ -71,6 +71,7 @@ public static class DependencyInjection
         services.AddScoped<IRaftRepository, RaftRepository>();
         services.AddScoped<IZoneLicenseRepository, ZoneLicenseRepository>();
         services.AddScoped<IRaftMaterialCostQuery, RaftMaterialCostQuery>();
+        services.AddScoped<IStoredFileReferenceQuery, StoredFileReferenceQuery>();
         services.AddScoped<ISupplierRepository, SupplierRepository>();
         services.AddScoped<IFarmingInputItemRepository, FarmingInputItemRepository>();
         services.AddScoped<IPurchaseReceiptRepository, PurchaseReceiptRepository>();
@@ -90,6 +91,7 @@ public static class DependencyInjection
         services.AddSingleton<ISpreadsheetWriter, ClosedXmlSpreadsheetWriter>();
 
         services.AddScoped<DeploymentBootstrapper>();
+        services.AddScoped<OwnerPasswordReset>();
 
         // FARM-03 expiring zone license reminder (formerly JOB-06)
         services.AddOptions<ZoneLicenseReminderOptions>().Bind(configuration.GetSection(ZoneLicenseReminderOptions.SectionName));
@@ -99,6 +101,14 @@ public static class DependencyInjection
         // Overdue water measurement reminder (formerly JOB-05)
         services.AddOptions<WaterMeasurementOverdueOptions>().Bind(configuration.GetSection(WaterMeasurementOverdueOptions.SectionName));
         services.AddHostedService<WaterMeasurementOverdueJob>();
+
+        // Raft photo and license files no record points to (cooperative logos are never touched)
+        services.AddOptions<OrphanFileCleanupOptions>()
+            .Bind(configuration.GetSection(OrphanFileCleanupOptions.SectionName))
+            .Validate(o => o.GracePeriod >= OrphanFileCleanupOptions.MinimumGracePeriod, $"{OrphanFileCleanupOptions.SectionName}:GracePeriod must be at least 01:00:00.")
+            .ValidateOnStart();
+        services.AddSingleton<OrphanFileCleanupJob>();
+        services.AddHostedService<OrphanFileCleanupHostedService>();
         services.AddHealthChecks().AddReadinessChecks();
 
         return services;

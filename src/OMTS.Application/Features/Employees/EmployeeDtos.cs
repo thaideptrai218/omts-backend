@@ -18,7 +18,10 @@ public sealed record NewEmployeeAccount(
     IReadOnlyList<GrantDraft> Grants,
     SubjectType? SubjectType = null);
 
-/// <param name="AccountId">Link an existing Staff/Owner account (not with <paramref name="Account"/>).</param>
+/// <param name="AccountId">
+/// Link an existing Staff/Owner account (not with <paramref name="Account"/>). On edit, missing or null keeps the linked
+/// account; <c>DELETE /api/employees/{id}/account</c> unlinks it.
+/// </param>
 /// <param name="Account">Create a new staff account in the same save (create only).</param>
 public sealed record SaveEmployeeRequest(
     string? FullName,

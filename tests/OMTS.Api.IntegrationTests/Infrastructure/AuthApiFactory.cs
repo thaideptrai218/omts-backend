@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OMTS.Application.Common.Interfaces.Identity;
@@ -18,6 +19,10 @@ namespace OMTS.Api.IntegrationTests.Infrastructure;
 public class AuthApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _databaseName = $"omts-auth-{Guid.NewGuid()}";
+
+    // One root for every factory, so every host a factory builds (KestrelApiFactory builds two) sees the same
+    // database by name. A root per factory would make EF build an internal service provider per factory.
+    private static readonly InMemoryDatabaseRoot DatabaseRoot = new();
 
     // Generated per test host so no key-like literal is committed (gitleaks).
     private readonly string _signingKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
@@ -39,12 +44,13 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         // Background jobs never run on their own in tests; tests call them directly.
         builder.UseSetting("Jobs:ZoneLicenseReminder:CatchUpOnStart", "false");
         builder.UseSetting("Jobs:WaterMeasurementOverdue:CatchUpOnStart", "false");
+        builder.UseSetting("Jobs:OrphanFileCleanup:Enabled", "false");
         builder.ConfigureLogging(logging => logging.AddProvider(Logs));
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<DbContextOptions<OmtsDbContext>>();
             services.AddDbContext<OmtsDbContext>((provider, options) => options
-                .UseInMemoryDatabase(_databaseName)
+                .UseInMemoryDatabase(_databaseName, DatabaseRoot)
                 .AddOmtsInterceptors(provider));
 
             services.AddControllers().AddApplicationPart(typeof(AuthApiFactory).Assembly);
@@ -73,7 +79,7 @@ public class AuthApiFactory : WebApplicationFactory<Program>
             DisplayName = username,
             PasswordHash = hasher.Hash(password),
             SubjectType = subjectType,
-            PhoneNumber = $"09{Random.Shared.Next(10000000, 99999999)}",
+            PhoneNumber = AcsTestKit.NewPhone(),
             PhoneVerifiedAt = DateTimeOffset.UtcNow,
             StatusId = StatusIds.Account.Active,
         };

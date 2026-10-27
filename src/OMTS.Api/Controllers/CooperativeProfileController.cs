@@ -30,6 +30,7 @@ public sealed class CooperativeProfileController(CooperativeProfileService profi
     [Authorize]
     [RequireCooperativeOwner]
     [RequestSizeLimit(3 * 1024 * 1024)]
+    [UploadField("Logo")]
     [ProducesResponseType<CooperativeProfileView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> UploadLogo(IFormFile? file, CancellationToken cancellationToken)
     {
