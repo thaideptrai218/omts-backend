@@ -78,11 +78,16 @@ bootstrap temporary password. To get every demo login back, reset the environmen
 The demo data also holds the cooperative profile, the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued),
 license documents (valid, expiring within 30 days, expired), about 10 rafts with lanes per zone, 8 employees (one Left),
 5 suppliers, 15 farming input items and 20 purchase receipts of the last 3 months with payments, discounts and a return.
-Phone numbers are fake (`0900 000 0xx`).
+`DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰) and one water measurement a day for the
+30 days before the seed day: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
+26.0 ‰) and one voided reading. The mistyped 2.6 ‰ alerted before its correction, so the inboxes hold four sets of water
+alerts. Phone numbers are fake (`0900 000 0xx`).
 
 Dates are set relative to the day of the first seed and are not moved afterwards:
 - After a few weeks the "expiring" license has expired. `docker compose down -v` gives fresh dates.
 - Receipt codes carry the seed date (`PR-<seed date>-nnn`), not the receipt date.
+- The last water measurement is from the day before the seed: a month later without new ones, the zones are overdue and
+  get the 06:00 reminder (MSG26).
 - The receipt list shows the current calendar year by default. Seeded in January–March, part of the history is in the
   previous year: pass `from`/`to` to see it.
 
@@ -149,6 +154,10 @@ revokes the session. `GET /api/me` and `GET /api/me/permissions` return the call
 zone-scoped permissions. Errors are RFC 7807 problem details whose `code` is the SRS message code
 (`MSG12`, `MSG69`…) and whose `detail` is the SRS English text.
 
+Dates and times are ISO 8601. A time sent without a UTC offset (`2026-10-20T08:00:00`, in JSON or a multipart field)
+is Vietnam time (UTC+7), never the server's time zone or UTC; `Z` or an offset such as `+07:00` is kept. Responses always
+carry the offset. Business dates (`from`/`to` filters, receipt dates) are Vietnam dates.
+
 ### Database (EF Core code-first)
 
 Entities live in `OMTS.Domain`; the DbContext, configurations and migrations live in `OMTS.Infrastructure/Persistence`.
@@ -179,7 +188,9 @@ The OCR Service of the water meter photos (ENV-01) is only faked until its provi
 
 `WaterMeasurementOverdueJob` runs every day at 06:00 (Asia/Ho_Chi_Minh): each In Use zone without a Confirmed water
 measurement for more than one calendar month gets one MSG26 reminder per overdue period (Owners and the zone's staff
-with View on `WATER_MEASUREMENTS`).
+with View on `WATER_MEASUREMENTS`). Like the zone license reminder (07:00), a host started after the run time runs it
+once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A reminder already
+sent is never sent again.
 
 A replaced raft photo or license file is removed right after the save, and the upload of a failed save right away.
 `OrphanFileCleanupJob` runs every day at 03:00 (Asia/Ho_Chi_Minh) and deletes what such a removal left behind: raft
@@ -232,7 +243,8 @@ created by a one-time command run on the server by the deployment operator (not 
 | CORS: the web app calls the API from the browser. Set its origin in every deployed environment; empty means no CORS. Development allows `http://localhost:3000`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`) |
 | Reverse proxy: X-Forwarded-For is trusted only from these addresses (and loopback), so the limits see the real client | `ForwardedHeaders:KnownProxies` (e.g. `10.0.0.4`), `ForwardedHeaders:KnownNetworks` (e.g. `10.0.0.0/24`) |
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG04 and a critical log entry is written (one number or address gets at most 10 codes per hour) | `Verification:DailySmsLimit` (default 500) |
-| Zone license reminder (FARM-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`) |
+| Zone license reminder (FARM-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
+| Overdue water measurement reminder (ENV-01, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
 | Orphan raft photo and license file clean-up (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
 
 ## Contributing

@@ -493,6 +493,7 @@ internal sealed class ZoneRaceApiFactory(SqlServerTestDatabase database) : WebAp
             ["RateLimits:CodeRequestsPerMinute"] = "100000",
             ["RateLimits:LoginsPerMinute"] = "100000",
             ["Jobs:ZoneLicenseReminder:CatchUpOnStart"] = "false",
+            ["Jobs:WaterMeasurementOverdue:CatchUpOnStart"] = "false",
             ["Jobs:OrphanFileCleanup:Enabled"] = "false",
         }));
         builder.ConfigureTestServices(services =>

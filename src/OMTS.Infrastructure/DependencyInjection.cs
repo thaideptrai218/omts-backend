@@ -89,7 +89,6 @@ public static class DependencyInjection
         services.AddFileStorage(configuration);
         services.AddOcr(configuration);
         services.AddSingleton<ISpreadsheetWriter, ClosedXmlSpreadsheetWriter>();
-        services.AddHostedService<WaterMeasurementOverdueJob>();
 
         services.AddScoped<DeploymentBootstrapper>();
         services.AddScoped<OwnerPasswordReset>();
@@ -98,6 +97,10 @@ public static class DependencyInjection
         services.AddOptions<ZoneLicenseReminderOptions>().Bind(configuration.GetSection(ZoneLicenseReminderOptions.SectionName));
         services.AddSingleton<ZoneLicenseReminderJob>();
         services.AddHostedService<ZoneLicenseReminderHostedService>();
+
+        // Overdue water measurement reminder (formerly JOB-05)
+        services.AddOptions<WaterMeasurementOverdueOptions>().Bind(configuration.GetSection(WaterMeasurementOverdueOptions.SectionName));
+        services.AddHostedService<WaterMeasurementOverdueJob>();
 
         // Raft photo and license files no record points to (cooperative logos are never touched)
         services.AddOptions<OrphanFileCleanupOptions>()

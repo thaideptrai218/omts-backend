@@ -25,6 +25,7 @@ public sealed class WaterMeasurementCorrectionService(
     IWaterMeasurementRepository measurements,
     ZoneAccessGuard zoneAccess,
     WaterAlertService alerts,
+    WaterOverdueRearm overdue,
     WaterMeasurementViewBuilder views,
     EditingPresenceTracker editing,
     RowVersionGuard rowVersions,
@@ -56,6 +57,8 @@ public sealed class WaterMeasurementCorrectionService(
             return refused;
         }
 
+        // A correction that moves the answer to the last overdue reminder before the zone's other measurements re-arms it.
+        await overdue.BeforeCorrectionAsync(current, request.MeasuredAt!.Value, cancellationToken);
         var accountId = CallerId();
         var next = new WaterMeasurement
         {
@@ -122,6 +125,8 @@ public sealed class WaterMeasurementCorrectionService(
         }
 
         var fromStatus = measurement.StatusId;
+        // Voiding the measurement that answered the last overdue reminder re-arms it (WaterOverdueRule).
+        await overdue.BeforeVoidAsync(measurement, cancellationToken);
         measurement.StatusId = S.Voided;
         measurement.VoidReason = reason;
         audit.Record(new AuditEntry(WaterMeasurementAudit.Voided, WaterMeasurementAudit.RecordType)

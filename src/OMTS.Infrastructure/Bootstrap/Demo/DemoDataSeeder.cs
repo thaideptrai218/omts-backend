@@ -11,11 +11,12 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 /// <c>seed --bootstrap --demo</c>, which refuses it outside Development. Data is created through the same
 /// application services the API uses, acting as the Cooperative Owner (<see cref="AmbientActor"/>), so
 /// validation, VND rounding, statuses, row versions and audit rows match real use. Idempotent: every step
-/// finds its rows by business code. Water measurements and the labour modules get their own steps later.
+/// finds its rows by business code. The labour modules get their own steps later.
 /// </summary>
 internal static class DemoDataSeeder
 {
-    // Order matters: later steps need the zones, accounts, suppliers and items of earlier ones.
+    // Order matters: later steps need the zones, accounts, suppliers and items of earlier ones (the water alerts go
+    // to the zone staff created before them).
     private static readonly IDemoSeedStep[] Steps =
     [
         new DemoCooperativeProfileStep(),
@@ -27,6 +28,7 @@ internal static class DemoDataSeeder
         new DemoSupplierStep(),
         new DemoInputItemStep(),
         new DemoPurchaseReceiptStep(),
+        new DemoWaterMeasurementStep(),
     ];
 
     public static async Task<IReadOnlyList<string>> SeedAsync(

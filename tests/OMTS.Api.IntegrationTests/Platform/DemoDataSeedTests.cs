@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Application.Common;
+using OMTS.Application.Features.Notifications;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Enums;
 using OMTS.Infrastructure.Bootstrap;
@@ -38,6 +40,8 @@ public class DemoDataSeedTests
         ("SeedReceiptLots", db => db.SeedReceiptLots.CountAsync()),
         ("SupplierPayments", db => db.SupplierPayments.CountAsync()),
         ("PurchaseReturns", db => db.PurchaseReturns.CountAsync()),
+        ("WaterMeasurements", db => db.WaterMeasurements.CountAsync()),
+        ("Notifications", db => db.Notifications.CountAsync()),
         ("AuditEvents", db => db.AuditEvents.CountAsync()),
     ];
 
@@ -127,6 +131,35 @@ public class DemoDataSeedTests
         Assert.True(await db.ZoneComplianceDocuments.AnyAsync(d => d.ExpiryDate > today && d.ExpiryDate <= today.AddDays(30)));
         Assert.True(await db.ZoneComplianceDocuments.AnyAsync(d => d.ExpiryDate < today));
         Assert.True(await db.PurchaseReceipts.AllAsync(r => r.ReceiptDate <= today && r.ReceiptDate >= today.AddDays(-90)));
+
+        await AssertWaterDataAsync(db, today);
+    }
+
+    // ENV (OMTS-214): thresholds and 30 days of readings per In Use zone, three outside the thresholds plus a mistyped
+    // salinity that was corrected (both versions kept), and one voided reading.
+    private static async Task AssertWaterDataAsync(OmtsDbContext db, DateOnly today)
+    {
+        var zones = await db.FarmingZones.Where(z => z.StatusId == StatusIds.Usage.InUse).ToListAsync();
+        Assert.Equal(2, zones.Count);
+        Assert.All(zones, z => Assert.Equal((7.5m, 8.5m, 18m, 32m), (z.PhMin!.Value, z.PhMax!.Value, z.SalinityMin!.Value, z.SalinityMax!.Value)));
+
+        var water = await db.WaterMeasurements.AsNoTracking().ToListAsync();
+        Assert.Equal(61, water.Count);
+        Assert.Equal(59, water.Count(m => m.StatusId == StatusIds.WaterMeasurement.Confirmed));
+        Assert.Single(water, m => m.StatusId == StatusIds.WaterMeasurement.Superseded && m.ThresholdExceeded && m.Salinity == 2.6m);
+        Assert.Single(water, m => m.CorrectedFromMeasurementId is not null && m.StatusId == StatusIds.WaterMeasurement.Confirmed && !m.ThresholdExceeded);
+        Assert.Single(water, m => m.StatusId == StatusIds.WaterMeasurement.Voided && m.VoidReason is { Length: > 0 });
+        Assert.Equal(3, water.Count(m => m.StatusId == StatusIds.WaterMeasurement.Confirmed && m.ThresholdExceeded));
+        Assert.All(water, m => Assert.Equal(7.5m, m.PhMinUsed));
+        foreach (var zone in zones)
+        {
+            var days = water.Where(m => m.ZoneId == zone.Id && m.CorrectedFromMeasurementId is null)
+                .Select(m => BusinessClock.ToBusinessDate(m.MeasuredAt)).ToList();
+            Assert.Equal(30, days.Distinct().Count());
+            Assert.All(days, d => Assert.InRange(d, today.AddDays(-30), today.AddDays(-1)));
+        }
+
+        Assert.True(await db.Notifications.AnyAsync(n => n.Type == NotificationTypes.WaterAlert));
     }
 
     // Each account must really land in the login branch the demo data promises.

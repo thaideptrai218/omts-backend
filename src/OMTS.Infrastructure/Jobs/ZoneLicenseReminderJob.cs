@@ -1,14 +1,12 @@
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using OMTS.Application.Common;
 using OMTS.Application.Features.Farming.Licenses;
 
 namespace OMTS.Infrastructure.Jobs;
 
 /// <summary>"Jobs:ZoneLicenseReminder" section.</summary>
-public sealed class ZoneLicenseReminderOptions
+public sealed class ZoneLicenseReminderOptions : IDailyJobOptions
 {
     public const string SectionName = "Jobs:ZoneLicenseReminder";
 
@@ -58,43 +56,18 @@ public sealed class ZoneLicenseReminderJob(IServiceScopeFactory scopes, ILogger<
     }
 }
 
-/// <summary>Runs <see cref="ZoneLicenseReminderJob"/> once a day at <see cref="ZoneLicenseReminderOptions.RunAt"/>.</summary>
+/// <summary>Runs <see cref="ZoneLicenseReminderJob"/> once a day at <see cref="ZoneLicenseReminderOptions.RunAt"/> (see <see cref="DailyJobHostedService"/>).</summary>
 internal sealed class ZoneLicenseReminderHostedService(
     ZoneLicenseReminderJob job,
     IOptions<ZoneLicenseReminderOptions> options,
     TimeProvider timeProvider,
-    ILogger<ZoneLicenseReminderHostedService> logger) : BackgroundService
+    ILogger<ZoneLicenseReminderHostedService> logger) : DailyJobHostedService(options.Value, timeProvider, logger)
 {
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override string JobName => "Zone license reminder";
+
+    protected override async Task RunOnceAsync(DateOnly today, CancellationToken cancellationToken)
     {
-        var catchUp = options.Value.CatchUpOnStart && IsPastRunTime(timeProvider.GetUtcNow(), options.Value.RunAt);
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            if (!catchUp)
-            {
-                await Task.Delay(DelayUntilNextRun(timeProvider.GetUtcNow(), options.Value.RunAt), timeProvider, stoppingToken);
-            }
-
-            catchUp = false;
-            try
-            {
-                var sent = await job.RunOnceAsync(timeProvider.Today(), stoppingToken);
-                logger.LogInformation("Zone license reminder sent {Count} notices.", sent);
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                logger.LogError(exception, "Zone license reminder run failed.");
-            }
-        }
-    }
-
-    internal static bool IsPastRunTime(DateTimeOffset nowUtc, TimeOnly runAt) =>
-        TimeOnly.FromTimeSpan(nowUtc.ToOffset(BusinessClock.UtcOffset).TimeOfDay) >= runAt;
-
-    internal static TimeSpan DelayUntilNextRun(DateTimeOffset nowUtc, TimeOnly runAt)
-    {
-        var local = nowUtc.ToOffset(BusinessClock.UtcOffset);
-        var next = new DateTimeOffset(local.Date + runAt.ToTimeSpan(), BusinessClock.UtcOffset);
-        return (next > local ? next : next.AddDays(1)) - local;
+        var sent = await job.RunOnceAsync(today, cancellationToken);
+        Logger.LogInformation("Zone license reminder sent {Count} notices.", sent);
     }
 }

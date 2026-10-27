@@ -30,6 +30,8 @@ builder.Services.AddControllers(options =>
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()))
     // Unreadable values answer 400 MSG01 like every other invalid field.
     .ConfigureApiBehaviorOptions(options => options.InvalidModelStateResponseFactory = InvalidModelStateResponse.Create);
+// A time sent without a UTC offset is Vietnam time (UTC+7), in JSON bodies and in Swagger.
+builder.Services.AddOmtsBusinessTime();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOmtsSwagger();
 

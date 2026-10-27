@@ -11,7 +11,8 @@ namespace OMTS.Application.Features.WaterQuality;
 /// Daily overdue water measurement reminder (formerly JOB-05, ENV-01 time event): every In Use zone whose
 /// latest Confirmed measurement is more than one calendar month old (or that has none and was created more
 /// than a month ago) gets MSG26 once per overdue period, in-app and by push, to every active Cooperative Owner
-/// and the zone's staff holding View on WATER_MEASUREMENTS. Drafts, corrected and voided records never count.
+/// and the zone's staff holding View on WATER_MEASUREMENTS. Drafts, corrected and voided records never count; how a
+/// correction or a void re-arms the reminder is described on <see cref="WaterOverdueRule"/>.
 /// </summary>
 public sealed class WaterMeasurementOverdueReminder(
     IWaterMeasurementRepository measurements,
@@ -27,9 +28,11 @@ public sealed class WaterMeasurementOverdueReminder(
     {
         var now = timeProvider.GetUtcNow();
         var reminded = 0;
-        foreach (var (zone, latestConfirmed, confirmedAt) in await measurements.ListInUseZonesWithLatestConfirmedAsync(cancellationToken))
+        foreach (var latest in await measurements.ListInUseZonesWithLatestConfirmedAsync(cancellationToken))
         {
-            if (!WaterOverdueRule.NeedsReminder(latestConfirmed ?? zone.CreatedAt, zone.WaterOverdueRemindedAt, today, confirmedAt))
+            var zone = latest.Zone;
+            var knownAt = await PeriodKnownAtAsync(latest, cancellationToken);
+            if (!WaterOverdueRule.NeedsReminder(latest.LatestConfirmedMeasuredAt ?? zone.CreatedAt, zone.WaterOverdueRemindedAt, today, knownAt))
             {
                 continue;
             }
@@ -49,4 +52,12 @@ public sealed class WaterMeasurementOverdueReminder(
 
         return reminded;
     }
+
+    // A correction (ENV-02) is confirmed now but keeps the reminder state of an earlier version unless it moved the
+    // measurement later than all of them (WaterOverdueRule.PeriodKnownAt); only read when a reminder was already sent.
+    // The chain stops at the version read above, so a correction saved in between is not mixed in.
+    private async Task<DateTimeOffset?> PeriodKnownAtAsync(ZoneLatestWaterMeasurement latest, CancellationToken cancellationToken) =>
+        latest is { LatestIsCorrection: true, LatestId: { } id, Zone.WaterOverdueRemindedAt: not null }
+            ? WaterOverdueRule.PeriodKnownAt(await measurements.GetVersionChainAsync(id, cancellationToken), upTo: id)
+            : latest.LatestConfirmedAt;
 }

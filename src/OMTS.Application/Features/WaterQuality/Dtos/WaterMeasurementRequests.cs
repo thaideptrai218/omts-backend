@@ -5,6 +5,7 @@ namespace OMTS.Application.Features.WaterQuality.Dtos;
 /// it returns the record already saved. <see cref="Confirm"/> = true needs both values and saves the record as
 /// Confirmed at once; false saves a Draft.
 /// </summary>
+/// <param name="MeasuredAt">ISO 8601; without a UTC offset it is Vietnam time (UTC+7), "Z" or "+07:00" is kept as sent.</param>
 public sealed record RecordWaterMeasurementRequest(
     Guid? ClientOperationId,
     DateTimeOffset? MeasuredAt,
@@ -13,9 +14,11 @@ public sealed record RecordWaterMeasurementRequest(
     bool Confirm);
 
 /// <summary>ENV-01 Draft → Confirmed with the final values; an omitted value keeps the draft's value.</summary>
+/// <param name="MeasuredAt">ISO 8601; without a UTC offset it is Vietnam time (UTC+7), "Z" or "+07:00" is kept as sent.</param>
 public sealed record ConfirmWaterMeasurementRequest(DateTimeOffset? MeasuredAt, decimal? Ph, decimal? Salinity);
 
 /// <summary>ENV-02 correction of the latest Confirmed version; <see cref="RecordVersion"/> is the version being edited.</summary>
+/// <param name="MeasuredAt">ISO 8601; without a UTC offset it is Vietnam time (UTC+7), "Z" or "+07:00" is kept as sent.</param>
 public sealed record CorrectWaterMeasurementRequest(
     DateTimeOffset? MeasuredAt,
     decimal? Ph,

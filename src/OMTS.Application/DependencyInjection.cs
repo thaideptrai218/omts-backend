@@ -103,6 +103,7 @@ public static class DependencyInjection
         services.AddScoped<WaterMeasurementQueryService>();
         services.AddScoped<WaterThresholdService>();
         services.AddScoped<WaterMeasurementOverdueReminder>();
+        services.AddScoped<WaterOverdueRearm>();
 
         return services;
     }
