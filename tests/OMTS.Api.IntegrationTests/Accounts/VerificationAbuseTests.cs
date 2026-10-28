@@ -185,7 +185,7 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
 
         // Staff creation (ACS-09): the temporary password is returned once, never logged.
         var zone = await factory.AddZoneAsync(NewCode());
-        var role = await factory.AddRoleAsync($"Zone role {NewCode()}", (PermissionFunctions.WaterMeasurements, true, true, false));
+        await factory.EnsureFixedRolesAsync();
         // The owner's password was just reset by recovery.
         var ownerClient = await factory.LoginAsync(owner.Username, "Reset2026x");
         var username = $"s{NewCode()}";
@@ -194,7 +194,7 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
             displayName = "Nguyễn Văn C",
             username,
             phoneNumber = NewPhone(),
-            grants = new[] { new { zoneId = zone.Id, roleId = role.Id } },
+            grants = new[] { new { zoneId = zone.Id, role = FixedRoles.ZoneManagerCode } },
         });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         var temporaryPassword = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("temporaryPassword").GetString()!;

@@ -138,14 +138,11 @@ public class WaterExportRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
         return new XLWorkbook(await export.Content.ReadAsStreamAsync());
     }
 
-    /// <summary>A Zone Manager with View and Create on WATER_MEASUREMENTS in the zone, whose display name is <paramref name="displayName"/>.</summary>
+    /// <summary>A Zone Manager of the zone whose display name is <paramref name="displayName"/>.</summary>
     private async Task<HttpClient> StaffNamedAsync(FarmingZone zone, string displayName)
     {
-        var role = new Role { Name = $"Water {NewCode()}" };
-        role.Permissions.Add(new RolePermission { FunctionCode = PermissionFunctions.WaterMeasurements, CanView = true, CanCreate = true });
-        await api.UseDbAsync(db => db.Roles.Add(role));
         var account = await api.AddAccountAsync(NewCode(), Password, SubjectType.Staff, a => a.DisplayName = displayName);
-        await api.GrantAsync(account, role, zone);
+        await api.GrantAsync(account, StaffRole.ZoneManager, zone);
         return await api.LoginAsync(account.Username);
     }
 }

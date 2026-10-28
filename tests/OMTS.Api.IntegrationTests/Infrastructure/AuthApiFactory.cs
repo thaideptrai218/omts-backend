@@ -96,35 +96,12 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         return zone;
     }
 
-    /// <summary>Creates a role whose permissions are the given function → actions.</summary>
-    public async Task<Role> AddRoleAsync(string name, params (string Function, bool View, bool Create, bool Edit)[] permissions)
-    {
-        var role = new Role { Name = name };
-        foreach (var (function, view, create, edit) in permissions)
-        {
-            role.Permissions.Add(new RolePermission { FunctionCode = function, CanView = view, CanCreate = create, CanEdit = edit });
-        }
-
-        await UseDbAsync(db => db.Roles.Add(role));
-        return role;
-    }
-
-    /// <summary>Grants <paramref name="role"/> in <paramref name="zone"/>, or in All zones when null.</summary>
-    public async Task<AccessGrant> GrantAsync(Account account, Role role, FarmingZone? zone, Action<AccessGrant>? configure = null)
-    {
-        var grant = new AccessGrant
-        {
-            AccountId = account.Id,
-            RoleId = role.Id,
-            ZoneId = zone?.Id,
-            ScopeType = zone is null ? AccessScopeType.AllZones : AccessScopeType.SpecificZone,
-            EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1),
-            GrantedByAccountId = account.Id,
-        };
-        configure?.Invoke(grant);
-        await UseDbAsync(db => db.AccessGrants.Add(grant));
-        return grant;
-    }
+    /// <summary>
+    /// Grants the fixed <paramref name="role"/> in <paramref name="zone"/>, or in All zones when null, with the real
+    /// rights of the §I.4.4 matrix (BR-FARM-07).
+    /// </summary>
+    public Task<AccessGrant> GrantAsync(Account account, StaffRole role, FarmingZone? zone, Action<AccessGrant>? configure = null) =>
+        FixedRoleTestKit.GrantAsync(this, account, role, zone?.Id, configure: configure);
 
     /// <summary>Runs a change through a fresh context and saves it, as UC11/UC12 would.</summary>
     public async Task UseDbAsync(Action<OmtsDbContext> change)

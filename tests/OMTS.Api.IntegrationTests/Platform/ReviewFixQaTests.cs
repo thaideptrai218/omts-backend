@@ -14,6 +14,7 @@ using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Storage;
+using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Files;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Enums;
@@ -151,16 +152,16 @@ public class ReviewFixQaTests
         Assert.Equal(HttpStatusCode.OK, database.StatusCode);
     }
 
-    // README (after the S3 fix): a re-run recreates a default role whose name no longer exists, creates nothing else.
+    // BR-FARM-07: the fixed roles are found by code, so a re-run creates no role again, even when a row's name changed.
     [Fact]
-    public async Task Bootstrap_rerun_after_a_role_rename_recreates_only_the_missing_default_role()
+    public async Task Bootstrap_rerun_finds_the_fixed_roles_by_code_and_creates_nothing_twice()
     {
         await using var api = BootstrapTests.WithSecrets(new AuthApiFactory());
         await RunBootstrapAsync(api);
         using (var scope = api.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
-            (await db.Roles.SingleAsync(r => r.Name == "Zone Manager")).Name = "Zone Lead";
+            (await db.Roles.SingleAsync(r => r.Code == FixedRoles.ZoneManagerCode)).Name = "Zone Lead";
             await db.SaveChangesAsync();
         }
 
@@ -169,8 +170,9 @@ public class ReviewFixQaTests
         using var check = api.Services.CreateScope();
         var verify = check.ServiceProvider.GetRequiredService<OmtsDbContext>();
         Assert.Equal(DeploymentBootstrapper.Success, outcome.ExitCode);
-        Assert.Equal(1, await verify.Roles.CountAsync(r => r.Name == "Zone Manager"));
-        Assert.Equal(1, await verify.Roles.CountAsync(r => r.Name == "Zone Lead"));
+        Assert.Contains(outcome.Messages, m => m == "Default roles already exist.");
+        Assert.Equal(2, await verify.Roles.CountAsync());
+        Assert.Equal(1, await verify.Roles.CountAsync(r => r.Code == FixedRoles.ZoneManagerCode && r.Name == "Zone Lead"));
         Assert.Equal(1, await verify.Cooperatives.CountAsync());
         Assert.Equal(1, await verify.Accounts.CountAsync(a => a.SubjectType == SubjectType.CooperativeOwner));
     }

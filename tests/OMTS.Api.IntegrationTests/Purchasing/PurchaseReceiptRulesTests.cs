@@ -292,21 +292,21 @@ public class PurchaseReceiptRulesTests(AuthApiFactory factory) : IClassFixture<A
     }
 
     [Fact]
-    public async Task View_only_and_create_only_grants_are_respected()
+    public async Task View_only_role_is_respected_and_any_zone_manager_of_the_zone_completes_a_draft()
     {
         var world = await factory.WorldAsync();
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 10_000)));
-        var viewer = await factory.PurchasingStaffAsync(world.Zone, new Perm(PermissionFunctions.PurchaseReceipts));
+        // The Accountant views purchase receipts only (§I.4.4 PURCHASE-03 R).
+        var viewer = await factory.AccountantAsync(world.Zone);
         await (await viewer.GetAsync($"/api/purchase-receipts/{draft.Id()}")).ReadAsync(HttpStatusCode.OK);
         await (await viewer.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 10_000)))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await viewer.PutAsJsonAsync($"/api/purchase-receipts/{draft.Id()}", world.Body(new LineBody(world.Other, 2, 10_000)))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await viewer.PostAsync($"/api/purchase-receipts/{draft.Id()}/complete", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await viewer.CancelAsync(draft.Id(), "x", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
 
-        // Anyone with Edit in the zone may edit or complete a draft somebody else recorded.
-        var editor = await factory.PurchasingStaffAsync(world.Zone, new Perm(PermissionFunctions.PurchaseReceipts, Edit: true));
-        await (await editor.PostAsync($"/api/purchase-receipts/{draft.Id()}/complete", null)).ReadAsync(HttpStatusCode.OK);
-        await (await editor.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 10_000)))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        // Any Zone Manager of the zone may edit or complete a draft somebody else recorded.
+        var manager = await factory.ZoneManagerAsync(world.Zone);
+        await (await manager.PostAsync($"/api/purchase-receipts/{draft.Id()}/complete", null)).ReadAsync(HttpStatusCode.OK);
     }
 
     [Fact]

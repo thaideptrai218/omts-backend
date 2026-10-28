@@ -122,9 +122,7 @@ public class EmployeeSqlServerTests
         await using var api = await StartAsync(database);
         var (owner, _, cooperative) = await OwnerWithCooperativeAsync(api);
         var zone = await AddZoneAsync(api, cooperative.Id);
-        var role = new Role { Name = $"Tổ trưởng {NewCode()}" };
-        role.Permissions.Add(new RolePermission { FunctionCode = Application.Features.Authorization.PermissionFunctions.Attendance, CanView = true });
-        await ChangeAsync(api, db => db.Roles.Add(role));
+        var role = await api.RoleAsync(StaffRole.ZoneManager);
         var taken = NewPhone();
         await ChangeAsync(api, db => db.Accounts.Add(new Account
         {

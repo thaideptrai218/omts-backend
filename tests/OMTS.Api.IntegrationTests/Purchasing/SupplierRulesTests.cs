@@ -162,25 +162,27 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     }
 
     [Fact]
-    public async Task Callers_without_a_suppliers_grant_get_MSG02_and_a_view_grant_cannot_write()
+    public async Task Callers_without_a_suppliers_right_get_MSG_GEN_08_and_the_accountant_cannot_write()
     {
         var owner = await factory.PurchasingOwnerAsync();
         var supplierId = await owner.CreateSupplierAsync();
         var (zone, _) = await factory.ZoneWithRaftAsync();
 
-        var noGrant = await factory.PurchasingStaffAsync(zone, Perm.Full(PermissionFunctions.PurchaseReceipts));
+        // Both fixed roles read suppliers, so the caller without the right is a trader.
+        var noGrant = await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Password, Domain.Enums.SubjectType.Trader)).Username);
         await (await noGrant.GetAsync("/api/suppliers")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await noGrant.GetAsync($"/api/suppliers/{supplierId}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await noGrant.PostAsJsonAsync("/api/suppliers", new { name = "X", supplierType = "Seed", phoneNumber = NewPhone() })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
 
-        var viewer = await factory.PurchasingStaffAsync(zone, new Perm(PermissionFunctions.Suppliers));
+        // The Accountant only views suppliers, to pick the payee of a supplier payment (default of gap Q4).
+        var viewer = await factory.AccountantAsync(zone);
         await (await viewer.GetAsync($"/api/suppliers/{supplierId}")).ReadAsync(HttpStatusCode.OK);
         await (await viewer.PostAsJsonAsync("/api/suppliers", new { name = "X", supplierType = "Seed", phoneNumber = NewPhone() })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await viewer.PutAsJsonAsync($"/api/suppliers/{supplierId}", new { name = "X", supplierType = "Seed", phoneNumber = NewPhone(), rowVersion = "" })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await viewer.PostAsync($"/api/suppliers/{supplierId}/discontinue", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         Assert.Equal(Domain.Constants.StatusIds.Usage.InUse, (await factory.QueryAsync(db => db.Suppliers.SingleAsync(s => s.Id == supplierId))).StatusId);
 
-        // Supplier debt is INP-06: All zones SUPPLIER_PAYMENTS, so a Zone Manager cannot read it.
+        // Supplier debt is PURCHASE-04: the Zone Manager role does not hold SUPPLIER_PAYMENTS.
         var manager = await factory.ZoneManagerAsync(zone);
         await (await manager.GetAsync($"/api/suppliers/{supplierId}/debt")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await manager.GetAsync("/api/suppliers/debts")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");

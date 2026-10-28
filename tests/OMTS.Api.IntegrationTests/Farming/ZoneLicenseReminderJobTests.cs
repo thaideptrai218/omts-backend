@@ -25,16 +25,13 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
         var owner = await factory.OwnerAsync();
         var zoneA = await factory.ZoneEntityAsync((await owner.Client.CreateZoneAsync()).Id());
         var zoneB = await factory.ZoneEntityAsync((await owner.Client.CreateZoneAsync()).Id());
-        var view = (PermissionFunctions.CultivationCycles, true, false, false);
-
-        var manager = (await factory.StaffAccountAsync(zoneA, null, view)).Account;
-        var everywhere = (await factory.StaffAccountAsync(null, null, view)).Account;
-        var noView = (await factory.StaffAccountAsync(zoneA, null, (PermissionFunctions.CultivationCycles, false, true, true))).Account;
-        var otherFunction = (await factory.StaffAccountAsync(zoneA, null, (PermissionFunctions.WaterMeasurements, true, true, true))).Account;
-        var otherZone = (await factory.StaffAccountAsync(zoneB, null, view)).Account;
-        var revoked = (await factory.StaffAccountAsync(zoneA, g => { g.StatusId = StatusIds.AccessGrant.Revoked; g.RevokedAt = DateTimeOffset.UtcNow; }, view)).Account;
-        var expired = (await factory.StaffAccountAsync(zoneA, g => { g.EffectiveFrom = Today.AddDays(-60); g.EffectiveTo = Today.AddDays(-1); }, view)).Account;
-        var locked = (await factory.StaffAccountAsync(zoneA, null, view)).Account;
+        var manager = (await factory.StaffAccountAsync(zoneA)).Account;
+        var everywhere = (await factory.StaffAccountAsync(null)).Account;
+        // The Accountant role holds no CULTIVATION_CYCLES right (§I.4.4 CYCLE-01…06 No).
+        var accountant = (await factory.StaffAccountAsync(zoneA, StaffRole.Accountant)).Account;
+        var otherZone = (await factory.StaffAccountAsync(zoneB)).Account;
+        var revoked = (await factory.StaffAccountAsync(zoneA, configureGrant: g => { g.StatusId = StatusIds.AccessGrant.Revoked; g.RevokedAt = DateTimeOffset.UtcNow; })).Account;
+        var locked = (await factory.StaffAccountAsync(zoneA)).Account;
         await factory.UpdateAsync<OMTS.Domain.Entities.Identity.Account>(locked.Id, a => a.StatusId = StatusIds.Account.Locked);
 
         var license = await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneIds = [zoneA.Id], EffectiveDate = Today.AddDays(-300), ExpiryDate = Today.AddDays(30) });
@@ -52,7 +49,7 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
         var expected = (await ActiveOwnersAsync()).Append(manager.Id).Append(everywhere.Id).Order().ToList();
         var first = await NoticesAsync(license.Id());
         Assert.Equal(expected, first.Select(n => n.RecipientAccountId).Order());
-        Assert.DoesNotContain(first, n => new[] { noView.Id, otherFunction.Id, otherZone.Id, revoked.Id, expired.Id, locked.Id }.Contains(n.RecipientAccountId));
+        Assert.DoesNotContain(first, n => new[] { accountant.Id, otherZone.Id, revoked.Id, locked.Id }.Contains(n.RecipientAccountId));
         var zoneName = zoneA.Name;
         Assert.All(first, n =>
         {

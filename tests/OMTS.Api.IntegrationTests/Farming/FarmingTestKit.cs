@@ -110,29 +110,22 @@ public static class FarmingTestKit
     }
 
     /// <summary>
-    /// Logged-in staff with one effective grant in <paramref name="zone"/> (All zones when null) of a role holding
-    /// the given permissions (CULTIVATION_CYCLES view/create/edit when none).
+    /// Logged-in staff with one Effective pair of the fixed <paramref name="role"/> in <paramref name="zone"/> (All zones
+    /// when null).
     /// </summary>
-    public static async Task<Actor> StaffAsync(
-        this AuthApiFactory factory, FarmingZone? zone, params (string Function, bool View, bool Create, bool Edit)[] permissions)
+    public static async Task<Actor> StaffAsync(this AuthApiFactory factory, FarmingZone? zone, StaffRole role = StaffRole.ZoneManager)
     {
-        var (staff, grant) = await factory.StaffAccountAsync(zone, null, permissions);
+        var (staff, grant) = await factory.StaffAccountAsync(zone, role);
         return new Actor(await factory.LoginAsync(staff.Username), staff, grant);
     }
 
-    /// <summary>A staff account with one grant, not logged in (staff log in only with an effective grant).</summary>
+    /// <summary>A staff account with one pair, not logged in (staff log in only with an Effective pair).</summary>
     public static async Task<(Account Account, AccessGrant Grant)> StaffAccountAsync(
-        this AuthApiFactory factory, FarmingZone? zone, Action<AccessGrant>? configureGrant,
-        params (string Function, bool View, bool Create, bool Edit)[] permissions)
+        this AuthApiFactory factory, FarmingZone? zone, StaffRole role = StaffRole.ZoneManager, Action<AccessGrant>? configureGrant = null)
     {
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        var role = await factory.AddRoleAsync(NewCode(), permissions.Length > 0 ? permissions : [(PermissionFunctions.CultivationCycles, true, true, true)]);
         return (staff, await factory.GrantAsync(staff, role, zone, configureGrant));
     }
-
-    /// <summary>Every function of the catalog with view, create and edit.</summary>
-    public static (string, bool, bool, bool)[] EveryFunction() =>
-        PermissionFunctions.All.Select(f => (f.Code, true, true, true)).ToArray();
 
     public static async Task<HttpClient> TraderAsync(this AuthApiFactory factory)
     {
