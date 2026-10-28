@@ -30,4 +30,6 @@ public sealed record UpdateCooperativeProfileRequest(
     IReadOnlyList<string>? BusinessLines,
     string? RowVersion);
 
-public sealed record CooperativeProfileSaved(CooperativeProfileView Profile, string Message);
+/// <param name="Message">MSG-GEN-05.</param>
+/// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
+public sealed record CooperativeProfileSaved(CooperativeProfileView Profile, string Message, string MessageCode);

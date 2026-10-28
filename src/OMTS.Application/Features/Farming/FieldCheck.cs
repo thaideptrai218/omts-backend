@@ -1,7 +1,7 @@
 namespace OMTS.Application.Features.Farming;
 
 /// <summary>
-/// Reads request fields and collects the name of every invalid one, so MSG01 can list them all at once
+/// Reads request fields and collects the name of every invalid one, so MSG-GEN-01 can list them all at once
 /// (FARM-02/03/04 "every invalid field listed").
 /// </summary>
 internal sealed class FieldCheck

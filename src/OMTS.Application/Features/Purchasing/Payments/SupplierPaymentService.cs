@@ -139,8 +139,9 @@ public sealed class SupplierPaymentService(
 
         if (payment.ReceiptId is not null || payment.StatusId != StatusIds.SupplierPayment.Recorded)
         {
-            return AppError.Conflict(UserMessages.CannotChangeStatus(
-                "Supplier payment", statusCatalog.DisplayNameOf(payment.StatusId), "Allocated", "only an unallocated Recorded payment can be allocated"));
+            // Only an unallocated Recorded payment can be allocated.
+            return AppError.Conflict(UserMessages.WrongStatus(
+                "Supplier payment", payment.ReceiptId is null ? statusCatalog.DisplayNameOf(payment.StatusId) : "already allocated"));
         }
 
         var receipt = request.ReceiptId is { } receiptId ? await receipts.GetForEditAsync(receiptId, cancellationToken) : null;
@@ -179,8 +180,8 @@ public sealed class SupplierPaymentService(
     {
         if (receipt.StatusId != StatusIds.PurchaseReceipt.Completed)
         {
-            return AppError.Conflict(UserMessages.CannotChangeStatus(
-                "Purchase receipt", statusCatalog.DisplayNameOf(receipt.StatusId), "Paid", "only a Completed receipt can be paid"));
+            // Only a Completed receipt can be paid.
+            return AppError.Conflict(UserMessages.WrongStatus($"Purchase receipt {receipt.Code}", statusCatalog.DisplayNameOf(receipt.StatusId)));
         }
 
         if (!PurchaseMoney.IsThousands(amount))

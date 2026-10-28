@@ -7,7 +7,7 @@ namespace OMTS.Infrastructure.Messaging;
 
 /// <summary>
 /// <c>Sms:Provider = None</c>, the default outside Development until a real provider exists: every send
-/// fails with <c>NOT_CONFIGURED</c>, so callers answer MSG04 instead of reporting a code as sent.
+/// fails with <c>NOT_CONFIGURED</c>, so callers answer MSG-ACCOUNT-13 instead of reporting a code as sent.
 /// </summary>
 internal sealed class UnconfiguredSmsSender(ILogger<UnconfiguredSmsSender> logger) : ISmsSender
 {

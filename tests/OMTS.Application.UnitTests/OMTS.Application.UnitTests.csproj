@@ -26,4 +26,8 @@
     <ProjectReference Include="..\..\src\OMTS.Application\OMTS.Application.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Common\Messages\srs-2710-message-codes.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

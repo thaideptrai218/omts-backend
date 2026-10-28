@@ -26,6 +26,7 @@ public sealed class AccessGrantService(
     IRoleRepository roles,
     IFarmingZoneRepository zones,
     ICurrentUser currentUser,
+    IStatusCatalog statusCatalog,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
@@ -68,7 +69,8 @@ public sealed class AccessGrantService(
 
     /// <summary>
     /// Validates the rows and adds them to the unit of work (used by grant, staff account creation and
-    /// LAB-01). Zone and role must be In Use; overlapping Effective duplicates are refused (MSG03).
+    /// LAB-01). Zone and role must be In Use (a discontinued zone is MSG-GEN-09); overlapping Effective duplicates
+    /// are refused (MSG-GEN-02).
     /// </summary>
     public async Task<Result<IReadOnlyList<AccessGrant>>> AddGrantsAsync(Account account, IReadOnlyList<GrantDraft> drafts, CancellationToken cancellationToken)
     {
@@ -84,9 +86,20 @@ public sealed class AccessGrantService(
                 return AppError.Invalid("Role");
             }
 
-            if (draft.ZoneId is { } zoneId && (!zonesById.TryGetValue(zoneId, out var zone) || zone.StatusId != StatusIds.Usage.InUse))
+            if (draft.ZoneId is { } zoneId)
             {
-                return AppError.Invalid("Zone");
+                if (!zonesById.TryGetValue(zoneId, out var zone))
+                {
+                    return AppError.Invalid("Zone");
+                }
+
+                if (zone.StatusId != StatusIds.Usage.InUse)
+                {
+                    return new AppError(
+                        ErrorKind.Validation,
+                        UserMessages.WrongStatus($"Farming zone {zone.Code}", statusCatalog.DisplayNameOf(zone.StatusId)) with { LegacyCode = MessageCodes.Legacy.Msg01 },
+                        new Dictionary<string, object?> { ["field"] = "Zone" });
+                }
             }
 
             var from = draft.EffectiveFrom ?? today;
@@ -142,7 +155,7 @@ public sealed class AccessGrantService(
 
         if (grant.StatusId == StatusIds.AccessGrant.Revoked)
         {
-            return AppError.Conflict(UserMessages.CannotChangeStatus("Zone-role pair", "Revoked", "Revoked", "the grant is already revoked"));
+            return AppError.Conflict(UserMessages.WrongStatus("Zone-role pair", statusCatalog.DisplayNameOf(grant.StatusId)));
         }
 
         grant.StatusId = StatusIds.AccessGrant.Revoked;

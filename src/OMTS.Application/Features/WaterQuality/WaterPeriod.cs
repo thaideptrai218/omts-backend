@@ -24,10 +24,10 @@ public sealed record WaterPeriod(DateOnly From, DateOnly To)
 
     public int Days => To.DayNumber - From.DayNumber + 1;
 
-    /// <summary><c>to</c> defaults to today and <c>from</c> to <paramref name="defaultFrom"/>(to); from after to is invalid (MSG01).</summary>
+    /// <summary><c>to</c> defaults to today and <c>from</c> to <paramref name="defaultFrom"/>(to); from after to is invalid (MSG-GEN-01).</summary>
     public static Result<WaterPeriod> Parse(string? from, string? to, DateOnly today, Func<DateOnly, DateOnly> defaultFrom)
     {
-        // Dates outside [2000-01-01, today + 1 year] are refused (MSG01) so no instant or period count overflows.
+        // Dates outside [2000-01-01, today + 1 year] are refused (MSG-GEN-01) so no instant or period count overflows.
         var latest = today.AddYears(1);
         if (!TryParse(to, out var parsedTo) || parsedTo < Earliest || parsedTo > latest)
         {

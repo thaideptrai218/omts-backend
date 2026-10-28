@@ -38,7 +38,7 @@ public sealed class RegistrationService(
 
         if (await IsTakenAsync(request.Channel, identifier, cancellationToken))
         {
-            return AppError.Conflict(UserMessages.CannotRegister);
+            return AlreadyRegistered(request.Channel);
         }
 
         return await verification.StartAsync(VerificationPurpose.Registration, request.Channel, identifier, null, cancellationToken);
@@ -59,7 +59,7 @@ public sealed class RegistrationService(
 
         if (await IsTakenAsync(request.Channel, identifier, cancellationToken))
         {
-            return AppError.Conflict(UserMessages.CannotRegister);
+            return AlreadyRegistered(request.Channel);
         }
 
         var token = await verification.ConsumeTokenAsync(
@@ -104,11 +104,18 @@ public sealed class RegistrationService(
         catch (DuplicateRecordException)
         {
             // A parallel registration took the phone or email between the check above and this save.
-            return AppError.Conflict(UserMessages.CannotRegister);
+            return AlreadyRegistered(request.Channel);
         }
 
-        return new TraderRegistered(trader.Id, trader.Username, hidden, hidden ? UserMessages.OldDocumentsHidden.Text : null);
+        // MSG-ACCOUNT-02 (MSG57 before) when several offline profiles share the number (ACCOUNT-01.1).
+        var notice = hidden ? UserMessages.RegisteredWithNewCustomerProfile : null;
+        return new TraderRegistered(trader.Id, trader.Username, hidden, notice?.Text, notice?.Code);
     }
+
+    /// <summary>MSG-ACCOUNT-03 naming the phone number or email, also as <c>field</c>.</summary>
+    private static AppError AlreadyRegistered(VerificationChannel channel) => AppError.Conflict(
+        UserMessages.AlreadyRegistered(ContactInputs.ContactName(channel)),
+        new Dictionary<string, object?> { ["field"] = ContactInputs.FieldName(channel) });
 
     private async Task<bool> IsTakenAsync(VerificationChannel channel, string identifier, CancellationToken cancellationToken) =>
         channel == VerificationChannel.Sms

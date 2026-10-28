@@ -33,7 +33,7 @@ public sealed class AuthService(
     private const int MaxIpAddressLength = 64;
 
     // Verified against the password when the identifier is unknown, so an unknown identifier and a wrong
-    // password take the same time and cannot be told apart (MSG12 gives no hint which field is wrong).
+    // password take the same time and cannot be told apart (MSG-ACCOUNT-05 gives no hint which field is wrong).
     private static string? _unknownAccountHash;
 
     public async Task<AuthResult> LoginAsync(LoginRequest request, ClientInfo client, CancellationToken cancellationToken)
@@ -213,7 +213,7 @@ public sealed class AuthService(
     }
 
     /// <summary>
-    /// Unknown identifiers behave like accounts: same hashing time, and after 5 failures the same MSG69
+    /// Unknown identifiers behave like accounts: same hashing time, and after 5 failures the same MSG-ACCOUNT-06
     /// for 15 minutes, so the lockout cannot be used to find out which identifiers exist.
     /// </summary>
     private AuthResult FailUnknownIdentifier(string identifier, string password)

@@ -26,7 +26,10 @@ public sealed record PurchaseReceiptRow(
 public sealed record PurchaseReceiptTotals(
     int Count, int CompletedCount, decimal Subtotal, decimal Discount, decimal Payable, decimal Returned, decimal Paid, decimal Outstanding);
 
-public sealed record PurchaseReceiptSearchResult(Paged<PurchaseReceiptRow> Page, PurchaseReceiptTotals Totals, DateOnly From, DateOnly To, string? Message);
+/// <param name="Message">MSG-GEN-10 when no receipt matches.</param>
+/// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
+public sealed record PurchaseReceiptSearchResult(
+    Paged<PurchaseReceiptRow> Page, PurchaseReceiptTotals Totals, DateOnly From, DateOnly To, string? Message, string? MessageCode);
 
 public sealed record RaftCostReceipt(Guid ReceiptId, string Code, DateOnly ReceiptDate, decimal MaterialCost);
 
@@ -57,11 +60,14 @@ public sealed class PurchaseReceiptQueryService(
         // Paging and totals are computed by the database; the page number is capped so the offset cannot overflow.
         var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / 100), Math.Clamp(query.PageSize, 1, 100));
         var (found, totals) = await receipts.PageFiguresAsync(filter.Value!, page, pageSize, cancellationToken);
+        // The list always has a period, so an empty one is MSG-GEN-10 (filtered), not MSG-GEN-11.
+        var empty = totals.Count == 0 ? UserMessages.NoDataForFilters("period and filters") : null;
         return new PurchaseReceiptSearchResult(
             new Paged<PurchaseReceiptRow>(found.Select(Row).ToList(), page, pageSize, totals.Count),
             Totals(totals),
             filter.Value!.From!.Value, filter.Value.To!.Value,
-            totals.Count == 0 ? UserMessages.NoData("purchase receipts").Text : null);
+            empty?.Text,
+            empty?.Code);
     }
 
     /// <summary>Raft material cost per raft with the Completed receipts behind it (filters zone, raft, period, item).</summary>

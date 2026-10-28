@@ -73,7 +73,9 @@ public sealed record RoleView(
 
 public sealed record RolePermissionView(string FunctionCode, IReadOnlyList<string> Actions, DataScope DataScope);
 
-/// <param name="ConfirmMessage">MSG09, shown before saving an edit of a role in use.</param>
-public sealed record RoleImpact(int AccountCount, int ZoneCount, bool AllZonesGranted, IReadOnlyList<string> Accounts, string ConfirmMessage);
+/// <param name="ConfirmMessage">MSG-GEN-04, shown before saving an edit of a role in use.</param>
+/// <param name="ConfirmMessageCode">The code of <paramref name="ConfirmMessage"/>.</param>
+public sealed record RoleImpact(
+    int AccountCount, int ZoneCount, bool AllZonesGranted, IReadOnlyList<string> Accounts, string ConfirmMessage, string ConfirmMessageCode);
 
 public sealed record FunctionCatalogItem(string Code, string Name, bool CooperativeWide, bool IsDashboardTile, IReadOnlyList<string> SupportedActions);
