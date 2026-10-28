@@ -34,6 +34,4 @@ public class Customer : AuditableEntity, IHasStatus
 
     public int StatusId { get; set; } = StatusIds.Usage.InUse;
     public Status Status { get; set; } = null!;
-
-    public ICollection<SalesOrder> Orders { get; set; } = [];
 }
