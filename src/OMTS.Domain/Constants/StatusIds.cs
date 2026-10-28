@@ -50,72 +50,8 @@ public static class StatusIds
         public const int Voided = 704;
     }
 
-    public static class SalesOrder
-    {
-        public const int PendingReview = 801;
-        public const int AwaitingCustomer = 802;
-        public const int Confirmed = 803;
-        public const int Harvesting = 804;
-        public const int Harvested = 805;
-        public const int HandedOver = 806;
-        public const int Sold = 807;
-        public const int ReturnRequested = 808;
-        public const int ReturnAccepted = 809;
-        public const int Returned = 810;
-        public const int Rejected = 811;
-        public const int Cancelled = 812;
-    }
-
-    public static class HarvestEvent
-    {
-        public const int Draft = 901;
-        public const int Confirmed = 902;
-    }
-
-    public static class TracePublication
-    {
-        public const int Draft = 1001;
-        public const int Passed = 1002;
-        public const int Published = 1003;
-        public const int NeedsReview = 1004;
-        public const int Superseded = 1005;
-        public const int Withdrawn = 1006;
-    }
-
-    public static class QualityClaim
-    {
-        public const int Pending = 1101;
-        public const int InProgress = 1102;
-        public const int Closed = 1103;
-    }
-
-    public static class PhysicalReturn
-    {
-        public const int Holding = 1201;
-        public const int Assessed = 1202;
-        public const int Disposed = 1203;
-    }
-
-    public static class SaleAdjustment
-    {
-        public const int Draft = 1301;
-        public const int Approved = 1302;
-        public const int Rejected = 1303;
-    }
-
-    public static class PayRule
-    {
-        public const int Draft = 1401;
-        public const int Approved = 1402;
-        public const int Rejected = 1403;
-    }
-
-    public static class LaborSettlement
-    {
-        public const int Draft = 1501;
-        public const int Approved = 1502;
-        public const int Paid = 1503;
-    }
+    // 801–1603 belonged to the SRS 22/10 order, harvest, traceability, claim and labor model (removed in
+    // OMTS-216); new groups take fresh hundreds so a removed id is never reused with another meaning.
 
     public static class PurchaseReceipt
     {
@@ -128,12 +64,5 @@ public static class StatusIds
     {
         public const int Recorded = 1801;
         public const int Cancelled = 1802;
-    }
-
-    public static class MessageDelivery
-    {
-        public const int Sending = 1601;
-        public const int Sent = 1602;
-        public const int Failed = 1603;
     }
 }
