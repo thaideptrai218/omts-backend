@@ -66,8 +66,7 @@ public class EmployeeMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<
     }
 
     // SRS LABOR-01.3.E1: a last working day before a day with attendance "points out the date to fix (MSG-GEN-01)".
-    // Today the API answers MSG-GEN-06 (deviation 10 of the coder), which the SRS uses only in FARM-02 and FARM-04.
-    [Fact(Skip = "QA finding OMTS-216 PR 0.2 #4: the end of employment before later records answers MSG-GEN-06, the SRS cites MSG-GEN-01.")]
+    [Fact]
     public async Task Last_working_day_before_attendance_is_msg_gen_01_naming_the_date()
     {
         var (owner, zone, _) = await SetupAsync(factory);

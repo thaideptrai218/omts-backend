@@ -95,10 +95,7 @@ public sealed class AccessGrantService(
 
                 if (zone.StatusId != StatusIds.Usage.InUse)
                 {
-                    return new AppError(
-                        ErrorKind.Validation,
-                        UserMessages.WrongStatus($"Farming zone {zone.Code}", statusCatalog.DisplayNameOf(zone.StatusId)) with { LegacyCode = MessageCodes.Legacy.Msg01 },
-                        new Dictionary<string, object?> { ["field"] = "Zone" });
+                    return AppError.NotUsableChoice($"Farming zone {zone.Code}", statusCatalog.DisplayNameOf(zone.StatusId), "Zone");
                 }
             }
 

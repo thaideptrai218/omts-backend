@@ -255,7 +255,10 @@ public sealed class EmployeeService(
         return await SavedAsync(employee.Id, null, cancellationToken);
     }
 
-    /// <summary>Employed → Left. Records already made stay; work or attendance after the end date blocks it (MSG-GEN-06).</summary>
+    /// <summary>
+    /// Employed → Left. Records already made stay; work or attendance after the end date blocks it (409 MSG-GEN-01
+    /// "End date" with <c>count</c>, <c>attendanceCount</c> and <c>assignmentCount</c>).
+    /// </summary>
     public async Task<Result<EmploymentChanged>> EndEmploymentAsync(Guid id, EndEmploymentRequest request, CancellationToken cancellationToken)
     {
         // Ending is effective at once (status Left), so the end date is today or earlier.
@@ -280,11 +283,19 @@ public sealed class EmployeeService(
             return same;
         }
 
+        // LABOR-01.3.E1: the date to fix is pointed out (MSG-GEN-01 "End date"; MSG11 before), with the later records.
         var later = await employees.CountLaborRecordsAfterAsync(employee.Id, endDate, cancellationToken);
         if (later.Total > 0)
         {
-            return AppError.Conflict(UserMessages.StillInUse(
-                later.Total, $"attendance records ({later.AttendanceCount}), work assignments ({later.AssignmentCount}) after {endDate:dd/MM/yyyy}"));
+            return AppError.Conflict(
+                UserMessages.Invalid("End date") with { LegacyCode = MessageCodes.Legacy.Msg11 },
+                new Dictionary<string, object?>
+                {
+                    ["field"] = "End date",
+                    ["count"] = later.Total,
+                    ["attendanceCount"] = later.AttendanceCount,
+                    ["assignmentCount"] = later.AssignmentCount,
+                });
         }
 
         employee.StatusId = StatusIds.Employee.Left;

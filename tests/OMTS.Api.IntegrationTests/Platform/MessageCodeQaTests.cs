@@ -34,7 +34,7 @@ public class MessageCodeQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal("The file operation could not be completed. The source data has not changed; please try again.", storage.Detail());
     }
 
-    // RequirePermission: a missing or unreadable zone is MSG-GEN-01 naming the parameter (literal "MSG01" before, without a field).
+    // RequirePermission: a missing or unreadable zone is MSG-GEN-01 naming the field "Zone" (literal "MSG01" before, without a field).
     [Fact]
     public async Task Permission_filter_without_a_zone_answers_msg_gen_01_and_another_zone_msg_gen_08()
     {
@@ -47,9 +47,9 @@ public class MessageCodeQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var denied = await (await staff.Client.GetAsync($"/test-only/qa-messages/zone-from-query?zoneId={other.Id}")).SrsProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08", "MSG02");
         var allowed = await staff.Client.GetAsync($"/test-only/qa-messages/zone-from-query?zoneId={zone.Id}");
 
-        Assert.Equal("zoneId", missing.Str("field"));
-        Assert.Equal("zoneId is missing or invalid. Please check and enter it again.", missing.Detail());
-        Assert.Equal("zoneId", unreadable.Str("field"));
+        Assert.Equal("Zone", missing.Str("field"));
+        Assert.Equal("Zone is missing or invalid. Please check and enter it again.", missing.Detail());
+        Assert.Equal("Zone", unreadable.Str("field"));
         Assert.Equal("You do not have permission to perform this action. Nothing has been changed.", denied.Detail());
         Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
     }

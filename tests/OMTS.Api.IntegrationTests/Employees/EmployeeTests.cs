@@ -127,7 +127,7 @@ public class EmployeeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         var reinstated = await (await owner.PostAsync($"/api/employees/{id}/reinstate", null)).Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal("MSG-GEN-01", await noDate.ErrorCodeAsync());
-        Assert.Equal("MSG-GEN-06", await blocked.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await blocked.ErrorCodeAsync());
         Assert.Equal("Left", ended.GetProperty("employee").GetProperty("status").GetString());
         Assert.Equal("review-lock", ended.GetProperty("followUp").GetProperty("action").GetString());
         Assert.Equal("Employee is Left and cannot be used for this action.",

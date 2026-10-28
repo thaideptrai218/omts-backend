@@ -137,8 +137,7 @@ public class FarmingMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
     }
 
     // SRS FARM-04.0.E3 / MSG-GEN-09 context "adding … a raft of a discontinued zone": the zone is named with MSG-GEN-09.
-    // Today the API answers MSG-GEN-01 "Zone" (RaftService.CreateAsync; FarmingZoneRulesTests asserts it too).
-    [Fact(Skip = "QA finding OMTS-216 PR 0.2 #1: a raft added to a discontinued zone answers MSG-GEN-01, the SRS cites MSG-GEN-09.")]
+    [Fact]
     public async Task Raft_added_to_a_discontinued_zone_is_msg_gen_09_naming_the_zone()
     {
         var owner = await factory.OwnerAsync();

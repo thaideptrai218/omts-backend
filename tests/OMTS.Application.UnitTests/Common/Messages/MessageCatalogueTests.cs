@@ -55,9 +55,17 @@ public sealed class MessageCatalogueTests
             }
             else
             {
-                Assert.True(MessageCodes.Legacy.KeptAsCode.Contains(message.Code), $"{member}: {message.Code} changed code but names no legacy code.");
+                Assert.True(
+                    MessageCodes.Legacy.KeptAsCode.Contains(message.Code) || MessageCodes.NewWithoutLegacyCode.Contains(message.Code),
+                    $"{member}: {message.Code} names no legacy code; list it in MessageCodes.NewWithoutLegacyCode if the situation is new.");
             }
         }
+    }
+
+    [Fact]
+    public void A_new_message_without_legacy_code_is_an_srs_code()
+    {
+        Assert.All(MessageCodes.NewWithoutLegacyCode, code => Assert.Contains(code, SrsCodes.Value));
     }
 
     [Fact]

@@ -45,6 +45,12 @@ public static class MessageCodes
     public const string Labor03 = "MSG-LABOR-03";
 
     /// <summary>
+    /// SRS 27/10 codes for situations that had no message before, so they name no legacy code (e.g. MSG-ACCOUNT-01
+    /// when the trader account is linked to the existing customer profile). Empty for now.
+    /// </summary>
+    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
     /// Codes of the old list. Most are only sent as <c>legacyCode</c> next to the new code, for one release.
     /// <see cref="KeptAsCode"/> lists those still sent as <c>code</c>.
     /// </summary>

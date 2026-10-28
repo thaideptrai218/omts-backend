@@ -45,6 +45,16 @@ public sealed record AppError(ErrorKind Kind, UserMessage Message, IReadOnlyDict
     public static AppError AlreadyExists(string item, Guid existingId) =>
         new(ErrorKind.Conflict, UserMessages.AlreadyExists(item), new Dictionary<string, object?> { ["existingId"] = existingId });
 
+    /// <summary>
+    /// 400 MSG-GEN-09 naming the field: a record chosen in a form is no longer usable, e.g. a Discontinued zone
+    /// (GBR-01; MSG01 before).
+    /// </summary>
+    /// <param name="objectName">e.g. "Farming zone KV01".</param>
+    public static AppError NotUsableChoice(string objectName, string status, string field) => new(
+        ErrorKind.Validation,
+        UserMessages.WrongStatus(objectName, status) with { LegacyCode = MessageCodes.Legacy.Msg01 },
+        new Dictionary<string, object?> { ["field"] = field });
+
     /// <summary>MSG-ACCOUNT-09 naming the field (lower case in the text, as entered in <c>field</c>).</summary>
     /// <param name="field">e.g. "Phone number": the <c>field</c> extension, as in MSG-GEN-01.</param>
     /// <param name="legacyCode">The code the same refusal had before (MSG03 or MSG01).</param>

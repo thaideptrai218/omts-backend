@@ -34,9 +34,9 @@ public class EmployeeStatusAndAuditTests(AuthApiFactory factory) : IClassFixture
         var ended = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = "2026-10-17" });
 
         Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
-        Assert.Equal("MSG-GEN-06", problem.GetProperty("code").GetString());
-        Assert.Equal("Cannot proceed because 1 records are still in use: attendance records (0), work assignments (1) after 15/10/2026. Please handle these records first.",
-            problem.GetProperty("detail").GetString());
+        Assert.Equal(("MSG-GEN-01", "MSG11", "End date"), (problem.GetProperty("code").GetString(), problem.GetProperty("legacyCode").GetString(), problem.GetProperty("field").GetString()));
+        Assert.Equal("End date is missing or invalid. Please check and enter it again.", problem.GetProperty("detail").GetString());
+        Assert.Equal((1, 0, 1), (problem.GetProperty("count").GetInt32(), problem.GetProperty("attendanceCount").GetInt32(), problem.GetProperty("assignmentCount").GetInt32()));
         Assert.Equal(StatusIds.Employee.Working, statusAfterBlock);
         Assert.Equal(HttpStatusCode.OK, ended.StatusCode);
         Assert.Equal(new DateOnly(2026, 10, 17), await factory.QueryAsync(db => db.Employees.Where(e => e.Id == id).Select(e => e.EmploymentEndDate).SingleAsync()));

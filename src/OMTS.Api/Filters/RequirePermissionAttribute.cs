@@ -42,7 +42,8 @@ public sealed class RequirePermissionAttribute(string function, PermissionAction
             var raw = context.RouteData.Values[ZoneParameter]?.ToString() ?? context.HttpContext.Request.Query[ZoneParameter].ToString();
             if (!Guid.TryParse(raw, out var parsed))
             {
-                context.Result = ProblemResults.InvalidField(ZoneParameter);
+                // The field is named as on the screens ("Zone"), not by its query parameter.
+                context.Result = ProblemResults.InvalidField("Zone");
                 return;
             }
 

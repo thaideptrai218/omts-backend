@@ -71,8 +71,13 @@ public sealed class RaftService(
             return AppError.NotFound;
         }
 
+        // FARM-04.0.E3: no raft is added to a Discontinued zone (MSG-GEN-09 naming the zone).
+        if (zone.StatusId != StatusIds.Usage.InUse)
+        {
+            return AppError.NotUsableChoice($"Farming zone {zone.Code}", statusCatalog.DisplayNameOf(zone.StatusId), "Zone");
+        }
+
         var check = new FieldCheck();
-        check.Check(zone.StatusId == StatusIds.Usage.InUse, "Zone");
         // The zone must still be In Use when this save commits: a parallel discontinue then fails with MSG06.
         unitOfWork.MarkChanged(zone);
         var values = Read(request, check, out var lanes, out var drawing);

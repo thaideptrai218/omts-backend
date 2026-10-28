@@ -225,9 +225,9 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
     }
 
     // SRS ACCOUNT-06.0.E2: the wrong entry that cancels the code says so with MSG-ACCOUNT-17, and so does a later entry
-    // on the cancelled code. Today both answer MSG-ACCOUNT-16 (the context split of old MSG16 is not done).
+    // on the cancelled code (both 400, MSG16 before).
     // Recovery is the exception: its ids must stay indistinguishable from random ones (BR-ACCOUNT-07).
-    [Fact(Skip = "QA finding OMTS-216 PR 0.2 #2: the 5th wrong entry answers MSG-ACCOUNT-16, the SRS cites MSG-ACCOUNT-17.")]
+    [Fact]
     public async Task Fifth_wrong_entry_of_a_registration_code_is_msg_account_17()
     {
         var phone = NewPhone();
@@ -249,7 +249,7 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
 
     // MSG-ACCOUNT-17 tells the user to "start again to get a new code"; a start refused by the hourly budget of wrong
     // codes must not answer it (the start itself is what is refused): MSG-ACCOUNT-18 with the retry time.
-    [Fact(Skip = "QA finding OMTS-216 PR 0.2 #3: a start refused after 10 wrong codes answers MSG-ACCOUNT-17 \"start again\".")]
+    [Fact]
     public async Task Start_refused_after_ten_wrong_codes_gives_a_retry_time_instead_of_start_again()
     {
         var phone = NewPhone();
@@ -269,7 +269,8 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         var refused = await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone });
 
         Assert.NotEqual("MSG-ACCOUNT-17", await refused.ErrorCodeAsync());
-        var body = await refused.SrsProblemAsync(HttpStatusCode.TooManyRequests, "MSG-ACCOUNT-18", "TOO_MANY_REQUESTS");
+        // The HTTP status stays 423 (lead decision: statuses unchanged); the old code was MSG69.
+        var body = await refused.SrsProblemAsync(HttpStatusCode.Locked, "MSG-ACCOUNT-18", "MSG69");
         Assert.True(body.GetProperty("retryAfterSeconds").GetInt32() > 0);
     }
 

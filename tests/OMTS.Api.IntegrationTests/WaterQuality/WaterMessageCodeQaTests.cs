@@ -59,7 +59,7 @@ public class WaterMessageCodeQaTests(AuthApiFactory api) : IClassFixture<AuthApi
     // SRS WATER-01.2 / MSG-WATER-01: "could not read one or more values … {indicator_list}". A reading without salinity
     // (here out of range, so treated as not read) answers Success with no warning today; the placeholder is fixed to
     // "pH and salinity" and only used when the OCR Service fails.
-    [Fact(Skip = "QA finding OMTS-216 PR 0.2 #5: a partial OCR read shows no MSG-WATER-01 naming the value not read.")]
+    [Fact(Skip = "QA finding OMTS-216 PR 0.2 #5 (partial OCR read without MSG-WATER-01): deferred to OMTS-219 W1")]
     public async Task Partial_ocr_read_warns_with_msg_water_01_naming_the_value_not_read()
     {
         var z = await api.ZoneAsync();

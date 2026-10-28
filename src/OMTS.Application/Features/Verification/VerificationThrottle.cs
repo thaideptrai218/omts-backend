@@ -43,7 +43,8 @@ public sealed class VerificationThrottle(
     {
         if (recent.Sum(c => c.FailedAttempts) >= VerificationService.MaxFailedAttemptsPerWindow)
         {
-            return VerificationErrors.TooManyAttempts();
+            var oldestFailure = recent.Where(c => c.FailedAttempts > 0).Min(c => c.CreatedAt);
+            return VerificationErrors.WrongCodeBudgetSpent(oldestFailure + VerificationService.BudgetWindow, now);
         }
 
         if (recent.FirstOrDefault(c => now < c.NextResendAt) is { } latest)

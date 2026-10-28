@@ -10,8 +10,25 @@ internal static class VerificationErrors
 {
     public static AppError WrongCode() => new(ErrorKind.Validation, UserMessages.WrongVerificationCode);
 
-    /// <summary>MSG-ACCOUNT-17: the code was entered wrongly too many times and is cancelled.</summary>
+    /// <summary>MSG-ACCOUNT-17 (423): the wrong codes of the last hour leave no attempt, even for a right code.</summary>
     public static AppError TooManyAttempts() => new(ErrorKind.Locked, UserMessages.TooManyWrongCodes);
+
+    /// <summary>MSG-ACCOUNT-17 (400, MSG16 before): the 5th wrong entry cancelled this code; a new one is needed.</summary>
+    public static AppError CancelledByWrongEntries() =>
+        new(ErrorKind.Validation, UserMessages.TooManyWrongCodes with { LegacyCode = MessageCodes.Legacy.Msg16 });
+
+    /// <summary>
+    /// MSG-ACCOUNT-18 (423, MSG69 before): no new request after 10 wrong codes in the hour, until the oldest request
+    /// with a wrong code leaves the hour.
+    /// </summary>
+    public static AppError WrongCodeBudgetSpent(DateTimeOffset nextAllowed, DateTimeOffset now)
+    {
+        var wait = Seconds(nextAllowed, now);
+        return new AppError(
+            ErrorKind.Locked,
+            UserMessages.TooManyCodeRequests(wait) with { LegacyCode = MessageCodes.Legacy.Msg69 },
+            new Dictionary<string, object?> { ["retryAfterSeconds"] = wait });
+    }
 
     /// <summary>MSG-ACCOUNT-13 (GFR-06): the code could not be sent; nothing is changed.</summary>
     public static AppError ServiceDown(VerificationChannel channel) =>

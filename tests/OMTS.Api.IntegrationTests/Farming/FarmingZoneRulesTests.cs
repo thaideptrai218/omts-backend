@@ -122,7 +122,8 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal("MSG-GEN-09", await reactivateInUse.ErrorCodeAsync());
 
         // A Discontinued zone gets no new rafts and leaves the default lookup and map.
-        Assert.Equal(["Zone"], await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/rafts", NewRaftBody())).InvalidFieldsAsync());
+        var noRaft = await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/rafts", NewRaftBody())).ReadAsync(HttpStatusCode.BadRequest);
+        Assert.Equal(("MSG-GEN-09", "MSG01", "Zone"), (noRaft.Text("code"), noRaft.Text("legacyCode"), noRaft.Text("field")));
         Assert.DoesNotContain(zone.Id(), (await owner.Client.GetFromJsonAsync<JsonElement>("/api/zones/lookup")).EnumerateArray().Select(z => z.Id()));
         Assert.Contains(zone.Id(), (await owner.Client.GetFromJsonAsync<JsonElement>("/api/zones/lookup?includeDiscontinued=true")).EnumerateArray().Select(z => z.Id()));
         Assert.DoesNotContain(zone.Id(), (await owner.Client.GetFromJsonAsync<JsonElement>("/api/zones/map")).EnumerateArray().Select(z => z.Id()));
