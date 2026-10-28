@@ -62,26 +62,15 @@ public static class WaterTestKit
         return new WaterZone(api, zone, await api.LoginAsync(owner.Username), owner);
     }
 
-    /// <summary>A Zone Manager whose role holds the given actions on WATER_MEASUREMENTS, granted in <paramref name="zone"/>.</summary>
+    /// <summary>
+    /// Staff with one pair of the fixed <paramref name="role"/> in <paramref name="zone"/>: a Zone Manager holds every
+    /// WATER_MEASUREMENTS action (WATER-01…03), an Accountant none (§I.4.4).
+    /// </summary>
     public static async Task<(HttpClient Client, Account Account)> StaffAsync(
-        this AuthApiFactory api, FarmingZone? zone, bool create = false, bool edit = false, bool export = false, bool view = true)
+        this AuthApiFactory api, FarmingZone zone, StaffRole role = StaffRole.ZoneManager)
     {
-        var role = new Role { Name = $"Water {NewCode()}" };
-        role.Permissions.Add(new RolePermission
-        {
-            FunctionCode = PermissionFunctions.WaterMeasurements,
-            CanView = view,
-            CanCreate = create,
-            CanEdit = edit,
-            OtherPermissions = export ? ["EXPORT"] : [],
-        });
-        await api.UseDbAsync(db => db.Roles.Add(role));
         var account = await api.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        if (zone is not null)
-        {
-            await api.GrantAsync(account, role, zone);
-        }
-
+        await api.GrantAsync(account, role, zone);
         return (await api.LoginAsync(account.Username), account);
     }
 

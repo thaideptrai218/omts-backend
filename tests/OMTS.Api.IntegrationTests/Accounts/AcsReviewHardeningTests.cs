@@ -76,7 +76,7 @@ public class AcsReviewHardeningTests(AuthApiFactory factory) : IClassFixture<Aut
         // Usernames need a letter; a random hex code can be all digits.
         var staff = await factory.AddAccountAsync($"s{NewCode()}", Password, SubjectType.Staff);
         var zone = await factory.AddZoneAsync(NewCode());
-        await factory.GrantAsync(staff, await factory.AddRoleAsync($"R {NewCode()}", ("WATER_MEASUREMENTS", true, false, false)), zone);
+        await factory.GrantAsync(staff, StaffRole.ZoneManager, zone);
         var client = await factory.LoginAsync(owner.Username);
         var profileVersion = (await client.GetFromJsonAsync<JsonElement>("/api/me/profile")).GetProperty("rowVersion").GetString();
         var staffView = await client.GetFromJsonAsync<JsonElement>($"/api/accounts/{staff.Id}");
@@ -98,28 +98,6 @@ public class AcsReviewHardeningTests(AuthApiFactory factory) : IClassFixture<Aut
         Assert.Equal(HttpStatusCode.OK, profile.StatusCode);
         Assert.Equal(HttpStatusCode.OK, staffEdit.StatusCode);
         Assert.Equal("MSG06", await stale.ErrorCodeAsync());
-    }
-
-    // A grant that starts tomorrow would silently never apply once its role is discontinued.
-    [Fact]
-    public async Task Role_with_only_a_future_grant_cannot_be_discontinued()
-    {
-        var owner = await factory.AddAccountAsync(NewCode(), Password);
-        var client = await factory.LoginAsync(owner.Username);
-        var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff, a => a.DisplayName = "Future holder");
-        var role = await factory.AddRoleAsync($"R {NewCode()}", ("WATER_MEASUREMENTS", true, false, false));
-        await factory.GrantAsync(staff, role, await factory.AddZoneAsync(NewCode()), g =>
-        {
-            g.EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3));
-            g.StatusId = StatusIds.AccessGrant.Effective;
-        });
-
-        var response = await client.PostAsync($"/api/roles/{role.Id}/discontinue", null);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
-
-        Assert.Equal("MSG-GEN-06", problem.GetProperty("code").GetString());
-        Assert.Contains("1 records", problem.GetProperty("detail").GetString());
-        Assert.Contains("Future holder", problem.GetProperty("detail").GetString());
     }
 
     // Many accounts cannot flood one number: sends to a target are capped across accounts and purposes.

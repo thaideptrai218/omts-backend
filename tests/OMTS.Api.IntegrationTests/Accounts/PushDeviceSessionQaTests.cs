@@ -78,7 +78,7 @@ public class PushDeviceSessionQaTests
         await using var api = new AuthApiFactory();
         var owner = await api.LoginAsync((await api.AddAccountAsync(NewCode(), Password)).Username);
         var staff = await api.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        var role = await api.AddRoleAsync($"Water {NewCode()}", (PermissionFunctions.WaterMeasurements, true, true, false));
+        var role = StaffRole.ZoneManager;
         await api.GrantAsync(staff, role, await api.AddZoneAsync(NewCode()));
         using var staffPhone = await LoginAndRegisterAsync(api.CreateClient(), staff.Username, "staff-phone");
         var beforeLock = await NotifyAsync(api, staff.Id);

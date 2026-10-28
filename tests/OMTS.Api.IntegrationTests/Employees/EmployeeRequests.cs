@@ -1,9 +1,9 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using OMTS.Api.IntegrationTests.Infrastructure;
-using OMTS.Application.Features.Authorization;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Enums;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
 namespace OMTS.Api.IntegrationTests.Employees;
@@ -15,7 +15,7 @@ internal static class EmployeeRequests
     {
         await factory.EnsureCooperativeAsync();
         var owner = await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Password)).Username);
-        var role = await factory.AddRoleAsync($"Z {NewCode()}", (PermissionFunctions.Attendance, true, true, true));
+        var role = await factory.RoleAsync(StaffRole.ZoneManager);
         return (owner, await factory.AddZoneAsync(NewCode()), role);
     }
 
@@ -37,7 +37,10 @@ internal static class EmployeeRequests
         new { bankName = "Vietcombank", accountNumber = number, accountHolderName = "Nguyen Van A" };
 
     public static object AccountBlock(string username, FarmingZone? zone, Role role, string? phoneNumber = null) =>
-        new { username, phoneNumber, grants = new[] { new { zoneId = zone?.Id, roleId = role.Id } } };
+        AccountBlock(username, zone, role.Id, phoneNumber);
+
+    public static object AccountBlock(string username, FarmingZone? zone, Guid roleId, string? phoneNumber = null) =>
+        new { username, phoneNumber, grants = new[] { new { zoneId = zone?.Id, roleId } } };
 
     /// <summary>Creates the employee and returns the saved body (fails the test when it is not 201).</summary>
     public static async Task<JsonElement> CreateAsync(HttpClient owner, Dictionary<string, object?> body)

@@ -299,7 +299,7 @@ public class DemoDataSeedQaTests
         var receipts = await db.PurchaseReceipts.Select(r => new { r.Id, r.ReceiptDate, r.StatusId }).ToListAsync();
         var payments = await db.SupplierPayments.Select(p => new { p.Id, p.PaymentDate, p.StatusId }).ToListAsync();
         var returns = await db.PurchaseReturns.Select(r => new { r.Id, r.ReturnDate }).ToListAsync();
-        var grants = await db.AccessGrants.Select(g => new { g.Id, g.EffectiveFrom, g.EffectiveTo }).ToListAsync();
+        var grants = await db.AccessGrants.Select(g => new { g.Id, g.StatusId, g.RevokedAt }).ToListAsync();
         var employees = await db.Employees.Select(e => new { e.Id, e.StatusId, e.EmploymentEndDate }).ToListAsync();
         var water = await db.WaterMeasurements.Select(m => new { m.Id, m.MeasuredAt, m.StatusId, m.ConfirmedAt }).ToListAsync();
 

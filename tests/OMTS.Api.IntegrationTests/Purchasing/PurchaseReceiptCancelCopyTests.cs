@@ -138,14 +138,15 @@ public class PurchaseReceiptCancelCopyTests(AuthApiFactory factory) : IClassFixt
     }
 
     [Fact]
-    public async Task Cancel_needs_the_delete_action_in_the_receipt_zone()
+    public async Task Cancel_needs_a_zone_manager_pair_in_the_receipt_zone()
     {
         var world = await factory.WorldAsync();
         var receipt = await world.CompletedAsync(0, 0, new LineBody(world.Other, 1, 10_000));
         var (otherZone, _) = await factory.ZoneWithRaftAsync();
 
-        var noDelete = await factory.PurchasingStaffAsync(world.Zone, new Perm(PermissionFunctions.PurchaseReceipts, true, true, true));
-        await (await noDelete.CancelAsync(receipt.Id(), "Wrong", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        // The Accountant only views purchase receipts (§I.4.4 PURCHASE-03 R, PURCHASE-06 No).
+        var accountant = await factory.AccountantAsync(world.Zone);
+        await (await accountant.CancelAsync(receipt.Id(), "Wrong", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         var otherManager = await factory.ZoneManagerAsync(otherZone);
         await (await otherManager.CancelAsync(receipt.Id(), "Wrong", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await otherManager.PostAsync($"/api/purchase-receipts/{receipt.Id()}/copy", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");

@@ -58,7 +58,7 @@ public sealed class FarmingSqlServerHost : IAsyncDisposable
         return client;
     }
 
-    /// <summary>Logged-in staff (verified phone) with one effective grant in the zone of a role viewing cultivation cycles.</summary>
+    /// <summary>Logged-in staff (verified phone) with one Effective Zone Manager pair in the zone.</summary>
     public async Task<Actor> StaffInZoneAsync(Guid zoneId)
     {
         using var scope = Api.Services.CreateScope();
@@ -68,19 +68,8 @@ public sealed class FarmingSqlServerHost : IAsyncDisposable
             PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher>().Hash(Password),
             PhoneNumber = NewPhone(), PhoneVerifiedAt = DateTimeOffset.UtcNow,
         };
-        var role = new Role { Name = NewCode() };
-        role.Permissions.Add(new RolePermission { FunctionCode = "CULTIVATION_CYCLES", CanView = true });
-        var grant = new AccessGrant
-        {
-            AccountId = staff.Id, RoleId = role.Id, ZoneId = zoneId, ScopeType = AccessScopeType.SpecificZone,
-            EffectiveFrom = FarmingTestKit.Today.AddDays(-1), GrantedByAccountId = Owner.Account.Id,
-        };
-        await UseDbAsync(db =>
-        {
-            db.Accounts.Add(staff);
-            db.Roles.Add(role);
-            db.AccessGrants.Add(grant);
-        });
+        await UseDbAsync(db => db.Accounts.Add(staff));
+        var grant = await Api.GrantAsync(staff, StaffRole.ZoneManager, zoneId, Owner.Account.Id);
         return new Actor(await LoginAsync(staff.Username), staff, grant);
     }
 

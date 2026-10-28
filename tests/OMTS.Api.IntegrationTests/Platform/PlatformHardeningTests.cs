@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Interfaces.Messaging;
+using OMTS.Application.Features.Authorization;
 using OMTS.Infrastructure.Bootstrap;
 using OMTS.Infrastructure.Messaging.Fakes;
 using OMTS.Infrastructure.Persistence;
@@ -15,20 +16,30 @@ namespace OMTS.Api.IntegrationTests.Platform;
 /// <summary>Review follow-ups of OMTS-200: probes, providers outside Development, file store failures.</summary>
 public class PlatformHardeningTests
 {
-    // /health/ready depends on business data; platform probes use /health/db, which a role rename cannot turn red.
+    // /health/ready checks the fixed role rows by code, so a renamed row stays green; only a missing row turns it red.
+    // Platform probes use /health/db, which even that cannot turn red.
     [Fact]
-    public async Task Database_probe_stays_green_when_a_default_role_is_renamed()
+    public async Task Readiness_finds_the_fixed_roles_by_code_and_the_database_probe_stays_green_without_one()
     {
         await using var api = BootstrapTests.WithSecrets(new AuthApiFactory());
         using (var scope = api.Services.CreateScope())
         {
             await scope.ServiceProvider.GetRequiredService<DeploymentBootstrapper>().RunAsync(false, CancellationToken.None);
             var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
-            (await db.Roles.SingleAsync(r => r.Name == "Zone Manager")).Name = "Zone Lead";
+            (await db.Roles.SingleAsync(r => r.Code == FixedRoles.ZoneManagerCode)).Name = "Zone Lead";
             await db.SaveChangesAsync();
         }
 
         var client = api.CreateClient();
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/health/ready")).StatusCode);
+
+        using (var scope = api.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
+            db.Roles.Remove(await db.Roles.SingleAsync(r => r.Code == FixedRoles.AccountantCode));
+            await db.SaveChangesAsync();
+        }
+
         var ready = await client.GetAsync("/health/ready");
         var database = await client.GetAsync("/health/db");
 

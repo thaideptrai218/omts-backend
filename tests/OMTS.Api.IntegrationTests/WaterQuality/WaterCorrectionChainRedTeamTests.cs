@@ -19,7 +19,7 @@ public class WaterCorrectionChainRedTeamTests(AuthApiFactory api) : IClassFixtur
     public async Task Client_still_on_version_two_of_a_three_version_chain_gets_MSG06_naming_version_three()
     {
         var z = await api.ZoneAsync();
-        var (manager, _) = await api.StaffAsync(z.Zone, edit: true);
+        var (manager, _) = await api.StaffAsync(z.Zone);
         var v1 = await z.RecordedAsync(9.1m, 20m);
         var v2 = await (await manager.CorrectAsync(v1.Id(), 7.5m, 20m, recordVersion: 1)).Content.ReadFromJsonAsync<JsonElement>();
         var v3Response = await z.Owner.CorrectAsync(v2.Id(), 7.6m, 20m, recordVersion: 2, reason: "Đo lại");
@@ -158,7 +158,7 @@ public class WaterCorrectionChainRedTeamTests(AuthApiFactory api) : IClassFixtur
     public async Task Voiding_clears_the_voiders_editing_indicator()
     {
         var z = await api.ZoneAsync();
-        var (manager, _) = await api.StaffAsync(z.Zone, edit: true);
+        var (manager, _) = await api.StaffAsync(z.Zone);
         var confirmed = await z.RecordedAsync(7m, 20m);
         await manager.PostAsync($"/api/water-measurements/{confirmed.Id()}/editing", null);
         var before = await z.Owner.GetFromJsonAsync<JsonElement>($"/api/water-measurements/{confirmed.Id()}");

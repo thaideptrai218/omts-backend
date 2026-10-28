@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using OMTS.Api.IntegrationTests.Infrastructure;
-using OMTS.Application.Features.Authorization;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Enums;
@@ -88,21 +87,25 @@ public class AccessMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal("Account is Locked and cannot be used for this action.", again.Detail());
     }
 
-    // Roles live until PR 0.3: the impact carries MSG-GEN-04 (MSG09 before) and a held role MSG-GEN-06 (MSG11 before).
+    // PR 0.3 (BR-FARM-07): roles are fixed, so the role impact (MSG-GEN-04) and the held-role refusal (MSG-GEN-06) are
+    // gone. FARM-05 gains two refusals in the same message family: a Locked account (FARM-05.0.E2, MSG-GEN-09) and a pair
+    // under an All zones pair of the same role (BR-FARM-08 (A), MSG-GEN-02).
     [Fact]
-    public async Task Role_impact_carries_msg_gen_04_and_a_held_role_cannot_be_discontinued_with_msg_gen_06()
+    public async Task Pair_for_a_locked_account_is_msg_gen_09_and_a_pair_under_an_all_zones_pair_msg_gen_02()
     {
         var (owner, zone, role) = await SetupAsync();
+        var locked = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff, a => a.StatusId = StatusIds.Account.Locked);
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        await factory.GrantAsync(staff, role, zone);
+        var allZones = await (await owner.PostAsJsonAsync($"/api/accounts/{staff.Id}/grants", new { zoneId = (Guid?)null, roleId = role.Id })).BodyAsync(HttpStatusCode.Created);
 
-        var impact = await (await owner.GetAsync($"/api/roles/{role.Id}/impact")).BodyAsync(HttpStatusCode.OK);
-        var held = await (await owner.PostAsync($"/api/roles/{role.Id}/discontinue", null)).SrsProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-06", "MSG11");
+        var toLocked = await (await owner.PostAsJsonAsync($"/api/accounts/{locked.Id}/grants", new { zoneId = zone.Id, roleId = role.Id }))
+            .SrsProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09", "MSG61");
+        var underAllZones = await (await owner.PostAsJsonAsync($"/api/accounts/{staff.Id}/grants", new { zoneId = zone.Id, roleId = role.Id }))
+            .SrsProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02", "MSG03");
 
-        Assert.Equal("MSG-GEN-04", impact.Str("confirmMessageCode"));
-        Assert.Equal("Are you sure you want to edit this role? This action is recorded in the audit log.", impact.Str("confirmMessage"));
-        Assert.StartsWith("Cannot proceed because 1 records are still in use: ", held.Detail());
-        Assert.EndsWith(". Please handle these records first.", held.Detail());
+        Assert.Equal("Account is Locked and cannot be used for this action.", toLocked.Detail());
+        Assert.Equal("Zone-role pair already exists. Your entries are kept: change them, or open the existing record.", underAllZones.Detail());
+        Assert.Equal(allZones.GetProperty("id").GetGuid(), underAllZones.GetProperty("existingId").GetGuid());
     }
 
     private async Task<(HttpClient Owner, FarmingZone Zone, OMTS.Domain.Entities.Identity.Role Role)> SetupAsync()
@@ -110,7 +113,7 @@ public class AccessMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<Au
         await factory.EnsureCooperativeAsync();
         var owner = await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Password)).Username);
         var zone = await factory.AddZoneAsync(NewCode());
-        var role = await factory.AddRoleAsync($"R {NewCode()}", (PermissionFunctions.WaterMeasurements, true, false, false));
+        var role = await factory.RoleAsync(StaffRole.ZoneManager);
         return (owner, zone, role);
     }
 
