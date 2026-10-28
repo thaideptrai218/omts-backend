@@ -254,11 +254,11 @@ public sealed class AuthService(
     private void VerifyAgainstDummyHash(string password) =>
         passwordHasher.Verify(_unknownAccountHash ??= passwordHasher.Hash(Guid.NewGuid().ToString()), password);
 
-    /// <summary>Staff can log in only while they hold at least one effective zone–role pair (ACS-02).</summary>
+    /// <summary>Staff can log in only while they hold at least one Effective zone–role pair (ACCOUNT-02 step 4, AC-01).</summary>
     private Task<bool> HasEffectiveAccessAsync(Account account, CancellationToken cancellationToken) =>
         account.SubjectType != SubjectType.Staff
             ? Task.FromResult(true)
-            : grants.HasEffectiveGrantAsync(account.Id, timeProvider.Today(), cancellationToken);
+            : grants.HasEffectiveGrantAsync(account.Id, cancellationToken);
 
     private static string? Truncate(string? value, int maxLength) =>
         value is { Length: > 0 } && value.Length > maxLength ? value[..maxLength] : value;

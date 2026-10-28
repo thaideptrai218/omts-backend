@@ -59,4 +59,6 @@ public sealed record ProfileView(
     IReadOnlyList<ProfileGrantView> Grants,
     string RowVersion);
 
-public sealed record ProfileGrantView(string Role, Guid? ZoneId, string? ZoneName, bool AllZones);
+/// <param name="Role">Display name of the fixed role.</param>
+/// <param name="RoleCode">ZONE_MANAGER or ACCOUNTANT.</param>
+public sealed record ProfileGrantView(string Role, string RoleCode, Guid? ZoneId, string? ZoneName, bool AllZones);

@@ -1,212 +1,30 @@
-using OMTS.Application.Common;
-using OMTS.Application.Common.Concurrency;
-using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
-using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.AccessManagement.Dtos;
-using OMTS.Application.Features.Audit;
-using OMTS.Application.Features.Audit.Models;
-using OMTS.Domain.Constants;
+using OMTS.Application.Features.Authorization;
 using OMTS.Domain.Entities.Identity;
 
 namespace OMTS.Application.Features.AccessManagement;
 
 /// <summary>
-/// ACS-10 – the Cooperative Owner defines roles with permissions per catalog function (dashboard tiles
-/// included), copies them, and discontinues instead of deleting. Edits apply at once to every holder.
+/// The fixed roles, read only (BR-FARM-07, AC-02): roles are not created, edited, copied or discontinued in OMTS. Each
+/// row shows the permissions of the §I.4.4 matrix (<see cref="FixedRoles"/>).
 /// </summary>
-public sealed class RoleService(
-    IRoleRepository roles,
-    IAccessGrantRepository grants,
-    IStatusCatalog statusCatalog,
-    RowVersionGuard rowVersions,
-    AuditLogService audit,
-    IUnitOfWork unitOfWork,
-    TimeProvider timeProvider)
+public sealed class RoleService(IRoleRepository roles)
 {
-    public const int MaxNameLength = 100;
-    public const int MaxDescriptionLength = 1000;
-
-    public async Task<IReadOnlyList<RoleView>> ListAsync(int? statusId, CancellationToken cancellationToken) =>
-        (await roles.ListAsync(statusId, cancellationToken)).Select(View).ToList();
+    public async Task<IReadOnlyList<RoleView>> ListAsync(CancellationToken cancellationToken) =>
+        (await roles.ListAsync(cancellationToken)).Select(View).ToList();
 
     public async Task<Result<RoleView>> GetAsync(Guid id, CancellationToken cancellationToken) =>
         await roles.GetByIdAsync(id, cancellationToken) is { } role ? View(role) : AppError.NotFound;
 
-    /// <param name="beforeSave">Extra records for the same save (the copy's audit row).</param>
-    public async Task<Result<RoleView>> CreateAsync(SaveRoleRequest request, CancellationToken cancellationToken, Action<Role>? beforeSave = null)
-    {
-        var checkedRequest = await ValidateAsync(request, null, cancellationToken);
-        if (!checkedRequest.IsSuccess)
-        {
-            return checkedRequest.Error!;
-        }
-
-        var (name, description) = checkedRequest.Value!;
-        var role = new Role { Name = name, Description = description };
-        roles.Add(role);
-        foreach (var row in RoleMatrix.Apply(role, request.Permissions))
-        {
-            role.Permissions.Add(row);
-        }
-
-        audit.Record(new AuditEntry("Role.Created", nameof(Role))
-        {
-            RecordId = role.Id,
-            RecordCode = role.Name,
-            After = new { role.Name, role.Description, Permissions = RoleMatrix.View(role) },
-        });
-        beforeSave?.Invoke(role);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return View(role);
-    }
-
-    public async Task<Result<RoleView>> UpdateAsync(Guid id, SaveRoleRequest request, CancellationToken cancellationToken)
-    {
-        var role = await roles.GetByIdAsync(id, cancellationToken);
-        if (role is null)
-        {
-            return AppError.NotFound;
-        }
-
-        var checkedRequest = await ValidateAsync(request, role.Id, cancellationToken);
-        if (!checkedRequest.IsSuccess)
-        {
-            return checkedRequest.Error!;
-        }
-
-        if (await rowVersions.CheckAsync(role, request.RowVersion, cancellationToken) is { } conflict)
-        {
-            return conflict;
-        }
-
-        var before = new { role.Name, role.Description, Permissions = RoleMatrix.View(role) };
-        (role.Name, role.Description) = checkedRequest.Value!;
-        foreach (var row in RoleMatrix.Apply(role, request.Permissions))
-        {
-            roles.AddPermission(row);
-        }
-
-        // Touch the role itself so its row version moves even when only permission rows changed.
-        role.UpdatedAt = timeProvider.GetUtcNow();
-        audit.Record(new AuditEntry("Role.Updated", nameof(Role))
-        {
-            RecordId = role.Id,
-            RecordCode = role.Name,
-            Before = before,
-            After = new { role.Name, role.Description, Permissions = RoleMatrix.View(role) },
-        });
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return View(role);
-    }
-
-    /// <summary>A new role pre-filled from the source role's matrix, with its own unique name.</summary>
-    public async Task<Result<RoleView>> CopyAsync(Guid id, CopyRoleRequest request, CancellationToken cancellationToken)
-    {
-        var source = await roles.GetByIdAsync(id, cancellationToken);
-        if (source is null)
-        {
-            return AppError.NotFound;
-        }
-
-        // Recorded before the create's save, so the role and "Role.Copied" are stored together or not at all.
-        return await CreateAsync(
-            new SaveRoleRequest(request.Name, request.Description ?? source.Description, RoleMatrix.ToInputs(source)),
-            cancellationToken,
-            role => audit.Record(new AuditEntry("Role.Copied", nameof(Role)) { RecordId = role.Id, RecordCode = role.Name, After = new { CopiedFrom = source.Name } }));
-    }
-
-    /// <summary>
-    /// In Use → Discontinued only when no Effective grant uses the role, including grants that start later
-    /// (they would silently never apply). MSG-GEN-06 counts and lists the accounts holding them.
-    /// </summary>
-    public async Task<Result<RoleView>> DiscontinueAsync(Guid id, CancellationToken cancellationToken)
-    {
-        var role = await roles.GetByIdAsync(id, cancellationToken);
-        if (role is null)
-        {
-            return AppError.NotFound;
-        }
-
-        var holders = await grants.GetCurrentOrFutureForRoleAsync(role.Id, timeProvider.Today(), cancellationToken);
-        if (holders.Count > 0)
-        {
-            var names = holders.Select(g => g.Account.DisplayName).Distinct().ToList();
-            return AppError.Conflict(UserMessages.StillInUse(names.Count, string.Join(", ", names)));
-        }
-
-        return await ChangeStatusAsync(role, StatusIds.Usage.InUse, StatusIds.Usage.Discontinued, cancellationToken);
-    }
-
-    public async Task<Result<RoleView>> ReactivateAsync(Guid id, CancellationToken cancellationToken) =>
-        await roles.GetByIdAsync(id, cancellationToken) is { } role
-            ? await ChangeStatusAsync(role, StatusIds.Usage.Discontinued, StatusIds.Usage.InUse, cancellationToken)
-            : AppError.NotFound;
-
-    /// <summary>Accounts and zones an edit would affect, for the MSG-GEN-04 confirmation.</summary>
-    public async Task<Result<RoleImpact>> ImpactAsync(Guid id, CancellationToken cancellationToken)
-    {
-        if (await roles.GetByIdAsync(id, cancellationToken) is null)
-        {
-            return AppError.NotFound;
-        }
-
-        var holders = await grants.GetCurrentOrFutureForRoleAsync(id, timeProvider.Today(), cancellationToken);
-        return new RoleImpact(
-            holders.Select(g => g.AccountId).Distinct().Count(),
-            holders.Where(g => g.ZoneId is not null).Select(g => g.ZoneId).Distinct().Count(),
-            holders.Any(g => g.ZoneId is null),
-            holders.Select(g => g.Account.DisplayName).Distinct().ToList(),
-            UserMessages.ConfirmRoleEdit.Text,
-            UserMessages.ConfirmRoleEdit.Code);
-    }
-
-    private async Task<Result<RoleView>> ChangeStatusAsync(Role role, int from, int to, CancellationToken cancellationToken)
-    {
-        if (role.StatusId != from)
-        {
-            return AppError.Conflict(UserMessages.WrongStatus("Role", statusCatalog.DisplayNameOf(role.StatusId)));
-        }
-
-        role.StatusId = to;
-        audit.RecordStatusChange(nameof(Role), role.Id, role.Name, from, to);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return View(role);
-    }
-
-    private async Task<Result<(string Name, string? Description)>> ValidateAsync(SaveRoleRequest request, Guid? roleId, CancellationToken cancellationToken)
-    {
-        var name = request.Name?.Trim();
-        if (string.IsNullOrEmpty(name) || name.Length > MaxNameLength)
-        {
-            return AppError.Invalid("Role name");
-        }
-
-        var description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
-        if (description?.Length > MaxDescriptionLength)
-        {
-            return AppError.Invalid("Description");
-        }
-
-        if (RoleMatrix.Validate(request.Permissions) is { } invalid)
-        {
-            return invalid;
-        }
-
-        if (await roles.FindByNameAsync(name, cancellationToken) is { } existing && existing.Id != roleId)
-        {
-            return AppError.AlreadyExists("Role", existing.Id);
-        }
-
-        return (name, description);
-    }
-
-    private RoleView View(Role role) => new(
+    private static RoleView View(Role role) => new(
         role.Id,
+        role.Code,
         role.Name,
         role.Description,
-        statusCatalog.DisplayNameOf(role.StatusId),
-        RoleMatrix.View(role),
-        RowVersionGuard.Encode(role.RowVersion));
+        (FixedRoles.FindByCode(role.Code)?.Permissions ?? [])
+            .Select(p => new RolePermissionView(p.FunctionCode, p.Actions.Select(a => a.ToString()).ToList()))
+            .OrderBy(p => p.FunctionCode)
+            .ToList());
 }

@@ -7,8 +7,10 @@ namespace OMTS.Application.Features.Farming;
 
 /// <summary>
 /// Who may read zones and rafts (FARM-02, FARM-04 lookups and the raft condition view): the Cooperative
-/// Owner everywhere; staff in the zones of their effective zone–role grants, of any role, or everywhere with
-/// an All zones grant. Zone A never opens zone B (NFR-01). Traders and public viewers see nothing.
+/// Owner everywhere; staff in the zones of their Effective zone–role pairs, of either fixed role, or everywhere with
+/// an All zones pair. Zone A never opens zone B (NFR-01). Traders and public viewers see nothing. The grants of
+/// <see cref="AccountAccess"/> are only the Effective pairs of a fixed role (the persistence filter of BR-FARM-07), so a
+/// pair of an old role row opens no zone.
 /// </summary>
 public sealed class FarmingLookupAccess(ICurrentUser currentUser, PermissionService permissions)
 {

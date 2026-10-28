@@ -1434,12 +1434,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateOnly>("EffectiveFrom")
-                        .HasColumnType("date");
-
-                    b.Property<DateOnly?>("EffectiveTo")
-                        .HasColumnType("date");
-
                     b.Property<Guid>("GrantedByAccountId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1492,6 +1486,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("ZoneId");
 
                     b.HasIndex("AccountId", "StatusId");
+
+                    b.HasIndex("AccountId", "RoleId", "ZoneId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_AccessGrants_EffectivePair")
+                        .HasFilter("[StatusId] = 501");
 
                     b.ToTable("AccessGrants");
                 });
@@ -1875,6 +1874,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -1896,9 +1900,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
-                    b.Property<int>("StatusId")
-                        .HasColumnType("int");
-
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -1907,47 +1908,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Code")
+                        .IsUnique();
+
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.HasIndex("StatusId");
-
                     b.ToTable("Roles");
-                });
-
-            modelBuilder.Entity("OMTS.Domain.Entities.Identity.RolePermission", b =>
-                {
-                    b.Property<Guid>("RoleId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("FunctionCode")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<bool>("CanCreate")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("CanDelete")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("CanEdit")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("CanView")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("DataScope")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("OtherPermissions")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("RoleId", "FunctionCode");
-
-                    b.ToTable("RolePermissions");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.VerificationCode", b =>
@@ -6167,28 +6134,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("LoginSession");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Identity.Role", b =>
-                {
-                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
-                        .WithMany()
-                        .HasForeignKey("StatusId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Status");
-                });
-
-            modelBuilder.Entity("OMTS.Domain.Entities.Identity.RolePermission", b =>
-                {
-                    b.HasOne("OMTS.Domain.Entities.Identity.Role", "Role")
-                        .WithMany("Permissions")
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Role");
-                });
-
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.VerificationCode", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Identity.Account", "Account")
@@ -7066,8 +7011,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.Role", b =>
                 {
                     b.Navigation("AccessGrants");
-
-                    b.Navigation("Permissions");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.LaborSettlement", b =>

@@ -20,8 +20,8 @@ public sealed class PermissionCache(IMemoryCache cache) : IPermissionCacheInvali
     /// Take the key before loading from the database: if a change lands during the load, the result is
     /// stored under the old version and is never served.
     /// </summary>
-    public string KeyFor(Guid accountId, DateOnly day) =>
-        $"omts:access:{accountId}:{day:yyyyMMdd}:{Interlocked.Read(ref _globalVersion)}:{_accountVersions.GetValueOrDefault(accountId)}";
+    public string KeyFor(Guid accountId) =>
+        $"omts:access:{accountId}:{Interlocked.Read(ref _globalVersion)}:{_accountVersions.GetValueOrDefault(accountId)}";
 
     public AccountAccess? Get(string key) => cache.TryGetValue(key, out AccountAccess? access) ? access : null;
 

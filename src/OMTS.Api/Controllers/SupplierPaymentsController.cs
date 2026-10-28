@@ -9,14 +9,17 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Api.Controllers;
 
-/// <summary>INP-06 – supplier payments; cooperative-wide data, so only an All zones SUPPLIER_PAYMENTS grant (or the Owner) is accepted.</summary>
+/// <summary>
+/// PURCHASE-05 – supplier payments. They have no zone, so they follow the role only (BR-FARM-08): any Effective pair of
+/// a role holding SUPPLIER_PAYMENTS (the Accountant), whatever its zone, or the Owner.
+/// </summary>
 [ApiController]
 [Route("api/supplier-payments")]
 [Authorize]
 public sealed class SupplierPaymentsController(SupplierPaymentService payments) : ControllerBase
 {
     [HttpGet]
-    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.View, PermissionScope.AllZones)]
+    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.View, PermissionScope.NoZone)]
     [ProducesResponseType<SupplierPaymentPage>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Search(
         Guid? supplierId, Guid? receiptId, Guid? zoneId, PaymentMethod? method, int? statusId, DateOnly? from, DateOnly? to,
@@ -25,13 +28,13 @@ public sealed class SupplierPaymentsController(SupplierPaymentService payments) 
 
     /// <summary>A repeated <c>deduplicationKey</c> returns the first payment and creates nothing.</summary>
     [HttpPost]
-    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.Create, PermissionScope.AllZones)]
+    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.Create, PermissionScope.NoZone)]
     [ProducesResponseType<SupplierPaymentView>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Record(RecordSupplierPaymentRequest request, CancellationToken cancellationToken) =>
         (await payments.RecordAsync(request, cancellationToken)).ToActionResult(p => StatusCode(StatusCodes.Status201Created, p));
 
     [HttpPost("{id:guid}/allocate")]
-    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.Create, PermissionScope.AllZones)]
+    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.Create, PermissionScope.NoZone)]
     [ProducesResponseType<SupplierPaymentView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Allocate(Guid id, AllocatePaymentRequest request, CancellationToken cancellationToken) =>
         (await payments.AllocateAsync(id, request, cancellationToken)).ToActionResult(Ok);
