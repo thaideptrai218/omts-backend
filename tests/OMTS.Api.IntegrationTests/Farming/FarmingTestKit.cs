@@ -174,7 +174,7 @@ public static class FarmingTestKit
     public static async Task<List<string>> InvalidFieldsAsync(this HttpResponseMessage response)
     {
         var body = await response.ReadAsync(HttpStatusCode.BadRequest);
-        Assert.Equal("MSG01", body.GetProperty("code").GetString());
+        Assert.Equal("MSG-GEN-01", body.GetProperty("code").GetString());
         return body.TryGetProperty("fields", out var fields)
             ? fields.EnumerateArray().Select(f => f.GetString()!).ToList()
             : [body.GetProperty("field").GetString()!];

@@ -46,8 +46,11 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal(250_000, await DebtAsync(world));
 
         var over = await world.Owner.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000));
-        var problem = await over.ProblemAsync(HttpStatusCode.BadRequest, "MSG45");
-        Assert.Equal(("Line 1", "Returned quantity exceeds the allowed limit (0 kg)."), (problem.GetProperty("field").GetString(), problem.GetProperty("detail").GetString()));
+        var problem = await over.ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-03");
+        Assert.Equal("Line 1", problem.GetProperty("field").GetString());
+        Assert.EndsWith(
+            ": enter a quantity greater than 0 and at most 0 kg. Received 100 kg, seeded 30 kg, already returned 70 kg.",
+            problem.GetProperty("detail").GetString());
         Assert.Equal(2, await factory.QueryAsync(db => db.PurchaseReturns.CountAsync(r => r.ReceiptId == receipt.Id())));
 
         var debtRow = (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}/debt")).GetProperty("totals");
@@ -60,8 +63,11 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
         var (world, receipt, line) = await SeedReceiptAsync();
         await factory.StockAsync(world.Raft.Id, line, 30);
         var over = await world.Owner.PostReturnAsync(receipt.Id(), Return(line, 70.5m, 0, 0));
-        var problem = await over.ProblemAsync(HttpStatusCode.BadRequest, "MSG45");
-        Assert.Equal("Returned quantity exceeds the allowed limit (70 kg).", problem.GetProperty("detail").GetString());
+        var problem = await over.ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-03");
+        Assert.EndsWith(
+            ": enter a quantity greater than 0 and at most 70 kg. Received 100 kg, seeded 30 kg, already returned 0 kg.",
+            problem.GetProperty("detail").GetString());
+        Assert.Equal("MSG45", problem.GetProperty("legacyCode").GetString());
         Assert.Equal(70, problem.Money("limit"));
     }
 
@@ -72,7 +78,8 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
         await factory.StockAsync(world.Raft.Id, line, null);
         var view = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{receipt.Id()}");
         Assert.Equal((100m, 0m), (view.LineViewOf(world.Seed).Money("stocked"), view.LineViewOf(world.Seed).Money("returnable")));
-        await (await world.Owner.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000))).ProblemAsync(HttpStatusCode.BadRequest, "MSG45");
+        var problem = await (await world.Owner.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000))).ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-03");
+        Assert.EndsWith("at most 0 kg. The quantity already seeded from this line is not known.", problem.GetProperty("detail").GetString());
     }
 
     [Fact]
@@ -149,13 +156,14 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
             (valid with { RefundAmount = -1000 }, "Refund amount"),
         })
         {
-            Assert.Equal(field, await (await world.Owner.PostReturnAsync(receipt.Id(), body)).FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+            Assert.Equal(field, await (await world.Owner.PostReturnAsync(receipt.Id(), body)).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         }
 
-        foreach (var quantity in new decimal?[] { 0, -1, null })
+        // A missing quantity is MSG-GEN-01; one not greater than 0 is MSG-PURCHASE-03 with the limit (both MSG59 before).
+        foreach (var (quantity, code) in new (decimal?, string)[] { (0, "MSG-PURCHASE-03"), (-1, "MSG-PURCHASE-03"), (null, "MSG-GEN-01") })
         {
             var response = await world.Owner.PostReturnAsync(receipt.Id(), valid with { Lines = [new ReturnLineBody(line, quantity)] });
-            Assert.Equal("Line 1", await response.FieldAsync(HttpStatusCode.BadRequest, "MSG59"));
+            Assert.Equal("Line 1", await response.FieldAsync(HttpStatusCode.BadRequest, code));
         }
 
         // On the receipt date itself the return is accepted.
@@ -173,8 +181,8 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
 
         foreach (var receipt in new[] { draft, cancelled })
         {
-            var problem = await (await world.Owner.PostReturnAsync(receipt.Id(), Return(receipt.LineOf(world.Other), 1, 0, 10_000))).ProblemAsync(HttpStatusCode.Conflict, "MSG61");
-            Assert.EndsWith("only a Completed receipt can be returned.", problem.GetProperty("detail").GetString());
+            var problem = await (await world.Owner.PostReturnAsync(receipt.Id(), Return(receipt.LineOf(world.Other), 1, 0, 10_000))).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
+            Assert.EndsWith("and cannot be used for this action.", problem.GetProperty("detail").GetString());
         }
     }
 
@@ -211,13 +219,13 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
         var (otherZone, _) = await factory.ZoneWithRaftAsync();
 
         var otherManager = await factory.ZoneManagerAsync(otherZone);
-        await (await otherManager.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000))).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await otherManager.GetAsync($"/api/purchase-returns/{returnId}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        await (await otherManager.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await otherManager.GetAsync($"/api/purchase-returns/{returnId}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         var viewer = await factory.PurchasingStaffAsync(world.Zone, new Perm(PermissionFunctions.PurchaseReceipts));
-        await (await viewer.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000))).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        await (await viewer.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await viewer.GetAsync($"/api/purchase-returns/{returnId}")).ReadAsync(HttpStatusCode.OK);
         var editorOnly = await factory.PurchasingStaffAsync(world.Zone, new Perm(PermissionFunctions.PurchaseReceipts, Edit: true, Delete: true));
-        await (await editorOnly.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000))).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        await (await editorOnly.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         Assert.Equal(1, await factory.QueryAsync(db => db.PurchaseReturns.CountAsync(r => r.ReceiptId == receipt.Id())));
 
         var manager = await factory.ZoneManagerAsync(world.Zone);

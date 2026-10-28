@@ -48,21 +48,46 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal(await wrongPassword.Content.ReadAsStringAsync(), await unknownUser.Content.ReadAsStringAsync());
     }
 
-    // An unknown identifier is locked out like an account, so MSG69 does not reveal which identifiers exist.
+    // Problem shape: title and code are the SRS 27/10 code; legacyCode is the old code, for one release, only when it changed.
     [Fact]
-    public async Task Fifth_failure_on_an_unknown_identifier_also_answers_MSG69()
+    public async Task Problems_carry_the_srs_code_and_the_legacy_code_for_one_release()
+    {
+        var client = factory.CreateClient();
+
+        var problem = await (await PostLoginAsync(client, $"ghost-{Guid.NewGuid():N}", "Wrong123")).Content.ReadFromJsonAsync<JsonElement>();
+        var unreadable = await (await client.PostAsJsonAsync("/api/auth/login", new { identifier = 5, password = Password })).Content.ReadFromJsonAsync<JsonElement>();
+        var kept = await (await client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = "not-a-refresh-token" })).Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(401, problem.GetProperty("status").GetInt32());
+        Assert.Equal("MSG-ACCOUNT-05", problem.GetProperty("title").GetString());
+        Assert.Equal("MSG-ACCOUNT-05", problem.GetProperty("code").GetString());
+        Assert.Equal("MSG12", problem.GetProperty("legacyCode").GetString());
+        Assert.Equal("The login information is incorrect. Please check it and try again.", problem.GetProperty("detail").GetString());
+        Assert.Equal("MSG-GEN-01", unreadable.GetProperty("code").GetString());
+        Assert.Equal("MSG01", unreadable.GetProperty("legacyCode").GetString());
+        Assert.True(unreadable.TryGetProperty("field", out _));
+        Assert.Equal("MSG19", kept.GetProperty("code").GetString());
+        Assert.False(kept.TryGetProperty("legacyCode", out _));
+    }
+
+    // An unknown identifier is locked out like an account, so MSG-ACCOUNT-06 does not reveal which identifiers exist.
+    [Fact]
+    public async Task Fifth_failure_on_an_unknown_identifier_also_answers_MSG_ACCOUNT_06()
     {
         var client = factory.CreateClient();
         var identifier = $"ghost-{Guid.NewGuid():N}";
 
         for (var attempt = 1; attempt < 5; attempt++)
         {
-            Assert.Equal("MSG12", await ErrorCodeAsync(await PostLoginAsync(client, identifier, "Wrong123")));
+            Assert.Equal("MSG-ACCOUNT-05", await ErrorCodeAsync(await PostLoginAsync(client, identifier, "Wrong123")));
         }
 
         var fifth = await PostLoginAsync(client, identifier, "Wrong123");
         Assert.Equal(HttpStatusCode.Locked, fifth.StatusCode);
-        Assert.Equal("MSG69", await ErrorCodeAsync(fifth));
+        var problem = await fifth.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("MSG-ACCOUNT-06", problem.GetProperty("code").GetString());
+        Assert.Equal("MSG69", problem.GetProperty("legacyCode").GetString());
+        Assert.Equal("Too many failed login attempts. Please try again after 15 minutes.", problem.GetProperty("detail").GetString());
     }
 
     // UC02 – 2e: the 5th failure locks for 15 minutes, even with the right password afterwards.
@@ -81,7 +106,7 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var correct = await PostLoginAsync(client, "owner3", Password);
 
         Assert.Equal(HttpStatusCode.Locked, fifth.StatusCode);
-        Assert.Equal("MSG69", await ErrorCodeAsync(correct));
+        Assert.Equal("MSG-ACCOUNT-06", await ErrorCodeAsync(correct));
     }
 
     // UC02 – 2b.
@@ -92,8 +117,8 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         await factory.AddAccountAsync("staff1", Password, SubjectType.Staff);
         var client = factory.CreateClient();
 
-        Assert.Equal("MSG13", await ErrorCodeAsync(await PostLoginAsync(client, "locked1", Password)));
-        Assert.Equal("MSG13", await ErrorCodeAsync(await PostLoginAsync(client, "staff1", Password)));
+        Assert.Equal("MSG-ACCOUNT-07", await ErrorCodeAsync(await PostLoginAsync(client, "locked1", Password)));
+        Assert.Equal("MSG-ACCOUNT-07", await ErrorCodeAsync(await PostLoginAsync(client, "staff1", Password)));
     }
 
     // UC02 – 2d.
@@ -108,7 +133,7 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
 
         var response = await PostLoginAsync(factory.CreateClient(), "temp1", Password);
 
-        Assert.Equal("MSG68", await ErrorCodeAsync(response));
+        Assert.Equal("MSG-ACCOUNT-08", await ErrorCodeAsync(response));
     }
 
     // ACS-02: a valid temporary password logs in, but only to change it.
@@ -126,7 +151,7 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.True(tokens.GetProperty("mustChangePassword").GetBoolean());
     }
 
-    // Clients map the code, but the detail is the SRS wording (MSG68 as confirmed by the PM on 22/10).
+    // Clients map the code, but the detail is the SRS 27/10 wording (MSG-ACCOUNT-05, MSG-ACCOUNT-08).
     [Fact]
     public async Task Login_errors_carry_the_srs_message_text()
     {
@@ -140,10 +165,10 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var unknown = await (await PostLoginAsync(client, "nobody", Password)).Content.ReadFromJsonAsync<JsonElement>();
         var expired = await (await PostLoginAsync(client, "temp3", Password)).Content.ReadFromJsonAsync<JsonElement>();
 
-        Assert.Equal("The login information is incorrect. Please check and try again.", unknown.GetProperty("detail").GetString());
-        Assert.Equal(
-            "Your temporary password has expired. Staff accounts: please ask the Cooperative Owner to reset it. Cooperative Owner and trader accounts: please use Forgot password.",
-            expired.GetProperty("detail").GetString());
+        Assert.Equal("The login information is incorrect. Please check it and try again.", unknown.GetProperty("detail").GetString());
+        Assert.Equal("MSG-ACCOUNT-08", expired.GetProperty("code").GetString());
+        Assert.Equal("MSG68", expired.GetProperty("legacyCode").GetString());
+        Assert.Equal("Your temporary password has expired. Please ask the Cooperative Owner for a new one.", expired.GetProperty("detail").GetString());
     }
 
     // ACS-02: a locked account cannot keep its session alive through refresh.
@@ -158,7 +183,7 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var refresh = await client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = tokens.GetProperty("refreshToken").GetString() });
 
         Assert.Equal(HttpStatusCode.Forbidden, refresh.StatusCode);
-        Assert.Equal("MSG13", await ErrorCodeAsync(refresh));
+        Assert.Equal("MSG-ACCOUNT-07", await ErrorCodeAsync(refresh));
     }
 
     [Fact]
@@ -217,7 +242,7 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var refresh = await client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = tokens.GetProperty("refreshToken").GetString() });
 
         Assert.Equal(HttpStatusCode.Forbidden, refresh.StatusCode);
-        Assert.Equal("MSG68", await ErrorCodeAsync(refresh));
+        Assert.Equal("MSG-ACCOUNT-08", await ErrorCodeAsync(refresh));
         Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync(client, HttpMethod.Get, "/api/me", tokens)).StatusCode);
     }
 

@@ -51,11 +51,11 @@ public class EmployeeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         var halfBank = await owner.PostAsJsonAsync("/api/employees", new { fullName = name, phoneNumber = NewPhone(), bankAccount = new { bankName = "VCB" } });
         var badZone = await owner.PostAsJsonAsync("/api/employees", Body(name, NewPhone(), discontinued.Id));
 
-        Assert.Equal("MSG03", await same.ErrorCodeAsync());
+        Assert.Equal("MSG-LABOR-03", await same.ErrorCodeAsync());
         Assert.Equal(first.GetProperty("employee").GetProperty("id").GetGuid(), (await same.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("existingEmployeeId").GetGuid());
-        Assert.Equal("MSG01", await badPhone.ErrorCodeAsync());
-        Assert.Equal("Bank account is invalid. Please check and enter it again.", (await halfBank.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString());
-        Assert.Equal("MSG01", await badZone.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await badPhone.ErrorCodeAsync());
+        Assert.Equal("Bank account is missing or invalid. Please check and enter it again.", (await halfBank.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString());
+        Assert.Equal("MSG-GEN-01", await badZone.ErrorCodeAsync());
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public class EmployeeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
 
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
         Assert.DoesNotContain(staff.Id, linkable.EnumerateArray().Select(a => a.GetProperty("id").GetGuid()));
-        Assert.Equal("Account is invalid. Please check and enter it again.", (await toTrader.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString());
+        Assert.Equal("Account is missing or invalid. Please check and enter it again.", (await toTrader.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString());
         Assert.Equal("MSG24", await twice.ErrorCodeAsync());
     }
 
@@ -104,9 +104,9 @@ public class EmployeeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         var duplicate = await owner.PostAsJsonAsync("/api/employees", Body(name, NewPhone(), zone.Id, account: AccountBlock(taken.Username, zone, role)));
         var ownerRights = await owner.PostAsJsonAsync("/api/employees", Body(ownerRightsName, NewPhone(), zone.Id, account: AccountBlock($"nv{NewCode()}", zone, role, "CooperativeOwner")));
 
-        Assert.Equal("Account already exists. The system opens the existing record for you to check and does not create a copy.",
+        Assert.Equal("This username is already used by another account. Please enter another one.",
             (await duplicate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString());
-        Assert.Equal("MSG02", await ownerRights.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await ownerRights.ErrorCodeAsync());
         Assert.False(await factory.QueryAsync(db => db.Employees.AnyAsync(e => e.FullName == name || e.FullName == ownerRightsName)));
         Assert.True(await factory.QueryAsync(db => db.AuditEvents.AnyAsync(e => e.Action == "Account.OwnerRightsRefused")));
     }
@@ -126,11 +126,11 @@ public class EmployeeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         var again = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = "2026-10-22" });
         var reinstated = await (await owner.PostAsync($"/api/employees/{id}/reinstate", null)).Content.ReadFromJsonAsync<JsonElement>();
 
-        Assert.Equal("MSG01", await noDate.ErrorCodeAsync());
-        Assert.Equal("MSG11", await blocked.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await noDate.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-06", await blocked.ErrorCodeAsync());
         Assert.Equal("Left", ended.GetProperty("employee").GetProperty("status").GetString());
         Assert.Equal("review-lock", ended.GetProperty("followUp").GetProperty("action").GetString());
-        Assert.Equal("Cannot change Employee from “Left” to “Left”: the employee is already in this status.",
+        Assert.Equal("Employee is Left and cannot be used for this action.",
             (await again.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString());
         Assert.Equal("Employed", reinstated.GetProperty("employee").GetProperty("status").GetString());
         Assert.Equal(JsonValueKind.Null, reinstated.GetProperty("employee").GetProperty("employmentEndDate").ValueKind);
@@ -150,7 +150,7 @@ public class EmployeeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         var forbidden = await (await factory.LoginAsync(staff.Username)).GetAsync("/api/employees");
 
         Assert.Equal("MSG06", await stale.ErrorCodeAsync());
-        Assert.Equal("MSG02", await forbidden.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await forbidden.ErrorCodeAsync());
     }
 
     private async Task<(HttpClient Owner, FarmingZone Zone, Role Role)> SetupAsync()

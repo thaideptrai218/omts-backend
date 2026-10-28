@@ -135,14 +135,16 @@ public partial class VerificationServiceTests
     }
 
     [Fact]
-    public async Task Sender_failure_saves_nothing_and_answers_MSG04()
+    public async Task Sender_failure_saves_nothing_and_answers_MSG_ACCOUNT_13()
     {
         _sms.Fail = true;
 
         var result = await Service.StartAsync(VerificationPurpose.VerifyPhone, VerificationChannel.Sms, Phone, AccountId, default);
 
         Assert.Equal(ErrorKind.ServiceUnavailable, result.Error?.Kind);
-        Assert.Equal("MSG04", result.Error?.Message.Code);
+        Assert.Equal("MSG-ACCOUNT-13", result.Error?.Message.Code);
+        Assert.Equal("MSG04", result.Error?.Message.LegacyCode);
+        Assert.Equal("The verification code could not be sent by SMS. Nothing has been changed. Please try again later.", result.Error?.Message.Text);
         Assert.Empty(_codes.All);
     }
 
@@ -188,7 +190,7 @@ public partial class VerificationServiceTests
         Assert.True((await Service.StartAsync(VerificationPurpose.AccountRecovery, VerificationChannel.Sms, Phone, AccountId, default)).IsSuccess);
     }
 
-    // New requests do not give new guesses: 10 wrong codes per hour over all requests, then MSG69.
+    // New requests do not give new guesses: 10 wrong codes per hour over all requests, then MSG-ACCOUNT-17.
     [Fact]
     public async Task Wrong_codes_are_capped_across_requests()
     {
@@ -204,7 +206,7 @@ public partial class VerificationServiceTests
         }
 
         var start = await Service.StartAsync(VerificationPurpose.AccountRecovery, VerificationChannel.Sms, Phone, AccountId, default);
-        Assert.Equal("MSG69", start.Error?.Message.Code);
+        Assert.Equal("MSG-ACCOUNT-17", start.Error?.Message.Code);
     }
 
     [Fact]
@@ -223,7 +225,7 @@ public partial class VerificationServiceTests
         return result.Value!.VerificationId;
     }
 
-    private static void AssertWrongCode<T>(Result<T> result) => Assert.Equal("MSG16", result.Error?.Message.Code);
+    private static void AssertWrongCode<T>(Result<T> result) => Assert.Equal("MSG-ACCOUNT-16", result.Error?.Message.Code);
 
     private sealed class MutableTime(DateTimeOffset start) : TimeProvider
     {

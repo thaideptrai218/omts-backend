@@ -34,7 +34,7 @@ public class EmployeeStatusAndAuditTests(AuthApiFactory factory) : IClassFixture
         var ended = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = "2026-10-17" });
 
         Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
-        Assert.Equal("MSG11", problem.GetProperty("code").GetString());
+        Assert.Equal("MSG-GEN-06", problem.GetProperty("code").GetString());
         Assert.Equal("Cannot proceed because 1 records are still in use: attendance records (0), work assignments (1) after 15/10/2026. Please handle these records first.",
             problem.GetProperty("detail").GetString());
         Assert.Equal(StatusIds.Employee.Working, statusAfterBlock);
@@ -81,7 +81,7 @@ public class EmployeeStatusAndAuditTests(AuthApiFactory factory) : IClassFixture
         var back = await owner.PostAsync($"/api/employees/{id}/reinstate", null);
 
         Assert.Equal(HttpStatusCode.Conflict, notLeft.StatusCode);
-        Assert.Equal("Cannot change Employee from “Employed” to “Employed”: the employee is already in this status.",
+        Assert.Equal("Employee is Employed and cannot be used for this action.",
             (await notLeft.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString());
         Assert.Equal(HttpStatusCode.OK, back.StatusCode);
         var changes = await factory.QueryAsync(db => db.AuditEvents.AsNoTracking()

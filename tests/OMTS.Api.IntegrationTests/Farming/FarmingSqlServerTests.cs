@@ -40,7 +40,7 @@ public class FarmingSqlServerTests
         foreach (var refused in responses.Where(r => r.StatusCode != HttpStatusCode.Created))
         {
             Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
-            Assert.Equal("MSG03", await refused.ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-02", await refused.ErrorCodeAsync());
         }
 
         Assert.Equal(1, await host.QueryAsync(db => db.FarmingZones.CountAsync(z => z.Code == code)));
@@ -61,7 +61,8 @@ public class FarmingSqlServerTests
         foreach (var refused in responses.Where(r => r.StatusCode != HttpStatusCode.Created))
         {
             Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
-            Assert.Equal("MSG03", await refused.ErrorCodeAsync());
+            // The pre-check answers MSG-GEN-09 (already Replaced); a loser stopped by the unique index gets MSG-GEN-02.
+            Assert.Contains(await refused.ErrorCodeAsync(), new[] { "MSG-GEN-09", "MSG-GEN-02" });
         }
 
         var keys = await host.QueryAsync(db => db.ZoneComplianceDocuments.Where(d => d.Id == license.Id() || d.ReplacesDocumentId == license.Id())
@@ -164,7 +165,7 @@ public class FarmingSqlServerTests
         Assert.Equal([zoneA.Id()], (await staff.Client.GetFromJsonAsync<JsonElement>("/api/zones")).GetProperty("items").EnumerateArray().Select(z => z.Id()));
         Assert.Equal([zoneA.Id()], (await staff.Client.GetFromJsonAsync<JsonElement>("/api/zones/lookup")).EnumerateArray().Select(z => z.Id()));
         Assert.Equal([zoneA.Id()], (await staff.Client.GetFromJsonAsync<JsonElement>("/api/zones/map")).EnumerateArray().Select(z => z.Id()));
-        Assert.Equal("MSG02", await (await staff.Client.GetAsync($"/api/zones/{zoneB.Id()}/rafts")).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await staff.Client.GetAsync($"/api/zones/{zoneB.Id()}/rafts")).ErrorCodeAsync());
 
         var badges = (await owner.GetFromJsonAsync<JsonElement>("/api/zones")).GetProperty("items").EnumerateArray().Select(z => z.GetProperty("licenseState").GetString()).ToList();
         Assert.Equal(["ExpiringSoon", "ExpiringSoon"], badges);

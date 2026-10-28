@@ -3,7 +3,7 @@ using OMTS.Application.Features.WaterQuality.Dtos;
 
 namespace OMTS.Application.UnitTests.Features.WaterQuality;
 
-/// <summary>Field rules of ENV-01/ENV-02 (values, time, reason) and ENV-04 (threshold pairs, MSG28).</summary>
+/// <summary>Field rules of ENV-01/ENV-02 (values, time, reason) and ENV-04 (threshold pairs, MSG-WATER-05).</summary>
 public class WaterInputRulesTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 23, 3, 0, 0, TimeSpan.Zero);
@@ -62,7 +62,7 @@ public class WaterInputRulesTests
         var halfPair = WaterThresholdRules.Validate(new SetWaterThresholdsRequest(6.5m, null, null, 30m));
 
         Assert.True(cleared.IsSuccess);
-        Assert.Equal("MSG01", halfPair.Error!.Message.Code);
+        Assert.Equal("MSG-GEN-01", halfPair.Error!.Message.Code);
         Assert.Equal(new[] { "pH maximum", "Salinity minimum" }, (IEnumerable<string>)halfPair.Error.Details!["fields"]!);
     }
 
@@ -71,19 +71,23 @@ public class WaterInputRulesTests
     {
         var result = WaterThresholdRules.Validate(new SetWaterThresholdsRequest(9m, 15m, 50m, 10m));
 
-        Assert.Equal("MSG01", result.Error!.Message.Code);
+        Assert.Equal("MSG-GEN-01", result.Error!.Message.Code);
         Assert.Equal("pH maximum", result.Error.Details!["field"]);
     }
 
     [Theory]
-    [InlineData(8.5, 8.5, 10, 20, "pH minimum")]
-    [InlineData(6.5, 8.5, 20, 10, "Salinity minimum")]
-    public void Minimum_not_less_than_maximum_is_MSG28(double phMin, double phMax, double salMin, double salMax, string field)
+    [InlineData(8.5, 8.5, 10, 20, "pH minimum", "pH")]
+    [InlineData(6.5, 8.5, 20, 10, "Salinity minimum", "salinity")]
+    [InlineData(8.5, 6.5, 20, 10, "pH minimum", "pH and salinity")]
+    public void Minimum_not_less_than_maximum_is_MSG_WATER_05(double phMin, double phMax, double salMin, double salMax, string field, string indicator)
     {
         var result = WaterThresholdRules.Validate(new SetWaterThresholdsRequest((decimal)phMin, (decimal)phMax, (decimal)salMin, (decimal)salMax));
 
-        Assert.Equal("MSG28", result.Error!.Message.Code);
-        Assert.Equal("The minimum value must be less than the maximum value.", result.Error.Message.Text);
+        Assert.Equal("MSG-WATER-05", result.Error!.Message.Code);
+        Assert.Equal("MSG28", result.Error.Message.LegacyCode);
+        Assert.Equal(
+            $"The minimum of {indicator} must be less than the maximum. The thresholds were not saved. Please correct the values.",
+            result.Error.Message.Text);
         Assert.Equal(field, result.Error.Details!["field"]);
     }
 }

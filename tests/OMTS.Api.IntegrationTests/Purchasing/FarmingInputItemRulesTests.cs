@@ -24,7 +24,7 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
     {
         var owner = await factory.PurchasingOwnerAsync();
         var response = await owner.PostAsJsonAsync("/api/farming-input-items", new { code = code is null ? null : $"{code}{NewCode()}", name, group, unit });
-        Assert.Equal(field, await response.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal(field, await response.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
             (new { code = NewCode(), name = "N", group = "Seed", unit = "kg", description = new string('d', 2001) }, "Description"),
         })
         {
-            Assert.Equal(field, await (await owner.PostAsJsonAsync("/api/farming-input-items", body)).FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+            Assert.Equal(field, await (await owner.PostAsJsonAsync("/api/farming-input-items", body)).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         }
     }
 
@@ -50,7 +50,7 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
         var code = $"Seed-{NewCode()}";
         var first = await owner.CreateItemAsync("Seed", code: code);
         var duplicate = await owner.PostAsJsonAsync("/api/farming-input-items", new { code = code.ToUpperInvariant(), name = "Again", group = "Seed", unit = "kg" });
-        Assert.Equal(first, (await duplicate.ProblemAsync(HttpStatusCode.Conflict, "MSG03")).GetProperty("existingId").GetGuid());
+        Assert.Equal(first, (await duplicate.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("existingId").GetGuid());
 
         var second = await owner.CreateItemAsync("Other");
         var view = await owner.GetFromJsonAsync<JsonElement>($"/api/farming-input-items/{second}");
@@ -58,7 +58,7 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
         {
             code = code.ToLowerInvariant(), name = "Other", group = "Other", unit = "kg", rowVersion = view.GetProperty("rowVersion").GetString(),
         });
-        Assert.Equal(first, (await edit.ProblemAsync(HttpStatusCode.Conflict, "MSG03")).GetProperty("existingId").GetGuid());
+        Assert.Equal(first, (await edit.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("existingId").GetGuid());
     }
 
     [Theory]
@@ -82,7 +82,7 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
             rowVersion = view.GetProperty("rowVersion").GetString(),
         });
 
-        var problem = await response.ProblemAsync(HttpStatusCode.BadRequest, "MSG01");
+        var problem = await response.ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
         Assert.Equal(field, problem.GetProperty("field").GetString());
         Assert.Equal("create a new item instead", problem.GetProperty("hint").GetString());
         var kept = await factory.QueryAsync(db => db.FarmingInputItems.SingleAsync(i => i.Id == world.Seed));
@@ -106,7 +106,7 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
         {
             code = view.GetProperty("code").GetString(), name = "Seed", group = "Seed", unit = "con", rowVersion = view.GetProperty("rowVersion").GetString(),
         });
-        Assert.Equal("Unit", await change.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Unit", await change.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
     }
 
     [Fact]
@@ -132,10 +132,10 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
             Perm.Full(PermissionFunctions.PurchaseReceipts), new Perm(PermissionFunctions.Suppliers, true, true, true),
             new Perm(PermissionFunctions.SupplierPayments, true, true, Export: true), Perm.Full(PermissionFunctions.CultivationCycles));
 
-        await (await staff.PostAsJsonAsync("/api/farming-input-items", new { code = NewCode(), name = "X", group = "Other", unit = "kg" })).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await staff.PutAsJsonAsync($"/api/farming-input-items/{id}", new { code = NewCode(), name = "X", group = "Other", unit = "kg", rowVersion = "" })).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await staff.PostAsync($"/api/farming-input-items/{id}/discontinue", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await staff.PostAsync($"/api/farming-input-items/{id}/reactivate", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        await (await staff.PostAsJsonAsync("/api/farming-input-items", new { code = NewCode(), name = "X", group = "Other", unit = "kg" })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await staff.PutAsJsonAsync($"/api/farming-input-items/{id}", new { code = NewCode(), name = "X", group = "Other", unit = "kg", rowVersion = "" })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await staff.PostAsync($"/api/farming-input-items/{id}/discontinue", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await staff.PostAsync($"/api/farming-input-items/{id}/reactivate", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         Assert.Equal(StatusIds.Usage.InUse, (await factory.QueryAsync(db => db.FarmingInputItems.SingleAsync(i => i.Id == id))).StatusId);
     }
 
@@ -164,8 +164,8 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
             await factory.PurchasingStaffAsync(zone, new Perm(PermissionFunctions.SupplierPayments)),
         })
         {
-            await (await outsider.GetAsync("/api/farming-input-items")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-            await (await outsider.GetAsync($"/api/farming-input-items/{id}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+            await (await outsider.GetAsync("/api/farming-input-items")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+            await (await outsider.GetAsync($"/api/farming-input-items/{id}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         }
     }
 
@@ -177,7 +177,7 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
         var oldSeed = await world.Owner.CreateItemAsync("Seed");
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(oldSeed, 5, 10_000)));
         await (await world.Owner.PostAsync($"/api/farming-input-items/{oldSeed}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
-        await (await world.Owner.PostAsync($"/api/farming-input-items/{oldSeed}/discontinue", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG61");
+        await (await world.Owner.PostAsync($"/api/farming-input-items/{oldSeed}/discontinue", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
 
         var picker = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/farming-input-items?group=Seed&statusId={StatusIds.Usage.InUse}");
         var ids = picker.EnumerateArray().Select(i => i.Id()).ToList();
@@ -187,7 +187,7 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
         Assert.All(picker.EnumerateArray(), i => Assert.Equal(("Seed", "In Use"), (i.GetProperty("group").GetString(), i.GetProperty("status").GetString())));
 
         var complete = await world.Owner.PostAsync($"/api/purchase-receipts/{draft.Id()}/complete", null);
-        Assert.Equal("Line 1 item", await complete.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Line 1 item", await complete.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         Assert.Equal(0, await factory.QueryAsync(db => db.SeedReceiptLots.CountAsync(l => l.SeedTypeId == oldSeed)));
 
         await (await world.Owner.PostAsync($"/api/farming-input-items/{oldSeed}/reactivate", null)).ReadAsync(HttpStatusCode.OK);
