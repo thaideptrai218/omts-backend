@@ -1,7 +1,5 @@
-using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Authorization.Dtos;
-using OMTS.Application.Features.Authorization.Models;
 
 namespace OMTS.Application.Features.Authorization;
 
@@ -9,20 +7,18 @@ public sealed class PermissionService(
     IAccountRepository accounts,
     IAccessGrantRepository grants,
     IFarmingZoneRepository zones,
-    PermissionCache cache,
-    TimeProvider timeProvider)
+    PermissionCache cache)
 {
-    /// <summary>Effective access of an account today, or null when the account does not exist.</summary>
+    /// <summary>Effective access of an account, or null when the account does not exist.</summary>
     public async Task<AccountAccess?> GetAccessAsync(Guid accountId, CancellationToken cancellationToken)
     {
-        var today = timeProvider.Today();
-        var key = cache.KeyFor(accountId, today);
+        var key = cache.KeyFor(accountId);
         if (cache.Get(key) is { } cached)
         {
             return cached;
         }
 
-        var access = await LoadAsync(accountId, today, cancellationToken);
+        var access = await LoadAsync(accountId, cancellationToken);
         if (access is not null)
         {
             cache.Set(key, access);
@@ -44,8 +40,8 @@ public sealed class PermissionService(
 
         var grantViews = access.Grants
             .Select(g => g.ZoneId is { } zoneId && zonesById.TryGetValue(zoneId, out var zone)
-                ? new GrantView(zoneId, zone.Code, zone.Name, false, g.RoleName, g.Permissions)
-                : new GrantView(g.ZoneId, null, null, g.ZoneId is null, g.RoleName, g.Permissions))
+                ? new GrantView(zoneId, zone.Code, zone.Name, false, g.RoleName, g.RoleCode, g.Permissions)
+                : new GrantView(g.ZoneId, null, null, g.ZoneId is null, g.RoleName, g.RoleCode, g.Permissions))
             .ToList();
 
         return new MyPermissions(
@@ -58,7 +54,7 @@ public sealed class PermissionService(
             grantViews);
     }
 
-    private async Task<AccountAccess?> LoadAsync(Guid accountId, DateOnly today, CancellationToken cancellationToken)
+    private async Task<AccountAccess?> LoadAsync(Guid accountId, CancellationToken cancellationToken)
     {
         var account = await accounts.GetByIdAsync(accountId, cancellationToken);
         if (account is null)
@@ -66,16 +62,8 @@ public sealed class PermissionService(
             return null;
         }
 
-        var zoneGrants = (await grants.GetEffectiveGrantsAsync(accountId, today, cancellationToken))
-            .Select(g => new ZoneGrant(
-                g.ZoneId,
-                g.RoleId,
-                g.RoleName,
-                g.Permissions
-                    .Select(p => new GrantedPermission(p.FunctionCode, p.CanView, p.CanCreate, p.CanEdit, p.CanDelete, p.OtherPermissions, p.DataScope))
-                    .ToList()))
-            .ToList();
-
+        // Each Effective pair carries the permissions of its fixed role (FixedRoles).
+        var zoneGrants = await grants.GetEffectiveGrantsAsync(accountId, cancellationToken);
         return new AccountAccess(accountId, account.SubjectType, account.MustChangePassword, account.PhoneVerifiedAt is not null, zoneGrants);
     }
 }

@@ -5,9 +5,9 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Authorization;
 
 /// <summary>
-/// What an account may do, built from its effective zone–role grants (UC11 postconditions):
-/// the union of the roles' permissions, each limited to its zone; an All zones grant applies
-/// everywhere; zone A never grants zone B (NFR-01).
+/// What an account may do, built from its Effective zone–role pairs (FARM-05 POST-2, BR-FARM-08): on records with a
+/// zone, each fixed role's permissions are limited to the zones of its pairs (an All zones pair applies everywhere,
+/// zone A never opens zone B); records with no zone follow the role only, so any pair of the role opens them.
 /// </summary>
 public sealed class AccountAccess(
     Guid accountId,
@@ -44,16 +44,13 @@ public sealed class AccountAccess(
             return false;
         }
 
-        if (scope == PermissionScope.AllZones || PermissionFunctions.IsCooperativeWide(function))
+        if (scope == PermissionScope.ZoneScoped && !PermissionFunctions.IsCooperativeWide(function))
         {
-            return GrantsFor(function, action).Any(g => g.ZoneId is null);
+            return zoneId is not null && GrantsFor(function, action).Any(g => g.ZoneId is null || g.ZoneId == zoneId);
         }
 
-        return scope switch
-        {
-            PermissionScope.ZoneScoped => zoneId is not null && GrantsFor(function, action).Any(g => g.ZoneId is null || g.ZoneId == zoneId),
-            _ => GrantsFor(function, action).Any(),
-        };
+        // No zone on the records, or any zone is enough: a pair of a role holding the function, whatever its zone.
+        return GrantsFor(function, action).Any();
     }
 
     /// <summary>Zones a list endpoint may return records from for this function and action.</summary>
@@ -70,13 +67,13 @@ public sealed class AccountAccess(
         }
 
         var grants = GrantsFor(function, action).ToList();
-        if (grants.Any(g => g.ZoneId is null))
+        if (grants.Count == 0)
         {
-            return PermittedZones.Everywhere;
+            return PermittedZones.None;
         }
 
-        return PermissionFunctions.IsCooperativeWide(function)
-            ? PermittedZones.None
+        return grants.Any(g => g.ZoneId is null) || PermissionFunctions.IsCooperativeWide(function)
+            ? PermittedZones.Everywhere
             : new PermittedZones(false, grants.Select(g => g.ZoneId!.Value).ToHashSet());
     }
 

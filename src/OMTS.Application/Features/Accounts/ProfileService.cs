@@ -204,8 +204,7 @@ public sealed class ProfileService(
 
     private async Task<ProfileView> ViewAsync(Account account, CancellationToken cancellationToken)
     {
-        var today = Common.BusinessClock.ToBusinessDate(timeProvider.GetUtcNow());
-        var effective = (await grants.ListForAccountAsync(account.Id, cancellationToken)).Where(g => g.IsEffectiveOn(today));
+        var effective = await grants.ListEffectiveForAccountAsync(account.Id, cancellationToken);
         return new ProfileView(
             account.Id,
             account.Username,
@@ -215,7 +214,7 @@ public sealed class ProfileService(
             account.EmailVerifiedAt is not null,
             account.PhoneNumber,
             account.PhoneVerifiedAt is not null,
-            effective.Select(g => new ProfileGrantView(g.Role.Name, g.ZoneId, g.Zone?.Name, g.ZoneId is null)).ToList(),
+            effective.Select(g => new ProfileGrantView(g.Role.Name, g.Role.Code, g.ZoneId, g.Zone?.Name, g.ZoneId is null)).ToList(),
             AccountEditVersion.Of(account));
     }
 }

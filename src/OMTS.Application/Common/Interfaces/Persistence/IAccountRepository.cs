@@ -6,6 +6,9 @@ public interface IAccountRepository
 {
     Task<Account?> GetByIdAsync(Guid accountId, CancellationToken cancellationToken);
 
+    /// <summary>Display names of the accounts that exist among <paramref name="accountIds"/>.</summary>
+    Task<IReadOnlyDictionary<Guid, string>> GetDisplayNamesAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken cancellationToken);
+
     /// <summary>
     /// Account whose username is <paramref name="username"/>, or whose verified phone number / verified
     /// email equals the normalised <paramref name="phoneNumber"/> / <paramref name="email"/> (ACS-02).

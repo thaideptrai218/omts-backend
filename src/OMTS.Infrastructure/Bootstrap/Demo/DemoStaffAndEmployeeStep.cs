@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Identity;
+using OMTS.Application.Features.AccessManagement;
 using OMTS.Application.Features.AccessManagement.Dtos;
+using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Employees;
@@ -37,6 +39,11 @@ internal sealed class DemoStaffAndEmployeeStep : IDemoSeedStep
                 var saved = DemoSeedContext.Ensure(await service.CreateAsync(await RequestAsync(context, plan, cancellationToken), cancellationToken), $"employee {plan.FullName}");
                 employee = await context.Db.Employees.FirstAsync(e => e.Id == saved.Employee.Id, cancellationToken);
                 created++;
+                // Only right after the creation: a pair the Owner grants again later is real use a rerun must keep.
+                if (plan is { Username: { } username, RevokeReason: { } reason })
+                {
+                    await RevokePairsAsync(context, username, reason, cancellationToken);
+                }
             }
 
             if (plan.Username is not null)
@@ -55,6 +62,22 @@ internal sealed class DemoStaffAndEmployeeStep : IDemoSeedStep
         return created;
     }
 
+    /// <summary>FARM-05.1: revokes the Effective pairs of the account with the reason, as the Owner would.</summary>
+    private static async Task RevokePairsAsync(DemoSeedContext context, string username, string reason, CancellationToken cancellationToken)
+    {
+        var accountId = await context.Db.Accounts.Where(a => a.Username == username).Select(a => a.Id).SingleAsync(cancellationToken);
+        var grantIds = await context.Db.AccessGrants
+            .Where(g => g.AccountId == accountId && g.StatusId == StatusIds.AccessGrant.Effective)
+            .Select(g => g.Id)
+            .ToListAsync(cancellationToken);
+        foreach (var grantId in grantIds)
+        {
+            DemoSeedContext.Ensure(
+                await context.Get<AccessGrantService>().RevokeAsync(accountId, grantId, new ReasonRequest(reason), cancellationToken),
+                $"revoking the zone-role pair of {username}");
+        }
+    }
+
     private static async Task<SaveEmployeeRequest> RequestAsync(DemoSeedContext context, DemoEmployeePlan plan, CancellationToken cancellationToken)
     {
         var zoneIds = await context.Db.FarmingZones
@@ -63,13 +86,12 @@ internal sealed class DemoStaffAndEmployeeStep : IDemoSeedStep
         NewEmployeeAccount? account = null;
         if (plan.Username is not null)
         {
-            var roleId = await context.Db.Roles.Where(r => r.Name == plan.RoleName).Select(r => r.Id).SingleAsync(cancellationToken);
             Guid? grantZoneId = plan.GrantZone is null
                 ? null
                 : await context.Db.FarmingZones.Where(z => z.Code == plan.GrantZone).Select(z => z.Id).SingleAsync(cancellationToken);
             account = new NewEmployeeAccount(
                 plan.Username, null, null, null,
-                [new GrantDraft(grantZoneId, roleId, context.Today.AddDays(plan.GrantFromDays), plan.GrantToDays is { } to ? context.Today.AddDays(to) : null)]);
+                [new GrantDraft(grantZoneId, Role: FixedRoles.Of(plan.Role).Code)]);
         }
 
         return new SaveEmployeeRequest(

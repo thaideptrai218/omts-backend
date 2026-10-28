@@ -4,13 +4,12 @@ using static OMTS.Application.Features.Authorization.Models.PermissionAction;
 namespace OMTS.Application.Features.Authorization;
 
 /// <summary>
-/// Fixed catalog of grantable functions (BR-19, SRS 22/10/2026 §I.4): one function per grantable use-case
-/// group plus the operations dashboard tiles (FARM-06). Codes are stored in <c>RolePermission.FunctionCode</c>.
-/// Owner-only use cases (cooperative profile, zones, licenses, rafts, zone access, accounts, roles, audit
-/// log, water thresholds, harvest lot parameters, products, farming input items, receiving bank account,
-/// employees, payroll finalization, national portal submission) are not in the catalog: the Cooperative
-/// Owner already has every right and no role can open them. Pending final confirmation in OMTS-123; keep
-/// the list in this one place.
+/// Fixed catalog of the functions the fixed staff roles hold (BR-FARM-07, SRS 27/10/2026 §I.4.4): one function per
+/// use-case group a Zone Manager or an Accountant uses, plus the operations dashboard tiles (FARM-06, Owner only).
+/// What each role holds is <see cref="FixedRoles"/>. Owner-only use cases (cooperative profile, zones, licenses, rafts,
+/// zone access, accounts, audit log, water thresholds, harvest lot parameters, products, farming input items,
+/// receiving bank account, attendance and payroll settings, payroll finalization, and the Owner-only actions named in
+/// the function names below) need no function: the Cooperative Owner has every right and no role opens them.
 /// </summary>
 public static class PermissionFunctions
 {
@@ -19,6 +18,7 @@ public static class PermissionFunctions
     public const string WaterMeasurements = "WATER_MEASUREMENTS";
     public const string Harvests = "HARVESTS";
     public const string HarvestLots = "HARVEST_LOTS";
+    public const string LotTracing = "LOT_TRACING";
     public const string Provenance = "PROVENANCE";
     public const string Suppliers = "SUPPLIERS";
     public const string PurchaseReceipts = "PURCHASE_RECEIPTS";
@@ -27,6 +27,7 @@ public static class PermissionFunctions
     public const string PurchaseRequests = "PURCHASE_REQUESTS";
     public const string SalesInvoices = "SALES_INVOICES";
     public const string QualityClaims = "QUALITY_CLAIMS";
+    public const string SalesReturns = "SALES_RETURNS";
     public const string CustomerPayments = "CUSTOMER_PAYMENTS";
     public const string CustomerDebts = "CUSTOMER_DEBTS";
     public const string LaborWorkers = "LABOR_WORKERS";
@@ -44,36 +45,39 @@ public static class PermissionFunctions
 
     private static readonly PermissionAction[] Crud = [View, Create, Edit, Delete];
 
+    // CooperativeWide = the records have no zone, so they follow the role only (BR-FARM-08): any Effective pair of a
+    // role holding the function opens every record. Purchase receipts still carry a zone in this version (PURCHASE).
     public static readonly IReadOnlyList<FunctionDefinition> All =
     [
-        new(CultivationCycles, "Cultivation cycles, seeding and progress (CULT-01, CULT-02, CULT-05, CULT-06)", false, Crud),
-        new(CultivationLogs, "Cultivation log and lane write-off (CULT-03, CULT-04)", false, [View, Create, Edit]),
-        new(WaterMeasurements, "Water quality measurements (ENV-01…ENV-03)", false, [View, Create, Edit, Export]),
-        new(Harvests, "Harvest plans and harvest records (HARV-01, HARV-02)", false, Crud),
-        new(HarvestLots, "Harvest lots, yield and lot tracing (HARV-03, HARV-05, TRC-05)", false, [View, Create, Edit, Export]),
-        new(Provenance, "Provenance publication, QR labels and corrections (TRC-01…TRC-04)", false, [View, Create, Edit, Publish]),
-        // Cooperative-wide list, but a grant in any zone is enough to keep it (INP-01).
-        new(Suppliers, "Suppliers (INP-01)", false, [View, Create, Edit]),
-        new(PurchaseReceipts, "Purchase receipts and returns (INP-03…INP-05, INP-07)", false, [View, Create, Edit, Delete, Export]),
-        new(SupplierPayments, "Supplier payments and supplier debt (INP-06)", true, [View, Create, Export]),
-        new(Customers, "Customer profiles (SAL-01)", false, [View, Create, Edit]),
-        new(PurchaseRequests, "Purchase request responses (SAL-05)", false, [View, Create, Edit]),
-        new(SalesInvoices, "Sales invoices (SAL-07…SAL-10)", false, [View, Create, Edit, Delete, Export]),
-        new(QualityClaims, "Quality claims and sales returns (CLM-02, CLM-03)", false, [View, Create, Edit]),
-        new(CustomerPayments, "Customer payments (PAY-02)", true, [View, Create, Edit, Export]),
-        new(CustomerDebts, "Customer debts (PAY-03)", true, [View, Export]),
-        new(LaborWorkers, "Seasonal workers and teams (LAB-02)", false, [View, Create, Edit]),
-        new(WorkAssignments, "Work assignment and piecework confirmation (LAB-03, LAB-05)", false, Crud),
-        new(Attendance, "Attendance (LAB-04)", false, [View, Create, Edit]),
-        new(PayRules, "Pay rates (LAB-06)", true, [View, Create, Edit]),
-        new(Payroll, "Payroll preparation and wage payments (LAB-07, LAB-09)", true, [View, Create, Edit, Export]),
-        new(SalesReports, "Sales and revenue reports (RPT-01…RPT-03)", false, [View, Export]),
+        new(CultivationCycles, "Cultivation cycles, seeding, material usage and progress (CYCLE-01, CYCLE-02, CYCLE-03, CYCLE-05, CYCLE-06)", false, Crud),
+        new(CultivationLogs, "Cultivation logs (CYCLE-04)", false, [View, Create, Edit]),
+        new(WaterMeasurements, "Water measurements, corrections and history (WATER-01…WATER-03)", false, [View, Create, Edit, Export]),
+        new(Harvests, "Harvest records (HARVEST-01)", false, Crud),
+        new(HarvestLots, "Harvest lots and farming yield (HARVEST-02, HARVEST-04)", false, [View, Create, Edit, Export]),
+        new(LotTracing, "Lot tracing (TRACE-02)", false, [View]),
+        new(Provenance, "Provenance publication and corrections (TRACE-01, TRACE-03; withdrawing, TRACE-04, is Owner-only)", false, [View, Create, Edit, Publish]),
+        new(Suppliers, "Suppliers (PURCHASE-07)", true, [View, Create, Edit]),
+        new(PurchaseReceipts, "Purchase receipts, returns and cancellations (PURCHASE-01, PURCHASE-02, PURCHASE-03, PURCHASE-06)", false, [View, Create, Edit, Delete, Export]),
+        new(SupplierPayments, "Supplier payments and supplier debts (PURCHASE-04, PURCHASE-05)", true, [View, Create, Export]),
+        new(Customers, "Customers (SALE-04)", true, [View, Create, Edit]),
+        new(PurchaseRequests, "Purchase requests (SALE-03; responding is Owner-only)", false, [View, Edit]),
+        new(SalesInvoices, "Sales invoices (SALE-05, SALE-06, SALE-09; correcting and cancelling, SALE-07 and SALE-08, are Owner-only)", false, [View, Create, Edit, Delete, Export]),
+        new(QualityClaims, "Quality claims (CLAIM-02; responding is Owner-only)", false, [View, Edit]),
+        new(SalesReturns, "Sales returns (CLAIM-03; cancelling one is Owner-only)", false, [View, Create, Delete]),
+        new(CustomerPayments, "Customer payments and money paid back (DEBT-02)", true, [View, Create, Edit, Export]),
+        new(CustomerDebts, "Customer debts (DEBT-03)", true, [View, Export]),
+        new(LaborWorkers, "Employees (LABOR-01)", false, [View, Create, Edit]),
+        new(WorkAssignments, "Work assignment (LABOR-02)", false, Crud),
+        new(Attendance, "Attendance (LABOR-04)", false, [View, Create, Edit]),
+        new(PayRules, "Job types and pay rates (LABOR-11)", true, [View, Create, Edit]),
+        new(Payroll, "Payroll preparation and wage payments (LABOR-12, LABOR-14; finalizing, LABOR-13, is Owner-only)", true, [View, Create, Edit, Export]),
+        new(SalesReports, "Sales, price and post-sale reports (REPORT-01…REPORT-03)", false, [View, Export]),
 
-        new(DashboardDailyRevenue, "Dashboard tile: daily revenue (FARM-06)", false, [View], IsDashboardTile: true),
-        new(DashboardReceivables, "Dashboard tile: receivables (FARM-06)", false, [View], IsDashboardTile: true),
-        new(DashboardOpenHarvestLots, "Dashboard tile: open harvest lots (FARM-06)", false, [View], IsDashboardTile: true),
-        new(DashboardWaterAlerts, "Dashboard tile: water alerts (FARM-06)", false, [View], IsDashboardTile: true),
-        new(DashboardPendingTasks, "Dashboard tile: pending tasks (FARM-06)", false, [View], IsDashboardTile: true),
+        new(DashboardDailyRevenue, "Dashboard tile: daily revenue (FARM-06, Owner only)", false, [View], IsDashboardTile: true),
+        new(DashboardReceivables, "Dashboard tile: receivables (FARM-06, Owner only)", false, [View], IsDashboardTile: true),
+        new(DashboardOpenHarvestLots, "Dashboard tile: open harvest lots (FARM-06, Owner only)", false, [View], IsDashboardTile: true),
+        new(DashboardWaterAlerts, "Dashboard tile: water alerts (FARM-06, Owner only)", false, [View], IsDashboardTile: true),
+        new(DashboardPendingTasks, "Dashboard tile: pending tasks (FARM-06, Owner only)", false, [View], IsDashboardTile: true),
     ];
 
     private static readonly Dictionary<string, FunctionDefinition> ByCode = All.ToDictionary(f => f.Code);
