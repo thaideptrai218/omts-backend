@@ -94,6 +94,18 @@ public class NotificationDispatcherTests
             IReadOnlyCollection<Guid> accountIds, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyDictionary<Guid, IReadOnlyList<NotificationPreference>>>(
                 Preferences.Where(p => accountIds.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value));
+
+        // The dispatcher only writes; reading the inbox is tested against the API.
+        public Task<(IReadOnlyList<Notification> Items, int Total)> ListForRecipientAsync(
+            Guid accountId, int page, int pageSize, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<int> CountUnreadAsync(Guid accountId, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<Notification?> GetForRecipientAsync(Guid notificationId, Guid accountId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<Notification>> ListUnreadForRecipientAsync(Guid accountId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FakePushOutbox : IPushOutbox

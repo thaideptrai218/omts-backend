@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
 
@@ -25,6 +26,21 @@ internal sealed class AccountRepository(OmtsDbContext db) : IAccountRepository
 
     public Task<Account?> FindByPhoneAsync(string phoneNumber, CancellationToken cancellationToken) =>
         db.Accounts.FirstOrDefaultAsync(a => a.PhoneNumber == phoneNumber, cancellationToken);
+
+    public async Task<IReadOnlyList<Guid>> ListActiveOwnerIdsAsync(CancellationToken cancellationToken) =>
+        await db.Accounts
+            .Where(a => a.SubjectType == SubjectType.CooperativeOwner && a.StatusId == StatusIds.Account.Active)
+            .Select(a => a.Id)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Account>> ListTraderRequestsAsync(int statusId, CancellationToken cancellationToken) =>
+        await db.Accounts.AsNoTracking()
+            .Where(a => a.SubjectType == SubjectType.Trader && a.StatusId == statusId)
+            .OrderBy(a => a.AccessRequestedAt)
+            .ToListAsync(cancellationToken);
+
+    public Task<Account?> FindByZaloAccountIdAsync(string zaloAccountId, CancellationToken cancellationToken) =>
+        db.Accounts.FirstOrDefaultAsync(a => a.ZaloAccountId == zaloAccountId, cancellationToken);
 
     public Task<Account?> FindByVerifiedEmailAsync(string email, CancellationToken cancellationToken) =>
         db.Accounts.FirstOrDefaultAsync(a => a.Email == email && a.EmailVerifiedAt != null, cancellationToken);

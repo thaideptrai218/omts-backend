@@ -27,6 +27,9 @@ internal static class StatusCatalogSeed
 
         NewStatus(S.Account.Active, G.Account, "ACTIVE", "Active", "Can log in according to effective zone–role pairs.", initial: true),
         NewStatus(S.Account.Locked, G.Account, "LOCKED", "Locked", "Cannot log in; data and history stay unchanged."),
+        // Not in the SRS table yet: traders asking for an account from the Zalo Mini App (decision of 28/10/2026).
+        NewStatus(S.Account.PendingApproval, G.Account, "PENDING_APPROVAL", "Pending approval", "A trader asked for an account from the Zalo Mini App; cannot log in until the Cooperative Owner approves.", initial: true),
+        NewStatus(S.Account.Rejected, G.Account, "REJECTED", "Rejected", "The Cooperative Owner refused the request; the trader may ask again."),
 
         NewStatus(S.Employee.Working, G.Employee, "WORKING", "Employed", "The employee is working and can be assigned work and recorded in attendance.", initial: true),
         NewStatus(S.Employee.Left, G.Employee, "LEFT", "Left", "No new work or attendance; wage and salary history stays unchanged."),
@@ -176,6 +179,11 @@ internal static class StatusCatalogSeed
         NewTransition(71, S.PurchaseReceipt.Draft, S.PurchaseReceipt.Cancelled, "INP-04", OwnerOrZoneManager, Action, "Cancel a draft that will not be completed.", true),
         NewTransition(72, S.PurchaseReceipt.Completed, S.PurchaseReceipt.Cancelled, "INP-04", OwnerOrZoneManager, Action, "No seed lot of the receipt is stocked and the receipt has no purchase return.", true),
         NewTransition(73, S.SupplierPayment.Recorded, S.SupplierPayment.Cancelled, "INP-04", OwnerOrZoneManager, Action, "The receipt is cancelled together with its payments.", true),
+
+        // Trader accounts requested from the Zalo Mini App (not in the SRS table yet, decision of 28/10/2026).
+        NewTransition(74, S.Account.PendingApproval, S.Account.Active, "ACS-01 (Zalo)", Owner, Action, "Approve the trader's request.", false),
+        NewTransition(75, S.Account.PendingApproval, S.Account.Rejected, "ACS-01 (Zalo)", Owner, Action, "Refuse the trader's request.", true),
+        NewTransition(76, S.Account.Rejected, S.Account.PendingApproval, "ACS-01 (Zalo)", "Trader", Action, "The trader asks again from the Zalo Mini App.", false),
     ];
 
     private static Status NewStatus(int id, string group, string code, string displayName, string meaning, bool initial = false, bool final = false) =>

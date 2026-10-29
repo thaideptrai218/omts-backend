@@ -19,6 +19,15 @@ public interface IAccountRepository
     /// <summary>Any account using this phone number, verified or not (login phone numbers are unique system-wide).</summary>
     Task<Account?> FindByPhoneAsync(string phoneNumber, CancellationToken cancellationToken);
 
+    /// <summary>Ids of the active Cooperative Owner accounts (recipients of trader requests).</summary>
+    Task<IReadOnlyList<Guid>> ListActiveOwnerIdsAsync(CancellationToken cancellationToken);
+
+    /// <summary>Trader accounts in <paramref name="statusId"/> (Pending approval or Rejected), oldest request first.</summary>
+    Task<IReadOnlyList<Account>> ListTraderRequestsAsync(int statusId, CancellationToken cancellationToken);
+
+    /// <summary>The account linked to this Zalo user (Zalo Mini App "Liên kết tài khoản").</summary>
+    Task<Account?> FindByZaloAccountIdAsync(string zaloAccountId, CancellationToken cancellationToken);
+
     /// <summary>The account whose verified email is this one (verified emails are unique system-wide).</summary>
     Task<Account?> FindByVerifiedEmailAsync(string email, CancellationToken cancellationToken);
 

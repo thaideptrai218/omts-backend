@@ -7,13 +7,14 @@ using OMTS.Api.Filters;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Features.Accounts;
 using OMTS.Application.Features.Accounts.Dtos;
+using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Verification.Dtos;
 
 namespace OMTS.Api.Controllers;
 
 /// <summary>
-/// The caller's password (ACS-04) and the phone verification after login (ACS-02). Reachable while a
-/// temporary password must be changed and while the phone is unverified.
+/// The caller's password (ACS-04), the phone verification after login (ACS-02) and the Zalo link of the Mini
+/// App. Reachable while a temporary password must be changed and while the phone is unverified.
 /// </summary>
 [ApiController]
 [Route("api/me")]
@@ -21,7 +22,7 @@ namespace OMTS.Api.Controllers;
 [AllowWhenPasswordChangeRequired]
 [AllowWhenPhoneUnverified]
 public sealed class MeSecurityController(
-    PasswordChangeService passwords, PhoneVerificationService phones, ICurrentUser currentUser) : ControllerBase
+    PasswordChangeService passwords, PhoneVerificationService phones, ZaloLinkService zaloLinks, ICurrentUser currentUser) : ControllerBase
 {
     /// <summary>Proof by current password or by an email code; all sessions end and fresh tokens are returned (MSG18).</summary>
     [HttpPost("password")]
@@ -46,4 +47,10 @@ public sealed class MeSecurityController(
     [ProducesResponseType<ContactConfirmed>(StatusCodes.Status200OK)]
     public async Task<IActionResult> ConfirmPhoneVerification(ConfirmContactRequest request, CancellationToken cancellationToken) =>
         (await phones.ConfirmAsync(currentUser.AccountId!.Value, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>Removes the Zalo link (the account stays) and ends the current session; repeating it is harmless.</summary>
+    [HttpDelete("zalo-link")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> UnlinkZalo(CancellationToken cancellationToken) =>
+        (await zaloLinks.UnlinkAsync(currentUser.AccountId!.Value, currentUser.SessionId!.Value, cancellationToken)).ToActionResult(_ => NoContent());
 }

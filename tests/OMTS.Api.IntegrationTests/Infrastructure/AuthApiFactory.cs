@@ -12,6 +12,7 @@ using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
 using OMTS.Infrastructure;
 using OMTS.Infrastructure.Persistence;
+using OMTS.Infrastructure.Zalo;
 
 namespace OMTS.Api.IntegrationTests.Infrastructure;
 
@@ -46,8 +47,14 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jobs:WaterMeasurementOverdue:CatchUpOnStart", "false");
         builder.UseSetting("Jobs:OrphanFileCleanup:Enabled", "false");
         builder.ConfigureLogging(logging => logging.AddProvider(Logs));
-        builder.ConfigureServices(services =>
+        builder.ConfigureServices((context, services) =>
         {
+            // User-secrets may select Graph for local phone testing. Keep fake test tokens off the network,
+            // while preserving explicit unset-provider tests and non-Development startup checks.
+            if (context.HostingEnvironment.EnvironmentName == "Development" && context.Configuration["Zalo:Provider"] == "Graph")
+            {
+                services.PostConfigure<ZaloOptions>(options => options.Provider = ZaloOptions.FakeProvider);
+            }
             services.RemoveAll<DbContextOptions<OmtsDbContext>>();
             services.AddDbContext<OmtsDbContext>((provider, options) => options
                 .UseInMemoryDatabase(_databaseName, DatabaseRoot)

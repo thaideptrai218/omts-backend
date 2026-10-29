@@ -22,6 +22,12 @@ public static class StatusIds
     {
         public const int Active = 301;
         public const int Locked = 302;
+
+        /// <summary>Trader who asked for an account from the Zalo Mini App; cannot log in until approved.</summary>
+        public const int PendingApproval = 303;
+
+        /// <summary>The Cooperative Owner refused the request; the person may ask again.</summary>
+        public const int Rejected = 304;
     }
 
     public static class Employee

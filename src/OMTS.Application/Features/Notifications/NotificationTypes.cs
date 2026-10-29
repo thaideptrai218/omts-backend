@@ -27,6 +27,12 @@ public static class NotificationTypes
     public const string NewOrder = "NEW_ORDER";
     public const string TraceQrSent = "TRACE_QR_SENT";
 
+    /// <summary>To the Cooperative Owner: a trader asked for an account from the Zalo Mini App.</summary>
+    public const string TraderAccessRequested = "TRADER_ACCESS_REQUESTED";
+
+    /// <summary>To the trader: the Cooperative Owner approved the request.</summary>
+    public const string TraderAccessApproved = "TRADER_ACCESS_APPROVED";
+
     private static readonly Dictionary<string, string> CategoryByType = new()
     {
         [WaterAlert] = NotificationCategories.WaterAlerts,
@@ -36,6 +42,8 @@ public static class NotificationTypes
         [PayrollSentBack] = NotificationCategories.Work,
         [NewOrder] = NotificationCategories.Orders,
         [TraceQrSent] = NotificationCategories.TraceabilityQrSent,
+        [TraderAccessRequested] = NotificationCategories.Work,
+        [TraderAccessApproved] = NotificationCategories.Work,
     };
 
     /// <summary>Preference category of a type; an unknown type is its own category.</summary>
