@@ -1027,6 +1027,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AccessRequestNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTimeOffset?>("AccessRequestedAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -1069,6 +1076,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("PhoneVerifiedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -1097,6 +1108,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("ZaloAccountId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
@@ -1111,6 +1126,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Username")
                         .IsUnique();
+
+                    b.HasIndex("ZaloAccountId")
+                        .IsUnique()
+                        .HasFilter("[ZaloAccountId] IS NOT NULL");
 
                     b.ToTable("Accounts");
                 });
@@ -2178,6 +2197,28 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
+                            Id = 303,
+                            Code = "PENDING_APPROVAL",
+                            DisplayName = "Pending approval",
+                            Group = "ACCOUNT",
+                            IsFinal = false,
+                            IsInitial = true,
+                            Meaning = "A trader asked for an account from the Zalo Mini App; cannot log in until the Cooperative Owner approves.",
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 304,
+                            Code = "REJECTED",
+                            DisplayName = "Rejected",
+                            Group = "ACCOUNT",
+                            IsFinal = false,
+                            IsInitial = false,
+                            Meaning = "The Cooperative Owner refused the request; the trader may ask again.",
+                            SortOrder = 4
+                        },
+                        new
+                        {
                             Id = 401,
                             Code = "WORKING",
                             DisplayName = "Employed",
@@ -2924,6 +2965,39 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             ToStatusId = 3603,
                             TriggerEvent = "Action",
                             UseCases = "DEBT-02"
+                        },
+                        new
+                        {
+                            Id = 30074,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 303,
+                            GuardCondition = "Approve the trader's request.",
+                            ReasonRequired = false,
+                            ToStatusId = 301,
+                            TriggerEvent = "Action",
+                            UseCases = "ACS-01 (Zalo)"
+                        },
+                        new
+                        {
+                            Id = 30075,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 303,
+                            GuardCondition = "Refuse the trader's request.",
+                            ReasonRequired = true,
+                            ToStatusId = 304,
+                            TriggerEvent = "Action",
+                            UseCases = "ACS-01 (Zalo)"
+                        },
+                        new
+                        {
+                            Id = 30076,
+                            AllowedPerformers = "Trader",
+                            FromStatusId = 304,
+                            GuardCondition = "The trader asks again from the Zalo Mini App.",
+                            ReasonRequired = false,
+                            ToStatusId = 303,
+                            TriggerEvent = "Action",
+                            UseCases = "ACS-01 (Zalo)"
                         });
                 });
 

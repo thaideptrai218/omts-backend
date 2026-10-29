@@ -175,6 +175,17 @@ public static class MessageCodes
         public const string NoVerifiedEmail = "NO_VERIFIED_EMAIL";
         public const string UnexpectedError = "UNEXPECTED_ERROR";
         public const string PasswordChangeRequired = "PASSWORD_CHANGE_REQUIRED";
+        // The Zalo Mini App linking messages have no equivalent in the SRS catalogue.
+        public const string MiniAppNotification = "MINI_APP_NOTIFICATION";
+        public const string ZaloTokenInvalid = "ZALO_TOKEN_INVALID";
+        public const string ZaloPhoneTokenInvalid = "ZALO_PHONE_TOKEN_INVALID";
+        public const string ZaloPhoneNotFound = "ZALO_PHONE_NOT_FOUND";
+        public const string ZaloApprovalPending = "ZALO_APPROVAL_PENDING";
+        public const string ZaloRequestRejected = "ZALO_REQUEST_REJECTED";
+        public const string ZaloAccountExists = "ZALO_ACCOUNT_EXISTS";
+        public const string ZaloPhoneUnsupported = "ZALO_PHONE_UNSUPPORTED";
+        public const string ZaloAlreadyLinked = "ZALO_ALREADY_LINKED";
+        public const string ZaloNotLinked = "ZALO_NOT_LINKED";
         public const string LicenseReplaced = "LICENSE_REPLACED";
 
         /// <summary>
@@ -190,7 +201,8 @@ public static class MessageCodes
         /// </summary>
         public static readonly IReadOnlySet<string> KeptAsCode = new HashSet<string>(StringComparer.Ordinal)
         {
-            Msg05, Msg06, Msg19, Msg58,
+            Msg04, Msg05, Msg06, Msg19, Msg57, Msg58, MiniAppNotification,
+            ZaloTokenInvalid, ZaloPhoneTokenInvalid, ZaloPhoneNotFound, ZaloApprovalPending, ZaloRequestRejected, ZaloAccountExists, ZaloPhoneUnsupported, ZaloAlreadyLinked, ZaloNotLinked,
             NotFound, TooManyRequests, UnexpectedError, PasswordChangeRequired,
         };
     }
