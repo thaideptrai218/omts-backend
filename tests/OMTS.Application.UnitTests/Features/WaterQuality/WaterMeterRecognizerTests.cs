@@ -1,8 +1,9 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using OMTS.Application.Common.Interfaces.Ocr;
-using OMTS.Application.Features.WaterQuality;
+using OMTS.Application.Common.Models.Ocr;
 using OMTS.Application.Features.WaterQuality.Dtos;
+using OMTS.Application.Features.WaterQuality;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Enums;
 

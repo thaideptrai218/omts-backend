@@ -4,9 +4,6 @@ using OMTS.Application.Features.WaterQuality.Dtos;
 
 namespace OMTS.Infrastructure.Bootstrap.Demo;
 
-/// <summary>A demo reading taken <see cref="DaysAgo"/> days before the first seed day, early in the morning.</summary>
-internal sealed record DemoWaterReading(int DaysAgo, TimeOnly Time, decimal Ph, decimal Salinity);
-
 /// <summary>
 /// ENV-01…ENV-04 demo data of the In Use demo zones: their thresholds and one reading a day for the 30 days before the
 /// first seed day. Three readings are outside the thresholds (an algae bloom, heavy rain, a storm), one reading is

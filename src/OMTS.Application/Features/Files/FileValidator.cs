@@ -1,13 +1,6 @@
+using OMTS.Application.Features.Files.Models;
+
 namespace OMTS.Application.Features.Files;
-
-/// <summary>A checked file: its real format and the content type to store it with.</summary>
-public sealed record ValidatedFile(IncomingFile File, FileFormat Format, string ContentType);
-
-/// <summary>Result of <see cref="FileValidator.Validate"/>: the checked files, or the first invalid file's name.</summary>
-public sealed record FileValidationResult(IReadOnlyList<ValidatedFile> Files, string? InvalidFileName, string? Problem)
-{
-    public bool IsValid => Problem is null;
-}
 
 /// <summary>
 /// Checks uploads before they reach storage: the real format is read from the content (magic bytes), not

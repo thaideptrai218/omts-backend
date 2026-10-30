@@ -1,3 +1,5 @@
+using OMTS.Application.Common.Models.Storage;
+using OMTS.Application.Features.Files.Models;
 using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;

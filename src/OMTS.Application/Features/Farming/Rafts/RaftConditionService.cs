@@ -1,3 +1,6 @@
+using OMTS.Application.Common.Models.Persistence;
+using OMTS.Application.Features.Farming.Rafts.Dtos;
+using OMTS.Application.Features.Farming.Rafts.Models;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;

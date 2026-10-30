@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Models.Reports;
 using ClosedXML.Excel;
 using OMTS.Application.Common.Interfaces.Reports;
 

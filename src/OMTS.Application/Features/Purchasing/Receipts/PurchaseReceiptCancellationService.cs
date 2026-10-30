@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Purchasing.Receipts.Dtos;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Exceptions;

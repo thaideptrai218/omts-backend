@@ -16,9 +16,6 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Accounts;
 
-/// <summary>Result of ACS-04: fresh tokens for this device (every other session was ended) and MSG18.</summary>
-public sealed record PasswordChanged(AuthTokens Tokens, string Message);
-
 /// <summary>
 /// ACS-04 – the logged-in user changes the password after proving identity (current password, or a code
 /// sent to the verified email), including the forced change after a temporary password.

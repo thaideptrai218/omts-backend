@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OMTS.Api.Filters;
-using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Authorization;
 
 namespace OMTS.Api.IntegrationTests.Infrastructure;
 

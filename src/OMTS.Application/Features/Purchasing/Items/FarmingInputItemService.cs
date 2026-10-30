@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Purchasing.Items.Dtos;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
@@ -12,12 +13,6 @@ using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Purchasing.Items;
-
-public sealed record SaveFarmingInputItemRequest(
-    string? Code, string? Name, InputItemGroup? Group, string? Unit, string? Description, string? RowVersion = null);
-
-public sealed record FarmingInputItemView(
-    Guid Id, string Code, string Name, InputItemGroup Group, string Unit, string? Description, bool IsUsed, int StatusId, string Status, string RowVersion);
 
 /// <summary>
 /// INP-02 – the Cooperative Owner's catalogue of farming inputs (writes are Owner only, API filter). Group

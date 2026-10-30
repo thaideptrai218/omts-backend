@@ -1,3 +1,5 @@
+using OMTS.Application.Features.Purchasing.Models;
+using OMTS.Application.Features.Purchasing.Receipts.Dtos;
 using System.Globalization;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
@@ -15,22 +17,6 @@ using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Purchasing.Receipts;
-
-public sealed record ReturnLineInput(Guid? ReceiptLineId, decimal? Quantity);
-
-public sealed record CreatePurchaseReturnRequest(
-    DateOnly? ReturnDate,
-    string? Reason,
-    decimal? RefundAmount,
-    PaymentMethod? RefundMethod,
-    decimal? DebtReductionAmount,
-    IReadOnlyList<ReturnLineInput>? Lines);
-
-public sealed record PurchaseReturnLineView(Guid ReceiptLineId, string ItemCode, string ItemName, string Unit, decimal Quantity, decimal ReturnValue);
-
-public sealed record PurchaseReturnView(
-    Guid Id, string Code, Guid ReceiptId, string ReceiptCode, DateOnly ReturnDate, string Reason, decimal RefundAmount, PaymentMethod? RefundMethod,
-    decimal DebtReductionAmount, decimal ReturnValue, IReadOnlyList<PurchaseReturnLineView> Lines);
 
 /// <summary>
 /// INP-05 – return goods of a Completed receipt to the supplier: refund received, debt reduction, or both.

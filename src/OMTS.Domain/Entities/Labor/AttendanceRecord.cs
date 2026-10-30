@@ -20,6 +20,12 @@ public class AttendanceRecord : AuditableEntity
     public Contractor? Contractor { get; set; }
 
     public DateOnly WorkDate { get; set; }
+    public Guid? ZoneId { get; set; }
+    public DateTimeOffset? CheckedInAt { get; set; }
+    public DateTimeOffset? CheckedOutAt { get; set; }
+    public string? CheckInMethod { get; set; }
+    public string? CheckOutMethod { get; set; }
+    public ICollection<AttendanceJobPeriod> JobPeriods { get; set; } = [];
     public AttendanceResult Result { get; set; }
     public string? Notes { get; set; }
     public Guid RecordedByAccountId { get; set; }

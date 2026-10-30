@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Models.Messaging;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Logging;

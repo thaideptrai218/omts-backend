@@ -1,12 +1,6 @@
-namespace OMTS.Application.Features.Files;
+using OMTS.Application.Features.Files.Models;
 
-public enum FileFormat
-{
-    Jpeg,
-    Png,
-    Pdf,
-    WebP,
-}
+namespace OMTS.Application.Features.Files;
 
 /// <summary>Which formats, how large and how many files one save may carry.</summary>
 public sealed record FileRules(IReadOnlySet<FileFormat> AllowedFormats, long MaxBytesPerFile, int MaxFiles)

@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Files.Models;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;

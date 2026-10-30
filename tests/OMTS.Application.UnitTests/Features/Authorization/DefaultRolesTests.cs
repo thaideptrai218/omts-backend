@@ -1,5 +1,5 @@
-using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Authorization;
 
 namespace OMTS.Application.UnitTests.Features.Authorization;
 

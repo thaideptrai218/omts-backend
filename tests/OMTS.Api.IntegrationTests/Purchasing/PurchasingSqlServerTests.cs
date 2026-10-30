@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -7,10 +7,10 @@ using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Features.Authorization;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
+using FarmingHost = OMTS.Api.IntegrationTests.Farming.FarmingSqlServerHost;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 using static OMTS.Api.IntegrationTests.Purchasing.PurchasingSqlServerKit;
 using static OMTS.Api.IntegrationTests.Purchasing.PurchasingTestKit;
-using FarmingHost = OMTS.Api.IntegrationTests.Farming.FarmingSqlServerHost;
 
 namespace OMTS.Api.IntegrationTests.Purchasing;
 

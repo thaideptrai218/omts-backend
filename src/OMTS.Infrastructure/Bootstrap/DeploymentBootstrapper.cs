@@ -14,9 +14,6 @@ using OMTS.Infrastructure.Persistence.Seed;
 
 namespace OMTS.Infrastructure.Bootstrap;
 
-/// <summary>Exit code and console lines of the bootstrap command; never contains a password.</summary>
-public sealed record BootstrapOutcome(int ExitCode, IReadOnlyList<string> Messages);
-
 /// <summary>
 /// One-time deployment step (formerly UC72; no System Administrator since 22/10):
 /// <c>dotnet OMTS.Api.dll seed --bootstrap [--demo]</c> applies migrations, checks the status catalog,

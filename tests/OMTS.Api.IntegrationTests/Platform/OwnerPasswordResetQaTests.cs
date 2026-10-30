@@ -1,5 +1,6 @@
-using System.Net;
+using OMTS.Application.Common.Interfaces.Messaging;
 using System.Net.Http.Json;
+using System.Net;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;

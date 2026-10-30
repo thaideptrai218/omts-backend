@@ -9,6 +9,8 @@ Sibling repos: [omts-web](https://github.com/thaideptrai218/omts-web) · [omts-m
 
 ## Structure (Clean Architecture)
 
+Detailed folder responsibilities: [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md).
+
 ```
 src/
   OMTS.Domain/                 No dependencies.
@@ -26,9 +28,9 @@ src/
     Identity/                  JWT tokens, password hashing
     Persistence/               OmtsDbContext, UnitOfWork
       Configurations/<Group>/  One <Entity>Configuration per entity, same groups as Domain
-      Repositories/  Interceptors/  Seed/  Migrations/
+      Repositories/<Group>/  Interceptors/  Seed/  Migrations/
   OMTS.Api/                    HTTP endpoints, DI composition root.
-    Controllers/  Filters/  Extensions/  Services/  Common/
+    Controllers/<Feature>/  Filters/  Extensions/  Services/  Common/
 tests/
   OMTS.Domain.UnitTests/  OMTS.Application.UnitTests/
   OMTS.Api.IntegrationTests/   Infrastructure/ (test host, test-only endpoints), one folder per feature
@@ -115,8 +117,9 @@ inbound TCP 8080 in the PC's firewall. The Android emulator reaches the PC at `h
 documents, raft drawings, invoice photos) are relative, signed paths such as `/api/files/local/...?expires=…&sig=…`.
 Prefix them with the API base URL.
 
-**Web app.** In Development `Cors:AllowedOrigins` allows `http://localhost:3000`, so the Next.js dev server can call the
-API from the browser. For another origin, add a line such as `Cors__AllowedOrigins__1: http://192.168.1.10:3000` under
+**Web app and Zalo Mini App.** In Development `Cors:AllowedOrigins` allows `http://localhost:3000` (the Next.js dev
+server) and `https://h5.zdn.vn` (Zalo serves every `zmp deploy` version of the Mini App, Development, Testing and
+published, from that origin). For another origin, add a line such as `Cors__AllowedOrigins__2: http://192.168.1.10:3000` under
 `environment` in `docker-compose.yml`, then run `docker compose up -d`.
 
 **Update, reset, stop.**
@@ -238,9 +241,10 @@ created by a one-time command run on the server by the deployment operator (not 
 | Push (`Push:Provider` = `None` by default, `Fake` in Development) | `Push:Fake:FailFor` |
 | OCR (`Ocr:Provider` unset by default: meter photos are not read and the values are entered by hand (MSG04); `Fake` invents readings, so it is set in Development only and stops the host elsewhere) | `Ocr:TimeoutSeconds` (default 15), `Ocr:UncertainBelow` (default 0.8), `Ocr:Fake:Mode` (`Success`, `Fail`, `Timeout`), `Ocr:Fake:Ph`, `Ocr:Fake:Salinity`, `Ocr:Fake:Confidence` |
 | File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development; one container or folder per environment, see Background jobs) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
+| Zalo Mini App "Liên kết tài khoản" (`POST api/auth/zalo/link`, `zalo/login`, `DELETE api/me/zalo-link`; a trader without an account sends `zalo/trader-requests`, which the Cooperative Owner approves or refuses at `api/trader-requests`). `Zalo:Provider` unset by default: linking answers MSG04; `Graph` calls graph.zalo.me and needs the Zalo App secret (developers.zalo.me), the host does not start without it; `Fake` (Development only) accepts `fake:<zalo user id>` access tokens and `fake:<phone number>` phone tokens | `Zalo:Provider`, `Zalo:AppSecret` (user-secrets / `Zalo__AppSecret`), `Zalo:TimeoutSeconds` (default 10) |
 | Bootstrap (see Deployment) | `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:*` |
 | Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30) |
-| CORS: the web app calls the API from the browser. Set its origin in every deployed environment; empty means no CORS. Development allows `http://localhost:3000`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`) |
+| CORS: the web app and the Zalo Mini App call the API from the browser. Set their origins in every deployed environment; empty means no CORS. Development allows `http://localhost:3000` and `https://h5.zdn.vn`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`, `Cors__AllowedOrigins__1=https://h5.zdn.vn`) |
 | Reverse proxy: X-Forwarded-For is trusted only from these addresses (and loopback), so the limits see the real client | `ForwardedHeaders:KnownProxies` (e.g. `10.0.0.4`), `ForwardedHeaders:KnownNetworks` (e.g. `10.0.0.0/24`) |
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG04 and a critical log entry is written (one number or address gets at most 10 codes per hour) | `Verification:DailySmsLimit` (default 500) |
 | Zone license reminder (FARM-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |

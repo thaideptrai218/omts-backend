@@ -1,3 +1,5 @@
+using OMTS.Application.Features.Purchasing.Payments.Dtos;
+using OMTS.Application.Features.Purchasing.Receipts.Dtos;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
@@ -13,17 +15,6 @@ using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Purchasing.Payments;
-
-public sealed record RecordSupplierPaymentRequest(
-    Guid? SupplierId, Guid? ReceiptId, decimal? Amount, DateOnly? PaymentDate, PaymentMethod? Method, string? ReferenceCode, string? DeduplicationKey);
-
-public sealed record AllocatePaymentRequest(Guid? ReceiptId);
-
-public sealed record SupplierPaymentView(
-    Guid Id, SupplierRef Supplier, Guid? ReceiptId, string? ReceiptCode, decimal Amount, DateOnly PaymentDate, PaymentMethod Method,
-    string? ReferenceCode, int StatusId, string Status, string? CancelReason);
-
-public sealed record SupplierPaymentPage(Paged<SupplierPaymentView> Page, decimal TotalAmount);
 
 /// <summary>
 /// INP-06 – the Accountant records money paid to suppliers against Completed receipts (All zones grant,

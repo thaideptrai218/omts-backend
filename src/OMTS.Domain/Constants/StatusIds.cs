@@ -6,6 +6,13 @@ namespace OMTS.Domain.Constants;
 /// </summary>
 public static class StatusIds
 {
+    public static class PurchaseRequest
+    {
+        public const int AwaitingResponse = 1901;
+        public const int Accepted = 1902;
+        public const int Declined = 1903;
+        public const int Cancelled = 1904;
+    }
     public static class Usage
     {
         public const int InUse = 101;
@@ -22,6 +29,12 @@ public static class StatusIds
     {
         public const int Active = 301;
         public const int Locked = 302;
+
+        /// <summary>Trader who asked for an account from the Zalo Mini App; cannot log in until approved.</summary>
+        public const int PendingApproval = 303;
+
+        /// <summary>The Cooperative Owner refused the request; the person may ask again.</summary>
+        public const int Rejected = 304;
     }
 
     public static class Employee

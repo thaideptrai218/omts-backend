@@ -145,6 +145,41 @@ public static class UserMessages
     public static readonly UserMessage PasswordChangeRequired = new(
         "PASSWORD_CHANGE_REQUIRED", "Please change your temporary password before using other functions.");
 
+    /// <summary>Not in the SRS list: the Zalo access token of the Mini App could not be checked with Zalo.</summary>
+    public static readonly UserMessage ZaloTokenInvalid = new(
+        "ZALO_TOKEN_INVALID", "The Zalo account could not be verified. Please open OMTS from Zalo and try again.");
+
+    /// <summary>Not in the SRS list: the phone token of the Mini App was refused (used, expired or forged).</summary>
+    public static readonly UserMessage ZaloPhoneTokenInvalid = new(
+        "ZALO_PHONE_TOKEN_INVALID", "The phone number could not be read from Zalo. Please try again.");
+
+    /// <summary>Not in the SRS list: no account uses the Zalo phone number; the person may ask the cooperative for one.</summary>
+    public static readonly UserMessage ZaloPhoneNotFound = new(
+        "ZALO_PHONE_NOT_FOUND", "No OMTS account uses this phone number. Traders can send a request to the cooperative.");
+
+    /// <summary>Not in the SRS list: the trader's request waits for the Cooperative Owner.</summary>
+    public static readonly UserMessage ZaloApprovalPending = new(
+        "ZALO_APPROVAL_PENDING", "Your request has been sent. Please wait until the cooperative approves it.");
+
+    /// <summary>Not in the SRS list: the Cooperative Owner refused the trader's request (the reason is a separate field).</summary>
+    public static readonly UserMessage ZaloRequestRejected = new(
+        "ZALO_REQUEST_REJECTED", "The cooperative did not approve your request. You can contact the cooperative or send a new request.");
+
+    /// <summary>Not in the SRS list: the phone number already has an account, which is linked instead of requested.</summary>
+    public static readonly UserMessage ZaloAccountExists = new(
+        "ZALO_ACCOUNT_EXISTS", "This phone number already has an OMTS account. Please link it instead.");
+
+    /// <summary>Not in the SRS list: the Zalo phone number is not a Vietnamese number, so no account can use it.</summary>
+    public static readonly UserMessage ZaloPhoneUnsupported = new(
+        "ZALO_PHONE_UNSUPPORTED", "OMTS accounts use Vietnamese phone numbers only. Please use a Zalo account with a Vietnamese phone number.");
+
+    /// <summary>Not in the SRS list: the Zalo user is already linked to another OMTS account.</summary>
+    public static readonly UserMessage ZaloAlreadyLinked = new(
+        "ZALO_ALREADY_LINKED", "This Zalo account is already linked to another OMTS account.");
+
+    /// <summary>Not in the SRS list: the Zalo user has not linked an account yet (the Mini App stays a guest).</summary>
+    public static readonly UserMessage ZaloNotLinked = new("ZALO_NOT_LINKED", "This Zalo account is not linked to OMTS yet.");
+
     /// <summary>Not in the SRS list yet (FARM-03): a replaced license keeps its data for checking past validity.</summary>
     public static UserMessage LicenseReplaced(string replacementNumber) => new(
         "LICENSE_REPLACED", $"This license has been replaced by {replacementNumber} and can no longer be edited.");

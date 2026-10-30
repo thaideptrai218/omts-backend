@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Models.Messaging;
 using OMTS.Application.Common.Models;
 
 namespace OMTS.Application.Common.Interfaces.Messaging;
@@ -13,5 +14,3 @@ public interface IEmailSender
         IReadOnlyList<EmailAttachment>? attachments = null,
         CancellationToken cancellationToken = default);
 }
-
-public sealed record EmailAttachment(string FileName, string ContentType, byte[] Content);

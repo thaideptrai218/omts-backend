@@ -1,12 +1,13 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Interfaces.Storage;
+using OMTS.Application.Features.Files.Models;
 using OMTS.Application.Features.Files;
 using static OMTS.Api.IntegrationTests.Employees.EmployeeRequests;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;

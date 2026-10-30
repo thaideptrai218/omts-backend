@@ -1,3 +1,5 @@
+using OMTS.Application.Common.Models.Storage;
+using OMTS.Application.Features.Files.Models;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
