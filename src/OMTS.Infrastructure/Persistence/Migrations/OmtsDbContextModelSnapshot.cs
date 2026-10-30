@@ -3116,6 +3116,50 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasData(
                         new
                         {
+                            Id = 1901,
+                            Code = "AWAITING_RESPONSE",
+                            DisplayName = "Awaiting response",
+                            Group = "PURCHASE_REQUEST",
+                            IsFinal = false,
+                            IsInitial = true,
+                            Meaning = "SALE-01: purchase request in whole cages, awaiting the Owner.",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 1902,
+                            Code = "ACCEPTED",
+                            DisplayName = "Accepted",
+                            Group = "PURCHASE_REQUEST",
+                            IsFinal = false,
+                            IsInitial = false,
+                            Meaning = "SALE-03: the Owner accepted a cage quantity and pickup date.",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 1903,
+                            Code = "DECLINED",
+                            DisplayName = "Declined",
+                            Group = "PURCHASE_REQUEST",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "SALE-03: the Owner declined with a reason.",
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 1904,
+                            Code = "CANCELLED",
+                            DisplayName = "Cancelled",
+                            Group = "PURCHASE_REQUEST",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "SALE-02: the trader cancelled their own request.",
+                            SortOrder = 4
+                        },
+                        new
+                        {
                             Id = 101,
                             Code = "IN_USE",
                             DisplayName = "In Use",
@@ -4492,6 +4536,50 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
+                            Id = 77,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 1901,
+                            GuardCondition = "Positive accepted cage count no larger than requested; pickup date is today or later.",
+                            ReasonRequired = false,
+                            ToStatusId = 1902,
+                            TriggerEvent = "Action",
+                            UseCases = "SALE-03"
+                        },
+                        new
+                        {
+                            Id = 78,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 1901,
+                            GuardCondition = "The Owner enters a reason.",
+                            ReasonRequired = true,
+                            ToStatusId = 1903,
+                            TriggerEvent = "Action",
+                            UseCases = "SALE-03"
+                        },
+                        new
+                        {
+                            Id = 79,
+                            AllowedPerformers = "Trader",
+                            FromStatusId = 1901,
+                            GuardCondition = "Only the requesting customer may cancel.",
+                            ReasonRequired = false,
+                            ToStatusId = 1904,
+                            TriggerEvent = "Action",
+                            UseCases = "SALE-02"
+                        },
+                        new
+                        {
+                            Id = 80,
+                            AllowedPerformers = "Trader",
+                            FromStatusId = 1902,
+                            GuardCondition = "The request is not fulfilled; only the requesting customer may cancel.",
+                            ReasonRequired = false,
+                            ToStatusId = 1904,
+                            TriggerEvent = "Action",
+                            UseCases = "SALE-02"
+                        },
+                        new
+                        {
                             Id = 74,
                             AllowedPerformers = "Cooperative Owner",
                             FromStatusId = 303,
@@ -5263,6 +5351,110 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("StatusId");
 
                     b.ToTable("Products");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.PurchaseRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("AcceptedCages")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("AcceptedPickupDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("AllowPayLater")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("ClientOperationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateOnly>("PickupDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("RequestedCages")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("RespondedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("RespondedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ResponseNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("StatusId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("RespondedByAccountId");
+
+                    b.HasIndex("CustomerId", "ClientOperationId")
+                        .IsUnique();
+
+                    b.HasIndex("CustomerId", "CreatedAt");
+
+                    b.HasIndex("StatusId", "CreatedAt");
+
+                    b.ToTable("PurchaseRequest", t =>
+                        {
+                            t.HasCheckConstraint("CK_PurchaseRequest_Cages", "[RequestedCages] > 0 AND ([AcceptedCages] IS NULL OR ([AcceptedCages] > 0 AND [AcceptedCages] <= [RequestedCages]))");
+                        });
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.SaleTransaction", b =>
@@ -7172,6 +7364,38 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Status");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.PurchaseRequest", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Sales.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("RespondedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
+                        .WithMany()
+                        .HasForeignKey("StatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("Product");
 
                     b.Navigation("Status");
                 });

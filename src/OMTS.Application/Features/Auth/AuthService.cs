@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Identity;
@@ -17,6 +18,7 @@ public sealed class AuthService(
     ILoginSessionRepository sessions,
     IAccessGrantRepository grants,
     IEmployeeRepository employees,
+    IOptions<OMTS.Application.Features.Testing.TestRoleOptions> testRoles,
     IPushDeviceRepository pushDevices,
     IUnitOfWork unitOfWork,
     IPasswordHasher passwordHasher,
@@ -134,8 +136,10 @@ public sealed class AuthService(
     }
 
     /// <summary>Checked on every authenticated request so revoked sessions cannot be reused (NFR-01).</summary>
-    public Task<bool> IsSessionActiveAsync(Guid accountId, Guid sessionId, CancellationToken cancellationToken) =>
-        sessions.IsActiveAsync(accountId, sessionId, timeProvider.GetUtcNow(), cancellationToken);
+    public async Task<bool> IsSessionActiveAsync(Guid accountId, Guid sessionId, CancellationToken cancellationToken) =>
+        await sessions.IsActiveAsync(accountId, sessionId, timeProvider.GetUtcNow(), cancellationToken) &&
+        await accounts.GetByIdAsync(accountId, cancellationToken) is { } account &&
+        await TestPersonaAllowedAsync(account, cancellationToken);
 
     private async Task<AuthResult> LoginAsync(
         Account account, LoginRequest request, PasswordCheck passwordCheck, ClientInfo client, CancellationToken cancellationToken)
@@ -259,10 +263,21 @@ public sealed class AuthService(
     /// This grants no business permissions; management APIs still require effective zone grants.</summary>
     internal async Task<bool> HasEffectiveAccessAsync(Account account, CancellationToken cancellationToken, bool linkingEmployee = false)
     {
+        if (!await TestPersonaAllowedAsync(account, cancellationToken)) return false;
         if (account.SubjectType != SubjectType.Staff ||
             await grants.HasEffectiveGrantAsync(account.Id, timeProvider.Today(), cancellationToken)) return true;
-        return (account.ZaloAccountId is not null || linkingEmployee) &&
+        var testEmployee = testRoles.Value.Enabled && testRoles.Value.OwnerAccountId != Guid.Empty &&
+            account.Username == OMTS.Application.Features.Testing.TestRoleNames.Username(testRoles.Value.OwnerAccountId, "Employee");
+        return (account.ZaloAccountId is not null || linkingEmployee || testEmployee) &&
             await employees.GetByAccountIdAsync(account.Id, cancellationToken) is { StatusId: StatusIds.Employee.Working };
+    }
+
+    private async Task<bool> TestPersonaAllowedAsync(Account account, CancellationToken cancellationToken)
+    {
+        if (!OMTS.Application.Features.Testing.TestRoleNames.TryOwnerId(account.Username, out var ownerId)) return true;
+        if (!testRoles.Value.Enabled || testRoles.Value.OwnerAccountId != ownerId) return false;
+        return await accounts.GetByIdAsync(ownerId, cancellationToken) is
+            { SubjectType: SubjectType.CooperativeOwner, StatusId: StatusIds.Account.Active, ZaloAccountId: not null, PhoneVerifiedAt: not null };
     }
 
     private static string? Truncate(string? value, int maxLength) =>

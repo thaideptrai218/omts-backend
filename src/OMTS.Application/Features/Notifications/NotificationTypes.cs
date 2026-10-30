@@ -43,6 +43,8 @@ public static class NotificationTypes
         ["EMPLOYEE_LEAVE_REVIEWED"] = NotificationCategories.Work,
         [PayrollSentBack] = NotificationCategories.Work,
         [NewOrder] = NotificationCategories.Orders,
+        ["PURCHASE_REQUEST_RESPONDED"] = NotificationCategories.Orders,
+        ["PURCHASE_REQUEST_CANCELLED"] = NotificationCategories.Orders,
         [TraceQrSent] = NotificationCategories.TraceabilityQrSent,
         [TraderAccessRequested] = NotificationCategories.Work,
         [TraderAccessApproved] = NotificationCategories.Work,

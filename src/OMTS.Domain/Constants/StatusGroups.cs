@@ -3,6 +3,7 @@ namespace OMTS.Domain.Constants;
 /// <summary>Status groups of the Status catalog (SRS 3.4): 15 life-cycle groups plus the shared USAGE group.</summary>
 public static class StatusGroups
 {
+    public const string PurchaseRequest = "PURCHASE_REQUEST";
     public const string Usage = "USAGE";
     public const string Cooperative = "COOPERATIVE";
     public const string Account = "ACCOUNT";

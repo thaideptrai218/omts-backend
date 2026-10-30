@@ -19,6 +19,10 @@ internal static class StatusCatalogSeed
 
     public static readonly Status[] Statuses =
     [
+        NewStatus(S.PurchaseRequest.AwaitingResponse, G.PurchaseRequest, "AWAITING_RESPONSE", "Awaiting response", "SALE-01: purchase request in whole cages, awaiting the Owner.", initial: true),
+        NewStatus(S.PurchaseRequest.Accepted, G.PurchaseRequest, "ACCEPTED", "Accepted", "SALE-03: the Owner accepted a cage quantity and pickup date."),
+        NewStatus(S.PurchaseRequest.Declined, G.PurchaseRequest, "DECLINED", "Declined", "SALE-03: the Owner declined with a reason.", final: true),
+        NewStatus(S.PurchaseRequest.Cancelled, G.PurchaseRequest, "CANCELLED", "Cancelled", "SALE-02: the trader cancelled their own request.", final: true),
         NewStatus(S.Usage.InUse, G.Usage, "IN_USE", "In Use", "Selectable for new records.", initial: true),
         NewStatus(S.Usage.Discontinued, G.Usage, "OUT_OF_USE", "Discontinued", "Not shown when selecting new records; old data stays unchanged."),
 
@@ -180,6 +184,10 @@ internal static class StatusCatalogSeed
         NewTransition(72, S.PurchaseReceipt.Completed, S.PurchaseReceipt.Cancelled, "INP-04", OwnerOrZoneManager, Action, "No seed lot of the receipt is stocked and the receipt has no purchase return.", true),
         NewTransition(73, S.SupplierPayment.Recorded, S.SupplierPayment.Cancelled, "INP-04", OwnerOrZoneManager, Action, "The receipt is cancelled together with its payments.", true),
 
+        NewTransition(77, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Accepted, "SALE-03", Owner, Action, "Positive accepted cage count no larger than requested; pickup date is today or later.", false),
+        NewTransition(78, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Declined, "SALE-03", Owner, Action, "The Owner enters a reason.", true),
+        NewTransition(79, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Cancelled, "SALE-02", "Trader", Action, "Only the requesting customer may cancel.", false),
+        NewTransition(80, S.PurchaseRequest.Accepted, S.PurchaseRequest.Cancelled, "SALE-02", "Trader", Action, "The request is not fulfilled; only the requesting customer may cancel.", false),
         // Trader accounts requested from the Zalo Mini App (not in the SRS table yet, decision of 28/10/2026).
         NewTransition(74, S.Account.PendingApproval, S.Account.Active, "ACS-01 (Zalo)", Owner, Action, "Approve the trader's request.", false),
         NewTransition(75, S.Account.PendingApproval, S.Account.Rejected, "ACS-01 (Zalo)", Owner, Action, "Refuse the trader's request.", true),

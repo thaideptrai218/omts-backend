@@ -6,6 +6,13 @@ namespace OMTS.Domain.Constants;
 /// </summary>
 public static class StatusIds
 {
+    public static class PurchaseRequest
+    {
+        public const int AwaitingResponse = 1901;
+        public const int Accepted = 1902;
+        public const int Declined = 1903;
+        public const int Cancelled = 1904;
+    }
     public static class Usage
     {
         public const int InUse = 101;
