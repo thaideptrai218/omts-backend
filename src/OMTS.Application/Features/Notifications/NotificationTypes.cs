@@ -39,6 +39,8 @@ public static class NotificationTypes
         [WaterMeasurementOverdue] = NotificationCategories.DeadlineReminders,
         [ZoneLicenseExpiry] = NotificationCategories.DeadlineReminders,
         [WorkAssignment] = NotificationCategories.Work,
+        ["EMPLOYEE_LEAVE_REQUESTED"] = NotificationCategories.Work,
+        ["EMPLOYEE_LEAVE_REVIEWED"] = NotificationCategories.Work,
         [PayrollSentBack] = NotificationCategories.Work,
         [NewOrder] = NotificationCategories.Orders,
         [TraceQrSent] = NotificationCategories.TraceabilityQrSent,

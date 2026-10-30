@@ -37,6 +37,9 @@ public static class DependencyInjection
         services.AddScoped<AuthService>();
         services.AddScoped<ZaloLinkService>();
         services.AddScoped<ZaloLocationService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.WorkforceService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.LeaveService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.WorkforceSettingsService>();
 
         services.AddSingleton<PermissionCache>();
         services.AddSingleton<IPermissionCacheInvalidator>(provider => provider.GetRequiredService<PermissionCache>());

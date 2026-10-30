@@ -68,7 +68,7 @@ public sealed class ZaloLinkService(
             return AppError.Conflict(UserMessages.ZaloAlreadyLinked);
         }
 
-        if (await RefusalOfAsync(account, cancellationToken) is { } refused)
+        if (await RefusalOfAsync(account, cancellationToken, linkingEmployee: true) is { } refused)
         {
             return refused;
         }
@@ -326,14 +326,14 @@ public sealed class ZaloLinkService(
     /// Why the account cannot get a session: a trader request still waiting or refused (with the Owner's reason),
     /// or the rule of the password login (ACS-02): Active, and staff need an effective zone–role pair.
     /// </summary>
-    private async Task<AppError?> RefusalOfAsync(Account account, CancellationToken cancellationToken) => account.StatusId switch
+    private async Task<AppError?> RefusalOfAsync(Account account, CancellationToken cancellationToken, bool linkingEmployee = false) => account.StatusId switch
     {
         StatusIds.Account.PendingApproval => new AppError(ErrorKind.Forbidden, UserMessages.ZaloApprovalPending),
         StatusIds.Account.Rejected => new AppError(ErrorKind.Forbidden, UserMessages.ZaloRequestRejected, new Dictionary<string, object?>
         {
             ["reason"] = account.RejectionReason,
         }),
-        StatusIds.Account.Active when await authService.HasEffectiveAccessAsync(account, cancellationToken) => null,
+        StatusIds.Account.Active when await authService.HasEffectiveAccessAsync(account, cancellationToken, linkingEmployee) => null,
         _ => new AppError(ErrorKind.Forbidden, UserMessages.AccountUnusable),
     };
 

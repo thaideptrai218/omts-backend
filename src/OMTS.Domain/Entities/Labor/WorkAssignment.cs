@@ -31,6 +31,8 @@ public class WorkAssignment : AuditableEntity
     public Contractor? Contractor { get; set; }
 
     public string Task { get; set; } = string.Empty;
+    public Guid? JobTypeId { get; set; }
+    public JobType? JobType { get; set; }
     public DateOnly WorkDate { get; set; }
     public WorkPaymentType PaymentType { get; set; }
 

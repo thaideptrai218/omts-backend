@@ -16,6 +16,7 @@ public sealed class AuthService(
     IAccountRepository accounts,
     ILoginSessionRepository sessions,
     IAccessGrantRepository grants,
+    IEmployeeRepository employees,
     IPushDeviceRepository pushDevices,
     IUnitOfWork unitOfWork,
     IPasswordHasher passwordHasher,
@@ -254,11 +255,15 @@ public sealed class AuthService(
     private void VerifyAgainstDummyHash(string password) =>
         passwordHasher.Verify(_unknownAccountHash ??= passwordHasher.Hash(Guid.NewGuid().ToString()), password);
 
-    /// <summary>Staff can log in only while they hold at least one effective zone–role pair (ACS-02).</summary>
-    internal Task<bool> HasEffectiveAccessAsync(Account account, CancellationToken cancellationToken) =>
-        account.SubjectType != SubjectType.Staff
-            ? Task.FromResult(true)
-            : grants.HasEffectiveGrantAsync(account.Id, timeProvider.Today(), cancellationToken);
+    /// <summary>LABOR-06 via the approved Zalo linking flow: employed linked staff can use their own employee area.
+    /// This grants no business permissions; management APIs still require effective zone grants.</summary>
+    internal async Task<bool> HasEffectiveAccessAsync(Account account, CancellationToken cancellationToken, bool linkingEmployee = false)
+    {
+        if (account.SubjectType != SubjectType.Staff ||
+            await grants.HasEffectiveGrantAsync(account.Id, timeProvider.Today(), cancellationToken)) return true;
+        return (account.ZaloAccountId is not null || linkingEmployee) &&
+            await employees.GetByAccountIdAsync(account.Id, cancellationToken) is { StatusId: StatusIds.Employee.Working };
+    }
 
     private static string? Truncate(string? value, int maxLength) =>
         value is { Length: > 0 } && value.Length > maxLength ? value[..maxLength] : value;
