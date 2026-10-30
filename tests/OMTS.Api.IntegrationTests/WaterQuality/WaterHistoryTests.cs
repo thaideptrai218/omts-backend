@@ -1,11 +1,12 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using ClosedXML.Excel;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
-using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Reports;
+using OMTS.Application.Common.Models.Reports;
+using OMTS.Application.Common;
 
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 

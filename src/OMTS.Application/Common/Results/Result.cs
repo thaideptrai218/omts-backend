@@ -1,3 +1,4 @@
+
 namespace OMTS.Application.Common.Results;
 
 /// <summary>Outcome of a use case: a value, or an <see cref="AppError"/> to show the user.</summary>
@@ -20,10 +21,4 @@ public sealed class Result<T>
     public static implicit operator Result<T>(T value) => Success(value);
 
     public static implicit operator Result<T>(AppError error) => Failure(error);
-}
-
-/// <summary>Result of a use case that returns nothing but may fail.</summary>
-public sealed record Done
-{
-    public static readonly Done Value = new();
 }

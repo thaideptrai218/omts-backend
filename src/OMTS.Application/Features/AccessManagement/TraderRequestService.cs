@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;

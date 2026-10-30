@@ -7,18 +7,6 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Verification;
 
-/// <summary>"Verification" section: system-wide limits on code delivery.</summary>
-public sealed class VerificationLimitOptions
-{
-    public const string SectionName = "Verification";
-
-    /// <summary>
-    /// SMS codes (first sends and resends) the whole system may send in 24 hours. Beyond it SMS codes answer
-    /// MSG04 and a critical log entry alerts the operator (cost control against SMS pumping).
-    /// </summary>
-    public int DailySmsLimit { get; set; } = 500;
-}
-
 /// <summary>
 /// Limits of ACS-06 that hold across requests (NFR-01), checked before any code is sent:
 /// <list type="bullet">

@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Interfaces.Messaging;
 using System.Security.Cryptography;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Exceptions;

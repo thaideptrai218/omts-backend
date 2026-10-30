@@ -1,6 +1,6 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -11,6 +11,7 @@ using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Labor;
 using OMTS.Domain.Enums;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
+
 namespace OMTS.Api.IntegrationTests.Workforce;
 
 public sealed class WorkforceTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>

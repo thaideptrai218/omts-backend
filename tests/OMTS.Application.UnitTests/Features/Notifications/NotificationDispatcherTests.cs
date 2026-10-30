@@ -1,5 +1,6 @@
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Models.Messaging;
 using OMTS.Application.Features.Notifications;
 using OMTS.Application.UnitTests.Fakes;
 using OMTS.Domain.Entities.Identity;

@@ -2,41 +2,6 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Infrastructure.Bootstrap.Demo;
 
-internal enum DemoReceiptOutcome
-{
-    Draft,
-    Completed,
-
-    /// <summary>Completed first, then cancelled with a reason (its payments are cancelled too).</summary>
-    Cancelled,
-}
-
-internal sealed record DemoReceiptLine(string Item, decimal Quantity, decimal UnitPrice, string? SupplierLotCode = null, string? ActualSource = null);
-
-/// <summary>A payment recorded after the receipt (INP-06), <paramref name="DaysAgo"/> days before today.</summary>
-internal sealed record DemoLaterPayment(int DaysAgo, decimal Amount, PaymentMethod Method);
-
-/// <summary>A partial return (INP-05) of one line: refund plus debt reduction equal the returned value.</summary>
-internal sealed record DemoReturn(string Item, decimal Quantity, int DaysAgo, decimal Refund, decimal DebtReduction, string Reason);
-
-/// <param name="Code">Business code of the demo receipt, kept at the start of its notes: the service generates the receipt's own code from today's date, so this is what makes the seed repeatable.</param>
-/// <param name="RaftNumber">Raft of the receipt's zone (1…10); needed when a line is raft material.</param>
-internal sealed record DemoReceiptPlan(
-    string Code,
-    string SupplierPhone,
-    string Zone,
-    int? RaftNumber,
-    int DaysAgo,
-    DemoReceiptOutcome Outcome,
-    string Note,
-    DemoReceiptLine[] Lines,
-    decimal Discount = 0,
-    decimal PaidNow = 0,
-    PaymentMethod PaidNowMethod = PaymentMethod.Cash,
-    DemoLaterPayment[]? Later = null,
-    DemoReturn? Return = null,
-    string? CancelReason = null);
-
 /// <summary>
 /// Twenty purchase receipts over the last 85 days: 16 Completed (paid in full, partly or not at all, one
 /// with a partial return), 2 Cancelled and 2 Draft. Amounts are whole thousands of VND.

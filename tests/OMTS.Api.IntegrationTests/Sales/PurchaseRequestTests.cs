@@ -1,8 +1,10 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.Sales.Products.Dtos;
+using OMTS.Application.Features.Sales.Requests.Dtos;
 using OMTS.Application.Features.Sales;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Platform;

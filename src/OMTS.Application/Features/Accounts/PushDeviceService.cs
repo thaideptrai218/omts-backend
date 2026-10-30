@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Accounts.Dtos;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
@@ -5,9 +6,6 @@ using OMTS.Application.Features.Audit.Models;
 using OMTS.Domain.Entities.Identity;
 
 namespace OMTS.Application.Features.Accounts;
-
-/// <param name="PermissionGranted">False when the user declined notifications on the device.</param>
-public sealed record RegisterPushDeviceRequest(string Token, string Platform, bool PermissionGranted);
 
 /// <summary>ACS-07 – registers the Expo push token of the device the user is logged in on.</summary>
 public sealed class PushDeviceService(IPushDeviceRepository devices, AuditLogService audit, IUnitOfWork unitOfWork, TimeProvider timeProvider)

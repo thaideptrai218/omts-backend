@@ -9,6 +9,8 @@ Sibling repos: [omts-web](https://github.com/thaideptrai218/omts-web) · [omts-m
 
 ## Structure (Clean Architecture)
 
+Detailed folder responsibilities: [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md).
+
 ```
 src/
   OMTS.Domain/                 No dependencies.
@@ -26,9 +28,9 @@ src/
     Identity/                  JWT tokens, password hashing
     Persistence/               OmtsDbContext, UnitOfWork
       Configurations/<Group>/  One <Entity>Configuration per entity, same groups as Domain
-      Repositories/  Interceptors/  Seed/  Migrations/
+      Repositories/<Group>/  Interceptors/  Seed/  Migrations/
   OMTS.Api/                    HTTP endpoints, DI composition root.
-    Controllers/  Filters/  Extensions/  Services/  Common/
+    Controllers/<Feature>/  Filters/  Extensions/  Services/  Common/
 tests/
   OMTS.Domain.UnitTests/  OMTS.Application.UnitTests/
   OMTS.Api.IntegrationTests/   Infrastructure/ (test host, test-only endpoints), one folder per feature

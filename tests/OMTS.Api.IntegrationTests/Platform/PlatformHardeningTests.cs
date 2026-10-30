@@ -1,11 +1,12 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Interfaces.Messaging;
+using OMTS.Application.Common.Models.Messaging;
 using OMTS.Infrastructure.Bootstrap;
 using OMTS.Infrastructure.Messaging.Fakes;
 using OMTS.Infrastructure.Persistence;

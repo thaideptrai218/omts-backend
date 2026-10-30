@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OMTS.Application.Common.Interfaces.Identity;
@@ -10,9 +10,9 @@ using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
-using OMTS.Infrastructure;
 using OMTS.Infrastructure.Persistence;
 using OMTS.Infrastructure.Zalo;
+using OMTS.Infrastructure;
 
 namespace OMTS.Api.IntegrationTests.Infrastructure;
 

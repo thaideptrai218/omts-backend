@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Models.Reports;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Reports;
 using OMTS.Application.Features.WaterQuality.Dtos;

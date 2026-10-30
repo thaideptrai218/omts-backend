@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Authorization.Models;
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Caching.Memory;
 using OMTS.Application.Common.Interfaces;

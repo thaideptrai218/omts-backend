@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Models.Ocr;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OMTS.Application.Common.Interfaces.Ocr;

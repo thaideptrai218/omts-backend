@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Purchasing.Receipts.Dtos;
 using System.Globalization;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;

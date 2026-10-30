@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Models.Ocr;
 using OMTS.Application.Common.Interfaces.Ocr;
 
 namespace OMTS.Infrastructure.Ocr;

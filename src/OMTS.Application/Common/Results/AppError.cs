@@ -2,23 +2,6 @@ using OMTS.Application.Common.Messages;
 
 namespace OMTS.Application.Common.Results;
 
-/// <summary>What kind of failure a use case reports; the API maps it to an HTTP status.</summary>
-public enum ErrorKind
-{
-    Validation,
-    Unauthorized,
-    Forbidden,
-    NotFound,
-    Conflict,
-    Locked,
-    TooManyRequests,
-    ServiceUnavailable,
-    BadGateway,
-
-    /// <summary>The server could not complete the operation (e.g. generating an export file).</summary>
-    Internal,
-}
-
 /// <summary>
 /// A business failure with its SRS message. <see cref="Details"/> become extra fields of the problem
 /// response (e.g. <c>field</c>, <c>existingId</c>) so clients can open the right record.

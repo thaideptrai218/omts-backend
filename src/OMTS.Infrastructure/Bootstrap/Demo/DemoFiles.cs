@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Files.Models;
 using System.IO.Compression;
 using System.Text;
 using OMTS.Application.Features.Files;

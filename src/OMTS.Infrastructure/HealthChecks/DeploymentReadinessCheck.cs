@@ -8,17 +8,6 @@ using OMTS.Infrastructure.Persistence.Seed;
 
 namespace OMTS.Infrastructure.HealthChecks;
 
-/// <summary>What one readiness check verifies after deployment (OMTS-200 "Deployment bootstrap check").</summary>
-public enum ReadinessCheckKind
-{
-    Database,
-    Migrations,
-    StatusCatalog,
-    DefaultRoles,
-    Cooperative,
-    CooperativeOwner,
-}
-
 /// <summary>
 /// One <c>/health/ready</c> check. Results carry no business data or configuration values; the endpoint
 /// only lists the names of failing checks.

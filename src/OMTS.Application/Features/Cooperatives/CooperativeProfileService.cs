@@ -1,3 +1,5 @@
+using OMTS.Application.Features.Cooperatives.Dtos;
+using OMTS.Application.Features.Files.Models;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;

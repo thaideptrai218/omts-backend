@@ -1,6 +1,7 @@
 using OMTS.Application.Features.Workforce;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Labor;
+
 namespace OMTS.Application.UnitTests.Workforce;
 
 public sealed class AttendanceCalculatorTests

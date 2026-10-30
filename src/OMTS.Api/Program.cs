@@ -11,9 +11,9 @@ using OMTS.Infrastructure;
 var builder = WebApplication.CreateBuilder(BootstrapCommand.HostArguments(args));
 
 builder.Services.AddApplication();
-builder.Services.Configure<OMTS.Application.Features.Testing.TestRoleOptions>(
+builder.Services.Configure<OMTS.Application.Features.Testing.Options.TestRoleOptions>(
     builder.Configuration.GetSection("Development:TestRoles"));
-builder.Services.PostConfigure<OMTS.Application.Features.Testing.TestRoleOptions>(options =>
+builder.Services.PostConfigure<OMTS.Application.Features.Testing.Options.TestRoleOptions>(options =>
 {
     if (!builder.Environment.IsDevelopment()) options.Enabled = false;
 });

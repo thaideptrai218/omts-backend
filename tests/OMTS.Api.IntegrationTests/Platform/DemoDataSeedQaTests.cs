@@ -1,6 +1,6 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Reflection;
 using System.Security.Claims;
 using System.Text.Json;
@@ -13,8 +13,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Api.Services;
-using OMTS.Application.Common;
 using OMTS.Application.Common.Constants;
+using OMTS.Application.Common;
 using OMTS.Domain.Common;
 using OMTS.Domain.Enums;
 using OMTS.Infrastructure.Bootstrap;

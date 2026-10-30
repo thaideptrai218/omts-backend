@@ -1,3 +1,11 @@
+using OMTS.Infrastructure.Persistence.Repositories.Farming;
+using OMTS.Infrastructure.Persistence.Repositories.Identity;
+using OMTS.Infrastructure.Persistence.Repositories.Organization;
+using OMTS.Infrastructure.Persistence.Repositories.Platform;
+using OMTS.Infrastructure.Persistence.Repositories.Purchasing;
+using OMTS.Infrastructure.Persistence.Repositories.Sales;
+using OMTS.Infrastructure.Persistence.Repositories.WaterQuality;
+using OMTS.Infrastructure.Persistence.Repositories.Workforce;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

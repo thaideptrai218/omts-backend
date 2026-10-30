@@ -1,3 +1,5 @@
+using OMTS.Application.Common.Interfaces.Messaging;
+using OMTS.Application.Features.Workforce.Dtos;
 using System.Security.Cryptography;
 using System.Text;
 using OMTS.Application.Common.Interfaces;

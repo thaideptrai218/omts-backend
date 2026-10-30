@@ -1,11 +1,11 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Domain.Constants;
+using FarmingHost = OMTS.Api.IntegrationTests.Farming.FarmingSqlServerHost;
 using static OMTS.Api.IntegrationTests.Purchasing.PurchasingSqlServerKit;
 using static OMTS.Api.IntegrationTests.Purchasing.PurchasingTestKit;
-using FarmingHost = OMTS.Api.IntegrationTests.Farming.FarmingSqlServerHost;
 
 namespace OMTS.Api.IntegrationTests.Purchasing;
 

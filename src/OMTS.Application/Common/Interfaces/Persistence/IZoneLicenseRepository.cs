@@ -1,9 +1,7 @@
+using OMTS.Application.Common.Models.Persistence;
 using OMTS.Domain.Entities.Farming;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
-
-/// <summary>A license with the effective dates of the documents that replace it (FARM-03 Superseded rule).</summary>
-public sealed record LicenseWithReplacements(ZoneComplianceDocument Document, IReadOnlyList<DateOnly?> ReplacementEffectiveDates, bool IsReplaced);
 
 public interface IZoneLicenseRepository
 {

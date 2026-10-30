@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Interfaces.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OMTS.Application.Common;
@@ -37,9 +38,9 @@ public static class DependencyInjection
         services.AddScoped<AuthService>();
         services.AddScoped<ZaloLinkService>();
         services.AddScoped<ZaloLocationService>();
-        services.AddScoped<OMTS.Application.Features.Sales.PurchaseRequestService>();
-        services.AddScoped<OMTS.Application.Features.Sales.SalesProductService>();
-        services.AddOptions<OMTS.Application.Features.Testing.TestRoleOptions>();
+        services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseRequestService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Products.SalesProductService>();
+        services.AddOptions<OMTS.Application.Features.Testing.Options.TestRoleOptions>();
         services.AddScoped<OMTS.Application.Features.Testing.TestRoleService>();
         services.AddScoped<OMTS.Application.Features.Workforce.WorkforceService>();
         services.AddScoped<OMTS.Application.Features.Workforce.LeaveService>();

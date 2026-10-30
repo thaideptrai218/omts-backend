@@ -18,7 +18,7 @@ public sealed class AuthService(
     ILoginSessionRepository sessions,
     IAccessGrantRepository grants,
     IEmployeeRepository employees,
-    IOptions<OMTS.Application.Features.Testing.TestRoleOptions> testRoles,
+    IOptions<OMTS.Application.Features.Testing.Options.TestRoleOptions> testRoles,
     IPushDeviceRepository pushDevices,
     IUnitOfWork unitOfWork,
     IPasswordHasher passwordHasher,

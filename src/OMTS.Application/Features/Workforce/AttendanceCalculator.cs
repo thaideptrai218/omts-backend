@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Workforce.Dtos;
 using OMTS.Domain.Entities.Labor;
 namespace OMTS.Application.Features.Workforce;
 

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Models.Messaging;
 using OMTS.Application.Common.Models;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Verification;

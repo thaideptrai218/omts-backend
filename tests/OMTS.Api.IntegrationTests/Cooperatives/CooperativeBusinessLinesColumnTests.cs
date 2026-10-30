@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using static OMTS.Api.IntegrationTests.Cooperatives.CooperativeProfileRequests;

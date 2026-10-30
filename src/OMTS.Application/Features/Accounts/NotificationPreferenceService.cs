@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Accounts.Dtos;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
@@ -6,17 +7,6 @@ using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Accounts;
-
-public sealed record ChannelPreferenceView(NotificationChannel Channel, bool Enabled, bool Eligible, string? IneligibleReason);
-
-public sealed record CategoryPreferenceView(string Category, bool Mandatory, IReadOnlyList<ChannelPreferenceView> Channels);
-
-public sealed record NotificationPreferenceChange(string Category, NotificationChannel Channel, bool Enabled);
-
-public sealed record SaveNotificationPreferencesRequest(IReadOnlyList<NotificationPreferenceChange> Items);
-
-/// <param name="Notice">MSG22 when push was asked for but no device allows notifications.</param>
-public sealed record NotificationPreferencesSaved(IReadOnlyList<CategoryPreferenceView> Categories, string Message, string? Notice);
 
 /// <summary>
 /// ACS-07 – the user chooses notification categories and channels. Saving creates no notifications and

@@ -1,3 +1,8 @@
+using OMTS.Application.Common.Models.Persistence;
+using OMTS.Application.Common.Models.Reports;
+using OMTS.Application.Features.Employees.Dtos;
+using OMTS.Application.Features.Purchasing.Receipts.Dtos;
+using OMTS.Application.Features.Purchasing.Receipts.Models;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
@@ -13,26 +18,6 @@ using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Purchasing.Receipts;
-
-public sealed record PurchaseReceiptQuery(
-    InputItemGroup? ItemGroup = null, Guid? ItemId = null, Guid? ZoneId = null, Guid? RaftId = null, Guid? SupplierId = null,
-    int? StatusId = null, DateOnly? From = null, DateOnly? To = null, string? Code = null, int Page = 1, int PageSize = 20);
-
-public sealed record PurchaseReceiptRow(
-    Guid Id, string Code, DateOnly? ReceiptDate, SupplierRef Supplier, ZoneRef Zone, RaftRef? Raft, int StatusId, string Status,
-    decimal Subtotal, decimal Discount, decimal Payable, decimal Returned, decimal Paid, decimal Outstanding);
-
-/// <summary>Money totals count Completed receipts only; <see cref="Count"/> is every matching receipt.</summary>
-public sealed record PurchaseReceiptTotals(
-    int Count, int CompletedCount, decimal Subtotal, decimal Discount, decimal Payable, decimal Returned, decimal Paid, decimal Outstanding);
-
-public sealed record PurchaseReceiptSearchResult(Paged<PurchaseReceiptRow> Page, PurchaseReceiptTotals Totals, DateOnly From, DateOnly To, string? Message);
-
-public sealed record RaftCostReceipt(Guid ReceiptId, string Code, DateOnly ReceiptDate, decimal MaterialCost);
-
-public sealed record RaftMaterialCostRow(RaftRef Raft, ZoneRef Zone, decimal MaterialCost, IReadOnlyList<RaftCostReceipt> Receipts);
-
-public sealed record ExportedFile(string FileName, string ContentType, byte[] Content);
 
 /// <summary>INP-07 – search receipts with totals, raft material cost and Excel export, never wider than the caller's zones.</summary>
 public sealed class PurchaseReceiptQueryService(

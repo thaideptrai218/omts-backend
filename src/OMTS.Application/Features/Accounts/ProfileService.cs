@@ -11,9 +11,6 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Accounts;
 
-/// <summary>Contact change started: the code went to the new contact; the old one stays in use until verified (MSG62).</summary>
-public sealed record ContactChangeStarted(Verification.Dtos.VerificationStarted Verification, string Message);
-
 /// <summary>
 /// ACS-05 – the holder edits their own profile. A new email or phone number needs the current password and
 /// replaces the old one only once its code is verified; the previous verified contact is told. Username,

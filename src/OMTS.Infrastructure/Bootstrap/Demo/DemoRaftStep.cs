@@ -1,3 +1,5 @@
+using OMTS.Application.Features.Farming.Rafts.Dtos;
+using OMTS.Application.Features.Farming.Zones.Dtos;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Features.Farming.Rafts;
