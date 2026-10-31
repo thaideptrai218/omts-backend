@@ -42,8 +42,17 @@ public sealed record AppError(ErrorKind Kind, UserMessage Message, IReadOnlyDict
     public static readonly AppError NotFound = new(ErrorKind.NotFound, UserMessages.NotFound);
 
     /// <summary>MSG-GEN-02 with the id of the record that already exists.</summary>
-    public static AppError AlreadyExists(string item, Guid existingId) =>
-        new(ErrorKind.Conflict, UserMessages.AlreadyExists(item), new Dictionary<string, object?> { ["existingId"] = existingId });
+    /// <param name="field">The entry that clashed (e.g. "Code" or "Name"), sent as <c>field</c> when the record has several unique entries.</param>
+    public static AppError AlreadyExists(string item, Guid existingId, string? field = null)
+    {
+        var details = new Dictionary<string, object?> { ["existingId"] = existingId };
+        if (field is not null)
+        {
+            details["field"] = field;
+        }
+
+        return new AppError(ErrorKind.Conflict, UserMessages.AlreadyExists(item), details);
+    }
 
     /// <summary>
     /// 400 MSG-GEN-09 naming the field: a record chosen in a form is no longer usable, e.g. a Discontinued zone

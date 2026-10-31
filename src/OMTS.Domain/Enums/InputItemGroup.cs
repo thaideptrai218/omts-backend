@@ -1,9 +1,12 @@
 namespace OMTS.Domain.Enums;
 
-/// <summary>Group of a farming input item (INP-02): seed lines create seed lots; raft material lines need a raft.</summary>
+/// <summary>
+/// The fixed group of a farming input item (BR-PURCHASE-10): Seed items are the seed bought for seeding and all use one
+/// unit; Material items repair rafts (material usage, material cost of a raft); Other items are bought and paid only.
+/// </summary>
 public enum InputItemGroup
 {
     Seed,
-    RaftMaterial,
+    Material,
     Other,
 }

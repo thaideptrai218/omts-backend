@@ -20,13 +20,13 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Purchasing.Suppliers;
 
 /// <summary>
-/// INP-01 – one cooperative-wide supplier list. Any SUPPLIERS grant (any zone) may manage it (API filter);
-/// suppliers are discontinued and reactivated, never deleted.
+/// PURCHASE-07 – one cooperative-wide supplier list with no zone, so it follows the role only (BR-PURCHASE-06,
+/// BR-FARM-08): the Zone Manager maintains it, the Accountant views it (API filter). Only an In Use supplier is edited;
+/// suppliers are discontinued and resumed, never deleted (GBR-01).
 /// </summary>
 public sealed class SupplierService(
     ISupplierRepository suppliers,
     IPurchaseReceiptRepository receipts,
-    ISupplierPaymentRepository payments,
     ZoneAccessGuard zoneAccess,
     IFileStorage storage,
     IStatusCatalog statusCatalog,
@@ -39,6 +39,7 @@ public sealed class SupplierService(
 
     private const string RecordType = nameof(Supplier);
     private const int MaxCertificates = 10;
+    private const int MaxAddressLength = 500;
 
     public async Task<Paged<SupplierListItem>> SearchAsync(
         string? search, SupplierType? type, int? statusId, int page, int pageSize, CancellationToken cancellationToken)
@@ -86,6 +87,11 @@ public sealed class SupplierService(
             return AppError.NotFound;
         }
 
+        if (NotInUse(supplier) is { } discontinued)
+        {
+            return discontinued;
+        }
+
         var (values, invalid) = Validate(request);
         if (invalid.Count > 0)
         {
@@ -121,16 +127,22 @@ public sealed class SupplierService(
     public Task<Result<SupplierView>> DiscontinueAsync(Guid supplierId, CancellationToken cancellationToken) =>
         ChangeStatusAsync(supplierId, StatusIds.Usage.InUse, StatusIds.Usage.Discontinued, "Supplier.Discontinued", cancellationToken);
 
+    /// <summary>Resume (PURCHASE-07.2): back to In Use, offered again on new receipts.</summary>
     public Task<Result<SupplierView>> ReactivateAsync(Guid supplierId, CancellationToken cancellationToken) =>
         ChangeStatusAsync(supplierId, StatusIds.Usage.Discontinued, StatusIds.Usage.InUse, "Supplier.Reactivated", cancellationToken);
 
-    /// <summary>JPEG, PNG or PDF certificates; a failed upload leaves the supplier unchanged (MSG-GEN-03).</summary>
+    /// <summary>JPEG, PNG or PDF certificates of an In Use supplier; a failed upload leaves the supplier unchanged (MSG-GEN-03).</summary>
     public async Task<Result<SupplierView>> AddCertificatesAsync(Guid supplierId, IReadOnlyList<IncomingFile> files, CancellationToken cancellationToken)
     {
         var supplier = await suppliers.GetForEditAsync(supplierId, cancellationToken);
         if (supplier is null)
         {
             return AppError.NotFound;
+        }
+
+        if (NotInUse(supplier) is { } discontinued)
+        {
+            return discontinued;
         }
 
         var validated = FileValidator.Validate(files, FileRules.Documents);
@@ -159,13 +171,18 @@ public sealed class SupplierService(
         return await SetCertificatesAsync(supplier, [.. supplier.CertificateUrls, .. keys], cancellationToken);
     }
 
-    /// <summary>Removes the reference only; the stored file is kept.</summary>
+    /// <summary>Removes the reference only (In Use supplier); the stored file is kept.</summary>
     public async Task<Result<SupplierView>> RemoveCertificateAsync(Guid supplierId, int index, CancellationToken cancellationToken)
     {
         var supplier = await suppliers.GetForEditAsync(supplierId, cancellationToken);
         if (supplier is null)
         {
             return AppError.NotFound;
+        }
+
+        if (NotInUse(supplier) is { } discontinued)
+        {
+            return discontinued;
         }
 
         if (index < 0 || index >= supplier.CertificateUrls.Count)
@@ -213,14 +230,19 @@ public sealed class SupplierService(
         return await ViewAsync(supplier, cancellationToken);
     }
 
+    /// <summary>MSG-GEN-09: a Discontinued supplier is not edited (PURCHASE-07.1); it is resumed first.</summary>
+    private AppError? NotInUse(Supplier supplier) =>
+        supplier.StatusId == StatusIds.Usage.InUse
+            ? null
+            : AppError.Conflict(UserMessages.WrongStatus("Supplier", statusCatalog.DisplayNameOf(supplier.StatusId)));
+
     private async Task<SupplierView> ViewAsync(Supplier supplier, CancellationToken cancellationToken)
     {
-        // Receipt history only from zones whose receipts the caller may view; the debt is cooperative-wide.
+        // Receipt history only from zones whose receipts the caller may view (receipts still carry a zone until PURCHASE-01
+        // is aligned). The supplier debt is PURCHASE-04: not shown here.
         var visible = await zoneAccess.PermittedZonesAsync(PermissionFunctions.PurchaseReceipts, PermissionAction.View, cancellationToken);
         // The latest receipts only (figures summed by SQL), so the detail does not slow down as history grows.
         var history = visible.IsEmpty ? [] : await receipts.ListFiguresAsync(new PurchaseReceiptFilter(visible, SupplierId: supplier.Id), ReceiptHistoryLimit, cancellationToken);
-        var completed = (await receipts.SupplierDebtFiguresAsync([supplier.Id], cancellationToken)).FirstOrDefault();
-        var unallocated = await payments.UnallocatedAsync([supplier.Id], cancellationToken);
         var certificates = new List<SupplierCertificate>();
         for (var i = 0; i < supplier.CertificateUrls.Count; i++)
         {
@@ -228,9 +250,8 @@ public sealed class SupplierService(
         }
 
         return new SupplierView(
-            supplier.Id, supplier.Name, supplier.SupplierType, supplier.PhoneNumber, supplier.OtherContacts, certificates,
+            supplier.Id, supplier.Name, supplier.SupplierType, supplier.PhoneNumber, supplier.Address, supplier.Email, certificates,
             supplier.StatusId, statusCatalog.DisplayNameOf(supplier.StatusId),
-            SupplierDebts.Debt(completed, unallocated.GetValueOrDefault(supplier.Id)),
             history.Select(r => new SupplierReceiptRow(
                 r.Id, r.Code, PurchaseMoney.DateOrNull(r.ReceiptDate), r.ZoneId, statusCatalog.DisplayNameOf(r.StatusId), r.Payable, r.Outstanding)).ToList(),
             RowVersionGuard.Encode(supplier.RowVersion));
@@ -278,13 +299,19 @@ public sealed class SupplierService(
             invalid.Add("Phone number");
         }
 
-        var contacts = string.IsNullOrWhiteSpace(request.OtherContacts) ? null : request.OtherContacts.Trim();
-        if (contacts?.Length > 500)
+        var address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim();
+        if (address?.Length > MaxAddressLength)
         {
-            invalid.Add("Other contacts");
+            invalid.Add("Address");
         }
 
-        return (new Values(name, request.SupplierType ?? default, phone ?? string.Empty, contacts), invalid);
+        string? email = null;
+        if (!string.IsNullOrWhiteSpace(request.Email) && (email = EmailAddresses.Normalize(request.Email)) is null)
+        {
+            invalid.Add("Email");
+        }
+
+        return (new Values(name, request.SupplierType ?? default, phone ?? string.Empty, address, email), invalid);
     }
 
     private static void Apply(Supplier supplier, Values values)
@@ -292,10 +319,11 @@ public sealed class SupplierService(
         supplier.Name = values.Name;
         supplier.SupplierType = values.SupplierType;
         supplier.PhoneNumber = values.PhoneNumber;
-        supplier.OtherContacts = values.OtherContacts;
+        supplier.Address = values.Address;
+        supplier.Email = values.Email;
     }
 
-    private static object Snapshot(Supplier s) => new { s.Name, s.SupplierType, s.PhoneNumber, s.OtherContacts };
+    private static object Snapshot(Supplier s) => new { s.Name, s.SupplierType, s.PhoneNumber, s.Address, s.Email };
 
-    private sealed record Values(string Name, SupplierType SupplierType, string PhoneNumber, string? OtherContacts);
+    private sealed record Values(string Name, SupplierType SupplierType, string PhoneNumber, string? Address, string? Email);
 }

@@ -77,7 +77,7 @@ public static class PurchaseMoney
     }
 
     /// <summary>
-    /// Raft material cost of a receipt: its RaftMaterial line amounts less their proportional share of the
+    /// Raft material cost of a receipt: its Material line amounts less their proportional share of the
     /// discount and less the values returned from those lines (FARM-04, INP-07). Only Completed receipts count.
     /// </summary>
     /// <param name="itemId">When set, only the lines of that item count (INP-07 item filter).</param>
@@ -95,7 +95,7 @@ public static class PurchaseMoney
         }
 
         var payable = subtotal - receipt.DiscountAmount;
-        var materialLines = receipt.Lines.Where(l => l.Item.Group == InputItemGroup.RaftMaterial && (itemId == null || l.ItemId == itemId)).Select(l => l.Id).ToHashSet();
+        var materialLines = receipt.Lines.Where(l => l.Item.Group == InputItemGroup.Material && (itemId == null || l.ItemId == itemId)).Select(l => l.Id).ToHashSet();
         var gross = receipt.Lines.Where(l => materialLines.Contains(l.Id)).Sum(l => l.LineAmount) * payable / subtotal;
         var returned = receipt.Returns.SelectMany(r => r.Lines).Where(l => materialLines.Contains(l.ReceiptLineId)).Sum(l => l.ReturnValue);
         return RoundToThousand(gross) - returned;

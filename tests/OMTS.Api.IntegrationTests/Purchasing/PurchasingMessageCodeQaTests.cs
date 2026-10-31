@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
 
 namespace OMTS.Api.IntegrationTests.Purchasing;
@@ -35,7 +36,8 @@ public class PurchasingMessageCodeQaTests(AuthApiFactory factory) : IClassFixtur
         var missing = await (await world.Owner.PostReturnAsync(receipt.Id(), body with { Lines = [new ReturnLineBody(line, null)] }))
             .SrsProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01", "MSG59");
 
-        Assert.Equal("Other item: enter a quantity greater than 0 and at most 4 bag. Received 4 bag, already returned 0 bag.", zero.Detail());
+        var itemName = await factory.QueryAsync(db => db.FarmingInputItems.Where(i => i.Id == world.Other).Select(i => i.Name).SingleAsync());
+        Assert.Equal($"{itemName}: enter a quantity greater than 0 and at most 4 bag. Received 4 bag, already returned 0 bag.", zero.Detail());
         Assert.Equal(("Line 1", 4m), (zero.Str("field"), zero.GetProperty("limit").GetDecimal()));
         Assert.Equal("Line 1 is missing or invalid. Please check and enter it again.", missing.Detail());
     }

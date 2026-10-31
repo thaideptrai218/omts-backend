@@ -50,8 +50,8 @@ public class PurchaseMoneyTests
     public void Raft_material_cost_counts_material_lines_less_discount_share_and_returns_on_completed_receipts()
     {
         // Floats 600,000 + seed 400,000, discount 100,000 (10 %): floats cost 540,000, less 54,000 returned.
-        var receipt = Receipt(discount: 100_000, (InputItemGroup.RaftMaterial, 60, 10_000), (InputItemGroup.Seed, 40, 10_000));
-        var floats = receipt.Lines.First(l => l.Item.Group == InputItemGroup.RaftMaterial);
+        var receipt = Receipt(discount: 100_000, (InputItemGroup.Material, 60, 10_000), (InputItemGroup.Seed, 40, 10_000));
+        var floats = receipt.Lines.First(l => l.Item.Group == InputItemGroup.Material);
         receipt.Returns.Add(new PurchaseReturn { Lines = [new PurchaseReturnLine { ReceiptLineId = floats.Id, Quantity = 6, ReturnValue = 54_000 }] });
 
         Assert.Equal(486_000, PurchaseMoney.RaftMaterialCost(receipt));

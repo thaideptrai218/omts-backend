@@ -266,7 +266,7 @@ public class ReviewFixQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
         var code = seed.GetProperty("code").GetString()!;
         var filters = new[]
         {
-            $"itemGroup=Seed", $"itemGroup=RaftMaterial", $"itemId={world.Seed}", $"zoneId={world.Zone.Id}", $"raftId={world.Raft.Id}",
+            $"itemGroup=Seed", $"itemGroup=Material", $"itemId={world.Seed}", $"zoneId={world.Zone.Id}", $"raftId={world.Raft.Id}",
             $"supplierId={world.SupplierId}", $"statusId={StatusIds.PurchaseReceipt.Completed}", $"statusId={StatusIds.PurchaseReceipt.Draft}",
             $"from={Today.AddDays(-1):yyyy-MM-dd}", $"to={Today:yyyy-MM-dd}", $"code={code[3..].ToLowerInvariant()}", "from=2000-01-01&to=2005-01-01",
         };
