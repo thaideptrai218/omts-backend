@@ -18,6 +18,8 @@ namespace OMTS.Api.Controllers;
 public sealed class PurchaseReceiptsController(
     PurchaseReceiptService receipts,
     PurchaseReceiptCancellationService cancellations,
+    PurchaseReceiptCorrectionService corrections,
+    PurchaseReceiptCopyService copies,
     PurchaseReturnService returns,
     PurchaseReceiptQueryService queries) : ControllerBase
 {
@@ -69,12 +71,40 @@ public sealed class PurchaseReceiptsController(
     public async Task<IActionResult> Complete(Guid id, CompleteReceiptRequest? request, CancellationToken cancellationToken) =>
         (await receipts.CompleteAsync(id, request ?? new CompleteReceiptRequest(null), cancellationToken)).ToActionResult(Ok);
 
+    /// <summary>PURCHASE-06.1: removes an own Draft (the Owner: any) with its lines.</summary>
+    [HttpDelete(Receipts + "/{id:guid}")]
+    [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Delete, PermissionScope.NoZone)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Remove(Guid id, CancellationToken cancellationToken) =>
+        (await cancellations.RemoveAsync(id, cancellationToken)).ToActionResult(_ => NoContent());
+
+    /// <summary>PURCHASE-06 steps 1–2: whether the receipt can be cancelled, and the supplier debt before and after.</summary>
+    [HttpGet(Receipts + "/{id:guid}/cancel-preview")]
+    [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Delete, PermissionScope.NoZone)]
+    [ProducesResponseType<CancelPreview>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> PreviewCancel(Guid id, CancellationToken cancellationToken) =>
+        (await cancellations.PreviewAsync(id, cancellationToken)).ToActionResult(Ok);
+
     /// <summary>PURCHASE-06: cancels an own Completed receipt (the Owner: any) with a reason; its payments are kept.</summary>
     [HttpPost(Receipts + "/{id:guid}/cancel")]
     [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Delete, PermissionScope.NoZone)]
     [ProducesResponseType<PurchaseReceiptView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Cancel(Guid id, CancelReceiptRequest request, CancellationToken cancellationToken) =>
         (await cancellations.CancelAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>PURCHASE-06.2: the Owner corrects a Completed receipt that can no longer be cancelled.</summary>
+    [HttpPost(Receipts + "/{id:guid}/correct")]
+    [RequireCooperativeOwner]
+    [ProducesResponseType<PurchaseReceiptView>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Correct(Guid id, CorrectReceiptRequest request, CancellationToken cancellationToken) =>
+        (await corrections.CorrectAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>PURCHASE-01.4: a new receipt filled from this one, not saved; save it with <c>POST api/purchase-receipts</c>.</summary>
+    [HttpGet(Receipts + "/{id:guid}/copy")]
+    [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Create, PermissionScope.NoZone)]
+    [ProducesResponseType<PurchaseReceiptCopy>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Copy(Guid id, CancellationToken cancellationToken) =>
+        (await copies.CopyAsync(id, cancellationToken)).ToActionResult(Ok);
 
     [HttpPost(Receipts + "/{id:guid}/returns")]
     [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Create, PermissionScope.NoZone)]

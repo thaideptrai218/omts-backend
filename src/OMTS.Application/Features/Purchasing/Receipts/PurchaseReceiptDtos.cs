@@ -27,6 +27,12 @@ public sealed record CompleteReceiptRequest(string? RowVersion);
 /// <summary>PURCHASE-06: the reason is required; payments are never cancelled with the receipt.</summary>
 public sealed record CancelReceiptRequest(string? Reason, string? RowVersion = null);
 
+/// <summary>A line to correct; a value left out (null) keeps the line's value. An empty lot code clears it.</summary>
+public sealed record CorrectionLineInput(Guid? LineId, decimal? Quantity, decimal? UnitPrice, string? SupplierLotCode = null);
+
+/// <summary>PURCHASE-06.2: the Owner corrects lines of a receipt that can no longer be cancelled, with a reason.</summary>
+public sealed record CorrectReceiptRequest(string? Reason, IReadOnlyList<CorrectionLineInput>? Lines, string? RowVersion = null);
+
 public sealed record SupplierRef(Guid Id, string Name, string PhoneNumber);
 
 public sealed record RaftRef(Guid Id, string Code);
@@ -78,5 +84,19 @@ public sealed record PurchaseReceiptView(
     IReadOnlyList<ReceiptReturnView> Returns,
     string RowVersion);
 
+/// <summary>
+/// PURCHASE-01.4: a new receipt filled from another one; nothing is saved until Save draft or Complete. A supplier, an
+/// item or a raft that is no longer In Use, or a raft the caller may not choose, is left empty and named in
+/// <see cref="LeftEmpty"/> (e.g. "Supplier", "Line 2 item", "Line 1 raft").
+/// </summary>
+public sealed record PurchaseReceiptCopy(Guid CopiedFromId, string CopiedFromCode, SavePurchaseReceiptRequest Receipt, IReadOnlyList<string> LeftEmpty);
+
 /// <summary>Why a receipt cannot be cancelled (MSG-PURCHASE-09): <c>Seeded</c> with the seed lot code, or <c>Returned</c> with the return code.</summary>
 public sealed record CancelBlock(string Kind, string Code, string Message, string MessageCode);
+
+/// <summary>
+/// PURCHASE-06 step 2: the supplier debt before and after the cancellation; <see cref="Warning"/> is MSG-PURCHASE-07 when it
+/// would then be below zero (<see cref="AdvanceAfter"/> paid in advance). <see cref="Blocked"/> when it cannot be cancelled.
+/// </summary>
+public sealed record CancelPreview(
+    bool CanCancel, CancelBlock? Blocked, decimal DebtBefore, decimal DebtAfter, decimal AdvanceAfter, string? Warning, string? WarningCode);

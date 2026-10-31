@@ -50,6 +50,14 @@ public sealed class SupplierDebtService(IPurchaseReceiptRepository receipts, ISu
             completed.Select(r => new ReceiptDebtRow(r.Id, r.Code, r.ReceiptDate, r.Total, r.Returned, r.Paid, r.Refunded, r.Outstanding)).ToList());
     }
 
+    /// <summary>The debt to the supplier today; below zero when the cooperative has paid in advance (PURCHASE-06 step 2).</summary>
+    public async Task<decimal> DebtAsync(Guid supplierId, CancellationToken cancellationToken)
+    {
+        var figures = (await receipts.SupplierDebtFiguresAsync([supplierId], cancellationToken)).FirstOrDefault();
+        var unallocated = (await payments.UnallocatedAsync([supplierId], cancellationToken)).GetValueOrDefault(supplierId);
+        return (figures?.Outstanding ?? 0) - unallocated;
+    }
+
     private static SupplierDebtRow Totals(Guid supplierId, string name, SupplierDebtFigures? figures, decimal unallocated) => new(
         supplierId, name, figures?.Total ?? 0, figures?.Returned ?? 0, figures?.Paid ?? 0, figures?.Refunded ?? 0,
         unallocated, (figures?.Outstanding ?? 0) - unallocated);

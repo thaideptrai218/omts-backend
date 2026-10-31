@@ -47,18 +47,21 @@ public static class MessageCodes
 
     public const string Purchase01 = "MSG-PURCHASE-01";
     public const string Purchase03 = "MSG-PURCHASE-03";
+    public const string Purchase07 = "MSG-PURCHASE-07";
+    public const string Purchase08 = "MSG-PURCHASE-08";
     public const string Purchase09 = "MSG-PURCHASE-09";
+    public const string Purchase10 = "MSG-PURCHASE-10";
 
     public const string Labor03 = "MSG-LABOR-03";
 
     /// <summary>
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-22, the
-    /// related record of a notification no longer exists (ACCOUNT-08 is new in PR 0.5); MSG-PURCHASE-01, the purchase
-    /// receipt notification (OMTS-218 P2).
+    /// related record of a notification no longer exists (ACCOUNT-08 is new in PR 0.5); MSG-PURCHASE-01/07/08, the
+    /// purchase receipt notifications and the advance warning, and MSG-PURCHASE-10, the Owner's correction (OMTS-218 P2).
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
-        Account22, Purchase01,
+        Account22, Purchase01, Purchase07, Purchase08, Purchase10,
     };
 
     /// <summary>

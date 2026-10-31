@@ -192,6 +192,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | `ZONE_LICENSE_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
 | `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (not sent yet: LABOR PR) | never: list only | Owner |
 | `PURCHASE_RECEIPT_COMPLETED` | MSG-PURCHASE-01, when a receipt is completed (never for a draft), also when the Owner completed it | unless turned off | Owner |
+| `PURCHASE_RECEIPT_CANCELLED_ADVANCE` | MSG-PURCHASE-08, when a cancelled receipt leaves the supplier debt below zero | unless turned off | Owner, Accountant |
 
 - Preferences (ACCOUNT-07): `GET`/`PUT /api/me/notification-preferences` list the types of the roles the account
   holds with `push` on or off (`items: [{ type, push }]`). Mandatory types are shown as always pushed and cannot be
@@ -209,6 +210,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   | MSG-WATER-06 | `zone_name`, `last_date` |
   | MSG-FARM-01 / MSG-FARM-02 | `document_type` (license type code), `document_number`, `zone_codes` (list), `expiry_date`, `days` (MSG-FARM-01 only) |
   | MSG-PURCHASE-01 | `user_name`, `receipt_code`, `supplier_name`, `line_count`, `total_amount` (VND, not rounded) |
+  | MSG-PURCHASE-08 | `user_name`, `receipt_code`, `supplier_name`, `advance_amount` (VND paid in advance, positive) |
 - `GET /api/me/notifications/{id}/open` checks the access again (GFR-02): 403 MSG-GEN-08 when the user may no longer
   open the record (e.g. a revoked zone–role pair), 404 MSG-ACCOUNT-22 when the record was removed. A push carries the
   notification id.

@@ -3,12 +3,14 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.Notifications;
 using OMTS.Domain.Entities.Purchasing;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Purchasing.Receipts;
 
 /// <summary>
-/// BR-PURCHASE-05 for receipts: MSG-PURCHASE-01 to the Owner when a receipt is completed. The Owner receives it also when
-/// the Owner did the action. A draft, a return, a cancellation and a correction send nothing. The rows join the caller's
+/// BR-PURCHASE-05 for receipts: MSG-PURCHASE-01 to the Owner when a receipt is completed, and MSG-PURCHASE-08 to the
+/// Accountant and the Owner when a cancellation brings the supplier debt below zero. The Owner receives them also when the
+/// Owner did the action. A draft, a return, another cancellation and a correction send nothing. The rows join the caller's
 /// unit of work; push goes out after its commit.
 /// </summary>
 public sealed class PurchaseReceiptNotifications(
@@ -27,6 +29,17 @@ public sealed class PurchaseReceiptNotifications(
         await notifications.NotifyAsync(
             owners,
             new NotificationContent(NotificationTypes.PurchaseReceiptCompleted, "New purchase receipt", message, Related(receipt)),
+            cancellationToken);
+    }
+
+    /// <param name="advanceAmount">What the cooperative has now paid the supplier in advance (positive).</param>
+    public async Task PaidInAdvanceAsync(PurchaseReceipt receipt, string supplierName, decimal advanceAmount, CancellationToken cancellationToken)
+    {
+        var accountantsAndOwners = await recipients.GetOwnersAndRolesAsync([StaffRole.Accountant], cancellationToken);
+        var message = UserMessages.ReceiptCancelledPaidInAdvance(await ActorNameAsync(cancellationToken), receipt.Code, supplierName, advanceAmount);
+        await notifications.NotifyAsync(
+            accountantsAndOwners,
+            new NotificationContent(NotificationTypes.PurchaseReceiptCancelledPaidInAdvance, "Supplier paid in advance", message, Related(receipt)),
             cancellationToken);
     }
 

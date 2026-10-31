@@ -107,6 +107,9 @@ public interface IPurchaseReceiptRepository
 
     void Add(PurchaseReceipt receipt);
 
+    /// <summary>Deletes a Draft; its lines are removed with <see cref="RemoveLine"/> first (foreign keys never cascade).</summary>
+    void Remove(PurchaseReceipt receipt);
+
     void AddReturn(PurchaseReturn purchaseReturn);
 
     /// <summary>New rows under a tracked receipt are added explicitly: their keys are already set, so EF would

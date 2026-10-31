@@ -240,9 +240,37 @@ public static class UserMessages
     public static UserMessage ReturnQuantityOutsideLimit(string itemName, string maxQuantity, string unit, string limitExplanation, string legacyCode) => new(
         Purchase03, $"{itemName}: enter a quantity greater than 0 and at most {maxQuantity} {unit}. {limitExplanation}".TrimEnd(), legacyCode);
 
+    /// <summary>MSG-PURCHASE-07 (PURCHASE-06 step 2): cancelling the receipt would bring the supplier debt below zero.</summary>
+    /// <param name="advanceAmount">What the cooperative will then have paid in advance (a positive amount).</param>
+    public static UserMessage PaidInAdvanceAfterCancel(string supplierName, decimal advanceAmount) => new(
+        Purchase07,
+        $"After this cancellation, the cooperative will have paid {supplierName} {Vnd(advanceAmount)} VND in advance. The payments already recorded are not cancelled.")
+    {
+        Parameters = new Dictionary<string, object?> { ["supplier_name"] = supplierName, ["advance_amount"] = advanceAmount },
+    };
+
+    /// <summary>MSG-PURCHASE-08 (PURCHASE-06 step 7): notification to the Accountant and the Owner of a debt below zero after a cancellation.</summary>
+    public static UserMessage ReceiptCancelledPaidInAdvance(string userName, string receiptCode, string supplierName, decimal advanceAmount) => new(
+        Purchase08,
+        $"{userName} cancelled purchase receipt {receiptCode} from {supplierName}. The cooperative has now paid {supplierName} {Vnd(advanceAmount)} VND in advance.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["user_name"] = userName,
+            ["receipt_code"] = receiptCode,
+            ["supplier_name"] = supplierName,
+            ["advance_amount"] = advanceAmount,
+        },
+    };
+
     /// <summary>MSG-PURCHASE-09 (PURCHASE-06.0.E1): a seed lot was seeded or the receipt has a purchase return.</summary>
     public static UserMessage ReceiptCannotBeCancelled(string receiptCode, string cause) => new(
         Purchase09, $"Receipt {receiptCode} cannot be cancelled: {cause}. The Cooperative Owner can correct it instead.", Legacy.Msg61);
+
+    /// <summary>MSG-PURCHASE-10 (PURCHASE-06.2.E1): a corrected quantity is below the quantity seeded plus the quantity returned.</summary>
+    public static UserMessage QuantityBelowUsed(string itemName, decimal minQuantity, string unit, decimal seededQuantity, decimal returnedQuantity) => new(
+        Purchase10,
+        $"{itemName}: the quantity cannot be less than {Quantity(minQuantity)} {unit} ({Quantity(seededQuantity)} seeded, {Quantity(returnedQuantity)} returned).");
 
     // ---- MSG-LABOR ----
 
@@ -306,6 +334,9 @@ public static class UserMessages
 
     /// <summary>A VND amount as shown in messages, e.g. "1,250,500" (never rounded, BR-PURCHASE-02).</summary>
     private static string Vnd(decimal amount) => amount.ToString("#,0.###", CultureInfo.InvariantCulture);
+
+    /// <summary>A quantity as shown in messages, e.g. "12.5" (at most 3 decimals).</summary>
+    private static string Quantity(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 
     // {document} of MSG-FARM-01/02: "the license number with its zone".
     private static string LicenseDocument(string documentTypeName, string documentNumber, IReadOnlyList<string> zoneCodes) =>

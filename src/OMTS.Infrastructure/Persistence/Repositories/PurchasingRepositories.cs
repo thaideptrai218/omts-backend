@@ -159,6 +159,8 @@ internal sealed partial class PurchaseReceiptRepository(OmtsDbContext db) : IPur
 
     public void Add(PurchaseReceipt receipt) => db.PurchaseReceipts.Add(receipt);
 
+    public void Remove(PurchaseReceipt receipt) => db.PurchaseReceipts.Remove(receipt);
+
     public void AddReturn(PurchaseReturn purchaseReturn) => db.PurchaseReturns.Add(purchaseReturn);
 
     public void RemoveLine(PurchaseReceiptLine line) => db.PurchaseReceiptLines.Remove(line);
