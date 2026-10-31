@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using OMTS.Application.Common.Messages;
 
 namespace OMTS.Application.Features.Notifications;
@@ -11,22 +12,25 @@ public sealed record NotificationContent(string Type, string Title, UserMessage 
 /// <summary>The related record of a notification: a type of <see cref="RelatedRecordTypes"/>, its id and the code shown for it.</summary>
 public sealed record RelatedRecord(string Type, Guid Id, string? Code = null);
 
-/// <summary>Record types notifications point to, with their names in MSG-ACCOUNT-22 (<c>{object_name}</c>).</summary>
-public static class RelatedRecordTypes
+/// <summary>
+/// The record types of notifications and audit events: the entity name of the record ("FarmingZone"), except for zone
+/// licenses. The same name is used in both, and one resolver opens them (<c>IRelatedRecordQuery</c>).
+/// </summary>
+public static partial class RelatedRecordTypes
 {
     public const string WaterMeasurement = "WaterMeasurement";
     public const string FarmingZone = "FarmingZone";
 
-    /// <summary>A zone license (FARM-03); the name of the old entity is kept for the stored rows.</summary>
-    public const string ZoneLicense = "ZoneComplianceDocument";
+    /// <summary>A zone license (FARM-03), stored in the entity ZoneComplianceDocument.</summary>
+    public const string ZoneLicense = "ZoneLicense";
 
     public const string Account = "Account";
 
-    public static readonly IReadOnlyDictionary<string, string> Names = new Dictionary<string, string>(StringComparer.Ordinal)
-    {
-        [WaterMeasurement] = "Water measurement",
-        [FarmingZone] = "Farming zone",
-        [ZoneLicense] = "Zone license",
-        [Account] = "Account",
-    };
+    /// <summary>"FarmingZone" → "Farming zone", "ZoneLicense" → "Zone license": the {object_name} of MSG-ACCOUNT-22.</summary>
+    public static string ObjectName(string recordType) => string.Join(' ', PascalWords().Split(recordType)
+        .Where(w => w.Length > 0)
+        .Select((w, i) => i == 0 ? w : w.ToLowerInvariant()));
+
+    [GeneratedRegex("(?<=[a-z0-9])(?=[A-Z])")]
+    private static partial Regex PascalWords();
 }

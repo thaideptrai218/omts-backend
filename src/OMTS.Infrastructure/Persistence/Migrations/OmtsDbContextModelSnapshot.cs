@@ -2583,6 +2583,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ActorAccountId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ActorEmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("After")
                         .HasColumnType("nvarchar(max)");
 
@@ -2608,18 +2611,20 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("ViewScope")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
                     b.Property<Guid?>("ZoneId")
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ActorAccountId");
-
                     b.HasIndex("OccurredAt");
+
+                    b.HasIndex("Action", "OccurredAt");
+
+                    b.HasIndex("ActorAccountId", "OccurredAt");
+
+                    b.HasIndex("ActorEmployeeId", "OccurredAt");
+
+                    b.HasIndex("RecordCode", "OccurredAt");
 
                     b.HasIndex("RecordType", "RecordId");
 

@@ -13,10 +13,17 @@ internal sealed class AuditEventConfiguration : IEntityTypeConfiguration<AuditEv
         builder.Property(x => x.RecordType).HasMaxLength(Lengths.ShortText);
         builder.Property(x => x.RecordCode).HasMaxLength(Lengths.ShortText);
         builder.Property(x => x.Reason).HasMaxLength(Lengths.Reason);
-        builder.Property(x => x.ViewScope).HasMaxLength(Lengths.ShortText);
-        builder.HasIndex(x => new { x.RecordType, x.RecordId });
+
+        // ACCOUNT-10 searches a period, newest first, alone or with one filter: each filter leads an index that
+        // ends with the time, so the period is a range inside the seek.
         builder.HasIndex(x => x.OccurredAt);
-        // Audit search by zone and period (ACS-11).
         builder.HasIndex(x => new { x.ZoneId, x.OccurredAt });
+        builder.HasIndex(x => new { x.ActorAccountId, x.OccurredAt });
+        builder.HasIndex(x => new { x.ActorEmployeeId, x.OccurredAt });
+        builder.HasIndex(x => new { x.Action, x.OccurredAt });
+        // Record codes match from their start, so the code is a seek too.
+        builder.HasIndex(x => new { x.RecordCode, x.OccurredAt });
+        // Record type filter and the record of an event.
+        builder.HasIndex(x => new { x.RecordType, x.RecordId });
     }
 }

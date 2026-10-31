@@ -81,7 +81,7 @@ public sealed class NotificationInboxService(
 
         if (await records.FindAsync(recordType, recordId, cancellationToken) is not { } location)
         {
-            var objectName = RelatedRecordTypes.Names.GetValueOrDefault(recordType, recordType);
+            var objectName = RelatedRecordTypes.ObjectName(recordType);
             return new AppError(ErrorKind.NotFound, UserMessages.RecordNoLongerExists(objectName, notification.RelatedRecordCode ?? ""));
         }
 

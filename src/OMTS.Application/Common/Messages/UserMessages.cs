@@ -212,9 +212,9 @@ public static class UserMessages
         "Your preferences are saved. This device does not allow notifications from OMTS. To get them on this device, please turn them on in the device settings. You can still see all notifications in the notification list.",
         Legacy.Msg22);
 
-    /// <summary>MSG-ACCOUNT-22 (ACCOUNT-08.0.E1): the related record of a notification no longer exists.</summary>
+    /// <summary>MSG-ACCOUNT-22 (ACCOUNT-08.0.E1, ACCOUNT-10.1.E1): the record of a notification or of an audit event no longer exists.</summary>
     /// <param name="objectName">e.g. "Zone license"; the first letter is capitalized.</param>
-    /// <param name="recordCode">The code the notification shows for the record; may be empty.</param>
+    /// <param name="recordCode">The code the notification or the event shows for the record; may be empty.</param>
     public static UserMessage RecordNoLongerExists(string objectName, string recordCode) => new(
         Account22, $"{string.Join(' ', new[] { Capitalized(objectName), recordCode }.Where(p => p.Length > 0))} no longer exists.");
 

@@ -29,7 +29,8 @@ public sealed class AuditLogService(
 
         var auditEvent = new AuditEvent
         {
-            ActorAccountId = entry.ActorAccountId ?? currentUser.AccountId,
+            ActorAccountId = entry.ActorEmployeeId is null ? entry.ActorAccountId ?? currentUser.AccountId : entry.ActorAccountId,
+            ActorEmployeeId = entry.ActorEmployeeId,
             Action = entry.Action,
             RecordType = entry.RecordType,
             RecordId = entry.RecordId,
