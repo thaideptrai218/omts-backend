@@ -1815,11 +1815,44 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasDefaultValue("InApp");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<DateTimeOffset?>("DeliveryStatusAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int?>("DeliveryStatusId")
+                        .HasColumnType("int");
+
                     b.Property<bool>("IsMandatory")
                         .HasColumnType("bit");
+
+                    b.Property<string>("MessageCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("MessageParams")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("ProviderErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ProviderMessageId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTimeOffset?>("ReadAt")
                         .HasColumnType("datetimeoffset");
@@ -1830,6 +1863,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<string>("RelatedRecordCode")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid?>("RelatedRecordId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("RelatedRecordType")
                         .HasMaxLength(100)
@@ -1847,7 +1883,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DeliveryStatusId");
+
                     b.HasIndex("RecipientAccountId", "ReadAt");
+
+                    b.HasIndex("RelatedRecordType", "RelatedRecordId");
+
+                    b.HasIndex("RecipientAccountId", "Channel", "CreatedAt");
 
                     b.ToTable("Notifications");
                 });
@@ -2075,6 +2117,39 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
+                            Id = 1601,
+                            Code = "SENDING",
+                            DisplayName = "Sending",
+                            Group = "MESSAGE_DELIVERY",
+                            IsFinal = false,
+                            IsInitial = true,
+                            Meaning = "Handed to the SMS Service or Zalo OA, no answer yet.",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 1602,
+                            Code = "SENT",
+                            DisplayName = "Sent",
+                            Group = "MESSAGE_DELIVERY",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "Accepted by the service; this does not mean that the trader has read it.",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 1603,
+                            Code = "NOT_SENT",
+                            DisplayName = "Not sent",
+                            Group = "MESSAGE_DELIVERY",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "Not accepted by the service; nothing that was saved is undone (GFR-06).",
+                            SortOrder = 3
+                        },
+                        new
+                        {
                             Id = 1701,
                             Code = "DRAFT",
                             DisplayName = "Draft",
@@ -2293,6 +2368,28 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             ToStatusId = 703,
                             TriggerEvent = "Action",
                             UseCases = "UC26"
+                        },
+                        new
+                        {
+                            Id = 53,
+                            AllowedPerformers = "System",
+                            FromStatusId = 1601,
+                            GuardCondition = "The SMS Service or Zalo OA accepts the message.",
+                            ReasonRequired = false,
+                            ToStatusId = 1602,
+                            TriggerEvent = "System",
+                            UseCases = "SALE-06, SALE-03, CLAIM-02, TRACE-04"
+                        },
+                        new
+                        {
+                            Id = 54,
+                            AllowedPerformers = "System",
+                            FromStatusId = 1601,
+                            GuardCondition = "The SMS Service or Zalo OA does not accept the message.",
+                            ReasonRequired = false,
+                            ToStatusId = 1603,
+                            TriggerEvent = "System",
+                            UseCases = "SALE-06, SALE-03, CLAIM-02, TRACE-04"
                         },
                         new
                         {
@@ -3321,18 +3418,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                                 .ValueGeneratedOnAdd()
                                 .HasColumnType("int");
 
-                            b1.Property<string>("Category")
+                            b1.Property<bool>("Push")
+                                .HasColumnType("bit");
+
+                            b1.Property<string>("Type")
                                 .IsRequired()
                                 .HasMaxLength(100)
                                 .HasColumnType("nvarchar(100)");
-
-                            b1.Property<string>("Channel")
-                                .IsRequired()
-                                .HasMaxLength(50)
-                                .HasColumnType("nvarchar(50)");
-
-                            b1.Property<bool>("Enabled")
-                                .HasColumnType("bit");
 
                             b1.HasKey("AccountId", "Id");
 
@@ -3626,11 +3718,18 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Platform.Notification", b =>
                 {
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "DeliveryStatus")
+                        .WithMany()
+                        .HasForeignKey("DeliveryStatusId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Identity.Account", "RecipientAccount")
                         .WithMany()
                         .HasForeignKey("RecipientAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("DeliveryStatus");
 
                     b.Navigation("RecipientAccount");
                 });

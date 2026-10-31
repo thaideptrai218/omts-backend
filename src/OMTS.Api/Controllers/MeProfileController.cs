@@ -10,7 +10,7 @@ using OMTS.Application.Features.Accounts.Dtos;
 
 namespace OMTS.Api.Controllers;
 
-/// <summary>ACS-05 personal profile and ACS-07 notification settings of the caller.</summary>
+/// <summary>ACCOUNT-05 personal profile, ACCOUNT-07 notification preferences and the push devices of the caller.</summary>
 [ApiController]
 [Route("api/me")]
 [Authorize]
@@ -51,11 +51,17 @@ public sealed class MeProfileController(
     public async Task<IActionResult> ConfirmContactChange(ConfirmContactRequest request, CancellationToken cancellationToken) =>
         (await profiles.ConfirmContactChangeAsync(AccountId, request, cancellationToken)).ToActionResult(Ok);
 
+    /// <summary>ACCOUNT-07: the types the account can receive with their push setting; mandatory types are always pushed.</summary>
     [HttpGet("notification-preferences")]
-    [ProducesResponseType<IReadOnlyList<CategoryPreferenceView>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<NotificationPreferencesView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetNotificationPreferences(CancellationToken cancellationToken) =>
         (await preferences.GetAsync(AccountId, cancellationToken)).ToActionResult(Ok);
 
+    /// <summary>
+    /// Push on or off per type (<c>items: [{ type, push }]</c>): MSG-GEN-05, or MSG-ACCOUNT-21 in <c>notice</c> when push
+    /// was turned on but no device allows notifications (the choice is saved). A type the account cannot receive, or a
+    /// mandatory type turned off, answers 400 MSG-GEN-01 "Notification type".
+    /// </summary>
     [HttpPut("notification-preferences")]
     [ProducesResponseType<NotificationPreferencesSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> SaveNotificationPreferences(SaveNotificationPreferencesRequest request, CancellationToken cancellationToken) =>

@@ -14,6 +14,7 @@ internal static class StatusCatalogSeed
     private const string OwnerOrZoneManager = "Cooperative Owner; Zone Manager";
     private const string OwnerForStaffAdminForTraders =
         "Cooperative Owner (staff accounts); System Administrator (trader accounts, platform administration outside the cooperative app)";
+    private const string SystemActor = "System";
     private const string Action = "Action";
 
     public static readonly Status[] Statuses =
@@ -40,6 +41,11 @@ internal static class StatusCatalogSeed
         NewStatus(S.WaterMeasurement.Confirmed, G.WaterMeasurement, "CONFIRMED", "Confirmed", "Checked against the photo and confirmed; used for alerts and reports."),
         NewStatus(S.WaterMeasurement.Superseded, G.WaterMeasurement, "SUPERSEDED", "Corrected", "Replaced by a new correction version; the old record is kept for reference.", final: true),
         NewStatus(S.WaterMeasurement.Voided, G.WaterMeasurement, "VOIDED", "Voided", "Recorded by mistake and voided with a reason; excluded from charts, reports, exports and the overdue check.", final: true),
+
+        // SMS and Zalo OA sendings kept as Notification rows (BR-SALE-09, GFR-06).
+        NewStatus(S.MessageDelivery.Sending, G.MessageDelivery, "SENDING", "Sending", "Handed to the SMS Service or Zalo OA, no answer yet.", initial: true),
+        NewStatus(S.MessageDelivery.Sent, G.MessageDelivery, "SENT", "Sent", "Accepted by the service; this does not mean that the trader has read it.", final: true),
+        NewStatus(S.MessageDelivery.NotSent, G.MessageDelivery, "NOT_SENT", "Not sent", "Not accepted by the service; nothing that was saved is undone (GFR-06).", final: true),
 
         NewStatus(S.PurchaseReceipt.Draft, G.PurchaseReceipt, "DRAFT", "Draft", "Being recorded; does not count in costs, supplier debt or seed lots.", initial: true),
         NewStatus(S.PurchaseReceipt.Completed, G.PurchaseReceipt, "COMPLETED", "Completed", "Counts in input costs and supplier debt; seed lots created; never edited."),
@@ -69,7 +75,10 @@ internal static class StatusCatalogSeed
         NewTransition(10, S.WaterMeasurement.Draft, S.WaterMeasurement.Confirmed, "UC26", OwnerOrZoneManager, Action, "Check against the photo and confirm the values.", false),
         NewTransition(11, S.WaterMeasurement.Confirmed, S.WaterMeasurement.Superseded, "UC26", OwnerOrZoneManager, Action, "Save a new correction version.", true),
 
-        // 12–54 were the transitions of the removed SRS 22/10 groups (OMTS-216); their ids are not reused.
+        // 12–52 were the transitions of the removed SRS 22/10 groups (OMTS-216); their ids are not reused.
+        NewTransition(53, S.MessageDelivery.Sending, S.MessageDelivery.Sent, "SALE-06, SALE-03, CLAIM-02, TRACE-04", SystemActor, SystemActor, "The SMS Service or Zalo OA accepts the message.", false),
+        NewTransition(54, S.MessageDelivery.Sending, S.MessageDelivery.NotSent, "SALE-06, SALE-03, CLAIM-02, TRACE-04", SystemActor, SystemActor, "The SMS Service or Zalo OA does not accept the message.", false),
+
         NewTransition(55, S.WaterMeasurement.Draft, S.WaterMeasurement.Voided, "ENV-02", OwnerOrZoneManager, Action, "Void a wrong draft.", true),
         NewTransition(56, S.WaterMeasurement.Confirmed, S.WaterMeasurement.Voided, "ENV-02", OwnerOrZoneManager, Action, "Void the latest version of a wrong measurement.", true),
 

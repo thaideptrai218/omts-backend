@@ -1,3 +1,4 @@
+using System.Globalization;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.Authorization;
@@ -8,8 +9,9 @@ namespace OMTS.Application.Features.Farming.Licenses;
 
 /// <summary>
 /// FARM-03 expiring license reminder (formerly JOB-06), one license per call so that a failing license is
-/// skipped without touching the others: one notice when 0…30 days are left and one more once it has expired.
-/// The markers make a second run on the same day send nothing.
+/// skipped without touching the others: one notice when 0…30 days are left (MSG-FARM-01) and one more once it has
+/// expired (MSG-FARM-02), of the mandatory type ZONE_LICENSE_EXPIRY (BR-ACCOUNT-11). The markers make a second run on
+/// the same day send nothing.
 /// </summary>
 public sealed class ZoneLicenseReminderService(
     IZoneLicenseRepository licenses,
@@ -57,17 +59,18 @@ public sealed class ZoneLicenseReminderService(
             accounts.UnionWith(await recipients.GetRecipientsAsync(scope.ZoneId, PermissionFunctions.CultivationCycles, PermissionAction.View, cancellationToken));
         }
 
-        var documentName = $"{LicenseTypes.Names.GetValueOrDefault(document.DocumentType, document.DocumentType)} {document.DocumentNumber}";
+        // {document} of MSG-FARM-01/02: the license number with its zone.
         var zoneNames = string.Join(", ", document.ZoneScopes.Select(s => s.Zone.Name).Order());
-        var message = UserMessages.LicenseExpiry(documentName, zoneNames, Math.Max(daysLeft, 0));
+        var documentName = $"{LicenseTypes.Names.GetValueOrDefault(document.DocumentType, document.DocumentType)} {document.DocumentNumber} ({zoneNames})";
+        var expiryDate = expiry.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+        var message = expired ? UserMessages.LicenseExpired(documentName, expiryDate) : UserMessages.LicenseExpiringSoon(documentName, expiryDate, daysLeft);
         await notifications.NotifyAsync(
             accounts,
-            NotificationTypes.ZoneLicenseExpiry,
-            expired ? "Zone license expired" : "Zone license expiring soon",
-            message.Text,
-            "ZoneComplianceDocument",
-            document.Id.ToString(),
-            isMandatory: false,
+            new NotificationContent(
+                NotificationTypes.ZoneLicenseExpiry,
+                expired ? "Zone license expired" : "Zone license expiring soon",
+                message,
+                new RelatedRecord(RelatedRecordTypes.ZoneLicense, document.Id, document.DocumentNumber)),
             cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return true;

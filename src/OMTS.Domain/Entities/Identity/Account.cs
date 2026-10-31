@@ -44,7 +44,7 @@ public class Account : AuditableEntity, IHasStatus
     public int StatusId { get; set; } = StatusIds.Account.Active;
     public Status Status { get; set; } = null!;
 
-    /// <summary>On/off per notification category and channel (UC06); mandatory categories cannot be turned off.</summary>
+    /// <summary>Push on/off per notification type (ACCOUNT-07, BR-ACCOUNT-11); mandatory types are always pushed.</summary>
     public List<NotificationPreference> NotificationPreferences { get; set; } = [];
 
     public Employee? Employee { get; set; }
