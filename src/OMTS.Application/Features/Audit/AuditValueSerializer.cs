@@ -8,7 +8,7 @@ namespace OMTS.Application.Features.Audit;
 /// <summary>
 /// Turns before/after snapshots into JSON for <see cref="Domain.Entities.Platform.AuditEvent"/> and drops
 /// every field that may hold a password, temporary password, verification code or token (NFR-01),
-/// at any depth.
+/// at any depth: when the row is written, and again when it is shown.
 /// </summary>
 internal static partial class AuditValueSerializer
 {
@@ -32,6 +32,31 @@ internal static partial class AuditValueSerializer
         var node = JsonSerializer.SerializeToNode(values, values.GetType(), Options);
         RemoveSensitiveFields(node);
         return node?.ToJsonString();
+    }
+
+    /// <summary>
+    /// A stored before/after value as shown by the audit search (ACCOUNT-10), with the same fields removed again, so a
+    /// row written by an older version or by hand never shows a secret. A value that is not JSON is not shown (null).
+    /// </summary>
+    public static JsonElement? ForDisplay(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        JsonNode? node;
+        try
+        {
+            node = JsonNode.Parse(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        RemoveSensitiveFields(node);
+        return node is null ? null : JsonSerializer.SerializeToElement(node);
     }
 
     private static void RemoveSensitiveFields(JsonNode? node)
