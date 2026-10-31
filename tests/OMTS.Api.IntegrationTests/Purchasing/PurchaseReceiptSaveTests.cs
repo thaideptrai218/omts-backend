@@ -171,6 +171,7 @@ public class PurchaseReceiptSaveTests(AuthApiFactory factory) : IClassFixture<Au
         await (await accountant.GetAsync("/api/purchase-receipts")).ReadAsync(HttpStatusCode.OK);
         await (await accountant.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 1000)))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await accountant.GetAsync("/api/purchase-receipts/export")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await accountant.GetAsync($"/api/purchase-receipts/{receipt.Id()}/copy")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await accountant.CancelAsync(receipt.Id(), "x")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
     }
 

@@ -114,9 +114,9 @@ public class PurchasingSqlServerTests
         Assert.Equal(owners, await host.QueryAsync(db => db.Notifications.CountAsync(n => n.RelatedRecordId == draft.Id())));
     }
 
-    // A Draft edit replaces its lines (the unique line numbers are freed by the deletes first).
+    // A Draft edit replaces its lines (the unique line numbers are freed by the deletes first), a removal deletes them.
     [SqlServerFact]
-    public async Task Draft_lines_are_replaced_and_incomplete_lines_saved()
+    public async Task Draft_lines_are_replaced_incomplete_lines_saved_and_a_removed_draft_leaves_no_line()
     {
         await using var host = await FarmingHost.StartAsync();
         var world = await host.WorldAsync();
@@ -128,7 +128,9 @@ public class PurchasingSqlServerTests
         Assert.Equal(200_500m, edited.Money("total"));
         // A lines-only edit bumps the receipt version: an editor still holding the first one gets MSG06.
         await (await world.Owner.EditAsync(draft, world.Body(new LineBody(world.Other, 5, 1000)))).ProblemAsync(HttpStatusCode.Conflict, "MSG06");
-        Assert.Equal(3, await host.QueryAsync(db => db.PurchaseReceiptLines.CountAsync(l => l.ReceiptId == draft.Id())));
+
+        Assert.Equal(HttpStatusCode.NoContent, (await world.Owner.DeleteAsync($"/api/purchase-receipts/{draft.Id()}")).StatusCode);
+        Assert.Equal(0, await host.QueryAsync(db => db.PurchaseReceiptLines.CountAsync(l => l.ReceiptId == draft.Id())));
     }
 
     // GBR-04: a seeding event points to the receipt line; the line can then no longer be removed, nor the receipt cancelled.
@@ -414,6 +416,8 @@ public class PurchasingSqlServerTests
             .ReadAsync(HttpStatusCode.OK);
         Assert.Equal(200_000m, payments.Money("totalAmount"));
         Assert.Equal(StatusIds.PurchaseReceipt.Draft, (await owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{draft.Id()}")).GetProperty("statusId").GetInt32());
+        var preview = await (await owner.GetAsync($"/api/purchase-receipts/{receipt.Id()}/cancel-preview")).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal(("Returned", 890_500m), (preview.GetProperty("blocked").GetProperty("kind").GetString(), preview.Money("debtBefore")));
     }
 
     private static async Task AssertDuplicateAsync(FarmingHost host, string sql)

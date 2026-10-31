@@ -249,6 +249,7 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
         await (await accountant.CancelAsync(receipt.Id(), "x")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await accountant.PostReturnAsync(receipt.Id(), new ReturnBody { DebtReductionAmount = 100_000, Lines = [new ReturnLineBody(receipt.LineOf(world.Seed), 1)] }))
             .ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await accountant.GetAsync($"/api/purchase-receipts/{receipt.Id()}/copy")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
     }
 
     private async Task<decimal> DebtAsync(PurchasingWorld world) =>

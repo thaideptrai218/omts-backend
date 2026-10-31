@@ -73,17 +73,21 @@ public class PurchaseReceiptNotificationTests(AuthApiFactory factory) : IClassFi
         // A staff account is not offered the type: only the Owner receives it.
         var manager = await factory.ZoneManagerAsync(world.Zone);
         Assert.DoesNotContain(NotificationTypes.PurchaseReceiptCompleted, (await manager.OfferedTypesAsync()).Keys);
+        var accountant = await factory.AccountantAsync();
+        Assert.Contains(NotificationTypes.PurchaseReceiptCancelledPaidInAdvance, (await accountant.OfferedTypesAsync()).Keys);
     }
 
     [Fact]
-    public async Task A_draft_or_a_cancelled_receipt_sends_nothing_more_and_the_notification_of_a_cancelled_receipt_still_opens()
+    public async Task A_removed_draft_or_cancelled_receipt_sends_nothing_more_and_its_notification_opens_as_no_longer_existing()
     {
         var world = await factory.WorldAsync();
         var receipt = await world.CompletedAsync(new LineBody(world.Other, 1, 1_000));
         var before = await factory.QueryAsync(db => db.Notifications.CountAsync());
         await (await world.Owner.CancelAsync(receipt.Id(), "Entered twice")).ReadAsync(HttpStatusCode.OK);
-        await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 1_000)));
+        var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 1_000)));
+        Assert.Equal(HttpStatusCode.NoContent, (await world.Owner.DeleteAsync($"/api/purchase-receipts/{draft.Id()}")).StatusCode);
 
+        // The debt stays at zero after the cancellation, so no MSG-PURCHASE-08 either.
         Assert.Equal(before, await factory.QueryAsync(db => db.Notifications.CountAsync()));
         var notification = Assert.Single(Completed(await world.Owner.NotificationPageAsync()), n => n.GetProperty("relatedRecordId").GetGuid() == receipt.Id());
         // A cancelled receipt still exists and opens.
