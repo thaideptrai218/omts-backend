@@ -103,7 +103,8 @@ internal sealed class AuditEventQuery(OmtsDbContext db) : IAuditEventQuery
 
         if (filter.RecordCodePrefix is { } code)
         {
-            // Translated to LIKE 'code%' with the wildcards of the text escaped, so it seeks the RecordCode index.
+            // Translated to LIKE @code ESCAPE '\' with the wildcards of the text escaped. The pattern is a parameter, so the
+            // RecordCode index is only sought for "IS NOT NULL" and every coded event is read (QA 0.6 #3, deferred).
             query = query.Where(e => e.RecordCode != null && e.RecordCode.StartsWith(code));
         }
 

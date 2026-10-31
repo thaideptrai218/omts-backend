@@ -15,6 +15,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 name: "IX_AuditEvents_ActorAccountId",
                 table: "AuditEvents");
 
+            migrationBuilder.DropIndex(
+                name: "IX_AuditEvents_RecordType_RecordId",
+                table: "AuditEvents");
+
             migrationBuilder.DropColumn(
                 name: "ViewScope",
                 table: "AuditEvents");
@@ -45,6 +49,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 table: "AuditEvents",
                 columns: new[] { "RecordCode", "OccurredAt" });
 
+            migrationBuilder.CreateIndex(
+                name: "IX_AuditEvents_RecordType_OccurredAt",
+                table: "AuditEvents",
+                columns: new[] { "RecordType", "OccurredAt" });
+
             // Notifications and audit events name zone licenses the same way; the audit log is never edited, so the
             // notification rows take its name.
             migrationBuilder.Sql(
@@ -73,6 +82,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 name: "IX_AuditEvents_RecordCode_OccurredAt",
                 table: "AuditEvents");
 
+            migrationBuilder.DropIndex(
+                name: "IX_AuditEvents_RecordType_OccurredAt",
+                table: "AuditEvents");
+
             migrationBuilder.DropColumn(
                 name: "ActorEmployeeId",
                 table: "AuditEvents");
@@ -88,6 +101,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 name: "IX_AuditEvents_ActorAccountId",
                 table: "AuditEvents",
                 column: "ActorAccountId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AuditEvents_RecordType_RecordId",
+                table: "AuditEvents",
+                columns: new[] { "RecordType", "RecordId" });
         }
     }
 }

@@ -114,7 +114,8 @@ public sealed class AuditEventSearchService(IAuditEventQuery events, IRelatedRec
 
         if (to > from.AddYears(MaxPeriodYears))
         {
-            return AppError.Invalid("To date", $"The period is at most {MaxPeriodYears} years.");
+            // Only "from" entered: "to" is today, so the date to fix is the one entered.
+            return AppError.Invalid(query.To is null ? "From date" : "To date", $"The period is at most {MaxPeriodYears} years.");
         }
 
         var people = (query.ActorAccountId is null ? 0 : 1) + (query.ActorEmployeeId is null ? 0 : 1) + (query.SystemActor ? 1 : 0);

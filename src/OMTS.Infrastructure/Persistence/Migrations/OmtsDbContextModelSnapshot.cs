@@ -2626,7 +2626,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RecordCode", "OccurredAt");
 
-                    b.HasIndex("RecordType", "RecordId");
+                    b.HasIndex("RecordType", "OccurredAt");
 
                     b.HasIndex("ZoneId", "OccurredAt");
 
