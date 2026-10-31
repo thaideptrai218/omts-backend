@@ -169,7 +169,7 @@ public sealed class EmployeeService(
 
     /// <summary>
     /// Saves; a parallel save of the same person passes the pre-check, so the unique index refuses the second
-    /// one, which then gets the same MSG03 as the pre-check. Other duplicates are left to the exception handler.
+    /// one, which then gets the same MSG-LABOR-03 as the pre-check. Other duplicates are left to the exception handler.
     /// </summary>
     private async Task<AppError?> SaveAsync(EmployeeInput input, Guid? employeeId, CancellationToken cancellationToken)
     {
@@ -182,7 +182,7 @@ public sealed class EmployeeService(
         {
             if (await employees.FindSamePersonAsync(input.FullName, input.PhoneNumber, employeeId, cancellationToken) is { } same)
             {
-                return AppError.Conflict(UserMessages.AlreadyExists("Employee profile"), new Dictionary<string, object?> { ["existingEmployeeId"] = same.Id });
+                return SamePerson(same);
             }
 
             throw;
@@ -221,7 +221,7 @@ public sealed class EmployeeService(
     /// <summary>
     /// Removes the link to the login account, audited like a link change on edit; the account and its grants stay as
     /// they are. Without a link nothing changes and no audit row is written, so a repeated call answers the same.
-    /// A given <paramref name="rowVersion"/> that is not base64 answers MSG01 in every case; one older than the
+    /// A given <paramref name="rowVersion"/> that is not base64 answers MSG-GEN-01 in every case; one older than the
     /// profile answers MSG06 when there is a link to remove.
     /// </summary>
     public async Task<Result<EmployeeSaved>> UnlinkAccountAsync(Guid id, string? rowVersion, CancellationToken cancellationToken)
@@ -256,7 +256,10 @@ public sealed class EmployeeService(
         return await SavedAsync(employee.Id, null, cancellationToken);
     }
 
-    /// <summary>Employed → Left. Records already made stay; work or attendance after the end date blocks it (MSG11).</summary>
+    /// <summary>
+    /// Employed → Left. Records already made stay; work or attendance after the end date blocks it (409 MSG-GEN-01
+    /// "End date" with <c>count</c>, <c>attendanceCount</c> and <c>assignmentCount</c>).
+    /// </summary>
     public async Task<Result<EmploymentChanged>> EndEmploymentAsync(Guid id, EndEmploymentRequest request, CancellationToken cancellationToken)
     {
         // Ending is effective at once (status Left), so the end date is today or earlier.
@@ -281,11 +284,19 @@ public sealed class EmployeeService(
             return same;
         }
 
+        // LABOR-01.3.E1: the date to fix is pointed out (MSG-GEN-01 "End date"; MSG11 before), with the later records.
         var later = await employees.CountLaborRecordsAfterAsync(employee.Id, endDate, cancellationToken);
         if (later.Total > 0)
         {
-            return AppError.Conflict(UserMessages.StillInUse(
-                later.Total, $"attendance records ({later.AttendanceCount}), work assignments ({later.AssignmentCount}) after {endDate:dd/MM/yyyy}"));
+            return AppError.Conflict(
+                UserMessages.Invalid("End date") with { LegacyCode = MessageCodes.Legacy.Msg11 },
+                new Dictionary<string, object?>
+                {
+                    ["field"] = "End date",
+                    ["count"] = later.Total,
+                    ["attendanceCount"] = later.AttendanceCount,
+                    ["assignmentCount"] = later.AssignmentCount,
+                });
         }
 
         employee.StatusId = StatusIds.Employee.Left;
@@ -346,7 +357,7 @@ public sealed class EmployeeService(
 
         if (await employees.FindSamePersonAsync(input.FullName, input.PhoneNumber, employeeId, cancellationToken) is { } same)
         {
-            return AppError.Conflict(UserMessages.AlreadyExists("Employee profile"), new Dictionary<string, object?> { ["existingEmployeeId"] = same.Id });
+            return SamePerson(same);
         }
 
         return input;
@@ -384,11 +395,8 @@ public sealed class EmployeeService(
             employee,
             cancellationToken);
 
-        // LAB-01 names a username or phone collision "Account"; other duplicates (a repeated zone–role row) keep their message.
-        return created.Error is { } duplicate
-            && (duplicate.Message == UserMessages.AlreadyExists("Username") || duplicate.Message == UserMessages.AlreadyExists("Phone number"))
-            ? AppError.Conflict(UserMessages.AlreadyExists("Account"), duplicate.Details)
-            : created;
+        // A username or phone collision is MSG-ACCOUNT-09 naming the field, as in ACCOUNT-09 (LABOR-01).
+        return created;
     }
 
     // An attempt to give Owner rights is refused (the ACS rule) before anything is added, so only its audit row is saved.
@@ -410,15 +418,23 @@ public sealed class EmployeeService(
             return null;
         }
 
-        var name = statusCatalog.DisplayNameOf(target);
-        return AppError.Conflict(UserMessages.CannotChangeStatus("Employee", name, name, "the employee is already in this status"));
+        return AppError.Conflict(UserMessages.WrongStatus("Employee", statusCatalog.DisplayNameOf(target)));
     }
 
-    private async Task<EmployeeSaved> SavedAsync(Guid id, StaffAccountWithPassword? created, CancellationToken cancellationToken) => new(
-        View((await employees.GetForEditAsync(id, cancellationToken))!),
-        UserMessages.Saved("Employee profile").Text,
-        created?.TemporaryPassword,
-        created?.TemporaryPasswordExpiresAt);
+    /// <summary>MSG-LABOR-03: another employee profile has the phone number (MSG03 before).</summary>
+    private static AppError SamePerson(Employee same) =>
+        AppError.Conflict(UserMessages.PhoneBelongsToEmployee(same.FullName), new Dictionary<string, object?> { ["existingEmployeeId"] = same.Id });
+
+    private async Task<EmployeeSaved> SavedAsync(Guid id, StaffAccountWithPassword? created, CancellationToken cancellationToken)
+    {
+        var saved = UserMessages.Saved("Employee profile");
+        return new EmployeeSaved(
+            View((await employees.GetForEditAsync(id, cancellationToken))!),
+            saved.Text,
+            saved.Code,
+            created?.TemporaryPassword,
+            created?.TemporaryPasswordExpiresAt);
+    }
 
     private static void Apply(Employee employee, EmployeeInput input)
     {

@@ -15,7 +15,7 @@ public static class RoleMatrix
 {
     private static readonly PermissionAction[] Fixed = [PermissionAction.View, PermissionAction.Create, PermissionAction.Edit, PermissionAction.Delete];
 
-    /// <summary>Null when every row is valid; otherwise MSG01 naming the function.</summary>
+    /// <summary>Null when every row is valid; otherwise MSG-GEN-01 naming the function.</summary>
     public static AppError? Validate(IReadOnlyList<RolePermissionInput>? permissions)
     {
         var seen = new HashSet<string>();

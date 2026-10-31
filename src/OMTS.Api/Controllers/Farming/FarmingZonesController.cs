@@ -52,7 +52,7 @@ public sealed class FarmingZonesController(FarmingZoneService zones) : Controlle
     public async Task<IActionResult> Update(Guid zoneId, SaveFarmingZoneRequest request, CancellationToken cancellationToken) =>
         (await zones.UpdateAsync(zoneId, request, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Blocked with MSG11 while In Use rafts remain in the zone.</summary>
+    /// <summary>Blocked with MSG-GEN-06 while In Use rafts remain in the zone.</summary>
     [HttpPost("{zoneId:guid}/discontinue")]
     [RequireCooperativeOwner]
     [ProducesResponseType<FarmingZoneView>(StatusCodes.Status200OK)]

@@ -108,7 +108,7 @@ public class RaftConditionViewTests(AuthApiFactory factory) : IClassFixture<Auth
         Assert.Equal(HttpStatusCode.OK, (await inZone.Client.GetAsync($"/api/rafts/{raft.Id()}/condition?date={Today:yyyy-MM-dd}")).StatusCode);
         var refused = await elsewhere.Client.GetAsync($"/api/rafts/{raft.Id()}/condition");
         Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
-        Assert.Equal("MSG02", await refused.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await refused.ErrorCodeAsync());
     }
 
     private static List<(decimal From, decimal To, string Condition)> Portions(JsonElement lane) =>

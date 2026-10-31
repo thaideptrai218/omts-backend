@@ -107,7 +107,7 @@ public sealed class WaterMeasurementRecordingService(
 
         if (draft.StatusId != StatusIds.WaterMeasurement.Draft)
         {
-            return WaterMeasurementStatuses.CannotChange(statusCatalog, draft.StatusId, StatusIds.WaterMeasurement.Draft, "only a Draft can be sent to OCR again");
+            return WaterMeasurementStatuses.CannotChange(statusCatalog, draft.StatusId);
         }
 
         if (draft.PhotoUrl is not { } key || FileValidator.ContentTypeOfKey(key) is not { } contentType)
@@ -216,8 +216,7 @@ public sealed class WaterMeasurementRecordingService(
 
         if (measurement.StatusId != StatusIds.WaterMeasurement.Draft)
         {
-            return WaterMeasurementStatuses.CannotChange(
-                statusCatalog, measurement.StatusId, StatusIds.WaterMeasurement.Confirmed, "only a Draft can be confirmed");
+            return WaterMeasurementStatuses.CannotChange(statusCatalog, measurement.StatusId);
         }
 
         if (measurement.Zone.StatusId != StatusIds.Usage.InUse)
@@ -278,7 +277,7 @@ public sealed class WaterMeasurementRecordingService(
         var uploaded = await storage.UploadAsync(checkedPhoto.Files[0], PhotoCategory, cancellationToken);
         if (uploaded is not { Succeeded: true, Key: { } key })
         {
-            return new AppError(ErrorKind.BadGateway, UserMessages.FileOperationFailed);
+            return new AppError(ErrorKind.BadGateway, UserMessages.UploadFailed);
         }
 
         return Result<(ValidatedFile, string)?>.Success((checkedPhoto.Files[0], key));

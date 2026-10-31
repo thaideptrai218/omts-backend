@@ -24,7 +24,7 @@ namespace OMTS.Api.Controllers.Identity;
 public sealed class MeSecurityController(
     PasswordChangeService passwords, PhoneVerificationService phones, ZaloLinkService zaloLinks, ICurrentUser currentUser) : ControllerBase
 {
-    /// <summary>Proof by current password or by an email code; all sessions end and fresh tokens are returned (MSG18).</summary>
+    /// <summary>Proof by current password or by an email code; all sessions end and fresh tokens are returned (MSG-ACCOUNT-11).</summary>
     [HttpPost("password")]
     [ProducesResponseType<PasswordChanged>(StatusCodes.Status200OK)]
     public async Task<IActionResult> ChangePassword(ChangePasswordRequest request, CancellationToken cancellationToken) =>

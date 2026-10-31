@@ -36,7 +36,7 @@ public sealed class RolesController(RoleService roles) : ControllerBase
     public async Task<IActionResult> Create(SaveRoleRequest request, CancellationToken cancellationToken) =>
         (await roles.CreateAsync(request, cancellationToken)).ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
 
-    /// <summary>Applies at once to every holder; ask for MSG09 confirmation with <c>GET .../impact</c> first.</summary>
+    /// <summary>Applies at once to every holder; ask for MSG-GEN-04 confirmation with <c>GET .../impact</c> first.</summary>
     [HttpPut("api/roles/{id:guid}")]
     [ProducesResponseType<RoleView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Update(Guid id, SaveRoleRequest request, CancellationToken cancellationToken) =>

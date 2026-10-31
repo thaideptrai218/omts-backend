@@ -29,13 +29,17 @@ public sealed class MeProfileController(
     public async Task<IActionResult> GetProfile(CancellationToken cancellationToken) =>
         (await profiles.GetAsync(AccountId, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Display name only; a username in the body is refused (MSG20). Requires the read rowVersion.</summary>
+    /// <summary>
+    /// Display name only; a username in the body is refused (MSG-GEN-01 "Username"). Requires the read rowVersion.
+    /// Answers the profile with MSG-GEN-05 (<c>message</c>, <c>messageCode</c>).
+    /// </summary>
     [HttpPut("profile")]
     [ProducesResponseType<ProfileView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateProfile(UpdateProfileRequest request, CancellationToken cancellationToken) =>
-        (await profiles.UpdateAsync(AccountId, request, cancellationToken)).ToActionResult(r => Ok(new { profile = r.Profile, message = r.Message }));
+        (await profiles.UpdateAsync(AccountId, request, cancellationToken)).ToActionResult(
+            r => Ok(new { profile = r.Profile, message = r.Message.Text, messageCode = r.Message.Code }));
 
-    /// <summary>Sends a code to a new email or phone number (MSG62); the old one stays until verified.</summary>
+    /// <summary>Sends a code to a new email or phone number (MSG-ACCOUNT-19); the old one stays until verified.</summary>
     [HttpPost("contact-changes")]
     [EnableRateLimiting(RateLimitingExtensions.CodeRequests)]
     [ProducesResponseType<ContactChangeStarted>(StatusCodes.Status201Created)]

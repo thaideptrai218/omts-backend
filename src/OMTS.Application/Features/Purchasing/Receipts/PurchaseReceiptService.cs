@@ -145,7 +145,7 @@ public sealed class PurchaseReceiptService(
             return AppError.NotFound;
         }
 
-        if (await EditableDraftAsync(receipt, null, request.RowVersion, cancellationToken, toStatusId: StatusIds.PurchaseReceipt.Completed) is { } refused)
+        if (await EditableDraftAsync(receipt, null, request.RowVersion, cancellationToken) is { } refused)
         {
             return refused;
         }
@@ -160,7 +160,10 @@ public sealed class PurchaseReceiptService(
         return await views.ViewAsync(receipt.Id, cancellationToken);
     }
 
-    /// <summary>Invoice photos (JPEG, PNG or PDF, 10 MB, 10 per save) added to a Draft receipt the caller may edit (MSG61 otherwise).</summary>
+    /// <summary>
+    /// Invoice photos (JPEG, PNG or PDF, 10 MB, 10 per save) added to a Draft receipt the caller may edit (MSG-GEN-09
+    /// otherwise); a failed upload is MSG-GEN-03.
+    /// </summary>
     public async Task<Result<PurchaseReceiptView>> AddInvoicePhotosAsync(Guid receiptId, IReadOnlyList<IncomingFile> files, CancellationToken cancellationToken)
     {
         var receipt = await receipts.GetForEditAsync(receiptId, cancellationToken);
@@ -177,9 +180,7 @@ public sealed class PurchaseReceiptService(
         // A Completed receipt is never edited, and its seed lots copied the photos at completion.
         if (receipt.StatusId != StatusIds.PurchaseReceipt.Draft)
         {
-            return AppError.Conflict(UserMessages.CannotChangeStatus(
-                "Purchase receipt", statusCatalog.DisplayNameOf(receipt.StatusId), statusCatalog.DisplayNameOf(receipt.StatusId),
-                "invoice photos can only be added to a Draft receipt"));
+            return AppError.Conflict(UserMessages.WrongStatus($"Purchase receipt {receipt.Code}", statusCatalog.DisplayNameOf(receipt.StatusId)));
         }
 
         var validated = FileValidator.Validate(files, FileRules.Documents);
@@ -194,7 +195,7 @@ public sealed class PurchaseReceiptService(
             var uploaded = await storage.UploadAsync(file, "purchase-invoices", cancellationToken);
             if (!uploaded.Succeeded)
             {
-                return new AppError(ErrorKind.ServiceUnavailable, UserMessages.ServiceNotResponding("Cloud Storage"));
+                return new AppError(ErrorKind.ServiceUnavailable, UserMessages.UploadFailed with { LegacyCode = MessageCodes.Legacy.Msg04 });
             }
 
             keys.Add(uploaded.Key!);
@@ -211,7 +212,7 @@ public sealed class PurchaseReceiptService(
     }
 
     private async Task<AppError?> EditableDraftAsync(
-        PurchaseReceipt receipt, Guid? newZoneId, string? rowVersion, CancellationToken cancellationToken, int toStatusId = StatusIds.PurchaseReceipt.Draft, bool requireRowVersion = false)
+        PurchaseReceipt receipt, Guid? newZoneId, string? rowVersion, CancellationToken cancellationToken, bool requireRowVersion = false)
     {
         foreach (var zoneId in new[] { receipt.ZoneId, newZoneId ?? receipt.ZoneId }.Distinct())
         {
@@ -223,13 +224,11 @@ public sealed class PurchaseReceiptService(
 
         if (receipt.StatusId != StatusIds.PurchaseReceipt.Draft)
         {
-            return AppError.Conflict(UserMessages.CannotChangeStatus(
-                "Purchase receipt", statusCatalog.DisplayNameOf(receipt.StatusId),
-                statusCatalog.DisplayNameOf(toStatusId == StatusIds.PurchaseReceipt.Draft ? receipt.StatusId : toStatusId),
-                "only a Draft receipt can be edited or completed"));
+            // Only a Draft receipt can be edited or completed.
+            return AppError.Conflict(UserMessages.WrongStatus($"Purchase receipt {receipt.Code}", statusCatalog.DisplayNameOf(receipt.StatusId)));
         }
 
-        // A draft edit replaces every line, so it must say which version it read (MSG01 when missing); complete is guarded by status.
+        // A draft edit replaces every line, so it must say which version it read (MSG-GEN-01 when missing); complete is guarded by status.
         return rowVersion is null && !requireRowVersion ? null : await rowVersions.CheckAsync(receipt, rowVersion, cancellationToken);
     }
 

@@ -119,7 +119,7 @@ public class WaterHistoryTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
         var response = await z.Owner.GetAsync($"{z.Base}{(query.StartsWith('?') ? "" : "/")}{query}");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG01", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
         Assert.Equal(field, (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
     }
 
@@ -181,7 +181,7 @@ public class WaterHistoryTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
         using var workbook = new XLWorkbook(await allowed.Content.ReadAsStreamAsync());
 
         Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
-        Assert.Equal("MSG02", await refused.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await refused.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
         var statuses = workbook.Worksheet("Measurements").RowsUsed().Skip(1).Select(r => r.Cell(5).GetString()).ToList();
         Assert.Equal(["Confirmed", "Confirmed", "Corrected"], statuses.Order());
@@ -210,7 +210,7 @@ public class WaterHistoryTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
         {
             var response = await outsider.GetAsync(url);
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-            Assert.Equal("MSG02", await response.ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
         }
 
         Assert.Equal(HttpStatusCode.OK, (await viewer.GetAsync($"/api/water-measurements/{ids.Corrected}")).StatusCode);

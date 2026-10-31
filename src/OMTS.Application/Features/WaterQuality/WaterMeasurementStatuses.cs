@@ -10,7 +10,7 @@ namespace OMTS.Application.Features.WaterQuality;
 /// <summary>Status filter values of the ENV-03 lists and the derived alert state.</summary>
 public static class WaterMeasurementStatuses
 {
-    /// <summary>Object name used in MSG61.</summary>
+    /// <summary>Object name used in MSG-GEN-09.</summary>
     public const string ObjectName = "water measurement";
 
     public static readonly IReadOnlyList<int> All = [S.Draft, S.Confirmed, S.Superseded, S.Voided];
@@ -53,10 +53,9 @@ public static class WaterMeasurementStatuses
         return ids.Order().ToList();
     }
 
-    /// <summary>409 MSG61 for a transition the record's status does not allow.</summary>
-    public static AppError CannotChange(IStatusCatalog statusCatalog, int currentStatusId, int newStatusId, string reason) =>
-        AppError.Conflict(UserMessages.CannotChangeStatus(
-            ObjectName, statusCatalog.DisplayNameOf(currentStatusId), statusCatalog.DisplayNameOf(newStatusId), reason));
+    /// <summary>409 MSG-GEN-09 for a change the record's status does not allow.</summary>
+    public static AppError CannotChange(IStatusCatalog statusCatalog, int currentStatusId) =>
+        AppError.Conflict(UserMessages.WrongStatus(ObjectName, statusCatalog.DisplayNameOf(currentStatusId)));
 
     public static WaterAlertState AlertStateOf(WaterMeasurement measurement) => !measurement.ThresholdExceeded
         ? WaterAlertState.None

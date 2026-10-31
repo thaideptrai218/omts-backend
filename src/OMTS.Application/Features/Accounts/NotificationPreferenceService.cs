@@ -61,7 +61,7 @@ public sealed class NotificationPreferenceService(
 
         foreach (var item in request.Items ?? [])
         {
-            // Push without a device that allows it is saved off; the other channels are still saved (MSG22).
+            // Push without a device that allows it is saved off; the other channels are still saved (MSG-ACCOUNT-21).
             var enabled = item.Enabled;
             if (enabled && item.Channel == NotificationChannel.Push && !pushEligible && !IsLocked(item.Category, item.Channel))
             {
@@ -73,10 +73,9 @@ public sealed class NotificationPreferenceService(
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return new NotificationPreferencesSaved(
-            await ViewAsync(account, cancellationToken),
-            UserMessages.Saved("Notification settings").Text,
-            pushDeclined ? UserMessages.PushDeclined.Text : null);
+        var saved = UserMessages.Saved("Notification settings");
+        var notice = pushDeclined ? UserMessages.PushNotAllowedOnDevice : null;
+        return new NotificationPreferencesSaved(await ViewAsync(account, cancellationToken), saved.Text, saved.Code, notice?.Text, notice?.Code);
     }
 
     /// <summary>Categories that apply to the kind of account; only these are shown and accepted.</summary>

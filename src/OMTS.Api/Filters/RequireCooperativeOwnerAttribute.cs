@@ -10,7 +10,7 @@ namespace OMTS.Api.Filters;
 /// <summary>
 /// Owner-only use cases (accounts, grants, roles, cooperative profile, employees, zones…): checks the
 /// account's subject type, never role permissions, so a custom role can never open them. Others get
-/// 403 MSG02; no token gives 401.
+/// 403 MSG-GEN-08; no token gives 401.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
 public sealed class RequireCooperativeOwnerAttribute : Attribute, IAsyncAuthorizationFilter

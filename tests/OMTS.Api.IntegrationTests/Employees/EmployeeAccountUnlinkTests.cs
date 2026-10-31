@@ -93,7 +93,7 @@ public class EmployeeAccountUnlinkTests(AuthApiFactory factory) : IClassFixture<
 
         foreach (var client in new[] { await factory.LoginAsync(manager.Username), await factory.LoginAsync(trader.Username) })
         {
-            Assert.Equal("MSG02", await (await client.DeleteAsync($"/api/employees/{id}/account")).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.DeleteAsync($"/api/employees/{id}/account")).ErrorCodeAsync());
         }
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateClient().DeleteAsync($"/api/employees/{id}/account")).StatusCode);

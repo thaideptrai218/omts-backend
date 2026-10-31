@@ -5,7 +5,7 @@ namespace OMTS.Infrastructure.Ocr;
 
 /// <summary>
 /// Default OCR adapter when no real provider is configured: reads nothing and reports a failure, so the
-/// recording flow keeps the Draft, answers MSG04 and the user enters the values by hand.
+/// recording flow keeps the Draft, answers MSG-WATER-01 and the user enters the values by hand.
 /// </summary>
 public sealed class NotConfiguredOcrService : IOcrService
 {

@@ -46,7 +46,7 @@ internal sealed class AzureBlobFileStorage(
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
             // Network errors surface as RequestFailedException, AggregateException (after retries),
-            // HttpRequestException or a timeout; all are a failed upload for the caller (MSG05).
+            // HttpRequestException or a timeout; all are a failed upload for the caller (MSG-GEN-03).
             logger.LogError(exception, "Blob upload of {Key} failed", key);
             return FileUploadResult.Failed("STORAGE_ERROR");
         }

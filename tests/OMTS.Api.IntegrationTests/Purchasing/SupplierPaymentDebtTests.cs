@@ -34,7 +34,7 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
             (valid with { DeduplicationKey = new string('k', 101) }, "Deduplication key"),
         })
         {
-            Assert.Equal(field, await (await world.Owner.PostPaymentAsync(body)).FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+            Assert.Equal(field, await (await world.Owner.PostPaymentAsync(body)).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         }
 
         Assert.Equal("Amount", await (await world.Owner.PostPaymentAsync(valid with { Amount = 100_500 })).FieldAsync(HttpStatusCode.BadRequest, "MSG41"));
@@ -59,12 +59,12 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
         await (await world.Owner.CancelAsync(cancelled.Id(), "Wrong", null)).ReadAsync(HttpStatusCode.OK);
         foreach (var id in new[] { draft.Id(), cancelled.Id() })
         {
-            await (await world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = id, Amount = 1000 })).ProblemAsync(HttpStatusCode.Conflict, "MSG61");
+            await (await world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = id, Amount = 1000 })).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
         }
 
         var otherSupplier = await world.Owner.CreateSupplierAsync();
         var foreign = await world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = otherSupplier, ReceiptId = receipt.Id(), Amount = 1000 });
-        Assert.Equal("Receipt", await foreign.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Receipt", await foreign.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
 
         var audit = await factory.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.RecordId == exact.Id()));
         Assert.Equal(("SupplierPayment.Recorded", world.Zone.Id), (audit.Action, audit.ZoneId));
@@ -110,10 +110,10 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
             await world.Owner.PostAsJsonAsync($"/api/supplier-payments/{paymentId}/allocate", new { receiptId });
 
         Assert.Equal(200_000, (await (await Allocate(small.Id())).ProblemAsync(HttpStatusCode.BadRequest, "MSG45")).Money("limit"));
-        await (await Allocate(draft.Id())).ProblemAsync(HttpStatusCode.Conflict, "MSG61");
-        await (await Allocate(cancelled.Id())).ProblemAsync(HttpStatusCode.Conflict, "MSG61");
-        Assert.Equal("Receipt", await (await Allocate(foreign.Id())).FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
-        Assert.Equal("Receipt", await (await Allocate(null)).FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        await (await Allocate(draft.Id())).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
+        await (await Allocate(cancelled.Id())).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
+        Assert.Equal("Receipt", await (await Allocate(foreign.Id())).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("Receipt", await (await Allocate(null)).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         // Completed receipts owe 200,000 + 500,000; the detached 300,000 is held by the supplier.
         Assert.Equal(700_000 - 300_000, await DebtAsync(world));
 
@@ -121,7 +121,7 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal((big.Id(), big.GetProperty("code").GetString()), (allocated.GetProperty("receiptId").GetGuid(), allocated.GetProperty("receiptCode").GetString()));
         Assert.Equal(200_000, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{big.Id()}")).Money("outstanding"));
         Assert.Equal(400_000, await DebtAsync(world));
-        await (await Allocate(small.Id())).ProblemAsync(HttpStatusCode.Conflict, "MSG61");
+        await (await Allocate(small.Id())).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
 
         var audit = await factory.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.RecordId == paymentId && e.Action == "SupplierPayment.Allocated"));
         Assert.Equal(world.Zone.Id, audit.ZoneId);
@@ -137,7 +137,7 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
         await (await world.Owner.CancelAsync(receipt.Id(), "Wrong", true)).ReadAsync(HttpStatusCode.OK);
         var paymentId = await factory.QueryAsync(db => db.SupplierPayments.Where(p => p.SupplierId == world.SupplierId).Select(p => p.Id).SingleAsync());
         var target = await world.CompletedAsync(0, 0, new LineBody(world.Other, 1, 100_000));
-        await (await world.Owner.PostAsJsonAsync($"/api/supplier-payments/{paymentId}/allocate", new { receiptId = target.Id() })).ProblemAsync(HttpStatusCode.Conflict, "MSG61");
+        await (await world.Owner.PostAsJsonAsync($"/api/supplier-payments/{paymentId}/allocate", new { receiptId = target.Id() })).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
     }
 
     // Done when: supplier debt equals the formula in every INP-04/05 scenario.
@@ -242,14 +242,14 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
         var manager = await factory.ZoneManagerAsync(world.Zone);
         foreach (var refused in new[] { zoneOnly, manager })
         {
-            await (await refused.PostPaymentAsync(body)).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-            await (await refused.GetAsync("/api/supplier-payments")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-            await (await refused.GetAsync($"/api/suppliers/{world.SupplierId}/debt")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+            await (await refused.PostPaymentAsync(body)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+            await (await refused.GetAsync("/api/supplier-payments")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+            await (await refused.GetAsync($"/api/suppliers/{world.SupplierId}/debt")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         }
 
         var viewOnly = await factory.PurchasingStaffAsync(null, new Perm(PermissionFunctions.SupplierPayments));
         await (await viewOnly.GetAsync("/api/supplier-payments")).ReadAsync(HttpStatusCode.OK);
-        await (await viewOnly.PostPaymentAsync(body)).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        await (await viewOnly.PostPaymentAsync(body)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
 
         var accountant = await factory.AccountantAsync();
         await (await accountant.PostPaymentAsync(body)).ReadAsync(HttpStatusCode.Created);
@@ -260,11 +260,11 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
         await (await accountant.GetAsync("/api/farming-input-items")).ReadAsync(HttpStatusCode.OK);
 
         // Read-only on INP-03…INP-05.
-        await (await accountant.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 1000)))).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await accountant.CancelAsync(receipt.Id(), "x", true)).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        await (await accountant.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 1000)))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await accountant.CancelAsync(receipt.Id(), "x", true)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await accountant.PostReturnAsync(receipt.Id(), new ReturnBody { DebtReductionAmount = 100_000, Lines = [new ReturnLineBody(receipt.LineOf(world.Seed), 1)] }))
-            .ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await accountant.PostAsync($"/api/purchase-receipts/{receipt.Id()}/copy", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+            .ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await accountant.PostAsync($"/api/purchase-receipts/{receipt.Id()}/copy", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
     }
 
     private async Task<decimal> DebtAsync(PurchasingWorld world) =>

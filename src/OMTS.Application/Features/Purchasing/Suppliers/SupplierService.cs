@@ -122,12 +122,12 @@ public sealed class SupplierService(
 
     /// <summary>Never blocked: existing receipts, seed lots and payments stay unchanged.</summary>
     public Task<Result<SupplierView>> DiscontinueAsync(Guid supplierId, CancellationToken cancellationToken) =>
-        ChangeStatusAsync(supplierId, StatusIds.Usage.InUse, StatusIds.Usage.Discontinued, "Supplier.Discontinued", "the supplier is already discontinued", cancellationToken);
+        ChangeStatusAsync(supplierId, StatusIds.Usage.InUse, StatusIds.Usage.Discontinued, "Supplier.Discontinued", cancellationToken);
 
     public Task<Result<SupplierView>> ReactivateAsync(Guid supplierId, CancellationToken cancellationToken) =>
-        ChangeStatusAsync(supplierId, StatusIds.Usage.Discontinued, StatusIds.Usage.InUse, "Supplier.Reactivated", "the supplier is already in use", cancellationToken);
+        ChangeStatusAsync(supplierId, StatusIds.Usage.Discontinued, StatusIds.Usage.InUse, "Supplier.Reactivated", cancellationToken);
 
-    /// <summary>JPEG, PNG or PDF certificates; a failed upload leaves the supplier unchanged (MSG04).</summary>
+    /// <summary>JPEG, PNG or PDF certificates; a failed upload leaves the supplier unchanged (MSG-GEN-03).</summary>
     public async Task<Result<SupplierView>> AddCertificatesAsync(Guid supplierId, IReadOnlyList<IncomingFile> files, CancellationToken cancellationToken)
     {
         var supplier = await suppliers.GetForEditAsync(supplierId, cancellationToken);
@@ -153,7 +153,7 @@ public sealed class SupplierService(
             var uploaded = await storage.UploadAsync(file, "supplier-certificates", cancellationToken);
             if (!uploaded.Succeeded)
             {
-                return new AppError(ErrorKind.ServiceUnavailable, UserMessages.ServiceNotResponding("Cloud Storage"));
+                return new AppError(ErrorKind.ServiceUnavailable, UserMessages.UploadFailed with { LegacyCode = MessageCodes.Legacy.Msg04 });
             }
 
             keys.Add(uploaded.Key!);
@@ -191,7 +191,7 @@ public sealed class SupplierService(
     }
 
     private async Task<Result<SupplierView>> ChangeStatusAsync(
-        Guid supplierId, int fromStatusId, int toStatusId, string action, string wrongStatusReason, CancellationToken cancellationToken)
+        Guid supplierId, int fromStatusId, int toStatusId, string action, CancellationToken cancellationToken)
     {
         var supplier = await suppliers.GetForEditAsync(supplierId, cancellationToken);
         if (supplier is null)
@@ -201,8 +201,7 @@ public sealed class SupplierService(
 
         if (supplier.StatusId != fromStatusId)
         {
-            return AppError.Conflict(UserMessages.CannotChangeStatus(
-                "supplier", statusCatalog.DisplayNameOf(supplier.StatusId), statusCatalog.DisplayNameOf(toStatusId), wrongStatusReason));
+            return AppError.Conflict(UserMessages.WrongStatus("Supplier", statusCatalog.DisplayNameOf(supplier.StatusId)));
         }
 
         supplier.StatusId = toStatusId;
@@ -240,7 +239,7 @@ public sealed class SupplierService(
             RowVersionGuard.Encode(supplier.RowVersion));
     }
 
-    /// <summary>The second of two parallel saves with one phone gets the same MSG03 as the pre-check.</summary>
+    /// <summary>The second of two parallel saves with one phone gets the same MSG-GEN-02 as the pre-check.</summary>
     private async Task<AppError?> SaveAsync(string phoneNumber, Guid? exceptSupplierId, CancellationToken cancellationToken)
     {
         try

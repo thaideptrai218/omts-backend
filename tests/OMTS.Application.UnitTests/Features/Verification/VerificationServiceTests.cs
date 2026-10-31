@@ -56,12 +56,14 @@ public partial class VerificationServiceTests
         Assert.True((await Service.VerifyAsync(started, _sms.LastCode, AccountId, default)).IsSuccess);
 
         var locked = await StartAsync(VerificationPurpose.ChangePhone);
-        for (var i = 0; i < 5; i++)
+        for (var i = 0; i < 4; i++)
         {
-            await Service.VerifyAsync(locked, "000000", AccountId, default);
+            AssertWrongCode(await Service.VerifyAsync(locked, "000000", AccountId, default));
         }
 
-        AssertWrongCode(await Service.VerifyAsync(locked, _sms.LastCode, AccountId, default));
+        // The 5th wrong entry cancels the code, and so is every later entry, a right one too: MSG-ACCOUNT-17 (400).
+        AssertCancelled(await Service.VerifyAsync(locked, "000000", AccountId, default));
+        AssertCancelled(await Service.VerifyAsync(locked, _sms.LastCode, AccountId, default));
         AssertWrongCode(await Service.ResendAsync(locked, AccountId, default));
     }
 
@@ -136,14 +138,16 @@ public partial class VerificationServiceTests
     }
 
     [Fact]
-    public async Task Sender_failure_saves_nothing_and_answers_MSG04()
+    public async Task Sender_failure_saves_nothing_and_answers_MSG_ACCOUNT_13()
     {
         _sms.Fail = true;
 
         var result = await Service.StartAsync(VerificationPurpose.VerifyPhone, VerificationChannel.Sms, Phone, AccountId, default);
 
         Assert.Equal(ErrorKind.ServiceUnavailable, result.Error?.Kind);
-        Assert.Equal("MSG04", result.Error?.Message.Code);
+        Assert.Equal("MSG-ACCOUNT-13", result.Error?.Message.Code);
+        Assert.Equal("MSG04", result.Error?.Message.LegacyCode);
+        Assert.Equal("The verification code could not be sent by SMS. Nothing has been changed. Please try again later.", result.Error?.Message.Text);
         Assert.Empty(_codes.All);
     }
 
@@ -189,7 +193,8 @@ public partial class VerificationServiceTests
         Assert.True((await Service.StartAsync(VerificationPurpose.AccountRecovery, VerificationChannel.Sms, Phone, AccountId, default)).IsSuccess);
     }
 
-    // New requests do not give new guesses: 10 wrong codes per hour over all requests, then MSG69.
+    // New requests do not give new guesses: 10 wrong codes per hour over all requests, then MSG-ACCOUNT-18 (423) with
+    // the wait until the oldest request with a wrong code leaves the hour.
     [Fact]
     public async Task Wrong_codes_are_capped_across_requests()
     {
@@ -205,7 +210,8 @@ public partial class VerificationServiceTests
         }
 
         var start = await Service.StartAsync(VerificationPurpose.AccountRecovery, VerificationChannel.Sms, Phone, AccountId, default);
-        Assert.Equal("MSG69", start.Error?.Message.Code);
+        Assert.Equal((ErrorKind.Locked, "MSG-ACCOUNT-18", "MSG69"), (start.Error?.Kind, start.Error?.Message.Code, start.Error?.Message.LegacyCode));
+        Assert.Equal(3600 - 122, start.Error?.Details?["retryAfterSeconds"]);
     }
 
     [Fact]
@@ -224,7 +230,10 @@ public partial class VerificationServiceTests
         return result.Value!.VerificationId;
     }
 
-    private static void AssertWrongCode<T>(Result<T> result) => Assert.Equal("MSG16", result.Error?.Message.Code);
+    private static void AssertWrongCode<T>(Result<T> result) => Assert.Equal("MSG-ACCOUNT-16", result.Error?.Message.Code);
+
+    private static void AssertCancelled<T>(Result<T> result) =>
+        Assert.Equal((ErrorKind.Validation, "MSG-ACCOUNT-17", "MSG16"), (result.Error?.Kind, result.Error?.Message.Code, result.Error?.Message.LegacyCode));
 
     private sealed class MutableTime(DateTimeOffset start) : TimeProvider
     {

@@ -150,7 +150,7 @@ public class ReviewFixQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
         var shrink = await actor.Client.PutAsJsonAsync($"/api/rafts/{raft.Id()}", NewRaftBody(raft.Text("code"), lanes: 4) with { RowVersion = raft.Text("rowVersion") });
 
         Assert.Equal(HttpStatusCode.Conflict, shrink.StatusCode);
-        Assert.Equal("MSG11", await shrink.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-06", await shrink.ErrorCodeAsync());
         Assert.Equal(5, await factory.QueryAsync(db => db.Lanes.CountAsync(l => l.RaftId == raft.Id())));
         Assert.Equal(1, await LayoutVersionsAsync(raft.Id()));
     }

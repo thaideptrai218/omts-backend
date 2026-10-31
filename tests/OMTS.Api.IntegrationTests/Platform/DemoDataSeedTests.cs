@@ -194,7 +194,7 @@ public class DemoDataSeedTests
         {
             var (status, body) = await LoginAsync(username);
             Assert.Equal(HttpStatusCode.Forbidden, status);
-            Assert.Equal("MSG13", body.GetProperty("code").GetString());
+            Assert.Equal("MSG-ACCOUNT-07", body.GetProperty("code").GetString());
         }
 
         using var scope = api.Services.CreateScope();

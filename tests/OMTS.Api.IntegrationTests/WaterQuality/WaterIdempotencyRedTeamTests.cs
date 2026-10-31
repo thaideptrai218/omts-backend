@@ -123,7 +123,7 @@ public class WaterIdempotencyRedTeamTests(AuthApiFactory api) : IClassFixture<Au
 
         Assert.Equal(HttpStatusCode.BadGateway, recognized.StatusCode);
         Assert.Equal(HttpStatusCode.BadGateway, manual.StatusCode);
-        Assert.Equal("MSG05", await manual.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-03", await manual.ErrorCodeAsync());
         Assert.Equal(0, await broken.QueryAsync(db => db.WaterMeasurements.CountAsync()));
         Assert.Equal(0, await broken.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordType == "WaterMeasurement")));
         Assert.Equal(0, await broken.QueryAsync(db => db.Notifications.CountAsync(n => n.Type == "WATER_ALERT")));

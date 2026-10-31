@@ -29,7 +29,7 @@ public class PurchasingSqlServerTests
     }
 
     [SqlServerFact]
-    public async Task Parallel_duplicate_supplier_phones_and_item_codes_create_one_record_and_answer_MSG03()
+    public async Task Parallel_duplicate_supplier_phones_and_item_codes_create_one_record_and_answer_MSG_GEN_02()
     {
         await using var host = await FarmingHost.StartAsync();
         var owner = host.Owner.Client;
@@ -38,7 +38,7 @@ public class PurchasingSqlServerTests
 
         var suppliers = await InParallelAsync(6, i => owner.PostAsJsonAsync("/api/suppliers", new { name = $"Supplier {i}", supplierType = "Seed", phoneNumber = spellings[i % 3] }));
         Assert.Single(suppliers, r => r.StatusCode == HttpStatusCode.Created);
-        await AssertLosersAsync(suppliers.Where(r => r.StatusCode != HttpStatusCode.Created), "409 MSG03");
+        await AssertLosersAsync(suppliers.Where(r => r.StatusCode != HttpStatusCode.Created), "409 MSG-GEN-02");
         Assert.Equal(1, await host.QueryAsync(db => db.Suppliers.CountAsync(s => s.PhoneNumber == phone)));
 
         var code = $"Seed-{NewCode()}";
@@ -47,7 +47,7 @@ public class PurchasingSqlServerTests
             code = i % 2 == 0 ? code : code.ToUpperInvariant(), name = "Hàu giống", group = "Seed", unit = "kg",
         }));
         Assert.Single(items, r => r.StatusCode == HttpStatusCode.Created);
-        await AssertLosersAsync(items.Where(r => r.StatusCode != HttpStatusCode.Created), "409 MSG03");
+        await AssertLosersAsync(items.Where(r => r.StatusCode != HttpStatusCode.Created), "409 MSG-GEN-02");
         Assert.Equal(1, await host.QueryAsync(db => db.FarmingInputItems.CountAsync(i => i.Code == code)));
     }
 
@@ -62,7 +62,7 @@ public class PurchasingSqlServerTests
         var responses = await InParallelAsync(6, _ => world.Owner.PostAsync($"/api/purchase-receipts/{draft.Id()}/complete", null));
 
         Assert.Single(responses, r => r.StatusCode == HttpStatusCode.OK);
-        await AssertLosersAsync(responses.Where(r => r.StatusCode != HttpStatusCode.OK), "409 MSG06", "409 MSG61");
+        await AssertLosersAsync(responses.Where(r => r.StatusCode != HttpStatusCode.OK), "409 MSG06", "409 MSG-GEN-09");
         Assert.Equal(1, await host.QueryAsync(db => db.SupplierPayments.CountAsync(p => p.ReceiptId == draft.Id())));
         Assert.Equal(1, await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == draft.Id() && e.Action == "PurchaseReceipt.StatusChanged")));
         Assert.Equal(1, await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.Action == "SupplierPayment.Recorded" && e.ZoneId == world.Zone.Id)));
@@ -84,7 +84,7 @@ public class PurchasingSqlServerTests
 
         var created = responses.Count(r => r.StatusCode == HttpStatusCode.Created);
         Assert.InRange(created, 1, 3);
-        await AssertLosersAsync(responses.Where(r => r.StatusCode != HttpStatusCode.Created), "409 MSG06", "400 MSG45");
+        await AssertLosersAsync(responses.Where(r => r.StatusCode != HttpStatusCode.Created), "409 MSG06", "400 MSG-PURCHASE-03");
         var returned = await host.QueryAsync(db => db.PurchaseReturnLines.Where(l => l.ReceiptLineId == line).SumAsync(l => l.Quantity));
         Assert.Equal(created * 30m, returned);
         var view = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{receipt.Id()}");
@@ -122,7 +122,7 @@ public class PurchasingSqlServerTests
         }
 
         Assert.Single(ids);
-        await AssertLosersAsync(keyed.Where(r => r.StatusCode != HttpStatusCode.Created), "409 MSG06", "409 MSG03");
+        await AssertLosersAsync(keyed.Where(r => r.StatusCode != HttpStatusCode.Created), "409 MSG06", "409 MSG-GEN-02");
         Assert.Equal(900_000, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{other.Id()}")).Money("outstanding"));
     }
 
@@ -182,7 +182,7 @@ public class PurchasingSqlServerTests
         var responses = await InParallelAsync(6, i => world.Owner.PostAsJsonAsync($"/api/supplier-payments/{paymentId}/allocate", new { receiptId = targets[i % 2].Id() }));
 
         Assert.Single(responses, r => r.StatusCode == HttpStatusCode.OK);
-        await AssertLosersAsync(responses.Where(r => r.StatusCode != HttpStatusCode.OK), "409 MSG06", "409 MSG61");
+        await AssertLosersAsync(responses.Where(r => r.StatusCode != HttpStatusCode.OK), "409 MSG06", "409 MSG-GEN-09");
         var allocatedTo = await host.QueryAsync(db => db.SupplierPayments.Where(p => p.Id == paymentId).Select(p => p.ReceiptId).SingleAsync());
         Assert.Contains(allocatedTo!.Value, targets.Select(t => t.Id()));
         Assert.Equal(1, await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == paymentId && e.Action == "SupplierPayment.Allocated")));

@@ -17,4 +17,4 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Accounts.Dtos;
 
 /// <summary>Result of ACS-04: fresh tokens for this device (every other session was ended) and MSG18.</summary>
-public sealed record PasswordChanged(AuthTokens Tokens, string Message);
+public sealed record PasswordChanged(AuthTokens Tokens, string Message, string MessageCode);

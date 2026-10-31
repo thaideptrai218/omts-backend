@@ -92,7 +92,7 @@ public sealed class PurchaseReceiptValidator(
             || (l.Quantity is { } lq && l.UnitPrice is { } lp && lq * lp > MaxAmount));
         if (badDraftLine >= 0)
         {
-            return (found, new AppError(ErrorKind.Validation, UserMessages.QuantityOrPriceInvalid, new Dictionary<string, object?> { ["field"] = $"Line {badDraftLine + 1}" }));
+            return (found, InvalidLine(badDraftLine));
         }
 
         // Amounts are stored as multiples of 1,000 VND (database check), so a Draft is checked too.
@@ -169,7 +169,7 @@ public sealed class PurchaseReceiptValidator(
         var badLine = lines.FindIndex(l => l.Quantity <= 0 || l.UnitPrice < 0 || decimal.Truncate(l.UnitPrice) != l.UnitPrice);
         if (badLine >= 0)
         {
-            return new AppError(ErrorKind.Validation, UserMessages.QuantityOrPriceInvalid, new Dictionary<string, object?> { ["field"] = $"Line {badLine + 1}" });
+            return InvalidLine(badLine);
         }
 
         foreach (var (amount, field) in new[] { (receipt.DiscountAmount, "Discount amount"), (receipt.AmountPaidNow, "Amount paid now") })
@@ -188,6 +188,14 @@ public sealed class PurchaseReceiptValidator(
 
         var payable = subtotal - receipt.DiscountAmount;
         return receipt.AmountPaidNow > payable ? ExceedsLimit("Amount paid now", payable) : null;
+    }
+
+    /// <summary>MSG-GEN-01 naming the line whose quantity or unit price is invalid (MSG59 before).</summary>
+    private static AppError InvalidLine(int index)
+    {
+        var field = $"Line {index + 1}";
+        return new AppError(
+            ErrorKind.Validation, UserMessages.Invalid(field) with { LegacyCode = MessageCodes.Legacy.Msg59 }, new Dictionary<string, object?> { ["field"] = field });
     }
 
     public static AppError ExceedsLimit(string field, decimal limit) => new(

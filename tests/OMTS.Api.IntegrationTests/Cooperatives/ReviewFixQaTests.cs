@@ -136,7 +136,7 @@ public class ReviewFixQaTests
         var refusals = await api.QueryAsync(db => db.AuditEvents.Where(e => e.Action == "Account.OwnerRightsRefused").Select(e => e.RecordCode).ToListAsync());
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        Assert.Equal("MSG02", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
         Assert.Equal([username], refusals);
         Assert.Equal(0, await api.QueryAsync(db => db.Employees.CountAsync()));
         Assert.False(await api.QueryAsync(db => db.Accounts.AnyAsync(a => a.Username == username)));

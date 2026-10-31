@@ -12,5 +12,5 @@ public sealed record OcrOutcome(
 {
     public static readonly OcrOutcome NotCalled = new(OcrStatus.NotCalled, null, null, null, null);
 
-    public static OcrOutcome Failed() => new(OcrStatus.Failed, null, null, null, UserMessages.ServiceNotResponding("OCR"));
+    public static OcrOutcome Failed() => new(OcrStatus.Failed, null, null, null, UserMessages.OcrValuesNotRead("pH and salinity"));
 }

@@ -50,8 +50,8 @@ public sealed class PurchaseReturnService(
 
         if (receipt.StatusId != StatusIds.PurchaseReceipt.Completed)
         {
-            return AppError.Conflict(UserMessages.CannotChangeStatus(
-                "Purchase receipt", statusCatalog.DisplayNameOf(receipt.StatusId), "Returned", "only a Completed receipt can be returned"));
+            // Only a Completed receipt can be returned.
+            return AppError.Conflict(UserMessages.WrongStatus($"Purchase receipt {receipt.Code}", statusCatalog.DisplayNameOf(receipt.StatusId)));
         }
 
         var invalid = new List<string>();
@@ -188,24 +188,36 @@ public sealed class PurchaseReturnService(
         for (var i = 0; i < lines.Count; i++)
         {
             var line = receipt.Lines.First(l => l.Id == lines[i].ReceiptLineId);
-            if (lines[i].Quantity is not > 0)
+            if (lines[i].Quantity is null)
             {
-                return new AppError(ErrorKind.Validation, UserMessages.QuantityOrPriceInvalid, new Dictionary<string, object?> { ["field"] = $"Line {i + 1}" });
+                var field = $"Line {i + 1}";
+                return new AppError(
+                    ErrorKind.Validation, UserMessages.Invalid(field) with { LegacyCode = MessageCodes.Legacy.Msg59 }, new Dictionary<string, object?> { ["field"] = field });
             }
 
             var (stockedQuantity, unknown) = stocked.GetValueOrDefault(line.Id);
-            var returnable = PurchaseReceiptViews.Returnable(line, stockedQuantity, unknown, returned.GetValueOrDefault(line.Id));
-            if (lines[i].Quantity > returnable)
+            var lineReturned = returned.GetValueOrDefault(line.Id);
+            var returnable = PurchaseReceiptViews.Returnable(line, stockedQuantity, unknown, lineReturned);
+            // MSG-PURCHASE-03 with the limit of the line (MSG59 for a quantity not greater than 0, MSG45 above the limit before).
+            if (lines[i].Quantity is not > 0 || lines[i].Quantity > returnable)
             {
+                var seeded = stockedQuantity > 0 ? $", seeded {Quantity(stockedQuantity)} {line.Unit}" : string.Empty;
+                var explanation = unknown
+                    ? "The quantity already seeded from this line is not known."
+                    : $"Received {Quantity(line.Quantity)} {line.Unit}{seeded}, already returned {Quantity(lineReturned)} {line.Unit}.";
                 return new AppError(
                     ErrorKind.Validation,
-                    UserMessages.ExceedsLimit("Returned quantity", $"{returnable.ToString("0.###", CultureInfo.InvariantCulture)} {line.Unit}"),
+                    UserMessages.ReturnQuantityOutsideLimit(
+                        line.Item.Name, Quantity(returnable), line.Unit, explanation,
+                        lines[i].Quantity is not > 0 ? MessageCodes.Legacy.Msg59 : MessageCodes.Legacy.Msg45),
                     new Dictionary<string, object?> { ["field"] = $"Line {i + 1}", ["limit"] = returnable });
             }
         }
 
         return null;
     }
+
+    private static string Quantity(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 
     /// <summary>Refund + debt reduction = total return value; debt reduction ≤ outstanding; refund ≤ net paid.</summary>
     private static AppError? AmountError(decimal refund, decimal debtReduction, decimal total, ReceiptFigures figures)

@@ -22,12 +22,12 @@ public sealed class ZoneWaterMeasurementsController(
     WaterMeasurementRecordingService recording,
     WaterMeasurementQueryService queries) : ControllerBase
 {
-    // A 10 MB photo plus the multipart envelope; a larger photo still reaches the validator's MSG01.
+    // A 10 MB photo plus the multipart envelope; a larger photo still reaches the validator's MSG-GEN-01.
     private const long MaxUploadBytes = 12 * 1024 * 1024;
 
     /// <summary>
     /// Multipart: <c>photo</c> (JPEG/PNG, at most 10 MB) and an optional <c>clientOperationId</c>. Stores the photo,
-    /// reads it with OCR and saves a Draft; when OCR fails the Draft is still saved and <c>ocr.status</c> is Failed (MSG04).
+    /// reads it with OCR and saves a Draft; when OCR fails the Draft is still saved and <c>ocr.status</c> is Failed (MSG-WATER-01).
     /// </summary>
     [HttpPost("recognize")]
     [RequirePermission(PermissionFunctions.WaterMeasurements, PermissionAction.Create)]

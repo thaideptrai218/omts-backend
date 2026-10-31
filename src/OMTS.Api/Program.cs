@@ -34,7 +34,7 @@ builder.Services.AddControllers(options =>
     })
     // Enums travel by name ("Sms", "Web", "View"); numbers are still accepted.
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()))
-    // Unreadable values answer 400 MSG01 like every other invalid field.
+    // Unreadable values answer 400 MSG-GEN-01 like every other invalid field.
     .ConfigureApiBehaviorOptions(options => options.InvalidModelStateResponseFactory = InvalidModelStateResponse.Create);
 // A time sent without a UTC offset is Vietnam time (UTC+7), in JSON bodies and in Swagger.
 builder.Services.AddOmtsBusinessTime();

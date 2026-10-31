@@ -46,7 +46,7 @@ public sealed class TraderRequestService(
 
         if (trader.StatusId != StatusIds.Account.PendingApproval)
         {
-            return statusChanges.WrongStatus(nameof(Account), trader, StatusIds.Account.Active, "only a request waiting for approval can be approved");
+            return statusChanges.WrongStatus(nameof(Account), trader);
         }
 
         var cooperative = await cooperatives.GetCurrentAsync(cancellationToken)
@@ -88,7 +88,7 @@ public sealed class TraderRequestService(
 
         if (trader.StatusId != StatusIds.Account.PendingApproval)
         {
-            return statusChanges.WrongStatus(nameof(Account), trader, StatusIds.Account.Rejected, "only a request waiting for approval can be refused");
+            return statusChanges.WrongStatus(nameof(Account), trader);
         }
 
         trader.StatusId = StatusIds.Account.Rejected;

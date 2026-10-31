@@ -83,7 +83,7 @@ public sealed class PasswordChangeService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         var tokens = await authService.CreateSessionAsync(account, request.ClientType, request.DeviceName, client, cancellationToken, sessionId);
-        return new PasswordChanged(tokens, UserMessages.PasswordChanged.Text);
+        return new PasswordChanged(tokens, UserMessages.PasswordChanged.Text, UserMessages.PasswordChanged.Code);
     }
 
     private async Task<AppError?> CheckProofAsync(Account account, ChangePasswordRequest request, CancellationToken cancellationToken)

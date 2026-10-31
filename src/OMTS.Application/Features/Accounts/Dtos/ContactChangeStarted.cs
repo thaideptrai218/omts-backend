@@ -12,4 +12,4 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Accounts.Dtos;
 
 /// <summary>Contact change started: the code went to the new contact; the old one stays in use until verified (MSG62).</summary>
-public sealed record ContactChangeStarted(Verification.Dtos.VerificationStarted Verification, string Message);
+public sealed record ContactChangeStarted(Verification.Dtos.VerificationStarted Verification, string Message, string MessageCode);

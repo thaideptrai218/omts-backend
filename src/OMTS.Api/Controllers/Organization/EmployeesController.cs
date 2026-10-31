@@ -56,7 +56,7 @@ public sealed class EmployeesController(EmployeeService employees) : ControllerB
     /// </summary>
     /// <param name="id">The employee.</param>
     /// <param name="rowVersion">
-    /// Optional, URL-encoded: the version the screen was read from. Not base64: MSG01; older than the profile: MSG06.
+    /// Optional, URL-encoded: the version the screen was read from. Not base64: MSG-GEN-01; older than the profile: MSG06.
     /// </param>
     /// <param name="cancellationToken">Request aborted.</param>
     [HttpDelete("{id:guid}/account")]

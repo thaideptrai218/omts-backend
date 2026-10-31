@@ -9,7 +9,7 @@ namespace OMTS.Api.Controllers.WaterQuality;
 /// <summary>
 /// One water measurement by id (ENV-01 confirm, ENV-02 correct/void/editing indicator, ENV-03 detail). The route
 /// has no zone, so each use case loads the record and checks the caller's WATER_MEASUREMENTS grant in its zone
-/// (View: detail, Create: confirm/recognize, Edit: correct/void/editing); another zone answers 403 MSG02.
+/// (View: detail, Create: confirm/recognize, Edit: correct/void/editing); another zone answers 403 MSG-GEN-08.
 /// </summary>
 [ApiController]
 [Route("api/water-measurements/{id:guid}")]

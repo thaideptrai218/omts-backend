@@ -5,7 +5,7 @@ namespace OMTS.Application.Features.Files;
 /// <summary>
 /// Checks uploads before they reach storage: the real format is read from the content (magic bytes), not
 /// from the extension or the client's content type, so a renamed .exe is rejected. Callers map a failure
-/// to MSG01 naming the field.
+/// to MSG-GEN-01 naming the field.
 /// </summary>
 public static class FileValidator
 {

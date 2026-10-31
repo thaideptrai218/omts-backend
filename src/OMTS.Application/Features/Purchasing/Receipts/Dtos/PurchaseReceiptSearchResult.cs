@@ -14,4 +14,4 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Purchasing.Receipts.Dtos;
 
-public sealed record PurchaseReceiptSearchResult(Paged<PurchaseReceiptRow> Page, PurchaseReceiptTotals Totals, DateOnly From, DateOnly To, string? Message);
+public sealed record PurchaseReceiptSearchResult(Paged<PurchaseReceiptRow> Page, PurchaseReceiptTotals Totals, DateOnly From, DateOnly To, string? Message, string? MessageCode);

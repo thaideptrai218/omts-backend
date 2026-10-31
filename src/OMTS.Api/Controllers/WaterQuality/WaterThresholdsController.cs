@@ -11,7 +11,7 @@ namespace OMTS.Api.Controllers.WaterQuality;
 
 /// <summary>
 /// ENV-04 – water thresholds per zone. Only the Cooperative Owner sets them; staff holding View on
-/// WATER_MEASUREMENTS read those of their zones. A minimum not less than its maximum is refused (MSG28).
+/// WATER_MEASUREMENTS read those of their zones. A minimum not less than its maximum is refused (MSG-WATER-05).
 /// </summary>
 [ApiController]
 [Authorize]

@@ -8,4 +8,5 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Accounts.Dtos;
 
 /// <param name="Notice">MSG22 when push was asked for but no device allows notifications.</param>
-public sealed record NotificationPreferencesSaved(IReadOnlyList<CategoryPreferenceView> Categories, string Message, string? Notice);
+public sealed record NotificationPreferencesSaved(
+    IReadOnlyList<CategoryPreferenceView> Categories, string Message, string MessageCode, string? Notice, string? NoticeCode);
