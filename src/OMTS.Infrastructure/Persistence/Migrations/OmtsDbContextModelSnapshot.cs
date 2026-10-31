@@ -529,27 +529,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("WaterMeasurements");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Farming.DocumentZoneScope", b =>
-                {
-                    b.Property<Guid>("DocumentId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("ZoneId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateOnly?>("ValidFrom")
-                        .HasColumnType("date");
-
-                    b.Property<DateOnly?>("ValidTo")
-                        .HasColumnType("date");
-
-                    b.HasKey("DocumentId", "ZoneId");
-
-                    b.HasIndex("ZoneId");
-
-                    b.ToTable("DocumentZoneScopes");
-                });
-
             modelBuilder.Entity("OMTS.Domain.Entities.Farming.FarmingZone", b =>
                 {
                     b.Property<Guid>("Id")
@@ -830,7 +809,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("DocumentType")
-                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
@@ -877,6 +855,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid>("ZoneId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ExpiryDate");
@@ -884,6 +865,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("ReplacesDocumentId")
                         .IsUnique()
                         .HasFilter("[ReplacesDocumentId] IS NOT NULL");
+
+                    b.HasIndex("ZoneId");
 
                     b.ToTable("ZoneComplianceDocuments");
                 });
@@ -1165,6 +1148,12 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("ExpiredReminderSentAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("ExpiringReminderSentAt")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<DateOnly?>("ExpiryDate")
                         .HasColumnType("date");
@@ -3306,25 +3295,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Zone");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Farming.DocumentZoneScope", b =>
-                {
-                    b.HasOne("OMTS.Domain.Entities.Farming.ZoneComplianceDocument", "Document")
-                        .WithMany("ZoneScopes")
-                        .HasForeignKey("DocumentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("OMTS.Domain.Entities.Farming.FarmingZone", "Zone")
-                        .WithMany("DocumentScopes")
-                        .HasForeignKey("ZoneId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Document");
-
-                    b.Navigation("Zone");
-                });
-
             modelBuilder.Entity("OMTS.Domain.Entities.Farming.FarmingZone", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Identity.Cooperative", "Cooperative")
@@ -3392,7 +3362,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ReplacesDocumentId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("OMTS.Domain.Entities.Farming.FarmingZone", "Zone")
+                        .WithMany("Licenses")
+                        .HasForeignKey("ZoneId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("ReplacesDocument");
+
+                    b.Navigation("Zone");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.AccessGrant", b =>
@@ -4009,7 +3987,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Farming.FarmingZone", b =>
                 {
-                    b.Navigation("DocumentScopes");
+                    b.Navigation("Licenses");
 
                     b.Navigation("Rafts");
 
@@ -4030,11 +4008,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("LayoutVersions");
 
                     b.Navigation("PurchaseReceipts");
-                });
-
-            modelBuilder.Entity("OMTS.Domain.Entities.Farming.ZoneComplianceDocument", b =>
-                {
-                    b.Navigation("ZoneScopes");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.Account", b =>

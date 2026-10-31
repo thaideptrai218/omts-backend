@@ -34,6 +34,12 @@ public sealed class FarmingZonesController(FarmingZoneService zones) : Controlle
     public async Task<IActionResult> Map(bool includeDiscontinued = false, CancellationToken cancellationToken = default) =>
         Ok(await zones.MapAsync(includeDiscontinued, cancellationToken));
 
+    /// <summary>The proposed code of a new zone (KV01, KV02…; GBR-03); the Owner may type another one.</summary>
+    [HttpGet("next-code")]
+    [RequireCooperativeOwner]
+    [ProducesResponseType<FarmingZoneCodeProposal>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> NextCode(CancellationToken cancellationToken) => Ok(await zones.ProposeCodeAsync(cancellationToken));
+
     [HttpGet("{zoneId:guid}")]
     [ProducesResponseType<FarmingZoneView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Get(Guid zoneId, CancellationToken cancellationToken) =>
@@ -45,6 +51,7 @@ public sealed class FarmingZonesController(FarmingZoneService zones) : Controlle
     public async Task<IActionResult> Create(SaveFarmingZoneRequest request, CancellationToken cancellationToken) =>
         (await zones.CreateAsync(request, cancellationToken)).ToActionResult(z => StatusCode(StatusCodes.Status201Created, z));
 
+    /// <summary>Edits an In Use zone; a Discontinued zone answers MSG-GEN-09 (resume it first).</summary>
     [HttpPut("{zoneId:guid}")]
     [RequireCooperativeOwner]
     [ProducesResponseType<FarmingZoneView>(StatusCodes.Status200OK)]
@@ -58,6 +65,8 @@ public sealed class FarmingZonesController(FarmingZoneService zones) : Controlle
     public async Task<IActionResult> Discontinue(Guid zoneId, ChangeStatusRequest request, CancellationToken cancellationToken) =>
         (await zones.DiscontinueAsync(zoneId, request, cancellationToken)).ToActionResult(Ok);
 
+    /// <summary>Resume (FARM-02.3). <c>/reactivate</c> is the older route of the same action, kept for one release.</summary>
+    [HttpPost("{zoneId:guid}/resume")]
     [HttpPost("{zoneId:guid}/reactivate")]
     [RequireCooperativeOwner]
     [ProducesResponseType<FarmingZoneView>(StatusCodes.Status200OK)]

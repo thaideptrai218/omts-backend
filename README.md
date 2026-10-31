@@ -75,8 +75,9 @@ on every `docker compose up` and creates nothing twice.
 A password you change stays changed: the seed never resets it. The Owner gets `Demo@1234` only while still on the
 bootstrap temporary password. To get every demo login back, reset the environment with `docker compose down -v`.
 
-The demo data also holds the cooperative profile (with a logo, a cover photo and one Valid certification), the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued),
-license documents (valid, expiring within 30 days, expired), about 10 rafts with lanes per zone, 8 employees (one Left),
+The demo data also holds the cooperative profile (with a logo, a cover photo and two certifications: one Valid, one
+expiring within 30 days), the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued), zone licenses (`DEMO-01`:
+an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid license and an older expired one), about 10 rafts with lanes per zone, 8 employees (one Left),
 5 suppliers, 15 farming input items and 20 purchase receipts of the last 3 months with payments, discounts and a return.
 `DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰) and one water measurement a day for the
 30 days before the seed day: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
@@ -84,7 +85,7 @@ license documents (valid, expiring within 30 days, expired), about 10 rafts with
 alerts. Phone numbers are fake (`0900 000 0xx`).
 
 Dates are set relative to the day of the first seed and are not moved afterwards:
-- After a few weeks the "expiring" license has expired. `docker compose down -v` gives fresh dates.
+- After a few weeks the "expiring" license and certification have expired. `docker compose down -v` gives fresh dates.
 - Receipt codes carry the seed date (`PR-<seed date>-nnn`), not the receipt date.
 - The last water measurement is from the day before the seed: a month later without new ones, the zones are overdue and
   get the 06:00 reminder (MSG-WATER-06).
@@ -173,6 +174,17 @@ until it is revoked with a reason; there are no validity dates. On records with 
 its pairs; records with no zone (suppliers, supplier payments and debts, customers, payroll…) follow the role only, so an
 Accountant pair for one zone opens them (BR-FARM-08). A staff account without an Effective pair cannot log in.
 
+### Farming zones and licenses
+
+- Zones (FARM-02): `GET /api/zones/next-code` (Owner) proposes the next code `KV01`, `KV02`… (GBR-03: the highest `KVnn` in
+  use, discontinued zones included, plus one); the Owner may save another code. A Discontinued zone is read-only: its
+  edit answers MSG-GEN-09 until `POST /api/zones/{id}/resume` (`/reactivate` is the older route, kept for one release).
+  The water measurement point is optional.
+- Licenses (FARM-03): a license belongs to one zone (`zoneId`; the older `zoneIds` is read for one release, with one
+  zone only) and is added, edited or replaced only while that zone is In Use (MSG-GEN-09). The expiry date is required;
+  the type, holder and legal scope are optional. A license is Replaced from the day the license replacing it is recorded,
+  whatever its dates (BR-FARM-06); a Replaced license cannot be edited or replaced again (MSG-GEN-09).
+
 ### Notifications
 
 Every notification a module sends is kept in the list of its recipient account, whatever the preferences and even when
@@ -185,6 +197,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | `WATER_ALERT_WITHDRAWN` | MSG-WATER-04 (not sent yet: WATER PR) | always (mandatory) | Owner, Zone Manager |
 | `WATER_MEASUREMENT_OVERDUE` | MSG-WATER-06 | unless turned off | Owner, Zone Manager |
 | `ZONE_LICENSE_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
+| `COOPERATIVE_CERTIFICATION_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
 | `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (not sent yet: LABOR PR) | never: list only | Owner |
 
 - Preferences (ACCOUNT-07): `GET`/`PUT /api/me/notification-preferences` list the types of the roles the account
@@ -201,7 +214,8 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   |---|---|
   | MSG-WATER-03 | `corrected` (bool), `zone_name`, `raft_code` (null: no raft yet, "–"), `measurement_time`, `values_outside`: `[{ indicator: PH \| SALINITY, value, unit: "‰" \| null, direction: High \| Low, min, max }]` |
   | MSG-WATER-06 | `zone_name`, `last_date` |
-  | MSG-FARM-01 / MSG-FARM-02 | `document_type` (license type code), `document_number`, `zone_codes` (list), `expiry_date`, `days` (MSG-FARM-01 only) |
+  | MSG-FARM-01 / MSG-FARM-02 (`ZONE_LICENSE_EXPIRY`) | `document_type` (license type code, null when none), `document_number`, `zone_codes` (list holding the license's one zone), `expiry_date`, `days` (MSG-FARM-01 only) |
+  | MSG-FARM-01 / MSG-FARM-02 (`COOPERATIVE_CERTIFICATION_EXPIRY`) | `certification_name`, `certification_number` (null when none), `expiry_date`, `days` (MSG-FARM-01 only) |
 - `GET /api/me/notifications/{id}/open` checks the access again (GFR-02): 403 MSG-GEN-08 when the user may no longer
   open the record (e.g. a revoked zone–role pair), 404 MSG-ACCOUNT-22 when the record was removed. A push carries the
   notification id.
@@ -236,15 +250,26 @@ The OCR Service of the water meter photos (ENV-01) is only faked until its provi
 
 ### Background jobs
 
+Every daily job runs on one base (`DailyJobHostedService`): a run time in business time (UTC+7), an optional catch-up run
+when the host starts after it, and a failed run logged without stopping the next day's.
+
 `WaterMeasurementOverdueJob` runs every day at 06:00 (Asia/Ho_Chi_Minh): each In Use zone without a Confirmed water
 measurement for more than one calendar month gets one MSG-WATER-06 reminder per overdue period (Owners and the zone's staff
-with View on `WATER_MEASUREMENTS`). Like the zone license reminder (07:00), a host started after the run time runs it
+with View on `WATER_MEASUREMENTS`). Like the expiry reminder (07:00), a host started after the run time runs it
 once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A reminder already
 sent is never sent again.
 
+The expiry reminder (GFR-03, `ZoneLicenseReminderJob`, 07:00) checks the zone licenses and the cooperative certifications.
+It notifies the active Cooperative Owners only (mandatory push), once when a record becomes Expiring soon (30 days or fewer,
+MSG-FARM-01) and once when it becomes Expired (MSG-FARM-02); a record found already Expired gets the Expired notice only.
+Only the newest license of an In Use zone is reminded (the latest effective date that is not Replaced): a Replaced
+license and the licenses of a Discontinued zone are not. After a resume, the newest license gets the notice of its
+current state at the next check if that notice was not sent yet; nothing is sent twice. A new expiry date re-arms both
+notices.
+
 A replaced raft photo, license file, cooperative cover photo or certificate file is removed right after the save (a removed
 certification or cover photo too), and the upload of a failed save right away. `OrphanFileCleanupJob` runs every day at
-03:00 (Asia/Ho_Chi_Minh) and deletes what such a removal left behind: raft photos (`raft-photos/`), license files
+03:00 (Asia/Ho_Chi_Minh), with no catch-up at start unless `CatchUpOnStart` is set, and deletes what such a removal left behind: raft photos (`raft-photos/`), license files
 (`zone-licenses/`), cover photos (`cooperative-covers/`) and certificate files (`cooperative-certifications/`) that no
 record points to and that were written more than the grace period (24 hours) ago. No other storage folder is scanned, so
 cooperative logos are kept for ever.
@@ -303,9 +328,9 @@ created by a one-time command run on the server by the deployment operator (not 
 | CORS: the web app calls the API from the browser. Set its origin in every deployed environment; empty means no CORS. Development allows `http://localhost:3000`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`) |
 | Reverse proxy: X-Forwarded-For is trusted only from these addresses (and loopback), so the limits see the real client | `ForwardedHeaders:KnownProxies` (e.g. `10.0.0.4`), `ForwardedHeaders:KnownNetworks` (e.g. `10.0.0.0/24`) |
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG-ACCOUNT-13 and a critical log entry is written (one number or address gets at most 10 codes per hour) | `Verification:DailySmsLimit` (default 500) |
-| Zone license reminder (FARM-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
+| Expiry reminder of zone licenses and certifications (GFR-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
 | Overdue water measurement reminder (ENV-01, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
-| Orphan file clean-up: raft photos, license files, cover photos, certificate files (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
+| Orphan file clean-up: raft photos, license files, cover photos, certificate files (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `CatchUpOnStart` (default `false`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
 
 ## Design documents
 

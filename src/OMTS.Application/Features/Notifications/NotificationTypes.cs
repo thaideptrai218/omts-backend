@@ -20,8 +20,15 @@ public static class NotificationTypes
     /// <summary>MSG-WATER-06, the reminder to measure the water of a zone (GFR-04).</summary>
     public const string WaterMeasurementOverdue = "WATER_MEASUREMENT_OVERDUE";
 
-    /// <summary>MSG-FARM-01/02, the expiry reminders of zone licenses (GFR-03); mandatory.</summary>
+    /// <summary>MSG-FARM-01/02, the expiry reminders of zone licenses (GFR-03), to the Cooperative Owner only; mandatory.</summary>
     public const string ZoneLicenseExpiry = "ZONE_LICENSE_EXPIRY";
+
+    /// <summary>
+    /// MSG-FARM-01/02, the expiry reminders of cooperative certifications (GFR-03), to the Cooperative Owner only; mandatory.
+    /// Its own type, beside the license one: it opens another record (FARM-01, not FARM-03) and its message parameters
+    /// name a certification, so each type keeps one parameter shape.
+    /// </summary>
+    public const string CooperativeCertificationExpiry = "COOPERATIVE_CERTIFICATION_EXPIRY";
 
     /// <summary>MSG-LABOR-02, the reminder to lock a staff account after an end of employment: kept, never pushed (BR-LABOR-04).</summary>
     public const string StaffAccountLockReminder = "STAFF_ACCOUNT_LOCK_REMINDER";
@@ -37,6 +44,7 @@ public static class NotificationTypes
         new(WaterMeasurementOverdue, "Water measurement reminder", Default, [CooperativeOwner, ZoneManager],
             NotificationOpenAccess.InZone(PermissionFunctions.WaterMeasurements, PermissionAction.Create)),
         new(ZoneLicenseExpiry, "Zone license expiry reminder", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new(CooperativeCertificationExpiry, "Cooperative certification expiry reminder", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         new(StaffAccountLockReminder, "Reminder to lock a staff account", NeverPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
     ];
 

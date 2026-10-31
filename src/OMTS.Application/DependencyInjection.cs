@@ -79,7 +79,9 @@ public static class DependencyInjection
         services.AddScoped<FarmingLookupAccess>();
         services.AddScoped<FarmingZoneService>();
         services.AddScoped<ZoneLicenseService>();
+        // GFR-03 expiry reminders of zone licenses and cooperative certifications
         services.AddScoped<ZoneLicenseReminderService>();
+        services.AddScoped<CertificationReminderService>();
         services.AddScoped<RaftService>();
         services.AddScoped<RaftConditionService>();
         services.AddScoped<UploadedFileSaver>();

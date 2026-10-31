@@ -1,16 +1,17 @@
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
-using OMTS.Application.Features.Authorization;
-using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Notifications;
+using OMTS.Domain.Constants;
 
 namespace OMTS.Application.Features.Farming.Licenses;
 
 /// <summary>
-/// FARM-03 expiring license reminder (formerly JOB-06), one license per call so that a failing license is
-/// skipped without touching the others: one notice when 0…30 days are left (MSG-FARM-01) and one more once it has
-/// expired (MSG-FARM-02), of the mandatory type ZONE_LICENSE_EXPIRY (BR-ACCOUNT-11). The markers make a second run on
-/// the same day send nothing.
+/// GFR-03 for zone licenses, one license per call so that a failing license is skipped without touching the others. Only
+/// the newest license of an In Use zone is reminded (a Replaced license and the licenses of a discontinued zone are not):
+/// once when it becomes Expiring soon (MSG-FARM-01) and once when it becomes Expired (MSG-FARM-02), to the active
+/// Cooperative Owners only, as the mandatory type ZONE_LICENSE_EXPIRY (BR-ACCOUNT-11). The markers make a second run on
+/// the same day, a catch-up or a discontinue and resume of the zone send nothing twice: after a resume, the newest license
+/// gets the notice of its current state at the next check if that notice was not sent yet.
 /// </summary>
 public sealed class ZoneLicenseReminderService(
     IZoneLicenseRepository licenses,
@@ -19,7 +20,7 @@ public sealed class ZoneLicenseReminderService(
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
 {
-    /// <summary>Unreplaced licenses with a notice due on <paramref name="today"/>; <see cref="RemindAsync"/> re-checks each one.</summary>
+    /// <summary>Licenses that may have a notice due on <paramref name="today"/>; <see cref="RemindAsync"/> re-checks each one.</summary>
     public Task<IReadOnlyList<Guid>> CandidateIdsAsync(DateOnly today, CancellationToken cancellationToken) =>
         licenses.ListReminderCandidateIdsAsync(today, LicenseStateRules.ExpiringSoonDays, cancellationToken);
 
@@ -27,49 +28,35 @@ public sealed class ZoneLicenseReminderService(
     public async Task<bool> RemindAsync(Guid documentId, DateOnly today, CancellationToken cancellationToken)
     {
         var document = await licenses.GetForEditAsync(documentId, cancellationToken);
-        if (document?.ExpiryDate is not { } expiry || await licenses.FindReplacementAsync(document.Id, cancellationToken) is not null)
+        if (document is not { ExpiryDate: { } expiry } || document.Zone.StatusId != StatusIds.Usage.InUse)
         {
             return false;
         }
 
-        var daysLeft = expiry.DayNumber - today.DayNumber;
-        var now = timeProvider.GetUtcNow();
-        bool expired;
-        if (daysLeft < 0 && document.ExpiredReminderSentAt is null)
-        {
-            expired = true;
-            document.ExpiredReminderSentAt = now;
-            // Never two notices for one license on the same run.
-            document.ExpiringReminderSentAt ??= now;
-        }
-        else if (daysLeft is >= 0 and <= LicenseStateRules.ExpiringSoonDays && document.ExpiringReminderSentAt is null)
-        {
-            expired = false;
-            document.ExpiringReminderSentAt = now;
-        }
-        else
+        var newest = ZoneLicenseOverview.Newest(document.ZoneId, await licenses.ListForZonesAsync([document.ZoneId], cancellationToken));
+        if (newest?.Document.Id != document.Id)
         {
             return false;
         }
 
-        var accounts = new HashSet<Guid>();
-        foreach (var scope in document.ZoneScopes)
+        var state = LicenseStateRules.StateOn(ZoneLicenseOverview.Facts(newest), today);
+        if (ExpiryReminderRule.Due(state == LicenseState.ExpiringSoon, state == LicenseState.Expired, document) is not { } notice)
         {
-            accounts.UnionWith(await recipients.GetRecipientsAsync(scope.ZoneId, PermissionFunctions.CultivationCycles, PermissionAction.View, cancellationToken));
+            return false;
         }
 
-        // {document} of MSG-FARM-01/02: the license type, number and the codes of its zones.
-        var typeName = LicenseTypes.Names.GetValueOrDefault(document.DocumentType, document.DocumentType);
-        var zoneCodes = document.ZoneScopes.Select(s => s.Zone.Code).Order(StringComparer.Ordinal).ToList();
-        var message = expired
-            ? UserMessages.LicenseExpired(document.DocumentType, typeName, document.DocumentNumber, zoneCodes, expiry)
-            : UserMessages.LicenseExpiringSoon(document.DocumentType, typeName, document.DocumentNumber, zoneCodes, expiry, daysLeft);
+        ExpiryReminderRule.MarkSent(document, notice, timeProvider.GetUtcNow());
+        var typeName = LicenseTypes.NameOf(document.DocumentType);
+        var zoneCode = document.Zone.Code;
+        var expired = notice == ExpiryNotice.Expired;
         await notifications.NotifyAsync(
-            accounts,
+            await recipients.GetCooperativeOwnersAsync(cancellationToken),
             new NotificationContent(
                 NotificationTypes.ZoneLicenseExpiry,
                 expired ? "Zone license expired" : "Zone license expiring soon",
-                message,
+                expired
+                    ? UserMessages.LicenseExpired(document.DocumentType, typeName, document.DocumentNumber, zoneCode, expiry)
+                    : UserMessages.LicenseExpiringSoon(document.DocumentType, typeName, document.DocumentNumber, zoneCode, expiry, expiry.DayNumber - today.DayNumber),
                 new RelatedRecord(RelatedRecordTypes.ZoneLicense, document.Id, document.DocumentNumber)),
             cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);

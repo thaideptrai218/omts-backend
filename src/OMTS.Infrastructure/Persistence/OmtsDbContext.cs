@@ -27,7 +27,6 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     // Farming zones and rafts
     public DbSet<FarmingZone> FarmingZones => Set<FarmingZone>();
     public DbSet<ZoneComplianceDocument> ZoneComplianceDocuments => Set<ZoneComplianceDocument>();
-    public DbSet<DocumentZoneScope> DocumentZoneScopes => Set<DocumentZoneScope>();
     public DbSet<Raft> Rafts => Set<Raft>();
     public DbSet<RaftLayoutVersion> RaftLayoutVersions => Set<RaftLayoutVersion>();
     public DbSet<Lane> Lanes => Set<Lane>();

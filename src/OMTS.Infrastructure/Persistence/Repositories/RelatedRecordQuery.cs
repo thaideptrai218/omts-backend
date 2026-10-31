@@ -19,6 +19,8 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
             // Owner-only records: their zones are not checked.
             case RelatedRecordTypes.ZoneLicense:
                 return await db.ZoneComplianceDocuments.AnyAsync(d => d.Id == recordId, cancellationToken) ? new RelatedRecordLocation(null) : null;
+            case RelatedRecordTypes.CooperativeCertification:
+                return await db.CooperativeCertifications.AnyAsync(c => c.Id == recordId, cancellationToken) ? new RelatedRecordLocation(null) : null;
             case RelatedRecordTypes.Account:
                 return await db.Accounts.AnyAsync(a => a.Id == recordId, cancellationToken) ? new RelatedRecordLocation(null) : null;
             default:

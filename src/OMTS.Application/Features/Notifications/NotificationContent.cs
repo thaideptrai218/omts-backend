@@ -20,6 +20,9 @@ public static class RelatedRecordTypes
     /// <summary>A zone license (FARM-03); the name of the old entity is kept for the stored rows.</summary>
     public const string ZoneLicense = "ZoneComplianceDocument";
 
+    /// <summary>A certification of the cooperative (FARM-01.1).</summary>
+    public const string CooperativeCertification = "CooperativeCertification";
+
     public const string Account = "Account";
 
     public static readonly IReadOnlyDictionary<string, string> Names = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -27,6 +30,7 @@ public static class RelatedRecordTypes
         [WaterMeasurement] = "Water measurement",
         [FarmingZone] = "Farming zone",
         [ZoneLicense] = "Zone license",
+        [CooperativeCertification] = "Certification",
         [Account] = "Account",
     };
 }

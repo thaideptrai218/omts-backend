@@ -20,10 +20,7 @@ internal sealed class ZoneRecipientQuery(OmtsDbContext db) : IZoneRecipientQuery
             .ToList();
         var anyZone = PermissionFunctions.IsCooperativeWide(functionCode);
 
-        var owners = await db.Accounts.AsNoTracking()
-            .Where(a => a.SubjectType == SubjectType.CooperativeOwner && a.StatusId == StatusIds.Account.Active)
-            .Select(a => a.Id)
-            .ToListAsync(cancellationToken);
+        var owners = await GetCooperativeOwnersAsync(cancellationToken);
 
         List<Guid> staff = roleCodes.Count == 0
             ? []
@@ -38,4 +35,10 @@ internal sealed class ZoneRecipientQuery(OmtsDbContext db) : IZoneRecipientQuery
 
         return owners.Concat(staff).Distinct().ToList();
     }
+
+    public async Task<IReadOnlyList<Guid>> GetCooperativeOwnersAsync(CancellationToken cancellationToken) =>
+        await db.Accounts.AsNoTracking()
+            .Where(a => a.SubjectType == SubjectType.CooperativeOwner && a.StatusId == StatusIds.Account.Active)
+            .Select(a => a.Id)
+            .ToListAsync(cancellationToken);
 }

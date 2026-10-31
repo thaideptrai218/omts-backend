@@ -16,7 +16,8 @@ namespace OMTS.Application.Features.Farming.Zones;
 
 /// <summary>
 /// FARM-02 – farming zones. Writes are Cooperative Owner only (checked by the API filter); reads are
-/// limited to the zones the caller may see (<see cref="FarmingLookupAccess"/>).
+/// limited to the zones the caller may see (<see cref="FarmingLookupAccess"/>). A Discontinued zone is read-only until
+/// it is resumed (GBR-01, MSG-GEN-09).
 /// </summary>
 public sealed class FarmingZoneService(
     IFarmingZoneRepository zones,
@@ -75,6 +76,10 @@ public sealed class FarmingZoneService(
             z.Rafts.OrderBy(r => r.Code).Select(r => new MapRaft(r.Id, r.Code, r.Latitude, r.Longitude)).ToList())).ToList();
     }
 
+    /// <summary>The proposed code of a new zone (KV01, KV02…; GBR-03); the Owner may replace it.</summary>
+    public async Task<FarmingZoneCodeProposal> ProposeCodeAsync(CancellationToken cancellationToken) => new(
+        SequentialCodes.Next(SequentialCodes.ZonePrefix, SequentialCodes.ZoneDigits, await zones.CodesStartingWithAsync(SequentialCodes.ZonePrefix, cancellationToken)));
+
     public async Task<Result<FarmingZoneView>> CreateAsync(SaveFarmingZoneRequest request, CancellationToken cancellationToken)
     {
         if (await cooperatives.GetCurrentAsync(cancellationToken) is not { } cooperative)
@@ -101,12 +106,18 @@ public sealed class FarmingZoneService(
         return await ViewAsync(zone, cancellationToken);
     }
 
+    /// <summary>FARM-02.1: only an In Use zone is edited (FARM-02.1.E1, MSG-GEN-09); the codes of its rafts never change.</summary>
     public async Task<Result<FarmingZoneView>> UpdateAsync(Guid zoneId, SaveFarmingZoneRequest request, CancellationToken cancellationToken)
     {
         var zone = await zones.GetForEditAsync(zoneId, cancellationToken);
         if (zone is null)
         {
             return AppError.NotFound;
+        }
+
+        if (zone.StatusId != StatusIds.Usage.InUse)
+        {
+            return WrongStatus(zone);
         }
 
         var check = Validate(request, out var values);
@@ -164,7 +175,10 @@ public sealed class FarmingZoneService(
         return await ChangeStatusAsync(zone, StatusIds.Usage.Discontinued, "FarmingZone.Discontinued", request, cancellationToken);
     }
 
-    /// <summary>Discontinued → In Use, always allowed.</summary>
+    /// <summary>
+    /// FARM-02.3 Resume: Discontinued → In Use with the same code and history, always allowed. Its rafts keep their own
+    /// status, and its newest license is reminded again from the next check (GFR-03).
+    /// </summary>
     public async Task<Result<FarmingZoneView>> ReactivateAsync(Guid zoneId, ChangeStatusRequest request, CancellationToken cancellationToken)
     {
         var zone = await zones.GetForEditAsync(zoneId, cancellationToken);
@@ -203,8 +217,8 @@ public sealed class FarmingZoneService(
         }
 
         var today = timeProvider.Today();
-        var covering = await licenses.ListCoveringAsync(zoneIds, cancellationToken);
-        return zoneIds.ToDictionary(id => id, id => ZoneLicenseOverview.WorstFor(id, covering, today));
+        var zoneLicenses = await licenses.ListForZonesAsync(zoneIds, cancellationToken);
+        return zoneIds.ToDictionary(id => id, id => ZoneLicenseOverview.BadgeFor(id, zoneLicenses, today));
     }
 
     private async Task<FarmingZoneView> ViewAsync(FarmingZone zone, CancellationToken cancellationToken)
@@ -225,7 +239,8 @@ public sealed class FarmingZoneService(
         var location = check.Required(request.Location, "Location", 500);
         check.Coordinates(request.Latitude, request.Longitude, required: true);
         check.Check(request.Area is > 0 and < 100_000_000_000_000m, "Area");
-        var point = check.Required(request.WaterMeasurementPoint, "Water measurement point", 200);
+        // Optional since SRS 27/10: water is measured per zone with no fixed point (BR-WATER-01).
+        var point = check.Optional(request.WaterMeasurementPoint, "Water measurement point", 200);
         values = new ZoneValues(code, name, location, request.Latitude, request.Longitude, request.Area, point);
         return check;
     }
@@ -244,5 +259,5 @@ public sealed class FarmingZoneService(
     private static object Snapshot(FarmingZone z) => new { z.Code, z.Name, z.Location, z.Latitude, z.Longitude, z.Area, z.WaterMeasurementPoint };
 
     private sealed record ZoneValues(
-        string Code, string Name, string Location, decimal? Latitude, decimal? Longitude, decimal? Area, string WaterMeasurementPoint);
+        string Code, string Name, string Location, decimal? Latitude, decimal? Longitude, decimal? Area, string? WaterMeasurementPoint);
 }

@@ -2,7 +2,7 @@ using OMTS.Application.Features.Farming.Licenses;
 
 namespace OMTS.Application.Features.Farming.Zones;
 
-/// <summary>FARM-02 create/edit body; <see cref="RowVersion"/> is required on edit only.</summary>
+/// <summary>FARM-02 create/edit body; <see cref="WaterMeasurementPoint"/> is optional; <see cref="RowVersion"/> is required on edit only.</summary>
 public sealed record SaveFarmingZoneRequest(
     string? Code,
     string? Name,
@@ -13,10 +13,17 @@ public sealed record SaveFarmingZoneRequest(
     string? WaterMeasurementPoint,
     string? RowVersion = null);
 
-/// <summary>Discontinue / reactivate body; the reason is optional and goes to the audit log.</summary>
+/// <summary>Discontinue / resume body; the reason is optional and goes to the audit log.</summary>
 public sealed record ChangeStatusRequest(string? Reason, string? RowVersion);
 
-/// <param name="LicenseState">Worst license state today (Expired, ExpiringSoon, Missing); null when all is fine or for staff.</param>
+/// <summary>The proposed code of a new zone (GBR-03).</summary>
+/// <param name="Code">e.g. KV03: the highest KVnn number in use (discontinued zones included) plus one.</param>
+public sealed record FarmingZoneCodeProposal(string Code);
+
+/// <param name="LicenseState">
+/// Expired or ExpiringSoon: the state today of the zone's newest license that is not Replaced; null when it is fine, when
+/// the zone has no license, or for staff.
+/// </param>
 public sealed record FarmingZoneListItem(
     Guid Id,
     string Code,

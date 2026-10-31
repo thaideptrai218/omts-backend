@@ -50,27 +50,46 @@ public static class UserMessages
 
     // ---- MSG-FARM ----
 
-    /// <summary>MSG-FARM-01 (GFR-03): notification to the Owner when a license becomes Expiring soon.</summary>
-    /// <param name="documentType">License type code (stored), e.g. AQUACULTURE_LICENSE.</param>
-    /// <param name="documentTypeName">Its English name, for the text.</param>
-    /// <param name="zoneCodes">Codes of the zones the license covers.</param>
+    /// <summary>MSG-FARM-01 (GFR-03): notification to the Owner when a zone license becomes Expiring soon.</summary>
+    /// <param name="documentType">Optional license type code (stored), e.g. AQUACULTURE_LICENSE.</param>
+    /// <param name="documentTypeName">Its English name, for the text ("Zone license" when there is no type).</param>
+    /// <param name="zoneCode">Code of the zone of the license.</param>
     public static UserMessage LicenseExpiringSoon(
-        string documentType, string documentTypeName, string documentNumber, IReadOnlyList<string> zoneCodes, DateOnly expiryDate, int days) => new(
+        string? documentType, string? documentTypeName, string documentNumber, string zoneCode, DateOnly expiryDate, int days) => new(
         Farm01,
-        $"{LicenseDocument(documentTypeName, documentNumber, zoneCodes)} expires on {Date(expiryDate)}, in {days} days. Please renew it and record the new one.",
+        $"{LicenseDocument(documentTypeName, documentNumber, zoneCode)} expires on {Date(expiryDate)}, in {days} days. Please renew it and record the new one.",
         Legacy.Msg25)
     {
-        Parameters = LicenseParameters(documentType, documentNumber, zoneCodes, expiryDate, days),
+        Parameters = LicenseParameters(documentType, documentNumber, zoneCode, expiryDate, days),
     };
 
-    /// <summary>MSG-FARM-02 (GFR-03): notification to the Owner when a license becomes Expired.</summary>
+    /// <summary>MSG-FARM-02 (GFR-03): notification to the Owner when a zone license becomes Expired.</summary>
     public static UserMessage LicenseExpired(
-        string documentType, string documentTypeName, string documentNumber, IReadOnlyList<string> zoneCodes, DateOnly expiryDate) => new(
+        string? documentType, string? documentTypeName, string documentNumber, string zoneCode, DateOnly expiryDate) => new(
         Farm02,
-        $"{LicenseDocument(documentTypeName, documentNumber, zoneCodes)} expired on {Date(expiryDate)}. Please renew it and record the new one.",
+        $"{LicenseDocument(documentTypeName, documentNumber, zoneCode)} expired on {Date(expiryDate)}. Please renew it and record the new one.",
         Legacy.Msg25)
     {
-        Parameters = LicenseParameters(documentType, documentNumber, zoneCodes, expiryDate, days: null),
+        Parameters = LicenseParameters(documentType, documentNumber, zoneCode, expiryDate, days: null),
+    };
+
+    /// <summary>MSG-FARM-01 (GFR-03): notification to the Owner when a cooperative certification becomes Expiring soon.</summary>
+    /// <param name="number">The certification number; null when it has none.</param>
+    public static UserMessage CertificationExpiringSoon(string name, string? number, DateOnly expiryDate, int days) => new(
+        Farm01,
+        $"{CertificationDocument(name, number)} expires on {Date(expiryDate)}, in {days} days. Please renew it and record the new one.",
+        Legacy.Msg25)
+    {
+        Parameters = CertificationParameters(name, number, expiryDate, days),
+    };
+
+    /// <summary>MSG-FARM-02 (GFR-03): notification to the Owner when a cooperative certification becomes Expired.</summary>
+    public static UserMessage CertificationExpired(string name, string? number, DateOnly expiryDate) => new(
+        Farm02,
+        $"{CertificationDocument(name, number)} expired on {Date(expiryDate)}. Please renew it and record the new one.",
+        Legacy.Msg25)
+    {
+        Parameters = CertificationParameters(name, number, expiryDate, days: null),
     };
     // ---- MSG-WATER ----
 
@@ -290,19 +309,32 @@ public static class UserMessages
     private static string Date(DateOnly date) => date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
 
     // {document} of MSG-FARM-01/02: "the license number with its zone".
-    private static string LicenseDocument(string documentTypeName, string documentNumber, IReadOnlyList<string> zoneCodes) =>
-        $"{documentTypeName} {documentNumber} ({string.Join(", ", zoneCodes)})";
+    private static string LicenseDocument(string? documentTypeName, string documentNumber, string zoneCode) =>
+        $"{documentTypeName ?? "Zone license"} {documentNumber} ({zoneCode})";
 
+    // {document} of MSG-FARM-01/02: "the certification name and number".
+    private static string CertificationDocument(string name, string? number) => number is null ? name : $"{name} ({number})";
+
+    // zone_codes stays a list (one zone since PR 0.8), as the clients of PR 0.5 read it.
     private static Dictionary<string, object?> LicenseParameters(
-        string documentType, string documentNumber, IReadOnlyList<string> zoneCodes, DateOnly expiryDate, int? days)
+        string? documentType, string documentNumber, string zoneCode, DateOnly expiryDate, int? days) => WithDays(new Dictionary<string, object?>
     {
-        var parameters = new Dictionary<string, object?>
+        ["document_type"] = documentType,
+        ["document_number"] = documentNumber,
+        ["zone_codes"] = new[] { zoneCode },
+        ["expiry_date"] = expiryDate,
+    }, days);
+
+    private static Dictionary<string, object?> CertificationParameters(string name, string? number, DateOnly expiryDate, int? days) =>
+        WithDays(new Dictionary<string, object?>
         {
-            ["document_type"] = documentType,
-            ["document_number"] = documentNumber,
-            ["zone_codes"] = zoneCodes,
+            ["certification_name"] = name,
+            ["certification_number"] = number,
             ["expiry_date"] = expiryDate,
-        };
+        }, days);
+
+    private static Dictionary<string, object?> WithDays(Dictionary<string, object?> parameters, int? days)
+    {
         if (days is { } value)
         {
             parameters["days"] = value;
