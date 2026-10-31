@@ -1,3 +1,4 @@
+using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.Authorization;
@@ -13,7 +14,7 @@ namespace OMTS.Application.Features.WaterQuality;
 /// <summary>
 /// Confirmation step shared by ENV-01 (confirm, create confirmed) and ENV-02 (correction version): stores the
 /// threshold set used (BR-07), evaluates the values and, on a violation, raises the alert with mandatory
-/// WATER_ALERT notifications (MSG27) to every active Cooperative Owner and the zone's staff holding View on
+/// WATER_ALERT notifications (MSG-WATER-03) to every active Cooperative Owner and the zone's staff holding View on
 /// WATER_MEASUREMENTS. Notification rows join the caller's unit of work; push is sent after its commit.
 /// </summary>
 public sealed class WaterAlertService(IZoneRecipientQuery recipients, INotificationDispatcher notifications, TimeProvider timeProvider)
@@ -46,9 +47,12 @@ public sealed class WaterAlertService(IZoneRecipientQuery recipients, INotificat
         }
 
         var accountIds = await recipients.GetRecipientsAsync(zone.Id, PermissionFunctions.WaterMeasurements, PermissionAction.View, cancellationToken);
-        var message = UserMessages.WaterThresholdExceeded(string.Join(", ", evaluation.ViolatedMetrics), zone.Name);
+        // Measurements have no raft yet (the raft of a measurement comes with the WATER ticket).
+        var message = UserMessages.WaterAlert(
+            corrected: measurement.CorrectedFromMeasurementId is not null, zone.Name, raftCode: null, measurement.MeasuredAt, evaluation.ValuesOutside);
         await notifications.NotifyAsync(
-            accountIds, NotificationTypes.WaterAlert, AlertTitle, message.Text, nameof(WaterMeasurement), measurement.Id.ToString(),
-            isMandatory: true, cancellationToken);
+            accountIds,
+            new NotificationContent(NotificationTypes.WaterAlert, AlertTitle, message, new RelatedRecord(RelatedRecordTypes.WaterMeasurement, measurement.Id)),
+            cancellationToken);
     }
 }

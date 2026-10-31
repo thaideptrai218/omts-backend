@@ -180,7 +180,9 @@ public class OwnerPasswordResetQaTests
         using (var scope = api.Services.CreateScope())
         {
             await scope.ServiceProvider.GetRequiredService<INotificationDispatcher>().NotifyAsync(
-                [accountId], NotificationTypes.WaterAlert, "QA", null, null, null, isMandatory: true, CancellationToken.None);
+                [accountId],
+                new NotificationContent(NotificationTypes.WaterAlert, "QA", new OMTS.Application.Common.Messages.UserMessage("MSG-WATER-03", "QA")),
+                CancellationToken.None);
             await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
         }
 

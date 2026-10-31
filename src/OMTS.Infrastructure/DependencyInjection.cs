@@ -61,6 +61,7 @@ public static class DependencyInjection
         services.AddScoped<IFarmingZoneRepository, FarmingZoneRepository>();
         services.AddScoped<IAuditEventRepository, AuditEventRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<IRelatedRecordQuery, RelatedRecordQuery>();
         services.AddScoped<IZoneRecipientQuery, ZoneRecipientQuery>();
         services.AddScoped<IVerificationCodeRepository, VerificationCodeRepository>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();

@@ -38,8 +38,14 @@ public class WaterOverdueReminderTests
         Assert.Single(reminders, n => n.RecipientAccountId == z.OwnerAccount.Id);
         Assert.Single(reminders, n => n.RecipientAccountId == manager.Id);
         Assert.DoesNotContain(reminders, n => n.RecipientAccountId == outsider.Id);
-        Assert.All(reminders, n => Assert.Equal(
-            $"Zone {z.Zone.Name} has had no confirmed water measurement for more than 1 month. Please measure and record it.", n.Body));
+        // MSG-WATER-06 with the date of the latest measurement; a normal type (BR-ACCOUNT-11).
+        var lastDate = Today.AddMonths(-2).ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
+        Assert.All(reminders, n =>
+        {
+            Assert.Equal($"Zone {z.Zone.Name} has had no water measurement since {lastDate}. Please measure the water and record the result in OMTS.", n.Body);
+            Assert.Equal(("MSG-WATER-06", false), (n.MessageCode, n.IsMandatory));
+            Assert.Equal((z.Zone.Id, z.Zone.Code), (n.RelatedRecordId, n.RelatedRecordCode));
+        });
         Assert.NotNull((await api.QueryAsync(db => db.FarmingZones.AsNoTracking().SingleAsync(x => x.Id == z.Zone.Id))).WaterOverdueRemindedAt);
     }
 

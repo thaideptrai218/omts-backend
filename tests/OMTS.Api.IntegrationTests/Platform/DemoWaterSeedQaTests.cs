@@ -53,7 +53,7 @@ public class DemoWaterSeedQaTests
         {
             var expected = await recipients.GetRecipientsAsync(measurement.ZoneId, PermissionFunctions.WaterMeasurements, PermissionAction.View, default);
             var notified = await db.Notifications.AsNoTracking()
-                .Where(n => n.Type == NotificationTypes.WaterAlert && n.RelatedRecordCode == measurement.Id.ToString())
+                .Where(n => n.Type == NotificationTypes.WaterAlert && n.RelatedRecordId == measurement.Id)
                 .Select(n => n.RecipientAccountId).ToListAsync();
             Assert.Contains(ownerId, notified);
             Assert.Equal(expected.Order(), notified.Order());
@@ -62,7 +62,7 @@ public class DemoWaterSeedQaTests
         // Only alerts: no reminder, no other water notification.
         Assert.Equal(
             alerted.Count,
-            await db.Notifications.Where(n => n.Type == NotificationTypes.WaterAlert).Select(n => n.RelatedRecordCode).Distinct().CountAsync());
+            await db.Notifications.Where(n => n.Type == NotificationTypes.WaterAlert).Select(n => n.RelatedRecordId).Distinct().CountAsync());
         Assert.False(await db.Notifications.AnyAsync(n => n.Type == NotificationTypes.WaterMeasurementOverdue));
 
         // The correction is the ENV-02 version chain: same day and pH, salinity 26.0, a reason, no alert.
@@ -94,7 +94,7 @@ public class DemoWaterSeedQaTests
     }
 
     // README: "The last water measurement is from the day before the seed: a month later without new ones, the zones
-    // are overdue and get the 06:00 reminder (MSG26)."
+    // are overdue and get the 06:00 reminder (MSG-WATER-06)."
     [SqlServerFact]
     public async Task Demo_zones_are_on_time_until_a_month_after_the_last_reading_then_reminded_once()
     {

@@ -1,11 +1,12 @@
-using OMTS.Domain.Enums;
-
 namespace OMTS.Domain.Entities.Identity;
 
-/// <summary>One notification category/channel switch of an account (owned by <see cref="Account"/>).</summary>
+/// <summary>
+/// Whether one notification type is also pushed to the account's devices (ACCOUNT-07, BR-ACCOUNT-11); owned by
+/// <see cref="Account"/>. A type without an entry is pushed. Every notification is kept in the list whatever this says
+/// (BR-ACCOUNT-12).
+/// </summary>
 public class NotificationPreference
 {
-    public string Category { get; set; } = string.Empty;
-    public NotificationChannel Channel { get; set; }
-    public bool Enabled { get; set; } = true;
+    public string Type { get; set; } = string.Empty;
+    public bool Push { get; set; } = true;
 }

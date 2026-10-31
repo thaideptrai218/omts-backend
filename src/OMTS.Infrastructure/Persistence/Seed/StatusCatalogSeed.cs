@@ -85,9 +85,10 @@ internal static class StatusCatalogSeed
         NewStatus(S.LaborSettlement.Approved, G.LaborSettlement, "APPROVED", "Approved", "Approved by the Cooperative Owner; the basis for payment."),
         NewStatus(S.LaborSettlement.Paid, G.LaborSettlement, "PAID", "Fully Paid", "Total paid equals the approved obligation.", final: true),
 
-        NewStatus(S.MessageDelivery.Sending, G.MessageDelivery, "SENDING", "Sending", "Handed to the channel provider, no response yet.", initial: true),
-        NewStatus(S.MessageDelivery.Sent, G.MessageDelivery, "SENT", "Sent", "The provider reports successful delivery.", final: true),
-        NewStatus(S.MessageDelivery.Failed, G.MessageDelivery, "FAILED", "Failed", "The provider reports an error or the response timeout expires.", final: true),
+        // SMS and Zalo OA sendings kept as Notification rows (BR-SALE-09, GFR-06).
+        NewStatus(S.MessageDelivery.Sending, G.MessageDelivery, "SENDING", "Sending", "Handed to the SMS Service or Zalo OA, no answer yet.", initial: true),
+        NewStatus(S.MessageDelivery.Sent, G.MessageDelivery, "SENT", "Sent", "Accepted by the service; this does not mean that the trader has read it.", final: true),
+        NewStatus(S.MessageDelivery.NotSent, G.MessageDelivery, "NOT_SENT", "Not sent", "Not accepted by the service; nothing that was saved is undone (GFR-06).", final: true),
 
         NewStatus(S.PurchaseReceipt.Draft, G.PurchaseReceipt, "DRAFT", "Draft", "Being recorded; does not count in costs, supplier debt or seed lots.", initial: true),
         NewStatus(S.PurchaseReceipt.Completed, G.PurchaseReceipt, "COMPLETED", "Completed", "Counts in input costs and supplier debt; seed lots created; never edited."),
@@ -166,8 +167,8 @@ internal static class StatusCatalogSeed
         NewTransition(51, S.LaborSettlement.Approved, S.LaborSettlement.Draft, "UC60", Owner, Action, "Reopen for editing; audit log written (before – after).", true),
         NewTransition(52, S.LaborSettlement.Approved, S.LaborSettlement.Paid, "UC61", SystemActor, SystemActor, "Total paid equals the approved obligation.", false),
 
-        NewTransition(53, S.MessageDelivery.Sending, S.MessageDelivery.Sent, "UC70", SystemActor, SystemActor, "Success response from Zalo OA, Email Service or SMS Service.", false),
-        NewTransition(54, S.MessageDelivery.Sending, S.MessageDelivery.Failed, "UC70", SystemActor, "System; time", "Error response or timeout.", false),
+        NewTransition(53, S.MessageDelivery.Sending, S.MessageDelivery.Sent, "SALE-06, SALE-03, CLAIM-02, TRACE-04", SystemActor, SystemActor, "The SMS Service or Zalo OA accepts the message.", false),
+        NewTransition(54, S.MessageDelivery.Sending, S.MessageDelivery.NotSent, "SALE-06, SALE-03, CLAIM-02, TRACE-04", SystemActor, SystemActor, "The SMS Service or Zalo OA does not accept the message.", false),
 
         NewTransition(55, S.WaterMeasurement.Draft, S.WaterMeasurement.Voided, "ENV-02", OwnerOrZoneManager, Action, "Void a wrong draft.", true),
         NewTransition(56, S.WaterMeasurement.Confirmed, S.WaterMeasurement.Voided, "ENV-02", OwnerOrZoneManager, Action, "Void the latest version of a wrong measurement.", true),
