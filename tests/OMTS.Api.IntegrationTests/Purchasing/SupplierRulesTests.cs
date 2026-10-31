@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -25,7 +25,7 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
 
         var response = await owner.PostAsJsonAsync("/api/suppliers", new { name, supplierType = type, phoneNumber = phone });
 
-        Assert.Equal(field, await response.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal(field, await response.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         Assert.Equal(before, await factory.QueryAsync(db => db.Suppliers.CountAsync()));
     }
 
@@ -34,9 +34,9 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     {
         var owner = await factory.PurchasingOwnerAsync();
         var longName = await owner.PostAsJsonAsync("/api/suppliers", new { name = new string('a', 201), supplierType = "Seed", phoneNumber = NewPhone() });
-        Assert.Equal("Name", await longName.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Name", await longName.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         var longContacts = await owner.PostAsJsonAsync("/api/suppliers", new { name = "S", supplierType = "Seed", phoneNumber = NewPhone(), otherContacts = new string('a', 501) });
-        Assert.Equal("Other contacts", await longContacts.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Other contacts", await longContacts.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var formatted = $"+84 {phone[1..4]} {phone[4..7]} {phone[7..]}";
 
         var duplicate = await owner.PostAsJsonAsync("/api/suppliers", new { name = "Copy", supplierType = "Material", phoneNumber = formatted });
-        Assert.Equal(first, (await duplicate.ProblemAsync(HttpStatusCode.Conflict, "MSG03")).GetProperty("existingId").GetGuid());
+        Assert.Equal(first, (await duplicate.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("existingId").GetGuid());
 
         var second = await owner.CreateSupplierAsync();
         var view = await owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{second}");
@@ -56,7 +56,7 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         {
             name = "Second", supplierType = "Seed", phoneNumber = formatted, rowVersion = view.GetProperty("rowVersion").GetString(),
         });
-        Assert.Equal(first, (await edit.ProblemAsync(HttpStatusCode.Conflict, "MSG03")).GetProperty("existingId").GetGuid());
+        Assert.Equal(first, (await edit.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("existingId").GetGuid());
         Assert.Equal(phone, await factory.QueryAsync(db => db.Suppliers.Where(s => s.Id == first).Select(s => s.PhoneNumber).SingleAsync()));
     }
 
@@ -79,10 +79,10 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
 
         var discontinued = await (await manager.PostAsync($"/api/suppliers/{id}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("Discontinued", discontinued.GetProperty("status").GetString());
-        await (await manager.PostAsync($"/api/suppliers/{id}/discontinue", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG61");
+        await (await manager.PostAsync($"/api/suppliers/{id}/discontinue", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
         var reactivated = await (await manager.PostAsync($"/api/suppliers/{id}/reactivate", null)).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("In Use", reactivated.GetProperty("status").GetString());
-        await (await manager.PostAsync($"/api/suppliers/{id}/reactivate", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG61");
+        await (await manager.PostAsync($"/api/suppliers/{id}/reactivate", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
 
         Assert.Equal(
             ["Supplier.Created", "Supplier.Updated", "Supplier.Discontinued", "Supplier.Reactivated"],
@@ -104,9 +104,9 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var kept = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{completed.Id()}");
         Assert.Equal("Completed", kept.GetProperty("status").GetString());
         var complete = await world.Owner.PostAsync($"/api/purchase-receipts/{draft.Id()}/complete", null);
-        Assert.Equal("Supplier", await complete.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Supplier", await complete.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         var direct = await world.Owner.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 100_000)) with { Complete = true });
-        Assert.Equal("Supplier", await direct.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Supplier", await direct.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         Assert.Equal(0, await factory.QueryAsync(db => db.SupplierPayments.CountAsync(p => p.ReceiptId == draft.Id())));
 
         await (await world.Owner.PostAsync($"/api/suppliers/{world.SupplierId}/reactivate", null)).ReadAsync(HttpStatusCode.OK);
@@ -169,21 +169,21 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var (zone, _) = await factory.ZoneWithRaftAsync();
 
         var noGrant = await factory.PurchasingStaffAsync(zone, Perm.Full(PermissionFunctions.PurchaseReceipts));
-        await (await noGrant.GetAsync("/api/suppliers")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await noGrant.GetAsync($"/api/suppliers/{supplierId}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await noGrant.PostAsJsonAsync("/api/suppliers", new { name = "X", supplierType = "Seed", phoneNumber = NewPhone() })).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        await (await noGrant.GetAsync("/api/suppliers")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await noGrant.GetAsync($"/api/suppliers/{supplierId}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await noGrant.PostAsJsonAsync("/api/suppliers", new { name = "X", supplierType = "Seed", phoneNumber = NewPhone() })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
 
         var viewer = await factory.PurchasingStaffAsync(zone, new Perm(PermissionFunctions.Suppliers));
         await (await viewer.GetAsync($"/api/suppliers/{supplierId}")).ReadAsync(HttpStatusCode.OK);
-        await (await viewer.PostAsJsonAsync("/api/suppliers", new { name = "X", supplierType = "Seed", phoneNumber = NewPhone() })).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await viewer.PutAsJsonAsync($"/api/suppliers/{supplierId}", new { name = "X", supplierType = "Seed", phoneNumber = NewPhone(), rowVersion = "" })).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await viewer.PostAsync($"/api/suppliers/{supplierId}/discontinue", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        await (await viewer.PostAsJsonAsync("/api/suppliers", new { name = "X", supplierType = "Seed", phoneNumber = NewPhone() })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await viewer.PutAsJsonAsync($"/api/suppliers/{supplierId}", new { name = "X", supplierType = "Seed", phoneNumber = NewPhone(), rowVersion = "" })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await viewer.PostAsync($"/api/suppliers/{supplierId}/discontinue", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         Assert.Equal(Domain.Constants.StatusIds.Usage.InUse, (await factory.QueryAsync(db => db.Suppliers.SingleAsync(s => s.Id == supplierId))).StatusId);
 
         // Supplier debt is INP-06: All zones SUPPLIER_PAYMENTS, so a Zone Manager cannot read it.
         var manager = await factory.ZoneManagerAsync(zone);
-        await (await manager.GetAsync($"/api/suppliers/{supplierId}/debt")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await manager.GetAsync("/api/suppliers/debts")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        await (await manager.GetAsync($"/api/suppliers/{supplierId}/debt")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await manager.GetAsync("/api/suppliers/debts")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
     }
 
     [Fact]

@@ -39,6 +39,21 @@ public class Account : AuditableEntity, IHasStatus
 
     public DateTimeOffset? LastLoginAt { get; set; }
 
+    /// <summary>
+    /// Zalo user id of the Zalo Mini App user who linked this account by their Zalo phone number; unique.
+    /// The id is unique per Zalo App, so changing the Zalo App unlinks everyone.
+    /// </summary>
+    public string? ZaloAccountId { get; set; }
+
+    /// <summary>When a trader last asked for an account from the Zalo Mini App (status Pending approval).</summary>
+    public DateTimeOffset? AccessRequestedAt { get; set; }
+
+    /// <summary>What the trader wrote to the cooperative with the request, if anything.</summary>
+    public string? AccessRequestNote { get; set; }
+
+    /// <summary>Why the Cooperative Owner refused the request (status Rejected); shown to the trader.</summary>
+    public string? RejectionReason { get; set; }
+
     public SubjectType SubjectType { get; set; }
 
     public int StatusId { get; set; } = StatusIds.Account.Active;
@@ -66,6 +81,18 @@ public class Account : AuditableEntity, IHasStatus
             LockoutEndAt = now + TemporaryLockDuration;
             FailedLoginCount = 0;
         }
+    }
+
+    /// <summary>
+    /// The person proved who they are another way (Zalo phone number), so the temporary password the Owner
+    /// handed out stops working: <paramref name="unusablePasswordHash"/> is the hash of a password nobody knows.
+    /// The web is reached again through Forgot password with the verified phone number.
+    /// </summary>
+    public void RetireTemporaryPassword(string unusablePasswordHash)
+    {
+        PasswordHash = unusablePasswordHash;
+        MustChangePassword = false;
+        TemporaryPasswordIssuedAt = null;
     }
 
     public void RegisterSuccessfulLogin(DateTimeOffset now)

@@ -1,3 +1,5 @@
+using OMTS.Application.Common.Models.Storage;
+using OMTS.Application.Features.Files.Models;
 using OMTS.Application.Features.Files;
 
 namespace OMTS.Application.Common.Interfaces.Storage;
@@ -38,13 +40,3 @@ public interface IFileStorage
     /// </summary>
     Task<IReadOnlyList<StoredFile>> ListAsync(string category, CancellationToken cancellationToken = default);
 }
-
-public sealed record FileUploadResult(bool Succeeded, string? Key, string? ErrorCode)
-{
-    public static FileUploadResult Stored(string key) => new(true, key, null);
-
-    public static FileUploadResult Failed(string errorCode) => new(false, null, errorCode);
-}
-
-/// <param name="LastModified">When the file was written (UTC); a file is never rewritten after its upload.</param>
-public sealed record StoredFile(string Key, DateTimeOffset LastModified);

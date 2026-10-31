@@ -1,6 +1,6 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -174,7 +174,7 @@ public static class FarmingTestKit
     public static async Task<List<string>> InvalidFieldsAsync(this HttpResponseMessage response)
     {
         var body = await response.ReadAsync(HttpStatusCode.BadRequest);
-        Assert.Equal("MSG01", body.GetProperty("code").GetString());
+        Assert.Equal("MSG-GEN-01", body.GetProperty("code").GetString());
         return body.TryGetProperty("fields", out var fields)
             ? fields.EnumerateArray().Select(f => f.GetString()!).ToList()
             : [body.GetProperty("field").GetString()!];

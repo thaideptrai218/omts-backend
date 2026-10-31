@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -33,7 +33,7 @@ public class PurchaseReceiptRulesTests(AuthApiFactory factory) : IClassFixture<A
 
         // Completing validates everything that the draft could leave out.
         var complete = await world.Owner.PostAsync($"/api/purchase-receipts/{draft.Id()}/complete", null);
-        var problem = await complete.ProblemAsync(HttpStatusCode.BadRequest, "MSG01");
+        var problem = await complete.ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
         Assert.Equal("Receipt date", problem.GetProperty("field").GetString());
         Assert.Equal("Draft", (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{draft.Id()}")).GetProperty("status").GetString());
     }
@@ -63,7 +63,7 @@ public class PurchaseReceiptRulesTests(AuthApiFactory factory) : IClassFixture<A
         })
         {
             var response = await world.Owner.PostReceiptAsync(body);
-            Assert.Equal(field, await response.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+            Assert.Equal(field, await response.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         }
 
         Assert.Equal(0, await factory.QueryAsync(db => db.PurchaseReceipts.CountAsync(r => r.SupplierId == world.SupplierId)));
@@ -78,7 +78,7 @@ public class PurchaseReceiptRulesTests(AuthApiFactory factory) : IClassFixture<A
     {
         var world = await factory.WorldAsync();
         var response = await world.Owner.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 1000), new LineBody(world.Other, quantity, unitPrice)) with { Complete = true });
-        Assert.Equal("Line 2", await response.FieldAsync(HttpStatusCode.BadRequest, "MSG59"));
+        Assert.Equal("Line 2", await response.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
     }
 
     [Fact]
@@ -134,18 +134,18 @@ public class PurchaseReceiptRulesTests(AuthApiFactory factory) : IClassFixture<A
         foreach (var (raftId, field) in new (Guid?, string)[] { (null, "Raft"), (otherRaft.Id, "Raft"), (stoppedRaft.Id, "Raft") })
         {
             var response = await world.Owner.PostReceiptAsync(world.Body(material) with { RaftId = raftId, Complete = true });
-            Assert.Equal(field, await response.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+            Assert.Equal(field, await response.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         }
 
         // A raft is optional for other goods but must still be valid when given.
         var seedWithForeignRaft = await world.Owner.PostReceiptAsync(world.Body(new LineBody(world.Seed, 1, 1000)) with { RaftId = otherRaft.Id, Complete = true });
-        Assert.Equal("Raft", await seedWithForeignRaft.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Raft", await seedWithForeignRaft.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         await world.CompletedAsync(0, 0, new LineBody(world.Seed, 1, 1000));
 
         var stoppedZone = await factory.AddZoneAsync(NewCode());
         await factory.UpdateAsync<FarmingZone>(stoppedZone.Id, z => z.StatusId = StatusIds.Usage.Discontinued);
         var zone = await world.Owner.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 1000)) with { ZoneId = stoppedZone.Id, Complete = true });
-        Assert.Equal("Zone", await zone.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Zone", await zone.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         Assert.Equal(0, await factory.QueryAsync(db => db.PurchaseReceipts.CountAsync(r => r.ZoneId == otherZone.Id || r.ZoneId == stoppedZone.Id)));
     }
 
@@ -191,7 +191,7 @@ public class PurchaseReceiptRulesTests(AuthApiFactory factory) : IClassFixture<A
 
         // A second complete is a status error and creates nothing more.
         var again = await world.Owner.PostAsync($"/api/purchase-receipts/{completed.Id()}/complete", null);
-        await again.ProblemAsync(HttpStatusCode.Conflict, "MSG61");
+        await again.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
         Assert.Equal(2, await factory.QueryAsync(db => db.SeedReceiptLots.CountAsync(l => l.PurchaseReceiptLine.ReceiptId == completed.Id())));
         Assert.Equal(1, await factory.QueryAsync(db => db.SupplierPayments.CountAsync(p => p.ReceiptId == completed.Id())));
 
@@ -232,8 +232,8 @@ public class PurchaseReceiptRulesTests(AuthApiFactory factory) : IClassFixture<A
 
         foreach (var id in new[] { completed.Id(), draft.Id() })
         {
-            await (await world.Owner.PutAsJsonAsync($"/api/purchase-receipts/{id}", world.Body(new LineBody(world.Other, 9, 10_000)))).ProblemAsync(HttpStatusCode.Conflict, "MSG61");
-            await (await world.Owner.PostAsync($"/api/purchase-receipts/{id}/complete", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG61");
+            await (await world.Owner.PutAsJsonAsync($"/api/purchase-receipts/{id}", world.Body(new LineBody(world.Other, 9, 10_000)))).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
+            await (await world.Owner.PostAsync($"/api/purchase-receipts/{id}/complete", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
         }
 
         var cancelled = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{draft.Id()}");
@@ -275,16 +275,16 @@ public class PurchaseReceiptRulesTests(AuthApiFactory factory) : IClassFixture<A
         await (await manager.PostAsync($"/api/purchase-receipts/{own.Id()}/complete", null)).ReadAsync(HttpStatusCode.OK);
 
         // Another zone: no create, no read, no edit, no complete, and a draft cannot be moved there.
-        await (await manager.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 10_000)) with { ZoneId = otherZone.Id })).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await manager.GetAsync($"/api/purchase-receipts/{foreign.Id()}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await manager.GetAsync($"/api/purchase-receipts/{foreign.Id()}/returns")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await manager.PutAsJsonAsync($"/api/purchase-receipts/{foreign.Id()}", world.Body(new LineBody(world.Other, 5, 10_000)))).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        await (await manager.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 10_000)) with { ZoneId = otherZone.Id })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await manager.GetAsync($"/api/purchase-receipts/{foreign.Id()}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await manager.GetAsync($"/api/purchase-receipts/{foreign.Id()}/returns")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await manager.PutAsJsonAsync($"/api/purchase-receipts/{foreign.Id()}", world.Body(new LineBody(world.Other, 5, 10_000)))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await manager.PutAsJsonAsync($"/api/purchase-receipts/{foreign.Id()}", world.Body(new LineBody(world.Other, 5, 10_000)) with { ZoneId = otherZone.Id }))
-            .ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await manager.PostAsync($"/api/purchase-receipts/{foreign.Id()}/complete", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+            .ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await manager.PostAsync($"/api/purchase-receipts/{foreign.Id()}/complete", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         var ownDraft = await manager.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 10_000)));
         await (await manager.PutAsJsonAsync($"/api/purchase-receipts/{ownDraft.Id()}", world.Body(new LineBody(world.Other, 1, 10_000)) with { ZoneId = otherZone.Id }))
-            .ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+            .ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
 
         var foreignNow = await factory.QueryAsync(db => db.PurchaseReceipts.Include(r => r.Lines).SingleAsync(r => r.Id == foreign.Id()));
         Assert.Equal((StatusIds.PurchaseReceipt.Draft, 1m), (foreignNow.StatusId, foreignNow.Lines.Single().Quantity));
@@ -298,15 +298,15 @@ public class PurchaseReceiptRulesTests(AuthApiFactory factory) : IClassFixture<A
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 10_000)));
         var viewer = await factory.PurchasingStaffAsync(world.Zone, new Perm(PermissionFunctions.PurchaseReceipts));
         await (await viewer.GetAsync($"/api/purchase-receipts/{draft.Id()}")).ReadAsync(HttpStatusCode.OK);
-        await (await viewer.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 10_000)))).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await viewer.PutAsJsonAsync($"/api/purchase-receipts/{draft.Id()}", world.Body(new LineBody(world.Other, 2, 10_000)))).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await viewer.PostAsync($"/api/purchase-receipts/{draft.Id()}/complete", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await viewer.CancelAsync(draft.Id(), "x", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        await (await viewer.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 10_000)))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await viewer.PutAsJsonAsync($"/api/purchase-receipts/{draft.Id()}", world.Body(new LineBody(world.Other, 2, 10_000)))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await viewer.PostAsync($"/api/purchase-receipts/{draft.Id()}/complete", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await viewer.CancelAsync(draft.Id(), "x", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
 
         // Anyone with Edit in the zone may edit or complete a draft somebody else recorded.
         var editor = await factory.PurchasingStaffAsync(world.Zone, new Perm(PermissionFunctions.PurchaseReceipts, Edit: true));
         await (await editor.PostAsync($"/api/purchase-receipts/{draft.Id()}/complete", null)).ReadAsync(HttpStatusCode.OK);
-        await (await editor.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 10_000)))).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        await (await editor.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 10_000)))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
     }
 
     [Fact]

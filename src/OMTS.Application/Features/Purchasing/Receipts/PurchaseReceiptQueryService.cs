@@ -1,3 +1,8 @@
+using OMTS.Application.Common.Models.Persistence;
+using OMTS.Application.Common.Models.Reports;
+using OMTS.Application.Features.Employees.Dtos;
+using OMTS.Application.Features.Purchasing.Receipts.Dtos;
+using OMTS.Application.Features.Purchasing.Receipts.Models;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
@@ -13,26 +18,6 @@ using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Purchasing.Receipts;
-
-public sealed record PurchaseReceiptQuery(
-    InputItemGroup? ItemGroup = null, Guid? ItemId = null, Guid? ZoneId = null, Guid? RaftId = null, Guid? SupplierId = null,
-    int? StatusId = null, DateOnly? From = null, DateOnly? To = null, string? Code = null, int Page = 1, int PageSize = 20);
-
-public sealed record PurchaseReceiptRow(
-    Guid Id, string Code, DateOnly? ReceiptDate, SupplierRef Supplier, ZoneRef Zone, RaftRef? Raft, int StatusId, string Status,
-    decimal Subtotal, decimal Discount, decimal Payable, decimal Returned, decimal Paid, decimal Outstanding);
-
-/// <summary>Money totals count Completed receipts only; <see cref="Count"/> is every matching receipt.</summary>
-public sealed record PurchaseReceiptTotals(
-    int Count, int CompletedCount, decimal Subtotal, decimal Discount, decimal Payable, decimal Returned, decimal Paid, decimal Outstanding);
-
-public sealed record PurchaseReceiptSearchResult(Paged<PurchaseReceiptRow> Page, PurchaseReceiptTotals Totals, DateOnly From, DateOnly To, string? Message);
-
-public sealed record RaftCostReceipt(Guid ReceiptId, string Code, DateOnly ReceiptDate, decimal MaterialCost);
-
-public sealed record RaftMaterialCostRow(RaftRef Raft, ZoneRef Zone, decimal MaterialCost, IReadOnlyList<RaftCostReceipt> Receipts);
-
-public sealed record ExportedFile(string FileName, string ContentType, byte[] Content);
 
 /// <summary>INP-07 – search receipts with totals, raft material cost and Excel export, never wider than the caller's zones.</summary>
 public sealed class PurchaseReceiptQueryService(
@@ -57,11 +42,14 @@ public sealed class PurchaseReceiptQueryService(
         // Paging and totals are computed by the database; the page number is capped so the offset cannot overflow.
         var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / 100), Math.Clamp(query.PageSize, 1, 100));
         var (found, totals) = await receipts.PageFiguresAsync(filter.Value!, page, pageSize, cancellationToken);
+        // The list always has a period, so an empty one is MSG-GEN-10 (filtered), not MSG-GEN-11.
+        var empty = totals.Count == 0 ? UserMessages.NoDataForFilters("period and filters") : null;
         return new PurchaseReceiptSearchResult(
             new Paged<PurchaseReceiptRow>(found.Select(Row).ToList(), page, pageSize, totals.Count),
             Totals(totals),
             filter.Value!.From!.Value, filter.Value.To!.Value,
-            totals.Count == 0 ? UserMessages.NoData("purchase receipts").Text : null);
+            empty?.Text,
+            empty?.Code);
     }
 
     /// <summary>Raft material cost per raft with the Completed receipts behind it (filters zone, raft, period, item).</summary>

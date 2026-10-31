@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using ClosedXML.Excel;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -80,7 +80,8 @@ public class PurchaseReceiptListExportTests(AuthApiFactory factory) : IClassFixt
         var empty = await SearchAsync(world.Owner, $"supplierId={world.SupplierId}");
         Assert.Empty(Ids(empty));
         Assert.Equal((0, 0m), (empty.GetProperty("totals").GetProperty("count").GetInt32(), empty.GetProperty("totals").Money("payable")));
-        Assert.Equal("There is no data for purchase receipts in the selected scope.", empty.GetProperty("message").GetString());
+        Assert.Equal("There is no data for the period and filters you chose. Please choose again.", empty.GetProperty("message").GetString());
+        Assert.Equal("MSG-GEN-10", empty.GetProperty("messageCode").GetString());
 
         Assert.Equal([lastYear.Id()], Ids(await SearchAsync(world.Owner, $"supplierId={world.SupplierId}&from={Today.Year - 1}-01-01")));
         // Only "to" given: from 1 January of that year.
@@ -96,10 +97,10 @@ public class PurchaseReceiptListExportTests(AuthApiFactory factory) : IClassFixt
 
         foreach (var path in new[] { "/api/purchase-receipts", "/api/purchase-receipts/raft-material-costs", "/api/purchase-receipts/export" })
         {
-            Assert.Equal("From date", await (await world.Owner.GetAsync($"{path}?from={Today:yyyy-MM-dd}&to={Today.AddDays(-1):yyyy-MM-dd}")).FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
-            Assert.Equal("Raft", await (await world.Owner.GetAsync($"{path}?raftId={Guid.NewGuid()}")).FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
-            await (await manager.GetAsync($"{path}?zoneId={otherZone.Id}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-            await (await manager.GetAsync($"{path}?raftId={otherRaft.Id}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+            Assert.Equal("From date", await (await world.Owner.GetAsync($"{path}?from={Today:yyyy-MM-dd}&to={Today.AddDays(-1):yyyy-MM-dd}")).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+            Assert.Equal("Raft", await (await world.Owner.GetAsync($"{path}?raftId={Guid.NewGuid()}")).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+            await (await manager.GetAsync($"{path}?zoneId={otherZone.Id}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+            await (await manager.GetAsync($"{path}?raftId={otherRaft.Id}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         }
     }
 
@@ -183,7 +184,7 @@ public class PurchaseReceiptListExportTests(AuthApiFactory factory) : IClassFixt
         Assert.Equal(list.GetProperty("totals").Money("payable"), Cell(totals, 9));
 
         var noExport = await factory.PurchasingStaffAsync(world.Zone, new Perm(PermissionFunctions.PurchaseReceipts, true, true, true, true));
-        await (await noExport.GetAsync("/api/purchase-receipts/export")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        await (await noExport.GetAsync("/api/purchase-receipts/export")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await noExport.GetAsync("/api/purchase-receipts")).ReadAsync(HttpStatusCode.OK);
     }
 
@@ -209,7 +210,7 @@ public class PurchaseReceiptListExportTests(AuthApiFactory factory) : IClassFixt
         Assert.Equal(2, Ids(await SearchAsync(client, $"supplierId={world.SupplierId}")).Count);
         var export = await ExportAsync(client, $"supplierId={world.SupplierId}");
         Assert.Equal([inZone.GetProperty("code").GetString()], export.Codes);
-        await (await client.GetAsync($"/api/purchase-receipts/export?zoneId={otherZone.Id}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        await (await client.GetAsync($"/api/purchase-receipts/export?zoneId={otherZone.Id}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         Assert.DoesNotContain(inOther.GetProperty("code").GetString(), export.Codes);
     }
 

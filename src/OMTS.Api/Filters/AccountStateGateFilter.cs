@@ -9,7 +9,7 @@ namespace OMTS.Api.Filters;
 
 /// <summary>
 /// Global gate for authenticated requests: a temporary password must be changed first (UC02 branch 2c),
-/// then traders and staff must verify a phone number (BR-34, MSG67). Only endpoints marked with the
+/// then traders and staff must verify a phone number (BR-34, MSG-ACCOUNT-04). Only endpoints marked with the
 /// matching attribute stay reachable meanwhile. Runs before <see cref="RequirePermissionAttribute"/>.
 /// </summary>
 public sealed class AccountStateGateFilter(ICurrentUser currentUser, PermissionService permissionService) : IAsyncAuthorizationFilter

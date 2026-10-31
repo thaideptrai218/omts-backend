@@ -1,6 +1,6 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -29,7 +29,7 @@ public class PhoneAndPasswordTests(AuthApiFactory factory) : IClassFixture<AuthA
         var client = await factory.LoginAsync(trader.Username);
 
         // Every other function stays closed until the phone is verified (MSG67).
-        Assert.Equal("MSG67", await (await client.GetAsync("/api/me/permissions")).ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-04", await (await client.GetAsync("/api/me/permissions")).ErrorCodeAsync());
 
         var id = await VerificationIdAsync(await client.PostAsJsonAsync("/api/me/phone-verification", new { phoneNumber = phone }));
         var token = await VerifyAsync(client, id, factory.LastSmsCode(phone));
@@ -58,7 +58,7 @@ public class PhoneAndPasswordTests(AuthApiFactory factory) : IClassFixture<AuthA
         var token = await VerifyAsync(client, id, factory.LastSmsCode(phone));
         var confirmed = await client.PostAsJsonAsync("/api/me/phone-verification/confirm", new { verificationToken = token });
 
-        Assert.Equal("MSG01", await taken.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-09", await taken.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.OK, confirmed.StatusCode);
         Assert.NotNull(await factory.QueryAsync(db => db.Accounts.Where(a => a.Id == staff.Id).Select(a => a.PhoneVerifiedAt).SingleAsync()));
     }
@@ -92,9 +92,9 @@ public class PhoneAndPasswordTests(AuthApiFactory factory) : IClassFixture<AuthA
         var reset = await client.PostAsJsonAsync("/api/auth/recovery/reset", new { verificationToken = token, newPassword = "NewPass2026", passwordConfirmation = "NewPass2026" });
         var reused = await client.PostAsJsonAsync("/api/auth/recovery/reset", new { verificationToken = token, newPassword = "Other2026x", passwordConfirmation = "Other2026x" });
 
-        Assert.Equal("MSG01", await weak.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await weak.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
-        Assert.Equal("MSG16", await reused.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-16", await reused.ErrorCodeAsync());
         var tokens = await LoginTokensAsync(factory.CreateClient(), owner.Username, "NewPass2026");
         Assert.False(tokens.GetProperty("mustChangePassword").GetBoolean());
     }
@@ -109,10 +109,11 @@ public class PhoneAndPasswordTests(AuthApiFactory factory) : IClassFixture<AuthA
         var wrong = await client.PostAsJsonAsync("/api/me/password", new { currentPassword = "Wrong123", newPassword = "NewPass2026", passwordConfirmation = "NewPass2026" });
         var changed = await client.PostAsJsonAsync("/api/me/password", new { currentPassword = Password, newPassword = "NewPass2026", passwordConfirmation = "NewPass2026" });
 
-        Assert.Equal("MSG17", await wrong.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-14", await wrong.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
         var body = await changed.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("Your password has been changed.", body.GetProperty("message").GetString());
+        Assert.Equal("Your password has been changed. You have been logged out on your other devices.", body.GetProperty("message").GetString());
+        Assert.Equal("MSG-ACCOUNT-11", body.GetProperty("messageCode").GetString());
         Assert.Equal(HttpStatusCode.Unauthorized, (await other.GetAsync("/api/me")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/me")).StatusCode);
         var fresh = factory.CreateClient();
@@ -133,7 +134,7 @@ public class PhoneAndPasswordTests(AuthApiFactory factory) : IClassFixture<AuthA
         var token = await VerifyAsync(client, id, factory.LastEmailCode(email));
         var changed = await client.PostAsJsonAsync("/api/me/password", new { verificationToken = token, newPassword = "NewPass2026", passwordConfirmation = "NewPass2026" });
 
-        Assert.Equal("NO_VERIFIED_EMAIL", await noEmail.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-15", await noEmail.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
     }
 

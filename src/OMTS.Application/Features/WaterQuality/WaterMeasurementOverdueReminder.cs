@@ -1,3 +1,5 @@
+using OMTS.Application.Common.Interfaces.Messaging;
+using OMTS.Application.Common.Models.Persistence;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.Authorization;

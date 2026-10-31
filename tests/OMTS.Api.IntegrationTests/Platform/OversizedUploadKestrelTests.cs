@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Headers;
+using System.Net;
 using System.Text.Json;
 using OMTS.Api.IntegrationTests.Cooperatives;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -92,7 +92,7 @@ public class OversizedUploadKestrelTests
         var text = await response.Content.ReadAsStringAsync();
         Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"HTTP {(int)response.StatusCode}: {text}");
         var body = JsonDocument.Parse(text).RootElement;
-        Assert.Equal("MSG01", body.GetProperty("code").GetString());
+        Assert.Equal("MSG-GEN-01", body.GetProperty("code").GetString());
         Assert.Equal(field, body.GetProperty("field").GetString());
     }
 }

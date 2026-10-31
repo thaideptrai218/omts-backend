@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -34,10 +34,10 @@ public class CooperativeProfileRuleTests
 
         foreach (var client in new[] { trader, staff })
         {
-            Assert.Equal("MSG02", await (await client.GetAsync("/api/cooperative/profile")).ErrorCodeAsync());
-            Assert.Equal("MSG02", await (await client.PutAsJsonAsync("/api/cooperative/profile", Valid("AAAAAAAAB9E="))).ErrorCodeAsync());
-            Assert.Equal("MSG02", await (await UploadLogoAsync(client, Png, "logo.png")).ErrorCodeAsync());
-            Assert.Equal("MSG02", await (await client.DeleteAsync("/api/cooperative/profile/logo")).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.GetAsync("/api/cooperative/profile")).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.PutAsJsonAsync("/api/cooperative/profile", Valid("AAAAAAAAB9E="))).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await UploadLogoAsync(client, Png, "logo.png")).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.DeleteAsync("/api/cooperative/profile/logo")).ErrorCodeAsync());
         }
 
         var anonymous = api.CreateClient();
@@ -60,7 +60,7 @@ public class CooperativeProfileRuleTests
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("Full name is invalid. Please check and enter it again.", problem.GetProperty("detail").GetString());
+        Assert.Equal("Full name is missing or invalid. Please check and enter it again.", problem.GetProperty("detail").GetString());
         Assert.Equal(
             ["Full name", "Tax code", "Office address", "Phone number", "Legal representative", "Business lines"],
             Fields(problem));
@@ -185,7 +185,7 @@ public class CooperativeProfileRuleTests
         var problem = await duplicate.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
-        Assert.Equal("Tax code already exists. The system opens the existing record for you to check and does not create a copy.",
+        Assert.Equal("Tax code already exists. Your entries are kept: change them, or open the existing record.",
             problem.GetProperty("detail").GetString());
         Assert.Equal(other.Id, problem.GetProperty("existingId").GetGuid());
         Assert.Equal(1, await api.QueryAsync(db => db.Cooperatives.CountAsync(c => c.StatusId == StatusIds.Cooperative.Draft && c.TaxCode == null)));

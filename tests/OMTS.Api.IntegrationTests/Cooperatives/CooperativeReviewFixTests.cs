@@ -1,6 +1,6 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -79,10 +79,10 @@ public class CooperativeReviewFixTests
             rowVersion = profile.GetProperty("rowVersion").GetString(),
         });
 
-        Assert.Equal("MSG01", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
     }
 
-    // Two identical zone–role rows are reported as such, not as "Account already exists".
+    // Two identical zone–role rows are reported as such (MSG-GEN-02 "Zone-role pair"), not as a taken username or phone.
     [Fact]
     public async Task Repeated_zone_role_row_in_a_new_employee_account_keeps_its_own_message()
     {

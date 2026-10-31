@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Models.Messaging;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Logging;
@@ -60,7 +61,7 @@ internal sealed class SmtpEmailSender(IOptions<EmailOptions> options, ILogger<Sm
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // Provider errors are returned, never thrown, so the caller leaves its data unchanged (MSG04).
+            // Provider errors are returned, never thrown, so the caller leaves its data unchanged (MSG-ACCOUNT-13).
             // Never the exception message: a rejected-recipient reply echoes the full address.
             logger.LogError("Email to {Recipient} failed: {Error} {SmtpStatus}", Masking.Email(to), exception.GetType().Name,
                 exception is SmtpCommandException command ? $"{command.ErrorCode} {(int)command.StatusCode}" : null);

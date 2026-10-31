@@ -1,11 +1,11 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Domain.Constants;
+using FarmingHost = OMTS.Api.IntegrationTests.Farming.FarmingSqlServerHost;
 using static OMTS.Api.IntegrationTests.Purchasing.PurchasingSqlServerKit;
 using static OMTS.Api.IntegrationTests.Purchasing.PurchasingTestKit;
-using FarmingHost = OMTS.Api.IntegrationTests.Farming.FarmingSqlServerHost;
 
 namespace OMTS.Api.IntegrationTests.Purchasing;
 
@@ -177,9 +177,9 @@ public class ReviewFixQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
         var over = "from=2000-01-01&to=2005-01-02";
         var exact = "from=2000-01-01&to=2005-01-01";
 
-        Assert.Equal("To date", await (await world.Owner.GetAsync($"/api/purchase-receipts?{over}")).FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
-        Assert.Equal("To date", await (await world.Owner.GetAsync($"/api/purchase-receipts/export?{over}")).FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
-        Assert.Equal("To date", await (await world.Owner.GetAsync($"/api/purchase-receipts/raft-material-costs?{over}")).FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("To date", await (await world.Owner.GetAsync($"/api/purchase-receipts?{over}")).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("To date", await (await world.Owner.GetAsync($"/api/purchase-receipts/export?{over}")).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("To date", await (await world.Owner.GetAsync($"/api/purchase-receipts/raft-material-costs?{over}")).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         Assert.Equal(HttpStatusCode.OK, (await world.Owner.GetAsync($"/api/purchase-receipts?{exact}")).StatusCode);
     }
 
@@ -191,7 +191,7 @@ public class ReviewFixQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
         var url = $"/api/purchase-receipts/{draft.Id()}";
         var edit = world.Body(new LineBody(world.Other, 2, 100_000));
 
-        Assert.Equal("RowVersion", await (await world.Owner.PutAsJsonAsync(url, edit)).FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("RowVersion", await (await world.Owner.PutAsJsonAsync(url, edit)).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         var saved = await (await world.Owner.PutAsJsonAsync(url, edit with { RowVersion = draft.GetProperty("rowVersion").GetString() })).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(2m, saved.GetProperty("lines")[0].Money("quantity"));
     }
@@ -216,7 +216,7 @@ public class ReviewFixQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
         }
         else
         {
-            Assert.Equal("Line 1", await response.FieldAsync(HttpStatusCode.BadRequest, "MSG59"));
+            Assert.Equal("Line 1", await response.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         }
     }
 

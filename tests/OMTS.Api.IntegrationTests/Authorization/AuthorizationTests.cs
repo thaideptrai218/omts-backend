@@ -1,6 +1,6 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Features.Authorization;
@@ -25,7 +25,7 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zoneA.Id}/water-measurements")).StatusCode);
         var otherZone = await client.GetAsync($"/test-only/zones/{zoneB.Id}/water-measurements");
         Assert.Equal(HttpStatusCode.Forbidden, otherZone.StatusCode);
-        Assert.Equal("MSG02", await ErrorCodeAsync(otherZone));
+        Assert.Equal("MSG-GEN-08", await ErrorCodeAsync(otherZone));
     }
 
     [Fact]
@@ -193,7 +193,7 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
 
         var blocked = await client.GetAsync($"/test-only/zones/{zone.Id}/water-measurements");
         Assert.Equal(HttpStatusCode.Forbidden, blocked.StatusCode);
-        Assert.Equal("MSG67", await ErrorCodeAsync(blocked));
+        Assert.Equal("MSG-ACCOUNT-04", await ErrorCodeAsync(blocked));
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/test-only/verify-phone", null)).StatusCode);
 
         // Verifying the number lifts the gate right away (UC08 saves the account).

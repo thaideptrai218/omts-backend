@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using ClosedXML.Excel;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -128,7 +128,7 @@ public class WaterExportRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
         Assert.Equal(HttpStatusCode.OK, longest.StatusCode);
         Assert.Equal(366, (await longest.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("periods").GetArrayLength());
         Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
-        Assert.Equal("MSG01", await tooLong.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await tooLong.ErrorCodeAsync());
         Assert.Equal("Group by", (await tooLong.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
     }
 

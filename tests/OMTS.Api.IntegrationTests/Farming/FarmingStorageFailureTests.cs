@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Domain.Entities.Farming;
@@ -59,6 +59,6 @@ public class FarmingStorageFailureTests
     private static async Task AssertFileFailureAsync(HttpResponseMessage response)
     {
         Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
-        Assert.Equal("MSG05", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-03", await response.ErrorCodeAsync());
     }
 }

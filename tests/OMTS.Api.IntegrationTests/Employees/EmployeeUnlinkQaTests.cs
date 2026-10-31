@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Farming;
@@ -126,7 +126,7 @@ public class EmployeeUnlinkQaTests(AuthApiFactory factory) : IClassFixture<AuthA
         await (await owner.DeleteAsync($"/api/employees/{id}/account")).ReadAsync(HttpStatusCode.OK);
         var unlinked = await owner.DeleteAsync($"/api/employees/{id}/account?rowVersion=not-base64");
         Assert.Equal(HttpStatusCode.BadRequest, unlinked.StatusCode);
-        Assert.Equal("MSG01", await unlinked.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await unlinked.ErrorCodeAsync());
         Assert.Equal("RowVersion", await FieldAsync(unlinked));
         await (await owner.DeleteAsync($"/api/employees/{id}/account?rowVersion={Uri.EscapeDataString("AAAAAAAAB9E=")}")).ReadAsync(HttpStatusCode.OK);
         Assert.Single(await factory.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == id && e.Action == "Employee.Updated").ToListAsync()));

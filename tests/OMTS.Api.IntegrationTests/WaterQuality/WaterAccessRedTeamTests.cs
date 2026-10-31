@@ -1,10 +1,10 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
-using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Authorization;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
@@ -50,7 +50,7 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
             {
                 var response = await call();
                 Assert.True(response.StatusCode == HttpStatusCode.Forbidden, $"{name}: {(int)response.StatusCode}");
-                Assert.Equal("MSG02", await response.ErrorCodeAsync());
+                Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
             }
         }
 
@@ -78,7 +78,7 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
         foreach (var response in new[] { setOne, setAll })
         {
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-            Assert.Equal("MSG02", await response.ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
         }
 
         var zone = await api.QueryAsync(db => db.FarmingZones.AsNoTracking().SingleAsync(x => x.Id == z.Zone.Id));
@@ -105,7 +105,7 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
         foreach (var response in responses)
         {
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-            Assert.Equal("MSG02", await response.ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
             Assert.DoesNotContain(draftId.ToString(), await response.Content.ReadAsStringAsync());
         }
 
@@ -136,7 +136,7 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
         foreach (var response in responses)
         {
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-            Assert.Equal("MSG02", await response.ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
         }
 
         Assert.Equal(StatusIds.WaterMeasurement.Draft,
@@ -154,7 +154,7 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
         var history = await noView.GetAsync(z.Base);
 
         Assert.Equal(HttpStatusCode.Forbidden, detail.StatusCode);
-        Assert.Equal("MSG02", await detail.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await detail.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.Forbidden, history.StatusCode);
     }
 
@@ -173,7 +173,7 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
 
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, again.StatusCode);
-        Assert.Equal("MSG02", await again.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await again.ErrorCodeAsync());
         Assert.DoesNotContain(savedId.ToString(), await again.Content.ReadAsStringAsync());
         Assert.Equal(1, await api.QueryAsync(db => db.WaterMeasurements.CountAsync(m => m.ZoneId == z.Zone.Id)));
     }
@@ -188,7 +188,7 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
         var response = await exportOnly.GetAsync($"{z.Base}/export");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        Assert.Equal("MSG02", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
     }
 
     [Fact]
@@ -218,7 +218,7 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
         Assert.NotEqual((await byOwner.Content.ReadFromJsonAsync<JsonElement>()).Id(), managerBody.Id());
         Assert.Equal(managerAccount.Id, managerBody.GetProperty("measuredBy").GetProperty("id").GetGuid());
         Assert.Equal(HttpStatusCode.BadRequest, otherZone.StatusCode);
-        Assert.Equal("MSG01", await otherZone.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await otherZone.ErrorCodeAsync());
         Assert.Equal("Client operation id", (await otherZone.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
         Assert.Equal(2, await api.QueryAsync(db => db.WaterMeasurements.CountAsync(m => m.ZoneId == zoneA.Zone.Id)));
         Assert.Equal(0, await api.QueryAsync(db => db.WaterMeasurements.CountAsync(m => m.ZoneId == zoneB.Zone.Id)));

@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Features.Authorization;
@@ -36,7 +36,7 @@ public class GrantAndRoleTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         Assert.Equal(HttpStatusCode.Forbidden, afterRevoke.StatusCode);
         Assert.Equal("Moved", history[0].GetProperty("revokeReason").GetString());
         // The last effective grant is gone, so the staff member can no longer log in (MSG13).
-        Assert.Equal("MSG13", await (await factory.CreateClient().PostAsJsonAsync("/api/auth/login", new { identifier = staff.Username, password = Password })).ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-07", await (await factory.CreateClient().PostAsJsonAsync("/api/auth/login", new { identifier = staff.Username, password = Password })).ErrorCodeAsync());
     }
 
     [Fact]
@@ -54,10 +54,10 @@ public class GrantAndRoleTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var unknownZone = await owner.PostAsJsonAsync($"/api/accounts/{staff.Id}/grants", new { zoneId = Guid.NewGuid(), roleId });
         var backwards = await owner.PostAsJsonAsync($"/api/accounts/{staff.Id}/grants", new { zoneId = (Guid?)null, roleId, effectiveFrom = "2026-12-01", effectiveTo = "2026-11-01" });
 
-        Assert.Equal("MSG03", await duplicate.ErrorCodeAsync());
-        Assert.Equal("MSG02", await toTrader.ErrorCodeAsync());
-        Assert.Equal("MSG01", await unknownZone.ErrorCodeAsync());
-        Assert.Equal("MSG01", await backwards.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-02", await duplicate.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await toTrader.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await unknownZone.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await backwards.ErrorCodeAsync());
     }
 
     [Fact]
@@ -91,10 +91,10 @@ public class GrantAndRoleTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var duplicate = await owner.PostAsJsonAsync("/api/roles", Role(name, (Water, ["View"])));
         var catalog = await owner.GetFromJsonAsync<JsonElement>("/api/permission-functions");
 
-        Assert.Equal("MSG01", await withoutView.ErrorCodeAsync());
-        Assert.Equal("MSG01", await unsupported.ErrorCodeAsync());
-        Assert.Equal("MSG01", await unknown.ErrorCodeAsync());
-        Assert.Equal("MSG03", await duplicate.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await withoutView.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await unsupported.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await unknown.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-02", await duplicate.ErrorCodeAsync());
         Assert.Equal(PermissionFunctions.All.Count, catalog.GetArrayLength());
     }
 
@@ -118,7 +118,7 @@ public class GrantAndRoleTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         Assert.Equal(1, impact.GetProperty("accountCount").GetInt32());
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/test-only/zones/{zone.Id}/water-measurements", null)).StatusCode);
-        Assert.Equal("MSG11", await discontinue.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-06", await discontinue.ErrorCodeAsync());
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public class GrantAndRoleTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var actions = copy.GetProperty("permissions")[0].GetProperty("actions").EnumerateArray().Select(a => a.GetString());
         Assert.Equal(["View", "Export"], actions);
         Assert.Equal("Discontinued", (await discontinued.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString());
-        Assert.Equal("MSG61", await twice.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-09", await twice.ErrorCodeAsync());
         Assert.Equal("In Use", (await reactivated.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString());
     }
 

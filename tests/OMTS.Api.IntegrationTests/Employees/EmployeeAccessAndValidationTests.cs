@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -43,7 +43,7 @@ public class EmployeeAccessAndValidationTests(AuthApiFactory factory) : IClassFi
         {
             foreach (var call in calls)
             {
-                Assert.Equal("MSG02", await (await call(client)).ErrorCodeAsync());
+                Assert.Equal("MSG-GEN-08", await (await call(client)).ErrorCodeAsync());
             }
         }
 
@@ -99,7 +99,7 @@ public class EmployeeAccessAndValidationTests(AuthApiFactory factory) : IClassFi
             var response = await owner.PostAsJsonAsync("/api/employees", body);
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
             Assert.Equal(field, await FieldAsync(response));
-            Assert.Equal($"{field} is invalid. Please check and enter it again.", (await ProblemAsync(response)).GetProperty("detail").GetString());
+            Assert.Equal($"{field} is missing or invalid. Please check and enter it again.", (await ProblemAsync(response)).GetProperty("detail").GetString());
         }
 
         Assert.False(await factory.QueryAsync(db => db.Employees.AnyAsync(e => e.FullName == name || e.FullName.StartsWith("NNNN"))));
@@ -137,7 +137,9 @@ public class EmployeeAccessAndValidationTests(AuthApiFactory factory) : IClassFi
         {
             var problem = await conflict.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
-            Assert.Equal("Employee profile already exists. The system opens the existing record for you to check and does not create a copy.",
+            Assert.Equal("MSG-LABOR-03", problem.GetProperty("code").GetString());
+            Assert.Equal(
+                $"This phone number belongs to {name}. Each employee needs their own phone number for the employee app: enter another number, or leave it empty.",
                 problem.GetProperty("detail").GetString());
             Assert.Equal(first, problem.GetProperty("existingEmployeeId").GetGuid());
         }

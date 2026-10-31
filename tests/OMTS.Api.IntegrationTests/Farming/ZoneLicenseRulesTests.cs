@@ -1,7 +1,7 @@
-using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json;
+using System.Net;
 using System.Text.Json.Nodes;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -184,14 +184,14 @@ public class ZoneLicenseRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal("Superseded", oldNow.Text("state"));
 
         var again = await (await owner.Client.PostAsync($"/api/zone-licenses/{old.Id()}/replace", renewal.ToForm())).ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal("MSG03", again.Text("code"));
+        Assert.Equal("MSG-GEN-09", again.Text("code"));
         Assert.Equal(replacement.Id(), again.GetProperty("replacementId").GetGuid());
 
         var edit = await (await owner.Client.PutAsync($"/api/zone-licenses/{old.Id()}", new LicenseFields
         {
             ZoneIds = [zoneA], EffectiveDate = Today.AddYears(-5), ExpiryDate = Today.AddDays(40), RowVersion = old.Text("rowVersion"),
         }.ToForm())).ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal("LICENSE_REPLACED", edit.Text("code"));
+        Assert.Equal("MSG-GEN-09", edit.Text("code"));
         Assert.Contains(replacement.Text("documentNumber"), edit.Text("detail"));
         Assert.Equal(replacement.Id(), edit.GetProperty("replacementId").GetGuid());
 
@@ -263,11 +263,11 @@ public class ZoneLicenseRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
 
         foreach (var client in new[] { staff.Client, everywhere.Client, trader })
         {
-            Assert.Equal("MSG02", await (await client.GetAsync($"/api/zones/{zoneId}/licenses")).ErrorCodeAsync());
-            Assert.Equal("MSG02", await (await client.GetAsync($"/api/zone-licenses/{license.Id()}")).ErrorCodeAsync());
-            Assert.Equal("MSG02", await (await client.PostAsync("/api/zone-licenses", form.ToForm())).ErrorCodeAsync());
-            Assert.Equal("MSG02", await (await client.PutAsync($"/api/zone-licenses/{license.Id()}", form.ToForm())).ErrorCodeAsync());
-            Assert.Equal("MSG02", await (await client.PostAsync($"/api/zone-licenses/{license.Id()}/replace", form.ToForm())).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.GetAsync($"/api/zones/{zoneId}/licenses")).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.GetAsync($"/api/zone-licenses/{license.Id()}")).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.PostAsync("/api/zone-licenses", form.ToForm())).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.PutAsync($"/api/zone-licenses/{license.Id()}", form.ToForm())).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.PostAsync($"/api/zone-licenses/{license.Id()}/replace", form.ToForm())).ErrorCodeAsync());
         }
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateClient().GetAsync($"/api/zone-licenses/{license.Id()}")).StatusCode);

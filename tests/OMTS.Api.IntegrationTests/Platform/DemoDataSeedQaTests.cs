@@ -1,6 +1,6 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Reflection;
 using System.Security.Claims;
 using System.Text.Json;
@@ -13,8 +13,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Api.Services;
-using OMTS.Application.Common;
 using OMTS.Application.Common.Constants;
+using OMTS.Application.Common;
 using OMTS.Domain.Common;
 using OMTS.Domain.Enums;
 using OMTS.Infrastructure.Bootstrap;
@@ -264,7 +264,7 @@ public class DemoDataSeedQaTests
         Assert.Equal(trader.Id, me.GetProperty("accountId").GetGuid());
         var ownerOnly = await traderClient.GetAsync("/api/cooperative/profile");
         Assert.Equal(HttpStatusCode.Forbidden, ownerOnly.StatusCode);
-        Assert.Equal("MSG02", await ownerOnly.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await ownerOnly.ErrorCodeAsync());
 
         // The same endpoint is open to the real Owner, so the refusals above are about the caller.
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync("/api/cooperative/profile")).StatusCode);

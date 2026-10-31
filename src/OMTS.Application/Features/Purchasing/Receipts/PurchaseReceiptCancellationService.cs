@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Purchasing.Receipts.Dtos;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Exceptions;
@@ -119,8 +120,8 @@ public sealed class PurchaseReceiptCancellationService(
 
         if (source.StatusId == StatusIds.PurchaseReceipt.Draft)
         {
-            return AppError.Conflict(UserMessages.CannotChangeStatus(
-                "Purchase receipt", statusCatalog.DisplayNameOf(source.StatusId), "Draft", "a Draft is edited directly, not copied"));
+            // A Draft is edited directly, not copied.
+            return AppError.Conflict(UserMessages.WrongStatus($"Purchase receipt {source.Code}", statusCatalog.DisplayNameOf(source.StatusId)));
         }
 
         var prefix = DocumentCodes.PrefixFor(DocumentCodes.ReceiptPrefix, timeProvider.Today());
@@ -169,24 +170,27 @@ public sealed class PurchaseReceiptCancellationService(
         return await views.ViewAsync(copy.Id, cancellationToken);
     }
 
-    /// <summary>Already Cancelled; or Completed with a stocked seed lot or a purchase return (MSG61).</summary>
+    /// <summary>
+    /// Already Cancelled (MSG-GEN-09); or Completed with a stocked seed lot or a purchase return (MSG-PURCHASE-09,
+    /// PURCHASE-06.0.E1).
+    /// </summary>
     private async Task<AppError?> BlockedAsync(PurchaseReceipt receipt, CancellationToken cancellationToken)
     {
-        string? reason = null;
         if (receipt.StatusId == StatusIds.PurchaseReceipt.Cancelled)
         {
-            reason = "the receipt is already cancelled";
-        }
-        else if (receipt.StatusId == StatusIds.PurchaseReceipt.Completed)
-        {
-            var stocked = await receipts.StockedAsync(receipt.Lines.Where(l => l.SeedLot is not null).Select(l => l.Id).ToList(), cancellationToken);
-            var stockedLot = receipt.Lines.FirstOrDefault(l => stocked.ContainsKey(l.Id))?.SeedLot;
-            reason = stockedLot is not null ? $"seed lot {stockedLot.InternalCode} has already been stocked"
-                : receipt.Returns.Count > 0 ? "the receipt has purchase returns"
-                : null;
+            return AppError.Conflict(UserMessages.WrongStatus($"Purchase receipt {receipt.Code}", statusCatalog.DisplayNameOf(receipt.StatusId)));
         }
 
-        return reason is null ? null : AppError.Conflict(UserMessages.CannotChangeStatus(
-            "Purchase receipt", statusCatalog.DisplayNameOf(receipt.StatusId), statusCatalog.DisplayNameOf(StatusIds.PurchaseReceipt.Cancelled), reason));
+        if (receipt.StatusId != StatusIds.PurchaseReceipt.Completed)
+        {
+            return null;
+        }
+
+        var stocked = await receipts.StockedAsync(receipt.Lines.Where(l => l.SeedLot is not null).Select(l => l.Id).ToList(), cancellationToken);
+        var stockedLot = receipt.Lines.FirstOrDefault(l => stocked.ContainsKey(l.Id))?.SeedLot;
+        var cause = stockedLot is not null ? $"seed lot {stockedLot.InternalCode} has already been stocked"
+            : receipt.Returns.Count > 0 ? "the receipt has purchase returns"
+            : null;
+        return cause is null ? null : AppError.Conflict(UserMessages.ReceiptCannotBeCancelled(receipt.Code, cause));
     }
 }

@@ -3,11 +3,6 @@ using static OMTS.Application.Features.Authorization.PermissionFunctions;
 
 namespace OMTS.Application.Features.Authorization;
 
-/// <summary>Permissions of a default role on one function; null actions = every supported action.</summary>
-public sealed record DefaultRolePermission(string FunctionCode, IReadOnlyList<PermissionAction>? Actions = null);
-
-public sealed record DefaultRole(string Name, string Description, IReadOnlyList<DefaultRolePermission> Permissions);
-
 /// <summary>
 /// Roles created at deployment for the staff actors of the 22/10 SRS (Permission Matrix §I.4.4). They are
 /// created only when no role with that name exists, so permissions the Owner edited are never overwritten.

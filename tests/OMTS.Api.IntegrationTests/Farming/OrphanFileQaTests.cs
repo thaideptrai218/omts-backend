@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Interfaces.Storage;
+using OMTS.Application.Features.Files.Models;
 using OMTS.Application.Features.Files;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Infrastructure.Jobs;

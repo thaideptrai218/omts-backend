@@ -1,5 +1,6 @@
-using System.Net;
+using OMTS.Application.Common.Interfaces.Messaging;
 using System.Net.Http.Json;
+using System.Net;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -114,7 +115,7 @@ public class OwnerPasswordResetQaTests
         var outcome = await ResetAsync(api, owner.Username);
         var login = await api.CreateClient().PostAsJsonAsync("/api/auth/login", new { identifier = owner.Username, password = ResetPassword });
 
-        Assert.Equal("MSG69", await lockedOut.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-06", await lockedOut.ErrorCodeAsync());
         Assert.Equal(DeploymentBootstrapper.Success, outcome.ExitCode);
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         Assert.Empty(await PushDevicesAsync(api, owner.Id));

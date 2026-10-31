@@ -1,3 +1,5 @@
+using OMTS.Application.Common.Models.Ocr;
+
 namespace OMTS.Application.Common.Interfaces.Ocr;
 
 /// <summary>
@@ -9,21 +11,4 @@ namespace OMTS.Application.Common.Interfaces.Ocr;
 public interface IOcrService
 {
     Task<OcrResult> RecognizeAsync(Stream photo, string contentType, CancellationToken cancellationToken);
-}
-
-/// <summary>A value read from the photo with the provider's confidence (0…1).</summary>
-public sealed record OcrReading<T>(T Value, double Confidence) where T : struct;
-
-/// <summary>What the OCR Service read; every field is optional, <see cref="ErrorCode"/> is set on failure.</summary>
-public sealed record OcrResult(
-    bool Succeeded,
-    OcrReading<decimal>? Ph,
-    OcrReading<decimal>? Salinity,
-    OcrReading<DateTimeOffset>? MeasuredAt,
-    string? ErrorCode)
-{
-    public static OcrResult Read(OcrReading<decimal>? ph, OcrReading<decimal>? salinity, OcrReading<DateTimeOffset>? measuredAt) =>
-        new(true, ph, salinity, measuredAt, null);
-
-    public static OcrResult Failed(string errorCode) => new(false, null, null, null, errorCode);
 }

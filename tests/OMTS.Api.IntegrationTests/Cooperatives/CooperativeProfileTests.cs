@@ -1,6 +1,6 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -60,7 +60,7 @@ public class CooperativeProfileTests
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("Tax code is invalid. Please check and enter it again.", problem.GetProperty("detail").GetString());
+        Assert.Equal("Tax code is missing or invalid. Please check and enter it again.", problem.GetProperty("detail").GetString());
         Assert.Equal(["Tax code", "Website", "Business lines"], problem.GetProperty("fields").EnumerateArray().Select(f => f.GetString()));
         Assert.Equal(StatusIds.Cooperative.Draft, await api.QueryAsync(db => db.Cooperatives.Select(c => c.StatusId).SingleAsync()));
     }
@@ -77,7 +77,7 @@ public class CooperativeProfileTests
         var duplicate = await owner.PutAsJsonAsync("/api/cooperative/profile", Valid(rowVersion, taxCode: "0101234567"));
         var stale = await owner.PutAsJsonAsync("/api/cooperative/profile", Valid("AAAAAAAAB9E="));
 
-        Assert.Equal("MSG03", await duplicate.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-02", await duplicate.ErrorCodeAsync());
         Assert.Equal("MSG06", await stale.ErrorCodeAsync());
     }
 
@@ -91,8 +91,8 @@ public class CooperativeProfileTests
         await api.GrantAsync(staff, role, null);
         var client = await api.LoginAsync(staff.Username);
 
-        Assert.Equal("MSG02", await (await client.GetAsync("/api/cooperative/profile")).ErrorCodeAsync());
-        Assert.Equal("MSG02", await (await client.PutAsJsonAsync("/api/cooperative/profile", Valid(""))).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await client.GetAsync("/api/cooperative/profile")).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await client.PutAsJsonAsync("/api/cooperative/profile", Valid(""))).ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.Unauthorized, (await api.CreateClient().GetAsync("/api/cooperative/profile")).StatusCode);
     }
 
@@ -112,8 +112,8 @@ public class CooperativeProfileTests
         var publicLogo = await api.CreateClient().GetAsync(logoUrl);
         var removed = await owner.DeleteAsync("/api/cooperative/profile/logo");
 
-        Assert.Equal("Logo is invalid. Please check and enter it again.", (await exe.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString());
-        Assert.Equal("MSG01", await big.ErrorCodeAsync());
+        Assert.Equal("Logo is missing or invalid. Please check and enter it again.", (await exe.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString());
+        Assert.Equal("MSG-GEN-01", await big.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         Assert.Equal(HttpStatusCode.OK, publicLogo.StatusCode);
         Assert.Equal("image/png", publicLogo.Content.Headers.ContentType?.MediaType);

@@ -1,19 +1,20 @@
 using System.Collections.Concurrent;
-using System.Net;
 using System.Net.Http.Json;
 using System.Net.Sockets;
+using System.Net;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
+using System.Text;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Storage;
+using OMTS.Application.Features.Files.Models;
 using OMTS.Application.Features.Files;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Enums;
@@ -23,6 +24,7 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Api.IntegrationTests.Platform;
 
 /// <summary>QA checks of the OMTS-200 review fixes: real endpoints, provider refusals, probes, bootstrap re-run.</summary>
+[Collection("Platform SMTP timing")]
 public class ReviewFixQaTests
 {
     private static readonly byte[] Png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4];
@@ -245,3 +247,8 @@ public class ReviewFixQaTests
         return (port, received, done);
     }
 }
+
+// The fake SMTP peer and the client share a real five-second deadline. Keep the protocol/privacy
+// checks away from concurrent password hashing and SQL migration tests without changing that deadline.
+[CollectionDefinition("Platform SMTP timing", DisableParallelization = true)]
+public sealed class PlatformSmtpTimingCollection;

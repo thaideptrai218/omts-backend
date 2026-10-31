@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -34,9 +34,9 @@ public class EmployeeStatusAndAuditTests(AuthApiFactory factory) : IClassFixture
         var ended = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = "2026-10-17" });
 
         Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
-        Assert.Equal("MSG11", problem.GetProperty("code").GetString());
-        Assert.Equal("Cannot proceed because 1 records are still in use: attendance records (0), work assignments (1) after 15/10/2026. Please handle these records first.",
-            problem.GetProperty("detail").GetString());
+        Assert.Equal(("MSG-GEN-01", "MSG11", "End date"), (problem.GetProperty("code").GetString(), problem.GetProperty("legacyCode").GetString(), problem.GetProperty("field").GetString()));
+        Assert.Equal("End date is missing or invalid. Please check and enter it again.", problem.GetProperty("detail").GetString());
+        Assert.Equal((1, 0, 1), (problem.GetProperty("count").GetInt32(), problem.GetProperty("attendanceCount").GetInt32(), problem.GetProperty("assignmentCount").GetInt32()));
         Assert.Equal(StatusIds.Employee.Working, statusAfterBlock);
         Assert.Equal(HttpStatusCode.OK, ended.StatusCode);
         Assert.Equal(new DateOnly(2026, 10, 17), await factory.QueryAsync(db => db.Employees.Where(e => e.Id == id).Select(e => e.EmploymentEndDate).SingleAsync()));
@@ -81,7 +81,7 @@ public class EmployeeStatusAndAuditTests(AuthApiFactory factory) : IClassFixture
         var back = await owner.PostAsync($"/api/employees/{id}/reinstate", null);
 
         Assert.Equal(HttpStatusCode.Conflict, notLeft.StatusCode);
-        Assert.Equal("Cannot change Employee from “Employed” to “Employed”: the employee is already in this status.",
+        Assert.Equal("Employee is Employed and cannot be used for this action.",
             (await notLeft.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString());
         Assert.Equal(HttpStatusCode.OK, back.StatusCode);
         var changes = await factory.QueryAsync(db => db.AuditEvents.AsNoTracking()

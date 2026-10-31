@@ -1,9 +1,9 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using FarmingHost = OMTS.Api.IntegrationTests.Farming.FarmingSqlServerHost;
 using static OMTS.Api.IntegrationTests.Purchasing.PurchasingSqlServerKit;
 using static OMTS.Api.IntegrationTests.Purchasing.PurchasingTestKit;
-using FarmingHost = OMTS.Api.IntegrationTests.Farming.FarmingSqlServerHost;
 
 namespace OMTS.Api.IntegrationTests.Purchasing;
 
@@ -37,6 +37,6 @@ public class ReviewFixQaRegressionTests
         var url = $"/api/purchase-receipts/{draft.Id()}";
 
         var response = await world.Owner.PutAsJsonAsync(url, world.Body(new LineBody(world.Other, 2, 100_000)) with { RowVersion = string.Empty });
-        Assert.Equal("RowVersion", await response.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("RowVersion", await response.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
     }
 }

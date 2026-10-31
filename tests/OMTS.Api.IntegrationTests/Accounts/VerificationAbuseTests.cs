@@ -1,6 +1,6 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
@@ -115,7 +115,7 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
     // second (which locks), 1 on the third. Ten failures in the hour: no new code is sent, and a right code on the
     // open third request is refused with MSG69.
     [Fact]
-    public async Task Ten_wrong_entries_across_requests_refuse_the_right_code_with_msg69()
+    public async Task Ten_wrong_entries_across_requests_refuse_the_right_code_with_msg_account_17()
     {
         var (owner, _) = await OwnerWithPhoneAndEmailAsync();
         var anonymous = factory.CreateClient();
@@ -142,7 +142,7 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
         Assert.Equal(sent, factory.Services.GetRequiredService<FakeSmsSender>().Inbox.List(phone).Count);
 
         var right = await anonymous.PostAsJsonAsync($"/api/verifications/{third}/verify", new { code = thirdCode });
-        Assert.Equal("MSG69", await right.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-17", await right.ErrorCodeAsync());
         Assert.False((await right.Content.ReadFromJsonAsync<JsonElement>()).TryGetProperty("verificationToken", out _));
     }
 
@@ -151,7 +151,7 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
         for (var i = 0; i < count; i++)
         {
             var response = await anonymous.PostAsJsonAsync($"/api/verifications/{verificationId}/verify", new { code = WrongCodeFor(code) });
-            Assert.Equal("MSG16", await response.ErrorCodeAsync());
+            Assert.Equal("MSG-ACCOUNT-16", await response.ErrorCodeAsync());
         }
     }
 
@@ -208,7 +208,7 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
         var wrongCurrent = await ownerClient.PostAsJsonAsync("/api/me/password", new { currentPassword = "Wrong123", newPassword = "Owner2026x", passwordConfirmation = "Owner2026x" });
         var ownerChanged = await ownerClient.PostAsJsonAsync("/api/me/password", new { currentPassword = "Reset2026x", newPassword = "Owner2026y", passwordConfirmation = "Owner2026y" });
         Assert.Equal(HttpStatusCode.OK, staffChanged.StatusCode);
-        Assert.Equal("MSG17", await wrongCurrent.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-14", await wrongCurrent.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.OK, ownerChanged.StatusCode);
 
         var secrets = new List<(string Kind, string Value, bool IsCode)>();

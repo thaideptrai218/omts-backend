@@ -1,28 +1,7 @@
+using OMTS.Application.Features.Farming.Rafts.Models;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Farming.Rafts;
-
-public enum PortionCondition
-{
-    NotSeeded,
-    Growing,
-    Harvested,
-    WrittenOff,
-}
-
-public enum LaneSummary
-{
-    NotSeeded,
-    Growing,
-    PartiallyHarvested,
-    FullyHarvested,
-}
-
-/// <summary>A recorded lane segment, in metres from marker A.</summary>
-public sealed record SegmentFact(Guid Id, LaneSegmentType Type, decimal From, decimal To, DateOnly Date);
-
-/// <summary>A stretch of the lane with one condition and the segments that make it so.</summary>
-public sealed record LanePortion(decimal From, decimal To, PortionCondition Condition, IReadOnlyList<Guid> SegmentIds);
 
 /// <summary>
 /// FARM-04 lane condition: splits 0…length into portions. Seeded segments make a portion Growing;

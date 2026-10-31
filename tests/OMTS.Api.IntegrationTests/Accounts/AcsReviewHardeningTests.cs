@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -28,8 +28,8 @@ public class AcsReviewHardeningTests(AuthApiFactory factory) : IClassFixture<Aut
         var right = await client.PostAsJsonAsync("/api/me/contact-changes", new { channel = "Email", target = email, currentPassword = Password });
 
         Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
-        Assert.Equal("MSG01", await missing.ErrorCodeAsync());
-        Assert.Equal("MSG17", await wrong.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await missing.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-14", await wrong.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.Created, right.StatusCode);
     }
 
@@ -65,7 +65,7 @@ public class AcsReviewHardeningTests(AuthApiFactory factory) : IClassFixture<Aut
         var response = await client.PostAsJsonAsync("/api/me/phone-verification", new { phoneNumber = NewPhone() });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG01", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
     }
 
     // Logins write the account row; an open profile form must not turn stale because of them.
@@ -117,7 +117,7 @@ public class AcsReviewHardeningTests(AuthApiFactory factory) : IClassFixture<Aut
         var response = await client.PostAsync($"/api/roles/{role.Id}/discontinue", null);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
 
-        Assert.Equal("MSG11", problem.GetProperty("code").GetString());
+        Assert.Equal("MSG-GEN-06", problem.GetProperty("code").GetString());
         Assert.Contains("1 records", problem.GetProperty("detail").GetString());
         Assert.Contains("Future holder", problem.GetProperty("detail").GetString());
     }
@@ -142,7 +142,7 @@ public class AcsReviewHardeningTests(AuthApiFactory factory) : IClassFixture<Aut
     }
 
     [Fact]
-    public async Task Daily_sms_ceiling_answers_msg04()
+    public async Task Daily_sms_ceiling_answers_msg_account_13()
     {
         await using var api = new AuthApiFactory();
         using var limited = api.WithWebHostBuilder(b => b.UseSetting("Verification:DailySmsLimit", "1"));
@@ -154,7 +154,7 @@ public class AcsReviewHardeningTests(AuthApiFactory factory) : IClassFixture<Aut
 
         Assert.Equal(HttpStatusCode.Created, sent.StatusCode);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, refused.StatusCode);
-        Assert.Equal("MSG04", await refused.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-13", await refused.ErrorCodeAsync());
     }
 
     // Every endpoint that sends a code is limited per client, also when logged in.

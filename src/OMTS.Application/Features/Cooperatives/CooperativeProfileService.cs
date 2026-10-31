@@ -1,3 +1,5 @@
+using OMTS.Application.Features.Cooperatives.Dtos;
+using OMTS.Application.Features.Files.Models;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -99,7 +101,8 @@ public sealed partial class CooperativeProfileService(
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return new CooperativeProfileSaved(View(cooperative), UserMessages.Saved("Cooperative profile").Text);
+        var saved = UserMessages.Saved("Cooperative profile");
+        return new CooperativeProfileSaved(View(cooperative), saved.Text, saved.Code);
     }
 
     /// <summary>Replaces the logo at once (PNG/JPEG/WebP, 2 MB). The old file is kept: published versions may use it.</summary>
@@ -120,7 +123,7 @@ public sealed partial class CooperativeProfileService(
         var uploaded = await storage.UploadAsync(checkedFile.Files[0], LogoCategory, cancellationToken);
         if (!uploaded.Succeeded)
         {
-            return new AppError(ErrorKind.BadGateway, UserMessages.FileOperationFailed);
+            return new AppError(ErrorKind.BadGateway, UserMessages.UploadFailed);
         }
 
         return await SetLogoAsync(cooperative, uploaded.Key, cancellationToken);

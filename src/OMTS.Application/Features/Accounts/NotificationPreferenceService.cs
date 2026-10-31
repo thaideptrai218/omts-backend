@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Accounts.Dtos;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
@@ -6,17 +7,6 @@ using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Accounts;
-
-public sealed record ChannelPreferenceView(NotificationChannel Channel, bool Enabled, bool Eligible, string? IneligibleReason);
-
-public sealed record CategoryPreferenceView(string Category, bool Mandatory, IReadOnlyList<ChannelPreferenceView> Channels);
-
-public sealed record NotificationPreferenceChange(string Category, NotificationChannel Channel, bool Enabled);
-
-public sealed record SaveNotificationPreferencesRequest(IReadOnlyList<NotificationPreferenceChange> Items);
-
-/// <param name="Notice">MSG22 when push was asked for but no device allows notifications.</param>
-public sealed record NotificationPreferencesSaved(IReadOnlyList<CategoryPreferenceView> Categories, string Message, string? Notice);
 
 /// <summary>
 /// ACS-07 – the user chooses notification categories and channels. Saving creates no notifications and
@@ -71,7 +61,7 @@ public sealed class NotificationPreferenceService(
 
         foreach (var item in request.Items ?? [])
         {
-            // Push without a device that allows it is saved off; the other channels are still saved (MSG22).
+            // Push without a device that allows it is saved off; the other channels are still saved (MSG-ACCOUNT-21).
             var enabled = item.Enabled;
             if (enabled && item.Channel == NotificationChannel.Push && !pushEligible && !IsLocked(item.Category, item.Channel))
             {
@@ -83,10 +73,9 @@ public sealed class NotificationPreferenceService(
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return new NotificationPreferencesSaved(
-            await ViewAsync(account, cancellationToken),
-            UserMessages.Saved("Notification settings").Text,
-            pushDeclined ? UserMessages.PushDeclined.Text : null);
+        var saved = UserMessages.Saved("Notification settings");
+        var notice = pushDeclined ? UserMessages.PushNotAllowedOnDevice : null;
+        return new NotificationPreferencesSaved(await ViewAsync(account, cancellationToken), saved.Text, saved.Code, notice?.Text, notice?.Code);
     }
 
     /// <summary>Categories that apply to the kind of account; only these are shown and accepted.</summary>

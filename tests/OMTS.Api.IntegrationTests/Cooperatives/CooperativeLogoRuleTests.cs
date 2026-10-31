@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -63,7 +63,7 @@ public class CooperativeLogoRuleTests
         foreach (var response in refused)
         {
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-            Assert.Equal("Logo is invalid. Please check and enter it again.", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString());
+            Assert.Equal("Logo is missing or invalid. Please check and enter it again.", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString());
         }
 
         Assert.Equal(key, await LogoKeyAsync(api));
@@ -71,7 +71,7 @@ public class CooperativeLogoRuleTests
     }
 
     [Fact]
-    public async Task Storage_failure_returns_502_MSG05_and_keeps_the_old_logo()
+    public async Task Storage_failure_returns_502_MSG_GEN_03_and_keeps_the_old_logo()
     {
         using var api = new AuthApiFactory();
         var cooperative = await api.EnsureCooperativeAsync();
@@ -86,8 +86,9 @@ public class CooperativeLogoRuleTests
             var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
 
             Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
-            Assert.Equal("MSG05", problem.GetProperty("code").GetString());
-            Assert.Equal("The file operation could not be completed. The source data has not changed; please try again.", problem.GetProperty("detail").GetString());
+            Assert.Equal("MSG-GEN-03", problem.GetProperty("code").GetString());
+            Assert.Equal("The file could not be uploaded. Your other entries are kept; please try again.", problem.GetProperty("detail").GetString());
+            Assert.Equal("MSG05", problem.GetProperty("legacyCode").GetString());
             Assert.Equal(oldKey, await LogoKeyAsync(api));
             Assert.False(await api.QueryAsync(db => db.AuditEvents.AnyAsync(e => e.Action == "Cooperative.LogoChanged")));
         }

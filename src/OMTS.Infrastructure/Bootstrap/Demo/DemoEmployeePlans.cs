@@ -1,37 +1,5 @@
+
 namespace OMTS.Infrastructure.Bootstrap.Demo;
-
-/// <summary>Which login branch a demo staff account is meant to land in.</summary>
-internal enum DemoLoginKind
-{
-    /// <summary>Verified phone, own password: goes straight in.</summary>
-    Normal,
-
-    /// <summary>Temporary password that never expires in the demo: must change it at first login.</summary>
-    MustChangePassword,
-
-    /// <summary>Phone not verified yet: the phone verification step comes first.</summary>
-    PhoneUnverified,
-}
-
-/// <param name="Username">Null for an employee without a login account.</param>
-/// <param name="GrantZone">Zone code of the zone–role grant; null = All zones.</param>
-/// <param name="GrantFromDays">Days from today the grant starts (negative = in the past).</param>
-/// <param name="GrantToDays">Days from today the grant ends; null = no end.</param>
-internal sealed record DemoEmployeePlan(
-    string FullName,
-    string Phone,
-    string? Username,
-    string RoleName,
-    string? GrantZone,
-    int GrantFromDays,
-    int? GrantToDays,
-    string[] WorkingZones,
-    DateOnly Birthday,
-    string Ward,
-    string BankName,
-    string BankAccountNumber,
-    DemoLoginKind Login = DemoLoginKind.Normal,
-    int? LeftDaysAgo = null);
 
 /// <summary>The eight demo employees (LAB-01); phones come from the fake range 0900 000 0xx.</summary>
 internal static class DemoEmployeePlans

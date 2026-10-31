@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -45,7 +45,7 @@ public class StaffAccountTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var create = await client.PostAsJsonAsync("/api/accounts", Body(zone, role));
 
         Assert.Equal(HttpStatusCode.Forbidden, list.StatusCode);
-        Assert.Equal("MSG02", await create.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await create.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateClient().GetAsync("/api/accounts")).StatusCode);
     }
 
@@ -61,10 +61,10 @@ public class StaffAccountTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var lockTrader = await owner.PostAsJsonAsync($"/api/accounts/{trader.Id}/lock", new { reason = "test" });
         var ownerRights = await owner.PostAsJsonAsync("/api/accounts", Body(zone, role, subjectType: "CooperativeOwner"));
 
-        Assert.Equal("MSG02", await lockOwner.ErrorCodeAsync());
-        Assert.Equal("MSG02", await resetTrader.ErrorCodeAsync());
-        Assert.Equal("MSG02", await lockTrader.ErrorCodeAsync());
-        Assert.Equal("MSG02", await ownerRights.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await lockOwner.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await resetTrader.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await lockTrader.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await ownerRights.ErrorCodeAsync());
         Assert.True(await factory.QueryAsync(db => db.AuditEvents.AnyAsync(e => e.Action == "Account.OwnerRightsRefused")));
     }
 
@@ -79,11 +79,11 @@ public class StaffAccountTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var noGrant = await owner.PostAsJsonAsync("/api/accounts", new { displayName = "A", username = $"s{NewCode()}", phoneNumber = NewPhone(), grants = Array.Empty<object>() });
         var phoneLikeUsername = await owner.PostAsJsonAsync("/api/accounts", Body(zone, role, username: "0912345678"));
 
-        Assert.Equal("MSG03", await duplicateUsername.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-09", await duplicateUsername.ErrorCodeAsync());
         Assert.Equal(existing.Id, (await duplicateUsername.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("existingId").GetGuid());
-        Assert.Equal("MSG03", await duplicatePhone.ErrorCodeAsync());
-        Assert.Equal("MSG01", await noGrant.ErrorCodeAsync());
-        Assert.Equal("MSG01", await phoneLikeUsername.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-09", await duplicatePhone.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await noGrant.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await phoneLikeUsername.ErrorCodeAsync());
     }
 
     [Fact]
@@ -100,10 +100,10 @@ public class StaffAccountTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var again = await owner.PostAsJsonAsync($"/api/accounts/{id}/lock", new { reason = "Again" });
         var unlocked = await owner.PostAsJsonAsync($"/api/accounts/{id}/unlock", new { reason = "Back" });
 
-        Assert.Equal("MSG01", await noReason.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await noReason.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.OK, locked.StatusCode);
-        Assert.Equal("MSG61", await again.ErrorCodeAsync());
-        Assert.Equal("Cannot change Account from “Locked” to “Locked”: the account is already locked.",
+        Assert.Equal("MSG-GEN-09", await again.ErrorCodeAsync());
+        Assert.Equal("Account is Locked and cannot be used for this action.",
             (await again.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString());
         Assert.Equal(HttpStatusCode.OK, unlocked.StatusCode);
         Assert.False(await factory.QueryAsync(db => db.LoginSessions.AnyAsync(s => s.AccountId == id && s.RevokedAt == null)));
@@ -127,7 +127,7 @@ public class StaffAccountTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
 
         await factory.UpdateAsync<Account>(id, a => a.TemporaryPasswordIssuedAt = DateTimeOffset.UtcNow.AddHours(-25));
         var expired = await factory.CreateClient().PostAsJsonAsync("/api/auth/login", new { identifier = username, password = newPassword });
-        Assert.Equal("MSG68", await expired.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-08", await expired.ErrorCodeAsync());
     }
 
     [Fact]

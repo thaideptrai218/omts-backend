@@ -119,7 +119,7 @@ public sealed class RoleService(
 
     /// <summary>
     /// In Use → Discontinued only when no Effective grant uses the role, including grants that start later
-    /// (they would silently never apply). MSG11 counts and lists the accounts holding them.
+    /// (they would silently never apply). MSG-GEN-06 counts and lists the accounts holding them.
     /// </summary>
     public async Task<Result<RoleView>> DiscontinueAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -144,7 +144,7 @@ public sealed class RoleService(
             ? await ChangeStatusAsync(role, StatusIds.Usage.Discontinued, StatusIds.Usage.InUse, cancellationToken)
             : AppError.NotFound;
 
-    /// <summary>Accounts and zones an edit would affect, for the MSG09 confirmation.</summary>
+    /// <summary>Accounts and zones an edit would affect, for the MSG-GEN-04 confirmation.</summary>
     public async Task<Result<RoleImpact>> ImpactAsync(Guid id, CancellationToken cancellationToken)
     {
         if (await roles.GetByIdAsync(id, cancellationToken) is null)
@@ -158,15 +158,15 @@ public sealed class RoleService(
             holders.Where(g => g.ZoneId is not null).Select(g => g.ZoneId).Distinct().Count(),
             holders.Any(g => g.ZoneId is null),
             holders.Select(g => g.Account.DisplayName).Distinct().ToList(),
-            UserMessages.ConfirmRoleEdit.Text);
+            UserMessages.ConfirmRoleEdit.Text,
+            UserMessages.ConfirmRoleEdit.Code);
     }
 
     private async Task<Result<RoleView>> ChangeStatusAsync(Role role, int from, int to, CancellationToken cancellationToken)
     {
         if (role.StatusId != from)
         {
-            var current = statusCatalog.DisplayNameOf(role.StatusId);
-            return AppError.Conflict(UserMessages.CannotChangeStatus("Role", current, statusCatalog.DisplayNameOf(to), $"the role is already {current.ToLowerInvariant()}"));
+            return AppError.Conflict(UserMessages.WrongStatus("Role", statusCatalog.DisplayNameOf(role.StatusId)));
         }
 
         role.StatusId = to;

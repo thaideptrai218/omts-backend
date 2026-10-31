@@ -3,7 +3,10 @@ using OMTS.Domain.Entities.Farming;
 
 namespace OMTS.Domain.Entities.Cultivation;
 
-/// <summary>E19 – Cultivation event/observation that is not a structured water measurement.</summary>
+/// <summary>
+/// E19 – Cultivation event/observation that is not a structured water measurement. Kept only because a
+/// lane with an entry cannot be removed from a raft (FARM-04); the SRS 27/10 CultivationLog replaces it.
+/// </summary>
 public class CultivationLogEntry : AuditableEntity
 {
     public Guid ZoneId { get; set; }

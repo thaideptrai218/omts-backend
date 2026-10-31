@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
@@ -27,7 +27,7 @@ public class ReviewFixQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
         var response = await client.PostAsJsonAsync("/api/me/contact-changes", new { channel = "Sms", target });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG01", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
         Assert.Empty(factory.Services.GetRequiredService<FakeSmsSender>().Inbox.List(target));
         var stored = await factory.QueryAsync(db => db.Accounts.SingleAsync(a => a.Id == owner.Id));
         Assert.Equal(owner.PhoneNumber, stored.PhoneNumber);
@@ -49,8 +49,8 @@ public class ReviewFixQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
         }
         var whileLocked = await client.PostAsJsonAsync("/api/me/contact-changes", Body(Password));
 
-        Assert.Equal(new[] { "MSG17", "MSG17", "MSG17", "MSG17", "MSG69" }, codes);
-        Assert.Equal("MSG69", await whileLocked.ErrorCodeAsync());
+        Assert.Equal(new[] { "MSG-ACCOUNT-14", "MSG-ACCOUNT-14", "MSG-ACCOUNT-14", "MSG-ACCOUNT-14", "MSG-ACCOUNT-06" }, codes);
+        Assert.Equal("MSG-ACCOUNT-06", await whileLocked.ErrorCodeAsync());
         var stored = await factory.QueryAsync(db => db.Accounts.SingleAsync(a => a.Id == owner.Id));
         Assert.Equal(owner.PhoneNumber, stored.PhoneNumber);
         Assert.Null(stored.Email);
@@ -86,7 +86,7 @@ public class ReviewFixQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
         var response = await client.PostAsJsonAsync("/api/me/phone-verification", new { phoneNumber = newPhone });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG01", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
         Assert.Empty(factory.Services.GetRequiredService<FakeSmsSender>().Inbox.List(newPhone));
         var stored = await factory.QueryAsync(db => db.Accounts.SingleAsync(a => a.Id == owner.Id));
         Assert.Equal(owner.PhoneNumber, stored.PhoneNumber);

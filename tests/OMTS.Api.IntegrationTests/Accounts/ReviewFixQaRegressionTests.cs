@@ -1,6 +1,6 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -32,8 +32,8 @@ public class ReviewFixQaRegressionTests
         {
             codes.Add((await response.ErrorCodeAsync()) ?? "none");
         }
-        var unexpected = codes.Where(c => c is not ("MSG17" or "MSG69")).ToList();
-        Assert.True(unexpected.Count == 0, $"{unexpected.Count} of 10 answered outside MSG17/MSG69. All codes: {string.Join(",", codes)}");
+        var unexpected = codes.Where(c => c is not ("MSG-ACCOUNT-14" or "MSG-ACCOUNT-06")).ToList();
+        Assert.True(unexpected.Count == 0, $"{unexpected.Count} of 10 answered outside MSG-ACCOUNT-14/MSG-ACCOUNT-06. All codes: {string.Join(",", codes)}");
 
         var stored = await database.ReadAsync(db => db.Accounts.SingleAsync(a => a.Id == owner.Id));
         Assert.True(stored.LockoutEndAt is not null, $"no lock after 10 wrong passwords; FailedLoginCount={stored.FailedLoginCount}");

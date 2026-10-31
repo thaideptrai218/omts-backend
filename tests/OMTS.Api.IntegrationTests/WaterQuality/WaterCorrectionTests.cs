@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -113,14 +113,14 @@ public class WaterCorrectionTests(AuthApiFactory api) : IClassFixture<AuthApiFac
         var voidAgain = await z.Owner.VoidAsync(confirmed.Id(), 1);
         var correctVoided = await z.Owner.CorrectAsync(confirmed.Id(), 7.1m, 20m, recordVersion: 1);
 
-        Assert.Equal("Cannot change water measurement from “Draft” to “Corrected”: only a confirmed measurement can be corrected.",
+        Assert.Equal("Water measurement is Draft and cannot be used for this action.",
             (await correctDraft.Content.ReadFromJsonAsync<JsonElement>()).Text("detail"));
-        Assert.Equal("Cannot change water measurement from “Voided” to “Voided”: the measurement has been voided.",
+        Assert.Equal("Water measurement is Voided and cannot be used for this action.",
             (await voidAgain.Content.ReadFromJsonAsync<JsonElement>()).Text("detail"));
         foreach (var response in new[] { correctDraft, voidAgain, correctVoided })
         {
             Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-            Assert.Equal("MSG61", await response.ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-09", await response.ErrorCodeAsync());
         }
     }
 
@@ -134,9 +134,9 @@ public class WaterCorrectionTests(AuthApiFactory api) : IClassFixture<AuthApiFac
         var voidOld = await z.Owner.VoidAsync(original.Id(), recordVersion: 2);
         var correctOld = await z.Owner.CorrectAsync(original.Id(), 7.4m, 20m, recordVersion: 2);
 
-        Assert.Equal("MSG61", await voidOld.ErrorCodeAsync());
-        Assert.Equal("MSG61", await correctOld.ErrorCodeAsync());
-        Assert.Contains("“Corrected”", (await correctOld.Content.ReadFromJsonAsync<JsonElement>()).Text("detail"));
+        Assert.Equal("MSG-GEN-09", await voidOld.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-09", await correctOld.ErrorCodeAsync());
+        Assert.Contains("is Corrected", (await correctOld.Content.ReadFromJsonAsync<JsonElement>()).Text("detail"));
     }
 
     [Fact]
@@ -240,7 +240,7 @@ public class WaterCorrectionTests(AuthApiFactory api) : IClassFixture<AuthApiFac
         foreach (var response in responses)
         {
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-            Assert.Equal("MSG02", await response.ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
         }
 
         Assert.Equal(StatusIds.WaterMeasurement.Confirmed, await api.QueryAsync(db => db.WaterMeasurements.Where(m => m.Id == confirmed.Id()).Select(m => m.StatusId).SingleAsync()));

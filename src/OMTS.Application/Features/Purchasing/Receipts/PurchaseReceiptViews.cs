@@ -1,3 +1,5 @@
+using OMTS.Application.Features.Employees.Dtos;
+using OMTS.Application.Features.Purchasing.Receipts.Dtos;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;

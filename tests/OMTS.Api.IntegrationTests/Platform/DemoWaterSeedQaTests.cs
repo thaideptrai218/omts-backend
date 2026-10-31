@@ -1,16 +1,16 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
-using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;
-using OMTS.Application.Features.Authorization;
+using OMTS.Application.Common;
 using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Notifications;
 using OMTS.Application.Features.WaterQuality;
 using OMTS.Domain.Common;
@@ -101,11 +101,17 @@ public class DemoWaterSeedQaTests
         await using var host = new DemoWaterHost();
         await host.RunAsync();
         var today = TimeProvider.System.Today();
+        // Counted from the last seeded reading, not from today: at a month end both reach the same day
+        // (on 31/10 the last reading is 30/10, and 30/10 + 1 month = 31/10 + 1 month = 30/11).
+        var lastReading = await host.QueryAsync(db => db.WaterMeasurements.AsNoTracking()
+            .Where(m => m.StatusId == StatusIds.WaterMeasurement.Confirmed)
+            .MaxAsync(m => m.MeasuredAt));
+        var lastDayOnTime = BusinessClock.ToBusinessDate(lastReading).AddMonths(1);
 
         Assert.Equal(0, await RemindAsync(host.App, today));
-        Assert.Equal(0, await RemindAsync(host.App, today.AddMonths(1).AddDays(-1)));
-        Assert.Equal(2, await RemindAsync(host.App, today.AddMonths(1)));
-        Assert.Equal(0, await RemindAsync(host.App, today.AddMonths(1).AddDays(1)));
+        Assert.Equal(0, await RemindAsync(host.App, lastDayOnTime));
+        Assert.Equal(2, await RemindAsync(host.App, lastDayOnTime.AddDays(1)));
+        Assert.Equal(0, await RemindAsync(host.App, lastDayOnTime.AddDays(2)));
 
         using var scope = host.App.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();

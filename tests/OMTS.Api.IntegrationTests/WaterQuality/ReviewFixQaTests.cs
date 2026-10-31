@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -36,7 +36,7 @@ public class ReviewFixQaTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var ocr = body.GetProperty("ocr");
         Assert.Equal("Failed", ocr.Text("status"));
-        Assert.Equal("MSG04", ocr.GetProperty("warning").Text("code"));
+        Assert.Equal("MSG-WATER-01", ocr.GetProperty("warning").Text("code"));
         Assert.Equal(JsonValueKind.Null, ocr.GetProperty("ph").ValueKind);
         Assert.Equal(JsonValueKind.Null, ocr.GetProperty("salinity").ValueKind);
         var draft = body.GetProperty("measurement");
@@ -63,7 +63,7 @@ public class ReviewFixQaTests
         var response = await z.Owner.GetAsync($"{z.Base}{(query.StartsWith('?') ? string.Empty : "/")}{query}");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG01", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
         Assert.Equal(field, (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
     }
 

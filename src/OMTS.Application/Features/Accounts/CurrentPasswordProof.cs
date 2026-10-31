@@ -11,11 +11,11 @@ namespace OMTS.Application.Features.Accounts;
 /// <summary>
 /// The logged-in user proves who they are with the current password (ACS-04 password change, ACS-05 contact
 /// changes). Wrong entries count like failed logins, so a stolen session cannot guess the password: the 5th
-/// failure blocks for 15 minutes (MSG69).
+/// failure blocks login for 15 minutes (MSG-ACCOUNT-06, as at login).
 /// </summary>
 public sealed class CurrentPasswordProof(IPasswordHasher passwordHasher, IUnitOfWork unitOfWork, TimeProvider timeProvider)
 {
-    /// <summary>Null when the password is right; a missing one is MSG01 "Current password".</summary>
+    /// <summary>Null when the password is right; a missing one is MSG-GEN-01 "Current password".</summary>
     public async Task<AppError?> CheckAsync(Account account, string? password, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(password))
@@ -26,7 +26,7 @@ public sealed class CurrentPasswordProof(IPasswordHasher passwordHasher, IUnitOf
         var now = timeProvider.GetUtcNow();
         if (account.IsTemporarilyLocked(now))
         {
-            return new AppError(ErrorKind.Locked, UserMessages.TooManyAttempts);
+            return new AppError(ErrorKind.Locked, UserMessages.TooManyLoginAttempts);
         }
 
         if (passwordHasher.Verify(account.PasswordHash, password) != PasswordCheck.Failed)
@@ -55,7 +55,7 @@ public sealed class CurrentPasswordProof(IPasswordHasher passwordHasher, IUnitOf
         }
 
         return account.IsTemporarilyLocked(now)
-            ? new AppError(ErrorKind.Locked, UserMessages.TooManyAttempts)
+            ? new AppError(ErrorKind.Locked, UserMessages.TooManyLoginAttempts)
             : new AppError(ErrorKind.Validation, UserMessages.WrongCurrentPassword);
     }
 

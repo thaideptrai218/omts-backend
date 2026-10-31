@@ -1,7 +1,5 @@
 using OMTS.Domain.Common;
 using OMTS.Domain.Entities.Farming;
-using OMTS.Domain.Entities.Sales;
-using OMTS.Domain.Entities.Traceability;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Domain.Entities.Cultivation;
@@ -34,15 +32,9 @@ public class LaneSegment : AuditableEntity
     public SeedingEvent? Seeding { get; set; }
 
     /// <summary>Planned harvest segment.</summary>
-    public Guid? OrderId { get; set; }
-    public SalesOrder? Order { get; set; }
     public decimal? PlannedKg { get; set; }
 
-    /// <summary>Harvested segment; linked to at most one lot.</summary>
-    public Guid? HarvestEventId { get; set; }
-    public HarvestEvent? HarvestEvent { get; set; }
-    public Guid? LotId { get; set; }
-    public TraceabilityLot? Lot { get; set; }
+    /// <summary>Harvested segment: why the harvest differs from the plan.</summary>
     public string? PlanDeviationReason { get; set; }
 
     /// <summary>Written-off segment (created by a “Write off lane segment” log entry).</summary>

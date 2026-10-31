@@ -9,14 +9,16 @@ Sibling repos: [omts-web](https://github.com/thaideptrai218/omts-web) · [omts-m
 
 ## Structure (Clean Architecture)
 
+Detailed folder responsibilities: [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md).
+
 ```
 src/
   OMTS.Domain/                 No dependencies.
     Common/                    Entity, AuditableEntity, IHasStatus
     Constants/                 StatusIds, StatusGroups (fixed Status catalog)
     Enums/
-    Entities/<Group>/          52 SRS entities by group: Identity, Farming, Cultivation, Sales,
-                               Traceability, AfterSales, Finance, Labor, Platform
+    Entities/<Group>/          Entities by group: Identity, Farming, Cultivation, Purchasing, Sales,
+                               Labor, Platform
   OMTS.Application/            Use cases and ports. Depends on Domain only (no EF Core).
     Common/Interfaces/         Ports: Persistence/ (IUnitOfWork, I*Repository), Identity/, ICurrentUser
     Common/Models/             Types the ports exchange (AccessToken, EffectiveGrant, ...)
@@ -26,9 +28,9 @@ src/
     Identity/                  JWT tokens, password hashing
     Persistence/               OmtsDbContext, UnitOfWork
       Configurations/<Group>/  One <Entity>Configuration per entity, same groups as Domain
-      Repositories/  Interceptors/  Seed/  Migrations/
+      Repositories/<Group>/  Interceptors/  Seed/  Migrations/
   OMTS.Api/                    HTTP endpoints, DI composition root.
-    Controllers/  Filters/  Extensions/  Services/  Common/
+    Controllers/<Feature>/  Filters/  Extensions/  Services/  Common/
 tests/
   OMTS.Domain.UnitTests/  OMTS.Application.UnitTests/
   OMTS.Api.IntegrationTests/   Infrastructure/ (test host, test-only endpoints), one folder per feature
@@ -100,7 +102,7 @@ sent stays in memory until the API restarts. Read it in the dev inbox, also list
 `docker compose logs -f api` shows each fake message's id and masked recipient, never the code.
 
 For example, `nhanvien.chuaxacthuc` (phone `0900000015`) logs in with `phoneVerificationRequired = true`, and its
-business calls answer MSG67 until the phone is verified. Logging in sends no code; with that login's access token:
+business calls answer MSG-ACCOUNT-04 until the phone is verified. Logging in sends no code; with that login's access token:
 1. `POST /api/me/phone-verification` with `{}` sends the code.
 2. `GET /api/dev/sms?phoneNumber=0900000015` shows it.
 3. `POST /api/verifications/{id}/verify` with `{ "code": "…" }` returns a verification token.
@@ -115,8 +117,9 @@ inbound TCP 8080 in the PC's firewall. The Android emulator reaches the PC at `h
 documents, raft drawings, invoice photos) are relative, signed paths such as `/api/files/local/...?expires=…&sig=…`.
 Prefix them with the API base URL.
 
-**Web app.** In Development `Cors:AllowedOrigins` allows `http://localhost:3000`, so the Next.js dev server can call the
-API from the browser. For another origin, add a line such as `Cors__AllowedOrigins__1: http://192.168.1.10:3000` under
+**Web app and Zalo Mini App.** In Development `Cors:AllowedOrigins` allows `http://localhost:3000` (the Next.js dev
+server) and `https://h5.zdn.vn` (Zalo serves every `zmp deploy` version of the Mini App, Development, Testing and
+published, from that origin). For another origin, add a line such as `Cors__AllowedOrigins__2: http://192.168.1.10:3000` under
 `environment` in `docker-compose.yml`, then run `docker compose up -d`.
 
 **Update, reset, stop.**
@@ -151,8 +154,13 @@ OMTS_TEST_SQLSERVER="Server=localhost;User Id=sa;Password=<pwd>;TrustServerCerti
 `POST /api/auth/login` (username, verified phone or verified email) returns a 15-minute access token and a
 refresh token (7 days web / 30 days mobile, rotated on every `POST /api/auth/refresh`); `POST /api/auth/logout`
 revokes the session. `GET /api/me` and `GET /api/me/permissions` return the caller and their effective
-zone-scoped permissions. Errors are RFC 7807 problem details whose `code` is the SRS message code
-(`MSG12`, `MSG69`…) and whose `detail` is the SRS English text.
+zone-scoped permissions. Errors are RFC 7807 problem details whose `title` and `code` are the message code of
+the SRS 27/10/2026 catalogue (`MSG-GEN-01`, `MSG-ACCOUNT-05`…) and whose `detail` is the SRS English text. For one
+release they also carry `legacyCode`, the old code of the same situation (`MSG01`, `MSG12`…), so web and mobile can
+switch on their own schedule. A few old codes have no SRS 27/10 message yet and are still sent as `code` (MSG05,
+MSG06, MSG19, MSG58, the technical codes `NOT_FOUND`, `UNEXPECTED_ERROR`…; full list in
+`MessageCodes.Legacy.KeptAsCode`). Success responses that carry a text carry its code next to it (`messageCode`,
+`noticeCode`).
 
 Dates and times are ISO 8601. A time sent without a UTC offset (`2026-10-20T08:00:00`, in JSON or a multipart field)
 is Vietnam time (UTC+7), never the server's time zone or UTC; `Z` or an offset such as `+07:00` is kept. Responses always
@@ -236,13 +244,14 @@ created by a one-time command run on the server by the deployment operator (not 
 | Email (`Email:Provider` = `Smtp` or `Fake`; `Email:Smtp:Security` = `StartTls` (587), `SslOnConnect` (465) or `None`, which is refused outside Development) | `Email:Smtp:Host`, `Port`, `Security`, `Username`, `Password`, `FromAddress`, `FromName`, `TimeoutSeconds`, `Email:Fake:FailFor` |
 | SMS (`Sms:Provider` = `None`, the default: nothing is sent and phone verification cannot complete; `Fake` keeps messages in the dev inbox and is set in Development only) | `Sms:Fake:FailFor` (test numbers that fail) |
 | Push (`Push:Provider` = `None` by default, `Fake` in Development) | `Push:Fake:FailFor` |
-| OCR (`Ocr:Provider` unset by default: meter photos are not read and the values are entered by hand (MSG04); `Fake` invents readings, so it is set in Development only and stops the host elsewhere) | `Ocr:TimeoutSeconds` (default 15), `Ocr:UncertainBelow` (default 0.8), `Ocr:Fake:Mode` (`Success`, `Fail`, `Timeout`), `Ocr:Fake:Ph`, `Ocr:Fake:Salinity`, `Ocr:Fake:Confidence` |
+| OCR (`Ocr:Provider` unset by default: meter photos are not read and the values are entered by hand (MSG-WATER-01); `Fake` invents readings, so it is set in Development only and stops the host elsewhere) | `Ocr:TimeoutSeconds` (default 15), `Ocr:UncertainBelow` (default 0.8), `Ocr:Fake:Mode` (`Success`, `Fail`, `Timeout`), `Ocr:Fake:Ph`, `Ocr:Fake:Salinity`, `Ocr:Fake:Confidence` |
 | File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development; one container or folder per environment, see Background jobs) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
+| Zalo Mini App "Liên kết tài khoản" (`POST api/auth/zalo/link`, `zalo/login`, `DELETE api/me/zalo-link`; a trader without an account sends `zalo/trader-requests`, which the Cooperative Owner approves or refuses at `api/trader-requests`). `Zalo:Provider` unset by default: linking answers MSG04; `Graph` calls graph.zalo.me and needs the Zalo App secret (developers.zalo.me), the host does not start without it; `Fake` (Development only) accepts `fake:<zalo user id>` access tokens and `fake:<phone number>` phone tokens | `Zalo:Provider`, `Zalo:AppSecret` (user-secrets / `Zalo__AppSecret`), `Zalo:TimeoutSeconds` (default 10) |
 | Bootstrap (see Deployment) | `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:*` |
 | Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30) |
-| CORS: the web app calls the API from the browser. Set its origin in every deployed environment; empty means no CORS. Development allows `http://localhost:3000`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`) |
+| CORS: the web app and the Zalo Mini App call the API from the browser. Set their origins in every deployed environment; empty means no CORS. Development allows `http://localhost:3000` and `https://h5.zdn.vn`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`, `Cors__AllowedOrigins__1=https://h5.zdn.vn`) |
 | Reverse proxy: X-Forwarded-For is trusted only from these addresses (and loopback), so the limits see the real client | `ForwardedHeaders:KnownProxies` (e.g. `10.0.0.4`), `ForwardedHeaders:KnownNetworks` (e.g. `10.0.0.0/24`) |
-| Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG04 and a critical log entry is written (one number or address gets at most 10 codes per hour) | `Verification:DailySmsLimit` (default 500) |
+| Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG-ACCOUNT-13 and a critical log entry is written (one number or address gets at most 10 codes per hour) | `Verification:DailySmsLimit` (default 500) |
 | Zone license reminder (FARM-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
 | Overdue water measurement reminder (ENV-01, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
 | Orphan raft photo and license file clean-up (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
