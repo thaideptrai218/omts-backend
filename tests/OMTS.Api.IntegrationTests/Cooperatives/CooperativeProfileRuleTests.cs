@@ -34,7 +34,7 @@ public class CooperativeProfileRuleTests
         foreach (var client in new[] { trader, staff })
         {
             Assert.Equal("MSG-GEN-08", await (await client.GetAsync("/api/cooperative/profile")).ErrorCodeAsync());
-            Assert.Equal("MSG-GEN-08", await (await client.PutAsJsonAsync("/api/cooperative/profile", Valid("AAAAAAAAB9E="))).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.PutAsJsonAsync("/api/cooperative/profile", Valid(StaleRowVersion))).ErrorCodeAsync());
             Assert.Equal("MSG-GEN-08", await (await UploadLogoAsync(client, Png, "logo.png")).ErrorCodeAsync());
             Assert.Equal("MSG-GEN-08", await (await client.DeleteAsync("/api/cooperative/profile/logo")).ErrorCodeAsync());
         }
@@ -154,7 +154,7 @@ public class CooperativeProfileRuleTests
         Assert.Equal(HttpStatusCode.OK, (await owner.PutAsJsonAsync("/api/cooperative/profile", Valid(await RowVersionAsync(owner)))).StatusCode);
 
         var missing = await owner.PutAsJsonAsync("/api/cooperative/profile", Valid(null, b => b["fullName"] = "HTX Mới"));
-        var stale = await owner.PutAsJsonAsync("/api/cooperative/profile", Valid("AAAAAAAAB9E=", b => b["fullName"] = "HTX Mới"));
+        var stale = await owner.PutAsJsonAsync("/api/cooperative/profile", Valid(StaleRowVersion, b => b["fullName"] = "HTX Mới"));
         var problem = await stale.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);

@@ -58,9 +58,6 @@ internal static class CooperativeProfileQaKit
     public const string CoverPhotoFiles = "/api/public/cooperative/cover-photos/";
     public const string LogoFiles = "/api/public/cooperative/logos/";
 
-    /// <summary>A row version neither SQL Server nor <c>IssueRowVersionAsync</c> ever hands out (always stale).</summary>
-    public static readonly string NeverIssuedVersion = Convert.ToBase64String(new byte[] { 0, 0, 0, 0, 0, 0, 8, 1 });
-
     public static ConcurrencyConflictException Conflict => new(new InvalidOperationException("Test: changed by another request."));
 
     public static InvalidOperationException DatabaseDown => new("Test: the database is down.");

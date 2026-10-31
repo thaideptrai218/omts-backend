@@ -128,7 +128,7 @@ public class EmployeeUnlinkQaTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(HttpStatusCode.BadRequest, unlinked.StatusCode);
         Assert.Equal("MSG-GEN-01", await unlinked.ErrorCodeAsync());
         Assert.Equal("RowVersion", await FieldAsync(unlinked));
-        await (await owner.DeleteAsync($"/api/employees/{id}/account?rowVersion={Uri.EscapeDataString("AAAAAAAAB9E=")}")).ReadAsync(HttpStatusCode.OK);
+        await (await owner.DeleteAsync($"/api/employees/{id}/account?rowVersion={Uri.EscapeDataString(StaleRowVersion)}")).ReadAsync(HttpStatusCode.OK);
         Assert.Single(await factory.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == id && e.Action == "Employee.Updated").ToListAsync()));
     }
 

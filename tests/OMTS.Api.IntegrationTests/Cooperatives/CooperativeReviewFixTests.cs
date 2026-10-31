@@ -126,10 +126,10 @@ public class CooperativeReviewFixTests
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
 
         var future = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = today.AddDays(2).ToString("yyyy-MM-dd") });
-        var stale = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = today.ToString("yyyy-MM-dd"), rowVersion = "AAAAAAAAB9E=" });
+        var stale = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = today.ToString("yyyy-MM-dd"), rowVersion = StaleRowVersion });
         var ended = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = today.ToString("yyyy-MM-dd"), rowVersion = RowVersionOf(saved) });
         // The in-memory provider issues no new row versions: a version the server never issued stands for a stale screen.
-        var staleReinstate = await owner.PostAsJsonAsync($"/api/employees/{id}/reinstate", new { rowVersion = "AAAAAAAAB9E=" });
+        var staleReinstate = await owner.PostAsJsonAsync($"/api/employees/{id}/reinstate", new { rowVersion = StaleRowVersion });
         var reinstated = await owner.PostAsync($"/api/employees/{id}/reinstate", null);
 
         Assert.Equal("End date", await FieldAsync(future));
