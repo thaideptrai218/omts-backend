@@ -17,8 +17,8 @@ src/
     Common/                    Entity, AuditableEntity, IHasStatus
     Constants/                 StatusIds, StatusGroups (fixed Status catalog)
     Enums/
-    Entities/<Group>/          52 SRS entities by group: Identity, Farming, Cultivation, Sales,
-                               Traceability, AfterSales, Finance, Labor, Platform
+    Entities/<Group>/          Entities by group: Identity, Farming, Cultivation, Purchasing, Sales,
+                               Labor, Platform
   OMTS.Application/            Use cases and ports. Depends on Domain only (no EF Core).
     Common/Interfaces/         Ports: Persistence/ (IUnitOfWork, I*Repository), Identity/, ICurrentUser
     Common/Models/             Types the ports exchange (AccessToken, EffectiveGrant, ...)

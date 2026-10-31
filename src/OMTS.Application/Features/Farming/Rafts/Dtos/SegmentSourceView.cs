@@ -15,6 +15,4 @@ public sealed record SegmentSourceView(
     string? ConfirmedBy,
     Guid? SeedingEventId,
     string? SeedLotCode,
-    Guid? HarvestEventId,
-    Guid? LotId,
     string? WriteOffReason);

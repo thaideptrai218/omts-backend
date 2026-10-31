@@ -16,6 +16,4 @@ public sealed record LaneSegmentDetail(
     string? ConfirmedBy,
     Guid? SeedingEventId,
     string? SeedLotCode,
-    Guid? HarvestEventId,
-    Guid? LotId,
     string? WriteOffReason);

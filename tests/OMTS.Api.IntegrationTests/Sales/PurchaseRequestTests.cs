@@ -47,7 +47,7 @@ public sealed class PurchaseRequestTests(AuthApiFactory factory) : IClassFixture
         var inbox = await manager.GetFromJsonAsync<PurchaseRequestPage>("/api/purchase-requests?status=AWAITING_RESPONSE");
         Assert.Contains(inbox!.Items, r => r.Id == row.Id);
         // Requesting does not fabricate a weighed sale or invoice.
-        Assert.False(await factory.QueryAsync(db => db.SalesOrders.AnyAsync(o => o.CustomerId == customer.Id)));
+        Assert.Null(await factory.QueryAsync(db => Task.FromResult(db.Model.FindEntityType("OMTS.Domain.Entities.Sales.SalesOrder"))));
     }
 
     [Theory]

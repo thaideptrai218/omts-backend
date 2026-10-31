@@ -54,9 +54,23 @@ internal sealed class WorkforceRepository(OmtsDbContext db) : IWorkforceReposito
     public Task<AttendanceQr?> EmployeeQrAsync(Guid employeeId, CancellationToken ct) =>
         db.Set<AttendanceQr>().FirstOrDefaultAsync(q => q.EmployeeId == employeeId, ct);
     public Task<bool> HasLockedPayrollFromAsync(DateOnly from, CancellationToken ct) =>
-        db.LaborSettlements.AnyAsync(p => p.PeriodEnd >= from && p.StatusId != StatusIds.LaborSettlement.Draft, ct);
+        NoPayrollLocksAsync(ct);
     public Task<bool> HasLockedPayrollPeriodAsync(DateOnly from, DateOnly to, CancellationToken ct) =>
-        db.LaborSettlements.AnyAsync(p => p.PeriodStart <= to && p.PeriodEnd >= from && p.StatusId != StatusIds.LaborSettlement.Draft, ct);
+        NoPayrollLocksAsync(ct);
+
+    // RemoveLegacyScaffolding refuses to run when any legacy payroll lock exists. No payroll-v2
+    // writer exists in this integration. Replace this implementation when payroll v2 is added;
+    // do not query the removed LaborSettlements table or recreate it via the EF model.
+    private async Task<bool> NoPayrollLocksAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (db.Database.IsRelational() && !(await db.Database.GetAppliedMigrationsAsync(ct))
+            .Contains("20261028151320_RemoveLegacyScaffolding", StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException("Apply the guarded legacy cleanup migration before changing workforce records.");
+        }
+        return false;
+    }
     public void AddAttendance(AttendanceRecord attendance) => db.AttendanceRecords.Add(attendance);
     public void AddPeriod(AttendanceJobPeriod period) => db.Set<AttendanceJobPeriod>().Add(period);
     public void AddJob(JobType job) => db.Set<JobType>().Add(job);

@@ -198,18 +198,13 @@ public sealed class WorkforceTests(AuthApiFactory factory) : IClassFixture<AuthA
     }
 
     [Fact]
-    public async Task Settings_validate_break_and_never_change_a_locked_payroll()
+    public async Task Settings_validate_break_and_save_after_guarded_cleanup()
     {
-        var (client, owner, employee, _, _) = await SetupAsync();
+        var (client, _, _, _, _) = await SetupAsync();
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/workforce/attendance-settings",
             new { effectiveFrom = Today, breakFrom = "12:30:00", breakTo = "11:30:00", roundingMinutes = 15 })).StatusCode);
         await Success(await client.PostAsJsonAsync("/api/workforce/attendance-settings",
             new { effectiveFrom = Today.AddYears(3), roundingMinutes = 0 }));
-        var locked = new LaborSettlement { EmployeeId = employee.Id, PeriodStart = Today.AddYears(4), PeriodEnd = Today.AddYears(4).AddMonths(1),
-            StatusId = StatusIds.LaborSettlement.Approved, PreparedByAccountId = owner.Id };
-        await factory.UseDbAsync(db => db.LaborSettlements.Add(locked));
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/workforce/attendance-settings",
-            new { effectiveFrom = locked.PeriodStart, roundingMinutes = 15 })).StatusCode);
     }
 
     [Fact]

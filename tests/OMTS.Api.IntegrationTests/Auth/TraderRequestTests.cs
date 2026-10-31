@@ -64,7 +64,7 @@ public class TraderRequestTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Contains(pending.EnumerateArray(), r => r.GetProperty("accountId").GetGuid() == accountId && r.GetProperty("displayName").GetString() == "Lê Thị Lái");
         Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
         Assert.Equal("ACTIVE", (await approved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString());
-        Assert.Equal("MSG61", await again.ErrorCodeAsync());
+        await again.SrsProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09", "MSG61");
 
         // The trader gets a session from the Mini App, has an own customer profile and the approval notice.
         var login = await ZaloLoginAsync(zaloId);
@@ -89,7 +89,7 @@ public class TraderRequestTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var rejected = await owner.PostAsJsonAsync($"/api/trader-requests/{accountId}/reject", new { reason = "Không quen biết" });
         var login = await ZaloLoginAsync(zaloId);
 
-        Assert.Equal("MSG01", await noReason.ErrorCodeAsync());
+        await noReason.SrsProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01", "MSG01");
         Assert.Equal("REJECTED", (await rejected.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString());
         Assert.Equal("ZALO_REQUEST_REJECTED", await login.ErrorCodeAsync());
         Assert.Equal("Không quen biết", (await login.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("reason").GetString());
@@ -121,7 +121,7 @@ public class TraderRequestTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     {
         var response = await RequestAsync(NewCode(), NewPhone(), "  ", null);
 
-        Assert.Equal("MSG01", await response.ErrorCodeAsync());
+        await response.SrsProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01", "MSG01");
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public class TraderRequestTests(AuthApiFactory factory) : IClassFixture<AuthApiF
 
         var after = await (await owner.GetAsync("/api/me/notifications")).Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(0, after.GetProperty("unreadCount").GetInt32());
-        Assert.Equal("MSG01", await (await owner.GetAsync("/api/me/notifications?pageSize=1000")).ErrorCodeAsync());
+        await (await owner.GetAsync("/api/me/notifications?pageSize=1000")).SrsProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01", "MSG01");
     }
 
     /// <summary>A logged-in Cooperative Owner of the test cooperative (approval links the trader's customer profile).</summary>

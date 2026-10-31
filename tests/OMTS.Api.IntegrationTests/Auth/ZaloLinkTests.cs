@@ -50,7 +50,7 @@ public class ZaloLinkTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
 
         // The temporary password the Owner handed out stops working.
         var oldPassword = await factory.CreateClient().PostAsJsonAsync("/api/auth/login", new { identifier = staff.Username, password = Password });
-        Assert.Equal("MSG12", await oldPassword.ErrorCodeAsync());
+        await oldPassword.SrsProblemAsync(HttpStatusCode.Unauthorized, "MSG-ACCOUNT-05", "MSG12");
     }
 
     [Fact]
@@ -100,8 +100,8 @@ public class ZaloLinkTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         var locked = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader, a => a.StatusId = StatusIds.Account.Locked);
         var noGrant = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
 
-        Assert.Equal("MSG13", await (await LinkAsync(NewCode(), locked.PhoneNumber!)).ErrorCodeAsync());
-        Assert.Equal("MSG13", await (await LinkAsync(NewCode(), noGrant.PhoneNumber!)).ErrorCodeAsync());
+        await (await LinkAsync(NewCode(), locked.PhoneNumber!)).SrsProblemAsync(HttpStatusCode.Forbidden, "MSG-ACCOUNT-07", "MSG13");
+        await (await LinkAsync(NewCode(), noGrant.PhoneNumber!)).SrsProblemAsync(HttpStatusCode.Forbidden, "MSG-ACCOUNT-07", "MSG13");
     }
 
     [Fact]
