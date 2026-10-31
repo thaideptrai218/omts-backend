@@ -217,7 +217,7 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         return client;
     }
 
-    private static string NewCode() => Guid.NewGuid().ToString("N")[..10];
+    private static string NewCode() => AcsTestKit.NewCode();
 
     private static async Task<string?> ErrorCodeAsync(HttpResponseMessage response) =>
         (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString();
