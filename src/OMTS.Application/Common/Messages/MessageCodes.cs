@@ -45,6 +45,7 @@ public static class MessageCodes
     public const string Account21 = "MSG-ACCOUNT-21";
     public const string Account22 = "MSG-ACCOUNT-22";
 
+    public const string Purchase01 = "MSG-PURCHASE-01";
     public const string Purchase03 = "MSG-PURCHASE-03";
     public const string Purchase09 = "MSG-PURCHASE-09";
 
@@ -52,9 +53,13 @@ public static class MessageCodes
 
     /// <summary>
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-22, the
-    /// related record of a notification no longer exists (ACCOUNT-08 is new in PR 0.5).
+    /// related record of a notification no longer exists (ACCOUNT-08 is new in PR 0.5); MSG-PURCHASE-01, the purchase
+    /// receipt notification (OMTS-218 P2).
     /// </summary>
-    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal) { Account22 };
+    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Account22, Purchase01,
+    };
 
     /// <summary>
     /// Codes of the old list. Most are only sent as <c>legacyCode</c> next to the new code, for one release.

@@ -238,11 +238,11 @@ public sealed class SupplierService(
 
     private async Task<SupplierView> ViewAsync(Supplier supplier, CancellationToken cancellationToken)
     {
-        // Receipt history only from zones whose receipts the caller may view (receipts still carry a zone until PURCHASE-01
-        // is aligned). The supplier debt is PURCHASE-04: not shown here.
+        // Receipt history for the callers who view purchase receipts (no zone: the role only, BR-FARM-08). The supplier debt
+        // is PURCHASE-04: not shown here.
         var visible = await zoneAccess.PermittedZonesAsync(PermissionFunctions.PurchaseReceipts, PermissionAction.View, cancellationToken);
         // The latest receipts only (figures summed by SQL), so the detail does not slow down as history grows.
-        var history = visible.IsEmpty ? [] : await receipts.ListFiguresAsync(new PurchaseReceiptFilter(visible, SupplierId: supplier.Id), ReceiptHistoryLimit, cancellationToken);
+        var history = visible.IsEmpty ? [] : await receipts.ListFiguresAsync(new PurchaseReceiptFilter(SupplierId: supplier.Id), ReceiptHistoryLimit, cancellationToken);
         var certificates = new List<SupplierCertificate>();
         for (var i = 0; i < supplier.CertificateUrls.Count; i++)
         {
@@ -252,8 +252,7 @@ public sealed class SupplierService(
         return new SupplierView(
             supplier.Id, supplier.Name, supplier.SupplierType, supplier.PhoneNumber, supplier.Address, supplier.Email, certificates,
             supplier.StatusId, statusCatalog.DisplayNameOf(supplier.StatusId),
-            history.Select(r => new SupplierReceiptRow(
-                r.Id, r.Code, PurchaseMoney.DateOrNull(r.ReceiptDate), r.ZoneId, statusCatalog.DisplayNameOf(r.StatusId), r.Payable, r.Outstanding)).ToList(),
+            history.Select(r => new SupplierReceiptRow(r.Id, r.Code, r.ReceiptDate, r.StatusId, statusCatalog.DisplayNameOf(r.StatusId), r.Total)).ToList(),
             RowVersionGuard.Encode(supplier.RowVersion));
     }
 

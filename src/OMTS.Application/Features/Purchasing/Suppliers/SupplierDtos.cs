@@ -11,7 +11,8 @@ public sealed record SupplierListItem(Guid Id, string Name, SupplierType Supplie
 
 public sealed record SupplierCertificate(int Index, string Url);
 
-public sealed record SupplierReceiptRow(Guid Id, string Code, DateOnly? ReceiptDate, Guid ZoneId, string Status, decimal Payable, decimal Outstanding);
+/// <summary>One of the latest purchase receipts of the supplier (any status), with its total (BR-PURCHASE-02).</summary>
+public sealed record SupplierReceiptRow(Guid Id, string Code, DateOnly ReceiptDate, int StatusId, string Status, decimal Total);
 
 /// <summary>
 /// A supplier with its certificates and its latest receipts. The supplier debt is not here: it is PURCHASE-04, which the

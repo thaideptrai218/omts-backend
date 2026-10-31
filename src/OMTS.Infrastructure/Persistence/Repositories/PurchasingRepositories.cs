@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Features.Purchasing;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Enums;
@@ -108,7 +109,8 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
             return new HashSet<Guid>();
         }
 
-        var onReceipts = await db.PurchaseReceiptLines.Where(l => itemIds.Contains(l.ItemId)).Select(l => l.ItemId).Distinct().ToListAsync(cancellationToken);
+        var onReceipts = await db.PurchaseReceiptLines.Where(l => l.ItemId != null && itemIds.Contains(l.ItemId.Value))
+            .Select(l => l.ItemId!.Value).Distinct().ToListAsync(cancellationToken);
         var onCycles = await db.CultivationCycles.Where(c => c.PlannedSeedTypeId != null && itemIds.Contains(c.PlannedSeedTypeId.Value))
             .Select(c => c.PlannedSeedTypeId!.Value).Distinct().ToListAsync(cancellationToken);
         return onReceipts.Concat(onCycles).ToHashSet();
@@ -122,36 +124,38 @@ internal sealed partial class PurchaseReceiptRepository(OmtsDbContext db) : IPur
     public Task<PurchaseReceipt?> GetForEditAsync(Guid receiptId, CancellationToken cancellationToken) =>
         db.PurchaseReceipts
             .Include(r => r.Supplier)
-            .Include(r => r.Zone)
-            .Include(r => r.Raft)
             .Include(r => r.Lines).ThenInclude(l => l.Item)
-            .Include(r => r.Lines).ThenInclude(l => l.SeedLot)
+            .Include(r => r.Lines).ThenInclude(l => l.Raft!).ThenInclude(r => r.Zone)
             .Include(r => r.Returns).ThenInclude(rt => rt.Lines)
             .Include(r => r.Payments)
             .AsSplitQuery()
             .FirstOrDefaultAsync(r => r.Id == receiptId, cancellationToken);
 
-    public Task<int> CountCodesAsync(string prefix, CancellationToken cancellationToken) =>
-        db.PurchaseReceipts.CountAsync(r => r.Code.StartsWith(prefix), cancellationToken);
+    public async Task<int> LatestReceiptNumberAsync(CancellationToken cancellationToken)
+    {
+        // The longest, then the highest, PN code is the latest: PN999999 is followed by PN1000000 (GBR-04).
+        var codes = await db.PurchaseReceipts.AsNoTracking()
+            .Where(r => r.Code.StartsWith(DocumentCodes.ReceiptPrefix))
+            .OrderByDescending(r => r.Code.Length).ThenByDescending(r => r.Code)
+            .Select(r => r.Code)
+            .Take(20)
+            .ToListAsync(cancellationToken);
+        return codes.Select(DocumentCodes.ReceiptNumber).OfType<int>().DefaultIfEmpty(0).Max();
+    }
 
     public Task<int> CountReturnCodesAsync(string prefix, CancellationToken cancellationToken) =>
         db.PurchaseReturns.CountAsync(r => r.Code.StartsWith(prefix), cancellationToken);
 
-    public async Task<IReadOnlyDictionary<Guid, (decimal Stocked, bool UnknownQuantity)>> StockedAsync(
+    public async Task<IReadOnlyDictionary<Guid, (decimal Seeded, bool UnknownQuantity)>> SeededAsync(
         IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken)
     {
         var rows = await db.SeedingEvents.AsNoTracking()
-            .Where(e => lineIds.Contains(e.SeedLot.PurchaseReceiptLineId))
-            .Select(e => new { e.SeedLot.PurchaseReceiptLineId, e.SeedQuantity })
+            .Where(e => lineIds.Contains(e.SeedLotId))
+            .Select(e => new { e.SeedLotId, e.SeedQuantity })
             .ToListAsync(cancellationToken);
-        return rows.GroupBy(r => r.PurchaseReceiptLineId)
+        return rows.GroupBy(r => r.SeedLotId)
             .ToDictionary(g => g.Key, g => (g.Sum(r => r.SeedQuantity ?? 0), g.Any(r => r.SeedQuantity is null)));
     }
-
-    public async Task<IReadOnlyList<PurchaseReceipt>> SearchAsync(PurchaseReceiptFilter filter, CancellationToken cancellationToken) =>
-        await Filtered(filter, WithFigures(db.PurchaseReceipts.AsNoTracking()).Include(r => r.Supplier).Include(r => r.Zone).Include(r => r.Raft))
-            .OrderByDescending(r => r.ReceiptDate).ThenByDescending(r => r.Code)
-            .ToListAsync(cancellationToken);
 
     public void Add(PurchaseReceipt receipt) => db.PurchaseReceipts.Add(receipt);
 
@@ -161,20 +165,11 @@ internal sealed partial class PurchaseReceiptRepository(OmtsDbContext db) : IPur
 
     public void AddLine(PurchaseReceiptLine line) => db.PurchaseReceiptLines.Add(line);
 
-    public void AddSeedLot(Domain.Entities.Cultivation.SeedReceiptLot lot) => db.SeedReceiptLots.Add(lot);
-
     public Task<PurchaseReturn?> GetReturnAsync(Guid returnId, CancellationToken cancellationToken) =>
         db.PurchaseReturns.AsNoTracking()
             .Include(r => r.Receipt)
             .Include(r => r.Lines).ThenInclude(l => l.ReceiptLine).ThenInclude(l => l.Item)
             .FirstOrDefaultAsync(r => r.Id == returnId, cancellationToken);
-
-    // Lines, returns and payments are what the money figures are computed from.
-    private static IQueryable<PurchaseReceipt> WithFigures(IQueryable<PurchaseReceipt> query) => query
-        .Include(r => r.Lines).ThenInclude(l => l.Item)
-        .Include(r => r.Returns).ThenInclude(rt => rt.Lines)
-        .Include(r => r.Payments)
-        .AsSplitQuery();
 }
 
 internal sealed class SupplierPaymentRepository(OmtsDbContext db) : ISupplierPaymentRepository
@@ -186,13 +181,12 @@ internal sealed class SupplierPaymentRepository(OmtsDbContext db) : ISupplierPay
         db.SupplierPayments.AsNoTracking().Include(p => p.Supplier).FirstOrDefaultAsync(p => p.DeduplicationKey == key, cancellationToken);
 
     public async Task<(IReadOnlyList<SupplierPayment> Items, int Total, decimal TotalAmount)> SearchAsync(
-        Guid? supplierId, Guid? receiptId, Guid? zoneId, PaymentMethod? method, int? statusId, DateOnly? from, DateOnly? to,
+        Guid? supplierId, Guid? receiptId, PaymentMethod? method, int? statusId, DateOnly? from, DateOnly? to,
         int page, int pageSize, CancellationToken cancellationToken)
     {
         var query = db.SupplierPayments.AsNoTracking()
             .Where(p => (supplierId == null || p.SupplierId == supplierId)
                 && (receiptId == null || p.ReceiptId == receiptId)
-                && (zoneId == null || (p.Receipt != null && p.Receipt.ZoneId == zoneId))
                 && (method == null || p.Method == method)
                 && (statusId == null || p.StatusId == statusId)
                 && (from == null || p.PaymentDate >= from)

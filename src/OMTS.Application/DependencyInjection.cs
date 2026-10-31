@@ -86,8 +86,10 @@ public static class DependencyInjection
         services.AddScoped<ZoneAccessGuard>();
         services.AddScoped<SupplierService>();
         services.AddScoped<FarmingInputItemService>();
+        services.AddScoped<PurchaseReceiptAccess>();
         services.AddScoped<PurchaseReceiptValidator>();
         services.AddScoped<PurchaseReceiptViews>();
+        services.AddScoped<PurchaseReceiptNotifications>();
         services.AddScoped<PurchaseReceiptService>();
         services.AddScoped<PurchaseReceiptCancellationService>();
         services.AddScoped<PurchaseReturnService>();

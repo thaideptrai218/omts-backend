@@ -220,6 +220,21 @@ public static class UserMessages
 
     // ---- MSG-PURCHASE ----
 
+    /// <summary>MSG-PURCHASE-01 (BR-PURCHASE-05): notification to the Owner when a purchase receipt is completed.</summary>
+    /// <param name="totalAmount">The total of the receipt in VND, not rounded (BR-PURCHASE-02).</param>
+    public static UserMessage ReceiptCompleted(string userName, string receiptCode, string supplierName, int lineCount, decimal totalAmount) => new(
+        Purchase01, $"{userName} completed purchase receipt {receiptCode} from {supplierName}: {lineCount} lines, {Vnd(totalAmount)} VND.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["user_name"] = userName,
+            ["receipt_code"] = receiptCode,
+            ["supplier_name"] = supplierName,
+            ["line_count"] = lineCount,
+            ["total_amount"] = totalAmount,
+        },
+    };
+
     /// <summary>MSG-PURCHASE-03 (PURCHASE-02.0.E1): a quantity to return is not greater than 0 or above what is left.</summary>
     /// <param name="legacyCode">MSG59 (not greater than 0) or MSG45 (above the limit).</param>
     public static UserMessage ReturnQuantityOutsideLimit(string itemName, string maxQuantity, string unit, string limitExplanation, string legacyCode) => new(
@@ -288,6 +303,9 @@ public static class UserMessages
 
     /// <summary>A date as shown in messages, e.g. "29/11/2026".</summary>
     private static string Date(DateOnly date) => date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+
+    /// <summary>A VND amount as shown in messages, e.g. "1,250,500" (never rounded, BR-PURCHASE-02).</summary>
+    private static string Vnd(decimal amount) => amount.ToString("#,0.###", CultureInfo.InvariantCulture);
 
     // {document} of MSG-FARM-01/02: "the license number with its zone".
     private static string LicenseDocument(string documentTypeName, string documentNumber, IReadOnlyList<string> zoneCodes) =>

@@ -3,6 +3,7 @@ using OMTS.Application.Common.Results;
 
 namespace OMTS.Application.Features.Purchasing.Payments;
 
+/// <param name="Payable">Σ totals of the Completed receipts (no discount any more: the total).</param>
 public sealed record SupplierDebtRow(
     Guid SupplierId, string SupplierName, decimal Payable, decimal Returned, decimal Paid, decimal Refunded, decimal Unallocated, decimal Outstanding);
 
@@ -11,7 +12,10 @@ public sealed record ReceiptDebtRow(
 
 public sealed record SupplierDebtDetail(SupplierDebtRow Totals, IReadOnlyList<ReceiptDebtRow> Receipts);
 
-/// <summary>INP-06 supplier debt: per supplier and per receipt, from Completed receipts and unallocated payments (summed in SQL).</summary>
+/// <summary>
+/// Supplier debt (until PURCHASE-04 is rebuilt): per supplier and per receipt, from Completed receipts and the payments no
+/// longer allocated to a receipt (summed in SQL). Equal to BR-PURCHASE-04 while refunds stand for money paid back.
+/// </summary>
 public sealed class SupplierDebtService(IPurchaseReceiptRepository receipts, ISupplierPaymentRepository payments, ISupplierRepository suppliers)
 {
     public async Task<IReadOnlyList<SupplierDebtRow>> ListAsync(CancellationToken cancellationToken)
@@ -43,10 +47,10 @@ public sealed class SupplierDebtService(IPurchaseReceiptRepository receipts, ISu
         var unallocated = (await payments.UnallocatedAsync([supplierId], cancellationToken)).GetValueOrDefault(supplierId);
         return new SupplierDebtDetail(
             Totals(supplierId, supplier.Name, figures, unallocated),
-            completed.Select(r => new ReceiptDebtRow(r.Id, r.Code, r.ReceiptDate, r.Payable, r.Returned, r.Paid, r.Refunded, r.Outstanding)).ToList());
+            completed.Select(r => new ReceiptDebtRow(r.Id, r.Code, r.ReceiptDate, r.Total, r.Returned, r.Paid, r.Refunded, r.Outstanding)).ToList());
     }
 
     private static SupplierDebtRow Totals(Guid supplierId, string name, SupplierDebtFigures? figures, decimal unallocated) => new(
-        supplierId, name, figures?.Payable ?? 0, figures?.Returned ?? 0, figures?.Paid ?? 0, figures?.Refunded ?? 0,
+        supplierId, name, figures?.Total ?? 0, figures?.Returned ?? 0, figures?.Paid ?? 0, figures?.Refunded ?? 0,
         unallocated, (figures?.Outstanding ?? 0) - unallocated);
 }

@@ -56,6 +56,16 @@ public sealed class AccountAccess(
     /// <summary>Zones a list endpoint may return records from for this function and action.</summary>
     public PermittedZones PermittedZonesFor(string function, PermissionAction action)
     {
+        var zones = PairZonesFor(function, action);
+        return !zones.IsEmpty && PermissionFunctions.IsCooperativeWide(function) ? PermittedZones.Everywhere : zones;
+    }
+
+    /// <summary>
+    /// The zones of the pairs whose role allows the action, even on a function whose records have no zone: e.g. the rafts
+    /// a Zone Manager may name on a purchase receipt line are those of the zones of their Zone Manager pairs (BR-PURCHASE-01).
+    /// </summary>
+    public PermittedZones PairZonesFor(string function, PermissionAction action)
+    {
         if (IsCooperativeOwner)
         {
             return PermittedZones.Everywhere;
@@ -72,7 +82,7 @@ public sealed class AccountAccess(
             return PermittedZones.None;
         }
 
-        return grants.Any(g => g.ZoneId is null) || PermissionFunctions.IsCooperativeWide(function)
+        return grants.Any(g => g.ZoneId is null)
             ? PermittedZones.Everywhere
             : new PermittedZones(false, grants.Select(g => g.ZoneId!.Value).ToHashSet());
     }

@@ -26,6 +26,9 @@ public static class NotificationTypes
     /// <summary>MSG-LABOR-02, the reminder to lock a staff account after an end of employment: kept, never pushed (BR-LABOR-04).</summary>
     public const string StaffAccountLockReminder = "STAFF_ACCOUNT_LOCK_REMINDER";
 
+    /// <summary>MSG-PURCHASE-01, the new purchase receipt, to the Owner when a receipt is completed (BR-PURCHASE-05); push can be turned off.</summary>
+    public const string PurchaseReceiptCompleted = "PURCHASE_RECEIPT_COMPLETED";
+
     public static readonly IReadOnlyList<NotificationTypeDefinition> All =
     [
         new(WaterAlert, "Water alert", AlwaysPush, [CooperativeOwner, ZoneManager],
@@ -38,6 +41,10 @@ public static class NotificationTypes
             NotificationOpenAccess.InZone(PermissionFunctions.WaterMeasurements, PermissionAction.Create)),
         new(ZoneLicenseExpiry, "Zone license expiry reminder", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         new(StaffAccountLockReminder, "Reminder to lock a staff account", NeverPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        // Purchase receipts have no zone: opening one follows the role only (BR-FARM-08). Only the transaction of the
+        // Accountant (MSG-PURCHASE-04, PURCHASE-05) is mandatory in FE-08 (BR-ACCOUNT-11).
+        new(PurchaseReceiptCompleted, "New purchase receipt", Default, [CooperativeOwner],
+            NotificationOpenAccess.InZone(PermissionFunctions.PurchaseReceipts, PermissionAction.View)),
     ];
 
     private static readonly Dictionary<string, NotificationTypeDefinition> ByCode = All.ToDictionary(t => t.Code, StringComparer.Ordinal);
