@@ -122,12 +122,12 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
         var job = factory.Services.GetRequiredService<ZoneLicenseReminderJob>();
         await job.RunOnceAsync(today);
         await job.RunOnceAsync(today);
-        var licenseId = license.GetProperty("id").GetGuid().ToString();
+        var licenseId = license.GetProperty("id").GetGuid();
         var notices = await factory.QueryAsync(db => db.Notifications
-            .Where(n => n.Type == NotificationTypes.ZoneLicenseExpiry && n.RelatedRecordCode == licenseId).ToListAsync());
+            .Where(n => n.Type == NotificationTypes.ZoneLicenseExpiry && n.RelatedRecordId == licenseId).ToListAsync());
         Assert.NotEmpty(notices);
         Assert.Equal(notices.Count, notices.Select(n => n.RecipientAccountId).Distinct().Count());
-        Assert.Contains("expires in 30 days", notices[0].Body);
+        Assert.Contains(", in 30 days.", notices[0].Body);
 
         // Replaced: the old license is never reminded again, and editing it is refused.
         var replaced = await owner.PostAsync($"/api/zone-licenses/{licenseId}/replace", LicenseForm(null, today, today.AddYears(5)));

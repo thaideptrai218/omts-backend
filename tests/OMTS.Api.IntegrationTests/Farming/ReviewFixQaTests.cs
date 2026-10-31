@@ -353,7 +353,7 @@ public class ReviewFixQaSqlServerTests
         Assert.NotNull(markers.Expiring);
         Assert.NotNull(markers.Expired);
         var notices = await host.QueryAsync(db => db.Notifications
-            .Where(n => n.Type == NotificationTypes.ZoneLicenseExpiry && n.RelatedRecordCode == licenseId.ToString())
+            .Where(n => n.Type == NotificationTypes.ZoneLicenseExpiry && n.RelatedRecordId == licenseId)
             .Select(n => n.RecipientAccountId).ToListAsync());
         Assert.NotEmpty(notices);
         Assert.Equal(notices.Distinct().Count(), notices.Count);

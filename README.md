@@ -87,7 +87,7 @@ Dates are set relative to the day of the first seed and are not moved afterwards
 - After a few weeks the "expiring" license has expired. `docker compose down -v` gives fresh dates.
 - Receipt codes carry the seed date (`PR-<seed date>-nnn`), not the receipt date.
 - The last water measurement is from the day before the seed: a month later without new ones, the zones are overdue and
-  get the 06:00 reminder (MSG26).
+  get the 06:00 reminder (MSG-WATER-06).
 - The receipt list shows the current calendar year by default. Seeded in January–March, part of the history is in the
   previous year: pass `from`/`to` to see it.
 
@@ -173,6 +173,33 @@ until it is revoked with a reason; there are no validity dates. On records with 
 its pairs; records with no zone (suppliers, supplier payments and debts, customers, payroll…) follow the role only, so an
 Accountant pair for one zone opens them (BR-FARM-08). A staff account without an Effective pair cannot log in.
 
+### Notifications
+
+Every notification a module sends is kept in the list of its recipient account, whatever the preferences and even when
+it could not be pushed (BR-ACCOUNT-12). Each type of `NotificationTypes.All` has a push policy and the roles it is sent
+to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the dispatcher refuses unregistered types.
+
+| Type | Content | Push | Roles |
+|---|---|---|---|
+| `WATER_ALERT` | MSG-WATER-03 | always (mandatory) | Owner, Zone Manager |
+| `WATER_ALERT_WITHDRAWN` | MSG-WATER-04 (not sent yet: WATER PR) | always (mandatory) | Owner, Zone Manager |
+| `WATER_MEASUREMENT_OVERDUE` | MSG-WATER-06 | unless turned off | Owner, Zone Manager |
+| `ZONE_LICENSE_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
+| `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (not sent yet: LABOR PR) | never: list only | Owner |
+
+- Preferences (ACCOUNT-07): `GET`/`PUT /api/me/notification-preferences` list the types of the roles the account
+  holds with `push` on or off (`items: [{ type, push }]`). Mandatory types are shown as always pushed and cannot be
+  turned off; list-only types are not offered. `pushAllowedOnDevice` is false when no device registered by a logged-in
+  session allows notifications; turning push on then still saves the choice and answers MSG-ACCOUNT-21 in `notice`.
+- List (ACCOUNT-08): `GET /api/me/notifications?unreadOnly=&page=&pageSize=` (newest first, `unreadCount` of the whole
+  list), `POST /api/me/notifications/{id}/read`, `POST /api/me/notifications/read-all`. A row keeps its English
+  `title`/`body` and the `messageCode` with `messageParams` (placeholder values) so the apps can show it in Vietnamese.
+- `GET /api/me/notifications/{id}/open` checks the access again (GFR-02): 403 MSG-GEN-08 when the user may no longer
+  open the record (e.g. a revoked zone–role pair), 404 MSG-ACCOUNT-22 when the record was removed. A push carries the
+  notification id.
+- The same table keeps SMS and Zalo OA sendings to traders (`channel`, phone, delivery status Sending / Sent / Not
+  sent, provider message id or error code); they are never in a list. No sender uses them yet (SALE-06, TRACE-04).
+
 ### Database (EF Core code-first)
 
 Entities live in `OMTS.Domain`; the DbContext, configurations and migrations live in `OMTS.Infrastructure/Persistence`.
@@ -202,7 +229,7 @@ The OCR Service of the water meter photos (ENV-01) is only faked until its provi
 ### Background jobs
 
 `WaterMeasurementOverdueJob` runs every day at 06:00 (Asia/Ho_Chi_Minh): each In Use zone without a Confirmed water
-measurement for more than one calendar month gets one MSG26 reminder per overdue period (Owners and the zone's staff
+measurement for more than one calendar month gets one MSG-WATER-06 reminder per overdue period (Owners and the zone's staff
 with View on `WATER_MEASUREMENTS`). Like the zone license reminder (07:00), a host started after the run time runs it
 once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A reminder already
 sent is never sent again.

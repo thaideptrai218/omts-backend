@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Notifications;
 using OMTS.Domain.Enums;
@@ -123,10 +124,10 @@ public class PushDeviceSessionQaTests
         await RegisterAsync(client, tokens, "declined-token", permissionGranted: false);
 
         Assert.Equal(NoDevices, await NotifyAsync(api, account.Id));
-        Assert.Equal("NO_PUSH_DEVICE", (await PushReasonAsync(client)).GetString());
+        Assert.False(await PushAllowedAsync(client));
     }
 
-    // Mandatory categories are always pushed; without a logged-in device the dev inbox still keeps the push,
+    // Mandatory types are always pushed; without a logged-in device the dev inbox still keeps the push,
     // with an empty "devices" list (README "External services").
     [Fact]
     public async Task Mandatory_push_after_logout_is_kept_in_the_dev_inbox_with_no_devices()
@@ -162,19 +163,19 @@ public class PushDeviceSessionQaTests
         web.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer", (await LoginTokensAsync(web, first.Username)).GetProperty("accessToken").GetString());
 
-        var eligible = await PushReasonAsync(web);
+        var eligible = await PushAllowedAsync(web);
         await phone.PostAsync("/api/auth/logout", null);
         var pushed = await NotifyManyAsync(api, [first.Id, second.Id]);
         await tablet.PostAsync("/api/auth/logout", null);
-        var ineligible = await PushReasonAsync(web);
+        var ineligible = await PushAllowedAsync(web);
         var deleteAction = await database.ReadAsync(db => db.Database
             .SqlQueryRaw<string>("SELECT delete_referential_action_desc AS Value FROM sys.foreign_keys WHERE name = 'FK_PushDevices_LoginSessions_LoginSessionId'")
             .SingleAsync());
 
-        Assert.Equal(JsonValueKind.Null, eligible.ValueKind);
+        Assert.True(eligible);
         Assert.Equal(["first-tablet"], pushed[first.Id]);
         Assert.Equal(["second-phone"], pushed[second.Id]);
-        Assert.Equal("NO_PUSH_DEVICE", ineligible.GetString());
+        Assert.False(ineligible);
         Assert.Equal("NO_ACTION", deleteAction);
     }
 
@@ -203,18 +204,18 @@ public class PushDeviceSessionQaTests
     /// was sent at all (e.g. a locked account is not notified).
     /// </summary>
     private static async Task<IReadOnlyList<string>?> NotifyAsync(
-        WebApplicationFactory<Program> api, Guid accountId, string type = NotificationTypes.WorkAssignment) =>
+        WebApplicationFactory<Program> api, Guid accountId, string type = NotificationTypes.WaterMeasurementOverdue) =>
         (await NotifyManyAsync(api, [accountId], type))[accountId];
 
     private static async Task<Dictionary<Guid, IReadOnlyList<string>?>> NotifyManyAsync(
-        WebApplicationFactory<Program> api, Guid[] accountIds, string type = NotificationTypes.WorkAssignment)
+        WebApplicationFactory<Program> api, Guid[] accountIds, string type = NotificationTypes.WaterMeasurementOverdue)
     {
         var inbox = api.Services.GetRequiredService<FakePushSender>().Inbox;
         var before = accountIds.ToDictionary(id => id, id => inbox.List(id.ToString()).FirstOrDefault()?.Id);
         using (var scope = api.Services.CreateScope())
         {
             await scope.ServiceProvider.GetRequiredService<INotificationDispatcher>().NotifyAsync(
-                accountIds, type, "QA", null, null, null, isMandatory: false, CancellationToken.None);
+                accountIds, new NotificationContent(type, "QA", UserMessages.WaterMeasurementOverdue("QA", "01/10/2026")), CancellationToken.None);
             await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
         }
 
@@ -223,10 +224,7 @@ public class PushDeviceSessionQaTests
             : null);
     }
 
-    private static async Task<JsonElement> PushReasonAsync(HttpClient client)
-    {
-        var categories = await client.GetFromJsonAsync<JsonElement>("/api/me/notification-preferences");
-        var push = categories[0].GetProperty("channels").EnumerateArray().Single(c => c.GetProperty("channel").GetString() == nameof(NotificationChannel.Push));
-        return push.GetProperty("ineligibleReason");
-    }
+    /// <summary>Whether the settings say that a device of the account allows notifications (ACCOUNT-07.1).</summary>
+    private static async Task<bool> PushAllowedAsync(HttpClient client) =>
+        (await client.GetFromJsonAsync<JsonElement>("/api/me/notification-preferences")).GetProperty("pushAllowedOnDevice").GetBoolean();
 }

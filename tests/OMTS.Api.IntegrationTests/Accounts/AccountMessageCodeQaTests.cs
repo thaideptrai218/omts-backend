@@ -100,7 +100,7 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         var owner = await factory.AddAccountAsync(NewCode(), Password);
         var client = await factory.LoginAsync(owner.Username);
 
-        var saved = await (await client.PutAsJsonAsync("/api/me/notification-preferences", new { items = new[] { new { category = "WORK", channel = "InApp", enabled = true } } }))
+        var saved = await (await client.PutAsJsonAsync("/api/me/notification-preferences", new { items = new[] { new { type = "WATER_MEASUREMENT_OVERDUE", push = false } } }))
             .BodyAsync(HttpStatusCode.OK);
 
         Assert.Equal(("Notification settings saved.", "MSG-GEN-05"), (saved.Str("message"), saved.Str("messageCode")));

@@ -1,5 +1,7 @@
+using System.Text.Json;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.Notifications;
 using OMTS.Application.UnitTests.Fakes;
 using OMTS.Domain.Entities.Identity;
@@ -8,6 +10,7 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.UnitTests.Features.Notifications;
 
+/// <summary>BR-ACCOUNT-11/12: every notification is kept; push follows the type's policy and the account's preference.</summary>
 public class NotificationDispatcherTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 23, 1, 0, 0, TimeSpan.Zero);
@@ -17,45 +20,101 @@ public class NotificationDispatcherTests
     private readonly FakePushDeviceRepository _devices = new();
 
     [Fact]
-    public async Task Non_mandatory_type_follows_each_accounts_channel_preferences()
+    public async Task A_normal_type_is_kept_for_everyone_and_pushed_unless_push_is_turned_off()
     {
-        var silent = Guid.NewGuid();
-        var pushOnly = Guid.NewGuid();
+        var pushOff = Guid.NewGuid();
+        var pushOn = Guid.NewGuid();
         var defaults = Guid.NewGuid();
-        _notifications.Preferences[silent] = [Off(NotificationCategories.DeadlineReminders, NotificationChannel.InApp), Off(NotificationCategories.DeadlineReminders, NotificationChannel.Push)];
-        _notifications.Preferences[pushOnly] = [Off(NotificationCategories.DeadlineReminders, NotificationChannel.InApp)];
-        _notifications.Preferences[defaults] = [];
+        _notifications.Preferences[pushOff] = [Push(NotificationTypes.WaterMeasurementOverdue, false)];
+        _notifications.Preferences[pushOn] = [Push(NotificationTypes.WaterMeasurementOverdue, true)];
+        _notifications.Preferences[defaults] = [Push(NotificationTypes.WaterAlert, false)];
 
-        await NotifyAsync([silent, pushOnly, defaults], NotificationTypes.ZoneLicenseExpiry, isMandatory: false);
+        await NotifyAsync([pushOff, pushOn, defaults], NotificationTypes.WaterMeasurementOverdue);
 
-        Assert.Equal([defaults], _notifications.Added.Select(n => n.RecipientAccountId));
-        Assert.Equal([pushOnly, defaults], _outbox.Messages.Select(m => m.RecipientAccountId));
+        Assert.Equal([pushOff, pushOn, defaults], _notifications.Added.Select(n => n.RecipientAccountId));
+        Assert.Equal([pushOn, defaults], _outbox.Messages.Select(m => m.RecipientAccountId));
+        Assert.All(_notifications.Added, n => Assert.False(n.IsMandatory));
     }
 
     [Fact]
-    public async Task Mandatory_type_is_delivered_in_app_and_by_push_even_when_turned_off()
+    public async Task A_mandatory_type_is_kept_and_pushed_even_when_its_push_is_turned_off()
     {
         var account = Guid.NewGuid();
-        _notifications.Preferences[account] = [Off(NotificationCategories.WaterAlerts, NotificationChannel.InApp), Off(NotificationCategories.WaterAlerts, NotificationChannel.Push)];
+        _notifications.Preferences[account] = [Push(NotificationTypes.WaterAlert, false), Push(NotificationTypes.ZoneLicenseExpiry, false)];
 
-        await NotifyAsync([account], NotificationTypes.WaterAlert, isMandatory: false);
+        await NotifyAsync([account], NotificationTypes.WaterAlert);
+        await NotifyAsync([account], NotificationTypes.ZoneLicenseExpiry);
 
-        var notification = Assert.Single(_notifications.Added);
-        Assert.True(notification.IsMandatory);
-        Assert.Equal(Now, notification.CreatedAt);
-        Assert.Single(_outbox.Messages);
+        Assert.Equal(2, _notifications.Added.Count);
+        Assert.All(_notifications.Added, n => Assert.True(n.IsMandatory));
+        Assert.Equal(Now, _notifications.Added[0].CreatedAt);
+        Assert.Equal(2, _outbox.Messages.Count);
     }
 
     [Fact]
-    public async Task Unknown_accounts_and_duplicates_are_skipped()
+    public async Task A_never_push_type_is_kept_and_never_pushed()
+    {
+        var account = Guid.NewGuid();
+        _notifications.Preferences[account] = [Push(NotificationTypes.StaffAccountLockReminder, true)];
+        _devices.Deliverable.Add(Device(account, "phone"));
+
+        await NotifyAsync([account], NotificationTypes.StaffAccountLockReminder);
+
+        var kept = Assert.Single(_notifications.Added);
+        Assert.Equal(NotificationTypes.StaffAccountLockReminder, kept.Type);
+        Assert.False(kept.IsMandatory);
+        Assert.Empty(_outbox.Messages);
+    }
+
+    [Fact]
+    public async Task The_row_keeps_the_message_code_its_parameters_and_the_related_record()
+    {
+        var account = Guid.NewGuid();
+        var zoneId = Guid.NewGuid();
+        _notifications.Preferences[account] = [];
+
+        await new NotificationDispatcher(_notifications, _devices, _outbox, new FixedTimeProvider(Now)).NotifyAsync(
+            [account],
+            new NotificationContent(
+                NotificationTypes.WaterMeasurementOverdue,
+                "Water measurement overdue",
+                UserMessages.WaterMeasurementOverdue("Vùng Cái Rồng", "01/10/2026"),
+                new RelatedRecord(RelatedRecordTypes.FarmingZone, zoneId, "KV01")),
+            CancellationToken.None);
+
+        var row = Assert.Single(_notifications.Added);
+        Assert.Equal(NotificationChannel.InApp, row.Channel);
+        Assert.Equal("MSG-WATER-06", row.MessageCode);
+        Assert.Equal("Zone Vùng Cái Rồng has had no water measurement since 01/10/2026. Please measure the water and record the result in OMTS.", row.Body);
+        var parameters = JsonSerializer.Deserialize<Dictionary<string, string>>(row.MessageParams!)!;
+        Assert.Equal("Vùng Cái Rồng", parameters["zone_name"]);
+        Assert.Equal("01/10/2026", parameters["last_date"]);
+        Assert.Contains("Vùng Cái Rồng", row.MessageParams);
+        Assert.Equal((RelatedRecordTypes.FarmingZone, zoneId, "KV01"), (row.RelatedRecordType, row.RelatedRecordId, row.RelatedRecordCode));
+        var push = Assert.Single(_outbox.Messages);
+        Assert.Equal((row.Id, "MSG-WATER-06", zoneId), (push.NotificationId, push.MessageCode, push.RelatedRecordId));
+    }
+
+    [Fact]
+    public async Task Unknown_or_locked_accounts_and_duplicates_are_skipped()
     {
         var account = Guid.NewGuid();
         _notifications.Preferences[account] = [];
 
-        await NotifyAsync([account, account, Guid.NewGuid()], NotificationTypes.WorkAssignment, isMandatory: false);
+        await NotifyAsync([account, account, Guid.NewGuid()], NotificationTypes.WaterMeasurementOverdue);
 
         Assert.Single(_notifications.Added);
         Assert.Single(_outbox.Messages);
+    }
+
+    [Fact]
+    public async Task An_unregistered_type_is_refused()
+    {
+        var account = Guid.NewGuid();
+        _notifications.Preferences[account] = [];
+
+        await Assert.ThrowsAsync<ArgumentException>(() => NotifyAsync([account], "WORK_ASSIGNMENT"));
+        Assert.Empty(_notifications.Added);
     }
 
     [Fact]
@@ -67,22 +126,31 @@ public class NotificationDispatcherTests
         _notifications.Preferences[withoutDevice] = [];
         _devices.Deliverable.AddRange([Device(withDevices, "phone"), Device(withDevices, "tablet"), Device(Guid.NewGuid(), "someone-else")]);
 
-        await NotifyAsync([withDevices, withoutDevice], NotificationTypes.WorkAssignment, isMandatory: false);
+        await NotifyAsync([withDevices, withoutDevice], NotificationTypes.WaterAlert);
 
         Assert.Equal(["phone", "tablet"], _outbox.Messages.Single(m => m.RecipientAccountId == withDevices).DeviceTokens);
         Assert.Empty(_outbox.Messages.Single(m => m.RecipientAccountId == withoutDevice).DeviceTokens);
         Assert.Equal(Now, _devices.AskedAt);
     }
 
-    private Task NotifyAsync(IReadOnlyCollection<Guid> recipients, string type, bool isMandatory) =>
+    [Fact]
+    public void Every_registered_type_is_offered_to_a_role_and_never_push_types_are_not_offered()
+    {
+        Assert.Equal(NotificationTypes.All.Count, NotificationTypes.All.Select(t => t.Code).Distinct().Count());
+        Assert.All(NotificationTypes.All, t => Assert.NotEmpty(t.Roles));
+        var everyRole = Enum.GetValues<NotificationRole>().ToHashSet();
+        Assert.DoesNotContain(NotificationTypes.OfferedTo(everyRole), t => t.PushPolicy == NotificationPushPolicy.NeverPush);
+    }
+
+    private Task NotifyAsync(IReadOnlyCollection<Guid> recipients, string type) =>
         new NotificationDispatcher(_notifications, _devices, _outbox, new FixedTimeProvider(Now))
-            .NotifyAsync(recipients, type, "Title", "Body", "Record", "R-1", isMandatory, CancellationToken.None);
+            .NotifyAsync(recipients, new NotificationContent(type, "Title", new UserMessage("MSG-WATER-06", "Body")), CancellationToken.None);
 
     private static PushDevice Device(Guid accountId, string token) => new() { AccountId = accountId, Token = token, PermissionGranted = true };
 
-    private static NotificationPreference Off(string category, NotificationChannel channel) =>
-        new() { Category = category, Channel = channel, Enabled = false };
+    private static NotificationPreference Push(string type, bool push) => new() { Type = type, Push = push };
 
+    /// <summary>Accounts in <see cref="Preferences"/> are the active ones.</summary>
     private sealed class FakeNotificationRepository : INotificationRepository
     {
         public Dictionary<Guid, IReadOnlyList<NotificationPreference>> Preferences { get; } = [];
@@ -94,6 +162,17 @@ public class NotificationDispatcherTests
             IReadOnlyCollection<Guid> accountIds, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyDictionary<Guid, IReadOnlyList<NotificationPreference>>>(
                 Preferences.Where(p => accountIds.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value));
+
+        public Task<(IReadOnlyList<Notification> Items, int Total)> ListAsync(
+            Guid recipientAccountId, bool unreadOnly, int page, int pageSize, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<int> CountUnreadAsync(Guid recipientAccountId, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<Notification?> GetAsync(Guid recipientAccountId, Guid notificationId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<Notification>> ListUnreadAsync(Guid recipientAccountId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FakePushOutbox : IPushOutbox
