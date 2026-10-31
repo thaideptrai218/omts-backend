@@ -108,7 +108,7 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
         Assert.Equal(["document_number", "document_type", "expiry_date", "zone_codes"], expired.GetProperty("messageParams").EnumerateObject().Select(p => p.Name).Order());
         Assert.Equal(("AQUACULTURE_LICENSE", number, zone.Code, expiryIso), (Param(expired, "document_type"), Param(expired, "document_number"), Single(expired, "zone_codes"), Param(expired, "expiry_date")));
         Assert.All(items, i => Assert.Equal(
-            ("ZONE_LICENSE_EXPIRY", true, "ZoneComplianceDocument", number),
+            ("ZONE_LICENSE_EXPIRY", true, "ZoneLicense", number),
             (i.GetProperty("type").GetString(), i.GetProperty("mandatory").GetBoolean(), i.GetProperty("relatedRecordType").GetString(), i.GetProperty("relatedRecordCode").GetString())));
 
         var opened = await owner.Client.OpenNotificationAsync(expired.GetProperty("id").GetGuid());

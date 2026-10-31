@@ -58,7 +58,7 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
                 $"Marine aquaculture license {license.Text("documentNumber")} ({zoneCode}) expires on {Date(Today.AddDays(30))}, in 30 days. Please renew it and record the new one.",
                 n.Body);
             Assert.Equal("MSG-FARM-01", n.MessageCode);
-            Assert.Equal(("ZoneComplianceDocument", license.Text("documentNumber")), (n.RelatedRecordType, n.RelatedRecordCode));
+            Assert.Equal(("ZoneLicense", license.Text("documentNumber")), (n.RelatedRecordType, n.RelatedRecordCode));
             // A mandatory type (BR-ACCOUNT-11).
             Assert.True(n.IsMandatory);
         });

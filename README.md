@@ -208,6 +208,24 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 - The same table keeps SMS and Zalo OA sendings to traders (`channel`, phone, delivery status Sending / Sent / Not
   sent, provider message id or error code); they are never in a list. No sender uses them yet (SALE-06, TRACE-04).
 
+### Audit log
+
+Every create, edit and status change writes one `AuditEvent` in the same save as the change (GBR-02, NFR-02): who acted
+(an account, an employee of the employee app, or the system when neither is set), when, the action
+(`FarmingZone.Updated`, `Account.StatusChanged`…), the record (type, id, code), the zone, the reason and the values
+before and after. Fields that may hold a password, a code or a token are removed when the row is written and again
+when it is shown. Events are never edited or deleted and no job cleans them up (kept at least 5 years).
+
+Only the Cooperative Owner searches it (ACCOUNT-10, BR-ACCOUNT-13); every other caller gets 403 MSG-GEN-08:
+- `GET /api/audit-events`: newest first, paged (`page`, `pageSize` up to 100). `from`/`to` are Vietnam dates, both
+  included: the last 30 days by default, at most 5 years, else MSG-GEN-01. Filters: one person (`actorAccountId`,
+  `actorEmployeeId` or `system=true`), `action` and `recordType` (exact values), `recordCode` (codes starting with it),
+  `zoneId`. No match: 200 with an empty page and MSG-GEN-10 in `message`.
+- `GET /api/audit-events/facets`: the actions, record types and people to offer in the filters.
+- `GET /api/audit-events/{id}`: the event with `before` and `after` (JSON).
+- `GET /api/audit-events/{id}/record`: the record of the event as it is now, or 404 MSG-ACCOUNT-22 when it no longer
+  exists (its events stay in the log).
+
 ### Database (EF Core code-first)
 
 Entities live in `OMTS.Domain`; the DbContext, configurations and migrations live in `OMTS.Infrastructure/Persistence`.
