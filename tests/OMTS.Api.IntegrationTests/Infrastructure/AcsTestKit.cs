@@ -24,7 +24,8 @@ public static partial class AcsTestKit
     /// <summary>A valid mobile number ("09" + 8 digits) no other call of this run returns.</summary>
     public static string NewPhone() => $"09{10_000_000 + (int)((uint)Interlocked.Increment(ref _phoneSequence) % PhoneRange)}";
 
-    public static string NewCode() => Guid.NewGuid().ToString("N")[..10];
+    // Starts with a letter: a username needs one (about 1 hex string in 100 is all digits), and the "c" keeps it hex.
+    public static string NewCode() => "c" + Guid.NewGuid().ToString("N")[..9];
 
     /// <summary>A client carrying the access token of a fresh login.</summary>
     public static async Task<HttpClient> LoginAsync(this AuthApiFactory factory, string identifier, string password = Password)

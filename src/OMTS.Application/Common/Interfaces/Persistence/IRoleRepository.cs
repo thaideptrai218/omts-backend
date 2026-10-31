@@ -2,17 +2,16 @@ using OMTS.Domain.Entities.Identity;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
+/// <summary>
+/// The fixed role rows (BR-FARM-07); read only, they are created at deployment. Rows with another code (old roles kept
+/// by the FixedRoles migration) are never returned.
+/// </summary>
 public interface IRoleRepository
 {
-    /// <summary>Role with its permission rows.</summary>
     Task<Role?> GetByIdAsync(Guid roleId, CancellationToken cancellationToken);
 
-    Task<Role?> FindByNameAsync(string name, CancellationToken cancellationToken);
+    Task<Role?> FindByCodeAsync(string code, CancellationToken cancellationToken);
 
-    /// <summary>Roles with their permission rows, optionally of one status, ordered by name.</summary>
-    Task<IReadOnlyList<Role>> ListAsync(int? statusId, CancellationToken cancellationToken);
-
-    void Add(Role role);
-
-    void AddPermission(RolePermission permission);
+    /// <summary>Every role row, ordered by name.</summary>
+    Task<IReadOnlyList<Role>> ListAsync(CancellationToken cancellationToken);
 }

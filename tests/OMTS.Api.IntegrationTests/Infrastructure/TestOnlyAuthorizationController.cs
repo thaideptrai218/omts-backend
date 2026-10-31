@@ -20,7 +20,7 @@ public sealed class TestOnlyAuthorizationController : ControllerBase
     public IActionResult CreateWaterMeasurement(Guid zoneId) => Ok(new { zoneId });
 
     [HttpGet("supplier-payments")]
-    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.View, PermissionScope.AllZones)]
+    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.View, PermissionScope.NoZone)]
     public IActionResult ViewSupplierPayments() => Ok();
 
     [HttpPost("change-password")]

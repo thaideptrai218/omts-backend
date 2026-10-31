@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
@@ -106,8 +107,8 @@ public class WaterThresholdTests(AuthApiFactory api) : IClassFixture<AuthApiFact
     {
         var z = await api.ZoneAsync();
         var other = await api.ZoneAsync();
-        var (viewer, _) = await api.StaffAsync(z.Zone, create: true, edit: true);
-        var (noWater, _) = await api.StaffAsync(z.Zone, view: false);
+        var (viewer, _) = await api.StaffAsync(z.Zone);
+        var (noWater, _) = await api.StaffAsync(z.Zone, StaffRole.Accountant);
 
         var own = await viewer.GetAsync($"/api/zones/{z.Zone.Id}/water-thresholds");
         var foreign = await viewer.GetAsync($"/api/zones/{other.Zone.Id}/water-thresholds");

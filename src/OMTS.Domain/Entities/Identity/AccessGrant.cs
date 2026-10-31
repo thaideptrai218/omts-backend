@@ -7,8 +7,9 @@ using OMTS.Domain.Enums;
 namespace OMTS.Domain.Entities.Identity;
 
 /// <summary>
-/// E06 – A zone–role pair assigned to an account. Effective permissions are the union of the roles'
-/// permissions in the zone. Re-granting creates a new grant; a revoked one is never restored (BR-19).
+/// E06 – a zone–role pair of a staff account (FARM-05): one fixed role in one zone or in All zones. It is Effective
+/// from its grant until it is revoked (with the time, the person and the reason); there are no validity dates.
+/// Re-granting creates a new pair; a revoked one is never restored (BR-FARM-08).
 /// </summary>
 public class AccessGrant : AuditableEntity, IHasStatus
 {
@@ -24,11 +25,7 @@ public class AccessGrant : AuditableEntity, IHasStatus
 
     public AccessScopeType ScopeType { get; set; }
 
-    public DateOnly EffectiveFrom { get; set; }
-
-    /// <summary>“Expired” is derived once this date has passed; the status stays Effective.</summary>
-    public DateOnly? EffectiveTo { get; set; }
-
+    /// <summary>The Owner who granted the pair; the time is <see cref="AuditableEntity.CreatedAt"/>.</summary>
     public Guid GrantedByAccountId { get; set; }
 
     public DateTimeOffset? RevokedAt { get; set; }
@@ -38,6 +35,5 @@ public class AccessGrant : AuditableEntity, IHasStatus
     public int StatusId { get; set; } = StatusIds.AccessGrant.Effective;
     public Status Status { get; set; } = null!;
 
-    public bool IsEffectiveOn(DateOnly date) =>
-        StatusId == StatusIds.AccessGrant.Effective && EffectiveFrom <= date && (EffectiveTo is null || EffectiveTo >= date);
+    public bool IsEffective => StatusId == StatusIds.AccessGrant.Effective;
 }

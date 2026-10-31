@@ -47,7 +47,7 @@ public class PhoneAndPasswordTests(AuthApiFactory factory) : IClassFixture<AuthA
     {
         var other = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
         var zone = await factory.AddZoneAsync(NewCode());
-        var role = await factory.AddRoleAsync($"R {NewCode()}", (PermissionFunctions.WaterMeasurements, View: true, Create: false, Edit: false));
+        var role = StaffRole.ZoneManager;
         var phone = NewPhone();
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff, a => { a.PhoneNumber = phone; a.PhoneVerifiedAt = null; });
         await factory.GrantAsync(staff, role, zone);

@@ -183,7 +183,8 @@ public class PurchaseReceiptListExportTests(AuthApiFactory factory) : IClassFixt
         Assert.Equal(list.GetProperty("totals").Money("outstanding"), Cell(totals, 12));
         Assert.Equal(list.GetProperty("totals").Money("payable"), Cell(totals, 9));
 
-        var noExport = await factory.PurchasingStaffAsync(world.Zone, new Perm(PermissionFunctions.PurchaseReceipts, true, true, true, true));
+        // The Accountant views purchase receipts only (§I.4.4 PURCHASE-03 R): no export.
+        var noExport = await factory.AccountantAsync(world.Zone);
         await (await noExport.GetAsync("/api/purchase-receipts/export")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await noExport.GetAsync("/api/purchase-receipts")).ReadAsync(HttpStatusCode.OK);
     }
@@ -196,15 +197,10 @@ public class PurchaseReceiptListExportTests(AuthApiFactory factory) : IClassFixt
         var inZone = await world.CompletedAsync(0, 0, new LineBody(world.Other, 1, 100_000));
         var inOther = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 100_000)) with { ZoneId = otherZone.Id, Complete = true });
 
-        // View in both zones, Export in the first one only.
+        // View in both zones, Export in the first one only: Zone Manager there, Accountant (view only) in the other.
         var staff = await factory.AddAccountAsync(NewCode(), Password, Domain.Enums.SubjectType.Staff);
-        var exporter = new Domain.Entities.Identity.Role { Name = NewCode() };
-        exporter.Permissions.Add(new Domain.Entities.Identity.RolePermission { FunctionCode = PermissionFunctions.PurchaseReceipts, CanView = true, OtherPermissions = ["EXPORT"] });
-        var viewer = new Domain.Entities.Identity.Role { Name = NewCode() };
-        viewer.Permissions.Add(new Domain.Entities.Identity.RolePermission { FunctionCode = PermissionFunctions.PurchaseReceipts, CanView = true });
-        await factory.UseDbAsync(db => db.Roles.AddRange(exporter, viewer));
-        await factory.GrantAsync(staff, exporter, world.Zone);
-        await factory.GrantAsync(staff, viewer, otherZone);
+        await factory.GrantAsync(staff, Domain.Enums.StaffRole.ZoneManager, world.Zone);
+        await factory.GrantAsync(staff, Domain.Enums.StaffRole.Accountant, otherZone);
         var client = await factory.LoginAsync(staff.Username);
 
         Assert.Equal(2, Ids(await SearchAsync(client, $"supplierId={world.SupplierId}")).Count);

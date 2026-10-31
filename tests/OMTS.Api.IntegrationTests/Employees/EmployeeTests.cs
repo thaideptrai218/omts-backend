@@ -144,7 +144,7 @@ public class EmployeeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         var (name, phone) = ($"H {NewCode()}", NewPhone());
         var id = (await (await owner.PostAsJsonAsync("/api/employees", Body(name, phone, zone.Id))).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("employee").GetProperty("id").GetGuid();
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        await factory.GrantAsync(staff, await factory.AddRoleAsync($"W {NewCode()}", (PermissionFunctions.LaborWorkers, true, true, true)), null);
+        await factory.GrantAsync(staff, StaffRole.ZoneManager, null);
 
         var stale = await owner.PutAsJsonAsync($"/api/employees/{id}", new { fullName = name, phoneNumber = phone, rowVersion = "AAAAAAAAB9E=" });
         var forbidden = await (await factory.LoginAsync(staff.Username)).GetAsync("/api/employees");
@@ -157,7 +157,7 @@ public class EmployeeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
     {
         await factory.EnsureCooperativeAsync();
         var owner = await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Password)).Username);
-        var role = await factory.AddRoleAsync($"Z {NewCode()}", (PermissionFunctions.Attendance, true, true, true));
+        var role = await factory.RoleAsync(StaffRole.ZoneManager);
         return (owner, await factory.AddZoneAsync(NewCode()), role);
     }
 

@@ -62,12 +62,11 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
     }
 
     [Fact]
-    public async Task Staff_holding_every_water_right_at_all_zones_still_cannot_set_thresholds()
+    public async Task Zone_manager_holding_every_water_right_at_all_zones_still_cannot_set_thresholds()
     {
         var z = await api.ZoneAsync();
-        var role = await AddWaterRoleAsync(view: true, create: true, edit: true, export: true);
         var account = await api.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        await api.GrantAsync(account, role, zone: null);
+        await api.GrantAsync(account, StaffRole.ZoneManager, zone: null);
         var staff = await api.LoginAsync(account.Username);
 
         var read = await staff.GetAsync($"/api/zones/{z.Zone.Id}/water-thresholds");
@@ -92,7 +91,7 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
         var zoneB = await api.ZoneAsync();
         var draftId = (await (await zoneB.RecognizeAsync("ocr-fail")).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("measurement").Id();
         var confirmed = await zoneB.RecordedAsync(7m, 20m);
-        var (managerOfA, _) = await api.StaffAsync((await api.ZoneAsync()).Zone, create: true, edit: true, export: true);
+        var (managerOfA, _) = await api.StaffAsync((await api.ZoneAsync()).Zone);
 
         var responses = new[]
         {
@@ -116,21 +115,19 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
     }
 
     [Fact]
-    public async Task Each_action_needs_its_own_right_view_does_not_confirm_create_does_not_void_edit_does_not_confirm()
+    public async Task A_pair_of_a_role_without_water_rights_in_the_zone_acts_on_no_draft()
     {
         var z = await api.ZoneAsync();
         var draft = await z.RecordedAsync(7m, 20m, confirm: false);
-        var (viewer, _) = await api.StaffAsync(z.Zone);
-        var (creator, _) = await api.StaffAsync(z.Zone, create: true);
-        var (editor, _) = await api.StaffAsync(z.Zone, edit: true);
+        // WATER-01…03 are No for the Accountant (§I.4.4), whatever zone its pair names.
+        var (accountant, _) = await api.StaffAsync(z.Zone, StaffRole.Accountant);
 
         var responses = new[]
         {
-            await viewer.PostAsJsonAsync($"/api/water-measurements/{draft.Id()}/confirm", new { }),
-            await creator.VoidAsync(draft.Id(), 1),
-            await creator.PostAsync($"/api/water-measurements/{draft.Id()}/editing", null),
-            await editor.PostAsJsonAsync($"/api/water-measurements/{draft.Id()}/confirm", new { }),
-            await editor.PostAsync($"/api/water-measurements/{draft.Id()}/recognize", null),
+            await accountant.PostAsJsonAsync($"/api/water-measurements/{draft.Id()}/confirm", new { }),
+            await accountant.VoidAsync(draft.Id(), 1),
+            await accountant.PostAsync($"/api/water-measurements/{draft.Id()}/editing", null),
+            await accountant.PostAsync($"/api/water-measurements/{draft.Id()}/recognize", null),
         };
 
         foreach (var response in responses)
@@ -148,7 +145,7 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
     {
         var z = await api.ZoneAsync();
         var confirmed = await z.RecordedAsync(7m, 20m);
-        var (noView, _) = await api.StaffAsync(z.Zone, view: false, create: true);
+        var (noView, _) = await api.StaffAsync(z.Zone, StaffRole.Accountant);
 
         var detail = await noView.GetAsync($"/api/water-measurements/{confirmed.Id()}");
         var history = await noView.GetAsync(z.Base);
@@ -162,7 +159,7 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
     public async Task Re_sending_a_saved_operation_after_the_grant_was_revoked_is_refused_not_answered_with_the_record()
     {
         var z = await api.ZoneAsync();
-        var (manager, account) = await api.StaffAsync(z.Zone, create: true);
+        var (manager, account) = await api.StaffAsync(z.Zone);
         var operationId = Guid.NewGuid();
         var first = await z.RecordAsync(7m, 20m, clientOperationId: operationId, client: manager);
         var savedId = (await first.Content.ReadFromJsonAsync<JsonElement>()).Id();
@@ -179,13 +176,13 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
     }
 
     [Fact]
-    public async Task Export_right_without_view_is_refused()
+    public async Task Export_is_refused_to_a_role_without_water_rights_in_the_zone()
     {
         var z = await api.ZoneAsync();
         await z.RecordedAsync(7m, 20m);
-        var (exportOnly, _) = await api.StaffAsync(z.Zone, view: false, export: true);
+        var (accountant, _) = await api.StaffAsync(z.Zone, StaffRole.Accountant);
 
-        var response = await exportOnly.GetAsync($"{z.Base}/export");
+        var response = await accountant.GetAsync($"{z.Base}/export");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
@@ -196,7 +193,7 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
     {
         var zoneA = await api.ZoneAsync();
         var zoneB = await api.ZoneAsync();
-        var (manager, managerAccount) = await api.StaffAsync(zoneA.Zone, create: true);
+        var (manager, managerAccount) = await api.StaffAsync(zoneA.Zone);
         var operationId = Guid.NewGuid();
 
         var byOwner = await zoneA.RecordAsync(7m, 20m, clientOperationId: operationId);
@@ -224,45 +221,11 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
         Assert.Equal(0, await api.QueryAsync(db => db.WaterMeasurements.CountAsync(m => m.ZoneId == zoneB.Zone.Id)));
     }
 
-    /// <summary>A staff account holding the deployment's default Accountant role at All zones (ACS-10 defaults).</summary>
+    /// <summary>A staff account holding the fixed Accountant role at All zones.</summary>
     private async Task<HttpClient> AccountantAtAllZonesAsync()
     {
-        var role = new Role { Name = $"Accountant {NewCode()}" };
-        foreach (var permission in DefaultRoles.Accountant.Permissions)
-        {
-            var actions = DefaultRoles.ActionsOf(permission);
-            role.Permissions.Add(new RolePermission
-            {
-                FunctionCode = permission.FunctionCode,
-                CanView = actions.Contains(PermissionAction.View),
-                CanCreate = actions.Contains(PermissionAction.Create),
-                CanEdit = actions.Contains(PermissionAction.Edit),
-                CanDelete = actions.Contains(PermissionAction.Delete),
-                OtherPermissions = actions
-                    .Where(a => a is not (PermissionAction.View or PermissionAction.Create or PermissionAction.Edit or PermissionAction.Delete))
-                    .Select(a => a.ToString().ToUpperInvariant())
-                    .ToList(),
-            });
-        }
-
-        await api.UseDbAsync(db => db.Roles.Add(role));
         var account = await api.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        await api.GrantAsync(account, role, zone: null);
+        await api.GrantAsync(account, StaffRole.Accountant, zone: null);
         return await api.LoginAsync(account.Username);
-    }
-
-    private async Task<Role> AddWaterRoleAsync(bool view, bool create, bool edit, bool export)
-    {
-        var role = new Role { Name = $"Water all {NewCode()}" };
-        role.Permissions.Add(new RolePermission
-        {
-            FunctionCode = PermissionFunctions.WaterMeasurements,
-            CanView = view,
-            CanCreate = create,
-            CanEdit = edit,
-            OtherPermissions = export ? ["EXPORT"] : [],
-        });
-        await api.UseDbAsync(db => db.Roles.Add(role));
-        return role;
     }
 }

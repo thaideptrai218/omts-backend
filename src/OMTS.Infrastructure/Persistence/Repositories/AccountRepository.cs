@@ -10,6 +10,13 @@ internal sealed class AccountRepository(OmtsDbContext db) : IAccountRepository
     public Task<Account?> GetByIdAsync(Guid accountId, CancellationToken cancellationToken) =>
         db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
 
+    public async Task<IReadOnlyDictionary<Guid, string>> GetDisplayNamesAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken cancellationToken) =>
+        accountIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.Accounts.AsNoTracking()
+                .Where(a => accountIds.Contains(a.Id))
+                .ToDictionaryAsync(a => a.Id, a => a.DisplayName, cancellationToken);
+
     public Task<Account?> FindByLoginIdentifierAsync(string username, string? phoneNumber, string? email, CancellationToken cancellationToken) =>
         db.Accounts.FirstOrDefaultAsync(
             a => a.Username == username

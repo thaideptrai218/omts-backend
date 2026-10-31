@@ -32,8 +32,8 @@ public static class PurchasingSqlServerKit
             await owner.CreateItemAsync("Seed", "kg"), await owner.CreateItemAsync("RaftMaterial", "piece"), await owner.CreateItemAsync("Other", "bag"));
     }
 
-    /// <summary>Logged-in staff with one grant in the zone (All zones when null) of a role holding the permissions.</summary>
-    public static async Task<HttpClient> StaffAsync(this FarmingHost host, Guid? zoneId, params Perm[] permissions)
+    /// <summary>Logged-in staff with one pair of the fixed <paramref name="role"/> in the zone (All zones when null).</summary>
+    public static async Task<HttpClient> StaffAsync(this FarmingHost host, Guid? zoneId, StaffRole role)
     {
         using var scope = host.Api.Services.CreateScope();
         var staff = new Account
@@ -41,31 +41,12 @@ public static class PurchasingSqlServerKit
             Username = NewCode(), DisplayName = "Purchasing staff", SubjectType = SubjectType.Staff, StatusId = StatusIds.Account.Active,
             PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher>().Hash(Password), PhoneNumber = NewPhone(), PhoneVerifiedAt = DateTimeOffset.UtcNow,
         };
-        var role = new Role { Name = NewCode() };
-        foreach (var p in permissions)
-        {
-            role.Permissions.Add(new RolePermission
-            {
-                FunctionCode = p.Function, CanView = p.View, CanCreate = p.Create, CanEdit = p.Edit, CanDelete = p.Delete, OtherPermissions = p.Export ? ["EXPORT"] : [],
-            });
-        }
-
-        var grant = new AccessGrant
-        {
-            AccountId = staff.Id, RoleId = role.Id, ZoneId = zoneId, ScopeType = zoneId is null ? AccessScopeType.AllZones : AccessScopeType.SpecificZone,
-            EffectiveFrom = PurchasingTestKit.Today.AddDays(-1), GrantedByAccountId = host.Owner.Account.Id,
-        };
-        await host.UseDbAsync(db =>
-        {
-            db.Accounts.Add(staff);
-            db.Roles.Add(role);
-            db.AccessGrants.Add(grant);
-        });
+        await host.UseDbAsync(db => db.Accounts.Add(staff));
+        await host.Api.GrantAsync(staff, role, zoneId, host.Owner.Account.Id);
         return await host.LoginAsync(staff.Username);
     }
 
-    public static Task<HttpClient> ZoneManagerAsync(this FarmingHost host, Guid zoneId) =>
-        host.StaffAsync(zoneId, Perm.Full(PermissionFunctions.PurchaseReceipts), new Perm(PermissionFunctions.Suppliers, true, true, true));
+    public static Task<HttpClient> ZoneManagerAsync(this FarmingHost host, Guid zoneId) => host.StaffAsync(zoneId, StaffRole.ZoneManager);
 
     /// <summary>Starts the requests together (HttpClient is safe for concurrent requests).</summary>
     public static async Task<HttpResponseMessage[]> InParallelAsync(int count, Func<int, Task<HttpResponseMessage>> request)

@@ -20,7 +20,7 @@ public sealed record BootstrapOutcome(int ExitCode, IReadOnlyList<string> Messag
 /// <summary>
 /// One-time deployment step (formerly UC72; no System Administrator since 22/10):
 /// <c>dotnet OMTS.Api.dll seed --bootstrap [--demo]</c> applies migrations, checks the status catalog,
-/// creates the default roles and, when no cooperative exists, the cooperative (Preliminary) and its first
+/// creates the rows of the two fixed roles (BR-FARM-07) and, when no cooperative exists, the cooperative (Preliminary) and its first
 /// Cooperative Owner with a temporary password that expires after 24 hours. Idempotent.
 /// </summary>
 public sealed class DeploymentBootstrapper(

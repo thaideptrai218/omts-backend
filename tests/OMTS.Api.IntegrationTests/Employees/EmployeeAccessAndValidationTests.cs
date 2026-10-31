@@ -20,9 +20,7 @@ public class EmployeeAccessAndValidationTests(AuthApiFactory factory) : IClassFi
         var (owner, zone, role) = await SetupAsync(factory);
         var id = IdOf(await CreateAsync(owner, Profile($"Access {NewCode()}", NewPhone(), zone.Id)));
         var manager = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        await factory.GrantAsync(manager, await factory.AddRoleAsync($"ZM {NewCode()}",
-            (PermissionFunctions.LaborWorkers, true, true, true), (PermissionFunctions.WorkAssignments, true, true, true),
-            (PermissionFunctions.Attendance, true, true, true), (PermissionFunctions.Payroll, true, true, true)), null);
+        await factory.GrantAsync(manager, StaffRole.ZoneManager, null);
         var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
         var body = Profile($"Intruder {NewCode()}", NewPhone(), zone.Id);
         var account = AccountBlock($"nv{NewCode()}", zone, role);

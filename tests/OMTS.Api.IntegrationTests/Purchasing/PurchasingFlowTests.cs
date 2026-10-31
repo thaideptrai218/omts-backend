@@ -189,7 +189,7 @@ public class PurchasingFlowTests(AuthApiFactory factory) : IClassFixture<AuthApi
     private async Task<HttpClient> ManagerOfAsync(FarmingZone zone)
     {
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        var role = await factory.AddRoleAsync(NewCode(), (PermissionFunctions.PurchaseReceipts, true, true, true), (PermissionFunctions.Suppliers, true, true, true));
+        var role = StaffRole.ZoneManager;
         await factory.GrantAsync(staff, role, zone);
         return await factory.LoginAsync(staff.Username);
     }

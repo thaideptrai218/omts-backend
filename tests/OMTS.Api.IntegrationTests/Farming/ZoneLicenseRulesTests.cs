@@ -256,8 +256,8 @@ public class ZoneLicenseRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         var owner = await factory.OwnerAsync();
         var zoneId = (await owner.Client.CreateZoneAsync()).Id();
         var license = await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneIds = [zoneId], EffectiveDate = Today });
-        var staff = await factory.StaffAsync(await factory.ZoneEntityAsync(zoneId), EveryFunction());
-        var everywhere = await factory.StaffAsync(null, EveryFunction());
+        var staff = await factory.StaffAsync(await factory.ZoneEntityAsync(zoneId));
+        var everywhere = await factory.StaffAsync(null);
         var trader = await factory.TraderAsync();
         var form = new LicenseFields { ZoneIds = [zoneId], EffectiveDate = Today, RowVersion = license.Text("rowVersion") };
 

@@ -40,7 +40,7 @@ public class MessageCodeQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     {
         var zone = await factory.AddZoneAsync(NewCode());
         var other = await factory.AddZoneAsync(NewCode());
-        var staff = await factory.StaffAsync(zone, (PermissionFunctions.WaterMeasurements, true, false, false));
+        var staff = await factory.StaffAsync(zone);
 
         var missing = await (await staff.Client.GetAsync("/test-only/qa-messages/zone-from-query")).SrsProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01", "MSG01");
         var unreadable = await (await staff.Client.GetAsync("/test-only/qa-messages/zone-from-query?zoneId=seven")).SrsProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01", "MSG01");

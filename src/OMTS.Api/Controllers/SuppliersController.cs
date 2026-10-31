@@ -72,12 +72,12 @@ public sealed class SuppliersController(SupplierService suppliers, SupplierDebtS
 
     /// <summary>Per supplier: payable, returned, paid, refunded, unallocated and outstanding (INP-06).</summary>
     [HttpGet("debts")]
-    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.View, PermissionScope.AllZones)]
+    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.View, PermissionScope.NoZone)]
     [ProducesResponseType<IReadOnlyList<SupplierDebtRow>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Debts(CancellationToken cancellationToken) => Ok(await debts.ListAsync(cancellationToken));
 
     [HttpGet("{id:guid}/debt")]
-    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.View, PermissionScope.AllZones)]
+    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.View, PermissionScope.NoZone)]
     [ProducesResponseType<SupplierDebtDetail>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Debt(Guid id, CancellationToken cancellationToken) =>
         (await debts.GetAsync(id, cancellationToken)).ToActionResult(Ok);

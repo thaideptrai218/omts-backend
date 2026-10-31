@@ -82,7 +82,7 @@ public class OversizedUploadQaTests(KestrelApiFactory api) : IClassFixture<Kestr
     {
         await api.EnsureCooperativeAsync();
         var staff = await api.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        await api.GrantAsync(staff, await api.AddRoleAsync($"Water {NewCode()}", (PermissionFunctions.WaterMeasurements, true, true, true)), null);
+        await api.GrantAsync(staff, StaffRole.ZoneManager, null);
         var mustChange = await api.AddAccountAsync(NewCode(), Password, configure: a => { a.MustChangePassword = true; a.TemporaryPasswordIssuedAt = DateTimeOffset.UtcNow; });
         using var anonymous = KestrelClient();
         using var staffClient = await OnKestrelAsync(staff.Username);

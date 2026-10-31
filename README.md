@@ -70,7 +70,7 @@ on every `docker compose up` and creates nothing twice.
 | `thuonglai2` | Trader (Locked) | – | Refused: the account is locked |
 | `nhanvien.doimk` | Zone Manager | DEMO-01 | Logged in with `mustChangePassword = true` (change it first) |
 | `nhanvien.chuaxacthuc` | Zone Manager | DEMO-02 | Logged in with `phoneVerificationRequired = true` (verify the phone first) |
-| `nhanvien.hethan` | Zone Manager | DEMO-01, grant expired | Refused: no zone–role grant in effect |
+| `nhanvien.hethan` | Zone Manager | DEMO-01, pair revoked | Refused: no Effective zone–role pair (MSG-ACCOUNT-07) |
 
 A password you change stays changed: the seed never resets it. The Owner gets `Demo@1234` only while still on the
 bootstrap temporary password. To get every demo login back, reset the environment with `docker compose down -v`.
@@ -163,6 +163,16 @@ Dates and times are ISO 8601. A time sent without a UTC offset (`2026-10-20T08:0
 is Vietnam time (UTC+7), never the server's time zone or UTC; `Z` or an offset such as `+07:00` is kept. Responses always
 carry the offset. Business dates (`from`/`to` filters, receipt dates) are Vietnam dates.
 
+### Roles and zone access
+
+OMTS has three fixed roles (BR-FARM-07): Cooperative Owner, Zone Manager and Accountant. They are not created, edited or
+discontinued: `GET /api/roles` lists the two staff roles with their `code` (`ZONE_MANAGER`, `ACCOUNTANT`) and their
+permissions, the static matrix of SRS §I.4.4 in `FixedRoles`. The Owner grants a staff account zone–role pairs
+(`POST /api/accounts/{id}/grants` with `role` (code) or `roleId`, and a `zoneId` or none for All zones). A pair is Effective
+until it is revoked with a reason; there are no validity dates. On records with a zone a role works only in the zones of
+its pairs; records with no zone (suppliers, supplier payments and debts, customers, payroll…) follow the role only, so an
+Accountant pair for one zone opens them (BR-FARM-08). A staff account without an Effective pair cannot log in.
+
 ### Database (EF Core code-first)
 
 Entities live in `OMTS.Domain`; the DbContext, configurations and migrations live in `OMTS.Infrastructure/Persistence`.
@@ -218,22 +228,29 @@ created by a one-time command run on the server by the deployment operator (not 
    `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:DisplayName`, `Bootstrap:Owner:Username`,
    `Bootstrap:Owner:PhoneNumber`, `Bootstrap:Owner:Email` (optional), `Bootstrap:Owner:TemporaryPassword`.
 2. Run `dotnet OMTS.Api.dll seed --bootstrap` at handover time: it applies migrations, checks the status catalog, creates
-   the default roles (Zone Manager, Accountant) and, if no cooperative exists, the cooperative (Preliminary) and the
+   the rows of the two fixed roles (Zone Manager `ZONE_MANAGER`, Accountant `ACCOUNTANT`; their permissions are the
+   static §I.4.4 matrix, never stored) and, if no cooperative exists, the cooperative (Preliminary) and the
    Owner with the temporary password. The temporary password expires after 24 hours and must be changed at first login.
-   Running it again creates nothing that already exists ("already initialized", exit code 0); only a default role
-   whose name no longer exists (for example after a rename) is created again. Missing secrets give exit code 1 and the
+   Running it again creates nothing that already exists ("already initialized", exit code 0); the roles are found by
+   code. Missing secrets give exit code 1 and the
    names of the missing keys. `--demo` also seeds the demo data of "Run with Docker" (Development only; refused
    in any other environment).
+   Upgrading a database from before the fixed roles (migration `FixedRoles`): the rows named "Zone Manager" and
+   "Accountant" get the codes, other roles get a placeholder code (they are not listed, and their pairs give no
+   permission, login or zone any more), and the validity dates of the pairs are dropped, so expired and future pairs and
+   pairs of discontinued roles become Effective again; of two Effective copies of one pair only the newest stays. Down is
+   lossy (no stored permissions, every role In Use). Demo and test databases are not converted further: reset them
+   (`docker compose down -v`).
    An Owner who cannot log in (for example after missing the 24-hour window) is recovered with
    `dotnet OMTS.Api.dll seed --reset-owner-password`. It sets `Bootstrap:Owner:TemporaryPassword` (from configuration, never
    from the command line, so it never lands in shell history) as a new 24-hour temporary password that must be changed at
    first login, ends every session of the Owner and writes an audit row. Set a new value first: the Owner's current
    (expired) password is refused. With several Owners, `Bootstrap:Owner:Username`
    chooses one. Without an Owner, or without a valid password, it changes nothing and exits with code 1.
-3. Start the API and check `GET /health/ready`: 200 when the database, migrations, status catalog, default roles,
-   cooperative and an active Owner are all in place, else 503 listing the failing checks. This is a post-deployment
-   verification, **not** a platform probe: it depends on data the Owner can change (renaming a default role or locking the
-   only Owner turns it 503). Point App Service / Kubernetes readiness and load-balancer probes at `GET /health/db`
+3. Start the API and check `GET /health/ready`: 200 when the database, migrations, status catalog, the two fixed role
+   rows (by code), cooperative and an active Owner are all in place, else 503 listing the failing checks. This is a
+   post-deployment verification, **not** a platform probe: it depends on business data (locking the only Owner turns it
+   503). Point App Service / Kubernetes readiness and load-balancer probes at `GET /health/db`
    (database reachable and migrated). `GET /health` is liveness only.
 
 | Area | Keys |

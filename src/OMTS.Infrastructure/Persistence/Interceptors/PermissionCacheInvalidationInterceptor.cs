@@ -7,8 +7,8 @@ using OMTS.Domain.Entities.Identity;
 namespace OMTS.Infrastructure.Persistence.Interceptors;
 
 /// <summary>
-/// Clears cached permissions whenever grants, roles, role permissions or account state are saved, so
-/// every writer (UC11, UC12, UC04, UC08, jobs) makes changes effective immediately (BR-19) without
+/// Clears cached permissions whenever zone–role pairs, role rows or account state are saved, so every writer
+/// (FARM-05, ACCOUNT-09, the deployment seed, jobs) makes changes effective from the next action (GFR-02) without
 /// having to remember to invalidate.
 /// </summary>
 public sealed class PermissionCacheInvalidationInterceptor(IPermissionCacheInvalidator invalidator) : SaveChangesInterceptor
@@ -68,7 +68,7 @@ public sealed class PermissionCacheInvalidationInterceptor(IPermissionCacheInval
 
             switch (entry.Entity)
             {
-                case Role or RolePermission:
+                case Role:
                     pending.All = true;
                     break;
                 case AccessGrant grant:

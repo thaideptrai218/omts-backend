@@ -6,9 +6,10 @@ namespace OMTS.Application.Common.Interfaces.Persistence;
 public interface IZoneRecipientQuery
 {
     /// <summary>
-    /// Active Cooperative Owner accounts, plus active Staff accounts holding an effective zone–role grant on
-    /// <paramref name="zoneId"/> or at All zones whose role allows <paramref name="action"/> on
-    /// <paramref name="functionCode"/>. Revoked or expired grants and discontinued roles never count.
+    /// Active Cooperative Owner accounts, plus active Staff accounts holding an Effective zone–role pair on
+    /// <paramref name="zoneId"/> or at All zones whose fixed role allows <paramref name="action"/> on
+    /// <paramref name="functionCode"/> (for a function on records with no zone, a pair in any zone). Revoked pairs
+    /// never count.
     /// </summary>
     Task<IReadOnlyList<Guid>> GetRecipientsAsync(
         Guid zoneId, string functionCode, PermissionAction action, CancellationToken cancellationToken);

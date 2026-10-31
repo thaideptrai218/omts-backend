@@ -7,6 +7,7 @@ using OMTS.Application.Features.Authorization;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Purchasing;
+using OMTS.Domain.Enums;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
 namespace OMTS.Api.IntegrationTests.Purchasing;
@@ -124,18 +125,20 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
     }
 
     [Fact]
-    public async Task Every_write_is_owner_only_even_for_a_role_with_every_purchasing_action_everywhere()
+    public async Task Every_write_is_owner_only_even_for_staff_granted_at_all_zones()
     {
         var owner = await factory.PurchasingOwnerAsync();
         var id = await owner.CreateItemAsync("Other");
-        var staff = await factory.PurchasingStaffAsync(null,
-            Perm.Full(PermissionFunctions.PurchaseReceipts), new Perm(PermissionFunctions.Suppliers, true, true, true),
-            new Perm(PermissionFunctions.SupplierPayments, true, true, Export: true), Perm.Full(PermissionFunctions.CultivationCycles));
 
-        await (await staff.PostAsJsonAsync("/api/farming-input-items", new { code = NewCode(), name = "X", group = "Other", unit = "kg" })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        await (await staff.PutAsJsonAsync($"/api/farming-input-items/{id}", new { code = NewCode(), name = "X", group = "Other", unit = "kg", rowVersion = "" })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        await (await staff.PostAsync($"/api/farming-input-items/{id}/discontinue", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        await (await staff.PostAsync($"/api/farming-input-items/{id}/reactivate", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        // PURCHASE-08 is Owner-only (§I.4.4): neither fixed role writes items, whatever its pairs.
+        foreach (var staff in new[] { await factory.PurchasingStaffAsync(null, StaffRole.ZoneManager), await factory.AccountantAsync() })
+        {
+            await (await staff.PostAsJsonAsync("/api/farming-input-items", new { code = NewCode(), name = "X", group = "Other", unit = "kg" })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+            await (await staff.PutAsJsonAsync($"/api/farming-input-items/{id}", new { code = NewCode(), name = "X", group = "Other", unit = "kg", rowVersion = "" })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+            await (await staff.PostAsync($"/api/farming-input-items/{id}/discontinue", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+            await (await staff.PostAsync($"/api/farming-input-items/{id}/reactivate", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        }
+
         Assert.Equal(StatusIds.Usage.InUse, (await factory.QueryAsync(db => db.FarmingInputItems.SingleAsync(i => i.Id == id))).StatusId);
     }
 
@@ -146,27 +149,22 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
         var id = await owner.CreateItemAsync("Seed");
         var (zone, _) = await factory.ZoneWithRaftAsync();
 
+        // Both fixed roles read items: the Zone Manager views receipts and cycles in its zone, the Accountant views
+        // receipts and supplier payments, which have no zone, so a pair in one zone is enough (BR-FARM-08).
         foreach (var reader in new[]
         {
-            await factory.PurchasingStaffAsync(zone, new Perm(PermissionFunctions.PurchaseReceipts)),
-            await factory.PurchasingStaffAsync(null, new Perm(PermissionFunctions.SupplierPayments)),
-            await factory.PurchasingStaffAsync(zone, new Perm(PermissionFunctions.CultivationCycles)),
+            await factory.ZoneManagerAsync(zone),
+            await factory.AccountantAsync(),
+            await factory.AccountantAsync(zone),
         })
         {
             await (await reader.GetAsync("/api/farming-input-items")).ReadAsync(HttpStatusCode.OK);
             await (await reader.GetAsync($"/api/farming-input-items/{id}")).ReadAsync(HttpStatusCode.OK);
         }
 
-        foreach (var outsider in new[]
-        {
-            await factory.PurchasingStaffAsync(zone, new Perm(PermissionFunctions.Suppliers, true, true, true)),
-            // SUPPLIER_PAYMENTS is cooperative-wide: a grant in one zone gives no view.
-            await factory.PurchasingStaffAsync(zone, new Perm(PermissionFunctions.SupplierPayments)),
-        })
-        {
-            await (await outsider.GetAsync("/api/farming-input-items")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-            await (await outsider.GetAsync($"/api/farming-input-items/{id}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        }
+        var trader = await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader)).Username);
+        await (await trader.GetAsync("/api/farming-input-items")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await trader.GetAsync($"/api/farming-input-items/{id}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
     }
 
     // Done when: pickers return In Use items filtered by group.
