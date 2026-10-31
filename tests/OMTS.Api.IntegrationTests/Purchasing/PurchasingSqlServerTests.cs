@@ -297,6 +297,9 @@ public class PurchasingSqlServerTests
         await AssertDuplicateAsync(host, $"UPDATE Suppliers SET PhoneNumber = '{phone}' WHERE Id = '{otherSupplier}'");
         var seedCode = await host.QueryAsync(db => db.FarmingInputItems.Where(i => i.Id == world.Seed).Select(i => i.Code).SingleAsync());
         await AssertDuplicateAsync(host, $"UPDATE FarmingInputItems SET Code = '{seedCode.ToLowerInvariant()}' WHERE Id = '{world.Other}'");
+        // Item names are unique too, ignoring case (BR-PURCHASE-10).
+        var seedName = await host.QueryAsync(db => db.FarmingInputItems.Where(i => i.Id == world.Seed).Select(i => i.Name).SingleAsync());
+        await AssertDuplicateAsync(host, $"UPDATE FarmingInputItems SET Name = N'{seedName.ToUpperInvariant()}' WHERE Id = '{world.Other}'");
     }
 
     [SqlServerFact]
@@ -307,10 +310,20 @@ public class PurchasingSqlServerTests
         var owner = world.Owner;
 
         // A name of 101–200 characters fails (audit RecordCode is 100): see PurchasingSqlServerBugTests.pending.cs.txt.
+        // 256 characters: 60 + "@" + three labels of 60 + "." + 12.
+        var email = $"{new string('a', 60)}@{string.Join('.', Enumerable.Repeat(new string('b', 60), 3))}.{new string('c', 12)}";
+        Assert.Equal(256, email.Length);
         var supplier = await (await owner.PostAsJsonAsync("/api/suppliers", new
         {
-            name = new string('Ư', 100), supplierType = "Material", phoneNumber = NewPhone(), otherContacts = new string('ộ', 500),
+            name = new string('Ư', 100), supplierType = "Material", phoneNumber = NewPhone(), address = new string('ộ', 500), email,
         })).ReadAsync(HttpStatusCode.Created);
+        // Every Seed item uses one unit (BR-PURCHASE-10): the world's seed item, still unused, takes the longest unit first.
+        var seed = await owner.GetFromJsonAsync<JsonElement>($"/api/farming-input-items/{world.Seed}");
+        await (await owner.PutAsJsonAsync($"/api/farming-input-items/{world.Seed}", new
+        {
+            code = seed.GetProperty("code").GetString(), name = seed.GetProperty("name").GetString(), group = "Seed", unit = new string('ụ', 30),
+            rowVersion = seed.GetProperty("rowVersion").GetString(),
+        })).ReadAsync(HttpStatusCode.OK);
         var item = await (await owner.PostAsJsonAsync("/api/farming-input-items", new
         {
             code = NewCode() + new string('Đ', 40), name = new string('ố', 200), group = "Seed", unit = new string('ụ', 30), description = new string('ề', 2000),
@@ -336,7 +349,7 @@ public class PurchasingSqlServerTests
         await (await owner.CancelAsync(copy.Id(), new string('ỷ', 1000), null)).ReadAsync(HttpStatusCode.OK);
 
         var saved = await host.QueryAsync(db => db.Suppliers.SingleAsync(s => s.Id == supplier.Id()));
-        Assert.Equal((new string('Ư', 100), new string('ộ', 500)), (saved.Name, saved.OtherContacts));
+        Assert.Equal((new string('Ư', 100), new string('ộ', 500), email), (saved.Name, saved.Address, saved.Email));
         Assert.Equal(new string('ỷ', 1000), await host.QueryAsync(db => db.PurchaseReceipts.Where(r => r.Id == copy.Id()).Select(r => r.CancelReason).SingleAsync()));
     }
 
@@ -360,7 +373,7 @@ public class PurchasingSqlServerTests
         var code = seed.GetProperty("code").GetString()!;
 
         var list = await (await owner.GetAsync(
-            $"/api/purchase-receipts?itemGroup=RaftMaterial&itemId={world.Material}&zoneId={world.Zone.Id}&raftId={world.Raft.Id}&supplierId={world.SupplierId}" +
+            $"/api/purchase-receipts?itemGroup=Material&itemId={world.Material}&zoneId={world.Zone.Id}&raftId={world.Raft.Id}&supplierId={world.SupplierId}" +
             $"&statusId={StatusIds.PurchaseReceipt.Completed}&from={Today.AddDays(-1):yyyy-MM-dd}&to={Today:yyyy-MM-dd}&code={code[3..].ToLowerInvariant()}&page=1&pageSize=5"))
             .ReadAsync(HttpStatusCode.OK);
         Assert.Equal([seed.Id()], list.GetProperty("page").GetProperty("items").EnumerateArray().Select(r => r.Id()));

@@ -106,7 +106,7 @@ public static class PurchasingTestKit
         var (zone, raft) = await factory.ZoneWithRaftAsync();
         return new PurchasingWorld(
             owner, zone, raft, await owner.CreateSupplierAsync(),
-            await owner.CreateItemAsync("Seed", "kg"), await owner.CreateItemAsync("RaftMaterial", "piece"), await owner.CreateItemAsync("Other", "bag"));
+            await owner.CreateItemAsync("Seed", "kg"), await owner.CreateItemAsync("Material", "piece"), await owner.CreateItemAsync("Other", "bag"));
     }
 
     public static async Task<Guid> CreateSupplierAsync(this HttpClient client, string type = "Seed", string? phone = null, string? name = null)
@@ -115,9 +115,14 @@ public static class PurchasingTestKit
         return (await response.ReadAsync(HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
+    /// <summary>
+    /// An item named "{group} item {code}" (names are unique, BR-PURCHASE-10). Every Seed item of one database shares a
+    /// unit, so the tests use "kg" for seed.
+    /// </summary>
     public static async Task<Guid> CreateItemAsync(this HttpClient owner, string group, string unit = "kg", string? code = null)
     {
-        var response = await owner.PostAsJsonAsync("/api/farming-input-items", new { code = code ?? NewCode(), name = $"{group} item", group, unit });
+        code ??= NewCode();
+        var response = await owner.PostAsJsonAsync("/api/farming-input-items", new { code, name = $"{group} item {code}", group, unit });
         return (await response.ReadAsync(HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
