@@ -12,8 +12,14 @@ namespace OMTS.Application.Features.Files;
 /// </summary>
 public sealed class OrphanFileCleanupService(IFileStorage storage, IStoredFileReferenceQuery references, ILogger<OrphanFileCleanupService> logger)
 {
-    /// <summary>Raft photos and license files: each belongs to one column, so "no record points to it" is certain.</summary>
-    public static readonly IReadOnlyList<string> Categories = [FileCategories.RaftPhotos, FileCategories.ZoneLicenses];
+    /// <summary>
+    /// Raft photos, license files, cooperative cover photos and certificate files: each belongs to one column, so "no
+    /// record points to it" is certain.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Categories =
+    [
+        FileCategories.RaftPhotos, FileCategories.ZoneLicenses, FileCategories.CooperativeCoverPhotos, FileCategories.CooperativeCertifications,
+    ];
 
     /// <summary>
     /// Deletes the category's files written before <paramref name="writtenBefore"/> that no record points to, and
@@ -24,7 +30,7 @@ public sealed class OrphanFileCleanupService(IFileStorage storage, IStoredFileRe
     {
         if (!Categories.Contains(category))
         {
-            throw new ArgumentOutOfRangeException(nameof(category), category, "Only raft photos and license files are cleaned up.");
+            throw new ArgumentOutOfRangeException(nameof(category), category, "Only the categories of OrphanFileCleanupService.Categories are cleaned up.");
         }
 
         var stored = await storage.ListAsync(category, cancellationToken);

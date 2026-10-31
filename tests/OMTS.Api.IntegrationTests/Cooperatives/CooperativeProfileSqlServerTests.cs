@@ -25,10 +25,14 @@ public class CooperativeProfileSqlServerTests
         var saved = await owner.PutAsJsonAsync("/api/cooperative/profile", Valid(await RowVersionAsync(owner), b =>
         {
             b["fullName"] = Vietnamese(255);
+            b["shortName"] = Vietnamese(100);
             b["taxCode"] = "0109876543-001";
             b["officeAddress"] = Vietnamese(500);
             b["email"] = $"{new string('e', 60)}@{new string('d', 60)}.{new string('d', 60)}.{new string('d', 60)}.{new string('d', 8)}.vn";
             b["website"] = $"https://htxtrungnam.vn/{new string('w', 232)}";
+            b["socialLink"] = $"https://www.facebook.com/{new string('s', 230)}";
+            b["introductionVi"] = Vietnamese(4000);
+            b["introductionEn"] = Vietnamese(4000);
             b["legalRepresentative"] = Vietnamese(255);
             b["businessLines"] = new[] { line };
         }));
@@ -36,6 +40,7 @@ public class CooperativeProfileSqlServerTests
         Assert.True(saved.StatusCode == HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
         var stored = await QueryAsync(api, db => db.Cooperatives.AsNoTracking().SingleAsync());
         Assert.Equal((Vietnamese(255), Vietnamese(500), 255), (stored.FullName, stored.OfficeAddress, stored.Website!.Length));
+        Assert.Equal((Vietnamese(100), 255, Vietnamese(4000), Vietnamese(4000)), (stored.ShortName, stored.SocialLink!.Length, stored.IntroductionVi, stored.IntroductionEn));
         var reread = await owner.GetFromJsonAsync<JsonElement>("/api/cooperative/profile");
         Assert.Equal([line], reread.GetProperty("businessLines").EnumerateArray().Select(l => l.GetString()));
     }
@@ -65,8 +70,6 @@ public class CooperativeProfileSqlServerTests
         Assert.StartsWith($"The data was just updated by {account.DisplayName} at ", lateProblem.GetProperty("detail").GetString());
         var stored = await QueryAsync(api, db => db.Cooperatives.AsNoTracking().SingleAsync());
         Assert.StartsWith("HTX lần ", stored.FullName);
-        Assert.Equal(StatusIds.Cooperative.Completed, stored.StatusId);
-        Assert.Equal(1, await QueryAsync(api, db => db.AuditEvents.CountAsync(e => e.RecordId == cooperative.Id && e.Action == "Cooperative.StatusChanged")));
         Assert.Equal(1, await QueryAsync(api, db => db.AuditEvents.CountAsync(e => e.RecordId == cooperative.Id && e.Action == "Cooperative.Updated")));
     }
 

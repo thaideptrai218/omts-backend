@@ -33,6 +33,7 @@ public class DemoDataSeedQaTests
     private static readonly (string Table, Func<OmtsDbContext, Task<int>> Count)[] SeededTables =
     [
         ("Cooperatives", db => db.Cooperatives.CountAsync()),
+        ("CooperativeCertifications", db => db.CooperativeCertifications.CountAsync()),
         ("Accounts", db => db.Accounts.CountAsync()),
         ("AccessGrants", db => db.AccessGrants.CountAsync()),
         ("Customers", db => db.Customers.CountAsync()),

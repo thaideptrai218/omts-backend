@@ -103,7 +103,7 @@ public static class DependencyInjection
         services.AddOptions<WaterMeasurementOverdueOptions>().Bind(configuration.GetSection(WaterMeasurementOverdueOptions.SectionName));
         services.AddHostedService<WaterMeasurementOverdueJob>();
 
-        // Raft photo and license files no record points to (cooperative logos are never touched)
+        // Raft photos, license files, cover photos and certificate files no record points to (cooperative logos are never touched)
         services.AddOptions<OrphanFileCleanupOptions>()
             .Bind(configuration.GetSection(OrphanFileCleanupOptions.SectionName))
             .Validate(o => o.GracePeriod >= OrphanFileCleanupOptions.MinimumGracePeriod, $"{OrphanFileCleanupOptions.SectionName}:GracePeriod must be at least 01:00:00.")
