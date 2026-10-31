@@ -20,6 +20,13 @@ public sealed record FileRules(IReadOnlySet<FileFormat> AllowedFormats, long Max
     public static readonly FileRules Logo =
         new(new HashSet<FileFormat> { FileFormat.Png, FileFormat.Jpeg, FileFormat.WebP }, 2L * 1024 * 1024, 1);
 
+    /// <summary>
+    /// Cooperative cover photo (FARM-01): PNG, JPEG or WebP, at most 5 MB. A wide banner, larger than the logo, still
+    /// light enough for the public page on a phone.
+    /// </summary>
+    public static readonly FileRules CoverPhoto =
+        new(new HashSet<FileFormat> { FileFormat.Png, FileFormat.Jpeg, FileFormat.WebP }, 5L * 1024 * 1024, 1);
+
     /// <summary>Documents (licenses, invoices, certificates): JPEG, PNG or PDF.</summary>
     public static readonly FileRules Documents =
         new(new HashSet<FileFormat> { FileFormat.Jpeg, FileFormat.Png, FileFormat.Pdf }, TenMegabytes, 10);

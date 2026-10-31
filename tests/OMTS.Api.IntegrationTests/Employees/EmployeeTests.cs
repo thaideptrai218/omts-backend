@@ -146,7 +146,7 @@ public class EmployeeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
         await factory.GrantAsync(staff, StaffRole.ZoneManager, null);
 
-        var stale = await owner.PutAsJsonAsync($"/api/employees/{id}", new { fullName = name, phoneNumber = phone, rowVersion = "AAAAAAAAB9E=" });
+        var stale = await owner.PutAsJsonAsync($"/api/employees/{id}", new { fullName = name, phoneNumber = phone, rowVersion = StaleRowVersion });
         var forbidden = await (await factory.LoginAsync(staff.Username)).GetAsync("/api/employees");
 
         Assert.Equal("MSG06", await stale.ErrorCodeAsync());

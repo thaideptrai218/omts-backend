@@ -42,7 +42,7 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
         var updated = await owner.PutAsJsonAsync($"/api/zones/{zoneId}", ZoneBody(NewCode()) with { RowVersion = zone.GetProperty("rowVersion").GetString() });
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
         // InMemory does not generate rowversions: a version the server never issued stands for a stale one.
-        var stale = await owner.PutAsJsonAsync($"/api/zones/{zoneId}", ZoneBody(NewCode()) with { RowVersion = "AAAAAAAAB9E=" });
+        var stale = await owner.PutAsJsonAsync($"/api/zones/{zoneId}", ZoneBody(NewCode()) with { RowVersion = StaleRowVersion });
         Assert.Equal("MSG06", await stale.ErrorCodeAsync());
 
         // A Zone Manager of another zone: no write, no read of this zone, not in the lookup.

@@ -139,7 +139,7 @@ public class StaffAccountTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         await factory.UpdateAsync<Account>(id, a => a.PhoneVerifiedAt = DateTimeOffset.UtcNow);
         var current = await owner.GetFromJsonAsync<JsonElement>($"/api/accounts/{id}");
 
-        var stale = await owner.PutAsJsonAsync($"/api/accounts/{id}", new { displayName = "B", username = account.GetProperty("username").GetString(), phoneNumber = NewPhone(), rowVersion = "AAAAAAAAB9E=" });
+        var stale = await owner.PutAsJsonAsync($"/api/accounts/{id}", new { displayName = "B", username = account.GetProperty("username").GetString(), phoneNumber = NewPhone(), rowVersion = StaleRowVersion });
         var saved = await owner.PutAsJsonAsync($"/api/accounts/{id}", new { displayName = "B", username = account.GetProperty("username").GetString(), phoneNumber = NewPhone(), rowVersion = current.GetProperty("rowVersion").GetString() });
 
         Assert.Equal("MSG06", await stale.ErrorCodeAsync());

@@ -1,10 +1,12 @@
 namespace OMTS.Domain.Constants;
 
-/// <summary>Status groups of the Status catalog (SRS 3.4): 15 life-cycle groups plus the shared USAGE group.</summary>
+/// <summary>
+/// Status groups of the Status catalog (SRS 3.4): life-cycle groups plus the shared USAGE group. The cooperative has
+/// none since SRS 27/10 (ids 201–202 are no longer used).
+/// </summary>
 public static class StatusGroups
 {
     public const string Usage = "USAGE";
-    public const string Cooperative = "COOPERATIVE";
     public const string Account = "ACCOUNT";
     public const string Employee = "EMPLOYEE";
     public const string AccessGrant = "ACCESS_GRANT";

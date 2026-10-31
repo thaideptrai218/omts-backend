@@ -10,21 +10,40 @@ namespace OMTS.Application.Features.Files;
 /// logo file is kept, since published traceability versions show the logo of their publication time (FARM-01).
 /// Each environment needs a storage container (or folder) of its own: files its database does not know are deleted.
 /// </summary>
-public sealed class OrphanFileCleanupService(IFileStorage storage, IStoredFileReferenceQuery references, ILogger<OrphanFileCleanupService> logger)
+public sealed class OrphanFileCleanupService(
+    IFileStorage storage,
+    IStoredFileReferenceQuery references,
+    ICooperativeRepository cooperatives,
+    ILogger<OrphanFileCleanupService> logger)
 {
-    /// <summary>Raft photos and license files: each belongs to one column, so "no record points to it" is certain.</summary>
-    public static readonly IReadOnlyList<string> Categories = [FileCategories.RaftPhotos, FileCategories.ZoneLicenses];
+    /// <summary>
+    /// Raft photos, license files, cooperative cover photos and certificate files: each belongs to one column, so "no
+    /// record points to it" is certain.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Categories =
+    [
+        FileCategories.RaftPhotos, FileCategories.ZoneLicenses, FileCategories.CooperativeCoverPhotos, FileCategories.CooperativeCertifications,
+    ];
+
+    /// <summary>
+    /// Categories of the cooperative whose files may all be unreferenced in a real database: the cover photo was removed,
+    /// or the last certification. For them the database is known to be this environment's when it holds the cooperative.
+    /// </summary>
+    private static readonly IReadOnlySet<string> CooperativeCategories =
+        new HashSet<string>(StringComparer.Ordinal) { FileCategories.CooperativeCoverPhotos, FileCategories.CooperativeCertifications };
 
     /// <summary>
     /// Deletes the category's files written before <paramref name="writtenBefore"/> that no record points to, and
     /// returns how many were deleted. Younger files are kept: their upload may still wait for the save pointing to it.
-    /// When no stored file of the category at all is referenced, nothing is deleted (a warning is logged).
+    /// Nothing is deleted (a warning is logged) when the database does not look like this storage's own: for raft photos
+    /// and license files when no stored file of the category at all is referenced, for the cooperative's cover photos
+    /// and certificate files when the database holds no cooperative.
     /// </summary>
     public async Task<int> CleanAsync(string category, DateTimeOffset writtenBefore, CancellationToken cancellationToken)
     {
         if (!Categories.Contains(category))
         {
-            throw new ArgumentOutOfRangeException(nameof(category), category, "Only raft photos and license files are cleaned up.");
+            throw new ArgumentOutOfRangeException(nameof(category), category, "Only the categories of OrphanFileCleanupService.Categories are cleaned up.");
         }
 
         var stored = await storage.ListAsync(category, cancellationToken);
@@ -36,7 +55,18 @@ public sealed class OrphanFileCleanupService(IFileStorage storage, IStoredFileRe
 
         // Read after the listing: a record saved in between points to a file younger than the grace period.
         var referenced = await references.ReferencedKeysAsync(category, cancellationToken);
-        if (!stored.Any(f => referenced.Contains(f.Key)))
+        if (CooperativeCategories.Contains(category))
+        {
+            if (!await cooperatives.ExistsAsync(cancellationToken))
+            {
+                // Cooperative files but no cooperative: the database belongs to another environment, or is empty.
+                logger.LogWarning(
+                    "Orphan file clean-up of {Category} skipped: the database holds no cooperative; check that this environment has a storage of its own.",
+                    category);
+                return 0;
+            }
+        }
+        else if (!stored.Any(f => referenced.Contains(f.Key)))
         {
             // Not one stored file (old or new) is referenced: the database belongs to another environment, or is empty,
             // rather than this storage being full of orphans. Deleting would empty the folder, so nothing is deleted.

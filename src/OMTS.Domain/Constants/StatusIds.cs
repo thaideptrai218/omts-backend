@@ -12,12 +12,6 @@ public static class StatusIds
         public const int Discontinued = 102;
     }
 
-    public static class Cooperative
-    {
-        public const int Draft = 201;
-        public const int Completed = 202;
-    }
-
     public static class Account
     {
         public const int Active = 301;

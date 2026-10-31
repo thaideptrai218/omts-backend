@@ -20,7 +20,7 @@ public sealed record BootstrapOutcome(int ExitCode, IReadOnlyList<string> Messag
 /// <summary>
 /// One-time deployment step (formerly UC72; no System Administrator since 22/10):
 /// <c>dotnet OMTS.Api.dll seed --bootstrap [--demo]</c> applies migrations, checks the status catalog,
-/// creates the rows of the two fixed roles (BR-FARM-07) and, when no cooperative exists, the cooperative (Preliminary) and its first
+/// creates the rows of the two fixed roles (BR-FARM-07) and, when no cooperative exists, the cooperative (full name only) and its first
 /// Cooperative Owner with a temporary password that expires after 24 hours. Idempotent.
 /// </summary>
 public sealed class DeploymentBootstrapper(
@@ -79,7 +79,7 @@ public sealed class DeploymentBootstrapper(
         if (cooperative is null)
         {
             cooperative = CreateCooperativeAndOwner(settings);
-            messages.Add($"Cooperative created (Preliminary) with Cooperative Owner '{settings.OwnerUsername}'. " +
+            messages.Add($"Cooperative created with Cooperative Owner '{settings.OwnerUsername}'. " +
                 (seedDemoData
                     ? "Demo mode: the Owner gets the fixed demo password instead."
                     : "The temporary password expires in 24 hours and must be changed at first login."));
@@ -155,7 +155,8 @@ public sealed class DeploymentBootstrapper(
         audit.Record(new AuditEntry("Cooperative.Created", nameof(Cooperative))
         {
             RecordId = cooperative.Id,
-            After = new { cooperative.FullName, Status = "DRAFT" },
+            // The cooperative has no status (SRS 27/10).
+            After = new { cooperative.FullName },
         });
         audit.Record(new AuditEntry("Account.Created", nameof(Account))
         {
