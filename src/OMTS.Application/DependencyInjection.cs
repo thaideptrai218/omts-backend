@@ -68,7 +68,10 @@ public static class DependencyInjection
         services.AddScoped<RoleService>();
 
         // FARM-01 cooperative profile, LAB-01 employees
+        services.AddScoped<CooperativeProfileViews>();
         services.AddScoped<CooperativeProfileService>();
+        services.AddScoped<CooperativeCoverPhotoService>();
+        services.AddScoped<CooperativeCertificationService>();
         services.AddScoped<EmployeeService>();
 
         // FARM-02 zones, FARM-03 zone licenses, FARM-04 rafts

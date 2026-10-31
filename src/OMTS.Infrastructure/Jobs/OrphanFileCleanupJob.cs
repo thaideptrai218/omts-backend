@@ -25,8 +25,9 @@ public sealed class OrphanFileCleanupOptions
 }
 
 /// <summary>
-/// Deletes raft photo and license files that no record points to (<see cref="OrphanFileCleanupService"/>). Each
-/// category runs in its own scope, so a failing one is logged and skipped while the other continues.
+/// Deletes raft photos, license files, cooperative cover photos and certificate files that no record points to
+/// (<see cref="OrphanFileCleanupService"/>). Each category runs in its own scope, so a failing one is logged and skipped
+/// while the others continue.
 /// </summary>
 public sealed class OrphanFileCleanupJob(IServiceScopeFactory scopes, IOptions<OrphanFileCleanupOptions> options, ILogger<OrphanFileCleanupJob> logger)
 {

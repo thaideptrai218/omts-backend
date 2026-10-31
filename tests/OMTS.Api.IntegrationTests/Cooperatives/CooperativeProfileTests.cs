@@ -17,7 +17,7 @@ public class CooperativeProfileTests
     private static readonly byte[] Png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0x0D];
 
     [Fact]
-    public async Task First_complete_save_makes_the_profile_Completed_and_keeps_the_bank_account()
+    public async Task Save_answers_msg_gen_05_has_no_status_and_keeps_the_bank_account()
     {
         using var api = new AuthApiFactory();
         var cooperative = await api.EnsureCooperativeAsync();
@@ -28,20 +28,23 @@ public class CooperativeProfileTests
         var saved = await owner.PutAsJsonAsync("/api/cooperative/profile", Valid(before.GetProperty("rowVersion").GetString()));
         var body = await saved.Content.ReadFromJsonAsync<JsonElement>();
 
-        Assert.Equal("Preliminary", before.GetProperty("status").GetString());
+        // SRS 27/10: the cooperative has no status (no more Preliminary / Completed).
+        Assert.DoesNotContain("status", before.EnumerateObject().Select(p => p.Name));
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
         Assert.Equal("Cooperative profile saved.", body.GetProperty("message").GetString());
-        Assert.Equal("Completed", body.GetProperty("profile").GetProperty("status").GetString());
+        Assert.DoesNotContain("status", body.GetProperty("profile").EnumerateObject().Select(p => p.Name));
         Assert.Equal(["Nuôi hàu", "Thương mại thủy sản"], body.GetProperty("profile").GetProperty("businessLines").EnumerateArray().Select(l => l.GetString()));
         Assert.DoesNotContain("bankAccount", body.GetProperty("profile").EnumerateObject().Select(p => p.Name));
         var preview = body.GetProperty("profile").GetProperty("publicPreview");
-        Assert.Equal(["name", "officeAddress", "logoUrl"], preview.EnumerateObject().Select(p => p.Name));
+        Assert.Equal(
+            ["fullName", "shortName", "yearEstablished", "officeAddress", "phoneNumber", "email", "website", "socialLink", "logoUrl",
+             "coverPhotoUrl", "introductionVi", "introductionEn", "certifications"],
+            preview.EnumerateObject().Select(p => p.Name));
 
         var stored = await api.QueryAsync(db => db.Cooperatives.AsNoTracking().SingleAsync());
         Assert.Equal("0011223344", stored.BankAccount?.AccountNumber);
         var actions = await api.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == cooperative.Id).Select(e => e.Action).ToListAsync());
-        Assert.Contains("Cooperative.Updated", actions);
-        Assert.Contains("Cooperative.StatusChanged", actions);
+        Assert.Equal(["Cooperative.Updated"], actions);
     }
 
     [Fact]
@@ -54,7 +57,7 @@ public class CooperativeProfileTests
 
         var response = await owner.PutAsJsonAsync("/api/cooperative/profile", new
         {
-            fullName = "HTX", taxCode = "12345", officeAddress = "Vân Đồn", phoneNumber = "0912345678",
+            fullName = "HTX", shortName = "HTX", taxCode = "12345", officeAddress = "Vân Đồn", phoneNumber = "0912345678",
             website = "ftp://htx.vn", legalRepresentative = "Ông A", businessLines = new[] { " " }, rowVersion,
         });
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -62,7 +65,7 @@ public class CooperativeProfileTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("Tax code is missing or invalid. Please check and enter it again.", problem.GetProperty("detail").GetString());
         Assert.Equal(["Tax code", "Website", "Business lines"], problem.GetProperty("fields").EnumerateArray().Select(f => f.GetString()));
-        Assert.Equal(StatusIds.Cooperative.Draft, await api.QueryAsync(db => db.Cooperatives.Select(c => c.StatusId).SingleAsync()));
+        Assert.Null(await api.QueryAsync(db => db.Cooperatives.Select(c => c.TaxCode).SingleAsync()));
     }
 
     [Fact]
@@ -139,6 +142,7 @@ public class CooperativeProfileTests
     private static object Valid(string? rowVersion, string taxCode = "0109876543") => new
     {
         fullName = "Hợp tác xã Nuôi trồng thủy sản Trung Nam",
+        shortName = "HTX Trung Nam",
         taxCode,
         officeAddress = "Thôn 3, xã Đông Xá, Vân Đồn, Quảng Ninh",
         phoneNumber = "+84912345678",

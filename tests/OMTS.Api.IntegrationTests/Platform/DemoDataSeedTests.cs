@@ -25,6 +25,7 @@ public class DemoDataSeedTests
     private static readonly (string Table, Func<OmtsDbContext, Task<int>> Count)[] SeededTables =
     [
         ("Cooperatives", db => db.Cooperatives.CountAsync()),
+        ("CooperativeCertifications", db => db.CooperativeCertifications.CountAsync()),
         ("Accounts", db => db.Accounts.CountAsync()),
         ("AccessGrants", db => db.AccessGrants.CountAsync()),
         ("Customers", db => db.Customers.CountAsync()),
@@ -108,6 +109,17 @@ public class DemoDataSeedTests
     {
         using var scope = api.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
+
+        // FARM-01: the SRS 27/10 profile fields, a logo and a cover photo, and one Valid certification with its file.
+        var cooperative = await db.Cooperatives.AsNoTracking().SingleAsync();
+        Assert.Equal(("HTX Hàu Vân Đồn", 2012), (cooperative.ShortName, cooperative.YearEstablished));
+        Assert.All(
+            new[] { cooperative.TaxCode, cooperative.SocialLink, cooperative.IntroductionVi, cooperative.IntroductionEn, cooperative.LogoUrl, cooperative.CoverPhotoUrl },
+            value => Assert.False(string.IsNullOrEmpty(value)));
+        var certification = await db.CooperativeCertifications.AsNoTracking().SingleAsync();
+        Assert.Equal(cooperative.Id, certification.CooperativeId);
+        Assert.NotNull(certification.FileUrl);
+        Assert.True(certification.ExpiryDate > DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)).AddDays(30));
 
         Assert.Equal(3, await db.FarmingZones.CountAsync());
         Assert.Equal(1, await db.FarmingZones.CountAsync(z => z.StatusId == StatusIds.Usage.Discontinued));
