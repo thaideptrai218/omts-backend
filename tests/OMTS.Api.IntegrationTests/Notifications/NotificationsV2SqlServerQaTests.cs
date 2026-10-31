@@ -128,8 +128,9 @@ public class NotificationsV2SqlServerQaTests(ITestOutputHelper output)
     }
 
     // ACCOUNT-08 step 3 / BR-ACCOUNT-12: the time it was read is saved once. A mark-read that read the row while it was
-    // still unread must not move the time a concurrent request already saved.
-    [SqlServerFact(Skip = "QA finding OMTS-216 PR 0.5 #3 (mark-read reads then writes without a guard: a concurrent second request overwrites the saved read time)")]
+    // still unread must not move the time a concurrent request already saved. Accepted by the lead (QA 0.5 finding #3):
+    // the later time only moves the read time by the length of the race.
+    [SqlServerFact(Skip = "Accepted (QA 0.5)")]
     public async Task A_mark_read_that_loses_the_race_keeps_the_first_read_time()
     {
         var (database, api, owner, client, zone) = await SetUpAsync();

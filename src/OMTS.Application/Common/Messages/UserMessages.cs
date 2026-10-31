@@ -51,21 +51,27 @@ public static class UserMessages
     // ---- MSG-FARM ----
 
     /// <summary>MSG-FARM-01 (GFR-03): notification to the Owner when a license becomes Expiring soon.</summary>
-    /// <param name="document">The license number with its zone, e.g. "Marine aquaculture license GP-01 (Vùng A)".</param>
-    /// <param name="expiryDate">dd/MM/yyyy.</param>
-    public static UserMessage LicenseExpiringSoon(string document, string expiryDate, int days) => new(
-        Farm01, $"{document} expires on {expiryDate}, in {days} days. Please renew it and record the new one.", Legacy.Msg25)
+    /// <param name="documentType">License type code (stored), e.g. AQUACULTURE_LICENSE.</param>
+    /// <param name="documentTypeName">Its English name, for the text.</param>
+    /// <param name="zoneCodes">Codes of the zones the license covers.</param>
+    public static UserMessage LicenseExpiringSoon(
+        string documentType, string documentTypeName, string documentNumber, IReadOnlyList<string> zoneCodes, DateOnly expiryDate, int days) => new(
+        Farm01,
+        $"{LicenseDocument(documentTypeName, documentNumber, zoneCodes)} expires on {Date(expiryDate)}, in {days} days. Please renew it and record the new one.",
+        Legacy.Msg25)
     {
-        Parameters = Placeholders(("document", document), ("expiry_date", expiryDate), ("days", days.ToString(CultureInfo.InvariantCulture))),
+        Parameters = LicenseParameters(documentType, documentNumber, zoneCodes, expiryDate, days),
     };
 
     /// <summary>MSG-FARM-02 (GFR-03): notification to the Owner when a license becomes Expired.</summary>
-    public static UserMessage LicenseExpired(string document, string expiryDate) => new(
-        Farm02, $"{document} expired on {expiryDate}. Please renew it and record the new one.", Legacy.Msg25)
+    public static UserMessage LicenseExpired(
+        string documentType, string documentTypeName, string documentNumber, IReadOnlyList<string> zoneCodes, DateOnly expiryDate) => new(
+        Farm02,
+        $"{LicenseDocument(documentTypeName, documentNumber, zoneCodes)} expired on {Date(expiryDate)}. Please renew it and record the new one.",
+        Legacy.Msg25)
     {
-        Parameters = Placeholders(("document", document), ("expiry_date", expiryDate)),
+        Parameters = LicenseParameters(documentType, documentNumber, zoneCodes, expiryDate, days: null),
     };
-
     // ---- MSG-WATER ----
 
     /// <summary>MSG-WATER-01 (WATER-01.2): the OCR Service read nothing, or did not answer.</summary>
@@ -74,31 +80,37 @@ public static class UserMessages
         Water01, $"OMTS could not read {indicatorList} from the photo. Please look at the meter and type in the missing values.", Legacy.Msg04);
 
     /// <summary>MSG-WATER-03 (BR-WATER-05): the water alert notification.</summary>
-    /// <param name="correctionNote">Empty, or "(corrected measurement)" after a correction.</param>
-    /// <param name="raftCode">"–" while measurements have no raft.</param>
-    /// <param name="measurementTime">Vietnam time, "HH:mm dd/MM/yyyy".</param>
-    /// <param name="valuesOutside">Each value outside with its allowed range, e.g. "Salinity 12 ‰ is too low (allowed 15–30 ‰)".</param>
-    public static UserMessage WaterAlert(string correctionNote, string zoneName, string raftCode, string measurementTime, string valuesOutside) => new(
+    /// <param name="corrected">The alert of a corrected measurement: "(corrected measurement)" in the text.</param>
+    /// <param name="raftCode">Null while measurements have no raft ("–" in the text).</param>
+    /// <param name="measuredAt">Shown in Vietnam time.</param>
+    /// <param name="valuesOutside">Each value outside with its allowed range.</param>
+    public static UserMessage WaterAlert(
+        bool corrected, string zoneName, string? raftCode, DateTimeOffset measuredAt, IReadOnlyList<WaterValueOutside> valuesOutside) => new(
         Water03,
-        $"Water alert{(correctionNote.Length == 0 ? "" : " " + correctionNote)}: zone {zoneName}, raft {raftCode}, measured on {measurementTime}. {valuesOutside}. Please check the water.",
+        $"Water alert{(corrected ? " (corrected measurement)" : "")}: zone {zoneName}, raft {raftCode ?? "–"}, measured on {BusinessClock.Format(measuredAt)}. "
+            + $"{string.Join("; ", valuesOutside.Select(v => v.Describe()))}. Please check the water.",
         Legacy.Msg27)
     {
-        Parameters = Placeholders(
-            ("correction_note", correctionNote), ("zone_name", zoneName), ("raft_code", raftCode), ("measurement_time", measurementTime),
-            ("values_outside", valuesOutside)),
+        Parameters = new Dictionary<string, object?>
+        {
+            ["corrected"] = corrected,
+            ["zone_name"] = zoneName,
+            ["raft_code"] = raftCode,
+            ["measurement_time"] = measuredAt.ToOffset(BusinessClock.UtcOffset),
+            ["values_outside"] = valuesOutside,
+        },
     };
-
     /// <summary>MSG-WATER-05: the minimum of an indicator is not less than its maximum.</summary>
     /// <param name="indicator">e.g. "pH", or "pH and salinity" when both are wrong.</param>
     public static UserMessage MinimumNotLessThanMaximum(string indicator) => new(
         Water05, $"The minimum of {indicator} must be less than the maximum. The thresholds were not saved. Please correct the values.", Legacy.Msg28);
 
     /// <summary>MSG-WATER-06 (GFR-04): reminder to measure the water of a zone.</summary>
-    /// <param name="lastDate">dd/MM/yyyy: the latest measurement, or the start of the overdue period when there is none.</param>
-    public static UserMessage WaterMeasurementOverdue(string zoneName, string lastDate) => new(
-        Water06, $"Zone {zoneName} has had no water measurement since {lastDate}. Please measure the water and record the result in OMTS.", Legacy.Msg26)
+    /// <param name="lastDate">The business day of the latest measurement, or the start of the overdue period when there is none.</param>
+    public static UserMessage WaterMeasurementOverdue(string zoneName, DateOnly lastDate) => new(
+        Water06, $"Zone {zoneName} has had no water measurement since {Date(lastDate)}. Please measure the water and record the result in OMTS.", Legacy.Msg26)
     {
-        Parameters = Placeholders(("zone_name", zoneName), ("last_date", lastDate)),
+        Parameters = new Dictionary<string, object?> { ["zone_name"] = zoneName, ["last_date"] = lastDate },
     };
 
     // ---- MSG-ACCOUNT ----
@@ -274,8 +286,30 @@ public static class UserMessages
 
     private static string Capitalized(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
 
-    private static IReadOnlyDictionary<string, string> Placeholders(params (string Name, string Value)[] values) =>
-        values.ToDictionary(v => v.Name, v => v.Value, StringComparer.Ordinal);
+    /// <summary>A date as shown in messages, e.g. "29/11/2026".</summary>
+    private static string Date(DateOnly date) => date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+
+    // {document} of MSG-FARM-01/02: "the license number with its zone".
+    private static string LicenseDocument(string documentTypeName, string documentNumber, IReadOnlyList<string> zoneCodes) =>
+        $"{documentTypeName} {documentNumber} ({string.Join(", ", zoneCodes)})";
+
+    private static Dictionary<string, object?> LicenseParameters(
+        string documentType, string documentNumber, IReadOnlyList<string> zoneCodes, DateOnly expiryDate, int? days)
+    {
+        var parameters = new Dictionary<string, object?>
+        {
+            ["document_type"] = documentType,
+            ["document_number"] = documentNumber,
+            ["zone_codes"] = zoneCodes,
+            ["expiry_date"] = expiryDate,
+        };
+        if (days is { } value)
+        {
+            parameters["days"] = value;
+        }
+
+        return parameters;
+    }
 
     /// <summary>"15 minutes", "1 minute", "45 seconds": whole minutes from one minute up (rounded up).</summary>
     private static string Duration(TimeSpan span)

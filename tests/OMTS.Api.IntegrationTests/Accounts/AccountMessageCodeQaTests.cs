@@ -103,7 +103,7 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         var saved = await (await client.PutAsJsonAsync("/api/me/notification-preferences", new { items = new[] { new { type = "WATER_MEASUREMENT_OVERDUE", push = false } } }))
             .BodyAsync(HttpStatusCode.OK);
 
-        Assert.Equal(("Notification settings saved.", "MSG-GEN-05"), (saved.Str("message"), saved.Str("messageCode")));
+        Assert.Equal(("Notification preferences saved.", "MSG-GEN-05"), (saved.Str("message"), saved.Str("messageCode")));
         Assert.Equal(JsonValueKind.Null, saved.GetProperty("notice").ValueKind);
         Assert.Equal(JsonValueKind.Null, saved.GetProperty("noticeCode").ValueKind);
     }

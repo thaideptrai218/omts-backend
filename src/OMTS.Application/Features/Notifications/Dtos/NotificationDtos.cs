@@ -1,10 +1,12 @@
+using System.Text.Json;
+
 namespace OMTS.Application.Features.Notifications.Dtos;
 
 /// <summary>A notification of the caller's list (SCR-ACCOUNT-07), with the content it was sent with (BR-ACCOUNT-12).</summary>
 /// <param name="Title">English title.</param>
 /// <param name="Body">English text of <paramref name="MessageCode"/>.</param>
 /// <param name="MessageCode">SRS code of the content (MSG-WATER-03…), to show it in the client's language.</param>
-/// <param name="MessageParams">Values of the placeholders of <paramref name="MessageCode"/>, by placeholder name.</param>
+/// <param name="MessageParams">The parameters of <paramref name="MessageCode"/>: a JSON object of atomic values (see the README).</param>
 /// <param name="Mandatory">The type is always pushed.</param>
 /// <param name="ReadAt">Null while unread.</param>
 public sealed record NotificationView(
@@ -13,7 +15,7 @@ public sealed record NotificationView(
     string Title,
     string? Body,
     string? MessageCode,
-    IReadOnlyDictionary<string, string>? MessageParams,
+    JsonElement? MessageParams,
     bool Mandatory,
     string? RelatedRecordType,
     Guid? RelatedRecordId,

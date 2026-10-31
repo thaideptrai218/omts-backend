@@ -1,16 +1,23 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace OMTS.Infrastructure.Messaging.Fakes;
 
 /// <summary>A message a fake sender "delivered", kept in memory for the dev-only inbox endpoints and tests.</summary>
 /// <param name="Devices">Push only: the device tokens a real provider would deliver to (empty: none).</param>
+/// <param name="NotificationId">Push only: the kept notification it announces.</param>
+/// <param name="MessageCode">Push only: the SRS code of the content.</param>
+/// <param name="MessageParams">Push only: the parameters of <paramref name="MessageCode"/>, the JSON object a device renders.</param>
 public sealed record FakeMessage(
     string Id,
     DateTimeOffset SentAt,
     string Recipient,
     string? Subject,
     string Text,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? Devices = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? Devices = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? NotificationId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MessageCode = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? MessageParams = null);
 
 /// <summary>Keeps the last <see cref="Capacity"/> messages of one fake channel (SMS, email, push).</summary>
 public sealed class FakeMessageInbox

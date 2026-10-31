@@ -68,7 +68,7 @@ public sealed class NotificationPreferenceService(
 
         // ACCOUNT-07.1: the choice is saved; the user is told that no device of the account allows notifications.
         var pushAllowed = await PushAllowedAsync(account.Id, cancellationToken);
-        var saved = UserMessages.Saved("Notification settings");
+        var saved = UserMessages.Saved("Notification preferences");
         var notice = !pushAllowed && changes.Any(c => c.Push) ? UserMessages.PushNotAllowedOnDevice : null;
         return new NotificationPreferencesSaved(
             Views(account, offered.Values), pushAllowed, saved.Text, saved.Code, notice?.Text, notice?.Code);

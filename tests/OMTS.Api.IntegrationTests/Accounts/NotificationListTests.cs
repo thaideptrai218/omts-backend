@@ -40,6 +40,7 @@ public class NotificationListTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal("WATER_MEASUREMENT_OVERDUE", item.GetProperty("type").GetString());
         Assert.Equal("MSG-WATER-06", item.GetProperty("messageCode").GetString());
         Assert.Equal(zone.Name, item.GetProperty("messageParams").GetProperty("zone_name").GetString());
+        Assert.Equal("2026-10-01", item.GetProperty("messageParams").GetProperty("last_date").GetString());
         Assert.Equal($"Zone {zone.Name} has had no water measurement since 01/10/2026. Please measure the water and record the result in OMTS.", item.GetProperty("body").GetString());
         Assert.Equal(("FarmingZone", zone.Id, zone.Code), (item.GetProperty("relatedRecordType").GetString(), item.GetProperty("relatedRecordId").GetGuid(), item.GetProperty("relatedRecordCode").GetString()));
         Assert.False(item.GetProperty("mandatory").GetBoolean());
@@ -56,7 +57,7 @@ public class NotificationListTests(AuthApiFactory factory) : IClassFixture<AuthA
         var zone = await factory.AddZoneAsync(NewCode());
 
         await NotifyAsync([owner.Id], new NotificationContent(
-            NotificationTypes.WaterAlert, "Water quality alert", UserMessages.WaterAlert("", zone.Name, "–", "06:30 20/10/2026", "pH 9.1 is too high (allowed 7.5–8.5)"),
+            NotificationTypes.WaterAlert, "Water quality alert", UserMessages.WaterAlert(false, zone.Name, null, DateTimeOffset.UtcNow, [new(WaterValueOutside.Ph, 9.1m, null, WaterValueDirection.High, 7.5m, 8.5m)]),
             new RelatedRecord(RelatedRecordTypes.FarmingZone, zone.Id, zone.Code)));
         await NotifyAsync([owner.Id], new NotificationContent(
             NotificationTypes.StaffAccountLockReminder, "Lock reminder", new UserMessage("MSG-LABOR-02", "Lock the staff account."),
@@ -66,6 +67,14 @@ public class NotificationListTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(["STAFF_ACCOUNT_LOCK_REMINDER", "WATER_ALERT"], types.Order());
         var pushed = Assert.Single(Pushes(owner));
         Assert.StartsWith("WATER_ALERT:", pushed.Text);
+        // The push carries the code and atomic parameters (the dev inbox shows them as the device gets them).
+        Assert.Equal("MSG-WATER-03", pushed.MessageCode);
+        var outside = Assert.Single(pushed.MessageParams!.Value.GetProperty("values_outside").EnumerateArray());
+        Assert.Equal(("PH", 9.1m, "High", 7.5m, 8.5m), (
+            outside.GetProperty("indicator").GetString(), outside.GetProperty("value").GetDecimal(), outside.GetProperty("direction").GetString(),
+            outside.GetProperty("min").GetDecimal(), outside.GetProperty("max").GetDecimal()));
+        Assert.False(pushed.MessageParams!.Value.GetProperty("corrected").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, pushed.MessageParams!.Value.GetProperty("raft_code").ValueKind);
     }
 
     [Fact]
@@ -189,7 +198,7 @@ public class NotificationListTests(AuthApiFactory factory) : IClassFixture<AuthA
     private static NotificationContent OverdueReminder(FarmingZone zone) => new(
         NotificationTypes.WaterMeasurementOverdue,
         "Water measurement overdue",
-        UserMessages.WaterMeasurementOverdue(zone.Name, "01/10/2026"),
+        UserMessages.WaterMeasurementOverdue(zone.Name, new DateOnly(2026, 10, 1)),
         new RelatedRecord(RelatedRecordTypes.FarmingZone, zone.Id, zone.Code));
 
     /// <summary>Dispatch and save, as a module does inside its use case.</summary>

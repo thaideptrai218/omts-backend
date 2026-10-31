@@ -71,7 +71,7 @@ public class NotificationSqlServerTests
             await scope.ServiceProvider.GetRequiredService<INotificationDispatcher>().NotifyAsync(
                 [owner.Id],
                 new NotificationContent(
-                    NotificationTypes.WaterMeasurementOverdue, "Water measurement overdue", UserMessages.WaterMeasurementOverdue("Vùng Cái Rồng", "01/10/2026"),
+                    NotificationTypes.WaterMeasurementOverdue, "Water measurement overdue", UserMessages.WaterMeasurementOverdue("Vùng Cái Rồng", new DateOnly(2026, 10, 1)),
                     new RelatedRecord(RelatedRecordTypes.FarmingZone, zone.Id, zone.Code)),
                 CancellationToken.None);
             await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();

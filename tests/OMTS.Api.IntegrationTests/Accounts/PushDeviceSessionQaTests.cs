@@ -215,7 +215,7 @@ public class PushDeviceSessionQaTests
         using (var scope = api.Services.CreateScope())
         {
             await scope.ServiceProvider.GetRequiredService<INotificationDispatcher>().NotifyAsync(
-                accountIds, new NotificationContent(type, "QA", UserMessages.WaterMeasurementOverdue("QA", "01/10/2026")), CancellationToken.None);
+                accountIds, new NotificationContent(type, "QA", UserMessages.WaterMeasurementOverdue("QA", new DateOnly(2026, 10, 1))), CancellationToken.None);
             await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
         }
 

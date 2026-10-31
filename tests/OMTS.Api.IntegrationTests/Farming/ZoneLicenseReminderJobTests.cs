@@ -51,11 +51,11 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
         var first = await NoticesAsync(license.Id());
         Assert.Equal(expected, first.Select(n => n.RecipientAccountId).Order());
         Assert.DoesNotContain(first, n => new[] { accountant.Id, otherZone.Id, revoked.Id, locked.Id }.Contains(n.RecipientAccountId));
-        var zoneName = zoneA.Name;
+        var zoneCode = zoneA.Code;
         Assert.All(first, n =>
         {
             Assert.Equal(
-                $"Marine aquaculture license {license.Text("documentNumber")} ({zoneName}) expires on {Date(Today.AddDays(30))}, in 30 days. Please renew it and record the new one.",
+                $"Marine aquaculture license {license.Text("documentNumber")} ({zoneCode}) expires on {Date(Today.AddDays(30))}, in 30 days. Please renew it and record the new one.",
                 n.Body);
             Assert.Equal("MSG-FARM-01", n.MessageCode);
             Assert.Equal(("ZoneComplianceDocument", license.Text("documentNumber")), (n.RelatedRecordType, n.RelatedRecordCode));
@@ -97,7 +97,7 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
         var notices = await NoticesAsync(license.Id());
         Assert.Subset(notices.Select(n => n.RecipientAccountId).ToHashSet(), (await ActiveOwnersAsync()).ToHashSet());
         Assert.All(notices.GroupBy(n => n.RecipientAccountId), g => Assert.Single(g));
-        var zones = string.Join(", ", new[] { zoneA.Name, zoneB.Name }.Order());
+        var zones = string.Join(", ", new[] { zoneA.Code, zoneB.Code }.Order(StringComparer.Ordinal));
         Assert.All(notices, n => Assert.Equal(
             $"Sea area allocation decision {license.Text("documentNumber")} ({zones}) expired on {Date(Today.AddDays(-5))}. Please renew it and record the new one.", n.Body));
         var saved = await factory.QueryAsync(db => db.ZoneComplianceDocuments.SingleAsync(d => d.Id == license.Id()));

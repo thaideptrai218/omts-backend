@@ -1,8 +1,6 @@
-using System.Text.Encodings.Web;
-using System.Text.Json;
-using System.Text.Unicode;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Messages;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Platform;
 using OMTS.Domain.Enums;
@@ -33,9 +31,6 @@ public sealed class NotificationDispatcher(
     private const int MaxTitleLength = 200;
     private const int MaxBodyLength = 2000;
 
-    // Vietnamese names stay readable in the stored JSON.
-    private static readonly JsonSerializerOptions ParamsJson = new() { Encoder = JavaScriptEncoder.Create(UnicodeRanges.All) };
-
     public async Task NotifyAsync(IReadOnlyCollection<Guid> recipientAccountIds, NotificationContent content, CancellationToken cancellationToken)
     {
         var definition = NotificationTypes.Find(content.Type)
@@ -51,7 +46,7 @@ public sealed class NotificationDispatcher(
         // Only active accounts are notified; Locked accounts are left out by the repository.
         var preferences = await notifications.GetPreferencesAsync(recipients, cancellationToken);
         var now = timeProvider.GetUtcNow();
-        var parameters = content.Message.Parameters is { Count: > 0 } values ? JsonSerializer.Serialize(values, ParamsJson) : null;
+        var parameters = MessageParameterJson.Serialize(content.Message.Parameters);
         var pushed = new List<Notification>();
 
         foreach (var accountId in recipients)
@@ -104,7 +99,8 @@ public sealed class NotificationDispatcher(
                 tokens[notification.RecipientAccountId].ToList(),
                 notification.Id,
                 notification.MessageCode,
-                notification.RelatedRecordId));
+                notification.RelatedRecordId,
+                notification.MessageParams));
         }
     }
 

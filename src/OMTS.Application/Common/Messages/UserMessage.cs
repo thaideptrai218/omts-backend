@@ -15,9 +15,10 @@ public sealed record UserMessage(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? LegacyCode = null)
 {
     /// <summary>
-    /// The values of the SRS placeholders in <see cref="Text"/> by placeholder name (e.g. <c>zone_name</c>), for the
-    /// messages a client shows later in its own language (notification contents); null for the other messages.
+    /// For the messages a client shows later in its own language (notification contents): the values <see cref="Text"/>
+    /// is built from, by parameter name (e.g. <c>zone_name</c>), each an atomic value (text, number, boolean, date,
+    /// list), never an English phrase (<see cref="MessageParameterJson"/>). Null for the other messages.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public IReadOnlyDictionary<string, string>? Parameters { get; init; }
+    [JsonIgnore]
+    public IReadOnlyDictionary<string, object?>? Parameters { get; init; }
 }

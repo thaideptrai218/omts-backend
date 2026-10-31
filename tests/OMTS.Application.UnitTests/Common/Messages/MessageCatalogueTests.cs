@@ -106,6 +106,12 @@ public sealed class MessageCatalogueTests
         { Name: "legacyCode" } => MessageCodes.Legacy.Msg03,
         { ParameterType: var t } when t == typeof(string) => "Sample",
         { ParameterType: var t } when t == typeof(int) => 3,
+        { ParameterType: var t } when t == typeof(bool) => true,
+        { ParameterType: var t } when t == typeof(DateOnly) => new DateOnly(2026, 10, 1),
+        { ParameterType: var t } when t == typeof(DateTimeOffset) => new DateTimeOffset(2026, 10, 1, 1, 0, 0, TimeSpan.Zero),
+        { ParameterType: var t } when t == typeof(IReadOnlyList<string>) => new[] { "Sample" },
+        { ParameterType: var t } when t == typeof(IReadOnlyList<WaterValueOutside>) =>
+            new[] { new WaterValueOutside(WaterValueOutside.Ph, 9.1m, null, WaterValueDirection.High, 7.5m, 8.5m) },
         _ => throw new InvalidOperationException($"No sample value for parameter {parameter.Name} ({parameter.ParameterType.Name})."),
     };
 }

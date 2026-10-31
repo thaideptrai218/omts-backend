@@ -193,7 +193,15 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   session allows notifications; turning push on then still saves the choice and answers MSG-ACCOUNT-21 in `notice`.
 - List (ACCOUNT-08): `GET /api/me/notifications?unreadOnly=&page=&pageSize=` (newest first, `unreadCount` of the whole
   list), `POST /api/me/notifications/{id}/read`, `POST /api/me/notifications/read-all`. A row keeps its English
-  `title`/`body` and the `messageCode` with `messageParams` (placeholder values) so the apps can show it in Vietnamese.
+  `title`/`body` and the `messageCode` with `messageParams`, a JSON object of atomic values (never an English phrase) from
+  which the apps build the text in Vietnamese or English; a push carries the same code and parameters. Dates are ISO
+  dates, times ISO 8601 with the Vietnam offset:
+
+  | Code | `messageParams` |
+  |---|---|
+  | MSG-WATER-03 | `corrected` (bool), `zone_name`, `raft_code` (null: no raft yet, "–"), `measurement_time`, `values_outside`: `[{ indicator: PH \| SALINITY, value, unit: "‰" \| null, direction: High \| Low, min, max }]` |
+  | MSG-WATER-06 | `zone_name`, `last_date` |
+  | MSG-FARM-01 / MSG-FARM-02 | `document_type` (license type code), `document_number`, `zone_codes` (list), `expiry_date`, `days` (MSG-FARM-01 only) |
 - `GET /api/me/notifications/{id}/open` checks the access again (GFR-02): 403 MSG-GEN-08 when the user may no longer
   open the record (e.g. a revoked zone–role pair), 404 MSG-ACCOUNT-22 when the record was removed. A push carries the
   notification id.

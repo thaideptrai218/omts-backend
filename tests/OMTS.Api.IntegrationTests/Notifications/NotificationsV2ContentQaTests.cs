@@ -27,6 +27,7 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
     private static readonly string TestPassword = NewPassword();
 
     // MSG-WATER-03 (BR-WATER-05): zone, raft, time and each value outside; "(corrected measurement)" after a correction.
+    // The parameters are atomic (QA 0.5 finding #1): corrected flag, ISO time, structured values outside.
     [Fact]
     public async Task A_water_alert_and_its_correction_store_msg_water_03_with_every_placeholder()
     {
@@ -42,9 +43,10 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
         var alert = items.Single(i => i.GetProperty("relatedRecordId").GetGuid() == first);
         var correction = items.Single(i => i.GetProperty("relatedRecordId").GetGuid() == second);
 
-        AssertAlert(alert, "", "pH 9.1 is too high (allowed 6.5–8.5)");
+        AssertAlert(alert, false, [("PH", 9.1m, null, "High", 6.5m, 8.5m)]);
         Assert.Equal($"Water alert: zone {z.Zone.Name}, raft –, measured on {time}. pH 9.1 is too high (allowed 6.5–8.5). Please check the water.", alert.GetProperty("body").GetString());
-        AssertAlert(correction, "(corrected measurement)", "pH 9.4 is too high (allowed 6.5–8.5); Salinity 31 ‰ is too high (allowed 15–30 ‰)");
+        AssertAlert(correction, true, [("PH", 9.4m, null, "High", 6.5m, 8.5m), ("SALINITY", 31m, "‰", "High", 15m, 30m)]);
+        Assert.EndsWith(". pH 9.4 is too high (allowed 6.5–8.5); Salinity 31 ‰ is too high (allowed 15–30 ‰). Please check the water.", correction.GetProperty("body").GetString());
         Assert.StartsWith($"Water alert (corrected measurement): zone {z.Zone.Name}, raft –, measured on {time}.", correction.GetProperty("body").GetString());
 
         // The first alert still opens: its measurement exists, now as an earlier version (shown with its current status).
@@ -59,21 +61,24 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
         var problem = await removed.ProblemAsync();
         Assert.Equal(("MSG-ACCOUNT-22", "Water measurement no longer exists."), (problem.GetProperty("code").GetString(), problem.GetProperty("detail").GetString()));
 
-        void AssertAlert(JsonElement item, string correctionNote, string valuesOutside)
+        void AssertAlert(JsonElement item, bool corrected, (string Indicator, decimal Value, string? Unit, string Direction, decimal Min, decimal Max)[] valuesOutside)
         {
             Assert.Equal(("WATER_ALERT", "MSG-WATER-03", true), (item.GetProperty("type").GetString(), item.GetProperty("messageCode").GetString(), item.GetProperty("mandatory").GetBoolean()));
             Assert.Equal(("WaterMeasurement", JsonValueKind.Null), (item.GetProperty("relatedRecordType").GetString(), item.GetProperty("relatedRecordCode").ValueKind));
-            Assert.Equal(
-                new Dictionary<string, string>
-                {
-                    ["correction_note"] = correctionNote, ["zone_name"] = z.Zone.Name, ["raft_code"] = "–", ["measurement_time"] = time,
-                    ["values_outside"] = valuesOutside,
-                },
-                Params(item));
+            var parameters = item.GetProperty("messageParams");
+            Assert.Equal(["corrected", "measurement_time", "raft_code", "values_outside", "zone_name"], parameters.EnumerateObject().Select(p => p.Name).Order());
+            Assert.Equal((corrected, z.Zone.Name, JsonValueKind.Null), (parameters.GetProperty("corrected").GetBoolean(), parameters.GetProperty("zone_name").GetString(), parameters.GetProperty("raft_code").ValueKind));
+            var measured = parameters.GetProperty("measurement_time").GetDateTimeOffset();
+            Assert.Equal((measuredAt, BusinessClock.UtcOffset), (measured, measured.Offset));
+            Assert.Equal(valuesOutside, parameters.GetProperty("values_outside").EnumerateArray().Select(v => (
+                v.GetProperty("indicator").GetString()!, v.GetProperty("value").GetDecimal(),
+                v.GetProperty("unit").ValueKind == JsonValueKind.Null ? null : v.GetProperty("unit").GetString(),
+                v.GetProperty("direction").GetString()!, v.GetProperty("min").GetDecimal(), v.GetProperty("max").GetDecimal())).ToArray());
         }
     }
 
-    // MSG-FARM-01 then MSG-FARM-02 (GFR-03) with {document} = license number and zone; the license opens for the Owner
+    // MSG-FARM-01 then MSG-FARM-02 (GFR-03) with {document} = license type, number and zone codes, each its own parameter
+    // (QA 0.5 finding #1); the license opens for the Owner
     // only (Owner-only FARM-03) and answers MSG-ACCOUNT-22 with its number once removed.
     [Fact]
     public async Task License_reminders_store_msg_farm_01_and_02_and_open_for_the_owner_only()
@@ -85,8 +90,9 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
         var license = await FarmingKit.CreateLicenseAsync(owner.Client, new LicenseFields { ZoneIds = [zoneId], EffectiveDate = today.AddDays(-300), ExpiryDate = today.AddDays(30) });
         var (licenseId, number) = (license.GetProperty("id").GetGuid(), license.GetProperty("documentNumber").GetString()!);
         var job = factory.Services.GetRequiredService<ZoneLicenseReminderJob>();
-        var document = $"Marine aquaculture license {number} ({zone.Name})";
+        var document = $"Marine aquaculture license {number} ({zone.Code})";
         var expiry = today.AddDays(30).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+        var expiryIso = today.AddDays(30).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
         await job.RunOnceAsync(today);
         await job.RunOnceAsync(today.AddDays(31));
@@ -94,8 +100,13 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
         var items = (await owner.Client.NotificationPageAsync()).Items().Where(i => i.GetProperty("relatedRecordId").GetGuid() == licenseId).ToList();
         var expiring = items.Single(i => i.GetProperty("messageCode").GetString() == "MSG-FARM-01");
         var expired = items.Single(i => i.GetProperty("messageCode").GetString() == "MSG-FARM-02");
-        Assert.Equal(new Dictionary<string, string> { ["document"] = document, ["expiry_date"] = expiry, ["days"] = "30" }, Params(expiring));
-        Assert.Equal(new Dictionary<string, string> { ["document"] = document, ["expiry_date"] = expiry }, Params(expired));
+        Assert.Equal($"{document} expires on {expiry}, in 30 days. Please renew it and record the new one.", expiring.GetProperty("body").GetString());
+        Assert.Equal($"{document} expired on {expiry}. Please renew it and record the new one.", expired.GetProperty("body").GetString());
+        Assert.Equal(("AQUACULTURE_LICENSE", number, zone.Code, expiryIso, 30), (
+            Param(expiring, "document_type"), Param(expiring, "document_number"), Single(expiring, "zone_codes"), Param(expiring, "expiry_date"),
+            expiring.GetProperty("messageParams").GetProperty("days").GetInt32()));
+        Assert.Equal(["document_number", "document_type", "expiry_date", "zone_codes"], expired.GetProperty("messageParams").EnumerateObject().Select(p => p.Name).Order());
+        Assert.Equal(("AQUACULTURE_LICENSE", number, zone.Code, expiryIso), (Param(expired, "document_type"), Param(expired, "document_number"), Single(expired, "zone_codes"), Param(expired, "expiry_date")));
         Assert.All(items, i => Assert.Equal(
             ("ZONE_LICENSE_EXPIRY", true, "ZoneComplianceDocument", number),
             (i.GetProperty("type").GetString(), i.GetProperty("mandatory").GetBoolean(), i.GetProperty("relatedRecordType").GetString(), i.GetProperty("relatedRecordCode").GetString())));
@@ -109,7 +120,7 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
         await factory.GrantAsync(manager, StaffRole.ZoneManager, zone);
         var managerClient = await factory.LoginAsync(manager.Username, TestPassword);
         await factory.NotifyAsync([manager.Id], new NotificationContent(
-            NotificationTypes.ZoneLicenseExpiry, "Zone license expired", UserMessages.LicenseExpired(document, expiry),
+            NotificationTypes.ZoneLicenseExpiry, "Zone license expired", UserMessages.LicenseExpired("AQUACULTURE_LICENSE", "Marine aquaculture license", number, [zone.Code], today.AddDays(30)),
             new RelatedRecord(RelatedRecordTypes.ZoneLicense, licenseId, number)));
         var managerOpen = await managerClient.OpenNotificationAsync((await managerClient.NotificationPageAsync()).NotificationIds().Single());
         Assert.Equal((HttpStatusCode.Forbidden, "MSG-GEN-08"), (managerOpen.StatusCode, await managerOpen.ErrorCodeAsync()));
@@ -120,8 +131,10 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
         Assert.Equal($"Zone license {number} no longer exists.", (await removed.ProblemAsync()).GetProperty("detail").GetString());
     }
 
-    private static Dictionary<string, string> Params(JsonElement item) =>
-        item.GetProperty("messageParams").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString()!);
+    private static string? Param(JsonElement item, string name) => item.GetProperty("messageParams").GetProperty(name).GetString();
+
+    private static string? Single(JsonElement item, string name) =>
+        Assert.Single(item.GetProperty("messageParams").GetProperty(name).EnumerateArray()).GetString();
 
     private static DateTimeOffset Minute(DateTimeOffset value) => new(value.Ticks - value.Ticks % TimeSpan.TicksPerMinute, value.Offset);
 }

@@ -1,4 +1,3 @@
-using System.Globalization;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.Authorization;
@@ -59,11 +58,12 @@ public sealed class ZoneLicenseReminderService(
             accounts.UnionWith(await recipients.GetRecipientsAsync(scope.ZoneId, PermissionFunctions.CultivationCycles, PermissionAction.View, cancellationToken));
         }
 
-        // {document} of MSG-FARM-01/02: the license number with its zone.
-        var zoneNames = string.Join(", ", document.ZoneScopes.Select(s => s.Zone.Name).Order());
-        var documentName = $"{LicenseTypes.Names.GetValueOrDefault(document.DocumentType, document.DocumentType)} {document.DocumentNumber} ({zoneNames})";
-        var expiryDate = expiry.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
-        var message = expired ? UserMessages.LicenseExpired(documentName, expiryDate) : UserMessages.LicenseExpiringSoon(documentName, expiryDate, daysLeft);
+        // {document} of MSG-FARM-01/02: the license type, number and the codes of its zones.
+        var typeName = LicenseTypes.Names.GetValueOrDefault(document.DocumentType, document.DocumentType);
+        var zoneCodes = document.ZoneScopes.Select(s => s.Zone.Code).Order(StringComparer.Ordinal).ToList();
+        var message = expired
+            ? UserMessages.LicenseExpired(document.DocumentType, typeName, document.DocumentNumber, zoneCodes, expiry)
+            : UserMessages.LicenseExpiringSoon(document.DocumentType, typeName, document.DocumentNumber, zoneCodes, expiry, daysLeft);
         await notifications.NotifyAsync(
             accounts,
             new NotificationContent(

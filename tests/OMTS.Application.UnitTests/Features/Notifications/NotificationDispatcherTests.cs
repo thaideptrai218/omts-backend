@@ -78,7 +78,7 @@ public class NotificationDispatcherTests
             new NotificationContent(
                 NotificationTypes.WaterMeasurementOverdue,
                 "Water measurement overdue",
-                UserMessages.WaterMeasurementOverdue("Vùng Cái Rồng", "01/10/2026"),
+                UserMessages.WaterMeasurementOverdue("Vùng Cái Rồng", new DateOnly(2026, 10, 1)),
                 new RelatedRecord(RelatedRecordTypes.FarmingZone, zoneId, "KV01")),
             CancellationToken.None);
 
@@ -86,13 +86,14 @@ public class NotificationDispatcherTests
         Assert.Equal(NotificationChannel.InApp, row.Channel);
         Assert.Equal("MSG-WATER-06", row.MessageCode);
         Assert.Equal("Zone Vùng Cái Rồng has had no water measurement since 01/10/2026. Please measure the water and record the result in OMTS.", row.Body);
+        // Atomic values: an ISO date, readable Vietnamese.
         var parameters = JsonSerializer.Deserialize<Dictionary<string, string>>(row.MessageParams!)!;
-        Assert.Equal("Vùng Cái Rồng", parameters["zone_name"]);
-        Assert.Equal("01/10/2026", parameters["last_date"]);
+        Assert.Equal(new Dictionary<string, string> { ["zone_name"] = "Vùng Cái Rồng", ["last_date"] = "2026-10-01" }, parameters);
         Assert.Contains("Vùng Cái Rồng", row.MessageParams);
         Assert.Equal((RelatedRecordTypes.FarmingZone, zoneId, "KV01"), (row.RelatedRecordType, row.RelatedRecordId, row.RelatedRecordCode));
+        // The push carries the code and the parameters, so the device builds the text in its language.
         var push = Assert.Single(_outbox.Messages);
-        Assert.Equal((row.Id, "MSG-WATER-06", zoneId), (push.NotificationId, push.MessageCode, push.RelatedRecordId));
+        Assert.Equal((row.Id, "MSG-WATER-06", zoneId, row.MessageParams), (push.NotificationId, push.MessageCode, push.RelatedRecordId, push.MessageParams));
     }
 
     [Fact]
