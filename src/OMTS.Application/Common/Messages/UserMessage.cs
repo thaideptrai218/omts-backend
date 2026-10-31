@@ -12,4 +12,12 @@ namespace OMTS.Application.Common.Messages;
 public sealed record UserMessage(
     string Code,
     string Text,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? LegacyCode = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? LegacyCode = null)
+{
+    /// <summary>
+    /// The values of the SRS placeholders in <see cref="Text"/> by placeholder name (e.g. <c>zone_name</c>), for the
+    /// messages a client shows later in its own language (notification contents); null for the other messages.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyDictionary<string, string>? Parameters { get; init; }
+}

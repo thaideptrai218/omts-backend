@@ -1,3 +1,6 @@
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Unicode;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Domain.Entities.Identity;
@@ -6,24 +9,18 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Notifications;
 
-/// <summary>Sends in-app and push notifications for the modules (formerly API-02).</summary>
+/// <summary>Sends the notifications of the modules: kept in the recipients' lists and pushed per type (formerly API-02).</summary>
 public interface INotificationDispatcher
 {
     /// <summary>
-    /// Adds the in-app <see cref="Notification"/> rows to the current unit of work (saved with the caller's
-    /// change) and queues push messages that are sent only after that save commits; a push failure is
-    /// logged and never rolls back the change. Non-mandatory types follow each account's preferences per
-    /// category and channel; mandatory ones are always delivered in-app and by push.
+    /// Adds one <see cref="Notification"/> row per active recipient to the current unit of work (saved with the caller's
+    /// change), whatever the preferences (BR-ACCOUNT-12), and queues push messages that are sent only after that save
+    /// commits; a push failure is logged and never rolls back the change (GFR-06). Push follows the type
+    /// (<see cref="NotificationPushPolicy"/>): mandatory types are always pushed, never-push types never, the others
+    /// unless the account turned their push off (ACCOUNT-07).
     /// </summary>
-    Task NotifyAsync(
-        IReadOnlyCollection<Guid> recipientAccountIds,
-        string type,
-        string title,
-        string? body,
-        string? relatedRecordType,
-        string? relatedRecordCode,
-        bool isMandatory,
-        CancellationToken cancellationToken);
+    /// <exception cref="ArgumentException">The type is not registered in <see cref="NotificationTypes.All"/>.</exception>
+    Task NotifyAsync(IReadOnlyCollection<Guid> recipientAccountIds, NotificationContent content, CancellationToken cancellationToken);
 }
 
 public sealed class NotificationDispatcher(
@@ -32,18 +29,18 @@ public sealed class NotificationDispatcher(
     IPushOutbox pushOutbox,
     TimeProvider timeProvider) : INotificationDispatcher
 {
-    public async Task NotifyAsync(
-        IReadOnlyCollection<Guid> recipientAccountIds,
-        string type,
-        string title,
-        string? body,
-        string? relatedRecordType,
-        string? relatedRecordCode,
-        bool isMandatory,
-        CancellationToken cancellationToken)
+    // Column sizes of Notification: a long text must not fail the caller's business save.
+    private const int MaxTitleLength = 200;
+    private const int MaxBodyLength = 2000;
+
+    // Vietnamese names stay readable in the stored JSON.
+    private static readonly JsonSerializerOptions ParamsJson = new() { Encoder = JavaScriptEncoder.Create(UnicodeRanges.All) };
+
+    public async Task NotifyAsync(IReadOnlyCollection<Guid> recipientAccountIds, NotificationContent content, CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(type);
-        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        var definition = NotificationTypes.Find(content.Type)
+            ?? throw new ArgumentException($"Notification type '{content.Type}' is not registered in NotificationTypes.All.", nameof(content));
+        ArgumentException.ThrowIfNullOrWhiteSpace(content.Title);
 
         var recipients = recipientAccountIds.Distinct().ToList();
         if (recipients.Count == 0)
@@ -51,11 +48,11 @@ public sealed class NotificationDispatcher(
             return;
         }
 
-        var category = NotificationTypes.CategoryOf(type);
-        var mandatory = isMandatory || NotificationCategories.Mandatory.Contains(category);
+        // Only active accounts are notified; Locked accounts are left out by the repository.
         var preferences = await notifications.GetPreferencesAsync(recipients, cancellationToken);
         var now = timeProvider.GetUtcNow();
-        var pushRecipients = new List<Guid>();
+        var parameters = content.Message.Parameters is { Count: > 0 } values ? JsonSerializer.Serialize(values, ParamsJson) : null;
+        var pushed = new List<Notification>();
 
         foreach (var accountId in recipients)
         {
@@ -64,48 +61,62 @@ public sealed class NotificationDispatcher(
                 continue;
             }
 
-            if (mandatory || IsEnabled(accountPreferences, category, NotificationChannel.InApp))
+            var notification = new Notification
             {
-                notifications.Add(new Notification
-                {
-                    RecipientAccountId = accountId,
-                    Type = type,
-                    Title = Truncate(title, MaxTitleLength)!,
-                    Body = Truncate(body, MaxBodyLength),
-                    RelatedRecordType = relatedRecordType,
-                    RelatedRecordCode = relatedRecordCode,
-                    CreatedAt = now,
-                    IsMandatory = mandatory,
-                });
-            }
+                RecipientAccountId = accountId,
+                Channel = NotificationChannel.InApp,
+                Type = definition.Code,
+                Title = Truncate(content.Title, MaxTitleLength)!,
+                Body = Truncate(content.Message.Text, MaxBodyLength),
+                MessageCode = content.Message.Code,
+                MessageParams = parameters is { Length: <= MaxBodyLength } ? parameters : null,
+                RelatedRecordType = content.Record?.Type,
+                RelatedRecordId = content.Record?.Id,
+                RelatedRecordCode = content.Record?.Code,
+                CreatedAt = now,
+                IsMandatory = definition.IsMandatory,
+            };
+            notifications.Add(notification);
 
-            if (mandatory || IsEnabled(accountPreferences, category, NotificationChannel.Push))
+            if (IsPushed(definition, accountPreferences))
             {
-                pushRecipients.Add(accountId);
+                pushed.Add(notification);
             }
         }
 
-        if (pushRecipients.Count == 0)
+        if (pushed.Count == 0)
         {
             return;
         }
 
         // One query for every recipient: the devices still logged in with the session that registered them.
-        var tokens = (await devices.ListDeliverableAsync(pushRecipients, now, cancellationToken)).ToLookup(d => d.AccountId, d => d.Token);
-        foreach (var accountId in pushRecipients)
+        var tokens = (await devices.ListDeliverableAsync(pushed.Select(n => n.RecipientAccountId).ToList(), now, cancellationToken))
+            .ToLookup(d => d.AccountId, d => d.Token);
+        foreach (var notification in pushed)
         {
-            pushOutbox.Enqueue(new PushMessage(accountId, type, title, body, relatedRecordType, relatedRecordCode, tokens[accountId].ToList()));
+            pushOutbox.Enqueue(new PushMessage(
+                notification.RecipientAccountId,
+                notification.Type,
+                content.Title,
+                content.Message.Text,
+                notification.RelatedRecordType,
+                notification.RelatedRecordCode,
+                tokens[notification.RecipientAccountId].ToList(),
+                notification.Id,
+                notification.MessageCode,
+                notification.RelatedRecordId));
         }
     }
 
-    // Column sizes of Notification: a long text must not fail the caller's business save.
-    private const int MaxTitleLength = 200;
-    private const int MaxBodyLength = 2000;
+    /// <summary>Whether a notification of the type is pushed to an account with these preferences.</summary>
+    public static bool IsPushed(NotificationTypeDefinition definition, IReadOnlyList<NotificationPreference> preferences) => definition.PushPolicy switch
+    {
+        NotificationPushPolicy.AlwaysPush => true,
+        NotificationPushPolicy.NeverPush => false,
+        // A type without a saved choice is pushed (ACCOUNT-07 default).
+        _ => preferences.FirstOrDefault(p => p.Type == definition.Code)?.Push ?? true,
+    };
 
     private static string? Truncate(string? value, int maxLength) =>
         value is not null && value.Length > maxLength ? value[..maxLength] : value;
-
-    // A channel without a saved preference is on (ACS-07 defaults).
-    private static bool IsEnabled(IReadOnlyList<NotificationPreference> preferences, string category, NotificationChannel channel) =>
-        preferences.FirstOrDefault(p => p.Category == category && p.Channel == channel)?.Enabled ?? true;
 }

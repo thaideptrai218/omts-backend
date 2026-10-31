@@ -21,7 +21,7 @@ internal sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
         builder.OwnsMany(x => x.NotificationPreferences, preferences =>
         {
             preferences.ToJson();
-            preferences.Property(p => p.Category).HasMaxLength(Lengths.ShortText);
+            preferences.Property(p => p.Type).HasMaxLength(Lengths.ShortText);
         });
     }
 }
