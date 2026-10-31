@@ -28,7 +28,7 @@ public class CooperativeCoverPhotoQaTests
     {
         using var api = new FileFaultApiFactory();
         var owner = await api.NewOwnerAsync();
-        var url = (await (await owner.UploadCoverPhotoAsync(Png)).ReadAsync(HttpStatusCode.OK)).Text("coverPhotoUrl");
+        var url = (await (await owner.UploadCoverPhotoAsync(Png)).ReadAsync(HttpStatusCode.OK)).GetProperty("profile").Text("coverPhotoUrl");
         var key = await CoverKeyAsync(api);
 
         api.Faults.FailNextSave(Conflict);
@@ -72,9 +72,9 @@ public class CooperativeCoverPhotoQaTests
     }
 
     // README: the clean-up deletes what a failed removal left behind. After the Owner removed the cover photo there is
-    // no cover any more, so no stored cover file is referenced and the clean-up's "foreign database" guard skips the
-    // folder for ever (with a warning on every run).
-    [Fact(Skip = "QA finding OMTS-217 PR 0.7 #1 (orphan clean-up never removes a cover left behind once the cover is removed: zero references read as a foreign database)")]
+    // no cover any more, so no stored cover file is referenced; the cooperative row, not a reference, shows that the
+    // database is this storage's own (QA 0.7 #1).
+    [Fact]
     public async Task Clean_up_removes_a_cover_file_left_behind_after_the_cover_photo_was_removed()
     {
         using var api = new FileFaultApiFactory();
@@ -93,7 +93,7 @@ public class CooperativeCoverPhotoQaTests
 
     // The same for certificate files once the last certification is removed: the removed certificate (a business
     // document) stays in storage until a new certification is added.
-    [Fact(Skip = "QA finding OMTS-217 PR 0.7 #1 (orphan clean-up never removes a certificate file left behind once no certification is left)")]
+    [Fact]
     public async Task Clean_up_removes_a_certificate_file_left_behind_after_the_last_certification_was_removed()
     {
         using var api = new FileFaultApiFactory();
@@ -101,7 +101,7 @@ public class CooperativeCoverPhotoQaTests
         var id = (await owner.CreateCertificationAsync()).Id();
         var version = await api.IssueCertificationVersionAsync(id);
         api.Faults.DeleteThrows = true;
-        await (await owner.DeleteAsync($"{Certifications}/{id}?rowVersion={Uri.EscapeDataString(version)}")).ReadAsync(HttpStatusCode.NoContent);
+        await (await owner.DeleteAsync($"{Certifications}/{id}?rowVersion={Uri.EscapeDataString(version)}")).ReadAsync(HttpStatusCode.OK);
         api.Faults.DeleteThrows = false;
         Assert.Single(StoredKeys(api, FileCategories.CooperativeCertifications));
 
@@ -144,10 +144,10 @@ public class CooperativeCoverPhotoQaTests
         var storage = api.Services.GetRequiredService<IFileStorage>();
         var anonymous = api.CreateClient();
 
-        var first = (await (await owner.UploadCoverPhotoAsync(Png)).ReadAsync(HttpStatusCode.OK)).Text("coverPhotoUrl");
+        var first = (await (await owner.UploadCoverPhotoAsync(Png)).ReadAsync(HttpStatusCode.OK)).GetProperty("profile").Text("coverPhotoUrl");
         var firstKey = await CoverKeyAsync(api);
         Assert.Equal(Png, await anonymous.GetByteArrayAsync(first));
-        var second = (await (await owner.UploadCoverPhotoAsync(Jpeg, "cover.jpg")).ReadAsync(HttpStatusCode.OK)).Text("coverPhotoUrl");
+        var second = (await (await owner.UploadCoverPhotoAsync(Jpeg, "cover.jpg")).ReadAsync(HttpStatusCode.OK)).GetProperty("profile").Text("coverPhotoUrl");
         var served = await anonymous.GetAsync(second);
 
         Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync(first)).StatusCode);
@@ -160,7 +160,7 @@ public class CooperativeCoverPhotoQaTests
         using var http = new HttpClient();
         Assert.Equal(Pdf, await http.GetByteArrayAsync(link));
         var version = await api.IssueCertificationVersionAsync(certification.Id());
-        await (await owner.DeleteAsync($"{Certifications}/{certification.Id()}?rowVersion={Uri.EscapeDataString(version)}")).ReadAsync(HttpStatusCode.NoContent);
+        await (await owner.DeleteAsync($"{Certifications}/{certification.Id()}?rowVersion={Uri.EscapeDataString(version)}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync(link)).StatusCode);
 
         Assert.Equal(0, await api.Services.GetRequiredService<OrphanFileCleanupJob>().RunOnceAsync(DateTimeOffset.UtcNow.AddDays(2)));

@@ -155,7 +155,8 @@ public sealed class DeploymentBootstrapper(
         audit.Record(new AuditEntry("Cooperative.Created", nameof(Cooperative))
         {
             RecordId = cooperative.Id,
-            After = new { cooperative.FullName, Status = "DRAFT" },
+            // The cooperative has no status (SRS 27/10).
+            After = new { cooperative.FullName },
         });
         audit.Record(new AuditEntry("Account.Created", nameof(Account))
         {

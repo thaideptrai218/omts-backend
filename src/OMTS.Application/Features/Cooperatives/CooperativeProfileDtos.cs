@@ -6,7 +6,8 @@ public sealed record PublicCertification(string Name, string? Number, string? Is
 
 /// <summary>
 /// The cooperative block of the provenance page, exactly as the public page will show it (BR-FARM-09, BR-ORIGIN-02):
-/// never the tax code, the legal representative, the business lines or an Expired certification.
+/// never the tax code, the legal representative, the business lines or an Expired certification. Built from the saved
+/// data: the client previews unsaved edits with the same rules.
 /// </summary>
 /// <param name="IntroductionEn">The English introduction, or the Vietnamese one when it is empty (BR-ORIGIN-02).</param>
 public sealed record PublicCooperativePreview(

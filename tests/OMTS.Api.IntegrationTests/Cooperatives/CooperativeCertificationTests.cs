@@ -56,9 +56,10 @@ public class CooperativeCertificationTests
         Assert.Equal(("VG-01", "VG-02"), (Prop(update.Before, "Number"), Prop(update.After, "Number")));
 
         // Remove: the row and its file are gone, and the audit log keeps the values before.
-        var removed = await owner.DeleteAsync($"{Certifications}/{id}?rowVersion={Uri.EscapeDataString(version)}");
+        var removed = await (await owner.DeleteAsync($"{Certifications}/{id}?rowVersion={Uri.EscapeDataString(version)}")).ReadAsync(HttpStatusCode.OK);
 
-        Assert.Equal(HttpStatusCode.NoContent, removed.StatusCode);
+        Assert.Equal(("Certifications saved.", "MSG-GEN-05"), (removed.Text("message"), removed.Text("messageCode")));
+        Assert.Equal(["message", "messageCode"], removed.EnumerateObject().Select(p => p.Name));
         Assert.False(await api.QueryAsync(db => db.CooperativeCertifications.AnyAsync()));
         Assert.False(File.Exists(Path.Combine(api.StorageRoot, secondFile!)));
         var removal = await AuditAsync(api, id, "CooperativeCertification.Removed");

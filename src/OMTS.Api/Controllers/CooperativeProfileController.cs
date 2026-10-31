@@ -55,14 +55,14 @@ public sealed class CooperativeProfileController(CooperativeProfileService profi
 
     /// <summary>
     /// Multipart field <c>file</c>: PNG, JPEG or WebP, at most 5 MB; replaces the cover photo at once and deletes the
-    /// replaced file. A storage failure answers 502 MSG-GEN-03 and keeps the current cover photo.
+    /// replaced file (MSG-GEN-05). A storage failure answers 502 MSG-GEN-03 and keeps the current cover photo.
     /// </summary>
     [HttpPost("api/cooperative/profile/cover-photo")]
     [Authorize]
     [RequireCooperativeOwner]
     [RequestSizeLimit(6 * 1024 * 1024)]
     [UploadField("Cover photo")]
-    [ProducesResponseType<CooperativeProfileView>(StatusCodes.Status200OK)]
+    [ProducesResponseType<CooperativeProfileSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> UploadCoverPhoto(IFormFile? file, CancellationToken cancellationToken)
     {
         if (file is null)
@@ -73,10 +73,11 @@ public sealed class CooperativeProfileController(CooperativeProfileService profi
         return (await coverPhotos.UploadAsync(await file.ToIncomingFileAsync(cancellationToken), cancellationToken)).ToActionResult(Ok);
     }
 
+    /// <summary>Removes the cover photo and deletes its file (MSG-GEN-05).</summary>
     [HttpDelete("api/cooperative/profile/cover-photo")]
     [Authorize]
     [RequireCooperativeOwner]
-    [ProducesResponseType<CooperativeProfileView>(StatusCodes.Status200OK)]
+    [ProducesResponseType<CooperativeProfileSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> RemoveCoverPhoto(CancellationToken cancellationToken) =>
         (await coverPhotos.RemoveAsync(cancellationToken)).ToActionResult(Ok);
 

@@ -77,7 +77,7 @@ public class CooperativeProfileV2SqlServerTests
         Assert.Equal("MSG06", await staleEdit.ErrorCodeAsync());
         Assert.Equal("MSG06", await staleRemove.ErrorCodeAsync());
         Assert.Single(file);
-        Assert.Equal(HttpStatusCode.NoContent, removed.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, removed.StatusCode);
         Assert.False(await host.QueryAsync(db => db.CooperativeCertifications.AnyAsync()));
         Assert.Empty(host.StoredKeys(FileCategories.CooperativeCertifications));
         Assert.Equal(3, await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == id)));

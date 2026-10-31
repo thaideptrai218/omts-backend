@@ -70,7 +70,7 @@ public class CooperativeCertificationQaTests
         Assert.Equal(original, StoredKeys(api, FileCategories.CooperativeCertifications));
         Assert.Equal("VG-OLD", await api.QueryAsync(db => db.CooperativeCertifications.Select(c => c.Number).SingleAsync()));
 
-        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteAsync($"{Certifications}/{id}?rowVersion={Uri.EscapeDataString(version)}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await owner.DeleteAsync($"{Certifications}/{id}?rowVersion={Uri.EscapeDataString(version)}")).StatusCode);
         var editRemoved = await owner.PutAsync($"{Certifications}/{id}", new CertificationFields { RowVersion = version }.ToForm());
         var removeAgain = await owner.DeleteAsync($"{Certifications}/{id}?rowVersion={Uri.EscapeDataString(version)}");
 
@@ -171,7 +171,7 @@ public class CooperativeCertificationQaTests
         Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync(link)).StatusCode);
         Assert.Equal(Pdf, await anonymous.GetByteArrayAsync(newLink));
 
-        await (await owner.DeleteAsync($"{Certifications}/{id}?rowVersion={Uri.EscapeDataString(version)}")).ReadAsync(HttpStatusCode.NoContent);
+        await (await owner.DeleteAsync($"{Certifications}/{id}?rowVersion={Uri.EscapeDataString(version)}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync(newLink)).StatusCode);
     }
 

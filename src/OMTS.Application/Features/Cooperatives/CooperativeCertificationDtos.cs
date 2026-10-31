@@ -39,3 +39,7 @@ public sealed record CooperativeCertificationView(
 /// <param name="Message">MSG-GEN-05.</param>
 /// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
 public sealed record CooperativeCertificationSaved(CooperativeCertificationView Certification, string Message, string MessageCode);
+
+/// <param name="Message">MSG-GEN-05 "Certifications saved.".</param>
+/// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
+public sealed record CooperativeCertificationRemoved(string Message, string MessageCode);

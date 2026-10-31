@@ -7,6 +7,9 @@ public interface ICooperativeRepository
     /// <summary>The single cooperative of the deployment (created by the bootstrap command), or null before it.</summary>
     Task<Cooperative?> GetCurrentAsync(CancellationToken cancellationToken);
 
+    /// <summary>Whether the database holds the cooperative (it is created at deployment).</summary>
+    Task<bool> ExistsAsync(CancellationToken cancellationToken);
+
     /// <summary>Another cooperative record already using the tax code.</summary>
     Task<Cooperative?> FindByTaxCodeAsync(string taxCode, Guid exceptCooperativeId, CancellationToken cancellationToken);
 

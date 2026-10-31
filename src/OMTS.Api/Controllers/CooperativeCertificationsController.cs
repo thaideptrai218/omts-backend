@@ -55,14 +55,14 @@ public sealed class CooperativeCertificationsController(CooperativeCertification
     public async Task<IActionResult> Update(Guid id, [FromForm] SaveCooperativeCertificationRequest request, IFormFile? file, CancellationToken cancellationToken) =>
         (await certifications.UpdateAsync(id, request, await IncomingAsync(file, cancellationToken), cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Removes the certification and its file (FARM-01.1); the audit log keeps its values.</summary>
+    /// <summary>Removes the certification and its file (FARM-01.1, MSG-GEN-05); the audit log keeps its values.</summary>
     /// <param name="id">The certification.</param>
     /// <param name="rowVersion">The <c>rowVersion</c> the certification was read with; an older one answers MSG06.</param>
     /// <param name="cancellationToken">Request aborted.</param>
     [HttpDelete("{id:guid}")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<CooperativeCertificationRemoved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Remove(Guid id, [FromQuery] string? rowVersion, CancellationToken cancellationToken) =>
-        (await certifications.RemoveAsync(id, rowVersion, cancellationToken)).ToActionResult(_ => NoContent());
+        (await certifications.RemoveAsync(id, rowVersion, cancellationToken)).ToActionResult(Ok);
 
     private static async Task<IncomingFile?> IncomingAsync(IFormFile? file, CancellationToken cancellationToken) =>
         file is null ? null : await file.ToIncomingFileAsync(cancellationToken);
