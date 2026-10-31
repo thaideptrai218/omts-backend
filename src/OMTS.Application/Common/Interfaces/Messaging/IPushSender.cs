@@ -17,6 +17,10 @@ public interface IPushSender
 /// </param>
 /// <param name="NotificationId">The kept notification the push announces, so the app opens it (ACCOUNT-08.2).</param>
 /// <param name="MessageCode">SRS code of <paramref name="Body"/>.</param>
+/// <param name="MessageParams">
+/// The parameters of <paramref name="MessageCode"/> as a JSON object (<c>MessageParameterJson</c>), so the device shows the
+/// text in its own language; null when the message has none.
+/// </param>
 public sealed record PushMessage(
     Guid RecipientAccountId,
     string Type,
@@ -27,4 +31,5 @@ public sealed record PushMessage(
     IReadOnlyList<string> DeviceTokens,
     Guid? NotificationId = null,
     string? MessageCode = null,
-    Guid? RelatedRecordId = null);
+    Guid? RelatedRecordId = null,
+    string? MessageParams = null);

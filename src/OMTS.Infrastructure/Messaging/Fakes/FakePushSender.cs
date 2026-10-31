@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OMTS.Application.Common.Interfaces.Messaging;
@@ -24,7 +25,9 @@ public sealed class FakePushSender(IOptions<PushOptions> options, TimeProvider t
         }
 
         var id = Guid.NewGuid().ToString("N");
-        Inbox.Add(new FakeMessage(id, timeProvider.GetUtcNow(), recipient, message.Title, $"{message.Type}: {message.Body}", message.DeviceTokens));
+        Inbox.Add(new FakeMessage(
+            id, timeProvider.GetUtcNow(), recipient, message.Title, $"{message.Type}: {message.Body}", message.DeviceTokens,
+            message.NotificationId, message.MessageCode, message.MessageParams is { } json ? JsonDocument.Parse(json).RootElement.Clone() : null));
         logger.LogInformation(
             "Fake push {MessageId} {Type} to account {Recipient} on {DeviceCount} devices", id, message.Type, recipient, message.DeviceTokens.Count);
         return Task.FromResult(DeliveryResult.Sent(id));

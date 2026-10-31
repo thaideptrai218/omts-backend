@@ -109,7 +109,7 @@ public sealed class NotificationInboxService(
         notification.CreatedAt,
         notification.ReadAt);
 
-    private static IReadOnlyDictionary<string, string>? Params(string? json)
+    private static JsonElement? Params(string? json)
     {
         if (string.IsNullOrEmpty(json))
         {
@@ -118,7 +118,8 @@ public sealed class NotificationInboxService(
 
         try
         {
-            return JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.Clone();
         }
         catch (JsonException)
         {

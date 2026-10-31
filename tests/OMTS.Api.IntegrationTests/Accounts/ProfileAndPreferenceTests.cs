@@ -132,7 +132,7 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         await SaveAsync(client, ("WATER_ALERT", true), ("WATER_MEASUREMENT_OVERDUE", true));
         var afterOn = await TypesAsync(client);
 
-        Assert.Equal(("Notification settings saved.", "MSG-GEN-05"), (off.GetProperty("message").GetString(), off.GetProperty("messageCode").GetString()));
+        Assert.Equal(("Notification preferences saved.", "MSG-GEN-05"), (off.GetProperty("message").GetString(), off.GetProperty("messageCode").GetString()));
         Assert.Equal((false, false), afterOff["WATER_MEASUREMENT_OVERDUE"]);
         foreach (var refused in new[] { mandatoryOff, neverPush, unknown })
         {

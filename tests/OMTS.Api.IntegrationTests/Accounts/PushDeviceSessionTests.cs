@@ -137,7 +137,7 @@ public class PushDeviceSessionTests
         {
             await scope.ServiceProvider.GetRequiredService<INotificationDispatcher>().NotifyAsync(
                 [accountId],
-                new NotificationContent(NotificationTypes.WaterMeasurementOverdue, "Reminder", UserMessages.WaterMeasurementOverdue("Zone", "01/10/2026")),
+                new NotificationContent(NotificationTypes.WaterMeasurementOverdue, "Reminder", UserMessages.WaterMeasurementOverdue("Zone", new DateOnly(2026, 10, 1))),
                 CancellationToken.None);
             await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
         }

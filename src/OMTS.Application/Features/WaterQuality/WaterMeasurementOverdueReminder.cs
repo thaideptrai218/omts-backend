@@ -1,4 +1,3 @@
-using System.Globalization;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
@@ -39,7 +38,9 @@ public sealed class WaterMeasurementOverdueReminder(
             }
 
             var accountIds = await recipients.GetRecipientsAsync(zone.Id, PermissionFunctions.WaterMeasurements, PermissionAction.View, cancellationToken);
-            var lastDate = BusinessClock.ToBusinessDate(latest.LatestConfirmedMeasuredAt ?? zone.CreatedAt).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+            // TODO(OMTS-219 W3): GFR-04 {last_date} is the later of the latest active measurement and the start of the
+            // earliest Open cycle of the zone; until cycles exist, a zone never measured falls back to its creation date.
+            var lastDate = BusinessClock.ToBusinessDate(latest.LatestConfirmedMeasuredAt ?? zone.CreatedAt);
             await notifications.NotifyAsync(
                 accountIds,
                 new NotificationContent(

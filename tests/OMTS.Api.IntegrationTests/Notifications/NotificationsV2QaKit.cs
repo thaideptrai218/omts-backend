@@ -31,7 +31,7 @@ public static class NotificationsV2QaKit
     public static NotificationContent OverdueReminder(FarmingZone zone) => new(
         NotificationTypes.WaterMeasurementOverdue,
         "Water measurement overdue",
-        UserMessages.WaterMeasurementOverdue(zone.Name, "01/10/2026"),
+        UserMessages.WaterMeasurementOverdue(zone.Name, new DateOnly(2026, 10, 1)),
         new RelatedRecord(RelatedRecordTypes.FarmingZone, zone.Id, zone.Code));
 
     public static async Task<JsonElement> NotificationPageAsync(this HttpClient client, string query = "")

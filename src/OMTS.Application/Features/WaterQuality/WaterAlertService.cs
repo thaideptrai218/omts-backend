@@ -21,12 +21,6 @@ public sealed class WaterAlertService(IZoneRecipientQuery recipients, INotificat
 {
     public const string AlertTitle = "Water quality alert";
 
-    /// <summary>{correction_note} of MSG-WATER-03 for a correction version (ENV-02).</summary>
-    public const string CorrectionNote = "(corrected measurement)";
-
-    /// <summary>{raft_code} while measurements are recorded per zone, without a raft.</summary>
-    public const string NoRaft = "–";
-
     /// <summary>The measurement must carry its final pH and salinity.</summary>
     public async Task ConfirmAsync(
         WaterMeasurement measurement, FarmingZone zone, WaterThresholds thresholds, Guid? confirmedBy, CancellationToken cancellationToken)
@@ -53,12 +47,9 @@ public sealed class WaterAlertService(IZoneRecipientQuery recipients, INotificat
         }
 
         var accountIds = await recipients.GetRecipientsAsync(zone.Id, PermissionFunctions.WaterMeasurements, PermissionAction.View, cancellationToken);
+        // Measurements have no raft yet (the raft of a measurement comes with the WATER ticket).
         var message = UserMessages.WaterAlert(
-            measurement.CorrectedFromMeasurementId is null ? "" : CorrectionNote,
-            zone.Name,
-            NoRaft,
-            BusinessClock.Format(measurement.MeasuredAt),
-            evaluation.ValuesOutside!);
+            corrected: measurement.CorrectedFromMeasurementId is not null, zone.Name, raftCode: null, measurement.MeasuredAt, evaluation.ValuesOutside);
         await notifications.NotifyAsync(
             accountIds,
             new NotificationContent(NotificationTypes.WaterAlert, AlertTitle, message, new RelatedRecord(RelatedRecordTypes.WaterMeasurement, measurement.Id)),
