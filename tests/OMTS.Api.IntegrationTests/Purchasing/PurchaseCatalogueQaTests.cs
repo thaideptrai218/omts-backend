@@ -149,7 +149,7 @@ public class PurchaseCatalogueQaTests(AuthApiFactory factory) : IClassFixture<Au
     public async Task A_discontinued_supplier_keeps_its_phone_stays_readable_and_still_receives_payments()
     {
         var world = await factory.WorldAsync();
-        var receipt = await world.CompletedAsync(0, 0, new LineBody(world.Other, 2, 100_000));
+        var receipt = await world.CompletedAsync(new LineBody(world.Other, 2, 100_000));
         var phone = (await world.Owner.GetFromJsonAsync<JsonElement>($"{Suppliers}/{world.SupplierId}")).GetProperty("phoneNumber").GetString()!;
         await (await world.Owner.PostAsync($"{Suppliers}/{world.SupplierId}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
 
@@ -204,7 +204,7 @@ public class PurchaseCatalogueQaTests(AuthApiFactory factory) : IClassFixture<Au
     public async Task An_item_may_keep_or_recase_its_own_code_and_name_and_a_used_item_audits_its_new_code()
     {
         var world = await factory.WorldAsync();
-        await world.CompletedAsync(0, 0, new LineBody(world.Seed, 1, 10_000));
+        await world.CompletedAsync(new LineBody(world.Seed, 1, 10_000));
         var view = await world.Owner.GetFromJsonAsync<JsonElement>($"{Items}/{world.Seed}");
         var (code, name) = (view.GetProperty("code").GetString()!, view.GetProperty("name").GetString()!);
 
@@ -225,7 +225,7 @@ public class PurchaseCatalogueQaTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal(2, updates.Count);
         Assert.Contains(code.ToUpperInvariant(), updates[1].Before);
         Assert.Contains(newCode, updates[1].After);
-        var receipt = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts?itemId={world.Seed}&zoneId={world.Zone.Id}");
+        var receipt = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts?itemId={world.Seed}&supplierId={world.SupplierId}");
         Assert.Equal(1, receipt.GetProperty("page").GetProperty("items").GetArrayLength());
     }
 
@@ -260,17 +260,17 @@ public class PurchaseCatalogueQaTests(AuthApiFactory factory) : IClassFixture<Au
     public async Task The_old_group_name_is_refused_in_filters_and_Material_filters_receipts_and_raft_costs()
     {
         var world = await factory.WorldAsync();
-        var material = await world.CompletedAsync(0, 0, new LineBody(world.Material, 2, 50_000));
-        await world.CompletedAsync(0, 0, new LineBody(world.Other, 1, 70_000));
+        var material = await world.CompletedAsync(world.MaterialForRaft(2, 50_000));
+        await world.CompletedAsync(new LineBody(world.Other, 1, 70_000));
 
         // An old client filtering on RaftMaterial gets MSG-GEN-01 instead of an unfiltered list.
         await (await world.Owner.GetAsync($"{Items}?group=RaftMaterial")).ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
-        await (await world.Owner.GetAsync($"/api/purchase-receipts?itemGroup=RaftMaterial&zoneId={world.Zone.Id}")).ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
+        await (await world.Owner.GetAsync($"/api/purchase-receipts?itemGroup=RaftMaterial&supplierId={world.SupplierId}")).ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
 
-        var receipts = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts?itemGroup=Material&zoneId={world.Zone.Id}");
+        var receipts = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts?itemGroup=Material&supplierId={world.SupplierId}");
         Assert.Equal([material.Id()], receipts.GetProperty("page").GetProperty("items").EnumerateArray().Select(r => r.Id()));
         var costs = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/raft-material-costs?raftId={world.Raft.Id}");
-        Assert.Equal(100_000, costs.EnumerateArray().Single().Money("materialCost"));
+        Assert.Equal(100_000, costs.GetProperty("rafts").EnumerateArray().Single().Money("materialCost"));
     }
 
     private static async Task<string> ProposedAsync(HttpClient owner) =>
