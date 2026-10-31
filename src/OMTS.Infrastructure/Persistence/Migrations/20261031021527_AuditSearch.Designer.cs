@@ -12,7 +12,7 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(OmtsDbContext))]
-    [Migration("20261031013152_AuditSearch")]
+    [Migration("20261031021527_AuditSearch")]
     partial class AuditSearch
     {
         /// <inheritdoc />
@@ -2629,7 +2629,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RecordCode", "OccurredAt");
 
-                    b.HasIndex("RecordType", "RecordId");
+                    b.HasIndex("RecordType", "OccurredAt");
 
                     b.HasIndex("ZoneId", "OccurredAt");
 

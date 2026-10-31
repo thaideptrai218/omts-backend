@@ -21,9 +21,9 @@ internal sealed class AuditEventConfiguration : IEntityTypeConfiguration<AuditEv
         builder.HasIndex(x => new { x.ActorAccountId, x.OccurredAt });
         builder.HasIndex(x => new { x.ActorEmployeeId, x.OccurredAt });
         builder.HasIndex(x => new { x.Action, x.OccurredAt });
-        // Record codes match from their start, so the code is a seek too.
+        builder.HasIndex(x => new { x.RecordType, x.OccurredAt });
+        // For the record code prefix. The prefix is a parameter, so SQL Server seeks only "RecordCode IS NOT NULL" and
+        // reads every coded event of the log under a reused plan (QA 0.6 #3, deferred: matters at scale only).
         builder.HasIndex(x => new { x.RecordCode, x.OccurredAt });
-        // Record type filter and the record of an event.
-        builder.HasIndex(x => new { x.RecordType, x.RecordId });
     }
 }

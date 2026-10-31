@@ -28,7 +28,7 @@ public class AuditSearchSqlServerTests
         ["IX_AuditEvents_ActorEmployeeId_OccurredAt"] = "ActorEmployeeId,OccurredAt",
         ["IX_AuditEvents_Action_OccurredAt"] = "Action,OccurredAt",
         ["IX_AuditEvents_RecordCode_OccurredAt"] = "RecordCode,OccurredAt",
-        ["IX_AuditEvents_RecordType_RecordId"] = "RecordType,RecordId",
+        ["IX_AuditEvents_RecordType_OccurredAt"] = "RecordType,OccurredAt",
     };
 
     [SqlServerFact]
