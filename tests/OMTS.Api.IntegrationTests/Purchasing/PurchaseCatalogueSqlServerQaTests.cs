@@ -37,7 +37,7 @@ public class PurchaseCatalogueSqlServerQaTests
 
         var responses = await InParallelAsync(6, i => owner.PostAsJsonAsync(Items, new { code = $"P{i}-{NewCode()}", name = spellings[i % 3], group = "Material", unit = "cái" }));
 
-        var winnerId = await WinnerAsync(responses, HttpStatusCode.Created);
+        var winnerId = await WinnerAsync(responses, HttpStatusCode.Created, "Name");
         // The SQL Server collation ignores case, so this counts every spelling.
         Assert.Equal(1, await host.QueryAsync(db => db.FarmingInputItems.CountAsync(i => i.Name == name)));
         Assert.Equal(1, await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.Action == "FarmingInputItem.Created" && e.RecordId == winnerId)));
@@ -58,14 +58,15 @@ public class PurchaseCatalogueSqlServerQaTests
             code = i < 2 ? "VT001" : "vt001", name = $"Găng tay {i} {NewCode()}", group = "Other", unit = "đôi",
         }));
 
-        var winnerId = await WinnerAsync(responses, HttpStatusCode.Created);
+        var winnerId = await WinnerAsync(responses, HttpStatusCode.Created, "Code");
         Assert.Equal("VT002", await ProposedAsync(second));
 
         // GBR-03: the code of a discontinued item stays reserved, for the proposal and for a typed code.
         await (await first.PostAsync($"{Items}/{winnerId}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("VT002", await ProposedAsync(first));
         var again = await second.PostAsJsonAsync(Items, new { code = "Vt001", name = $"Găng tay {NewCode()}", group = "Other", unit = "đôi" });
-        Assert.Equal(winnerId, (await again.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("existingId").GetGuid());
+        var problem = await again.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02");
+        Assert.Equal((winnerId, "Code"), (problem.GetProperty("existingId").GetGuid(), problem.GetProperty("field").GetString()));
     }
 
     [SqlServerFact]
@@ -92,7 +93,7 @@ public class PurchaseCatalogueSqlServerQaTests
             code = codes[ids[i]], name = spellings[i], group = "Material", unit = "cuộn", rowVersion = versions[i],
         }));
 
-        var winnerId = await WinnerAsync(responses, HttpStatusCode.OK);
+        var winnerId = await WinnerAsync(responses, HttpStatusCode.OK, "Name");
         Assert.Contains(winnerId, ids);
         Assert.Equal([winnerId], await host.QueryAsync(db => db.FarmingInputItems.Where(i => i.Name == name).Select(i => i.Id).ToListAsync()));
     }
@@ -108,9 +109,11 @@ public class PurchaseCatalogueSqlServerQaTests
         await (await owner.PostAsync($"{Items}/{first}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
 
         var sameName = await owner.PostAsJsonAsync(Items, new { code = "VT200", name = $"HÀU GIỐNG THÁI BÌNH DƯƠNG {tag.ToUpperInvariant()}", group = "Seed", unit = "con" });
-        Assert.Equal(first, (await sameName.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("existingId").GetGuid());
+        var nameProblem = await sameName.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02");
+        Assert.Equal((first, "Name"), (nameProblem.GetProperty("existingId").GetGuid(), nameProblem.GetProperty("field").GetString()));
         var sameCode = await owner.PostAsJsonAsync(Items, new { code = " VT120 ", name = $"Hàu giống khác {tag}", group = "Seed", unit = "con" });
-        Assert.Equal(first, (await sameCode.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("existingId").GetGuid());
+        var codeProblem = await sameCode.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02");
+        Assert.Equal((first, "Code"), (codeProblem.GetProperty("existingId").GetGuid(), codeProblem.GetProperty("field").GetString()));
 
         // The proposal reads lower-case and discontinued codes, and the discontinued Seed item still sets the unit.
         var proposal = await (await owner.GetAsync($"{Items}/next-code")).ReadAsync(HttpStatusCode.OK);
@@ -121,8 +124,8 @@ public class PurchaseCatalogueSqlServerQaTests
 
     // BR-PURCHASE-10: "All seed items use one unit: the Cooperative Owner chooses it with the first seed item". The check
     // reads the other Seed items before saving and nothing in the database holds the rule, so two first Seed items saved
-    // together can each choose a unit (reproduced 4 times out of 4 on SQL Express). QA finding F1: enable once fixed.
-    [SqlServerFact(Skip = "QA finding F1 (OMTS-218): parallel first Seed items save two units; CheckSeedUnitAsync is check-then-act with nothing in the database behind it.")]
+    // together can each choose a unit (reproduced 4 times out of 4 on SQL Express). QA finding F1: accepted by the lead.
+    [SqlServerFact(Skip = "Accepted: only the Owner writes items; race between the first Seed items not prevented (QA P1 F1)")]
     public async Task Parallel_first_seed_items_with_different_units_keep_one_seed_unit()
     {
         await using var host = await FarmingHost.StartAsync();
@@ -284,15 +287,19 @@ public class PurchaseCatalogueSqlServerQaTests
         Assert.Empty(differences);
     }
 
-    /// <summary>Exactly one 2xx response; every other one is 409 MSG-GEN-02 naming the record it saved.</summary>
-    private static async Task<Guid> WinnerAsync(IReadOnlyCollection<HttpResponseMessage> responses, HttpStatusCode success)
+    /// <summary>
+    /// Exactly one 2xx response; every other one is 409 MSG-GEN-02 naming the record it saved and the entry that clashed
+    /// (<paramref name="field"/>, also for a loser of the unique index race, QA P1 F2).
+    /// </summary>
+    private static async Task<Guid> WinnerAsync(IReadOnlyCollection<HttpResponseMessage> responses, HttpStatusCode success, string field)
     {
         var winners = responses.Where(r => r.StatusCode == success).ToList();
         Assert.True(winners.Count == 1, string.Join(", ", await Task.WhenAll(responses.Select(r => r.CodeOrStatusAsync()))));
         var winnerId = (await winners[0].ReadAsync(success)).Id();
         foreach (var loser in responses.Except(winners))
         {
-            Assert.Equal(winnerId, (await loser.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("existingId").GetGuid());
+            var problem = await loser.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02");
+            Assert.Equal((winnerId, field), (problem.GetProperty("existingId").GetGuid(), problem.GetProperty("field").GetString()));
         }
 
         return winnerId;
