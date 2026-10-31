@@ -9,7 +9,7 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
 namespace OMTS.Api.IntegrationTests.Accounts;
 
-/// <summary>ACS-05 personal profile and ACS-07 notification preferences.</summary>
+/// <summary>ACCOUNT-05 personal profile and ACCOUNT-07 notification preferences (push per type).</summary>
 public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
     [Fact]
@@ -88,58 +88,97 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Equal(phone, stored.Single(c => c.Id == own.Id).PhoneNumber);
     }
 
+    // Generated per run, so no password-like literal is committed (secret scanners).
+    private static readonly string PreferencePassword = NewPassword();
+
+    // ACCOUNT-07 step 1: the types of the roles the account holds; mandatory ones are always pushed; never-push types
+    // (the lock reminder) are not offered.
     [Fact]
-    public async Task Mandatory_items_cannot_be_turned_off_and_ineligible_channels_cannot_be_turned_on()
+    public async Task Preferences_offer_the_types_of_the_roles_held_with_mandatory_ones_always_pushed()
     {
-        var owner = await factory.AddAccountAsync(NewCode(), Password);
-        var client = await factory.LoginAsync(owner.Username);
+        var zone = await factory.AddZoneAsync(NewCode());
+        var owner = await factory.AddAccountAsync(NewCode(), PreferencePassword);
+        var manager = await factory.AddAccountAsync(NewCode(), PreferencePassword, SubjectType.Staff);
+        var accountant = await factory.AddAccountAsync(NewCode(), PreferencePassword, SubjectType.Staff);
+        var trader = await factory.AddAccountAsync(NewCode(), PreferencePassword, SubjectType.Trader);
+        await factory.GrantAsync(manager, StaffRole.ZoneManager, zone);
+        await factory.GrantAsync(accountant, StaffRole.Accountant, null);
 
-        var mandatory = await SaveAsync(client, ("WATER_ALERTS", "InApp", false));
-        var email = await SaveAsync(client, ("WORK", "Email", true));
-        var zalo = await SaveAsync(client, ("WORK", "Zalo", true));
+        var ownerTypes = await TypesAsync(await factory.LoginAsync(owner.Username, PreferencePassword));
+        var managerTypes = await TypesAsync(await factory.LoginAsync(manager.Username, PreferencePassword));
+        var accountantTypes = await TypesAsync(await factory.LoginAsync(accountant.Username, PreferencePassword));
+        var traderTypes = await TypesAsync(await factory.LoginAsync(trader.Username, PreferencePassword));
 
-        Assert.Equal("MSG23", await mandatory.ErrorCodeAsync());
-        Assert.Equal("MSG21", await email.ErrorCodeAsync());
-        var zaloProblem = await zalo.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("The Zalo OA channel is not configured or not eligible, so it cannot be enabled yet.", zaloProblem.GetProperty("detail").GetString());
+        Assert.Equal(["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "ZONE_LICENSE_EXPIRY"], ownerTypes.Keys);
+        Assert.Equal(["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE"], managerTypes.Keys);
+        Assert.Empty(accountantTypes);
+        Assert.Empty(traderTypes);
+        Assert.Equal((true, true), ownerTypes["WATER_ALERT"]);
+        Assert.Equal((true, true), ownerTypes["ZONE_LICENSE_EXPIRY"]);
+        Assert.Equal((false, true), ownerTypes["WATER_MEASUREMENT_OVERDUE"]);
     }
 
     [Fact]
-    public async Task Push_without_an_allowed_device_is_saved_off_while_other_channels_are_saved()
+    public async Task Push_of_a_normal_type_is_turned_off_and_on_again_and_mandatory_or_other_types_are_refused()
     {
-        var owner = await factory.AddAccountAsync(NewCode(), Password);
-        var client = await factory.LoginAsync(owner.Username);
-        await client.PostAsJsonAsync("/api/me/devices", new { token = $"ExponentPushToken[{NewCode()}]", platform = "android", permissionGranted = false });
+        var owner = await factory.AddAccountAsync(NewCode(), PreferencePassword);
+        var client = await factory.LoginAsync(owner.Username, PreferencePassword);
 
-        var saved = await SaveAsync(client, ("WORK", "InApp", false), ("WORK", "Push", true));
+        var off = await (await SaveAsync(client, ("WATER_MEASUREMENT_OVERDUE", false))).Content.ReadFromJsonAsync<JsonElement>();
+        var afterOff = await TypesAsync(client);
+        var mandatoryOff = await SaveAsync(client, ("WATER_ALERT", false));
+        var neverPush = await SaveAsync(client, ("STAFF_ACCOUNT_LOCK_REMINDER", true));
+        var unknown = await SaveAsync(client, ("WORK", true));
+        await SaveAsync(client, ("WATER_ALERT", true), ("WATER_MEASUREMENT_OVERDUE", true));
+        var afterOn = await TypesAsync(client);
+
+        Assert.Equal(("Notification settings saved.", "MSG-GEN-05"), (off.GetProperty("message").GetString(), off.GetProperty("messageCode").GetString()));
+        Assert.Equal((false, false), afterOff["WATER_MEASUREMENT_OVERDUE"]);
+        foreach (var refused in new[] { mandatoryOff, neverPush, unknown })
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+            Assert.Equal("MSG-GEN-01", await refused.ErrorCodeAsync());
+            Assert.Equal("Notification type", (await refused.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("field").GetString());
+        }
+
+        Assert.Equal((true, true), afterOn["WATER_ALERT"]);
+        Assert.Equal((false, true), afterOn["WATER_MEASUREMENT_OVERDUE"]);
+    }
+
+    // ACCOUNT-07.1: the choice is saved and MSG-ACCOUNT-21 replaces MSG-GEN-05 in the notice.
+    [Fact]
+    public async Task Push_turned_on_without_an_allowed_device_is_saved_with_msg_account_21()
+    {
+        var owner = await factory.AddAccountAsync(NewCode(), PreferencePassword);
+        var client = await factory.LoginAsync(owner.Username, PreferencePassword);
+        await client.PostAsJsonAsync("/api/me/devices", new { token = $"ExponentPushToken[{NewCode()}]", platform = "android", permissionGranted = false });
+        await SaveAsync(client, ("WATER_MEASUREMENT_OVERDUE", false));
+
+        var saved = await SaveAsync(client, ("WATER_MEASUREMENT_OVERDUE", true));
         var body = await saved.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
         Assert.StartsWith("Your preferences are saved. This device does not allow notifications from OMTS.", body.GetProperty("notice").GetString());
         Assert.Equal("MSG-ACCOUNT-21", body.GetProperty("noticeCode").GetString());
-        var work = body.GetProperty("categories").EnumerateArray().Single(c => c.GetProperty("category").GetString() == "WORK");
-        var channels = work.GetProperty("channels").EnumerateArray().ToDictionary(c => c.GetProperty("channel").GetString()!, c => c.GetProperty("enabled").GetBoolean());
-        Assert.False(channels["InApp"]);
-        Assert.False(channels["Push"]);
+        Assert.False(body.GetProperty("pushAllowedOnDevice").GetBoolean());
+        Assert.Equal((false, true), (await TypesAsync(client))["WATER_MEASUREMENT_OVERDUE"]);
 
-        // Once the device allows notifications, push can be turned on.
+        // Once a device allows notifications, no notice; turning push off never gives one.
         var token = $"ExponentPushToken[{NewCode()}]";
         await client.PostAsJsonAsync("/api/me/devices", new { token, platform = "ios", permissionGranted = true });
-        Assert.Equal(JsonValueKind.Null, (await (await SaveAsync(client, ("WORK", "Push", true))).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("notice").ValueKind);
+        var allowed = await (await SaveAsync(client, ("WATER_MEASUREMENT_OVERDUE", true))).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Null, allowed.GetProperty("notice").ValueKind);
+        Assert.True(allowed.GetProperty("pushAllowedOnDevice").GetBoolean());
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/me/devices/{Uri.EscapeDataString(token)}")).StatusCode);
+        var turnedOff = await (await SaveAsync(client, ("WATER_MEASUREMENT_OVERDUE", false))).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Null, turnedOff.GetProperty("noticeCode").ValueKind);
     }
 
-    [Fact]
-    public async Task Traders_see_only_their_categories()
-    {
-        var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
-        var client = await factory.LoginAsync(trader.Username);
+    /// <summary>The offered types in order, each with (mandatory, push).</summary>
+    private static async Task<Dictionary<string, (bool Mandatory, bool Push)>> TypesAsync(HttpClient client) =>
+        (await client.GetFromJsonAsync<JsonElement>("/api/me/notification-preferences")).GetProperty("types").EnumerateArray()
+            .ToDictionary(t => t.GetProperty("type").GetString()!, t => (t.GetProperty("mandatory").GetBoolean(), t.GetProperty("push").GetBoolean()));
 
-        var categories = (await client.GetFromJsonAsync<JsonElement>("/api/me/notification-preferences")).EnumerateArray().Select(c => c.GetProperty("category").GetString());
-
-        Assert.Equal(["ORDERS", "TRACEABILITY_QR_SENT"], categories);
-    }
-
-    private static Task<HttpResponseMessage> SaveAsync(HttpClient client, params (string Category, string Channel, bool Enabled)[] items) =>
-        client.PutAsJsonAsync("/api/me/notification-preferences", new { items = items.Select(i => new { category = i.Category, channel = i.Channel, enabled = i.Enabled }) });
+    private static Task<HttpResponseMessage> SaveAsync(HttpClient client, params (string Type, bool Push)[] items) =>
+        client.PutAsJsonAsync("/api/me/notification-preferences", new { items = items.Select(i => new { type = i.Type, push = i.Push }) });
 }

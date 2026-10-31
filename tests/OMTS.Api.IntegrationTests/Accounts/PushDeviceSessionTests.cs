@@ -7,9 +7,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.Notifications;
 using OMTS.Domain.Entities.Identity;
-using OMTS.Domain.Enums;
 using OMTS.Infrastructure.Messaging.Fakes;
 using OMTS.Infrastructure.Persistence;
 
@@ -43,12 +43,12 @@ public class PushDeviceSessionTests
         var phone = await LoginAndRegisterAsync(api, "owner", "phone-token");
         using var web = await api.LoginAsync("owner");
 
-        var before = await PushReasonAsync(web);
+        var before = await PushAllowedAsync(web);
         await phone.PostAsync("/api/auth/logout", null);
-        var after = await PushReasonAsync(web);
+        var after = await PushAllowedAsync(web);
 
-        Assert.Equal(JsonValueKind.Null, before.ValueKind);
-        Assert.Equal("NO_PUSH_DEVICE", after.GetString());
+        Assert.True(before);
+        Assert.False(after);
     }
 
     [Fact]
@@ -136,7 +136,9 @@ public class PushDeviceSessionTests
         using (var scope = api.Services.CreateScope())
         {
             await scope.ServiceProvider.GetRequiredService<INotificationDispatcher>().NotifyAsync(
-                [accountId], NotificationTypes.WorkAssignment, "Work", null, null, null, isMandatory: false, CancellationToken.None);
+                [accountId],
+                new NotificationContent(NotificationTypes.WaterMeasurementOverdue, "Reminder", UserMessages.WaterMeasurementOverdue("Zone", "01/10/2026")),
+                CancellationToken.None);
             await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
         }
 
@@ -144,10 +146,7 @@ public class PushDeviceSessionTests
         return latest.Devices ?? [];
     }
 
-    private static async Task<JsonElement> PushReasonAsync(HttpClient client)
-    {
-        var categories = await client.GetFromJsonAsync<JsonElement>("/api/me/notification-preferences");
-        var push = categories[0].GetProperty("channels").EnumerateArray().Single(c => c.GetProperty("channel").GetString() == nameof(NotificationChannel.Push));
-        return push.GetProperty("ineligibleReason");
-    }
+    /// <summary>Whether the settings say that a device of the account allows notifications (ACCOUNT-07.1).</summary>
+    private static async Task<bool> PushAllowedAsync(HttpClient client) =>
+        (await client.GetFromJsonAsync<JsonElement>("/api/me/notification-preferences")).GetProperty("pushAllowedOnDevice").GetBoolean();
 }
