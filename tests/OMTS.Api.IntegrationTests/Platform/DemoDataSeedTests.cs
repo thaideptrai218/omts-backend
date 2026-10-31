@@ -116,14 +116,21 @@ public class DemoDataSeedTests
         Assert.All(
             new[] { cooperative.TaxCode, cooperative.SocialLink, cooperative.IntroductionVi, cooperative.IntroductionEn, cooperative.LogoUrl, cooperative.CoverPhotoUrl },
             value => Assert.False(string.IsNullOrEmpty(value)));
-        var certification = await db.CooperativeCertifications.AsNoTracking().SingleAsync();
-        Assert.Equal(cooperative.Id, certification.CooperativeId);
-        Assert.NotNull(certification.FileUrl);
-        Assert.True(certification.ExpiryDate > DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)).AddDays(30));
+        // Two certifications with their files: one Valid and one Expiring soon (GFR-03 reminds it).
+        var certifications = await db.CooperativeCertifications.AsNoTracking().OrderBy(c => c.ExpiryDate).ToListAsync();
+        Assert.Equal(2, certifications.Count);
+        Assert.All(certifications, c => Assert.Equal(cooperative.Id, c.CooperativeId));
+        Assert.All(certifications, c => Assert.NotNull(c.FileUrl));
+        var businessToday = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+        Assert.InRange(certifications[0].ExpiryDate!.Value, businessToday, businessToday.AddDays(30));
+        Assert.True(certifications[1].ExpiryDate > businessToday.AddDays(30));
 
         Assert.Equal(3, await db.FarmingZones.CountAsync());
         Assert.Equal(1, await db.FarmingZones.CountAsync(z => z.StatusId == StatusIds.Usage.Discontinued));
-        Assert.Equal(6, await db.ZoneComplianceDocuments.CountAsync());
+        // One zone per license: DEMO-01 an expired license replaced by one expiring soon, DEMO-02 a valid one and an older expired one.
+        Assert.Equal(4, await db.ZoneComplianceDocuments.CountAsync());
+        Assert.Equal(1, await db.ZoneComplianceDocuments.CountAsync(d => d.ReplacesDocumentId != null));
+        Assert.Equal(2, await db.ZoneComplianceDocuments.Select(d => d.ZoneId).Distinct().CountAsync());
         Assert.Equal(20, await db.Rafts.CountAsync());
         Assert.Equal(8, await db.Employees.CountAsync());
         Assert.Equal(1, await db.Employees.CountAsync(e => e.StatusId == StatusIds.Employee.Left));

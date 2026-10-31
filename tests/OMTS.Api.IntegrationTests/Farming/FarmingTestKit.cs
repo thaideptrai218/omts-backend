@@ -27,13 +27,17 @@ public sealed record RaftBody(
     string? Code, decimal? Latitude, decimal? Longitude, string? Location, string? Size, string? ConditionNotes,
     IReadOnlyList<LaneBody>? Lanes, object? LayoutDrawing = null, string? RowVersion = null);
 
-/// <summary>FARM-03 multipart form fields; <see cref="File"/> null sends no file.</summary>
+/// <summary>
+/// FARM-03 multipart form fields; <see cref="File"/> null sends no file. The expiry date is required since PR 0.8: it
+/// defaults to five years ahead. <see cref="ZoneIds"/> sends the deprecated <c>zoneIds</c> field.
+/// </summary>
 public sealed record LicenseFields
 {
     public string? DocumentType { get; init; } = "AQUACULTURE_LICENSE";
     public string? DocumentNumber { get; init; } = $"GP-{NewCode()}";
     public DateOnly? EffectiveDate { get; init; }
-    public DateOnly? ExpiryDate { get; init; }
+    public DateOnly? ExpiryDate { get; init; } = FarmingTestKit.Today.AddYears(5);
+    public Guid? ZoneId { get; init; }
     public IReadOnlyList<Guid> ZoneIds { get; init; } = [];
     public string? IssuingAuthority { get; init; }
     public string? Holder { get; init; }
@@ -61,6 +65,7 @@ public sealed record LicenseFields
         Add(Holder, "holder");
         Add(LegalScope, "legalScope");
         Add(RowVersion, "rowVersion");
+        Add(ZoneId?.ToString(), "zoneId");
         foreach (var zoneId in ZoneIds)
         {
             form.Add(new StringContent(zoneId.ToString()), "zoneIds");

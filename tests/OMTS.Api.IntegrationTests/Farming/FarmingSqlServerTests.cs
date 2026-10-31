@@ -52,7 +52,7 @@ public class FarmingSqlServerTests
     {
         await using var host = await FarmingSqlServerHost.StartAsync();
         var zoneId = (await host.Owner.Client.CreateZoneAsync()).Id();
-        var license = await host.Owner.Client.CreateLicenseAsync(new LicenseFields { ZoneIds = [zoneId], EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(20) });
+        var license = await host.Owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zoneId, EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(20) });
 
         var responses = await Task.WhenAll(Enumerable.Range(0, 6).Select(_ => host.Owner.Client.PostAsync(
             $"/api/zone-licenses/{license.Id()}/replace", new LicenseFields { EffectiveDate = Today, ExpiryDate = Today.AddYears(5) }.ToForm())));
@@ -61,8 +61,9 @@ public class FarmingSqlServerTests
         foreach (var refused in responses.Where(r => r.StatusCode != HttpStatusCode.Created))
         {
             Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
-            // The pre-check answers MSG-GEN-09 (already Replaced); a loser stopped by the unique index gets MSG-GEN-02.
-            Assert.Contains(await refused.ErrorCodeAsync(), new[] { "MSG-GEN-09", "MSG-GEN-02" });
+            // The pre-check answers MSG-GEN-09 (already Replaced); a loser stopped by the unique index gets MSG-GEN-02, and
+            // one stopped by the row version of the zone (part of every license save since PR 0.8) gets MSG06.
+            Assert.Contains(await refused.ErrorCodeAsync(), new[] { "MSG-GEN-09", "MSG-GEN-02", "MSG06" });
         }
 
         var keys = await host.QueryAsync(db => db.ZoneComplianceDocuments.Where(d => d.Id == license.Id() || d.ReplacesDocumentId == license.Id())
@@ -99,7 +100,7 @@ public class FarmingSqlServerTests
         var number = new string('Q', 90) + NewCode();
         var license = await owner.CreateLicenseAsync(new LicenseFields
         {
-            DocumentNumber = number, ZoneIds = [zone.Id()], EffectiveDate = Today,
+            DocumentNumber = number, ZoneId = zone.Id(), EffectiveDate = Today,
             IssuingAuthority = new string('Ủ', 200), Holder = new string('Ợ', 200), LegalScope = new string('Ằ', 1000),
         });
         var savedLicense = await owner.GetFromJsonAsync<JsonElement>($"/api/zone-licenses/{license.Id()}");
@@ -142,7 +143,7 @@ public class FarmingSqlServerTests
         Assert.Equal("MSG06", await (await owner.PostAsJsonAsync($"/api/rafts/{raft.Id()}/discontinue", new { rowVersion = raft.Text("rowVersion") })).ErrorCodeAsync());
         Assert.Equal("Checked", (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}")).Text("conditionNotes"));
 
-        var fields = new LicenseFields { ZoneIds = [zone.Id()], EffectiveDate = Today, File = null };
+        var fields = new LicenseFields { ZoneId = zone.Id(), EffectiveDate = Today, File = null };
         var license = await owner.CreateLicenseAsync(fields with { File = Pdf });
         await (await owner.PutAsync($"/api/zone-licenses/{license.Id()}", (fields with { Holder = "First", RowVersion = license.Text("rowVersion") }).ToForm())).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("MSG06", await (await owner.PutAsync($"/api/zone-licenses/{license.Id()}", (fields with { Holder = "Stale", RowVersion = license.Text("rowVersion") }).ToForm())).ErrorCodeAsync());
@@ -159,7 +160,10 @@ public class FarmingSqlServerTests
         var zoneB = await owner.CreateZoneAsync();
         var raft = await owner.CreateRaftAsync(zoneA.Id(), NewRaftBody(lanes: 3));
         await owner.CreateRaftAsync(zoneB.Id());
-        var license = await owner.CreateLicenseAsync(new LicenseFields { ZoneIds = [zoneA.Id(), zoneB.Id()], EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(30) });
+        var license = await owner.CreateLicenseAsync(new LicenseFields { ZoneId = zoneA.Id(), EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(30) });
+        // Zone B: an older expired license next to a newer valid one (only the newest one counts for the badge and reminder).
+        await owner.CreateLicenseAsync(new LicenseFields { ZoneId = zoneB.Id(), EffectiveDate = Today.AddYears(-3), ExpiryDate = Today.AddDays(-30) });
+        await owner.CreateLicenseAsync(new LicenseFields { ZoneId = zoneB.Id(), EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(31) });
         var staff = await host.StaffInZoneAsync(zoneA.Id());
 
         Assert.Equal([zoneA.Id()], (await staff.Client.GetFromJsonAsync<JsonElement>("/api/zones")).GetProperty("items").EnumerateArray().Select(z => z.Id()));
@@ -167,8 +171,9 @@ public class FarmingSqlServerTests
         Assert.Equal([zoneA.Id()], (await staff.Client.GetFromJsonAsync<JsonElement>("/api/zones/map")).EnumerateArray().Select(z => z.Id()));
         Assert.Equal("MSG-GEN-08", await (await staff.Client.GetAsync($"/api/zones/{zoneB.Id()}/rafts")).ErrorCodeAsync());
 
-        var badges = (await owner.GetFromJsonAsync<JsonElement>("/api/zones")).GetProperty("items").EnumerateArray().Select(z => z.GetProperty("licenseState").GetString()).ToList();
-        Assert.Equal(["ExpiringSoon", "ExpiringSoon"], badges);
+        var badges = (await owner.GetFromJsonAsync<JsonElement>("/api/zones")).GetProperty("items").EnumerateArray()
+            .ToDictionary(z => z.Id(), z => z.GetProperty("licenseState").GetString());
+        Assert.Equal(("ExpiringSoon", null), (badges[zoneA.Id()], badges[zoneB.Id()]));
         var overview = await owner.GetFromJsonAsync<JsonElement>($"/api/zones/{zoneA.Id()}/licenses?asOf={Today.AddDays(31):yyyy-MM-dd}");
         Assert.Contains(overview.GetProperty("licenses").EnumerateArray(), r => r.Text("state") == "Expired");
 
@@ -196,7 +201,8 @@ public class FarmingSqlServerTests
         var licenseId = license.Id();
         var recipients = await host.QueryAsync(db => db.Notifications
             .Where(n => n.Type == NotificationTypes.ZoneLicenseExpiry && n.RelatedRecordId == licenseId).Select(n => n.RecipientAccountId).ToListAsync());
-        Assert.Equal(new[] { host.Owner.Account.Id, staff.Account.Id }.Order(), recipients.Order());
+        // The Cooperative Owner only (GFR-03): the Zone Manager of the zone is not told.
+        Assert.Equal([host.Owner.Account.Id], recipients);
     }
 
     private static LaneSegment Segment(Guid cycleId, Guid laneId, LaneSegmentType type, decimal from, decimal to, DateOnly date, Guid recordedBy) => new()

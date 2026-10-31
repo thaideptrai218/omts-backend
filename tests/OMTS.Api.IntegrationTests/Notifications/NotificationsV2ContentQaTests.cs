@@ -89,7 +89,7 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
         var zoneId = (await FarmingKit.CreateZoneAsync(owner.Client)).GetProperty("id").GetGuid();
         var zone = await FarmingKit.ZoneEntityAsync(factory, zoneId);
         var today = FarmingKit.Today;
-        var license = await FarmingKit.CreateLicenseAsync(owner.Client, new LicenseFields { ZoneIds = [zoneId], EffectiveDate = today.AddDays(-300), ExpiryDate = today.AddDays(30) });
+        var license = await FarmingKit.CreateLicenseAsync(owner.Client, new LicenseFields { ZoneId = zoneId, EffectiveDate = today.AddDays(-300), ExpiryDate = today.AddDays(30) });
         var (licenseId, number) = (license.GetProperty("id").GetGuid(), license.GetProperty("documentNumber").GetString()!);
         var job = factory.Services.GetRequiredService<ZoneLicenseReminderJob>();
         var document = $"Marine aquaculture license {number} ({zone.Code})";
@@ -122,7 +122,7 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
         await factory.GrantAsync(manager, StaffRole.ZoneManager, zone);
         var managerClient = await factory.LoginAsync(manager.Username, TestPassword);
         await factory.NotifyAsync([manager.Id], new NotificationContent(
-            NotificationTypes.ZoneLicenseExpiry, "Zone license expired", UserMessages.LicenseExpired("AQUACULTURE_LICENSE", "Marine aquaculture license", number, [zone.Code], today.AddDays(30)),
+            NotificationTypes.ZoneLicenseExpiry, "Zone license expired", UserMessages.LicenseExpired("AQUACULTURE_LICENSE", "Marine aquaculture license", number, zone.Code, today.AddDays(30)),
             new RelatedRecord(RelatedRecordTypes.ZoneLicense, licenseId, number)));
         var managerOpen = await managerClient.OpenNotificationAsync((await managerClient.NotificationPageAsync()).NotificationIds().Single());
         Assert.Equal((HttpStatusCode.Forbidden, "MSG-GEN-08"), (managerOpen.StatusCode, await managerOpen.ErrorCodeAsync()));

@@ -29,8 +29,9 @@ public class ZoneLicenseSwaggerTests(AuthApiFactory factory) : IClassFixture<Aut
         Assert.Equal("2031-01-14", form.GetProperty("ExpiryDate").GetProperty("example").GetString());
         Assert.Equal("UBND tỉnh Quảng Ninh", form.GetProperty("IssuingAuthority").GetProperty("example").GetString());
         Assert.Equal("AAAAAAAAB9E=", form.GetProperty("RowVersion").GetProperty("example").GetString());
-        Assert.Equal("3fa85f64-5717-4562-b3fc-2c963f66afa6", form.GetProperty("ZoneIds").GetProperty("example")[0].GetString());
-        Assert.Contains("once per zone", form.GetProperty("ZoneIds").GetProperty("description").GetString());
+        Assert.Equal("3fa85f64-5717-4562-b3fc-2c963f66afa6", form.GetProperty("ZoneId").GetProperty("example").GetString());
+        Assert.Contains("required on create", form.GetProperty("ZoneId").GetProperty("description").GetString());
+        Assert.Contains("Deprecated", form.GetProperty("ZoneIds").GetProperty("description").GetString());
         Assert.Equal("binary", form.GetProperty("file").GetProperty("format").GetString());
         Assert.False(string.IsNullOrWhiteSpace(operation.GetProperty("summary").GetString()));
     }

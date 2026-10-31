@@ -116,8 +116,8 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
         Assert.Equal("ExpiringSoon", license.GetProperty("state").GetString());
 
         var overview = await owner.GetFromJsonAsync<JsonElement>($"/api/zones/{zoneId}/licenses");
-        var rows = overview.GetProperty("licenses").EnumerateArray().ToList();
-        Assert.Contains(rows, r => r.GetProperty("state").GetString() == "Missing" && r.GetProperty("documentType").GetString() == "SEA_AREA_ALLOCATION");
+        var row = Assert.Single(overview.GetProperty("licenses").EnumerateArray());
+        Assert.Equal(("ExpiringSoon", true), (row.GetProperty("state").GetString(), row.GetProperty("isNewest").GetBoolean()));
 
         var job = factory.Services.GetRequiredService<ZoneLicenseReminderJob>();
         await job.RunOnceAsync(today);
@@ -180,7 +180,7 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
         };
         if (zoneId is not null)
         {
-            form.Add(new StringContent(zoneId.Value.ToString()), "zoneIds");
+            form.Add(new StringContent(zoneId.Value.ToString()), "zoneId");
         }
 
         if (rowVersion is not null)
