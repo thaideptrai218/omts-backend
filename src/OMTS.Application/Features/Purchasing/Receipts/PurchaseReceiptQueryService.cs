@@ -73,7 +73,7 @@ public sealed class PurchaseReceiptQueryService(
     /// <summary>Raft material cost per raft with the Completed receipts behind it (filters zone, raft, period, item).</summary>
     public async Task<Result<IReadOnlyList<RaftMaterialCostRow>>> RaftMaterialCostsAsync(PurchaseReceiptQuery query, CancellationToken cancellationToken)
     {
-        var filter = await FilterAsync(query with { ItemGroup = InputItemGroup.RaftMaterial, StatusId = StatusIds.PurchaseReceipt.Completed }, PermissionAction.View, cancellationToken);
+        var filter = await FilterAsync(query with { ItemGroup = InputItemGroup.Material, StatusId = StatusIds.PurchaseReceipt.Completed }, PermissionAction.View, cancellationToken);
         if (!filter.IsSuccess)
         {
             return filter.Error!;

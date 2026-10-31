@@ -77,7 +77,7 @@ bootstrap temporary password. To get every demo login back, reset the environmen
 
 The demo data also holds the cooperative profile, the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued),
 license documents (valid, expiring within 30 days, expired), about 10 rafts with lanes per zone, 8 employees (one Left),
-5 suppliers, 15 farming input items and 20 purchase receipts of the last 3 months with payments, discounts and a return.
+5 suppliers, 15 farming input items (codes VT001–VT015, every seed item counted in `con`) and 20 purchase receipts of the last 3 months with payments, discounts and a return.
 `DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰) and one water measurement a day for the
 30 days before the seed day: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
 26.0 ‰) and one voided reading. The mistyped 2.6 ‰ alerted before its correction, so the inboxes hold four sets of water
@@ -276,6 +276,9 @@ created by a one-time command run on the server by the deployment operator (not 
    pairs of discontinued roles become Effective again; of two Effective copies of one pair only the newest stays. Down is
    lossy (no stored permissions, every role In Use). Demo and test databases are not converted further: reset them
    (`docker compose down -v`).
+   Upgrading a database from before the purchasing catalogue of SRS 27/10 (migration `PurchaseCatalogueV2`): the item
+   group `RaftMaterial` becomes `Material`, the supplier's free-text "other contacts" become its address, and the
+   migration stops when two farming input items have the same name (rename one first, or reset a demo database).
    An Owner who cannot log in (for example after missing the 24-hour window) is recovered with
    `dotnet OMTS.Api.dll seed --reset-owner-password`. It sets `Bootstrap:Owner:TemporaryPassword` (from configuration, never
    from the command line, so it never lands in shell history) as a new 24-hour temporary password that must be changed at

@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace OMTS.Infrastructure.Bootstrap.Demo;
 
-/// <summary>INP-01: five suppliers (phones 0900 000 031…035), matched by phone number.</summary>
+/// <summary>PURCHASE-07: five suppliers (phones 0900 000 031…035) of the three types, matched by phone number.</summary>
 internal sealed class DemoSupplierStep : IDemoSeedStep
 {
     public const string SeedHatcheryPhone = "0900000031";
@@ -14,13 +14,14 @@ internal sealed class DemoSupplierStep : IDemoSeedStep
     public const string MaterialShopPhone = "0900000034";
     public const string GeneralStorePhone = "0900000035";
 
-    private static readonly (string Name, SupplierType Type, string Phone, string Contacts)[] Suppliers =
+    // Fake addresses and emails (example.com) only.
+    private static readonly (string Name, SupplierType Type, string Phone, string Address, string? Email)[] Suppliers =
     [
-        ("Trại giống hàu Cái Rồng", SupplierType.Seed, SeedHatcheryPhone, "Anh Bình, Zalo cùng số điện thoại"),
-        ("Cơ sở giống thủy sản Bạch Long", SupplierType.Seed, SeedFarmPhone, "Chị Thu, địa chỉ: Cát Hải, Hải Phòng"),
-        ("Công ty TNHH Vật tư nuôi biển Hạ Long", SupplierType.Material, MaterialCompanyPhone, "Kho: Phường Cao Thắng, TP Hạ Long"),
-        ("Cửa hàng phao bè Vân Đồn", SupplierType.Material, MaterialShopPhone, "Anh Đạt, Thị trấn Cái Rồng"),
-        ("Đại lý vật tư tổng hợp Quan Lạn", SupplierType.Other, GeneralStorePhone, "Giao hàng tận bến Quan Lạn"),
+        ("Trại giống hàu Cái Rồng", SupplierType.Seed, SeedHatcheryPhone, "Thị trấn Cái Rồng, Vân Đồn, Quảng Ninh", "giongcairong@example.com"),
+        ("Cơ sở giống thủy sản Bạch Long", SupplierType.Seed, SeedFarmPhone, "Cát Hải, Hải Phòng", null),
+        ("Công ty TNHH Vật tư nuôi biển Hạ Long", SupplierType.Material, MaterialCompanyPhone, "Phường Cao Thắng, TP Hạ Long, Quảng Ninh", "vattuhalong@example.com"),
+        ("Cửa hàng phao bè Vân Đồn", SupplierType.Material, MaterialShopPhone, "Thị trấn Cái Rồng, Vân Đồn, Quảng Ninh", null),
+        ("Đại lý vật tư tổng hợp Quan Lạn", SupplierType.Other, GeneralStorePhone, "Bến Quan Lạn, Vân Đồn, Quảng Ninh", null),
     ];
 
     public string Name => "suppliers";
@@ -29,7 +30,7 @@ internal sealed class DemoSupplierStep : IDemoSeedStep
     {
         var service = context.Get<SupplierService>();
         var created = 0;
-        foreach (var (name, type, phone, contacts) in Suppliers)
+        foreach (var (name, type, phone, address, email) in Suppliers)
         {
             var normalized = PhoneNumbers.Normalize(phone);
             if (await context.Db.Suppliers.AnyAsync(s => s.PhoneNumber == normalized, cancellationToken))
@@ -37,7 +38,7 @@ internal sealed class DemoSupplierStep : IDemoSeedStep
                 continue;
             }
 
-            DemoSeedContext.Ensure(await service.CreateAsync(new SaveSupplierRequest(name, type, phone, contacts), cancellationToken), $"supplier {name}");
+            DemoSeedContext.Ensure(await service.CreateAsync(new SaveSupplierRequest(name, type, phone, address, email), cancellationToken), $"supplier {name}");
             created++;
         }
 

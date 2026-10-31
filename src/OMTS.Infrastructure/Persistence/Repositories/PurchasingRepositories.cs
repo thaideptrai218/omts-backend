@@ -56,6 +56,25 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
         return db.FarmingInputItems.AsNoTracking().FirstOrDefaultAsync(i => i.Code.ToUpper() == upper && i.Id != exceptItemId, cancellationToken);
     }
 
+    public Task<FarmingInputItem?> FindByNameAsync(string name, Guid? exceptItemId, CancellationToken cancellationToken)
+    {
+        var upper = name.ToUpperInvariant();
+        return db.FarmingInputItems.AsNoTracking().FirstOrDefaultAsync(i => i.Name.ToUpper() == upper && i.Id != exceptItemId, cancellationToken);
+    }
+
+    public Task<string?> SeedUnitAsync(Guid? exceptItemId, CancellationToken cancellationToken) =>
+        db.FarmingInputItems.AsNoTracking()
+            .Where(i => i.Group == InputItemGroup.Seed && i.Id != exceptItemId)
+            .OrderBy(i => i.CreatedAt).ThenBy(i => i.Id)
+            .Select(i => (string?)i.Unit)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<string>> CodesStartingWithAsync(string prefix, CancellationToken cancellationToken)
+    {
+        var upper = prefix.ToUpperInvariant();
+        return await db.FarmingInputItems.AsNoTracking().Where(i => i.Code.ToUpper().StartsWith(upper)).Select(i => i.Code).ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<FarmingInputItem>> ListAsync(string? search, InputItemGroup? group, int? statusId, CancellationToken cancellationToken)
     {
         var query = db.FarmingInputItems.AsNoTracking();
