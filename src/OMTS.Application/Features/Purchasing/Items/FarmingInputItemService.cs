@@ -199,6 +199,7 @@ public sealed class FarmingInputItemService(
     /// </summary>
     private async Task<AppError?> CheckSeedUnitAsync(Values values, Guid? itemId, CancellationToken cancellationToken)
     {
+        // Check then save, with no lock: two first Seed items saved at once may keep two units. Accepted, as only the Owner writes items (QA P1 F1).
         if (values.Group != InputItemGroup.Seed || await items.SeedUnitAsync(itemId, cancellationToken) is not { } seedUnit || seedUnit == values.Unit)
         {
             return null;
@@ -210,11 +211,21 @@ public sealed class FarmingInputItemService(
             new Dictionary<string, object?> { ["field"] = "Unit", ["hint"] = $"all seed items use the unit {seedUnit}", ["seedUnit"] = seedUnit });
     }
 
-    /// <summary>MSG-GEN-02 with the id of the other item that has the same code or name (GBR-03, BR-PURCHASE-10).</summary>
-    private async Task<AppError?> DuplicateAsync(Values values, Guid? itemId, CancellationToken cancellationToken) =>
-        (await items.FindByCodeAsync(values.Code, itemId, cancellationToken) ?? await items.FindByNameAsync(values.Name, itemId, cancellationToken)) is { } existing
-            ? AppError.AlreadyExists(ObjectName, existing.Id)
+    /// <summary>
+    /// MSG-GEN-02 with the id of the other item that has the same code or name (GBR-03, BR-PURCHASE-10), and <c>field</c>
+    /// "Code" or "Name" saying which one clashed (the code when both do).
+    /// </summary>
+    private async Task<AppError?> DuplicateAsync(Values values, Guid? itemId, CancellationToken cancellationToken)
+    {
+        if (await items.FindByCodeAsync(values.Code, itemId, cancellationToken) is { } sameCode)
+        {
+            return AppError.AlreadyExists(ObjectName, sameCode.Id, "Code");
+        }
+
+        return await items.FindByNameAsync(values.Name, itemId, cancellationToken) is { } sameName
+            ? AppError.AlreadyExists(ObjectName, sameName.Id, "Name")
             : null;
+    }
 
     /// <summary>The second of two parallel saves with one code or name gets the same MSG-GEN-02 as the pre-check.</summary>
     private async Task<AppError?> SaveAsync(Values values, Guid? itemId, CancellationToken cancellationToken)

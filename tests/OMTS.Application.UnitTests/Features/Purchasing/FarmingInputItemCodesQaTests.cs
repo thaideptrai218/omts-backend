@@ -18,9 +18,9 @@ public sealed class FarmingInputItemCodesQaTests
         Assert.DoesNotContain(existing, code => string.Equals(code.Trim(), proposal, StringComparison.OrdinalIgnoreCase));
     }
 
-    // QA finding F3 (Low): NumberOf ignores VT2147483647, so once the Owner has saved the proposal after VT2147483646 the
-    // same proposal comes back (and fails with MSG-GEN-02). Counting in long, or skipping used codes, fixes it.
-    [Fact(Skip = "QA finding F3 (OMTS-218): the proposal after VT2147483646 is VT2147483647 again once that code exists.")]
+    // QA finding F3 (Low, fixed): NumberOf ignored VT2147483647, so once the Owner had saved the proposal after
+    // VT2147483646 the same proposal came back (and failed with MSG-GEN-02).
+    [Fact]
     public void The_proposal_at_the_top_of_the_number_range_is_not_a_code_already_used()
     {
         string[] existing = ["VT2147483646", "VT2147483647"];

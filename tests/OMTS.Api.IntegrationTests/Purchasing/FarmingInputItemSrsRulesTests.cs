@@ -27,10 +27,14 @@ public class FarmingInputItemSrsRulesTests(AuthApiFactory factory) : IClassFixtu
 
         var sameName = await owner.PostAsJsonAsync(Items, new { code = NewCode(), name = name.ToUpperInvariant(), group = "Other", unit = "kg" });
         var problem = await sameName.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02");
-        Assert.Equal(first, problem.GetProperty("existingId").GetGuid());
+        Assert.Equal((first, "Name"), (problem.GetProperty("existingId").GetGuid(), problem.GetProperty("field").GetString()));
         Assert.Equal("Farming input item already exists. Your entries are kept: change them, or open the existing record.", problem.GetProperty("detail").GetString());
         var sameCode = await owner.PostAsJsonAsync(Items, new { code = code.ToUpperInvariant(), name = $"Another {code}", group = "Other", unit = "kg" });
-        Assert.Equal(first, (await sameCode.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("existingId").GetGuid());
+        var codeProblem = await sameCode.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02");
+        Assert.Equal((first, "Code"), (codeProblem.GetProperty("existingId").GetGuid(), codeProblem.GetProperty("field").GetString()));
+        // Both clash with the same item: the code is named.
+        var both = await owner.PostAsJsonAsync(Items, new { code, name, group = "Material", unit = "cái" });
+        Assert.Equal("Code", (await both.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("field").GetString());
 
         // Editing another item to the same name is refused the same way.
         var second = await owner.CreateItemAsync("Other");
@@ -39,7 +43,8 @@ public class FarmingInputItemSrsRulesTests(AuthApiFactory factory) : IClassFixtu
         {
             code = view.GetProperty("code").GetString(), name, group = "Other", unit = "kg", rowVersion = view.GetProperty("rowVersion").GetString(),
         });
-        Assert.Equal(first, (await edit.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("existingId").GetGuid());
+        var editProblem = await edit.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02");
+        Assert.Equal((first, "Name"), (editProblem.GetProperty("existingId").GetGuid(), editProblem.GetProperty("field").GetString()));
         Assert.Equal(1, await factory.QueryAsync(db => db.FarmingInputItems.CountAsync(i => i.Name == name)));
     }
 

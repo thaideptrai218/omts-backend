@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Numerics;
 
 namespace OMTS.Application.Features.Purchasing.Items;
 
@@ -13,22 +14,23 @@ public static class FarmingInputItemCodes
     /// <summary>The next code after <paramref name="existingCodes"/>: at least three digits, never one already used.</summary>
     public static string Next(IEnumerable<string> existingCodes)
     {
-        var highest = existingCodes.Select(NumberOf).DefaultIfEmpty(0).Max();
-        return Prefix + (highest + 1).ToString("D3", CultureInfo.InvariantCulture);
+        var highest = existingCodes.Select(NumberOf).DefaultIfEmpty(BigInteger.Zero).Max();
+        return Prefix + (highest + 1).ToString(CultureInfo.InvariantCulture).PadLeft(3, '0');
     }
 
-    /// <summary>The number of a code of the pattern ("vt012" → 12), or 0 for any other code.</summary>
-    private static int NumberOf(string code)
+    /// <summary>
+    /// The number of a code of the pattern ("vt012" → 12), or 0 for any other code. Any number of digits counts (no
+    /// overflow), so a used code is never proposed again (QA P1 F3).
+    /// </summary>
+    private static BigInteger NumberOf(string code)
     {
         var digits = code.Trim();
         if (digits.Length <= Prefix.Length || !digits.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase))
         {
-            return 0;
+            return BigInteger.Zero;
         }
 
         digits = digits[Prefix.Length..];
-        return digits.All(char.IsAsciiDigit) && int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var number) && number < int.MaxValue
-            ? number
-            : 0;
+        return digits.All(char.IsAsciiDigit) ? BigInteger.Parse(digits, NumberStyles.None, CultureInfo.InvariantCulture) : BigInteger.Zero;
     }
 }
