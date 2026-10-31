@@ -18,9 +18,9 @@ public class PurchaseReceiptCancelCopyTests(AuthApiFactory factory) : IClassFixt
     {
         var world = await factory.WorldAsync();
         var receipt = await world.CompletedAsync(0, 0, new LineBody(world.Other, 1, 10_000));
-        Assert.Equal("Reason", await (await world.Owner.CancelAsync(receipt.Id(), reason, true)).FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Reason", await (await world.Owner.CancelAsync(receipt.Id(), reason, true)).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         var tooLong = await world.Owner.CancelAsync(receipt.Id(), new string('r', 1001), true);
-        Assert.Equal("Reason", await tooLong.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Reason", await tooLong.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         Assert.Equal(StatusIds.PurchaseReceipt.Completed, (await factory.QueryAsync(db => db.PurchaseReceipts.SingleAsync(r => r.Id == receipt.Id()))).StatusId);
     }
 
@@ -35,8 +35,8 @@ public class PurchaseReceiptCancelCopyTests(AuthApiFactory factory) : IClassFixt
         Assert.NotNull(cancelled.GetProperty("cancelledAt").GetString());
 
         var again = await world.Owner.CancelAsync(draft.Id(), "Again", true);
-        var problem = await again.ProblemAsync(HttpStatusCode.Conflict, "MSG61");
-        Assert.Contains("“Cancelled” to “Cancelled”", problem.GetProperty("detail").GetString());
+        var problem = await again.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
+        Assert.EndsWith("is Cancelled and cannot be used for this action.", problem.GetProperty("detail").GetString());
 
         var audit = await factory.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.RecordId == draft.Id() && e.Action == "PurchaseReceipt.Cancelled"));
         Assert.Equal(("Not bought after all", world.Zone.Id), (audit.Reason, audit.ZoneId));
@@ -128,9 +128,13 @@ public class PurchaseReceiptCancelCopyTests(AuthApiFactory factory) : IClassFixt
         var receipt = await world.CompletedAsync(0, 0, new LineBody(world.Other, 1, 1000), new LineBody(world.Seed, 100, 1000));
         await factory.StockAsync(world.Raft.Id, receipt.LineOf(world.Seed), quantity: null);
 
-        var problem = await (await world.Owner.CancelAsync(receipt.Id(), "Wrong", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG61");
+        var problem = await (await world.Owner.CancelAsync(receipt.Id(), "Wrong", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-PURCHASE-09");
         var lotCode = receipt.LineViewOf(world.Seed).GetProperty("seedLotCode").GetString();
-        Assert.Equal($"Cannot change Purchase receipt from “Completed” to “Cancelled”: seed lot {lotCode} has already been stocked.", problem.GetProperty("detail").GetString());
+        var receiptCode = receipt.GetProperty("code").GetString();
+        Assert.Equal(
+            $"Receipt {receiptCode} cannot be cancelled: seed lot {lotCode} has already been stocked. The Cooperative Owner can correct it instead.",
+            problem.GetProperty("detail").GetString());
+        Assert.Equal("MSG61", problem.GetProperty("legacyCode").GetString());
     }
 
     [Fact]
@@ -141,10 +145,10 @@ public class PurchaseReceiptCancelCopyTests(AuthApiFactory factory) : IClassFixt
         var (otherZone, _) = await factory.ZoneWithRaftAsync();
 
         var noDelete = await factory.PurchasingStaffAsync(world.Zone, new Perm(PermissionFunctions.PurchaseReceipts, true, true, true));
-        await (await noDelete.CancelAsync(receipt.Id(), "Wrong", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        await (await noDelete.CancelAsync(receipt.Id(), "Wrong", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         var otherManager = await factory.ZoneManagerAsync(otherZone);
-        await (await otherManager.CancelAsync(receipt.Id(), "Wrong", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await otherManager.PostAsync($"/api/purchase-receipts/{receipt.Id()}/copy", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        await (await otherManager.CancelAsync(receipt.Id(), "Wrong", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await otherManager.PostAsync($"/api/purchase-receipts/{receipt.Id()}/copy", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         Assert.Equal(StatusIds.PurchaseReceipt.Completed, (await factory.QueryAsync(db => db.PurchaseReceipts.SingleAsync(r => r.Id == receipt.Id()))).StatusId);
 
         var manager = await factory.ZoneManagerAsync(world.Zone);
@@ -164,7 +168,7 @@ public class PurchaseReceiptCancelCopyTests(AuthApiFactory factory) : IClassFixt
 
         // A Draft is edited, not copied.
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 1000)));
-        await (await world.Owner.PostAsync($"/api/purchase-receipts/{draft.Id()}/copy", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG61");
+        await (await world.Owner.PostAsync($"/api/purchase-receipts/{draft.Id()}/copy", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
 
         await (await world.Owner.CancelAsync(source.Id(), "Wrong price", false)).ReadAsync(HttpStatusCode.OK);
         var copy = await (await world.Owner.PostAsync($"/api/purchase-receipts/{source.Id()}/copy", null)).ReadAsync(HttpStatusCode.Created);

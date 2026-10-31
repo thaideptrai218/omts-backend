@@ -72,7 +72,9 @@ public class WaterOverdueRearmQaTests
     {
         await using var api = new WaterApiFactory();
         var z = await api.ZoneAsync();
-        var measuredAt = DateTimeOffset.UtcNow.AddDays(-40);
+        // 08:00 Vietnam time, so the correction one hour later stays on the same business day at any time of the run.
+        var day = OMTS.Application.Common.BusinessClock.ToBusinessDate(DateTimeOffset.UtcNow).AddDays(-40);
+        var measuredAt = new DateTimeOffset(day.ToDateTime(new TimeOnly(8, 0)), TimeSpan.FromHours(7));
         var first = await z.RecordedAsync(7m, 20m, measuredAt: measuredAt);
         await RunAsync(api, Today);
 

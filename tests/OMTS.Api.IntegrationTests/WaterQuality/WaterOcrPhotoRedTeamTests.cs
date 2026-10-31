@@ -30,10 +30,10 @@ public class WaterOcrPhotoRedTeamTests(AuthApiFactory api) : IClassFixture<AuthA
 
         Assert.Equal(HttpStatusCode.OK, again.StatusCode);
         Assert.Equal("Failed", againBody.GetProperty("ocr").Text("status"));
-        Assert.Equal("MSG04", againBody.GetProperty("ocr").GetProperty("warning").Text("code"));
+        Assert.Equal("MSG-WATER-01", againBody.GetProperty("ocr").GetProperty("warning").Text("code"));
         Assert.Equal("Draft", againBody.GetProperty("measurement").Text("status"));
         Assert.Equal(HttpStatusCode.BadRequest, confirm.StatusCode);
-        Assert.Equal("MSG01", problem.Text("code"));
+        Assert.Equal("MSG-GEN-01", problem.Text("code"));
         Assert.Equal(["pH", "Salinity"], problem.GetProperty("fields").EnumerateArray().Select(f => f.GetString()));
         var stored = await api.QueryAsync(db => db.WaterMeasurements.AsNoTracking().SingleAsync(m => m.Id == draftId));
         Assert.Equal(StatusIds.WaterMeasurement.Draft, stored.StatusId);
@@ -116,7 +116,7 @@ public class WaterOcrPhotoRedTeamTests(AuthApiFactory api) : IClassFixture<AuthA
         var response = await z.Owner.PostAsync($"{z.Base}/with-photo", form);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG01", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
         Assert.Equal("Photo", (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
         Assert.Equal(0, await own.QueryAsync(db => db.WaterMeasurements.CountAsync()));
         Assert.False(Directory.Exists(own.StorageRoot) && Directory.EnumerateFiles(own.StorageRoot, "*", SearchOption.AllDirectories).Any());

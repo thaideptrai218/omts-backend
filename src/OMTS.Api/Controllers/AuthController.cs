@@ -59,7 +59,7 @@ public sealed class AuthController(AuthService authService, ICurrentUser current
         return result.Error switch
         {
             AuthError.InvalidCredentials => ProblemResults.Create(StatusCodes.Status401Unauthorized, UserMessages.LoginIncorrect),
-            AuthError.TemporarilyLocked => ProblemResults.Create(StatusCodes.Status423Locked, UserMessages.TooManyAttempts),
+            AuthError.TemporarilyLocked => ProblemResults.Create(StatusCodes.Status423Locked, UserMessages.TooManyLoginAttempts),
             AuthError.AccessDenied => ProblemResults.Create(StatusCodes.Status403Forbidden, UserMessages.AccountUnusable),
             AuthError.TemporaryPasswordExpired => ProblemResults.Create(StatusCodes.Status403Forbidden, UserMessages.TemporaryPasswordExpired),
             _ => ProblemResults.Create(StatusCodes.Status401Unauthorized, UserMessages.SessionExpired),

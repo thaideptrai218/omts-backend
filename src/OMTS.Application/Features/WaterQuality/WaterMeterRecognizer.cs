@@ -10,7 +10,7 @@ namespace OMTS.Application.Features.WaterQuality;
 /// <summary>
 /// Sends a meter photo to the OCR Service within <c>Ocr:TimeoutSeconds</c> and turns the answer into the
 /// draft values of a measurement. A failure or timeout never blocks the user: the outcome is Failed with
-/// MSG04 and the values stay empty for manual entry. Values outside the valid ranges are treated as not read.
+/// MSG-WATER-01 and the values stay empty for manual entry. Values outside the valid ranges are treated as not read.
 /// </summary>
 public sealed class WaterMeterRecognizer(
     IOcrService ocr,

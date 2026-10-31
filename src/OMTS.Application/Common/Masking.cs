@@ -1,7 +1,7 @@
 namespace OMTS.Application.Common;
 
 /// <summary>
-/// Masks contact data for logs and messages (MSG62 "n***@mail.com"): enough to recognise the target,
+/// Masks contact data for logs and messages (MSG-ACCOUNT-19 "n***@mail.com"): enough to recognise the target,
 /// not enough to read it.
 /// </summary>
 public static class Masking
