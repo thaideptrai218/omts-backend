@@ -35,7 +35,7 @@ public class CooperativeProfileV2SqlServerQaTests
         var owner = host.Owner.Client;
         var saved = await SaveAsync(owner, await RowVersionAsync(owner), "a@htxtrungnam.vn");
 
-        var afterCover = (await (await owner.UploadCoverPhotoAsync(FarmingTestKit.Png)).ReadAsync(HttpStatusCode.OK)).Text("rowVersion");
+        var afterCover = (await (await owner.UploadCoverPhotoAsync(FarmingTestKit.Png)).ReadAsync(HttpStatusCode.OK)).GetProperty("profile").Text("rowVersion");
         var stale = await owner.PutAsJsonAsync(Profile, Valid(saved, b => b["email"] = "b@htxtrungnam.vn"));
         Assert.Equal((HttpStatusCode.Conflict, "MSG06"), (stale.StatusCode, await stale.ErrorCodeAsync()));
         Assert.NotEqual(saved, afterCover);
@@ -43,7 +43,7 @@ public class CooperativeProfileV2SqlServerQaTests
         var next = await SaveAsync(owner, afterCover, "c@htxtrungnam.vn");
         var afterLogo = (await (await UploadLogoAsync(owner, FarmingTestKit.Png, "logo.png")).ReadAsync(HttpStatusCode.OK)).Text("rowVersion");
         next = await SaveAsync(owner, afterLogo, "d@htxtrungnam.vn");
-        var afterRemove = (await (await owner.DeleteAsync(CoverPhoto)).ReadAsync(HttpStatusCode.OK)).Text("rowVersion");
+        var afterRemove = (await (await owner.DeleteAsync(CoverPhoto)).ReadAsync(HttpStatusCode.OK)).GetProperty("profile").Text("rowVersion");
         next = await SaveAsync(owner, afterRemove, "e@htxtrungnam.vn");
         await owner.CreateCertificationAsync();
         next = await SaveAsync(owner, next, "f@htxtrungnam.vn");

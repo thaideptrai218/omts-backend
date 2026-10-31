@@ -125,8 +125,11 @@ public sealed class CooperativeCertificationService(
         return await SavedAsync(certification, cancellationToken);
     }
 
-    /// <summary>Removes the certification and, once that is saved, its file; the audit log keeps its values.</summary>
-    public async Task<Result<Done>> RemoveAsync(Guid id, string? rowVersion, CancellationToken cancellationToken)
+    /// <summary>
+    /// Removes the certification and, once that is saved, its file; the audit log keeps its values. MSG-GEN-05
+    /// "Certifications saved." (the list without it).
+    /// </summary>
+    public async Task<Result<CooperativeCertificationRemoved>> RemoveAsync(Guid id, string? rowVersion, CancellationToken cancellationToken)
     {
         if (await FindAsync(id, cancellationToken) is not { } certification)
         {
@@ -144,7 +147,8 @@ public sealed class CooperativeCertificationService(
         });
         cooperatives.RemoveCertification(certification);
         await fileSaver.SaveAsync(null, certification.FileUrl, cancellationToken);
-        return Done.Value;
+        var saved = UserMessages.Saved("Certifications");
+        return new CooperativeCertificationRemoved(saved.Text, saved.Code);
     }
 
     private async Task<CooperativeCertification?> FindAsync(Guid id, CancellationToken cancellationToken) =>

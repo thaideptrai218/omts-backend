@@ -22,8 +22,8 @@ public sealed class CooperativeCoverPhotoService(
     CooperativeProfileViews views,
     AuditLogService audit)
 {
-    /// <summary>Replaces the cover photo (PNG/JPEG/WebP, 5 MB).</summary>
-    public async Task<Result<CooperativeProfileView>> UploadAsync(IncomingFile file, CancellationToken cancellationToken)
+    /// <summary>Replaces the cover photo (PNG/JPEG/WebP, 5 MB); MSG-GEN-05 "Cover photo saved."</summary>
+    public async Task<Result<CooperativeProfileSaved>> UploadAsync(IncomingFile file, CancellationToken cancellationToken)
     {
         var cooperative = await cooperatives.GetCurrentAsync(cancellationToken);
         if (cooperative is null)
@@ -43,17 +43,26 @@ public sealed class CooperativeCoverPhotoService(
             return new AppError(ErrorKind.BadGateway, UserMessages.UploadFailed);
         }
 
-        return await SetAsync(cooperative, uploaded.Key, cancellationToken);
+        await SetAsync(cooperative, uploaded.Key, cancellationToken);
+        return await SavedAsync(cooperative, "Cover photo", cancellationToken);
     }
 
-    public async Task<Result<CooperativeProfileView>> RemoveAsync(CancellationToken cancellationToken) =>
-        await cooperatives.GetCurrentAsync(cancellationToken) switch
+    /// <summary>Removes the cover photo; MSG-GEN-05 "Cooperative profile saved." (the profile without a cover photo).</summary>
+    public async Task<Result<CooperativeProfileSaved>> RemoveAsync(CancellationToken cancellationToken)
+    {
+        if (await cooperatives.GetCurrentAsync(cancellationToken) is not { } cooperative)
         {
-            null => AppError.NotFound,
-            // Nothing to remove: no change, no audit row.
-            { CoverPhotoUrl: null } cooperative => await views.ProfileAsync(cooperative, cancellationToken),
-            var cooperative => await SetAsync(cooperative, null, cancellationToken),
-        };
+            return AppError.NotFound;
+        }
+
+        // Nothing to remove: no change, no audit row.
+        if (cooperative.CoverPhotoUrl is not null)
+        {
+            await SetAsync(cooperative, null, cancellationToken);
+        }
+
+        return await SavedAsync(cooperative, "Cooperative profile", cancellationToken);
+    }
 
     /// <summary>
     /// The current cover photo by its path below the category ("2026/10/{id}.jpg"), or null: a replaced file, or a
@@ -70,7 +79,7 @@ public sealed class CooperativeCoverPhotoService(
         return await CooperativePublicFiles.OpenAsync(storage, key, cancellationToken);
     }
 
-    private async Task<Result<CooperativeProfileView>> SetAsync(Cooperative cooperative, string? key, CancellationToken cancellationToken)
+    private async Task SetAsync(Cooperative cooperative, string? key, CancellationToken cancellationToken)
     {
         var replaced = cooperative.CoverPhotoUrl;
         audit.Record(new AuditEntry("Cooperative.CoverPhotoChanged", nameof(Cooperative))
@@ -81,6 +90,11 @@ public sealed class CooperativeCoverPhotoService(
         });
         cooperative.CoverPhotoUrl = key;
         await fileSaver.SaveAsync(key, replaced, cancellationToken);
-        return await views.ProfileAsync(cooperative, cancellationToken);
+    }
+
+    private async Task<CooperativeProfileSaved> SavedAsync(Cooperative cooperative, string what, CancellationToken cancellationToken)
+    {
+        var saved = UserMessages.Saved(what);
+        return new CooperativeProfileSaved(await views.ProfileAsync(cooperative, cancellationToken), saved.Text, saved.Code);
     }
 }

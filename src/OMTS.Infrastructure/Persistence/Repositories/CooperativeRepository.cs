@@ -9,6 +9,8 @@ internal sealed class CooperativeRepository(OmtsDbContext db) : ICooperativeRepo
     public Task<Cooperative?> GetCurrentAsync(CancellationToken cancellationToken) =>
         db.Cooperatives.OrderBy(c => c.CreatedAt).FirstOrDefaultAsync(cancellationToken);
 
+    public Task<bool> ExistsAsync(CancellationToken cancellationToken) => db.Cooperatives.AnyAsync(cancellationToken);
+
     public Task<Cooperative?> FindByTaxCodeAsync(string taxCode, Guid exceptCooperativeId, CancellationToken cancellationToken) =>
         db.Cooperatives.AsNoTracking().FirstOrDefaultAsync(c => c.TaxCode == taxCode && c.Id != exceptCooperativeId, cancellationToken);
 

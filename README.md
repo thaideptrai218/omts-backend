@@ -251,9 +251,10 @@ cooperative logos are kept for ever.
 
 **Every environment must use its own storage container (`Storage:AzureBlob:Container`) or folder
 (`Storage:Local:RootPath`); never share one between environments.** The job deletes the files its own database does not
-point to, so on a shared storage it would delete the files of the other environment. As a safeguard only, a folder in
-which not one stored file (old or new) is referenced by the database is skipped: nothing is deleted there and a warning
-is logged.
+point to, so on a shared storage it would delete the files of the other environment. As a safeguard only, a raft photo or
+license folder in which not one stored file (old or new) is referenced by the database is skipped: nothing is deleted
+there and a warning is logged. Cover photos and certificate files may all be unreferenced in a real database (cover
+removed, last certification removed), so their folders are skipped only when the database holds no cooperative.
 
 ## Deployment
 

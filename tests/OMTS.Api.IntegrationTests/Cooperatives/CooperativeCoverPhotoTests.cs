@@ -32,11 +32,13 @@ public class CooperativeCoverPhotoTests
         var owner = await api.NewOwnerAsync();
         var anonymous = api.CreateClient();
 
-        var first = await (await owner.UploadCoverPhotoAsync(Png)).ReadAsync(HttpStatusCode.OK);
+        var uploaded = await (await owner.UploadCoverPhotoAsync(Png)).ReadAsync(HttpStatusCode.OK);
+        var first = uploaded.GetProperty("profile");
         var firstUrl = first.Text("coverPhotoUrl");
         var firstKey = await CoverKeyAsync(api);
         var served = await anonymous.GetAsync(firstUrl);
 
+        Assert.Equal(("Cover photo saved.", "MSG-GEN-05"), (uploaded.Text("message"), uploaded.Text("messageCode")));
         Assert.StartsWith("/api/public/cooperative/cover-photos/", firstUrl);
         Assert.Equal(firstUrl, first.GetProperty("publicPreview").Text("coverPhotoUrl"));
         Assert.Equal(HttpStatusCode.OK, served.StatusCode);
@@ -44,7 +46,7 @@ public class CooperativeCoverPhotoTests
         Assert.Equal(["nosniff"], served.Headers.GetValues("X-Content-Type-Options"));
         Assert.Equal(Png, await served.Content.ReadAsByteArrayAsync());
 
-        var second = await (await owner.UploadCoverPhotoAsync(Jpeg, "cover.jpg")).ReadAsync(HttpStatusCode.OK);
+        var second = (await (await owner.UploadCoverPhotoAsync(Jpeg, "cover.jpg")).ReadAsync(HttpStatusCode.OK)).GetProperty("profile");
         var secondUrl = second.Text("coverPhotoUrl");
         var secondKey = await CoverKeyAsync(api);
 
@@ -54,12 +56,14 @@ public class CooperativeCoverPhotoTests
         Assert.Equal(Jpeg, await anonymous.GetByteArrayAsync(secondUrl));
         Assert.Equal([Path.Combine(api.StorageRoot, secondKey!.Replace('/', Path.DirectorySeparatorChar))], api.StoredFiles(FileCategories.CooperativeCoverPhotos));
 
-        var removed = await (await owner.DeleteAsync(CoverPhoto)).ReadAsync(HttpStatusCode.OK);
-        var removedAgain = await owner.DeleteAsync(CoverPhoto);
+        var removedAnswer = await (await owner.DeleteAsync(CoverPhoto)).ReadAsync(HttpStatusCode.OK);
+        var removed = removedAnswer.GetProperty("profile");
+        var removedAgain = await (await owner.DeleteAsync(CoverPhoto)).ReadAsync(HttpStatusCode.OK);
 
+        Assert.Equal(("Cooperative profile saved.", "MSG-GEN-05"), (removedAnswer.Text("message"), removedAnswer.Text("messageCode")));
         Assert.Equal(JsonValueKind.Null, removed.GetProperty("coverPhotoUrl").ValueKind);
         Assert.Equal(JsonValueKind.Null, removed.GetProperty("publicPreview").GetProperty("coverPhotoUrl").ValueKind);
-        Assert.Equal(HttpStatusCode.OK, removedAgain.StatusCode);
+        Assert.Equal("MSG-GEN-05", removedAgain.Text("messageCode"));
         Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync(secondUrl)).StatusCode);
         Assert.Empty(api.StoredFiles(FileCategories.CooperativeCoverPhotos));
 
@@ -136,7 +140,7 @@ public class CooperativeCoverPhotoTests
         using var api = new AuthApiFactory();
         var owner = await api.NewOwnerAsync();
         var logoUrl = (await (await CooperativeProfileRequests.UploadLogoAsync(owner, Png, "logo.png")).ReadAsync(HttpStatusCode.OK)).Text("logoUrl");
-        var coverUrl = (await (await owner.UploadCoverPhotoAsync(Jpeg, "cover.jpg")).ReadAsync(HttpStatusCode.OK)).Text("coverPhotoUrl");
+        var coverUrl = (await (await owner.UploadCoverPhotoAsync(Jpeg, "cover.jpg")).ReadAsync(HttpStatusCode.OK)).GetProperty("profile").Text("coverPhotoUrl");
         var orphan = await api.Services.GetRequiredService<IFileStorage>().UploadAsync(Validated(Png), FileCategories.CooperativeCoverPhotos);
         var anonymous = api.CreateClient();
         var coverPath = coverUrl["/api/public/cooperative/cover-photos/".Length..];

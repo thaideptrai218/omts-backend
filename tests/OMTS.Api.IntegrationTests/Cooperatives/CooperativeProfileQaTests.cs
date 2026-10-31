@@ -65,9 +65,9 @@ public class CooperativeProfileQaTests
         Assert.False(await QueryAsync(api, db => db.StatusTransitions.AnyAsync(t => t.Id == 3)));
     }
 
-    // GBR-02 / SRS 27/10: the audit row of the cooperative created at deployment still records "Status": "DRAFT", a
-    // status that no longer exists.
-    [Fact(Skip = "QA finding OMTS-217 PR 0.7 #2 (DeploymentBootstrapper still audits Cooperative.Created with Status DRAFT)")]
+    // GBR-02 / SRS 27/10: the audit row of the cooperative created at deployment records no status, since the
+    // cooperative has none (QA 0.7 #2).
+    [Fact]
     public async Task Bootstrap_audit_of_the_new_cooperative_records_no_status()
     {
         await using var api = BootstrapTests.WithSecrets(new AuthApiFactory());
