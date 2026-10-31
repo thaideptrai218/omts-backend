@@ -63,7 +63,7 @@ public class CooperativeCertificationQaTests
 
         var stale = await owner.PutAsync($"{Certifications}/{id}", new CertificationFields
         {
-            Number = "VG-NEW", RowVersion = NeverIssuedVersion, File = Png, FileName = "new.png",
+            Number = "VG-NEW", RowVersion = AcsTestKit.StaleRowVersion, File = Png, FileName = "new.png",
         }.ToForm());
 
         Assert.Equal((HttpStatusCode.Conflict, "MSG06"), (stale.StatusCode, await stale.ErrorCodeAsync()));

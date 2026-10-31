@@ -159,11 +159,11 @@ public class CooperativeCertificationTests
         var id = (await owner.CreateCertificationAsync()).Id();
         await api.IssueCertificationVersionAsync(id);
 
-        var staleEdit = await owner.PutAsync($"{Certifications}/{id}", new CertificationFields { File = null, RowVersion = "AAAAAAAAB9E=" }.ToForm());
+        var staleEdit = await owner.PutAsync($"{Certifications}/{id}", new CertificationFields { File = null, RowVersion = AcsTestKit.StaleRowVersion }.ToForm());
         var missingEdit = await owner.PutAsync($"{Certifications}/{id}", new CertificationFields { File = null }.ToForm());
-        var staleRemove = await owner.DeleteAsync($"{Certifications}/{id}?rowVersion=AAAAAAAAB9E%3D");
+        var staleRemove = await owner.DeleteAsync($"{Certifications}/{id}?rowVersion={Uri.EscapeDataString(AcsTestKit.StaleRowVersion)}");
         var missingRemove = await owner.DeleteAsync($"{Certifications}/{id}");
-        var unknown = await owner.DeleteAsync($"{Certifications}/{Guid.NewGuid()}?rowVersion=AAAAAAAAB9E%3D");
+        var unknown = await owner.DeleteAsync($"{Certifications}/{Guid.NewGuid()}?rowVersion={Uri.EscapeDataString(AcsTestKit.StaleRowVersion)}");
 
         Assert.Equal("MSG06", await staleEdit.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.Conflict, staleEdit.StatusCode);
@@ -193,8 +193,8 @@ public class CooperativeCertificationTests
         {
             Assert.Equal("MSG-GEN-08", await (await client.GetAsync(Certifications)).ErrorCodeAsync());
             Assert.Equal("MSG-GEN-08", await (await client.AddCertificationAsync(new CertificationFields())).ErrorCodeAsync());
-            Assert.Equal("MSG-GEN-08", await (await client.PutAsync($"{Certifications}/{id}", new CertificationFields { RowVersion = "AAAAAAAAB9E=" }.ToForm())).ErrorCodeAsync());
-            Assert.Equal("MSG-GEN-08", await (await client.DeleteAsync($"{Certifications}/{id}?rowVersion=AAAAAAAAB9E%3D")).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.PutAsync($"{Certifications}/{id}", new CertificationFields { RowVersion = AcsTestKit.StaleRowVersion }.ToForm())).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.DeleteAsync($"{Certifications}/{id}?rowVersion={Uri.EscapeDataString(AcsTestKit.StaleRowVersion)}")).ErrorCodeAsync());
         }
 
         var anonymous = api.CreateClient();

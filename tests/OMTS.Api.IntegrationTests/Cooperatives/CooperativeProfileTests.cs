@@ -78,7 +78,7 @@ public class CooperativeProfileTests
         var rowVersion = (await owner.GetFromJsonAsync<JsonElement>("/api/cooperative/profile")).GetProperty("rowVersion").GetString();
 
         var duplicate = await owner.PutAsJsonAsync("/api/cooperative/profile", Valid(rowVersion, taxCode: "0101234567"));
-        var stale = await owner.PutAsJsonAsync("/api/cooperative/profile", Valid("AAAAAAAAB9E="));
+        var stale = await owner.PutAsJsonAsync("/api/cooperative/profile", Valid(StaleRowVersion));
 
         Assert.Equal("MSG-GEN-02", await duplicate.ErrorCodeAsync());
         Assert.Equal("MSG06", await stale.ErrorCodeAsync());
