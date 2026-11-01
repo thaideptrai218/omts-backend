@@ -7,7 +7,8 @@ namespace OMTS.Application.Features.Purchasing.Receipts;
 /// <summary>
 /// PURCHASE-01.4 – Copy fills a new receipt with the supplier, the date received and the lines of a receipt (for example one
 /// just cancelled); nothing is saved until the user saves a Draft or completes it. A supplier, an item or a raft that is no
-/// longer In Use, or a raft the caller may not choose (BR-PURCHASE-01), is left empty (GBR-01).
+/// longer In Use, or a raft the caller may not choose (BR-PURCHASE-01), is left empty (GBR-01); a line whose item is left
+/// empty loses its raft too. The copy as returned can be saved as a Draft once it has a supplier (a Draft needs one).
 /// </summary>
 public sealed class PurchaseReceiptCopyService(
     IPurchaseReceiptRepository receipts, ISupplierRepository suppliers, PurchaseReceiptValidator validator, PurchaseReceiptAccess access)
@@ -37,16 +38,19 @@ public sealed class PurchaseReceiptCopyService(
             var line = lines[i];
             var item = line.ItemId is { } itemId ? refs.Items.GetValueOrDefault(itemId) : null;
             Guid? copiedItem = item?.StatusId == StatusIds.Usage.InUse ? item.Id : null;
+            Guid? copiedRaft = null;
             if (line.ItemId is not null && copiedItem is null)
             {
+                // The raft goes with the item: the user picks both again (the raft depends on the group of the item).
                 leftEmpty.Add($"Line {i + 1} item");
             }
-
-            // The raft is judged with the line's own item, so a raft stays when only the item was discontinued.
-            Guid? copiedRaft = line.RaftId is { } raftId && PurchaseReceiptValidator.RaftAllowed(item, refs.Rafts.GetValueOrDefault(raftId), raftZones) ? raftId : null;
-            if (line.RaftId is not null && copiedRaft is null)
+            else if (line.RaftId is { } raftId)
             {
-                leftEmpty.Add($"Line {i + 1} raft");
+                copiedRaft = PurchaseReceiptValidator.RaftAllowed(item, refs.Rafts.GetValueOrDefault(raftId), raftZones, itemRequired: item is not null) ? raftId : null;
+                if (copiedRaft is null)
+                {
+                    leftEmpty.Add($"Line {i + 1} raft");
+                }
             }
 
             copied.Add(new ReceiptLineInput(copiedItem, line.Quantity, line.UnitPrice, line.SupplierLotCode, copiedRaft));

@@ -251,11 +251,38 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 principalTable: "PurchaseReceiptLines",
                 principalColumn: "Id",
                 onDelete: ReferentialAction.Restrict);
+
+            // One counter per document kind (PN now; HD, payments and wage vouchers later): a number is taken once and
+            // never given again, even when its Draft is removed.
+            migrationBuilder.CreateTable(
+                name: "DocumentSequences",
+                columns: table => new
+                {
+                    Key = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    LastValue = table.Column<long>(type: "bigint", nullable: false),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_DocumentSequences", x => x.Key);
+                });
+
+            // The PN counter starts after the highest PN code already given (none on most databases).
+            migrationBuilder.Sql(
+                """
+                INSERT INTO DocumentSequences ([Key], LastValue)
+                SELECT N'PN', ISNULL(MAX(TRY_CAST(SUBSTRING(Code, 3, 20) AS bigint)), 0)
+                FROM PurchaseReceipts
+                WHERE Code LIKE N'PN[0-9]%';
+                """);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "DocumentSequences");
+
             migrationBuilder.DropForeignKey(
                 name: "FK_PurchaseReceiptLines_Rafts_RaftId",
                 table: "PurchaseReceiptLines");

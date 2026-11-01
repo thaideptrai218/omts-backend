@@ -11,15 +11,11 @@ public static class DocumentCodes
     public const string ReceiptPrefix = "PN";
     public const string ReturnPrefix = "PRT";
 
-    /// <summary>PN followed by at least six digits: PN000001…PN999999, then PN1000000.</summary>
-    public static string ReceiptCode(int number) => $"{ReceiptPrefix}{number.ToString("000000", CultureInfo.InvariantCulture)}";
-
-    /// <summary>The number of a receipt code of this sequence, or null for another code (e.g. an old PR-yyyyMMdd-nnn).</summary>
-    public static int? ReceiptNumber(string? code) =>
-        code is { Length: > 2 } && code.StartsWith(ReceiptPrefix, StringComparison.Ordinal) && code[2..].All(char.IsAsciiDigit)
-            && int.TryParse(code[2..], NumberStyles.None, CultureInfo.InvariantCulture, out var number)
-            ? number
-            : null;
+    /// <summary>
+    /// PN followed by at least six digits: PN000001…PN999999, then PN1000000. The number comes from the PN document
+    /// sequence (<c>IDocumentNumberAllocator</c>), so a code is never given twice, even after its Draft is removed.
+    /// </summary>
+    public static string ReceiptCode(long number) => $"{ReceiptPrefix}{number.ToString("000000", CultureInfo.InvariantCulture)}";
 
     /// <summary>The seed lot code of a Seed line (GBR-04), written on the seed bags.</summary>
     public static string SeedLotCode(string receiptCode, int lineNumber) => $"{receiptCode}-{lineNumber.ToString(CultureInfo.InvariantCulture)}";

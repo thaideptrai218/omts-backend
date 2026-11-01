@@ -105,7 +105,8 @@ public class PurchaseReceiptCorrectCopyTests(AuthApiFactory factory) : IClassFix
         var lines = body.GetProperty("lines").EnumerateArray().ToList();
         Assert.Equal((world.Seed, 10m, 900m, "LOT-9", world.Raft.Id), (lines[0].GetProperty("itemId").GetGuid(), lines[0].Money("quantity"), lines[0].Money("unitPrice"),
             lines[0].GetProperty("supplierLotCode").GetString(), lines[0].GetProperty("raftId").GetGuid()));
-        Assert.Equal((JsonValueKind.Null, world.Raft.Id), (lines[1].GetProperty("itemId").ValueKind, lines[1].GetProperty("raftId").GetGuid()));
+        // The raft goes with the item left empty (it depends on the group of the item); only the item is listed.
+        Assert.Equal((JsonValueKind.Null, JsonValueKind.Null), (lines[1].GetProperty("itemId").ValueKind, lines[1].GetProperty("raftId").ValueKind));
         Assert.Equal(JsonValueKind.Null, lines[2].GetProperty("raftId").ValueKind);
         Assert.Equal(1.5m, lines[3].Money("quantity"));
         Assert.Equal(["Line 2 item", "Line 3 raft"], copy.GetProperty("leftEmpty").EnumerateArray().Select(e => e.GetString()));

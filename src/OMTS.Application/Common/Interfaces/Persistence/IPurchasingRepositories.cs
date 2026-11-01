@@ -70,9 +70,6 @@ public interface IPurchaseReceiptRepository
     /// <summary>Receipt with supplier, lines (items, rafts and their zones), returns (lines) and payments, tracked.</summary>
     Task<PurchaseReceipt?> GetForEditAsync(Guid receiptId, CancellationToken cancellationToken);
 
-    /// <summary>The highest number of the PN receipt codes (GBR-04), or 0 when none is used yet.</summary>
-    Task<int> LatestReceiptNumberAsync(CancellationToken cancellationToken);
-
     /// <summary>Return codes already used that start with <paramref name="prefix"/>.</summary>
     Task<int> CountReturnCodesAsync(string prefix, CancellationToken cancellationToken);
 

@@ -71,7 +71,8 @@ public sealed class PurchaseReceiptValidator(
                 invalid.Add($"Line {i + 1} supplier lot code");
             }
 
-            if (lines[i].RaftId is { } raftId && !RaftAllowed(item, refs.Rafts.GetValueOrDefault(raftId), raftZones))
+            // A Draft line may have no item yet (BR-PURCHASE-03): its raft is then checked without the group, which needs the item.
+            if (lines[i].RaftId is { } raftId && !RaftAllowed(item, refs.Rafts.GetValueOrDefault(raftId), raftZones, itemRequired: lines[i].ItemId is not null))
             {
                 invalid.Add($"Line {i + 1} raft");
             }
@@ -146,10 +147,11 @@ public sealed class PurchaseReceiptValidator(
 
     /// <summary>
     /// GBR-04, BR-FARM-05: only a Seed or Material line names a raft, In Use in a zone In Use (GBR-01) that the caller can
-    /// access (BR-PURCHASE-01).
+    /// access (BR-PURCHASE-01). With <paramref name="itemRequired"/> false (a Draft line without an item yet) the group is not
+    /// checked; completing checks it.
     /// </summary>
-    public static bool RaftAllowed(FarmingInputItem? item, Raft? raft, PermittedZones raftZones) =>
-        item?.Group is InputItemGroup.Seed or InputItemGroup.Material
+    public static bool RaftAllowed(FarmingInputItem? item, Raft? raft, PermittedZones raftZones, bool itemRequired = true) =>
+        (item is null ? !itemRequired : item.Group is InputItemGroup.Seed or InputItemGroup.Material)
         && raft is { StatusId: StatusIds.Usage.InUse }
         && raft.Zone?.StatusId is null or StatusIds.Usage.InUse
         && (raftZones.AllZones || raftZones.ZoneIds.Contains(raft.ZoneId));

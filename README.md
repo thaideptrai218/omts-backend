@@ -291,7 +291,8 @@ created by a one-time command run on the server by the deployment operator (not 
    Upgrading a database from before the purchase receipts of SRS 27/10 (migration `PurchaseReceiptsV2`): receipts lose their
    zone, discount, paid-now amount and invoice photos; their lines get numbers and the receipt raft on their Seed and
    Material lines; seed lots become the Seed lines themselves (the seeding events are re-pointed); old codes
-   (`PR-yyyyMMdd-nnn`) stay and new receipts take `PN000123` codes. Down is lossy. Demo databases are not converted further:
+   (`PR-yyyyMMdd-nnn`) stay and new receipts take `PN000123` codes from the `DocumentSequences` counter, which starts after
+   the highest PN code and never gives a number twice. Down is lossy. Demo databases are not converted further:
    reset them (`docker compose down -v`).
    An Owner who cannot log in (for example after missing the 24-hour window) is recovered with
    `dotnet OMTS.Api.dll seed --reset-owner-password`. It sets `Bootstrap:Owner:TemporaryPassword` (from configuration, never

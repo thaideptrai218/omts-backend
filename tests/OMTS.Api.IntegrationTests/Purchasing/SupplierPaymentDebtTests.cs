@@ -240,8 +240,8 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
         await (await accountant.GetAsync("/api/suppliers/debts")).ReadAsync(HttpStatusCode.OK);
         await (await accountant.GetAsync($"/api/purchase-receipts/{receipt.Id()}")).ReadAsync(HttpStatusCode.OK);
         await (await accountant.GetAsync("/api/purchase-receipts")).ReadAsync(HttpStatusCode.OK);
-        // View only (§I.4.4 PURCHASE-03 R): no export.
-        Assert.Equal(HttpStatusCode.Forbidden, (await accountant.GetAsync("/api/purchase-receipts/export")).StatusCode);
+        // §I.4.4 PURCHASE-03 R, which includes exporting to a file.
+        Assert.Equal(HttpStatusCode.OK, (await accountant.GetAsync("/api/purchase-receipts/export")).StatusCode);
         await (await accountant.GetAsync("/api/farming-input-items")).ReadAsync(HttpStatusCode.OK);
 
         // Read-only on PURCHASE-01…03 and PURCHASE-06.

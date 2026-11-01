@@ -188,6 +188,8 @@ public sealed class PurchaseReceiptCancellationService(
     /// </summary>
     private async Task<(decimal Before, decimal After)> DebtsAsync(PurchaseReceipt receipt, CancellationToken cancellationToken)
     {
+        // Every return blocks a cancel today. When P4 lets a receipt with only Cancelled returns be cancelled, this formula
+        // must count the returns that are not cancelled only.
         var before = await debts.DebtAsync(receipt.SupplierId, cancellationToken);
         var figures = PurchaseMoney.Of(receipt);
         return (before, before - (figures.NetTotal - figures.Refunded));

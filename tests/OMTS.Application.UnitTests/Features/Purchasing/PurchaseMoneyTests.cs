@@ -78,19 +78,8 @@ public class PurchaseMoneyTests
     [InlineData(123, "PN000123")]
     [InlineData(999_999, "PN999999")]
     [InlineData(1_000_000, "PN1000000")]
-    public void Receipt_codes_are_PN_and_at_least_six_digits(int number, string code)
-    {
+    public void Receipt_codes_are_PN_and_at_least_six_digits(int number, string code) =>
         Assert.Equal(code, DocumentCodes.ReceiptCode(number));
-        Assert.Equal(number, DocumentCodes.ReceiptNumber(code));
-    }
-
-    [Theory]
-    [InlineData("PR-20261022-001")]
-    [InlineData("PN")]
-    [InlineData("PN12A")]
-    [InlineData("PRT-20261022-001")]
-    [InlineData(null)]
-    public void Other_codes_are_not_numbers_of_the_sequence(string? code) => Assert.Null(DocumentCodes.ReceiptNumber(code));
 
     [Fact]
     public void The_seed_lot_code_is_the_receipt_code_and_the_line_number() =>

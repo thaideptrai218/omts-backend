@@ -23,7 +23,10 @@ public class PurchaseReceiptsQaTests(AuthApiFactory factory) : IClassFixture<Aut
 {
     private const string Receipts = "/api/purchase-receipts";
 
-    /// <summary>Every receipt endpoint; <c>Writes</c> are the ones the Accountant (PURCHASE-03 R) may not call.</summary>
+    /// <summary>
+    /// Every receipt endpoint; <c>Writes</c> are the ones the Accountant (PURCHASE-03 R) may not call. The export is part of
+    /// PURCHASE-03 ("includes exporting to a file"), so the Accountant calls it (lead decision, QA P2 Q1).
+    /// </summary>
     private static IEnumerable<(HttpMethod Method, string Path, Func<HttpContent?> Body, bool Write)> Endpoints(PurchasingWorld world, Guid draft, Guid completed, Guid returnId)
     {
         HttpContent Json(object body) => JsonContent.Create(body);
@@ -32,7 +35,7 @@ public class PurchaseReceiptsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         yield return (HttpMethod.Get, $"{Receipts}/{completed}", () => null, false);
         yield return (HttpMethod.Get, $"{Receipts}/{completed}/returns", () => null, false);
         yield return (HttpMethod.Get, $"/api/purchase-returns/{returnId}", () => null, false);
-        yield return (HttpMethod.Get, $"{Receipts}/export", () => null, true);
+        yield return (HttpMethod.Get, $"{Receipts}/export", () => null, false);
         yield return (HttpMethod.Post, Receipts, () => Json(world.Body(new LineBody(world.Other, 1, 1_000)) with { Complete = true }), true);
         yield return (HttpMethod.Put, $"{Receipts}/{draft}", () => Json(world.Body(new LineBody(world.Other, 9, 1_000))), true);
         yield return (HttpMethod.Post, $"{Receipts}/{draft}/complete", () => null, true);

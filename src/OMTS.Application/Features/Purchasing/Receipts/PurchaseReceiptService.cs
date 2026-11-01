@@ -1,6 +1,6 @@
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
-using OMTS.Application.Common.Exceptions;
+using OMTS.Application.Common.Constants;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
@@ -25,6 +25,7 @@ public sealed class PurchaseReceiptService(
     PurchaseReceiptViews views,
     PurchaseReceiptAccess access,
     PurchaseReceiptNotifications notifications,
+    IDocumentNumberAllocator numbers,
     ICurrentUser currentUser,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
@@ -34,14 +35,15 @@ public sealed class PurchaseReceiptService(
 {
     private const string RecordType = nameof(PurchaseReceipt);
 
-    // Parallel saves read the same latest code; each retry reads it again, so a handful of attempts settles any race.
-    private const int MaxCodeAttempts = 10;
-
     public async Task<Result<PurchaseReceiptView>> GetAsync(Guid receiptId, CancellationToken cancellationToken) =>
         await receipts.GetForEditAsync(receiptId, cancellationToken) is { } receipt
             ? await views.ViewAsync(receipt.Id, cancellationToken)
             : AppError.NotFound;
 
+    /// <summary>
+    /// PURCHASE-01 / 01.2: the receipt, its lines, its audit and, when completed, the Owner's MSG-PURCHASE-01 go in one save:
+    /// a failed save leaves nothing (only its PN number is spent, BR-PURCHASE-03: the code is given at the first save).
+    /// </summary>
     public async Task<Result<PurchaseReceiptView>> CreateAsync(SavePurchaseReceiptRequest request, CancellationToken cancellationToken)
     {
         var (refs, invalid) = await validator.CheckDraftAsync(request, cancellationToken);
@@ -57,24 +59,17 @@ public sealed class PurchaseReceiptService(
             return error;
         }
 
+        // Taken once the receipt is valid, so a refused save spends no number; never given twice (GBR-04).
+        receipt.Code = DocumentCodes.ReceiptCode(await numbers.NextAsync(DocumentSequenceKeys.PurchaseReceipt, cancellationToken));
         receipts.Add(receipt);
-        var events = new List<AuditEvent>
-        {
-            audit.Record(new AuditEntry("PurchaseReceipt.Created", RecordType) { RecordId = receipt.Id, After = Snapshot(receipt) }),
-        };
+        audit.Record(new AuditEntry("PurchaseReceipt.Created", RecordType) { RecordId = receipt.Id, RecordCode = receipt.Code, After = Snapshot(receipt) });
         if (request.Complete)
         {
-            events.Add(MarkCompleted(receipt));
-        }
-
-        // BR-PURCHASE-03: the code is given at the first save. The notification names it, so it is added once the code is final.
-        await SaveWithCodeAsync(receipt, events, cancellationToken);
-        if (request.Complete)
-        {
+            MarkCompleted(receipt);
             await notifications.CompletedAsync(receipt, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
+        await unitOfWork.SaveChangesAsync(cancellationToken);
         return await views.ViewAsync(receipt.Id, cancellationToken);
     }
 
@@ -177,36 +172,11 @@ public sealed class PurchaseReceiptService(
     }
 
     /// <summary>Draft → Completed (BR-PURCHASE-03): from now on each Seed line is a seed lot and the total counts in the supplier debt.</summary>
-    private AuditEvent MarkCompleted(PurchaseReceipt receipt)
+    private void MarkCompleted(PurchaseReceipt receipt)
     {
         receipt.StatusId = StatusIds.PurchaseReceipt.Completed;
         receipt.CompletedAt = timeProvider.GetUtcNow();
-        return audit.RecordStatusChange(RecordType, receipt.Id, receipt.Code, StatusIds.PurchaseReceipt.Draft, StatusIds.PurchaseReceipt.Completed);
-    }
-
-    /// <summary>
-    /// Saves a new receipt with the next PN code (GBR-04); when a parallel save took that code (unique index), the code is
-    /// read again and the next one is used for the receipt and its audit rows.
-    /// </summary>
-    private async Task SaveWithCodeAsync(PurchaseReceipt receipt, IReadOnlyList<AuditEvent> events, CancellationToken cancellationToken)
-    {
-        for (var attempt = 1; ; attempt++)
-        {
-            receipt.Code = DocumentCodes.ReceiptCode(await receipts.LatestReceiptNumberAsync(cancellationToken) + 1);
-            foreach (var auditEvent in events)
-            {
-                auditEvent.RecordCode = receipt.Code;
-            }
-
-            try
-            {
-                await unitOfWork.SaveChangesAsync(cancellationToken);
-                return;
-            }
-            catch (DuplicateRecordException) when (attempt < MaxCodeAttempts)
-            {
-            }
-        }
+        audit.RecordStatusChange(RecordType, receipt.Id, receipt.Code, StatusIds.PurchaseReceipt.Draft, StatusIds.PurchaseReceipt.Completed);
     }
 
     /// <summary>The fields and lines of the request; lines are numbered 1…n in the order entered (GBR-04).</summary>

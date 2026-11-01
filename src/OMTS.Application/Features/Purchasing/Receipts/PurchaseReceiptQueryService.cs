@@ -51,7 +51,7 @@ public sealed record ExportedFile(string FileName, string ContentType, byte[] Co
 
 /// <summary>
 /// PURCHASE-03 – search purchase receipts with totals, the material cost of rafts per line and period, and the Excel export.
-/// Receipts have no zone: the Zone Manager, the Owner and the Accountant (view only) see every receipt (BR-FARM-08).
+/// Receipts have no zone: the Zone Manager, the Owner and the Accountant (view and export) see every receipt (BR-FARM-08).
 /// </summary>
 public sealed class PurchaseReceiptQueryService(
     IPurchaseReceiptRepository receipts,

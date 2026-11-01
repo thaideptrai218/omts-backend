@@ -45,7 +45,7 @@ public static class FixedRoles
             Full(LaborWorkers), Full(WorkAssignments), Full(Attendance),
         ]);
 
-    /// <summary>Office work, usually granted at All zones; views sales invoices, purchase receipts and lot traces.</summary>
+    /// <summary>Office work, usually granted at All zones; views sales invoices and lot traces, views and exports purchase receipts.</summary>
     public static readonly FixedRole Accountant = new(
         StaffRole.Accountant,
         AccountantCode,
@@ -54,7 +54,8 @@ public static class FixedRoles
         [
             Full(CustomerPayments), Full(CustomerDebts), Full(SupplierPayments), Full(PayRules), Full(Payroll), Full(SalesReports),
             new(SalesInvoices, [View]),
-            new(PurchaseReceipts, [View]),
+            // PURCHASE-03 is R for the Accountant but "includes exporting to a file": view and export (lead decision, QA P2 Q1).
+            new(PurchaseReceipts, [View, Export]),
             new(LotTracing, [View]),
             // Suppliers are read to pick the payee of a supplier payment (PURCHASE-05). §I.4.4 shows PURCHASE-07 as No for
             // the Accountant; kept by default until the BA answers (gap Q4, OMTS-118).

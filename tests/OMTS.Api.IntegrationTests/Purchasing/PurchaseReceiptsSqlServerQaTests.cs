@@ -111,7 +111,7 @@ public class PurchaseReceiptsSqlServerQaTests
         Assert.Equal(-300_000m, debt.GetProperty("totals").Money("outstanding"));
     }
 
-    // GBR-04 code race above the ten attempts of SaveWithCodeAsync: every create still gets its own PN code.
+    // GBR-04 code race: every create of a burst gets its own PN code from the document sequence.
     [SqlServerFact]
     public async Task A_burst_of_sixteen_parallel_creates_gives_each_receipt_its_own_PN_code()
     {

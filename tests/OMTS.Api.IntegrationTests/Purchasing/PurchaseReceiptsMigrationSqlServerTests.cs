@@ -11,7 +11,8 @@ namespace OMTS.Api.IntegrationTests.Purchasing;
 /// <summary>
 /// Migration PurchaseReceiptsV2 on a database with receipts: down (lossy) gives each receipt a zone and a raft and each seed
 /// line of a Completed receipt its old lot, keeping the seeding events; up numbers the lines, puts the receipt raft on its
-/// Seed and Material lines and points the seeding events to the seed lines again.
+/// Seed and Material lines, points the seeding events to the seed lines again and starts the PN counter after the highest
+/// PN code.
 /// </summary>
 public class PurchaseReceiptsMigrationSqlServerTests
 {
@@ -29,7 +30,8 @@ public class PurchaseReceiptsMigrationSqlServerTests
             db.CultivationCycles.Add(cycle);
             db.SeedingEvents.Add(new SeedingEvent { CycleId = cycle.Id, SeedLotId = seedLine, SeedingDate = Today, SeedQuantity = 4, RecordedByAccountId = host.Owner.Account.Id });
         });
-        await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 1_000), new LineBody(null, null, null)));
+        var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 1_000), new LineBody(null, null, null)));
+        var lastNumber = long.Parse(draft.GetProperty("code").GetString()![2..], System.Globalization.CultureInfo.InvariantCulture);
 
         await using var db = host.Database.CreateContext();
         var migrator = db.GetService<IMigrator>();
@@ -54,5 +56,10 @@ public class PurchaseReceiptsMigrationSqlServerTests
         Assert.Equal(world.Raft.Id, lines.Single(l => l.ItemId == world.Material).RaftId);
         Assert.Null(lines.Single(l => l.ItemId == world.Other).RaftId);
         Assert.Equal(seedLine, await db.SeedingEvents.Where(e => e.CycleId == cycle.Id).Select(e => e.SeedLotId).SingleAsync());
+
+        // The PN counter starts again after the highest PN code on the database, so the next receipt takes the next number.
+        Assert.Equal(lastNumber, await db.DocumentSequences.Where(s => s.Key == "PN").Select(s => s.LastValue).SingleAsync());
+        var next = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 1_000)));
+        Assert.Equal(OMTS.Application.Features.Purchasing.DocumentCodes.ReceiptCode(lastNumber + 1), next.GetProperty("code").GetString());
     }
 }

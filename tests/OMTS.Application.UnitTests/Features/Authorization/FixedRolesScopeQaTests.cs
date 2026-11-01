@@ -98,9 +98,10 @@ public class FixedRolesScopeQaTests
             Assert.Equal([ZoneC], zones.ZoneIds);
         }
 
-        // View only on receipts and invoices (PURCHASE-03 R, SALE-09 R), nothing of the Zone Manager.
+        // View only on invoices (SALE-09 R), view and export on receipts (PURCHASE-03 R includes the export), nothing of the
+        // Zone Manager.
         Assert.False(access.Allows(PurchaseReceipts, Create, PermissionScope.AnyZone, null));
-        Assert.False(access.Allows(PurchaseReceipts, Export, PermissionScope.AnyZone, null));
+        Assert.True(access.Allows(PurchaseReceipts, Export, PermissionScope.AnyZone, null));
         Assert.False(access.Allows(SalesInvoices, Create, PermissionScope.ZoneScoped, ZoneC));
         Assert.False(access.Allows(Suppliers, Create, PermissionScope.AnyZone, null));
         Assert.False(access.Allows(WaterMeasurements, View, PermissionScope.ZoneScoped, ZoneC));

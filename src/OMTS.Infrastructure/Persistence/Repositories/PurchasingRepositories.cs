@@ -131,18 +131,6 @@ internal sealed partial class PurchaseReceiptRepository(OmtsDbContext db) : IPur
             .AsSplitQuery()
             .FirstOrDefaultAsync(r => r.Id == receiptId, cancellationToken);
 
-    public async Task<int> LatestReceiptNumberAsync(CancellationToken cancellationToken)
-    {
-        // The longest, then the highest, PN code is the latest: PN999999 is followed by PN1000000 (GBR-04).
-        var codes = await db.PurchaseReceipts.AsNoTracking()
-            .Where(r => r.Code.StartsWith(DocumentCodes.ReceiptPrefix))
-            .OrderByDescending(r => r.Code.Length).ThenByDescending(r => r.Code)
-            .Select(r => r.Code)
-            .Take(20)
-            .ToListAsync(cancellationToken);
-        return codes.Select(DocumentCodes.ReceiptNumber).OfType<int>().DefaultIfEmpty(0).Max();
-    }
-
     public Task<int> CountReturnCodesAsync(string prefix, CancellationToken cancellationToken) =>
         db.PurchaseReturns.CountAsync(r => r.Code.StartsWith(prefix), cancellationToken);
 

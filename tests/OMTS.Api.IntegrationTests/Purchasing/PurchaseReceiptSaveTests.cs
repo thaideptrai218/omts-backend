@@ -133,11 +133,16 @@ public class PurchaseReceiptSaveTests(AuthApiFactory factory) : IClassFixture<Au
             new LineBody(world.Material, 1, 1000, RaftId: foreignRaft.Id),
             new LineBody(world.Material, 1, 1000, RaftId: stoppedRaft.Id),
             new LineBody(world.Seed, 1, 1000, RaftId: Guid.NewGuid()),
-            new LineBody(null, 1, 1000, RaftId: world.Raft.Id),
         })
         {
             Assert.Equal("Line 1 raft", await (await manager.PostReceiptAsync(world.Body(line))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         }
+
+        // A Draft line without an item yet may hold a raft of the caller's zones; the group is checked once the item is chosen.
+        var draft = await manager.CreateReceiptAsync(world.Body(new LineBody(null, 1, 1000, RaftId: world.Raft.Id)));
+        Assert.Equal(world.Raft.Id, draft.GetProperty("lines")[0].GetProperty("raft").Id());
+        Assert.Equal("Line 1 raft", await (await manager.PostReceiptAsync(world.Body(new LineBody(null, 1, 1000, RaftId: foreignRaft.Id)))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("Line 1 raft", await (await manager.EditAsync(draft, world.Body(new LineBody(world.Other, 1, 1000, RaftId: world.Raft.Id)))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
 
         var own = await manager.CreateReceiptAsync(world.Body(world.MaterialForRaft(2, 50_000), new LineBody(world.Seed, 10, 900, RaftId: world.Raft.Id)) with { Complete = true });
         var raft = own.LineViewOf(world.Material).GetProperty("raft");
@@ -165,12 +170,12 @@ public class PurchaseReceiptSaveTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal("Line 1 raft", await (await elsewhere.PostReceiptAsync(world.Body(world.MaterialForRaft(1, 1000)))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         Assert.Equal(HttpStatusCode.OK, (await elsewhere.GetAsync($"/api/purchase-receipts/export?supplierId={world.SupplierId}")).StatusCode);
 
-        // PURCHASE-03 R for the Accountant: reads every receipt, writes and exports nothing.
+        // PURCHASE-03 R for the Accountant: reads and exports every receipt (the export is part of PURCHASE-03), writes nothing.
         var accountant = await factory.AccountantAsync(otherZone);
         await (await accountant.GetAsync($"/api/purchase-receipts/{receipt.Id()}")).ReadAsync(HttpStatusCode.OK);
         await (await accountant.GetAsync("/api/purchase-receipts")).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, (await accountant.GetAsync("/api/purchase-receipts/export")).StatusCode);
         await (await accountant.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 1000)))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        await (await accountant.GetAsync("/api/purchase-receipts/export")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await accountant.GetAsync($"/api/purchase-receipts/{receipt.Id()}/copy")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await accountant.CancelAsync(receipt.Id(), "x")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
     }
