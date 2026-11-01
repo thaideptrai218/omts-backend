@@ -157,7 +157,7 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
     {
         var response = await owner.PostAsJsonAsync("/api/zones", ZoneBody(NewCode()));
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return await response.Content.ReadFromJsonAsync<JsonElement>();
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("zone");
     }
 
     private static async Task<string> ZoneRowVersionAsync(HttpClient owner, Guid zoneId) =>

@@ -1,5 +1,6 @@
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
@@ -78,9 +79,11 @@ public sealed class FarmingZoneService(
 
     /// <summary>The proposed code of a new zone (KV01, KV02…; GBR-03); the Owner may replace it.</summary>
     public async Task<FarmingZoneCodeProposal> ProposeCodeAsync(CancellationToken cancellationToken) => new(
-        SequentialCodes.Next(SequentialCodes.ZonePrefix, SequentialCodes.ZoneDigits, await zones.CodesStartingWithAsync(SequentialCodes.ZonePrefix, cancellationToken)));
+        SequentialCodes.Next(
+            SequentialCodes.ZonePrefix, SequentialCodes.ZoneDigits, SequentialCodes.ZoneCodeMaxLength,
+            await zones.CodesStartingWithAsync(SequentialCodes.ZonePrefix, cancellationToken)));
 
-    public async Task<Result<FarmingZoneView>> CreateAsync(SaveFarmingZoneRequest request, CancellationToken cancellationToken)
+    public async Task<Result<FarmingZoneSaved>> CreateAsync(SaveFarmingZoneRequest request, CancellationToken cancellationToken)
     {
         if (await cooperatives.GetCurrentAsync(cancellationToken) is not { } cooperative)
         {
@@ -102,12 +105,16 @@ public sealed class FarmingZoneService(
         Apply(zone, values);
         zones.Add(zone);
         audit.Record(new AuditEntry("FarmingZone.Created", RecordType) { RecordId = zone.Id, RecordCode = zone.Code, ZoneId = zone.Id, After = Snapshot(zone) });
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return await ViewAsync(zone, cancellationToken);
+        if (await SaveAsync(zone, exceptZoneId: null, cancellationToken) is { } duplicate)
+        {
+            return duplicate;
+        }
+
+        return await SavedAsync(zone, cancellationToken);
     }
 
     /// <summary>FARM-02.1: only an In Use zone is edited (FARM-02.1.E1, MSG-GEN-09); the codes of its rafts never change.</summary>
-    public async Task<Result<FarmingZoneView>> UpdateAsync(Guid zoneId, SaveFarmingZoneRequest request, CancellationToken cancellationToken)
+    public async Task<Result<FarmingZoneSaved>> UpdateAsync(Guid zoneId, SaveFarmingZoneRequest request, CancellationToken cancellationToken)
     {
         var zone = await zones.GetForEditAsync(zoneId, cancellationToken);
         if (zone is null)
@@ -146,10 +153,13 @@ public sealed class FarmingZoneService(
             {
                 RecordId = zone.Id, RecordCode = zone.Code, ZoneId = zone.Id, Before = changedBefore, After = changedAfter,
             });
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+            if (await SaveAsync(zone, zone.Id, cancellationToken) is { } duplicate)
+            {
+                return duplicate;
+            }
         }
 
-        return await ViewAsync(zone, cancellationToken);
+        return await SavedAsync(zone, cancellationToken);
     }
 
     /// <summary>In Use → Discontinued, blocked while the zone still has In Use rafts (MSG-GEN-06).</summary>
@@ -203,6 +213,35 @@ public sealed class FarmingZoneService(
 
     private AppError WrongStatus(FarmingZone zone) => statusChanges.WrongStatus($"Farming zone {zone.Code}", zone);
 
+    /// <summary>
+    /// Saves the zone. A parallel save of the same code stopped by the unique index answers what the pre-check answers
+    /// (MSG-GEN-02 with the existing zone, FARM-02.0.E1), not the generic duplicate error. Null when saved.
+    /// </summary>
+    private async Task<AppError?> SaveAsync(FarmingZone zone, Guid? exceptZoneId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return null;
+        }
+        catch (DuplicateRecordException)
+        {
+            if (await zones.FindByCodeAsync(zone.Code, exceptZoneId, cancellationToken) is { } existing)
+            {
+                return Duplicate(existing.Id);
+            }
+
+            throw;
+        }
+    }
+
+    /// <summary>The zone with MSG-GEN-05 (FARM-02.0 step 6).</summary>
+    private async Task<FarmingZoneSaved> SavedAsync(FarmingZone zone, CancellationToken cancellationToken)
+    {
+        var saved = UserMessages.Saved("Farming zone");
+        return new FarmingZoneSaved(await ViewAsync(zone, cancellationToken), saved.Text, saved.Code);
+    }
+
     private static AppError Duplicate(Guid existingId) => new(
         ErrorKind.Conflict,
         UserMessages.AlreadyExists("Farming zone"),
@@ -234,7 +273,7 @@ public sealed class FarmingZoneService(
     private static FieldCheck Validate(SaveFarmingZoneRequest request, out ZoneValues values)
     {
         var check = new FieldCheck();
-        var code = check.Required(request.Code, "Code", 50);
+        var code = check.Required(request.Code, "Code", SequentialCodes.ZoneCodeMaxLength);
         var name = check.Required(request.Name, "Name", 200);
         var location = check.Required(request.Location, "Location", 500);
         check.Coordinates(request.Latitude, request.Longitude, required: true);

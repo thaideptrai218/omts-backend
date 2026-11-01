@@ -66,8 +66,7 @@ public class FarmingZoneSrs2710Tests(AuthApiFactory factory) : IClassFixture<Aut
 
         var resumed = await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/resume", new { rowVersion = discontinued.Text("rowVersion") }))
             .ReadAsync(HttpStatusCode.OK);
-        var edited = await (await owner.Client.PutAsJsonAsync($"/api/zones/{zone.Id()}", body with { Name = "Renamed", RowVersion = resumed.Text("rowVersion") }))
-            .ReadAsync(HttpStatusCode.OK);
+        var edited = await owner.Client.EditZoneAsync(zone.Id(), body with { Name = "Renamed", RowVersion = resumed.Text("rowVersion") });
         Assert.Equal("Renamed", edited.Text("name"));
     }
 
@@ -116,8 +115,7 @@ public class FarmingZoneSrs2710Tests(AuthApiFactory factory) : IClassFixture<Aut
 
         var body = NewZoneBody();
         var zone = await owner.Client.CreateZoneAsync(body);
-        var cleared = await (await owner.Client.PutAsJsonAsync($"/api/zones/{zone.Id()}", body with { WaterMeasurementPoint = null, RowVersion = zone.Text("rowVersion") }))
-            .ReadAsync(HttpStatusCode.OK);
+        var cleared = await owner.Client.EditZoneAsync(zone.Id(), body with { WaterMeasurementPoint = null, RowVersion = zone.Text("rowVersion") });
         Assert.Equal(JsonValueKind.Null, cleared.GetProperty("waterMeasurementPoint").ValueKind);
         Assert.Equal(["Water measurement point"], await (await owner.Client.PostAsJsonAsync("/api/zones", NewZoneBody() with { WaterMeasurementPoint = new string('w', 201) })).InvalidFieldsAsync());
     }

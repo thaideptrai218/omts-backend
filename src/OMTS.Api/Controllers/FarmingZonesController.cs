@@ -47,14 +47,14 @@ public sealed class FarmingZonesController(FarmingZoneService zones) : Controlle
 
     [HttpPost]
     [RequireCooperativeOwner]
-    [ProducesResponseType<FarmingZoneView>(StatusCodes.Status201Created)]
+    [ProducesResponseType<FarmingZoneSaved>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Create(SaveFarmingZoneRequest request, CancellationToken cancellationToken) =>
         (await zones.CreateAsync(request, cancellationToken)).ToActionResult(z => StatusCode(StatusCodes.Status201Created, z));
 
     /// <summary>Edits an In Use zone; a Discontinued zone answers MSG-GEN-09 (resume it first).</summary>
     [HttpPut("{zoneId:guid}")]
     [RequireCooperativeOwner]
-    [ProducesResponseType<FarmingZoneView>(StatusCodes.Status200OK)]
+    [ProducesResponseType<FarmingZoneSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Update(Guid zoneId, SaveFarmingZoneRequest request, CancellationToken cancellationToken) =>
         (await zones.UpdateAsync(zoneId, request, cancellationToken)).ToActionResult(Ok);
 

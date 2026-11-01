@@ -151,8 +151,13 @@ public static class FarmingTestKit
         code ?? NewCode(), 21.05m, 107.35m, "Raft row 2", "40 m x 20 m", null,
         Enumerable.Range(1, lanes).Select(n => new LaneBody(n, length, "A", "B")).ToList());
 
+    /// <summary>Creates a zone and returns the saved zone, the <c>zone</c> of the answer (FARM-02.0 step 6).</summary>
     public static async Task<JsonElement> CreateZoneAsync(this HttpClient owner, ZoneBody? body = null) =>
-        await (await owner.PostAsJsonAsync("/api/zones", body ?? NewZoneBody())).ReadAsync(HttpStatusCode.Created);
+        (await (await owner.PostAsJsonAsync("/api/zones", body ?? NewZoneBody())).ReadAsync(HttpStatusCode.Created)).GetProperty("zone");
+
+    /// <summary>Edits a zone and returns the saved zone, the <c>zone</c> of the answer (FARM-02.1).</summary>
+    public static async Task<JsonElement> EditZoneAsync(this HttpClient owner, Guid zoneId, ZoneBody body) =>
+        (await (await owner.PutAsJsonAsync($"/api/zones/{zoneId}", body)).ReadAsync(HttpStatusCode.OK)).GetProperty("zone");
 
     public static async Task<JsonElement> CreateRaftAsync(this HttpClient owner, Guid zoneId, RaftBody? body = null) =>
         await (await owner.PostAsJsonAsync($"/api/zones/{zoneId}/rafts", body ?? NewRaftBody())).ReadAsync(HttpStatusCode.Created);

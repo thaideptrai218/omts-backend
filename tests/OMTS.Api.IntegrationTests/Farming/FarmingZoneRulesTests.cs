@@ -63,8 +63,8 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(first.Id(), editProblem.GetProperty("existingZoneId").GetGuid());
 
         // Keeping its own code (in another case) is not a duplicate.
-        var sameZone = await owner.Client.PutAsJsonAsync($"/api/zones/{first.Id()}", NewZoneBody(code.ToLowerInvariant()) with { RowVersion = first.Text("rowVersion") });
-        Assert.Equal(code.ToLowerInvariant(), (await sameZone.ReadAsync(HttpStatusCode.OK)).Text("code"));
+        var sameZone = await owner.Client.EditZoneAsync(first.Id(), NewZoneBody(code.ToLowerInvariant()) with { RowVersion = first.Text("rowVersion") });
+        Assert.Equal(code.ToLowerInvariant(), sameZone.Text("code"));
     }
 
     [Fact]
@@ -155,10 +155,10 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         await (await owner.Client.PutAsJsonAsync($"/api/zones/{zone.Id()}", body with { Name = "Renamed zone", RowVersion = zone.Text("rowVersion") }))
             .ReadAsync(HttpStatusCode.OK);
         // Location, coordinates and the measurement point stay editable (old measurements keep their own point).
-        var moved = await (await owner.Client.PutAsJsonAsync($"/api/zones/{zone.Id()}", body with
+        var moved = await owner.Client.EditZoneAsync(zone.Id(), body with
         {
             Name = "Renamed zone", Location = "Cai Rong", Latitude = 21.1m, Longitude = 107.4m, WaterMeasurementPoint = "Buoy 7", RowVersion = zone.Text("rowVersion"),
-        })).ReadAsync(HttpStatusCode.OK);
+        });
         Assert.Equal("Buoy 7", moved.Text("waterMeasurementPoint"));
         await (await owner.Client.PutAsJsonAsync($"/api/zones/{zone.Id()}", body with
         {

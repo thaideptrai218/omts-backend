@@ -53,7 +53,7 @@ public class ZonesLicensesSqlServerQaTests
     }
 
     // FARM-02.0.E1: a loser stopped by the unique index gets what the pre-check answers: the zone named and a way to open it.
-    [SqlServerFact(Skip = "QA finding OMTS-217 PR 0.8 #2 (a create stopped by the unique index answers \"Record already exists\" without existingId)")]
+    [SqlServerFact]
     public async Task A_duplicate_stopped_by_the_unique_index_still_names_the_zone_and_offers_to_open_it()
     {
         await using var host = await FarmingSqlServerHost.StartAsync();
@@ -73,6 +73,11 @@ public class ZonesLicensesSqlServerQaTests
         Assert.Equal("MSG-GEN-02", problem.Text("code"));
         Assert.StartsWith("Farming zone already exists", problem.Text("detail"));
         Assert.Equal(existing.Id(), problem.GetProperty("existingId").GetGuid());
+
+        // An edit to the code of another zone, stopped the same way.
+        var other = await host.Owner.Client.CreateZoneAsync(NewZoneBody("KV06"));
+        var edit = await (await client.PutAsJsonAsync($"/api/zones/{other.Id()}", NewZoneBody("KV05") with { RowVersion = other.Text("rowVersion") })).ReadAsync(HttpStatusCode.Conflict);
+        Assert.Equal(("MSG-GEN-02", existing.Id()), (edit.Text("code"), edit.GetProperty("existingId").GetGuid()));
     }
 
     // GBR-01: a write and a discontinue from one version of the zone: exactly one wins, in any order, and the loser leaves no file.
@@ -281,10 +286,14 @@ public class ZonesLicensesSqlServerQaTests
         (await (await owner.GetAsync("/api/zones/next-code")).ReadAsync(HttpStatusCode.OK)).Text("code");
 }
 
-/// <summary>The zone repository whose code check finds nothing, as when a parallel create has not committed yet.</summary>
+/// <summary>
+/// The zone repository of one request whose first code check finds nothing, as when a parallel create has not committed
+/// yet; a later look-up, after the unique index stopped the save, reaches the database.
+/// </summary>
 public class ZoneCodeCheckPassesProxy : DispatchProxy
 {
     private IFarmingZoneRepository _inner = null!;
+    private bool _checked;
 
     public static IFarmingZoneRepository Wrap(IFarmingZoneRepository inner)
     {
@@ -293,10 +302,16 @@ public class ZoneCodeCheckPassesProxy : DispatchProxy
         return proxy;
     }
 
-    protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
-        targetMethod!.Name == nameof(IFarmingZoneRepository.FindByCodeAsync)
-            ? Task.FromResult<FarmingZone?>(null)
-            : targetMethod.Invoke(_inner, args);
+    protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+    {
+        if (targetMethod!.Name == nameof(IFarmingZoneRepository.FindByCodeAsync) && !_checked)
+        {
+            _checked = true;
+            return Task.FromResult<FarmingZone?>(null);
+        }
+
+        return targetMethod.Invoke(_inner, args);
+    }
 }
 
 internal static class ZonesLicensesSqlServerQaKit

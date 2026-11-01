@@ -39,7 +39,7 @@ public class ZonesLicensesQaTests(AuthApiFactory factory) : IClassFixture<AuthAp
     }
 
     // FARM-02.0 step 3: the proposal goes in the Code field, so it must be a code that can be saved (at most 50 characters).
-    [Fact(Skip = "QA finding OMTS-217 PR 0.8 #4 (after KV plus 48 nines the proposal has 51 characters and is refused on save)")]
+    [Fact]
     public async Task The_proposal_after_the_longest_numeric_code_can_still_be_saved()
     {
         using var api = new AuthApiFactory();
@@ -83,7 +83,7 @@ public class ZonesLicensesQaTests(AuthApiFactory factory) : IClassFixture<AuthAp
     }
 
     // The client change list: zoneIds is read with one value only, "two or more answer 400 Zone".
-    [Fact(Skip = "QA finding OMTS-217 PR 0.8 #3 (zoneIds is ignored when zoneId is also sent, so other zones in it are dropped silently)")]
+    [Fact]
     public async Task Several_zones_in_the_deprecated_field_are_refused_even_next_to_zone_id()
     {
         var owner = await factory.OwnerAsync();
@@ -155,18 +155,20 @@ public class ZonesLicensesQaTests(AuthApiFactory factory) : IClassFixture<AuthAp
     }
 
     // FARM-02.0 step 6 and FARM-02.1: "shows that the zone is saved (MSG-GEN-05)", as the other FARM-01 saves answer it.
-    [Fact(Skip = "QA finding OMTS-217 PR 0.8 #5 (zone create and edit answer the zone without the message and code of MSG-GEN-05)")]
+    [Fact]
     public async Task A_saved_zone_answers_msg_gen_05()
     {
         var owner = await factory.OwnerAsync();
         var body = NewZoneBody();
 
-        var created = await owner.Client.CreateZoneAsync(body);
-        var edited = await (await owner.Client.PutAsJsonAsync($"/api/zones/{created.Id()}", body with { Name = "Renamed", RowVersion = created.Text("rowVersion") }))
+        var created = await (await owner.Client.PostAsJsonAsync("/api/zones", body)).ReadAsync(HttpStatusCode.Created);
+        var zone = created.GetProperty("zone");
+        var edited = await (await owner.Client.PutAsJsonAsync($"/api/zones/{zone.Id()}", body with { Name = "Renamed", RowVersion = zone.Text("rowVersion") }))
             .ReadAsync(HttpStatusCode.OK);
 
-        Assert.Equal("MSG-GEN-05", created.Text("messageCode"));
-        Assert.Equal("MSG-GEN-05", edited.Text("messageCode"));
+        // The shape of the FARM-01 saves: { zone, message, messageCode }.
+        Assert.Equal(("MSG-GEN-05", "Farming zone saved.", body.Name), (created.Text("messageCode"), created.Text("message"), zone.Text("name")));
+        Assert.Equal(("MSG-GEN-05", "Farming zone saved.", "Renamed"), (edited.Text("messageCode"), edited.Text("message"), edited.GetProperty("zone").Text("name")));
     }
 
     // The point became optional: recording water in a zone without one still works and stores no point (WATER-01).

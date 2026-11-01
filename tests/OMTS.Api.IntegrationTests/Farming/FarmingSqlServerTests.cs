@@ -118,7 +118,7 @@ public class FarmingSqlServerTests
 
         var body = NewZoneBody();
         var zone = await owner.CreateZoneAsync(body);
-        var renamed = await (await owner.PutAsJsonAsync($"/api/zones/{zone.Id()}", body with { Name = "First edit", RowVersion = zone.Text("rowVersion") })).ReadAsync(HttpStatusCode.OK);
+        var renamed = await owner.EditZoneAsync(zone.Id(), body with { Name = "First edit", RowVersion = zone.Text("rowVersion") });
         Assert.NotEqual(zone.Text("rowVersion"), renamed.Text("rowVersion"));
         var stale = await (await owner.PutAsJsonAsync($"/api/zones/{zone.Id()}", body with { Name = "Second edit", RowVersion = zone.Text("rowVersion") })).ReadAsync(HttpStatusCode.Conflict);
         Assert.Equal("MSG06", stale.Text("code"));

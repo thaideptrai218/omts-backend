@@ -37,10 +37,17 @@ public sealed class CertificationReminderService(
             return false;
         }
 
+        // With no active Owner the notice stays due: it goes out once an Owner can receive it (once per state, GFR-03).
+        var owners = await recipients.GetCooperativeOwnersAsync(cancellationToken);
+        if (owners.Count == 0)
+        {
+            return false;
+        }
+
         ExpiryReminderRule.MarkSent(certification, notice, timeProvider.GetUtcNow());
         var expired = notice == ExpiryNotice.Expired;
         await notifications.NotifyAsync(
-            await recipients.GetCooperativeOwnersAsync(cancellationToken),
+            owners,
             new NotificationContent(
                 NotificationTypes.CooperativeCertificationExpiry,
                 expired ? "Certification expired" : "Certification expiring soon",

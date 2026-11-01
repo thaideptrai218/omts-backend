@@ -39,16 +39,14 @@ internal sealed record ZoneLicenseInput(
         return (input, check.Invalid.Distinct().ToList());
     }
 
-    /// <summary><c>zoneId</c>, or the single value of the deprecated <c>zoneIds</c>; several zones are refused.</summary>
+    /// <summary>
+    /// <c>zoneId</c>, or the single value of the deprecated <c>zoneIds</c>; a <c>zoneIds</c> holding several zones, or
+    /// another zone than <c>zoneId</c>, is refused instead of dropping a zone silently.
+    /// </summary>
     private static Guid? RequestedZone(SaveZoneLicenseRequest request, FieldCheck check)
     {
-        if (request.ZoneId is { } zoneId)
-        {
-            return zoneId;
-        }
-
         var listed = request.ZoneIds?.Distinct().ToList() ?? [];
-        check.Check(listed.Count <= 1, "Zone");
-        return listed.Count == 1 ? listed[0] : null;
+        check.Check(listed.Count <= 1 && (request.ZoneId is null || listed.All(id => id == request.ZoneId)), "Zone");
+        return request.ZoneId ?? (listed.Count == 1 ? listed[0] : null);
     }
 }

@@ -179,7 +179,7 @@ Accountant pair for one zone opens them (BR-FARM-08). A staff account without an
 - Zones (FARM-02): `GET /api/zones/next-code` (Owner) proposes the next code `KV01`, `KV02`… (GBR-03: the highest `KVnn` in
   use, discontinued zones included, plus one); the Owner may save another code. A Discontinued zone is read-only: its
   edit answers MSG-GEN-09 until `POST /api/zones/{id}/resume` (`/reactivate` is the older route, kept for one release).
-  The water measurement point is optional.
+  The water measurement point is optional. Create and edit answer `{ zone, message, messageCode }` (MSG-GEN-05).
 - Licenses (FARM-03): a license belongs to one zone (`zoneId`; the older `zoneIds` is read for one release, with one
   zone only) and is added, edited or replaced only while that zone is In Use (MSG-GEN-09). The expiry date is required;
   the type, holder and legal scope are optional. A license is Replaced from the day the license replacing it is recorded,

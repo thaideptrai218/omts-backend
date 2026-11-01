@@ -85,7 +85,32 @@ public class ExpiryReminderAndZoneCodeRulesTests
     [InlineData(new[] { "KV99" }, "KV100")]
     [InlineData(new[] { "KV99999999999999999999" }, "KV100000000000000000000")]
     public void Zone_code_proposal_follows_the_kv_pattern(string[] existing, string expected) =>
-        Assert.Equal(expected, SequentialCodes.Next(SequentialCodes.ZonePrefix, SequentialCodes.ZoneDigits, existing));
+        Assert.Equal(expected, SequentialCodes.Next(SequentialCodes.ZonePrefix, SequentialCodes.ZoneDigits, SequentialCodes.ZoneCodeMaxLength, existing));
+
+    // A proposal can always be saved: it fits the Code field and is free, even next to a used number that has no next code.
+    [Fact]
+    public void Zone_code_proposal_passes_over_a_number_whose_next_code_would_not_fit()
+    {
+        var longest = "KV" + new string('9', 48);
+
+        // 47 nines still have a next code of exactly 50 characters.
+        Assert.Equal("KV1" + new string('0', 47), Propose("KV" + new string('9', 47)));
+        Assert.Equal("KV01", Propose(longest));
+        Assert.Equal("KV08", Propose(longest, "KV07"));
+    }
+
+    [Fact]
+    public void Zone_code_proposal_is_never_a_longest_code_already_in_use()
+    {
+        var nines = new string('9', 47);
+        var (longest, below) = ("KV" + nines + "9", "KV" + nines + "8");
+
+        Assert.Equal("KV" + nines + "7", Propose(longest, below, "KV" + nines + "6"));
+        Assert.Equal("KV02", Propose(longest, below, "KV01"));
+    }
+
+    private static string Propose(params string[] existing) =>
+        SequentialCodes.Next(SequentialCodes.ZonePrefix, SequentialCodes.ZoneDigits, SequentialCodes.ZoneCodeMaxLength, existing);
 
     private static LicenseWithReplacement License(
         DateOnly effective, DateOnly expiry, DateTimeOffset recorded, DateTimeOffset? replacedAt = null, Guid? zone = null) => new(

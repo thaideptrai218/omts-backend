@@ -45,12 +45,19 @@ public sealed class ZoneLicenseReminderService(
             return false;
         }
 
+        // With no active Owner the notice stays due: it goes out once an Owner can receive it (once per state, GFR-03).
+        var owners = await recipients.GetCooperativeOwnersAsync(cancellationToken);
+        if (owners.Count == 0)
+        {
+            return false;
+        }
+
         ExpiryReminderRule.MarkSent(document, notice, timeProvider.GetUtcNow());
         var typeName = LicenseTypes.NameOf(document.DocumentType);
         var zoneCode = document.Zone.Code;
         var expired = notice == ExpiryNotice.Expired;
         await notifications.NotifyAsync(
-            await recipients.GetCooperativeOwnersAsync(cancellationToken),
+            owners,
             new NotificationContent(
                 NotificationTypes.ZoneLicenseExpiry,
                 expired ? "Zone license expired" : "Zone license expiring soon",

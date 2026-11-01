@@ -164,7 +164,7 @@ public class ExpiryReminderQaTests(AuthApiFactory factory) : IClassFixture<AuthA
     }
 
     // GFR-03 is once per state, so a notice nobody received must stay due: with no active Owner nothing may be consumed.
-    [Fact(Skip = "QA finding OMTS-217 PR 0.8 #1 (with no active Owner the markers are saved and the run counts the notice as sent: it is lost for good)")]
+    [Fact]
     public async Task With_no_active_owner_the_notice_stays_due_until_an_owner_can_receive_it()
     {
         using var api = new AuthApiFactory();
