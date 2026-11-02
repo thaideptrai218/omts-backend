@@ -58,12 +58,9 @@ public class NotificationsV2SqlServerQaTests(ITestOutputHelper output)
 
         Assert.Equal((0, 0, 0), await SchemaAsync(db));
         Assert.Equal(2, await ScalarAsync<int>(db, "SELECT COUNT(*) AS [Value] FROM [Notifications]"));
-        Assert.Equal(("FAILED", "Failed"), (
-            await ScalarAsync<string>(db, "SELECT [Code] AS [Value] FROM [Statuses] WHERE [Id] = 1603"),
-            await ScalarAsync<string>(db, "SELECT [DisplayName] AS [Value] FROM [Statuses] WHERE [Id] = 1603")));
-        Assert.Equal(("UC70", "System; time"), (
-            await ScalarAsync<string>(db, "SELECT [UseCases] AS [Value] FROM [StatusTransitions] WHERE [Id] = 54"),
-            await ScalarAsync<string>(db, "SELECT [TriggerEvent] AS [Value] FROM [StatusTransitions] WHERE [Id] = 54")));
+        // The integration includes #18: the pre-v2 schema has no legacy delivery states or UC70 transitions.
+        Assert.Equal(0, await ScalarAsync<int>(db, "SELECT COUNT(*) AS [Value] FROM [Statuses] WHERE [Id] BETWEEN 1601 AND 1603"));
+        Assert.Equal(0, await ScalarAsync<int>(db, "SELECT COUNT(*) AS [Value] FROM [StatusTransitions] WHERE [Id] IN (53, 54)"));
 
         await db.Database.MigrateAsync();
 

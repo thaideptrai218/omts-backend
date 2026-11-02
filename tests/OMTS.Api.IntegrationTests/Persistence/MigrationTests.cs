@@ -109,7 +109,9 @@ public class MigrationTests
         Assert.Empty(LegacyTables.Intersect(tables));
         Assert.Empty(KeptTables.Except(tables));
         Assert.Empty(new[] { "OrderId", "HarvestEventId", "LotId" }.Intersect(await ColumnNamesAsync(db, "LaneSegments")));
-        Assert.False(await db.Statuses.AnyAsync(s => s.Id >= 801 && s.Id <= 1603));
+        Assert.False(await db.Statuses.AnyAsync(s => s.Id >= 801 && s.Id <= 1600));
+        // NotificationsV2 restores only its three delivery states after the scaffolding cleanup.
+        Assert.Equal(new[] { 1601, 1602, 1603 }, await db.Statuses.Where(s => s.Id >= 1601 && s.Id <= 1603).OrderBy(s => s.Id).Select(s => s.Id).ToArrayAsync());
         Assert.False(await db.StatusTransitions.AnyAsync(t => t.Id >= 12 && t.Id <= 54));
 
         await migrator.MigrateAsync(MigrationBeforeCleanup);
