@@ -1,3 +1,4 @@
+using OMTS.Application.Features.WaterQuality.Models;
 using Microsoft.Extensions.Logging;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;
@@ -12,11 +13,6 @@ using OMTS.Domain.Entities.Farming;
 using S = OMTS.Domain.Constants.StatusIds.WaterMeasurement;
 
 namespace OMTS.Application.Features.WaterQuality;
-
-/// <summary>Filters of the ENV-03 history list and export: local dates (default last 3 months) and statuses (default Confirmed).</summary>
-public sealed record WaterHistoryQuery(string? From, string? To, IReadOnlyList<string>? Status, int Page = 1, int PageSize = 20);
-
-public sealed record ExportFile(string FileName, string ContentType, byte[] Content);
 
 /// <summary>
 /// ENV-03 – water history, detail, chart and Excel export of a zone. Charts and exports use only Confirmed

@@ -22,7 +22,7 @@ public class PushDevice : Entity
     /// <summary>"ios", "android" or "web".</summary>
     public string Platform { get; set; } = string.Empty;
 
-    /// <summary>False when the user declined push notifications on the device (MSG22).</summary>
+    /// <summary>False when the user declined push notifications on the device (MSG-ACCOUNT-21).</summary>
     public bool PermissionGranted { get; set; }
 
     public DateTimeOffset RegisteredAt { get; set; }

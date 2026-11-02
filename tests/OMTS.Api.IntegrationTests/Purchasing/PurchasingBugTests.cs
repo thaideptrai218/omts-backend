@@ -38,7 +38,7 @@ public class PurchasingBugTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal(2, lots.Count);
         Assert.Single(completed.GetProperty("payments").EnumerateArray());
 
-        await (await world.Owner.PostAsync($"/api/purchase-receipts/{draft.Id()}/complete", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG61");
+        await (await world.Owner.PostAsync($"/api/purchase-receipts/{draft.Id()}/complete", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
         Assert.Equal(2, await factory.QueryAsync(db => db.SeedReceiptLots.CountAsync(l => l.PurchaseReceiptLine.ReceiptId == draft.Id())));
         Assert.Equal(1, await factory.QueryAsync(db => db.SupplierPayments.CountAsync(p => p.ReceiptId == draft.Id())));
     }
@@ -76,9 +76,9 @@ public class PurchasingBugTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         await (await world.Owner.PostAsync($"/api/farming-input-items/{oldItem}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
 
         var supplier = await world.Owner.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 1000)) with { SupplierId = oldSupplier });
-        Assert.Equal("Supplier", await supplier.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Supplier", await supplier.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         var item = await world.Owner.PostReceiptAsync(world.Body(new LineBody(oldItem, 1, 1000)));
-        Assert.Equal("Line 1 item", await item.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Line 1 item", await item.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
     }
 
     // INP-07 lists drafts by receipt date (default: this year). A Draft saved without a date gets 0001-01-01
@@ -98,7 +98,7 @@ public class PurchasingBugTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     public async Task The_item_filter_of_the_raft_material_cost_counts_that_item_only()
     {
         var world = await factory.WorldAsync();
-        var ropes = await world.Owner.CreateItemAsync("RaftMaterial", "roll");
+        var ropes = await world.Owner.CreateItemAsync("Material", "roll");
         await world.CompletedAsync(0, 0, new LineBody(world.Material, 10, 50_000), new LineBody(ropes, 2, 100_000));
 
         var costs = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/raft-material-costs?raftId={world.Raft.Id}&itemId={ropes}");

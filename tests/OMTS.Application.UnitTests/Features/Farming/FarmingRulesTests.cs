@@ -1,4 +1,6 @@
+using OMTS.Application.Features.Farming.Licenses.Models;
 using OMTS.Application.Features.Farming.Licenses;
+using OMTS.Application.Features.Farming.Rafts.Models;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Domain.Enums;
 

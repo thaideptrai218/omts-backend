@@ -31,7 +31,7 @@ internal sealed class BusinessTimeJsonConverter : JsonConverter<DateTimeOffset>
             }
         }
 
-        // Answered as 400 MSG01 naming the field (InvalidModelStateResponse).
+        // Answered as 400 MSG-GEN-01 naming the field (InvalidModelStateResponse).
         throw new JsonException("The value is not an ISO 8601 date and time.");
     }
 

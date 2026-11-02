@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Cooperatives.Dtos;
 using OMTS.Application.Features.Cooperatives;
 
 namespace OMTS.Infrastructure.Bootstrap.Demo;

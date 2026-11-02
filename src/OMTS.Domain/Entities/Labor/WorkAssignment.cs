@@ -8,7 +8,8 @@ namespace OMTS.Domain.Entities.Labor;
 
 /// <summary>
 /// E40 – Who does what work, where and when. Daily wage: exactly one of EmployeeId/WorkerId.
-/// Task contract: a contractor and contract amount; a passed acceptance generates one PayLine.
+/// Task contract: a contractor and contract amount. Kept only because ending an employment checks later
+/// assignments (LAB-01); the SRS 27/10 labor module replaces it.
 /// </summary>
 public class WorkAssignment : AuditableEntity
 {
@@ -31,6 +32,8 @@ public class WorkAssignment : AuditableEntity
     public Contractor? Contractor { get; set; }
 
     public string Task { get; set; } = string.Empty;
+    public Guid? JobTypeId { get; set; }
+    public JobType? JobType { get; set; }
     public DateOnly WorkDate { get; set; }
     public WorkPaymentType PaymentType { get; set; }
 

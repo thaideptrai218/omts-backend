@@ -1,15 +1,9 @@
+using OMTS.Application.Common.Models.Persistence;
+using OMTS.Application.Features.Purchasing.Payments.Dtos;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
 
 namespace OMTS.Application.Features.Purchasing.Payments;
-
-public sealed record SupplierDebtRow(
-    Guid SupplierId, string SupplierName, decimal Payable, decimal Returned, decimal Paid, decimal Refunded, decimal Unallocated, decimal Outstanding);
-
-public sealed record ReceiptDebtRow(
-    Guid ReceiptId, string Code, DateOnly ReceiptDate, decimal Payable, decimal Returned, decimal Paid, decimal Refunded, decimal Outstanding);
-
-public sealed record SupplierDebtDetail(SupplierDebtRow Totals, IReadOnlyList<ReceiptDebtRow> Receipts);
 
 /// <summary>INP-06 supplier debt: per supplier and per receipt, from Completed receipts and unallocated payments (summed in SQL).</summary>
 public sealed class SupplierDebtService(IPurchaseReceiptRepository receipts, ISupplierPaymentRepository payments, ISupplierRepository suppliers)

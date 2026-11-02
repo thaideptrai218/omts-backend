@@ -1,4 +1,6 @@
 using OMTS.Application.Common.Interfaces.Storage;
+using OMTS.Application.Common.Models.Storage;
+using OMTS.Application.Features.Files.Models;
 using OMTS.Application.Features.Files;
 
 namespace OMTS.Api.IntegrationTests.WaterQuality;

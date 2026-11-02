@@ -1,10 +1,9 @@
+using OMTS.Application.Common.Models.Persistence;
+using OMTS.Application.Features.Farming.Licenses.Models;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Domain.Entities.Farming;
 
 namespace OMTS.Application.Features.Farming.Licenses;
-
-/// <summary>One row of a zone's license overview: a covering document with its state, or a Missing row (no document).</summary>
-public sealed record ZoneLicenseRow(string DocumentType, ZoneComplianceDocument? Document, bool IsReplaced, LicenseState State);
 
 /// <summary>FARM-03 zone license overview as of a date.</summary>
 public static class ZoneLicenseOverview

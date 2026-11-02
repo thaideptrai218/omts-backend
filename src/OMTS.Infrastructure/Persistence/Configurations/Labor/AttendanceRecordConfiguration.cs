@@ -13,6 +13,11 @@ internal sealed class AttendanceRecordConfiguration : IEntityTypeConfiguration<A
         builder.HasOne(x => x.Contractor).WithMany().HasForeignKey(x => x.ContractorId);
         builder.ReferencesAccount(nameof(AttendanceRecord.RecordedByAccountId));
         builder.Property(x => x.Notes).HasMaxLength(Lengths.Reason);
+        builder.HasOne<OMTS.Domain.Entities.Farming.FarmingZone>().WithMany().HasForeignKey(x => x.ZoneId);
+        builder.Property(x => x.CheckInMethod).HasMaxLength(30);
+        builder.Property(x => x.CheckOutMethod).HasMaxLength(30);
+        builder.ToTable(t => t.HasCheckConstraint("CK_AttendanceRecord_Times",
+            "[CheckedInAt] IS NULL OR [CheckedOutAt] IS NULL OR [CheckedOutAt] > [CheckedInAt]"));
 
         // One record per person per day (E41).
         builder.HasIndex(x => new { x.EmployeeId, x.WorkDate }).IsUnique().HasFilter("[EmployeeId] IS NOT NULL");

@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -69,7 +69,7 @@ public class EmployeeSqlServerTests
 
         Assert.Equal([id], lower.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()));
         Assert.Equal([id], upper.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()));
-        Assert.Equal("MSG03", await duplicate.ErrorCodeAsync());
+        Assert.Equal("MSG-LABOR-03", await duplicate.ErrorCodeAsync());
         Assert.Equal(1, await QueryAsync(api, db => db.Employees.CountAsync()));
     }
 
@@ -122,9 +122,7 @@ public class EmployeeSqlServerTests
         await using var api = await StartAsync(database);
         var (owner, _, cooperative) = await OwnerWithCooperativeAsync(api);
         var zone = await AddZoneAsync(api, cooperative.Id);
-        var role = new Role { Name = $"Tổ trưởng {NewCode()}" };
-        role.Permissions.Add(new RolePermission { FunctionCode = Application.Features.Authorization.PermissionFunctions.Attendance, CanView = true });
-        await ChangeAsync(api, db => db.Roles.Add(role));
+        var role = await api.RoleAsync(StaffRole.ZoneManager);
         var taken = NewPhone();
         await ChangeAsync(api, db => db.Accounts.Add(new Account
         {
@@ -136,7 +134,7 @@ public class EmployeeSqlServerTests
         var refused = await owner.PostAsJsonAsync("/api/employees", Profile($"Refused {NewCode()}", taken, zone.Id, b => b["account"] = AccountBlock(refusedUser, zone, role)));
         var accepted = await CreateAsync(owner, Profile($"Accepted {NewCode()}", NewPhone(), zone.Id, b => b["account"] = AccountBlock(acceptedUser, zone, role)));
 
-        Assert.Equal("MSG03", await refused.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-09", await refused.ErrorCodeAsync());
         Assert.False(await QueryAsync(api, db => db.Accounts.AnyAsync(a => a.Username == refusedUser)));
         Assert.Equal(1, await QueryAsync(api, db => db.Employees.CountAsync()));
         var accountId = await QueryAsync(api, db => db.Accounts.Where(a => a.Username == acceptedUser).Select(a => a.Id).SingleAsync());

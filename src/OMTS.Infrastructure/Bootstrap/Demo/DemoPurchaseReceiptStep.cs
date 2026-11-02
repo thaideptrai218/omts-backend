@@ -1,3 +1,5 @@
+using OMTS.Application.Features.Purchasing.Payments.Dtos;
+using OMTS.Application.Features.Purchasing.Receipts.Dtos;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Validation;
 using OMTS.Application.Features.Purchasing.Payments;

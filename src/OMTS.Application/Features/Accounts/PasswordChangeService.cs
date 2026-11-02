@@ -16,9 +16,6 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Accounts;
 
-/// <summary>Result of ACS-04: fresh tokens for this device (every other session was ended) and MSG18.</summary>
-public sealed record PasswordChanged(AuthTokens Tokens, string Message);
-
 /// <summary>
 /// ACS-04 – the logged-in user changes the password after proving identity (current password, or a code
 /// sent to the verified email), including the forced change after a temporary password.
@@ -86,7 +83,7 @@ public sealed class PasswordChangeService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         var tokens = await authService.CreateSessionAsync(account, request.ClientType, request.DeviceName, client, cancellationToken, sessionId);
-        return new PasswordChanged(tokens, UserMessages.PasswordChanged.Text);
+        return new PasswordChanged(tokens, UserMessages.PasswordChanged.Text, UserMessages.PasswordChanged.Code);
     }
 
     private async Task<AppError?> CheckProofAsync(Account account, ChangePasswordRequest request, CancellationToken cancellationToken)

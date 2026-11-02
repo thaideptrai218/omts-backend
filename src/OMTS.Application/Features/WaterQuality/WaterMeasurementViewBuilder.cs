@@ -79,4 +79,3 @@ public sealed class WaterMeasurementViewBuilder(
     private static AccountRef? Ref(Guid? accountId, IReadOnlyDictionary<Guid, string> names) =>
         accountId is { } id ? new AccountRef(id, names.GetValueOrDefault(id, "Unknown account")) : null;
 }
-

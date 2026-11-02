@@ -1,10 +1,11 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Interfaces.Messaging;
+using OMTS.Application.Common.Models.Messaging;
 using OMTS.Application.Common.Models;
 using OMTS.Domain.Constants;
 
@@ -122,7 +123,7 @@ public class WaterIdempotencyRedTeamTests(AuthApiFactory api) : IClassFixture<Au
 
         Assert.Equal(HttpStatusCode.BadGateway, recognized.StatusCode);
         Assert.Equal(HttpStatusCode.BadGateway, manual.StatusCode);
-        Assert.Equal("MSG05", await manual.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-03", await manual.ErrorCodeAsync());
         Assert.Equal(0, await broken.QueryAsync(db => db.WaterMeasurements.CountAsync()));
         Assert.Equal(0, await broken.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordType == "WaterMeasurement")));
         Assert.Equal(0, await broken.QueryAsync(db => db.Notifications.CountAsync(n => n.Type == "WATER_ALERT")));

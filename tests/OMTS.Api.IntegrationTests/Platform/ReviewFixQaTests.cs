@@ -1,19 +1,21 @@
 using System.Collections.Concurrent;
-using System.Net;
 using System.Net.Http.Json;
 using System.Net.Sockets;
+using System.Net;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
+using System.Text;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Storage;
+using OMTS.Application.Features.Files.Models;
+using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Files;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Enums;
@@ -23,6 +25,7 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Api.IntegrationTests.Platform;
 
 /// <summary>QA checks of the OMTS-200 review fixes: real endpoints, provider refusals, probes, bootstrap re-run.</summary>
+[Collection("Platform SMTP timing")]
 public class ReviewFixQaTests
 {
     private static readonly byte[] Png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4];
@@ -151,16 +154,16 @@ public class ReviewFixQaTests
         Assert.Equal(HttpStatusCode.OK, database.StatusCode);
     }
 
-    // README (after the S3 fix): a re-run recreates a default role whose name no longer exists, creates nothing else.
+    // BR-FARM-07: the fixed roles are found by code, so a re-run creates no role again, even when a row's name changed.
     [Fact]
-    public async Task Bootstrap_rerun_after_a_role_rename_recreates_only_the_missing_default_role()
+    public async Task Bootstrap_rerun_finds_the_fixed_roles_by_code_and_creates_nothing_twice()
     {
         await using var api = BootstrapTests.WithSecrets(new AuthApiFactory());
         await RunBootstrapAsync(api);
         using (var scope = api.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
-            (await db.Roles.SingleAsync(r => r.Name == "Zone Manager")).Name = "Zone Lead";
+            (await db.Roles.SingleAsync(r => r.Code == FixedRoles.ZoneManagerCode)).Name = "Zone Lead";
             await db.SaveChangesAsync();
         }
 
@@ -169,8 +172,9 @@ public class ReviewFixQaTests
         using var check = api.Services.CreateScope();
         var verify = check.ServiceProvider.GetRequiredService<OmtsDbContext>();
         Assert.Equal(DeploymentBootstrapper.Success, outcome.ExitCode);
-        Assert.Equal(1, await verify.Roles.CountAsync(r => r.Name == "Zone Manager"));
-        Assert.Equal(1, await verify.Roles.CountAsync(r => r.Name == "Zone Lead"));
+        Assert.Contains(outcome.Messages, m => m == "Default roles already exist.");
+        Assert.Equal(2, await verify.Roles.CountAsync());
+        Assert.Equal(1, await verify.Roles.CountAsync(r => r.Code == FixedRoles.ZoneManagerCode && r.Name == "Zone Lead"));
         Assert.Equal(1, await verify.Cooperatives.CountAsync());
         Assert.Equal(1, await verify.Accounts.CountAsync(a => a.SubjectType == SubjectType.CooperativeOwner));
     }
@@ -245,3 +249,8 @@ public class ReviewFixQaTests
         return (port, received, done);
     }
 }
+
+// The fake SMTP peer and the client share a real five-second deadline. Keep the protocol/privacy
+// checks away from concurrent password hashing and SQL migration tests without changing that deadline.
+[CollectionDefinition("Platform SMTP timing", DisableParallelization = true)]
+public sealed class PlatformSmtpTimingCollection;

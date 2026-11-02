@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Models.Messaging;
 using OMTS.Application.Common.Interfaces.Messaging;
 
 namespace OMTS.Infrastructure.Messaging;

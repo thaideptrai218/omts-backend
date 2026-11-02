@@ -1,12 +1,11 @@
+using OMTS.Application.Features.Farming.Rafts.Dtos;
+using OMTS.Application.Features.Farming.Rafts.Models;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using OMTS.Domain.Entities.Farming;
 
 namespace OMTS.Application.Features.Farming.Rafts;
-
-/// <summary>A checked lane of a layout.</summary>
-public sealed record LayoutLane(int LaneNumber, decimal Length, string MarkerA, string MarkerB);
 
 /// <summary>
 /// FARM-04 lane layout: validation, the JSON stored in <see cref="Lane.MeasurementMarkers"/> and the

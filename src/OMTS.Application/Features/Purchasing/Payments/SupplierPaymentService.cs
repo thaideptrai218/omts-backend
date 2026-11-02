@@ -1,3 +1,5 @@
+using OMTS.Application.Features.Purchasing.Payments.Dtos;
+using OMTS.Application.Features.Purchasing.Receipts.Dtos;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
@@ -13,17 +15,6 @@ using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Purchasing.Payments;
-
-public sealed record RecordSupplierPaymentRequest(
-    Guid? SupplierId, Guid? ReceiptId, decimal? Amount, DateOnly? PaymentDate, PaymentMethod? Method, string? ReferenceCode, string? DeduplicationKey);
-
-public sealed record AllocatePaymentRequest(Guid? ReceiptId);
-
-public sealed record SupplierPaymentView(
-    Guid Id, SupplierRef Supplier, Guid? ReceiptId, string? ReceiptCode, decimal Amount, DateOnly PaymentDate, PaymentMethod Method,
-    string? ReferenceCode, int StatusId, string Status, string? CancelReason);
-
-public sealed record SupplierPaymentPage(Paged<SupplierPaymentView> Page, decimal TotalAmount);
 
 /// <summary>
 /// INP-06 – the Accountant records money paid to suppliers against Completed receipts (All zones grant,
@@ -139,8 +130,9 @@ public sealed class SupplierPaymentService(
 
         if (payment.ReceiptId is not null || payment.StatusId != StatusIds.SupplierPayment.Recorded)
         {
-            return AppError.Conflict(UserMessages.CannotChangeStatus(
-                "Supplier payment", statusCatalog.DisplayNameOf(payment.StatusId), "Allocated", "only an unallocated Recorded payment can be allocated"));
+            // Only an unallocated Recorded payment can be allocated.
+            return AppError.Conflict(UserMessages.WrongStatus(
+                "Supplier payment", payment.ReceiptId is null ? statusCatalog.DisplayNameOf(payment.StatusId) : "already allocated"));
         }
 
         var receipt = request.ReceiptId is { } receiptId ? await receipts.GetForEditAsync(receiptId, cancellationToken) : null;
@@ -179,8 +171,8 @@ public sealed class SupplierPaymentService(
     {
         if (receipt.StatusId != StatusIds.PurchaseReceipt.Completed)
         {
-            return AppError.Conflict(UserMessages.CannotChangeStatus(
-                "Purchase receipt", statusCatalog.DisplayNameOf(receipt.StatusId), "Paid", "only a Completed receipt can be paid"));
+            // Only a Completed receipt can be paid.
+            return AppError.Conflict(UserMessages.WrongStatus($"Purchase receipt {receipt.Code}", statusCatalog.DisplayNameOf(receipt.StatusId)));
         }
 
         if (!PurchaseMoney.IsThousands(amount))

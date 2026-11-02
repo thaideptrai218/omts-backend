@@ -1,6 +1,6 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,11 +30,11 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
 
         var duplicate = await owner.PostAsJsonAsync("/api/zones", ZoneBody(zone.GetProperty("code").GetString()!.ToLowerInvariant()));
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
-        Assert.Equal("MSG03", await duplicate.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-02", await duplicate.ErrorCodeAsync());
         Assert.Equal(zoneId, (await duplicate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("existingZoneId").GetGuid());
 
         var invalid = await owner.PostAsJsonAsync("/api/zones", ZoneBody(NewCode()) with { Latitude = 91, Longitude = null });
-        Assert.Equal("MSG01", await invalid.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await invalid.ErrorCodeAsync());
         var fields = (await invalid.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("fields").EnumerateArray().Select(f => f.GetString()).ToList();
         Assert.Contains("Latitude", fields);
         Assert.Contains("Longitude", fields);
@@ -74,11 +74,11 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
         {
             Lanes = [new(1, 10, "A", "B"), new(3, 10, "A", "B")],
         });
-        Assert.Equal("MSG01", await gap.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await gap.ErrorCodeAsync());
 
         // A zone with In Use rafts cannot be discontinued.
         var discontinueZone = await owner.PostAsJsonAsync($"/api/zones/{zoneId}/discontinue", new { rowVersion = await ZoneRowVersionAsync(owner, zoneId) });
-        Assert.Equal("MSG11", await discontinueZone.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-06", await discontinueZone.ErrorCodeAsync());
 
         var relaid = await owner.PutAsJsonAsync($"/api/rafts/{raftId}", RaftBody(raft.GetProperty("code").GetString()!, lanes: 6) with
         {
@@ -94,9 +94,9 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
         {
             RowVersion = second.GetProperty("rowVersion").GetString(),
         });
-        Assert.Equal("MSG11", await blocked.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-06", await blocked.ErrorCodeAsync());
         var discontinue = await owner.PostAsJsonAsync($"/api/rafts/{raftId}/discontinue", new { rowVersion = second.GetProperty("rowVersion").GetString() });
-        Assert.Equal("MSG61", await discontinue.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-06", await discontinue.ErrorCodeAsync());
 
         var condition = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raftId}/condition");
         Assert.Equal(6, condition.GetProperty("lanes").GetArrayLength());
@@ -122,20 +122,20 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
         var job = factory.Services.GetRequiredService<ZoneLicenseReminderJob>();
         await job.RunOnceAsync(today);
         await job.RunOnceAsync(today);
-        var licenseId = license.GetProperty("id").GetGuid().ToString();
+        var licenseId = license.GetProperty("id").GetGuid();
         var notices = await factory.QueryAsync(db => db.Notifications
-            .Where(n => n.Type == NotificationTypes.ZoneLicenseExpiry && n.RelatedRecordCode == licenseId).ToListAsync());
+            .Where(n => n.Type == NotificationTypes.ZoneLicenseExpiry && n.RelatedRecordId == licenseId).ToListAsync());
         Assert.NotEmpty(notices);
         Assert.Equal(notices.Count, notices.Select(n => n.RecipientAccountId).Distinct().Count());
-        Assert.Contains("expires in 30 days", notices[0].Body);
+        Assert.Contains(", in 30 days.", notices[0].Body);
 
         // Replaced: the old license is never reminded again, and editing it is refused.
         var replaced = await owner.PostAsync($"/api/zone-licenses/{licenseId}/replace", LicenseForm(null, today, today.AddYears(5)));
         Assert.Equal(HttpStatusCode.Created, replaced.StatusCode);
         var edit = await owner.PutAsync($"/api/zone-licenses/{licenseId}", LicenseForm(zoneId, today.AddDays(-300), today.AddDays(40), license.GetProperty("rowVersion").GetString()));
-        Assert.Equal("LICENSE_REPLACED", await edit.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-09", await edit.ErrorCodeAsync());
         var again = await owner.PostAsync($"/api/zone-licenses/{licenseId}/replace", LicenseForm(null, today, today.AddYears(5)));
-        Assert.Equal("MSG03", await again.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-09", await again.ErrorCodeAsync());
     }
 
     private async Task<HttpClient> OwnerAsync()
@@ -148,7 +148,7 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
     private async Task<HttpClient> StaffInZoneAsync(Guid zoneId)
     {
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        var role = await factory.AddRoleAsync(NewCode(), (PermissionFunctions.CultivationCycles, true, true, true));
+        var role = StaffRole.ZoneManager;
         await factory.GrantAsync(staff, role, await factory.QueryAsync(db => db.FarmingZones.SingleAsync(z => z.Id == zoneId)));
         return await factory.LoginAsync(staff.Username);
     }

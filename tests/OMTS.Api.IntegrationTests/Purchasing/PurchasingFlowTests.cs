@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -23,7 +23,7 @@ public class PurchasingFlowTests(AuthApiFactory factory) : IClassFixture<AuthApi
         var supplierId = await CreateSupplierAsync(owner);
         var seedA = await CreateItemAsync(owner, "Seed");
         var seedB = await CreateItemAsync(owner, "Seed");
-        var floats = await CreateItemAsync(owner, "RaftMaterial");
+        var floats = await CreateItemAsync(owner, "Material");
 
         // Subtotal 2 × 1,000,000 + 500,000 = 2,500,000; discount 100,000; paid now 400,000.
         var created = await owner.PostAsJsonAsync("/api/purchase-receipts", new
@@ -52,12 +52,12 @@ public class PurchasingFlowTests(AuthApiFactory factory) : IClassFixture<AuthApi
 
         // A completed receipt is never edited.
         var edit = await owner.PutAsJsonAsync($"/api/purchase-receipts/{receiptId}", new { supplierId, zoneId = zone.Id, lines = Array.Empty<object>() });
-        Assert.Equal("MSG61", await edit.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-09", await edit.ErrorCodeAsync());
 
         // Return 20 of seed A (stock 0): value 20 × 10,000 × 0.96 = 192,000, half refund half debt reduction.
         var seedLine = receipt.GetProperty("lines").EnumerateArray().First(l => l.GetProperty("itemId").GetGuid() == seedA).GetProperty("id").GetGuid();
         var tooMuch = await owner.PostAsJsonAsync($"/api/purchase-receipts/{receiptId}/returns", ReturnBody(seedLine, 101, 0, 0));
-        Assert.Equal("MSG45", await tooMuch.ErrorCodeAsync());
+        Assert.Equal("MSG-PURCHASE-03", await tooMuch.ErrorCodeAsync());
         var returned = await owner.PostAsJsonAsync($"/api/purchase-receipts/{receiptId}/returns", ReturnBody(seedLine, 20, 96_000, 96_000));
         Assert.Equal(HttpStatusCode.Created, returned.StatusCode);
         var afterReturn = await returned.Content.ReadFromJsonAsync<JsonElement>();
@@ -77,7 +77,7 @@ public class PurchasingFlowTests(AuthApiFactory factory) : IClassFixture<AuthApi
 
         // A receipt with a purchase return cannot be cancelled.
         var cancel = await owner.PostAsJsonAsync($"/api/purchase-receipts/{receiptId}/cancel", new { reason = "Wrong", cancelPayments = true });
-        Assert.Equal("MSG61", await cancel.ErrorCodeAsync());
+        Assert.Equal("MSG-PURCHASE-09", await cancel.ErrorCodeAsync());
     }
 
     [Theory]
@@ -92,7 +92,7 @@ public class PurchasingFlowTests(AuthApiFactory factory) : IClassFixture<AuthApi
         var receiptId = await CompletedReceiptAsync(owner, supplierId, zone.Id, item, paidNow: 300_000);
 
         var noChoice = await owner.PostAsJsonAsync($"/api/purchase-receipts/{receiptId}/cancel", new { reason = "Entered twice" });
-        Assert.Equal("MSG01", await noChoice.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await noChoice.ErrorCodeAsync());
         var cancelled = await owner.PostAsJsonAsync($"/api/purchase-receipts/{receiptId}/cancel", new { reason = "Entered twice", cancelPayments });
         Assert.Equal(HttpStatusCode.OK, cancelled.StatusCode);
 
@@ -125,7 +125,7 @@ public class PurchasingFlowTests(AuthApiFactory factory) : IClassFixture<AuthApi
         });
 
         var cancel = await owner.PostAsJsonAsync($"/api/purchase-receipts/{receiptId}/cancel", new { reason = "Wrong" });
-        Assert.Equal("MSG61", await cancel.ErrorCodeAsync());
+        Assert.Equal("MSG-PURCHASE-09", await cancel.ErrorCodeAsync());
 
         var manager = await ManagerOfAsync(otherZone);
         Assert.Equal(HttpStatusCode.Forbidden, (await manager.GetAsync($"/api/purchase-receipts/{receiptId}")).StatusCode);
@@ -145,25 +145,25 @@ public class PurchasingFlowTests(AuthApiFactory factory) : IClassFixture<AuthApi
         var owner = await OwnerAsync();
         var (zone, _) = await ZoneWithRaftAsync();
         var code = NewCode();
-        var created = await owner.PostAsJsonAsync("/api/farming-input-items", new { code, name = "Float 40 L", group = "RaftMaterial", unit = "piece" });
+        var created = await owner.PostAsJsonAsync("/api/farming-input-items", new { code, name = "Float 40 L", group = "Material", unit = "piece" });
         var item = await created.Content.ReadFromJsonAsync<JsonElement>();
-        var duplicate = await owner.PostAsJsonAsync("/api/farming-input-items", new { code = code.ToUpperInvariant(), name = "Again", group = "RaftMaterial", unit = "piece" });
-        Assert.Equal("MSG03", await duplicate.ErrorCodeAsync());
+        var duplicate = await owner.PostAsJsonAsync("/api/farming-input-items", new { code = code.ToUpperInvariant(), name = "Again", group = "Material", unit = "piece" });
+        Assert.Equal("MSG-GEN-02", await duplicate.ErrorCodeAsync());
 
         var supplierId = await CreateSupplierAsync(owner);
         await CompletedReceiptAsync(owner, supplierId, zone.Id, item.GetProperty("id").GetGuid(), paidNow: 0, raftNeeded: true);
         var changeUnit = await owner.PutAsJsonAsync($"/api/farming-input-items/{item.GetProperty("id").GetGuid()}", new
         {
-            code, name = "Float 40 L", group = "RaftMaterial", unit = "kg", rowVersion = item.GetProperty("rowVersion").GetString(),
+            code, name = "Float 40 L", group = "Material", unit = "kg", rowVersion = item.GetProperty("rowVersion").GetString(),
         });
-        Assert.Equal("MSG01", await changeUnit.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await changeUnit.ErrorCodeAsync());
 
         var manager = await ManagerOfAsync(zone);
         Assert.Equal(HttpStatusCode.Forbidden, (await manager.PostAsJsonAsync("/api/farming-input-items", new { code = NewCode(), name = "X", group = "Other", unit = "kg" })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await manager.GetAsync("/api/farming-input-items")).StatusCode);
 
         var duplicatePhone = await owner.PostAsJsonAsync("/api/suppliers", new { name = "Other", supplierType = "Seed", phoneNumber = await SupplierPhoneAsync(supplierId) });
-        Assert.Equal("MSG03", await duplicatePhone.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-02", await duplicatePhone.ErrorCodeAsync());
         Assert.Equal(supplierId, (await duplicatePhone.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("existingId").GetGuid());
     }
 
@@ -189,7 +189,7 @@ public class PurchasingFlowTests(AuthApiFactory factory) : IClassFixture<AuthApi
     private async Task<HttpClient> ManagerOfAsync(FarmingZone zone)
     {
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        var role = await factory.AddRoleAsync(NewCode(), (PermissionFunctions.PurchaseReceipts, true, true, true), (PermissionFunctions.Suppliers, true, true, true));
+        var role = StaffRole.ZoneManager;
         await factory.GrantAsync(staff, role, zone);
         return await factory.LoginAsync(staff.Username);
     }
@@ -211,7 +211,8 @@ public class PurchasingFlowTests(AuthApiFactory factory) : IClassFixture<AuthApi
 
     private static async Task<Guid> CreateItemAsync(HttpClient owner, string group)
     {
-        var response = await owner.PostAsJsonAsync("/api/farming-input-items", new { code = NewCode(), name = $"{group} item", group, unit = "kg" });
+        var code = NewCode();
+        var response = await owner.PostAsJsonAsync("/api/farming-input-items", new { code, name = $"{group} item {code}", group, unit = "kg" });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }

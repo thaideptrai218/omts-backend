@@ -1,6 +1,6 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Reflection;
 using System.Security.Claims;
 using System.Text.Json;
@@ -13,8 +13,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Api.Services;
-using OMTS.Application.Common;
 using OMTS.Application.Common.Constants;
+using OMTS.Application.Common;
 using OMTS.Domain.Common;
 using OMTS.Domain.Enums;
 using OMTS.Infrastructure.Bootstrap;
@@ -264,7 +264,7 @@ public class DemoDataSeedQaTests
         Assert.Equal(trader.Id, me.GetProperty("accountId").GetGuid());
         var ownerOnly = await traderClient.GetAsync("/api/cooperative/profile");
         Assert.Equal(HttpStatusCode.Forbidden, ownerOnly.StatusCode);
-        Assert.Equal("MSG02", await ownerOnly.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await ownerOnly.ErrorCodeAsync());
 
         // The same endpoint is open to the real Owner, so the refusals above are about the caller.
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync("/api/cooperative/profile")).StatusCode);
@@ -299,7 +299,7 @@ public class DemoDataSeedQaTests
         var receipts = await db.PurchaseReceipts.Select(r => new { r.Id, r.ReceiptDate, r.StatusId }).ToListAsync();
         var payments = await db.SupplierPayments.Select(p => new { p.Id, p.PaymentDate, p.StatusId }).ToListAsync();
         var returns = await db.PurchaseReturns.Select(r => new { r.Id, r.ReturnDate }).ToListAsync();
-        var grants = await db.AccessGrants.Select(g => new { g.Id, g.EffectiveFrom, g.EffectiveTo }).ToListAsync();
+        var grants = await db.AccessGrants.Select(g => new { g.Id, g.StatusId, g.RevokedAt }).ToListAsync();
         var employees = await db.Employees.Select(e => new { e.Id, e.StatusId, e.EmploymentEndDate }).ToListAsync();
         var water = await db.WaterMeasurements.Select(m => new { m.Id, m.MeasuredAt, m.StatusId, m.ConfirmedAt }).ToListAsync();
 

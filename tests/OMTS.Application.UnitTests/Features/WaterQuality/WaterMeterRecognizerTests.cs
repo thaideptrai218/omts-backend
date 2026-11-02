@@ -1,8 +1,9 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using OMTS.Application.Common.Interfaces.Ocr;
-using OMTS.Application.Features.WaterQuality;
+using OMTS.Application.Common.Models.Ocr;
 using OMTS.Application.Features.WaterQuality.Dtos;
+using OMTS.Application.Features.WaterQuality;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Enums;
 
@@ -26,13 +27,14 @@ public class WaterMeterRecognizerTests
     }
 
     [Fact]
-    public async Task Provider_failure_becomes_a_failed_outcome_with_MSG04()
+    public async Task Provider_failure_becomes_a_failed_outcome_with_MSG_WATER_01()
     {
         var outcome = await Recognizer(new StubOcr(_ => Task.FromResult(OcrResult.Failed("DOWN")))).RecognizeAsync(new MemoryStream([1]), "image/png", CancellationToken.None);
 
         Assert.Equal(OcrStatus.Failed, outcome.Status);
-        Assert.Equal("MSG04", outcome.Warning!.Code);
-        Assert.StartsWith("The OCR service is not responding.", outcome.Warning.Text);
+        Assert.Equal("MSG-WATER-01", outcome.Warning!.Code);
+        Assert.Equal("MSG04", outcome.Warning.LegacyCode);
+        Assert.StartsWith("OMTS could not read pH and salinity from the photo.", outcome.Warning.Text);
     }
 
     [Fact]

@@ -1,12 +1,13 @@
-using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json;
+using System.Net;
 using System.Text.Json.Nodes;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Features.Authorization;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Enums;
 using static OMTS.Api.IntegrationTests.Farming.FarmingTestKit;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
@@ -52,13 +53,13 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
 
         var duplicate = await owner.Client.PostAsJsonAsync("/api/zones", NewZoneBody($" {code.ToLowerInvariant()} "));
         var problem = await duplicate.ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal("MSG03", problem.Text("code"));
+        Assert.Equal("MSG-GEN-02", problem.Text("code"));
         Assert.Equal(first.Id(), problem.GetProperty("existingZoneId").GetGuid());
 
         var second = await owner.Client.CreateZoneAsync();
         var renamed = await owner.Client.PutAsJsonAsync($"/api/zones/{second.Id()}", NewZoneBody(code.ToUpperInvariant()) with { RowVersion = second.Text("rowVersion") });
         var editProblem = await renamed.ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal("MSG03", editProblem.Text("code"));
+        Assert.Equal("MSG-GEN-02", editProblem.Text("code"));
         Assert.Equal(first.Id(), editProblem.GetProperty("existingZoneId").GetGuid());
 
         // Keeping its own code (in another case) is not a duplicate.
@@ -97,7 +98,7 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
 
         var blocked = await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/discontinue", new { rowVersion = zone.Text("rowVersion") }))
             .ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal("MSG11", blocked.Text("code"));
+        Assert.Equal("MSG-GEN-06", blocked.Text("code"));
         Assert.Equal(["R-A", "R-B"], blocked.GetProperty("raftCodes").EnumerateArray().Select(c => c.GetString()));
         Assert.Contains("2 records are still in use: R-A, R-B", blocked.Text("detail"));
 
@@ -116,13 +117,14 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(StatusIds.Usage.Discontinued, discontinued.GetProperty("statusId").GetInt32());
 
         var again = await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/discontinue", new { rowVersion = discontinued.Text("rowVersion") });
-        Assert.Equal("MSG61", await again.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-09", await again.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
         var reactivateInUse = await owner.Client.PostAsJsonAsync($"/api/zones/{(await owner.Client.CreateZoneAsync()).Id()}/reactivate", new { rowVersion = "" });
-        Assert.Equal("MSG61", await reactivateInUse.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-09", await reactivateInUse.ErrorCodeAsync());
 
         // A Discontinued zone gets no new rafts and leaves the default lookup and map.
-        Assert.Equal(["Zone"], await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/rafts", NewRaftBody())).InvalidFieldsAsync());
+        var noRaft = await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/rafts", NewRaftBody())).ReadAsync(HttpStatusCode.BadRequest);
+        Assert.Equal(("MSG-GEN-09", "MSG01", "Zone"), (noRaft.Text("code"), noRaft.Text("legacyCode"), noRaft.Text("field")));
         Assert.DoesNotContain(zone.Id(), (await owner.Client.GetFromJsonAsync<JsonElement>("/api/zones/lookup")).EnumerateArray().Select(z => z.Id()));
         Assert.Contains(zone.Id(), (await owner.Client.GetFromJsonAsync<JsonElement>("/api/zones/lookup?includeDiscontinued=true")).EnumerateArray().Select(z => z.Id()));
         Assert.DoesNotContain(zone.Id(), (await owner.Client.GetFromJsonAsync<JsonElement>("/api/zones/map")).EnumerateArray().Select(z => z.Id()));
@@ -272,30 +274,25 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         var zoneB = await owner.Client.CreateZoneAsync();
         var entityA = await factory.ZoneEntityAsync(zoneA.Id());
 
-        // Any role counts for reading (here one without any farming function).
-        var staffA = await factory.StaffAsync(entityA, (PermissionFunctions.SalesInvoices, true, false, false));
+        // Any role counts for reading (here the Accountant, which holds no farming function).
+        var staffA = await factory.StaffAsync(entityA, StaffRole.Accountant);
         Assert.Equal(HttpStatusCode.OK, (await staffA.Client.GetAsync($"/api/zones/{zoneA.Id()}")).StatusCode);
-        Assert.Equal("MSG02", await (await staffA.Client.GetAsync($"/api/zones/{zoneB.Id()}")).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await staffA.Client.GetAsync($"/api/zones/{zoneB.Id()}")).ErrorCodeAsync());
         Assert.Equal([zoneA.Id()], (await staffA.Client.GetFromJsonAsync<JsonElement>("/api/zones/lookup")).EnumerateArray().Select(z => z.Id()));
         Assert.Equal([zoneA.Id()], (await staffA.Client.GetFromJsonAsync<JsonElement>("/api/zones")).GetProperty("items").EnumerateArray().Select(z => z.Id()));
 
         var everywhere = await factory.StaffAsync(null);
         Assert.Equal(HttpStatusCode.OK, (await everywhere.Client.GetAsync($"/api/zones/{zoneB.Id()}")).StatusCode);
 
-        // A grant revoked or expired after login opens nothing any more.
+        // A pair revoked after login opens nothing any more.
         var revoked = await factory.StaffAsync(entityA);
         await factory.UpdateAsync<AccessGrant>(revoked.Grant!.Id, g => { g.StatusId = StatusIds.AccessGrant.Revoked; g.RevokedAt = DateTimeOffset.UtcNow; });
-        var expired = await factory.StaffAsync(entityA);
-        await factory.UpdateAsync<AccessGrant>(expired.Grant!.Id, g => { g.EffectiveFrom = Today.AddDays(-30); g.EffectiveTo = Today.AddDays(-1); });
-        foreach (var lapsed in new[] { revoked, expired })
-        {
-            Assert.Equal("MSG02", await (await lapsed.Client.GetAsync($"/api/zones/{zoneA.Id()}")).ErrorCodeAsync());
-            Assert.Empty((await lapsed.Client.GetFromJsonAsync<JsonElement>("/api/zones/lookup")).EnumerateArray());
-            Assert.Empty((await lapsed.Client.GetFromJsonAsync<JsonElement>("/api/zones/map")).EnumerateArray());
-        }
+        Assert.Equal("MSG-GEN-08", await (await revoked.Client.GetAsync($"/api/zones/{zoneA.Id()}")).ErrorCodeAsync());
+        Assert.Empty((await revoked.Client.GetFromJsonAsync<JsonElement>("/api/zones/lookup")).EnumerateArray());
+        Assert.Empty((await revoked.Client.GetFromJsonAsync<JsonElement>("/api/zones/map")).EnumerateArray());
 
         var trader = await factory.TraderAsync();
-        Assert.Equal("MSG02", await (await trader.GetAsync($"/api/zones/{zoneA.Id()}")).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await trader.GetAsync($"/api/zones/{zoneA.Id()}")).ErrorCodeAsync());
         Assert.Empty((await trader.GetFromJsonAsync<JsonElement>("/api/zones")).GetProperty("items").EnumerateArray());
         Assert.Empty((await trader.GetFromJsonAsync<JsonElement>("/api/zones/lookup")).EnumerateArray());
         Assert.Empty((await trader.GetFromJsonAsync<JsonElement>("/api/zones/map")).EnumerateArray());

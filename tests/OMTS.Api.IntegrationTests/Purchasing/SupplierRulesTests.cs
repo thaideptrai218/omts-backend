@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -25,18 +25,18 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
 
         var response = await owner.PostAsJsonAsync("/api/suppliers", new { name, supplierType = type, phoneNumber = phone });
 
-        Assert.Equal(field, await response.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal(field, await response.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         Assert.Equal(before, await factory.QueryAsync(db => db.Suppliers.CountAsync()));
     }
 
     [Fact]
-    public async Task Too_long_name_or_contacts_return_MSG01()
+    public async Task Too_long_name_or_address_return_MSG01()
     {
         var owner = await factory.PurchasingOwnerAsync();
         var longName = await owner.PostAsJsonAsync("/api/suppliers", new { name = new string('a', 201), supplierType = "Seed", phoneNumber = NewPhone() });
-        Assert.Equal("Name", await longName.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
-        var longContacts = await owner.PostAsJsonAsync("/api/suppliers", new { name = "S", supplierType = "Seed", phoneNumber = NewPhone(), otherContacts = new string('a', 501) });
-        Assert.Equal("Other contacts", await longContacts.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Name", await longName.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        var longAddress = await owner.PostAsJsonAsync("/api/suppliers", new { name = "S", supplierType = "Seed", phoneNumber = NewPhone(), address = new string('a', 501) });
+        Assert.Equal("Address", await longAddress.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var formatted = $"+84 {phone[1..4]} {phone[4..7]} {phone[7..]}";
 
         var duplicate = await owner.PostAsJsonAsync("/api/suppliers", new { name = "Copy", supplierType = "Material", phoneNumber = formatted });
-        Assert.Equal(first, (await duplicate.ProblemAsync(HttpStatusCode.Conflict, "MSG03")).GetProperty("existingId").GetGuid());
+        Assert.Equal(first, (await duplicate.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("existingId").GetGuid());
 
         var second = await owner.CreateSupplierAsync();
         var view = await owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{second}");
@@ -56,7 +56,7 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         {
             name = "Second", supplierType = "Seed", phoneNumber = formatted, rowVersion = view.GetProperty("rowVersion").GetString(),
         });
-        Assert.Equal(first, (await edit.ProblemAsync(HttpStatusCode.Conflict, "MSG03")).GetProperty("existingId").GetGuid());
+        Assert.Equal(first, (await edit.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("existingId").GetGuid());
         Assert.Equal(phone, await factory.QueryAsync(db => db.Suppliers.Where(s => s.Id == first).Select(s => s.PhoneNumber).SingleAsync()));
     }
 
@@ -72,17 +72,19 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var phone = view.GetProperty("phoneNumber").GetString();
         var edited = await (await manager.PutAsJsonAsync($"/api/suppliers/{id}", new
         {
-            name = "Phao xốp Hạ Long", supplierType = "Material", phoneNumber = phone, otherContacts = "Zalo 0900000000",
+            name = "Phao xốp Hạ Long", supplierType = "Material", phoneNumber = phone, address = "Bãi Cháy, Hạ Long", email = "phao@example.com",
             rowVersion = view.GetProperty("rowVersion").GetString(),
         })).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal("Phao xốp Hạ Long", edited.GetProperty("name").GetString());
+        Assert.Equal(
+            ("Phao xốp Hạ Long", "Bãi Cháy, Hạ Long", "phao@example.com"),
+            (edited.GetProperty("name").GetString(), edited.GetProperty("address").GetString(), edited.GetProperty("email").GetString()));
 
         var discontinued = await (await manager.PostAsync($"/api/suppliers/{id}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("Discontinued", discontinued.GetProperty("status").GetString());
-        await (await manager.PostAsync($"/api/suppliers/{id}/discontinue", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG61");
+        await (await manager.PostAsync($"/api/suppliers/{id}/discontinue", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
         var reactivated = await (await manager.PostAsync($"/api/suppliers/{id}/reactivate", null)).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("In Use", reactivated.GetProperty("status").GetString());
-        await (await manager.PostAsync($"/api/suppliers/{id}/reactivate", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG61");
+        await (await manager.PostAsync($"/api/suppliers/{id}/reactivate", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
 
         Assert.Equal(
             ["Supplier.Created", "Supplier.Updated", "Supplier.Discontinued", "Supplier.Reactivated"],
@@ -104,9 +106,9 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var kept = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{completed.Id()}");
         Assert.Equal("Completed", kept.GetProperty("status").GetString());
         var complete = await world.Owner.PostAsync($"/api/purchase-receipts/{draft.Id()}/complete", null);
-        Assert.Equal("Supplier", await complete.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Supplier", await complete.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         var direct = await world.Owner.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 100_000)) with { Complete = true });
-        Assert.Equal("Supplier", await direct.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Supplier", await direct.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         Assert.Equal(0, await factory.QueryAsync(db => db.SupplierPayments.CountAsync(p => p.ReceiptId == draft.Id())));
 
         await (await world.Owner.PostAsync($"/api/suppliers/{world.SupplierId}/reactivate", null)).ReadAsync(HttpStatusCode.OK);
@@ -141,7 +143,7 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     }
 
     [Fact]
-    public async Task Detail_returns_the_receipt_history_of_visible_zones_and_the_current_debt()
+    public async Task Detail_returns_the_receipt_history_of_visible_zones_and_no_debt()
     {
         var world = await factory.WorldAsync();
         var first = await world.CompletedAsync(0, 200_000, new LineBody(world.Other, 10, 100_000));
@@ -150,7 +152,8 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var elsewhere = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 3, 100_000)) with { ZoneId = otherZone.Id, Complete = true });
 
         var view = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}");
-        Assert.Equal(800_000 + 300_000, view.Money("debt"));
+        // The supplier debt is PURCHASE-04, which the Zone Manager does not hold (§I.4.4): not on the supplier detail.
+        Assert.False(view.TryGetProperty("debt", out _));
         var history = view.GetProperty("receipts").EnumerateArray().Select(r => r.Id()).ToHashSet();
         Assert.Equal(new HashSet<Guid> { first.Id(), draft.Id(), elsewhere.Id() }, history);
 
@@ -162,28 +165,30 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     }
 
     [Fact]
-    public async Task Callers_without_a_suppliers_grant_get_MSG02_and_a_view_grant_cannot_write()
+    public async Task Callers_without_a_suppliers_right_get_MSG_GEN_08_and_the_accountant_cannot_write()
     {
         var owner = await factory.PurchasingOwnerAsync();
         var supplierId = await owner.CreateSupplierAsync();
         var (zone, _) = await factory.ZoneWithRaftAsync();
 
-        var noGrant = await factory.PurchasingStaffAsync(zone, Perm.Full(PermissionFunctions.PurchaseReceipts));
-        await (await noGrant.GetAsync("/api/suppliers")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await noGrant.GetAsync($"/api/suppliers/{supplierId}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await noGrant.PostAsJsonAsync("/api/suppliers", new { name = "X", supplierType = "Seed", phoneNumber = NewPhone() })).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        // Both fixed roles read suppliers, so the caller without the right is a trader.
+        var noGrant = await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Password, Domain.Enums.SubjectType.Trader)).Username);
+        await (await noGrant.GetAsync("/api/suppliers")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await noGrant.GetAsync($"/api/suppliers/{supplierId}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await noGrant.PostAsJsonAsync("/api/suppliers", new { name = "X", supplierType = "Seed", phoneNumber = NewPhone() })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
 
-        var viewer = await factory.PurchasingStaffAsync(zone, new Perm(PermissionFunctions.Suppliers));
+        // The Accountant only views suppliers, to pick the payee of a supplier payment (default of gap Q4).
+        var viewer = await factory.AccountantAsync(zone);
         await (await viewer.GetAsync($"/api/suppliers/{supplierId}")).ReadAsync(HttpStatusCode.OK);
-        await (await viewer.PostAsJsonAsync("/api/suppliers", new { name = "X", supplierType = "Seed", phoneNumber = NewPhone() })).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await viewer.PutAsJsonAsync($"/api/suppliers/{supplierId}", new { name = "X", supplierType = "Seed", phoneNumber = NewPhone(), rowVersion = "" })).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await viewer.PostAsync($"/api/suppliers/{supplierId}/discontinue", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        await (await viewer.PostAsJsonAsync("/api/suppliers", new { name = "X", supplierType = "Seed", phoneNumber = NewPhone() })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await viewer.PutAsJsonAsync($"/api/suppliers/{supplierId}", new { name = "X", supplierType = "Seed", phoneNumber = NewPhone(), rowVersion = "" })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await viewer.PostAsync($"/api/suppliers/{supplierId}/discontinue", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         Assert.Equal(Domain.Constants.StatusIds.Usage.InUse, (await factory.QueryAsync(db => db.Suppliers.SingleAsync(s => s.Id == supplierId))).StatusId);
 
-        // Supplier debt is INP-06: All zones SUPPLIER_PAYMENTS, so a Zone Manager cannot read it.
+        // Supplier debt is PURCHASE-04: the Zone Manager role does not hold SUPPLIER_PAYMENTS.
         var manager = await factory.ZoneManagerAsync(zone);
-        await (await manager.GetAsync($"/api/suppliers/{supplierId}/debt")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
-        await (await manager.GetAsync("/api/suppliers/debts")).ProblemAsync(HttpStatusCode.Forbidden, "MSG02");
+        await (await manager.GetAsync($"/api/suppliers/{supplierId}/debt")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await manager.GetAsync("/api/suppliers/debts")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
     }
 
     [Fact]

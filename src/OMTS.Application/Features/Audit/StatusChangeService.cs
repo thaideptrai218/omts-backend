@@ -18,7 +18,7 @@ public sealed class StatusChangeService(IStatusCatalog statusCatalog, RowVersion
     private const int MaxReasonLength = 1000;
 
     /// <summary>
-    /// Checks the optional reason (MSG01 "Reason" beyond 1000 characters) and the row version the screen was read
+    /// Checks the optional reason (MSG-GEN-01 "Reason" beyond 1000 characters) and the row version the screen was read
     /// from (MSG06), sets the new status and saves it with one audit row: <paramref name="entry"/> plus the old and
     /// new status codes and the reason. Null when saved.
     /// </summary>
@@ -49,7 +49,7 @@ public sealed class StatusChangeService(IStatusCatalog statusCatalog, RowVersion
         return null;
     }
 
-    /// <summary>MSG61: the record's current status does not allow the change to <paramref name="newStatusId"/>.</summary>
-    public AppError WrongStatus(string entityName, IHasStatus record, int newStatusId, string reason) => AppError.Conflict(UserMessages.CannotChangeStatus(
-        entityName, statusCatalog.DisplayNameOf(record.StatusId), statusCatalog.DisplayNameOf(newStatusId), reason));
+    /// <summary>MSG-GEN-09: the record's current status does not allow the change.</summary>
+    public AppError WrongStatus(string entityName, IHasStatus record) =>
+        AppError.Conflict(UserMessages.WrongStatus(entityName, statusCatalog.DisplayNameOf(record.StatusId)));
 }

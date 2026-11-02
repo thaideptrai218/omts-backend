@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Interfaces.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OMTS.Application.Common;
@@ -35,6 +36,15 @@ public static class DependencyInjection
 
         services.AddSingleton(_ => new UnknownLoginCounter());
         services.AddScoped<AuthService>();
+        services.AddScoped<ZaloLinkService>();
+        services.AddScoped<ZaloLocationService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseRequestService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Products.SalesProductService>();
+        services.AddOptions<OMTS.Application.Features.Testing.Options.TestRoleOptions>();
+        services.AddScoped<OMTS.Application.Features.Testing.TestRoleService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.WorkforceService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.LeaveService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.WorkforceSettingsService>();
 
         services.AddSingleton<PermissionCache>();
         services.AddSingleton<IPermissionCacheInvalidator>(provider => provider.GetRequiredService<PermissionCache>());
@@ -44,6 +54,7 @@ public static class DependencyInjection
         services.AddScoped<AuditLogService>();
         services.AddScoped<StatusChangeService>();
         services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
+        services.AddScoped<NotificationInboxService>();
         services.AddScoped<RowVersionGuard>();
 
         // ACS – personal accounts
@@ -65,6 +76,7 @@ public static class DependencyInjection
         services.AddScoped<AccessGrantService>();
         services.AddScoped<StaffAccountService>();
         services.AddScoped<RoleService>();
+        services.AddScoped<TraderRequestService>();
 
         // FARM-01 cooperative profile, LAB-01 employees
         services.AddScoped<CooperativeProfileService>();

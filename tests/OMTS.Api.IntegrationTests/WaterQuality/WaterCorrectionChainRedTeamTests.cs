@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -19,7 +19,7 @@ public class WaterCorrectionChainRedTeamTests(AuthApiFactory api) : IClassFixtur
     public async Task Client_still_on_version_two_of_a_three_version_chain_gets_MSG06_naming_version_three()
     {
         var z = await api.ZoneAsync();
-        var (manager, _) = await api.StaffAsync(z.Zone, edit: true);
+        var (manager, _) = await api.StaffAsync(z.Zone);
         var v1 = await z.RecordedAsync(9.1m, 20m);
         var v2 = await (await manager.CorrectAsync(v1.Id(), 7.5m, 20m, recordVersion: 1)).Content.ReadFromJsonAsync<JsonElement>();
         var v3Response = await z.Owner.CorrectAsync(v2.Id(), 7.6m, 20m, recordVersion: 2, reason: "Đo lại");
@@ -84,7 +84,7 @@ public class WaterCorrectionChainRedTeamTests(AuthApiFactory api) : IClassFixtur
         foreach (var response in new[] { correct, voided })
         {
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-            Assert.Equal("MSG01", await response.ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
             Assert.Equal("Record version", (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
         }
 
@@ -133,7 +133,7 @@ public class WaterCorrectionChainRedTeamTests(AuthApiFactory api) : IClassFixtur
         Assert.All(chart.GetProperty("periods").EnumerateArray(), p => Assert.True(p.GetProperty("missing").GetBoolean()));
         Assert.Single(workbook.Worksheet("Measurements").RowsUsed());
         // A voided version is final: it cannot be corrected or voided again.
-        Assert.Equal("MSG61", await (await z.Owner.CorrectAsync(v2.Id(), 7m, 20m, recordVersion: 2)).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-09", await (await z.Owner.CorrectAsync(v2.Id(), 7m, 20m, recordVersion: 2)).ErrorCodeAsync());
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public class WaterCorrectionChainRedTeamTests(AuthApiFactory api) : IClassFixtur
         var voided = await z.Owner.VoidAsync(draft.Id(), 1, reason: "Vùng đã ngừng");
 
         Assert.Equal(HttpStatusCode.BadRequest, confirm.StatusCode);
-        Assert.Equal("MSG01", await confirm.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await confirm.ErrorCodeAsync());
         Assert.Equal("Zone", (await confirm.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
         Assert.Empty(await api.AlertsOfAsync(draft.Id()));
         Assert.Equal(HttpStatusCode.OK, voided.StatusCode);
@@ -158,7 +158,7 @@ public class WaterCorrectionChainRedTeamTests(AuthApiFactory api) : IClassFixtur
     public async Task Voiding_clears_the_voiders_editing_indicator()
     {
         var z = await api.ZoneAsync();
-        var (manager, _) = await api.StaffAsync(z.Zone, edit: true);
+        var (manager, _) = await api.StaffAsync(z.Zone);
         var confirmed = await z.RecordedAsync(7m, 20m);
         await manager.PostAsync($"/api/water-measurements/{confirmed.Id()}/editing", null);
         var before = await z.Owner.GetFromJsonAsync<JsonElement>($"/api/water-measurements/{confirmed.Id()}");

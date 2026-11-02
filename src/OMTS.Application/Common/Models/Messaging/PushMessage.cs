@@ -1,0 +1,20 @@
+using OMTS.Application.Common.Models;
+
+namespace OMTS.Application.Common.Models.Messaging;
+
+/// <param name="DeviceTokens">
+/// The recipient's devices that receive push now (ACS-07: registered by a session that is still logged in,
+/// notifications allowed); empty when there is none.
+/// </param>
+public sealed record PushMessage(
+    Guid RecipientAccountId,
+    string Type,
+    string Title,
+    string? Body,
+    string? RelatedRecordType,
+    string? RelatedRecordCode,
+    IReadOnlyList<string> DeviceTokens,
+    Guid? NotificationId = null,
+    string? MessageCode = null,
+    Guid? RelatedRecordId = null,
+    string? MessageParams = null);

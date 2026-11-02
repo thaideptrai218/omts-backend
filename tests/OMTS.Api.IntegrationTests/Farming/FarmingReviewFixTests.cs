@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -66,7 +66,7 @@ public class FarmingReviewFixTests(AuthApiFactory factory) : IClassFixture<AuthA
         var problem = await shrink.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.Conflict, shrink.StatusCode);
-        Assert.Equal("MSG11", problem.GetProperty("code").GetString());
+        Assert.Equal("MSG-GEN-06", problem.GetProperty("code").GetString());
         Assert.Equal([5], problem.GetProperty("laneNumbers").EnumerateArray().Select(n => n.GetInt32()));
     }
 

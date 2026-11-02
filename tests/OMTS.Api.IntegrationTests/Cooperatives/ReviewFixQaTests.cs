@@ -1,12 +1,13 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Interfaces.Storage;
+using OMTS.Application.Features.Files.Models;
 using OMTS.Application.Features.Files;
 using static OMTS.Api.IntegrationTests.Employees.EmployeeRequests;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
@@ -135,7 +136,7 @@ public class ReviewFixQaTests
         var refusals = await api.QueryAsync(db => db.AuditEvents.Where(e => e.Action == "Account.OwnerRightsRefused").Select(e => e.RecordCode).ToListAsync());
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        Assert.Equal("MSG02", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
         Assert.Equal([username], refusals);
         Assert.Equal(0, await api.QueryAsync(db => db.Employees.CountAsync()));
         Assert.False(await api.QueryAsync(db => db.Accounts.AnyAsync(a => a.Username == username)));

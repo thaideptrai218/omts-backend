@@ -6,6 +6,9 @@ public interface IAccountRepository
 {
     Task<Account?> GetByIdAsync(Guid accountId, CancellationToken cancellationToken);
 
+    /// <summary>Display names of the accounts that exist among <paramref name="accountIds"/>.</summary>
+    Task<IReadOnlyDictionary<Guid, string>> GetDisplayNamesAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken cancellationToken);
+
     /// <summary>
     /// Account whose username is <paramref name="username"/>, or whose verified phone number / verified
     /// email equals the normalised <paramref name="phoneNumber"/> / <paramref name="email"/> (ACS-02).
@@ -18,6 +21,15 @@ public interface IAccountRepository
 
     /// <summary>Any account using this phone number, verified or not (login phone numbers are unique system-wide).</summary>
     Task<Account?> FindByPhoneAsync(string phoneNumber, CancellationToken cancellationToken);
+
+    /// <summary>Ids of the active Cooperative Owner accounts (recipients of trader requests).</summary>
+    Task<IReadOnlyList<Guid>> ListActiveOwnerIdsAsync(CancellationToken cancellationToken);
+
+    /// <summary>Trader accounts in <paramref name="statusId"/> (Pending approval or Rejected), oldest request first.</summary>
+    Task<IReadOnlyList<Account>> ListTraderRequestsAsync(int statusId, CancellationToken cancellationToken);
+
+    /// <summary>The account linked to this Zalo user (Zalo Mini App "Liên kết tài khoản").</summary>
+    Task<Account?> FindByZaloAccountIdAsync(string zaloAccountId, CancellationToken cancellationToken);
 
     /// <summary>The account whose verified email is this one (verified emails are unique system-wide).</summary>
     Task<Account?> FindByVerifiedEmailAsync(string email, CancellationToken cancellationToken);

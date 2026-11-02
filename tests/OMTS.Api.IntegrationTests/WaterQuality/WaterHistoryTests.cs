@@ -1,11 +1,13 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using ClosedXML.Excel;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
-using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Reports;
+using OMTS.Application.Common.Models.Reports;
+using OMTS.Application.Common;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
@@ -118,7 +120,7 @@ public class WaterHistoryTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
         var response = await z.Owner.GetAsync($"{z.Base}{(query.StartsWith('?') ? "" : "/")}{query}");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG01", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
         Assert.Equal(field, (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
     }
 
@@ -169,18 +171,19 @@ public class WaterHistoryTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
     }
 
     [Fact]
-    public async Task Export_needs_the_export_permission_and_never_contains_drafts_or_voided_records()
+    public async Task Export_needs_a_role_with_water_rights_in_the_zone_and_never_contains_drafts_or_voided_records()
     {
         var (z, _) = await SeedAsync();
-        var (viewer, _) = await api.StaffAsync(z.Zone);
-        var (exporter, _) = await api.StaffAsync(z.Zone, export: true);
+        // WATER-03 is No for the Accountant and Full* for the Zone Manager (§I.4.4).
+        var (viewer, _) = await api.StaffAsync(z.Zone, StaffRole.Accountant);
+        var (exporter, _) = await api.StaffAsync(z.Zone);
 
         var refused = await viewer.GetAsync($"{z.Base}/export");
         var allowed = await exporter.GetAsync($"{z.Base}/export?status=All");
         using var workbook = new XLWorkbook(await allowed.Content.ReadAsStreamAsync());
 
         Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
-        Assert.Equal("MSG02", await refused.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await refused.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
         var statuses = workbook.Worksheet("Measurements").RowsUsed().Skip(1).Select(r => r.Cell(5).GetString()).ToList();
         Assert.Equal(["Confirmed", "Confirmed", "Corrected"], statuses.Order());
@@ -202,14 +205,14 @@ public class WaterHistoryTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
     public async Task Zone_not_granted_is_403_for_history_chart_and_detail()
     {
         var (z, ids) = await SeedAsync();
-        var (outsider, _) = await api.StaffAsync((await api.ZoneAsync()).Zone, export: true);
+        var (outsider, _) = await api.StaffAsync((await api.ZoneAsync()).Zone);
         var (viewer, _) = await api.StaffAsync(z.Zone);
 
         foreach (var url in new[] { z.Base, $"{z.Base}/chart", $"{z.Base}/export", $"/api/water-measurements/{ids.Corrected}" })
         {
             var response = await outsider.GetAsync(url);
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-            Assert.Equal("MSG02", await response.ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
         }
 
         Assert.Equal(HttpStatusCode.OK, (await viewer.GetAsync($"/api/water-measurements/{ids.Corrected}")).StatusCode);

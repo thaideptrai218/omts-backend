@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -7,10 +7,10 @@ using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Features.Authorization;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
+using FarmingHost = OMTS.Api.IntegrationTests.Farming.FarmingSqlServerHost;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 using static OMTS.Api.IntegrationTests.Purchasing.PurchasingSqlServerKit;
 using static OMTS.Api.IntegrationTests.Purchasing.PurchasingTestKit;
-using FarmingHost = OMTS.Api.IntegrationTests.Farming.FarmingSqlServerHost;
 
 namespace OMTS.Api.IntegrationTests.Purchasing;
 
@@ -29,7 +29,7 @@ public class PurchasingSqlServerTests
     }
 
     [SqlServerFact]
-    public async Task Parallel_duplicate_supplier_phones_and_item_codes_create_one_record_and_answer_MSG03()
+    public async Task Parallel_duplicate_supplier_phones_and_item_codes_create_one_record_and_answer_MSG_GEN_02()
     {
         await using var host = await FarmingHost.StartAsync();
         var owner = host.Owner.Client;
@@ -38,7 +38,7 @@ public class PurchasingSqlServerTests
 
         var suppliers = await InParallelAsync(6, i => owner.PostAsJsonAsync("/api/suppliers", new { name = $"Supplier {i}", supplierType = "Seed", phoneNumber = spellings[i % 3] }));
         Assert.Single(suppliers, r => r.StatusCode == HttpStatusCode.Created);
-        await AssertLosersAsync(suppliers.Where(r => r.StatusCode != HttpStatusCode.Created), "409 MSG03");
+        await AssertLosersAsync(suppliers.Where(r => r.StatusCode != HttpStatusCode.Created), "409 MSG-GEN-02");
         Assert.Equal(1, await host.QueryAsync(db => db.Suppliers.CountAsync(s => s.PhoneNumber == phone)));
 
         var code = $"Seed-{NewCode()}";
@@ -47,7 +47,7 @@ public class PurchasingSqlServerTests
             code = i % 2 == 0 ? code : code.ToUpperInvariant(), name = "Hàu giống", group = "Seed", unit = "kg",
         }));
         Assert.Single(items, r => r.StatusCode == HttpStatusCode.Created);
-        await AssertLosersAsync(items.Where(r => r.StatusCode != HttpStatusCode.Created), "409 MSG03");
+        await AssertLosersAsync(items.Where(r => r.StatusCode != HttpStatusCode.Created), "409 MSG-GEN-02");
         Assert.Equal(1, await host.QueryAsync(db => db.FarmingInputItems.CountAsync(i => i.Code == code)));
     }
 
@@ -62,7 +62,7 @@ public class PurchasingSqlServerTests
         var responses = await InParallelAsync(6, _ => world.Owner.PostAsync($"/api/purchase-receipts/{draft.Id()}/complete", null));
 
         Assert.Single(responses, r => r.StatusCode == HttpStatusCode.OK);
-        await AssertLosersAsync(responses.Where(r => r.StatusCode != HttpStatusCode.OK), "409 MSG06", "409 MSG61");
+        await AssertLosersAsync(responses.Where(r => r.StatusCode != HttpStatusCode.OK), "409 MSG06", "409 MSG-GEN-09");
         Assert.Equal(1, await host.QueryAsync(db => db.SupplierPayments.CountAsync(p => p.ReceiptId == draft.Id())));
         Assert.Equal(1, await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == draft.Id() && e.Action == "PurchaseReceipt.StatusChanged")));
         Assert.Equal(1, await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.Action == "SupplierPayment.Recorded" && e.ZoneId == world.Zone.Id)));
@@ -84,7 +84,7 @@ public class PurchasingSqlServerTests
 
         var created = responses.Count(r => r.StatusCode == HttpStatusCode.Created);
         Assert.InRange(created, 1, 3);
-        await AssertLosersAsync(responses.Where(r => r.StatusCode != HttpStatusCode.Created), "409 MSG06", "400 MSG45");
+        await AssertLosersAsync(responses.Where(r => r.StatusCode != HttpStatusCode.Created), "409 MSG06", "400 MSG-PURCHASE-03");
         var returned = await host.QueryAsync(db => db.PurchaseReturnLines.Where(l => l.ReceiptLineId == line).SumAsync(l => l.Quantity));
         Assert.Equal(created * 30m, returned);
         var view = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{receipt.Id()}");
@@ -97,7 +97,7 @@ public class PurchasingSqlServerTests
     {
         await using var host = await FarmingHost.StartAsync();
         var world = await host.WorldAsync();
-        var accountant = await host.StaffAsync(null, new Perm(PermissionFunctions.SupplierPayments, true, true));
+        var accountant = await host.StaffAsync(null, Domain.Enums.StaffRole.Accountant);
         var receipt = await world.CompletedAsync(0, 0, new LineBody(world.Other, 10, 100_000));
 
         var responses = await InParallelAsync(6, _ => accountant.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = receipt.Id(), Amount = 400_000 }));
@@ -122,7 +122,7 @@ public class PurchasingSqlServerTests
         }
 
         Assert.Single(ids);
-        await AssertLosersAsync(keyed.Where(r => r.StatusCode != HttpStatusCode.Created), "409 MSG06", "409 MSG03");
+        await AssertLosersAsync(keyed.Where(r => r.StatusCode != HttpStatusCode.Created), "409 MSG06", "409 MSG-GEN-02");
         Assert.Equal(900_000, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{other.Id()}")).Money("outstanding"));
     }
 
@@ -182,7 +182,7 @@ public class PurchasingSqlServerTests
         var responses = await InParallelAsync(6, i => world.Owner.PostAsJsonAsync($"/api/supplier-payments/{paymentId}/allocate", new { receiptId = targets[i % 2].Id() }));
 
         Assert.Single(responses, r => r.StatusCode == HttpStatusCode.OK);
-        await AssertLosersAsync(responses.Where(r => r.StatusCode != HttpStatusCode.OK), "409 MSG06", "409 MSG61");
+        await AssertLosersAsync(responses.Where(r => r.StatusCode != HttpStatusCode.OK), "409 MSG06", "409 MSG-GEN-09");
         var allocatedTo = await host.QueryAsync(db => db.SupplierPayments.Where(p => p.Id == paymentId).Select(p => p.ReceiptId).SingleAsync());
         Assert.Contains(allocatedTo!.Value, targets.Select(t => t.Id()));
         Assert.Equal(1, await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == paymentId && e.Action == "SupplierPayment.Allocated")));
@@ -297,6 +297,9 @@ public class PurchasingSqlServerTests
         await AssertDuplicateAsync(host, $"UPDATE Suppliers SET PhoneNumber = '{phone}' WHERE Id = '{otherSupplier}'");
         var seedCode = await host.QueryAsync(db => db.FarmingInputItems.Where(i => i.Id == world.Seed).Select(i => i.Code).SingleAsync());
         await AssertDuplicateAsync(host, $"UPDATE FarmingInputItems SET Code = '{seedCode.ToLowerInvariant()}' WHERE Id = '{world.Other}'");
+        // Item names are unique too, ignoring case (BR-PURCHASE-10).
+        var seedName = await host.QueryAsync(db => db.FarmingInputItems.Where(i => i.Id == world.Seed).Select(i => i.Name).SingleAsync());
+        await AssertDuplicateAsync(host, $"UPDATE FarmingInputItems SET Name = N'{seedName.ToUpperInvariant()}' WHERE Id = '{world.Other}'");
     }
 
     [SqlServerFact]
@@ -307,10 +310,20 @@ public class PurchasingSqlServerTests
         var owner = world.Owner;
 
         // A name of 101–200 characters fails (audit RecordCode is 100): see PurchasingSqlServerBugTests.pending.cs.txt.
+        // 256 characters: 60 + "@" + three labels of 60 + "." + 12.
+        var email = $"{new string('a', 60)}@{string.Join('.', Enumerable.Repeat(new string('b', 60), 3))}.{new string('c', 12)}";
+        Assert.Equal(256, email.Length);
         var supplier = await (await owner.PostAsJsonAsync("/api/suppliers", new
         {
-            name = new string('Ư', 100), supplierType = "Material", phoneNumber = NewPhone(), otherContacts = new string('ộ', 500),
+            name = new string('Ư', 100), supplierType = "Material", phoneNumber = NewPhone(), address = new string('ộ', 500), email,
         })).ReadAsync(HttpStatusCode.Created);
+        // Every Seed item uses one unit (BR-PURCHASE-10): the world's seed item, still unused, takes the longest unit first.
+        var seed = await owner.GetFromJsonAsync<JsonElement>($"/api/farming-input-items/{world.Seed}");
+        await (await owner.PutAsJsonAsync($"/api/farming-input-items/{world.Seed}", new
+        {
+            code = seed.GetProperty("code").GetString(), name = seed.GetProperty("name").GetString(), group = "Seed", unit = new string('ụ', 30),
+            rowVersion = seed.GetProperty("rowVersion").GetString(),
+        })).ReadAsync(HttpStatusCode.OK);
         var item = await (await owner.PostAsJsonAsync("/api/farming-input-items", new
         {
             code = NewCode() + new string('Đ', 40), name = new string('ố', 200), group = "Seed", unit = new string('ụ', 30), description = new string('ề', 2000),
@@ -336,7 +349,7 @@ public class PurchasingSqlServerTests
         await (await owner.CancelAsync(copy.Id(), new string('ỷ', 1000), null)).ReadAsync(HttpStatusCode.OK);
 
         var saved = await host.QueryAsync(db => db.Suppliers.SingleAsync(s => s.Id == supplier.Id()));
-        Assert.Equal((new string('Ư', 100), new string('ộ', 500)), (saved.Name, saved.OtherContacts));
+        Assert.Equal((new string('Ư', 100), new string('ộ', 500), email), (saved.Name, saved.Address, saved.Email));
         Assert.Equal(new string('ỷ', 1000), await host.QueryAsync(db => db.PurchaseReceipts.Where(r => r.Id == copy.Id()).Select(r => r.CancelReason).SingleAsync()));
     }
 
@@ -360,7 +373,7 @@ public class PurchasingSqlServerTests
         var code = seed.GetProperty("code").GetString()!;
 
         var list = await (await owner.GetAsync(
-            $"/api/purchase-receipts?itemGroup=RaftMaterial&itemId={world.Material}&zoneId={world.Zone.Id}&raftId={world.Raft.Id}&supplierId={world.SupplierId}" +
+            $"/api/purchase-receipts?itemGroup=Material&itemId={world.Material}&zoneId={world.Zone.Id}&raftId={world.Raft.Id}&supplierId={world.SupplierId}" +
             $"&statusId={StatusIds.PurchaseReceipt.Completed}&from={Today.AddDays(-1):yyyy-MM-dd}&to={Today:yyyy-MM-dd}&code={code[3..].ToLowerInvariant()}&page=1&pageSize=5"))
             .ReadAsync(HttpStatusCode.OK);
         Assert.Equal([seed.Id()], list.GetProperty("page").GetProperty("items").EnumerateArray().Select(r => r.Id()));

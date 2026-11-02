@@ -1,12 +1,7 @@
+using OMTS.Application.Common.Models.Persistence;
 using OMTS.Domain.Entities.Identity;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
-
-/// <summary>Attendance or work assignments of an employee dated after a day (they block ending the employment).</summary>
-public sealed record LaborRecordsAfter(int AttendanceCount, int AssignmentCount)
-{
-    public int Total => AttendanceCount + AssignmentCount;
-}
 
 public interface IEmployeeRepository
 {

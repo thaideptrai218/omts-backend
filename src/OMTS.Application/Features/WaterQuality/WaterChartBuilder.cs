@@ -1,11 +1,9 @@
+using OMTS.Application.Features.WaterQuality.Models;
 using System.Globalization;
 using OMTS.Application.Common;
 using OMTS.Application.Features.WaterQuality.Dtos;
 
 namespace OMTS.Application.Features.WaterQuality;
-
-/// <summary>A confirmed measurement as the chart and the monthly summary see it.</summary>
-public sealed record WaterSample(DateTimeOffset MeasuredAt, decimal Ph, decimal Salinity);
 
 /// <summary>
 /// ENV-03 chart aggregation: one period per month or day of the range (by local date in

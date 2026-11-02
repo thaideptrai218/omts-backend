@@ -1,10 +1,11 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
@@ -84,7 +85,7 @@ public class WaterCorrectionTests(AuthApiFactory api) : IClassFixture<AuthApiFac
     public async Task Second_user_correcting_the_same_version_gets_MSG06_with_the_first_users_version()
     {
         var z = await api.ZoneAsync();
-        var (manager, managerAccount) = await api.StaffAsync(z.Zone, edit: true);
+        var (manager, managerAccount) = await api.StaffAsync(z.Zone);
         var original = await z.RecordedAsync(7.0m, 20m);
 
         var first = await manager.CorrectAsync(original.Id(), 7.2m, 20m, recordVersion: 1);
@@ -113,14 +114,14 @@ public class WaterCorrectionTests(AuthApiFactory api) : IClassFixture<AuthApiFac
         var voidAgain = await z.Owner.VoidAsync(confirmed.Id(), 1);
         var correctVoided = await z.Owner.CorrectAsync(confirmed.Id(), 7.1m, 20m, recordVersion: 1);
 
-        Assert.Equal("Cannot change water measurement from “Draft” to “Corrected”: only a confirmed measurement can be corrected.",
+        Assert.Equal("Water measurement is Draft and cannot be used for this action.",
             (await correctDraft.Content.ReadFromJsonAsync<JsonElement>()).Text("detail"));
-        Assert.Equal("Cannot change water measurement from “Voided” to “Voided”: the measurement has been voided.",
+        Assert.Equal("Water measurement is Voided and cannot be used for this action.",
             (await voidAgain.Content.ReadFromJsonAsync<JsonElement>()).Text("detail"));
         foreach (var response in new[] { correctDraft, voidAgain, correctVoided })
         {
             Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-            Assert.Equal("MSG61", await response.ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-09", await response.ErrorCodeAsync());
         }
     }
 
@@ -134,9 +135,9 @@ public class WaterCorrectionTests(AuthApiFactory api) : IClassFixture<AuthApiFac
         var voidOld = await z.Owner.VoidAsync(original.Id(), recordVersion: 2);
         var correctOld = await z.Owner.CorrectAsync(original.Id(), 7.4m, 20m, recordVersion: 2);
 
-        Assert.Equal("MSG61", await voidOld.ErrorCodeAsync());
-        Assert.Equal("MSG61", await correctOld.ErrorCodeAsync());
-        Assert.Contains("“Corrected”", (await correctOld.Content.ReadFromJsonAsync<JsonElement>()).Text("detail"));
+        Assert.Equal("MSG-GEN-09", await voidOld.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-09", await correctOld.ErrorCodeAsync());
+        Assert.Contains("is Corrected", (await correctOld.Content.ReadFromJsonAsync<JsonElement>()).Text("detail"));
     }
 
     [Fact]
@@ -186,7 +187,7 @@ public class WaterCorrectionTests(AuthApiFactory api) : IClassFixture<AuthApiFac
     public async Task Other_editors_are_shown_with_MSG58_until_they_cancel()
     {
         var z = await api.ZoneAsync();
-        var (manager, managerAccount) = await api.StaffAsync(z.Zone, edit: true);
+        var (manager, managerAccount) = await api.StaffAsync(z.Zone);
         var confirmed = await z.RecordedAsync(7m, 20m);
         var editing = $"/api/water-measurements/{confirmed.Id()}/editing";
 
@@ -211,7 +212,7 @@ public class WaterCorrectionTests(AuthApiFactory api) : IClassFixture<AuthApiFac
     public async Task Saving_clears_the_savers_editing_indicator()
     {
         var z = await api.ZoneAsync();
-        var (manager, _) = await api.StaffAsync(z.Zone, edit: true);
+        var (manager, _) = await api.StaffAsync(z.Zone);
         var confirmed = await z.RecordedAsync(7m, 20m);
         await manager.PostAsync($"/api/water-measurements/{confirmed.Id()}/editing", null);
 
@@ -222,12 +223,13 @@ public class WaterCorrectionTests(AuthApiFactory api) : IClassFixture<AuthApiFac
     }
 
     [Fact]
-    public async Task Staff_without_edit_or_outside_the_zone_cannot_correct_void_or_edit()
+    public async Task Staff_without_water_rights_or_outside_the_zone_cannot_correct_void_or_edit()
     {
         var z = await api.ZoneAsync();
         var confirmed = await z.RecordedAsync(7m, 20m);
-        var (viewer, _) = await api.StaffAsync(z.Zone, create: true);
-        var (outsider, _) = await api.StaffAsync((await api.ZoneAsync()).Zone, edit: true);
+        // WATER-02 is No for the Accountant (§I.4.4).
+        var (viewer, _) = await api.StaffAsync(z.Zone, StaffRole.Accountant);
+        var (outsider, _) = await api.StaffAsync((await api.ZoneAsync()).Zone);
 
         var responses = new[]
         {
@@ -240,7 +242,7 @@ public class WaterCorrectionTests(AuthApiFactory api) : IClassFixture<AuthApiFac
         foreach (var response in responses)
         {
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-            Assert.Equal("MSG02", await response.ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
         }
 
         Assert.Equal(StatusIds.WaterMeasurement.Confirmed, await api.QueryAsync(db => db.WaterMeasurements.Where(m => m.Id == confirmed.Id()).Select(m => m.StatusId).SingleAsync()));

@@ -9,14 +9,16 @@ Sibling repos: [omts-web](https://github.com/thaideptrai218/omts-web) · [omts-m
 
 ## Structure (Clean Architecture)
 
+Detailed folder responsibilities: [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md).
+
 ```
 src/
   OMTS.Domain/                 No dependencies.
     Common/                    Entity, AuditableEntity, IHasStatus
     Constants/                 StatusIds, StatusGroups (fixed Status catalog)
     Enums/
-    Entities/<Group>/          52 SRS entities by group: Identity, Farming, Cultivation, Sales,
-                               Traceability, AfterSales, Finance, Labor, Platform
+    Entities/<Group>/          Entities by group: Identity, Farming, Cultivation, Purchasing, Sales,
+                               Labor, Platform
   OMTS.Application/            Use cases and ports. Depends on Domain only (no EF Core).
     Common/Interfaces/         Ports: Persistence/ (IUnitOfWork, I*Repository), Identity/, ICurrentUser
     Common/Models/             Types the ports exchange (AccessToken, EffectiveGrant, ...)
@@ -26,9 +28,9 @@ src/
     Identity/                  JWT tokens, password hashing
     Persistence/               OmtsDbContext, UnitOfWork
       Configurations/<Group>/  One <Entity>Configuration per entity, same groups as Domain
-      Repositories/  Interceptors/  Seed/  Migrations/
+      Repositories/<Group>/  Interceptors/  Seed/  Migrations/
   OMTS.Api/                    HTTP endpoints, DI composition root.
-    Controllers/  Filters/  Extensions/  Services/  Common/
+    Controllers/<Feature>/  Filters/  Extensions/  Services/  Common/
 tests/
   OMTS.Domain.UnitTests/  OMTS.Application.UnitTests/
   OMTS.Api.IntegrationTests/   Infrastructure/ (test host, test-only endpoints), one folder per feature
@@ -70,14 +72,14 @@ on every `docker compose up` and creates nothing twice.
 | `thuonglai2` | Trader (Locked) | – | Refused: the account is locked |
 | `nhanvien.doimk` | Zone Manager | DEMO-01 | Logged in with `mustChangePassword = true` (change it first) |
 | `nhanvien.chuaxacthuc` | Zone Manager | DEMO-02 | Logged in with `phoneVerificationRequired = true` (verify the phone first) |
-| `nhanvien.hethan` | Zone Manager | DEMO-01, grant expired | Refused: no zone–role grant in effect |
+| `nhanvien.hethan` | Zone Manager | DEMO-01, pair revoked | Refused: no Effective zone–role pair (MSG-ACCOUNT-07) |
 
 A password you change stays changed: the seed never resets it. The Owner gets `Demo@1234` only while still on the
 bootstrap temporary password. To get every demo login back, reset the environment with `docker compose down -v`.
 
 The demo data also holds the cooperative profile, the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued),
 license documents (valid, expiring within 30 days, expired), about 10 rafts with lanes per zone, 8 employees (one Left),
-5 suppliers, 15 farming input items and 20 purchase receipts of the last 3 months with payments, discounts and a return.
+5 suppliers, 15 farming input items (codes VT001–VT015, every seed item counted in `con`) and 20 purchase receipts of the last 3 months with payments, discounts and a return.
 `DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰) and one water measurement a day for the
 30 days before the seed day: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
 26.0 ‰) and one voided reading. The mistyped 2.6 ‰ alerted before its correction, so the inboxes hold four sets of water
@@ -87,7 +89,7 @@ Dates are set relative to the day of the first seed and are not moved afterwards
 - After a few weeks the "expiring" license has expired. `docker compose down -v` gives fresh dates.
 - Receipt codes carry the seed date (`PR-<seed date>-nnn`), not the receipt date.
 - The last water measurement is from the day before the seed: a month later without new ones, the zones are overdue and
-  get the 06:00 reminder (MSG26).
+  get the 06:00 reminder (MSG-WATER-06).
 - The receipt list shows the current calendar year by default. Seeded in January–March, part of the history is in the
   previous year: pass `from`/`to` to see it.
 
@@ -100,7 +102,7 @@ sent stays in memory until the API restarts. Read it in the dev inbox, also list
 `docker compose logs -f api` shows each fake message's id and masked recipient, never the code.
 
 For example, `nhanvien.chuaxacthuc` (phone `0900000015`) logs in with `phoneVerificationRequired = true`, and its
-business calls answer MSG67 until the phone is verified. Logging in sends no code; with that login's access token:
+business calls answer MSG-ACCOUNT-04 until the phone is verified. Logging in sends no code; with that login's access token:
 1. `POST /api/me/phone-verification` with `{}` sends the code.
 2. `GET /api/dev/sms?phoneNumber=0900000015` shows it.
 3. `POST /api/verifications/{id}/verify` with `{ "code": "…" }` returns a verification token.
@@ -115,8 +117,9 @@ inbound TCP 8080 in the PC's firewall. The Android emulator reaches the PC at `h
 documents, raft drawings, invoice photos) are relative, signed paths such as `/api/files/local/...?expires=…&sig=…`.
 Prefix them with the API base URL.
 
-**Web app.** In Development `Cors:AllowedOrigins` allows `http://localhost:3000`, so the Next.js dev server can call the
-API from the browser. For another origin, add a line such as `Cors__AllowedOrigins__1: http://192.168.1.10:3000` under
+**Web app and Zalo Mini App.** In Development `Cors:AllowedOrigins` allows `http://localhost:3000` (the Next.js dev
+server) and `https://h5.zdn.vn` (Zalo serves every `zmp deploy` version of the Mini App, Development, Testing and
+published, from that origin). For another origin, add a line such as `Cors__AllowedOrigins__2: http://192.168.1.10:3000` under
 `environment` in `docker-compose.yml`, then run `docker compose up -d`.
 
 **Update, reset, stop.**
@@ -151,12 +154,62 @@ OMTS_TEST_SQLSERVER="Server=localhost;User Id=sa;Password=<pwd>;TrustServerCerti
 `POST /api/auth/login` (username, verified phone or verified email) returns a 15-minute access token and a
 refresh token (7 days web / 30 days mobile, rotated on every `POST /api/auth/refresh`); `POST /api/auth/logout`
 revokes the session. `GET /api/me` and `GET /api/me/permissions` return the caller and their effective
-zone-scoped permissions. Errors are RFC 7807 problem details whose `code` is the SRS message code
-(`MSG12`, `MSG69`…) and whose `detail` is the SRS English text.
+zone-scoped permissions. Errors are RFC 7807 problem details whose `title` and `code` are the message code of
+the SRS 27/10/2026 catalogue (`MSG-GEN-01`, `MSG-ACCOUNT-05`…) and whose `detail` is the SRS English text. For one
+release they also carry `legacyCode`, the old code of the same situation (`MSG01`, `MSG12`…), so web and mobile can
+switch on their own schedule. A few old codes have no SRS 27/10 message yet and are still sent as `code` (MSG05,
+MSG06, MSG19, MSG58, the technical codes `NOT_FOUND`, `UNEXPECTED_ERROR`…; full list in
+`MessageCodes.Legacy.KeptAsCode`). Success responses that carry a text carry its code next to it (`messageCode`,
+`noticeCode`).
 
 Dates and times are ISO 8601. A time sent without a UTC offset (`2026-10-20T08:00:00`, in JSON or a multipart field)
 is Vietnam time (UTC+7), never the server's time zone or UTC; `Z` or an offset such as `+07:00` is kept. Responses always
 carry the offset. Business dates (`from`/`to` filters, receipt dates) are Vietnam dates.
+
+### Roles and zone access
+
+OMTS has three fixed roles (BR-FARM-07): Cooperative Owner, Zone Manager and Accountant. They are not created, edited or
+discontinued: `GET /api/roles` lists the two staff roles with their `code` (`ZONE_MANAGER`, `ACCOUNTANT`) and their
+permissions, the static matrix of SRS §I.4.4 in `FixedRoles`. The Owner grants a staff account zone–role pairs
+(`POST /api/accounts/{id}/grants` with `role` (code) or `roleId`, and a `zoneId` or none for All zones). A pair is Effective
+until it is revoked with a reason; there are no validity dates. On records with a zone a role works only in the zones of
+its pairs; records with no zone (suppliers, supplier payments and debts, customers, payroll…) follow the role only, so an
+Accountant pair for one zone opens them (BR-FARM-08). A staff account without an Effective pair cannot log in.
+
+### Notifications
+
+Every notification a module sends is kept in the list of its recipient account, whatever the preferences and even when
+it could not be pushed (BR-ACCOUNT-12). Each type of `NotificationTypes.All` has a push policy and the roles it is sent
+to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the dispatcher refuses unregistered types.
+
+| Type | Content | Push | Roles |
+|---|---|---|---|
+| `WATER_ALERT` | MSG-WATER-03 | always (mandatory) | Owner, Zone Manager |
+| `WATER_ALERT_WITHDRAWN` | MSG-WATER-04 (not sent yet: WATER PR) | always (mandatory) | Owner, Zone Manager |
+| `WATER_MEASUREMENT_OVERDUE` | MSG-WATER-06 | unless turned off | Owner, Zone Manager |
+| `ZONE_LICENSE_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
+| `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (not sent yet: LABOR PR) | never: list only | Owner |
+
+- Preferences (ACCOUNT-07): `GET`/`PUT /api/me/notification-preferences` list the types of the roles the account
+  holds with `push` on or off (`items: [{ type, push }]`). Mandatory types are shown as always pushed and cannot be
+  turned off; list-only types are not offered. `pushAllowedOnDevice` is false when no device registered by a logged-in
+  session allows notifications; turning push on then still saves the choice and answers MSG-ACCOUNT-21 in `notice`.
+- List (ACCOUNT-08): `GET /api/me/notifications?unreadOnly=&page=&pageSize=` (newest first, `unreadCount` of the whole
+  list), `POST /api/me/notifications/{id}/read`, `POST /api/me/notifications/read-all`. A row keeps its English
+  `title`/`body` and the `messageCode` with `messageParams`, a JSON object of atomic values (never an English phrase) from
+  which the apps build the text in Vietnamese or English; a push carries the same code and parameters. Dates are ISO
+  dates, times ISO 8601 with the Vietnam offset:
+
+  | Code | `messageParams` |
+  |---|---|
+  | MSG-WATER-03 | `corrected` (bool), `zone_name`, `raft_code` (null: no raft yet, "–"), `measurement_time`, `values_outside`: `[{ indicator: PH \| SALINITY, value, unit: "‰" \| null, direction: High \| Low, min, max }]` |
+  | MSG-WATER-06 | `zone_name`, `last_date` |
+  | MSG-FARM-01 / MSG-FARM-02 | `document_type` (license type code), `document_number`, `zone_codes` (list), `expiry_date`, `days` (MSG-FARM-01 only) |
+- `GET /api/me/notifications/{id}/open` checks the access again (GFR-02): 403 MSG-GEN-08 when the user may no longer
+  open the record (e.g. a revoked zone–role pair), 404 MSG-ACCOUNT-22 when the record was removed. A push carries the
+  notification id.
+- The same table keeps SMS and Zalo OA sendings to traders (`channel`, phone, delivery status Sending / Sent / Not
+  sent, provider message id or error code); they are never in a list. No sender uses them yet (SALE-06, TRACE-04).
 
 ### Database (EF Core code-first)
 
@@ -187,7 +240,7 @@ The OCR Service of the water meter photos (ENV-01) is only faked until its provi
 ### Background jobs
 
 `WaterMeasurementOverdueJob` runs every day at 06:00 (Asia/Ho_Chi_Minh): each In Use zone without a Confirmed water
-measurement for more than one calendar month gets one MSG26 reminder per overdue period (Owners and the zone's staff
+measurement for more than one calendar month gets one MSG-WATER-06 reminder per overdue period (Owners and the zone's staff
 with View on `WATER_MEASUREMENTS`). Like the zone license reminder (07:00), a host started after the run time runs it
 once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A reminder already
 sent is never sent again.
@@ -213,22 +266,32 @@ created by a one-time command run on the server by the deployment operator (not 
    `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:DisplayName`, `Bootstrap:Owner:Username`,
    `Bootstrap:Owner:PhoneNumber`, `Bootstrap:Owner:Email` (optional), `Bootstrap:Owner:TemporaryPassword`.
 2. Run `dotnet OMTS.Api.dll seed --bootstrap` at handover time: it applies migrations, checks the status catalog, creates
-   the default roles (Zone Manager, Accountant) and, if no cooperative exists, the cooperative (Preliminary) and the
+   the rows of the two fixed roles (Zone Manager `ZONE_MANAGER`, Accountant `ACCOUNTANT`; their permissions are the
+   static §I.4.4 matrix, never stored) and, if no cooperative exists, the cooperative (Preliminary) and the
    Owner with the temporary password. The temporary password expires after 24 hours and must be changed at first login.
-   Running it again creates nothing that already exists ("already initialized", exit code 0); only a default role
-   whose name no longer exists (for example after a rename) is created again. Missing secrets give exit code 1 and the
+   Running it again creates nothing that already exists ("already initialized", exit code 0); the roles are found by
+   code. Missing secrets give exit code 1 and the
    names of the missing keys. `--demo` also seeds the demo data of "Run with Docker" (Development only; refused
    in any other environment).
+   Upgrading a database from before the fixed roles (migration `FixedRoles`): the rows named "Zone Manager" and
+   "Accountant" get the codes, other roles get a placeholder code (they are not listed, and their pairs give no
+   permission, login or zone any more), and the validity dates of the pairs are dropped, so expired and future pairs and
+   pairs of discontinued roles become Effective again; of two Effective copies of one pair only the newest stays. Down is
+   lossy (no stored permissions, every role In Use). Demo and test databases are not converted further: reset them
+   (`docker compose down -v`).
+   Upgrading a database from before the purchasing catalogue of SRS 27/10 (migration `PurchaseCatalogueV2`): the item
+   group `RaftMaterial` becomes `Material`, the supplier's free-text "other contacts" become its address, and the
+   migration stops when two farming input items have the same name (rename one first, or reset a demo database).
    An Owner who cannot log in (for example after missing the 24-hour window) is recovered with
    `dotnet OMTS.Api.dll seed --reset-owner-password`. It sets `Bootstrap:Owner:TemporaryPassword` (from configuration, never
    from the command line, so it never lands in shell history) as a new 24-hour temporary password that must be changed at
    first login, ends every session of the Owner and writes an audit row. Set a new value first: the Owner's current
    (expired) password is refused. With several Owners, `Bootstrap:Owner:Username`
    chooses one. Without an Owner, or without a valid password, it changes nothing and exits with code 1.
-3. Start the API and check `GET /health/ready`: 200 when the database, migrations, status catalog, default roles,
-   cooperative and an active Owner are all in place, else 503 listing the failing checks. This is a post-deployment
-   verification, **not** a platform probe: it depends on data the Owner can change (renaming a default role or locking the
-   only Owner turns it 503). Point App Service / Kubernetes readiness and load-balancer probes at `GET /health/db`
+3. Start the API and check `GET /health/ready`: 200 when the database, migrations, status catalog, the two fixed role
+   rows (by code), cooperative and an active Owner are all in place, else 503 listing the failing checks. This is a
+   post-deployment verification, **not** a platform probe: it depends on business data (locking the only Owner turns it
+   503). Point App Service / Kubernetes readiness and load-balancer probes at `GET /health/db`
    (database reachable and migrated). `GET /health` is liveness only.
 
 | Area | Keys |
@@ -236,13 +299,14 @@ created by a one-time command run on the server by the deployment operator (not 
 | Email (`Email:Provider` = `Smtp` or `Fake`; `Email:Smtp:Security` = `StartTls` (587), `SslOnConnect` (465) or `None`, which is refused outside Development) | `Email:Smtp:Host`, `Port`, `Security`, `Username`, `Password`, `FromAddress`, `FromName`, `TimeoutSeconds`, `Email:Fake:FailFor` |
 | SMS (`Sms:Provider` = `None`, the default: nothing is sent and phone verification cannot complete; `Fake` keeps messages in the dev inbox and is set in Development only) | `Sms:Fake:FailFor` (test numbers that fail) |
 | Push (`Push:Provider` = `None` by default, `Fake` in Development) | `Push:Fake:FailFor` |
-| OCR (`Ocr:Provider` unset by default: meter photos are not read and the values are entered by hand (MSG04); `Fake` invents readings, so it is set in Development only and stops the host elsewhere) | `Ocr:TimeoutSeconds` (default 15), `Ocr:UncertainBelow` (default 0.8), `Ocr:Fake:Mode` (`Success`, `Fail`, `Timeout`), `Ocr:Fake:Ph`, `Ocr:Fake:Salinity`, `Ocr:Fake:Confidence` |
+| OCR (`Ocr:Provider` unset by default: meter photos are not read and the values are entered by hand (MSG-WATER-01); `Fake` invents readings, so it is set in Development only and stops the host elsewhere) | `Ocr:TimeoutSeconds` (default 15), `Ocr:UncertainBelow` (default 0.8), `Ocr:Fake:Mode` (`Success`, `Fail`, `Timeout`), `Ocr:Fake:Ph`, `Ocr:Fake:Salinity`, `Ocr:Fake:Confidence` |
 | File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development; one container or folder per environment, see Background jobs) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
+| Zalo Mini App "Liên kết tài khoản" (`POST api/auth/zalo/link`, `zalo/login`, `DELETE api/me/zalo-link`; a trader without an account sends `zalo/trader-requests`, which the Cooperative Owner approves or refuses at `api/trader-requests`). `Zalo:Provider` unset by default: linking answers MSG04; `Graph` calls graph.zalo.me and needs the Zalo App secret (developers.zalo.me), the host does not start without it; `Fake` (Development only) accepts `fake:<zalo user id>` access tokens and `fake:<phone number>` phone tokens | `Zalo:Provider`, `Zalo:AppSecret` (user-secrets / `Zalo__AppSecret`), `Zalo:TimeoutSeconds` (default 10) |
 | Bootstrap (see Deployment) | `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:*` |
 | Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30) |
-| CORS: the web app calls the API from the browser. Set its origin in every deployed environment; empty means no CORS. Development allows `http://localhost:3000`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`) |
+| CORS: the web app and the Zalo Mini App call the API from the browser. Set their origins in every deployed environment; empty means no CORS. Development allows `http://localhost:3000` and `https://h5.zdn.vn`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`, `Cors__AllowedOrigins__1=https://h5.zdn.vn`) |
 | Reverse proxy: X-Forwarded-For is trusted only from these addresses (and loopback), so the limits see the real client | `ForwardedHeaders:KnownProxies` (e.g. `10.0.0.4`), `ForwardedHeaders:KnownNetworks` (e.g. `10.0.0.0/24`) |
-| Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG04 and a critical log entry is written (one number or address gets at most 10 codes per hour) | `Verification:DailySmsLimit` (default 500) |
+| Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG-ACCOUNT-13 and a critical log entry is written (one number or address gets at most 10 codes per hour) | `Verification:DailySmsLimit` (default 500) |
 | Zone license reminder (FARM-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
 | Overdue water measurement reminder (ENV-01, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
 | Orphan raft photo and license file clean-up (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |

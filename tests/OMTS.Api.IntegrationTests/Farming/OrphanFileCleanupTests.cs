@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Cooperatives;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Interfaces.Storage;
+using OMTS.Application.Features.Files.Models;
 using OMTS.Application.Features.Files;
 using OMTS.Infrastructure.Jobs;
 using static OMTS.Api.IntegrationTests.Farming.FarmingTestKit;

@@ -1,5 +1,5 @@
-using OMTS.Application.Features.WaterQuality;
 using OMTS.Application.Features.WaterQuality.Dtos;
+using OMTS.Application.Features.WaterQuality;
 
 namespace OMTS.Application.UnitTests.Features.WaterQuality;
 

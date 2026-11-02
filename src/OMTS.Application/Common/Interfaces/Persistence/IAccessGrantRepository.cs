@@ -1,30 +1,34 @@
-using OMTS.Application.Common.Models;
+using OMTS.Application.Features.Authorization.Models;
 using OMTS.Domain.Entities.Identity;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
 /// <summary>
-/// "Effective" means status Effective, within its validity period on <c>today</c>, and the role still
-/// In Use (BR-19); revoked or expired grants are never returned by the effective queries.
+/// Zone–role pairs (FARM-05). A pair is Effective until it is revoked (Effective / Revoked only). Only Effective pairs of
+/// a fixed role count for permissions, login and zone visibility: revoked pairs never do, nor pairs of a role row that is
+/// not a fixed role (an old Owner-made role kept by the FixedRoles migration).
 /// </summary>
 public interface IAccessGrantRepository
 {
-    Task<bool> HasEffectiveGrantAsync(Guid accountId, DateOnly today, CancellationToken cancellationToken);
+    /// <summary>Whether the account holds an Effective pair of a fixed role (staff log in only then).</summary>
+    Task<bool> HasEffectiveGrantAsync(Guid accountId, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<EffectiveGrant>> GetEffectiveGrantsAsync(Guid accountId, DateOnly today, CancellationToken cancellationToken);
+    /// <summary>The Effective pairs of a fixed role of the account, each with the permissions of its role (FixedRoles).</summary>
+    Task<IReadOnlyList<ZoneGrant>> GetEffectiveGrantsAsync(Guid accountId, CancellationToken cancellationToken);
 
-    /// <summary>Every grant of the account (history included), with role and zone loaded, newest first.</summary>
+    /// <summary>Every pair of the account (revoked and old-role ones included), with role and zone loaded, newest first.</summary>
     Task<IReadOnlyList<AccessGrant>> ListForAccountAsync(Guid accountId, CancellationToken cancellationToken);
+
+    /// <summary>The Effective pairs of a fixed role of the account, with role and zone loaded, newest first.</summary>
+    Task<IReadOnlyList<AccessGrant>> ListEffectiveForAccountAsync(Guid accountId, CancellationToken cancellationToken);
 
     Task<AccessGrant?> GetAsync(Guid grantId, Guid accountId, CancellationToken cancellationToken);
 
-    /// <summary>An Effective grant of the same account, zone and role whose period overlaps [from, to].</summary>
-    Task<AccessGrant?> FindOverlappingAsync(
-        Guid accountId, Guid? zoneId, Guid roleId, DateOnly from, DateOnly? to, CancellationToken cancellationToken);
-
-    /// <summary>Effective, not expired grants using the role, with their account loaded.</summary>
-    /// <summary>Effective grants of the role that apply today or will apply later (not yet started), with their accounts.</summary>
-    Task<IReadOnlyList<AccessGrant>> GetCurrentOrFutureForRoleAsync(Guid roleId, DateOnly today, CancellationToken cancellationToken);
+    /// <summary>
+    /// An Effective pair of the account with this role in this zone or in All zones (BR-FARM-08 (A): a pair for one
+    /// zone duplicates a pair of the same role for All zones). For an All zones request, only an All zones pair counts.
+    /// </summary>
+    Task<AccessGrant?> FindDuplicateAsync(Guid accountId, Guid roleId, Guid? zoneId, CancellationToken cancellationToken);
 
     void Add(AccessGrant grant);
 }

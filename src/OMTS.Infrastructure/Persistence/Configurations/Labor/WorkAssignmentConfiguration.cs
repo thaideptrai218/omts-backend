@@ -17,6 +17,9 @@ internal sealed class WorkAssignmentConfiguration : IEntityTypeConfiguration<Wor
         builder.ReferencesAccount(nameof(WorkAssignment.CancelledByAccountId));
 
         builder.Property(x => x.Task).HasMaxLength(Lengths.Address);
+        builder.HasOne(x => x.JobType).WithMany().HasForeignKey(x => x.JobTypeId);
+        builder.HasIndex(x => new { x.EmployeeId, x.WorkDate }).IsUnique()
+            .HasFilter("[EmployeeId] IS NOT NULL AND [CancelledAt] IS NULL AND [JobTypeId] IS NOT NULL");
         builder.Property(x => x.CancellationReason).HasMaxLength(Lengths.Reason);
         builder.HasIndex(x => new { x.ZoneId, x.WorkDate });
 

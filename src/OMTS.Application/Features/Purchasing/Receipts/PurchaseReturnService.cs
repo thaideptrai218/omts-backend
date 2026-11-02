@@ -1,3 +1,5 @@
+using OMTS.Application.Features.Purchasing.Models;
+using OMTS.Application.Features.Purchasing.Receipts.Dtos;
 using System.Globalization;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
@@ -15,22 +17,6 @@ using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Purchasing.Receipts;
-
-public sealed record ReturnLineInput(Guid? ReceiptLineId, decimal? Quantity);
-
-public sealed record CreatePurchaseReturnRequest(
-    DateOnly? ReturnDate,
-    string? Reason,
-    decimal? RefundAmount,
-    PaymentMethod? RefundMethod,
-    decimal? DebtReductionAmount,
-    IReadOnlyList<ReturnLineInput>? Lines);
-
-public sealed record PurchaseReturnLineView(Guid ReceiptLineId, string ItemCode, string ItemName, string Unit, decimal Quantity, decimal ReturnValue);
-
-public sealed record PurchaseReturnView(
-    Guid Id, string Code, Guid ReceiptId, string ReceiptCode, DateOnly ReturnDate, string Reason, decimal RefundAmount, PaymentMethod? RefundMethod,
-    decimal DebtReductionAmount, decimal ReturnValue, IReadOnlyList<PurchaseReturnLineView> Lines);
 
 /// <summary>
 /// INP-05 – return goods of a Completed receipt to the supplier: refund received, debt reduction, or both.
@@ -64,8 +50,8 @@ public sealed class PurchaseReturnService(
 
         if (receipt.StatusId != StatusIds.PurchaseReceipt.Completed)
         {
-            return AppError.Conflict(UserMessages.CannotChangeStatus(
-                "Purchase receipt", statusCatalog.DisplayNameOf(receipt.StatusId), "Returned", "only a Completed receipt can be returned"));
+            // Only a Completed receipt can be returned.
+            return AppError.Conflict(UserMessages.WrongStatus($"Purchase receipt {receipt.Code}", statusCatalog.DisplayNameOf(receipt.StatusId)));
         }
 
         var invalid = new List<string>();
@@ -202,24 +188,36 @@ public sealed class PurchaseReturnService(
         for (var i = 0; i < lines.Count; i++)
         {
             var line = receipt.Lines.First(l => l.Id == lines[i].ReceiptLineId);
-            if (lines[i].Quantity is not > 0)
+            if (lines[i].Quantity is null)
             {
-                return new AppError(ErrorKind.Validation, UserMessages.QuantityOrPriceInvalid, new Dictionary<string, object?> { ["field"] = $"Line {i + 1}" });
+                var field = $"Line {i + 1}";
+                return new AppError(
+                    ErrorKind.Validation, UserMessages.Invalid(field) with { LegacyCode = MessageCodes.Legacy.Msg59 }, new Dictionary<string, object?> { ["field"] = field });
             }
 
             var (stockedQuantity, unknown) = stocked.GetValueOrDefault(line.Id);
-            var returnable = PurchaseReceiptViews.Returnable(line, stockedQuantity, unknown, returned.GetValueOrDefault(line.Id));
-            if (lines[i].Quantity > returnable)
+            var lineReturned = returned.GetValueOrDefault(line.Id);
+            var returnable = PurchaseReceiptViews.Returnable(line, stockedQuantity, unknown, lineReturned);
+            // MSG-PURCHASE-03 with the limit of the line (MSG59 for a quantity not greater than 0, MSG45 above the limit before).
+            if (lines[i].Quantity is not > 0 || lines[i].Quantity > returnable)
             {
+                var seeded = stockedQuantity > 0 ? $", seeded {Quantity(stockedQuantity)} {line.Unit}" : string.Empty;
+                var explanation = unknown
+                    ? "The quantity already seeded from this line is not known."
+                    : $"Received {Quantity(line.Quantity)} {line.Unit}{seeded}, already returned {Quantity(lineReturned)} {line.Unit}.";
                 return new AppError(
                     ErrorKind.Validation,
-                    UserMessages.ExceedsLimit("Returned quantity", $"{returnable.ToString("0.###", CultureInfo.InvariantCulture)} {line.Unit}"),
+                    UserMessages.ReturnQuantityOutsideLimit(
+                        line.Item.Name, Quantity(returnable), line.Unit, explanation,
+                        lines[i].Quantity is not > 0 ? MessageCodes.Legacy.Msg59 : MessageCodes.Legacy.Msg45),
                     new Dictionary<string, object?> { ["field"] = $"Line {i + 1}", ["limit"] = returnable });
             }
         }
 
         return null;
     }
+
+    private static string Quantity(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 
     /// <summary>Refund + debt reduction = total return value; debt reduction ≤ outstanding; refund ≤ net paid.</summary>
     private static AppError? AmountError(decimal refund, decimal debtReduction, decimal total, ReceiptFigures figures)

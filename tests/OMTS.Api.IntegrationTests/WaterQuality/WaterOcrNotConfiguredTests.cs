@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -29,7 +29,7 @@ public class WaterOcrNotConfiguredTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var ocr = body.GetProperty("ocr");
         Assert.Equal("Failed", ocr.Text("status"));
-        Assert.Equal("MSG04", ocr.GetProperty("warning").Text("code"));
+        Assert.Equal("MSG-WATER-01", ocr.GetProperty("warning").Text("code"));
         foreach (var field in new[] { "ph", "salinity", "measuredAt" })
         {
             Assert.Equal(JsonValueKind.Null, ocr.GetProperty(field).ValueKind);
@@ -47,7 +47,7 @@ public class WaterOcrNotConfiguredTests
 
         var confirm = await z.Owner.PostAsJsonAsync($"/api/water-measurements/{stored.Id}/confirm", new { });
         Assert.Equal(HttpStatusCode.BadRequest, confirm.StatusCode);
-        Assert.Equal("MSG01", await confirm.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await confirm.ErrorCodeAsync());
     }
 
     [Fact]

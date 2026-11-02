@@ -1,3 +1,6 @@
+using OMTS.Application.Common.Models.Persistence;
+using OMTS.Application.Features.Farming.Rafts.Dtos;
+using OMTS.Application.Features.Farming.Rafts.Models;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
@@ -55,5 +58,5 @@ public sealed class RaftConditionService(IRaftRepository rafts, FarmingLookupAcc
     }
 
     private static SegmentSourceView Source(LaneSegmentDetail s) => new(
-        s.Id, s.Type, s.From, s.To, s.Date, s.RecordedBy, s.ConfirmedBy, s.SeedingEventId, s.SeedLotCode, s.HarvestEventId, s.LotId, s.WriteOffReason);
+        s.Id, s.Type, s.From, s.To, s.Date, s.RecordedBy, s.ConfirmedBy, s.SeedingEventId, s.SeedLotCode, s.WriteOffReason);
 }

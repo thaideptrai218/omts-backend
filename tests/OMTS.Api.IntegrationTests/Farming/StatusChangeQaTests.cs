@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -37,7 +37,7 @@ public class StatusChangeQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
         await (await owner.Client.PostAsJsonAsync($"{path}/reactivate", new { reason = "   ", rowVersion = discontinued.Text("rowVersion") }))
             .ReadAsync(HttpStatusCode.OK);
         var again = await owner.Client.PostAsJsonAsync($"{path}/reactivate", new { rowVersion = discontinued.Text("rowVersion") });
-        Assert.Equal("MSG61", await again.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-09", await again.ErrorCodeAsync());
 
         var audits = await factory.QueryAsync(db => db.AuditEvents.AsNoTracking()
             .Where(e => e.RecordId == record.Id() && e.Action != $"{recordType}.Created").OrderBy(e => e.OccurredAt).ToListAsync());

@@ -8,17 +8,6 @@ using OMTS.Infrastructure.Persistence.Seed;
 
 namespace OMTS.Infrastructure.HealthChecks;
 
-/// <summary>What one readiness check verifies after deployment (OMTS-200 "Deployment bootstrap check").</summary>
-public enum ReadinessCheckKind
-{
-    Database,
-    Migrations,
-    StatusCatalog,
-    DefaultRoles,
-    Cooperative,
-    CooperativeOwner,
-}
-
 /// <summary>
 /// One <c>/health/ready</c> check. Results carry no business data or configuration values; the endpoint
 /// only lists the names of failing checks.
@@ -64,9 +53,10 @@ internal sealed class DeploymentReadinessCheck(OmtsDbContext db, ReadinessCheckK
             && StatusCatalogSeed.Transitions.All(t => transitionIds.Contains(t.Id));
     }
 
+    // The rows of the fixed roles, by code (BR-FARM-07): nothing the Owner does can remove them.
     private async Task<bool> HasDefaultRolesAsync(CancellationToken cancellationToken)
     {
-        var names = DefaultRoles.All.Select(r => r.Name).ToList();
-        return await db.Roles.CountAsync(r => names.Contains(r.Name), cancellationToken) == names.Count;
+        var codes = FixedRoles.All.Select(r => r.Code).ToList();
+        return await db.Roles.CountAsync(r => codes.Contains(r.Code), cancellationToken) == codes.Count;
     }
 }

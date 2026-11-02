@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Models.Ocr;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;

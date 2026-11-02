@@ -1,6 +1,6 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +9,7 @@ using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Features.Authorization;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Enums;
 using OMTS.Infrastructure.Messaging.Fakes;
 using OMTS.Infrastructure.Persistence;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
@@ -32,7 +33,7 @@ public class AcsSqlServerTests
         await using var api = new SqlServerApiFactory(database);
         var owner = await api.AddAccountAsync(NewCode(), Password);
         var client = await LoginAsync(api, owner.Username);
-        var (zoneId, roleId) = await SeedZoneAndRoleAsync(database);
+        var (zoneId, roleId) = await SeedZoneAndRoleAsync(database, api);
         var username = $"s{NewCode()}";
 
         var responses = await Task.WhenAll(Enumerable.Range(0, 4)
@@ -42,7 +43,7 @@ public class AcsSqlServerTests
         foreach (var refused in responses.Where(r => r.StatusCode != HttpStatusCode.Created))
         {
             Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
-            Assert.Equal("MSG03", await refused.ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-02", await refused.ErrorCodeAsync());
         }
 
         Assert.Equal(1, await ReadAsync(database, db => db.Accounts.CountAsync(a => a.Username == username)));
@@ -69,7 +70,7 @@ public class AcsSqlServerTests
         Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Created);
         var refused = responses.Single(r => r.StatusCode != HttpStatusCode.Created);
         Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
-        Assert.Equal("MSG14", await refused.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-03", await refused.ErrorCodeAsync());
         Assert.Equal(1, await ReadAsync(database, db => db.Accounts.CountAsync(a => a.PhoneNumber == phone)));
     }
 
@@ -127,7 +128,7 @@ public class AcsSqlServerTests
         await using var api = new SqlServerApiFactory(database);
         var owner = await api.AddAccountAsync(NewCode(), Password);
         var client = await LoginAsync(api, owner.Username);
-        var (zoneId, roleId) = await SeedZoneAndRoleAsync(database);
+        var (zoneId, roleId) = await SeedZoneAndRoleAsync(database, api);
         var username = $"s{NewCode()}";
         var phone = NewPhone();
         var created = await client.PostAsJsonAsync("/api/accounts", StaffBody(username, zoneId, roleId, phone));
@@ -218,16 +219,13 @@ public class AcsSqlServerTests
         return client;
     }
 
-    private static async Task<(Guid ZoneId, Guid RoleId)> SeedZoneAndRoleAsync(SqlServerTestDatabase database)
+    private static async Task<(Guid ZoneId, Guid RoleId)> SeedZoneAndRoleAsync(SqlServerTestDatabase database, SqlServerApiFactory api)
     {
         await using var db = database.CreateContext();
         var zone = new FarmingZone { Code = NewCode(), Name = "Zone", Cooperative = new Cooperative { FullName = "HTX Trung Nam" } };
-        var role = new Role { Name = $"Role {NewCode()}" };
-        role.Permissions.Add(new RolePermission { FunctionCode = PermissionFunctions.WaterMeasurements, CanView = true, CanCreate = true, CanEdit = false });
         db.FarmingZones.Add(zone);
-        db.Roles.Add(role);
         await db.SaveChangesAsync();
-        return (zone.Id, role.Id);
+        return (zone.Id, (await api.RoleAsync(StaffRole.ZoneManager)).Id);
     }
 
     private static async Task SeedCooperativeAsync(SqlServerTestDatabase database)
@@ -283,7 +281,7 @@ public class AcsSqlServerTests
         await using var api = new SqlServerApiFactory(database);
         var owner = await api.AddAccountAsync(NewCode(), Password);
         var client = await LoginAsync(api, owner.Username);
-        var (zoneId, roleId) = await SeedZoneAndRoleAsync(database);
+        var (zoneId, roleId) = await SeedZoneAndRoleAsync(database, api);
         var username = $"s{NewCode()}";
 
         var responses = await Task.WhenAll(Enumerable.Range(0, 4)

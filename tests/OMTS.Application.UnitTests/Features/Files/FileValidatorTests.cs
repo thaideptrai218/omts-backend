@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Files.Models;
 using OMTS.Application.Features.Files;
 
 namespace OMTS.Application.UnitTests.Features.Files;

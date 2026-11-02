@@ -13,7 +13,7 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Accounts;
 
 /// <summary>
-/// ACS-02 phone step: traders and staff need a verified phone number before other functions (MSG67).
+/// ACS-02 phone step: traders and staff need a verified phone number before other functions (MSG-ACCOUNT-04).
 /// A trader enters a number; staff confirm the number the Owner entered or enter another one.
 /// </summary>
 public sealed class PhoneVerificationService(
@@ -40,9 +40,14 @@ public sealed class PhoneVerificationService(
 
         var input = request.PhoneNumber ?? (account.SubjectType == SubjectType.Staff ? account.PhoneNumber : null);
         var phone = PhoneNumbers.Normalize(input);
-        if (phone is null || await IsUsedByAnotherAccountAsync(phone, account.Id, cancellationToken))
+        if (phone is null)
         {
             return AppError.Invalid("Phone number");
+        }
+
+        if (await IsUsedByAnotherAccountAsync(phone, account.Id, cancellationToken))
+        {
+            return PhoneUsedByAnotherAccount();
         }
 
         return await verification.StartAsync(VerificationPurpose.VerifyPhone, VerificationChannel.Sms, phone, account.Id, cancellationToken);
@@ -72,7 +77,7 @@ public sealed class PhoneVerificationService(
         var phone = token.Value!.Target;
         if (await IsUsedByAnotherAccountAsync(phone, account.Id, cancellationToken))
         {
-            return AppError.Invalid("Phone number");
+            return PhoneUsedByAnotherAccount();
         }
 
         var before = new { account.PhoneNumber, account.PhoneVerifiedAt };
@@ -88,9 +93,14 @@ public sealed class PhoneVerificationService(
             After = new { account.PhoneNumber, account.PhoneVerifiedAt, OldDocumentsHidden = hidden },
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return new ContactConfirmed(phone, hidden, hidden ? UserMessages.OldDocumentsHidden.Text : null);
+        var notice = hidden ? UserMessages.OldDocumentsHidden : null;
+        return new ContactConfirmed(phone, hidden, notice?.Text, notice?.Code);
     }
 
     private async Task<bool> IsUsedByAnotherAccountAsync(string phone, Guid accountId, CancellationToken cancellationToken) =>
         await accounts.FindByPhoneAsync(phone, cancellationToken) is { } owner && owner.Id != accountId;
+
+    /// <summary>MSG-ACCOUNT-09 (MSG01 before).</summary>
+    private static AppError PhoneUsedByAnotherAccount() =>
+        AppError.UsedByAnotherAccount(ErrorKind.Validation, "Phone number", MessageCodes.Legacy.Msg01);
 }

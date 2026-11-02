@@ -2,7 +2,7 @@ using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
-using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Entities.Farming;
 using OMTS.Infrastructure.Persistence;
 
 namespace OMTS.Api.IntegrationTests.Persistence;
@@ -13,11 +13,11 @@ public class AuditableEntityStampTests(AuthApiFactory factory) : IClassFixture<A
     public async Task Save_stamps_creation_once_and_every_update()
     {
         var before = DateTimeOffset.UtcNow.AddSeconds(-1);
-        var role = await factory.AddRoleAsync($"Role {Guid.NewGuid():N}");
-        var created = await LoadAsync(role.Id);
+        var zone = await factory.AddZoneAsync(Guid.NewGuid().ToString("N")[..10]);
+        var created = await LoadAsync(zone.Id);
 
-        await factory.UpdateAsync<Role>(role.Id, r => r.Description = "changed");
-        var updated = await LoadAsync(role.Id);
+        await factory.UpdateAsync<FarmingZone>(zone.Id, z => z.Name = "changed");
+        var updated = await LoadAsync(zone.Id);
 
         Assert.True(created.CreatedAt >= before);
         Assert.Null(created.UpdatedAt);
@@ -42,9 +42,9 @@ public class AuditableEntityStampTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Null(stored.UpdatedAt);
     }
 
-    private async Task<Role> LoadAsync(Guid id)
+    private async Task<FarmingZone> LoadAsync(Guid id)
     {
         using var scope = factory.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<OmtsDbContext>().Roles.AsNoTracking().SingleAsync(r => r.Id == id);
+        return await scope.ServiceProvider.GetRequiredService<OmtsDbContext>().FarmingZones.AsNoTracking().SingleAsync(z => z.Id == id);
     }
 }

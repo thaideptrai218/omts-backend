@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OMTS.Api.Filters;
-using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Authorization;
 
 namespace OMTS.Api.IntegrationTests.Infrastructure;
 
@@ -20,7 +20,7 @@ public sealed class TestOnlyAuthorizationController : ControllerBase
     public IActionResult CreateWaterMeasurement(Guid zoneId) => Ok(new { zoneId });
 
     [HttpGet("supplier-payments")]
-    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.View, PermissionScope.AllZones)]
+    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.View, PermissionScope.NoZone)]
     public IActionResult ViewSupplierPayments() => Ok();
 
     [HttpPost("change-password")]

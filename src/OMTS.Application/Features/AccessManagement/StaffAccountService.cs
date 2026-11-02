@@ -270,9 +270,7 @@ public sealed class StaffAccountService(
 
         if (account.StatusId != from)
         {
-            var current = statusCatalog.DisplayNameOf(account.StatusId);
-            return AppError.Conflict(UserMessages.CannotChangeStatus(
-                "Account", current, statusCatalog.DisplayNameOf(to), $"the account is already {current.ToLowerInvariant()}"));
+            return AppError.Conflict(UserMessages.WrongStatus("Account", statusCatalog.DisplayNameOf(account.StatusId)));
         }
 
         account.StatusId = to;
@@ -315,12 +313,12 @@ public sealed class StaffAccountService(
 
         if (await accounts.FindByUsernameAsync(normalizedUsername, cancellationToken) is { } sameUsername && sameUsername.Id != accountId)
         {
-            return AppError.AlreadyExists("Username", sameUsername.Id);
+            return AppError.UsedByAnotherAccount(ErrorKind.Conflict, "Username", MessageCodes.Legacy.Msg03, sameUsername.Id);
         }
 
         if (await accounts.FindByPhoneAsync(phone, cancellationToken) is { } samePhone && samePhone.Id != accountId)
         {
-            return AppError.AlreadyExists("Phone number", samePhone.Id);
+            return AppError.UsedByAnotherAccount(ErrorKind.Conflict, "Phone number", MessageCodes.Legacy.Msg03, samePhone.Id);
         }
 
         return (name, normalizedUsername, phone, normalizedEmail);

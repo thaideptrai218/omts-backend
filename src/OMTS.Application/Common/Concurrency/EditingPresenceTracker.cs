@@ -1,7 +1,5 @@
-namespace OMTS.Application.Common.Concurrency;
 
-/// <summary>Someone with the edit form of a record open since <see cref="StartedAt"/>.</summary>
-public sealed record RecordEditor(Guid AccountId, string Name, DateTimeOffset StartedAt);
+namespace OMTS.Application.Common.Concurrency;
 
 /// <summary>
 /// "Someone is editing" indicator without locking (NFR-13, MSG58). Kept in memory: an entry lives until it

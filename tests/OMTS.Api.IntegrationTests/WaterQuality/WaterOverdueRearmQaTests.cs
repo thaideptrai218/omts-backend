@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -72,7 +72,8 @@ public class WaterOverdueRearmQaTests
     {
         await using var api = new WaterApiFactory();
         var z = await api.ZoneAsync();
-        var measuredAt = DateTimeOffset.UtcNow.AddDays(-40);
+        // Keep all corrections on one Vietnam business date, even when CI runs just before midnight.
+        var measuredAt = new DateTimeOffset(Today.AddDays(-40).ToDateTime(new TimeOnly(6, 0)), TimeSpan.FromHours(7));
         var first = await z.RecordedAsync(7m, 20m, measuredAt: measuredAt);
         await RunAsync(api, Today);
 

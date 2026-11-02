@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Interfaces.Storage;
+using OMTS.Application.Common.Models.Storage;
+using OMTS.Application.Features.Files.Models;
 using OMTS.Application.Features.Files;
 using OMTS.Domain.Common;
 using OMTS.Infrastructure.Persistence;
