@@ -143,13 +143,14 @@ public class TraderRequestTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var items = (await (await owner.GetAsync("/api/me/notifications?pageSize=2")).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("items");
         var first = items[0].GetProperty("id").GetGuid();
 
-        Assert.Equal(HttpStatusCode.NoContent, (await owner.PostAsync($"/api/me/notifications/{first}/read", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await owner.PostAsync($"/api/me/notifications/{first}/read", null)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await owner.PostAsync($"/api/me/notifications/{Guid.NewGuid()}/read", null)).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await owner.PostAsync("/api/me/notifications/read-all", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await owner.PostAsync("/api/me/notifications/read-all", null)).StatusCode);
 
         var after = await (await owner.GetAsync("/api/me/notifications")).Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(0, after.GetProperty("unreadCount").GetInt32());
-        await (await owner.GetAsync("/api/me/notifications?pageSize=1000")).SrsProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01", "MSG01");
+        var clamped = await owner.GetFromJsonAsync<JsonElement>("/api/me/notifications?pageSize=1000");
+        Assert.Equal(100, clamped.GetProperty("pageSize").GetInt32());
     }
 
     /// <summary>A logged-in Cooperative Owner of the test cooperative (approval links the trader's customer profile).</summary>

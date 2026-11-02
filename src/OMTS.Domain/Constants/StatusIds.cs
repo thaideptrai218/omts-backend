@@ -78,4 +78,11 @@ public static class StatusIds
         public const int Recorded = 1801;
         public const int Cancelled = 1802;
     }
+
+    public static class MessageDelivery
+    {
+        public const int Sending = 1601;
+        public const int Sent = 1602;
+        public const int NotSent = 1603;
+    }
 }

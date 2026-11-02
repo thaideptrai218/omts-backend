@@ -195,7 +195,7 @@ public class ZaloLinkTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
     private async Task<Account> AddStaffAsync(Action<Account> configure)
     {
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff, configure);
-        var role = await factory.AddRoleAsync($"Role {NewCode()}");
+        var role = StaffRole.ZoneManager;
         await factory.GrantAsync(staff, role, null);
         return staff;
     }

@@ -82,7 +82,7 @@ public sealed class TestRoleService(
             Reason = "Explicit role testing by the configured linked Owner",
         });
         // Normal CreateSession persists the persona, grant, profile, audit and revoked old session together.
-        return await auth.CreateSessionAsync(target, ClientType.Mobile, "Zalo · thử vai trò", client, ct);
+        return await auth.CreateSessionAsync(target, ClientType.Mobile, "Zalo Â· thá»­ vai trÃ²", client, ct);
     }
 
     private async Task<Result<Account>> AuthorizeAsync(CancellationToken ct)
@@ -104,10 +104,10 @@ public sealed class TestRoleService(
 
     private Account CreatePersona(Account owner, string role)
     {
-        var name = role switch { "Trader" => "Thương lái thử", "ZoneManager" => "Quản lý vùng thử", _ => "Nhân viên thử" };
+        var name = role switch { "Trader" => "ThÆ°Æ¡ng lÃ¡i thá»­", "ZoneManager" => "Quáº£n lÃ½ vÃ¹ng thá»­", _ => "NhÃ¢n viÃªn thá»­" };
         var account = new Account
         {
-            Username = Username(role), DisplayName = name + " · " + owner.DisplayName[..Math.Min(owner.DisplayName.Length, 160)],
+            Username = Username(role), DisplayName = name + " Â· " + owner.DisplayName[..Math.Min(owner.DisplayName.Length, 160)],
             SubjectType = role == "Trader" ? SubjectType.Trader : SubjectType.Staff,
             PasswordHash = passwordHasher.Hash(Convert.ToBase64String(RandomNumberGenerator.GetBytes(48))),
             // Identity was verified by the linked Owner; the internal persona has no public login identifier.
@@ -119,30 +119,11 @@ public sealed class TestRoleService(
 
     private async Task EnsureZoneGrantAsync(Account account, Guid ownerId, CancellationToken ct)
     {
-        var name = "Dev Zone Manager " + ownerId.ToString("N");
-        var role = await roles.FindByNameAsync(name, ct);
-        if (role is null)
-        {
-            role = new Role { Name = name, Description = "Development test persona; not assigned to real staff." };
-            foreach (var p in DefaultRoles.ZoneManager.Permissions)
-            {
-                var actions = DefaultRoles.ActionsOf(p);
-                role.Permissions.Add(new RolePermission { FunctionCode = p.FunctionCode,
-                    CanView = actions.Contains(OMTS.Application.Features.Authorization.Models.PermissionAction.View),
-                    CanCreate = actions.Contains(OMTS.Application.Features.Authorization.Models.PermissionAction.Create),
-                    CanEdit = actions.Contains(OMTS.Application.Features.Authorization.Models.PermissionAction.Edit),
-                    CanDelete = actions.Contains(OMTS.Application.Features.Authorization.Models.PermissionAction.Delete),
-                    OtherPermissions = actions.Where(a => a is not (OMTS.Application.Features.Authorization.Models.PermissionAction.View
-                        or OMTS.Application.Features.Authorization.Models.PermissionAction.Create
-                        or OMTS.Application.Features.Authorization.Models.PermissionAction.Edit
-                        or OMTS.Application.Features.Authorization.Models.PermissionAction.Delete)).Select(a => a.ToString().ToUpperInvariant()).ToList() });
-            }
-            roles.Add(role);
-        }
-        var today = DateOnly.FromDateTime(clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime);
-        if (!await grants.HasEffectiveGrantAsync(account.Id, today, ct))
+        var role = await roles.FindByCodeAsync(FixedRoles.ZoneManagerCode, ct)
+            ?? throw new InvalidOperationException("The fixed Zone Manager role must be seeded before test personas.");
+        if (!await grants.HasEffectiveGrantAsync(account.Id, ct))
             grants.Add(new AccessGrant { AccountId = account.Id, RoleId = role.Id, ScopeType = AccessScopeType.AllZones,
-                EffectiveFrom = today, GrantedByAccountId = ownerId });
+                GrantedByAccountId = ownerId });
     }
 
     private string Username(string role) => TestRoleNames.Username(options.Value.OwnerAccountId, role);

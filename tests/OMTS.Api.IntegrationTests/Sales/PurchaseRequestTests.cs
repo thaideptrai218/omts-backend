@@ -143,7 +143,7 @@ public sealed class PurchaseRequestTests(AuthApiFactory factory) : IClassFixture
     {
         var (trader, _, product) = await BuyerAsync(); var row = await SubmitAsync(trader, product);
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        var role = await factory.AddRoleAsync(NewCode(), (PermissionFunctions.PurchaseRequests, true, true, true));
+        var role = StaffRole.ZoneManager;
         await factory.GrantAsync(staff, role, null); var client = await factory.LoginAsync(staff.Username);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/purchase-requests")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/response", Accept(row))).StatusCode);

@@ -51,7 +51,7 @@ public sealed class WorkforceTests(AuthApiFactory factory) : IClassFixture<AuthA
         var (_, ownerAccount, employee, raft, job) = await SetupAsync();
         var zone = await factory.AddZoneAsync(NewCode());
         var manager = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        var role = await factory.AddRoleAsync(NewCode(), (PermissionFunctions.WorkAssignments, true, true, true), (PermissionFunctions.Attendance, true, true, true));
+        var role = StaffRole.ZoneManager;
         await factory.GrantAsync(manager, role, zone);
         var client = await factory.LoginAsync(manager.Username);
         var response = await client.PostAsJsonAsync("/api/workforce/assignments", new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } });
@@ -181,18 +181,17 @@ public sealed class WorkforceTests(AuthApiFactory factory) : IClassFixture<AuthA
     }
 
     [Fact]
-    public async Task Attendance_only_grant_can_read_roster_but_cannot_assign_work()
+    public async Task Accountant_fixed_role_cannot_read_roster_or_assign_work()
     {
         var (owner, _, employee, raft, job) = await SetupAsync();
         await Success(await owner.PostAsJsonAsync("/api/workforce/assignments", new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } }));
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        var role = await factory.AddRoleAsync(NewCode(), (PermissionFunctions.Attendance, true, true, false));
+        var role = StaffRole.Accountant;
         var zone = await factory.QueryAsync(db => db.FarmingZones.SingleAsync(z => z.Id == raft.ZoneId));
         await factory.GrantAsync(staff, role, zone);
         var client = await factory.LoginAsync(staff.Username);
-        await Success(await client.GetAsync("/api/workforce/lookups"));
-        var rows = await client.GetFromJsonAsync<JsonElement>($"/api/workforce/assignments?day={Today:yyyy-MM-dd}");
-        Assert.Single(rows.EnumerateArray());
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/workforce/lookups")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/api/workforce/assignments?day={Today:yyyy-MM-dd}")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/workforce/assignments",
             new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } })).StatusCode);
     }

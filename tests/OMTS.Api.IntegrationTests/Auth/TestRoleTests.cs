@@ -28,6 +28,7 @@ public sealed class TestRoleTests(AuthApiFactory factory) : IClassFixture<AuthAp
     {
         var owner = await OwnerAsync();
         await factory.EnsureCooperativeAsync();
+        await factory.EnsureFixedRolesAsync();
         using var host = Enabled(owner.Id);
         var client = await LoginInAsync(host, owner.Username);
         var other = await factory.AddAccountAsync(NewCode(), Password);
@@ -86,6 +87,7 @@ public sealed class TestRoleTests(AuthApiFactory factory) : IClassFixture<AuthAp
     {
         var owner = await OwnerAsync();
         await factory.EnsureCooperativeAsync();
+        await factory.EnsureFixedRolesAsync();
         using var host = Enabled(owner.Id);
         var client = await LoginInAsync(host, owner.Username);
         var response = await client.PostAsJsonAsync("/api/me/test-role", new { role = "ZoneManager" });

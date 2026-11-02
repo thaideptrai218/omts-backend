@@ -100,10 +100,10 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         var owner = await factory.AddAccountAsync(NewCode(), Password);
         var client = await factory.LoginAsync(owner.Username);
 
-        var saved = await (await client.PutAsJsonAsync("/api/me/notification-preferences", new { items = new[] { new { category = "WORK", channel = "InApp", enabled = true } } }))
+        var saved = await (await client.PutAsJsonAsync("/api/me/notification-preferences", new { items = new[] { new { type = "WATER_MEASUREMENT_OVERDUE", push = false } } }))
             .BodyAsync(HttpStatusCode.OK);
 
-        Assert.Equal(("Notification settings saved.", "MSG-GEN-05"), (saved.Str("message"), saved.Str("messageCode")));
+        Assert.Equal(("Notification preferences saved.", "MSG-GEN-05"), (saved.Str("message"), saved.Str("messageCode")));
         Assert.Equal(JsonValueKind.Null, saved.GetProperty("notice").ValueKind);
         Assert.Equal(JsonValueKind.Null, saved.GetProperty("noticeCode").ValueKind);
     }
@@ -280,9 +280,8 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
     {
         var other = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
         var zone = await factory.AddZoneAsync(NewCode());
-        var role = await factory.AddRoleAsync($"R {NewCode()}", (PermissionFunctions.WaterMeasurements, View: true, Create: false, Edit: false));
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff, a => a.PhoneVerifiedAt = null);
-        await factory.GrantAsync(staff, role, zone);
+        await factory.GrantAsync(staff, StaffRole.ZoneManager, zone);
         var staffClient = await factory.LoginAsync(staff.Username);
         var owner = await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Password)).Username);
 

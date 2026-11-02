@@ -3,6 +3,7 @@ namespace OMTS.Domain.Constants;
 /// <summary>Status groups of the Status catalog: the life-cycle groups in use plus the shared USAGE group.</summary>
 public static class StatusGroups
 {
+    public const string MessageDelivery = "MESSAGE_DELIVERY";
     public const string PurchaseRequest = "PURCHASE_REQUEST";
     public const string Usage = "USAGE";
     public const string Cooperative = "COOPERATIVE";

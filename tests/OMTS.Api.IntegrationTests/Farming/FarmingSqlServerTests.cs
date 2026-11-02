@@ -193,9 +193,9 @@ public class FarmingSqlServerTests
         var job = host.Api.Services.GetRequiredService<ZoneLicenseReminderJob>();
         Assert.Equal(1, await job.RunOnceAsync(Today));
         Assert.Equal(0, await job.RunOnceAsync(Today));
-        var code = license.Id().ToString();
+        var licenseId = license.Id();
         var recipients = await host.QueryAsync(db => db.Notifications
-            .Where(n => n.Type == NotificationTypes.ZoneLicenseExpiry && n.RelatedRecordCode == code).Select(n => n.RecipientAccountId).ToListAsync());
+            .Where(n => n.Type == NotificationTypes.ZoneLicenseExpiry && n.RelatedRecordId == licenseId).Select(n => n.RecipientAccountId).ToListAsync());
         Assert.Equal(new[] { host.Owner.Account.Id, staff.Account.Id }.Order(), recipients.Order());
     }
 

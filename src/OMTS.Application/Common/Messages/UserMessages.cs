@@ -1,3 +1,4 @@
+using System.Globalization;
 using OMTS.Domain.Entities.Identity;
 using static OMTS.Application.Common.Messages.MessageCodes;
 
@@ -12,6 +13,9 @@ namespace OMTS.Application.Common.Messages;
 /// </summary>
 public static class UserMessages
 {
+    // Compatibility for approved module notifications that have not received a catalogue code.
+    internal static UserMessage LegacyNotification(string? body) => new("", body ?? "");
+
     // ---- MSG-GEN ----
 
     /// <summary>MSG-GEN-01: a mandatory field is missing or a value is invalid.</summary>
@@ -24,10 +28,6 @@ public static class UserMessages
     /// <summary>MSG-GEN-03 (GFR-01): a file upload failed. Old code MSG05 (or MSG04 where the caller says so).</summary>
     public static readonly UserMessage UploadFailed = new(
         Gen03, "The file could not be uploaded. Your other entries are kept; please try again.", Legacy.Msg05);
-
-    /// <summary>MSG-GEN-04 for a role edit (the roles become fixed in a later PR).</summary>
-    public static readonly UserMessage ConfirmRoleEdit = new(
-        Gen04, "Are you sure you want to edit this role? This action is recorded in the audit log.", Legacy.Msg09);
 
     /// <summary>MSG-GEN-05: a record is saved.</summary>
     public static UserMessage Saved(string what) => new(Gen05, $"{what} saved.", Legacy.Msg10);
@@ -51,6 +51,30 @@ public static class UserMessages
     public static UserMessage NoDataForFilters(string filterDescription) => new(
         Gen10, $"There is no data for the {filterDescription} you chose. Please choose again.", Legacy.Msg08);
 
+    // ---- MSG-FARM ----
+
+    /// <summary>MSG-FARM-01 (GFR-03): notification to the Owner when a license becomes Expiring soon.</summary>
+    /// <param name="documentType">License type code (stored), e.g. AQUACULTURE_LICENSE.</param>
+    /// <param name="documentTypeName">Its English name, for the text.</param>
+    /// <param name="zoneCodes">Codes of the zones the license covers.</param>
+    public static UserMessage LicenseExpiringSoon(
+        string documentType, string documentTypeName, string documentNumber, IReadOnlyList<string> zoneCodes, DateOnly expiryDate, int days) => new(
+        Farm01,
+        $"{LicenseDocument(documentTypeName, documentNumber, zoneCodes)} expires on {Date(expiryDate)}, in {days} days. Please renew it and record the new one.",
+        Legacy.Msg25)
+    {
+        Parameters = LicenseParameters(documentType, documentNumber, zoneCodes, expiryDate, days),
+    };
+
+    /// <summary>MSG-FARM-02 (GFR-03): notification to the Owner when a license becomes Expired.</summary>
+    public static UserMessage LicenseExpired(
+        string documentType, string documentTypeName, string documentNumber, IReadOnlyList<string> zoneCodes, DateOnly expiryDate) => new(
+        Farm02,
+        $"{LicenseDocument(documentTypeName, documentNumber, zoneCodes)} expired on {Date(expiryDate)}. Please renew it and record the new one.",
+        Legacy.Msg25)
+    {
+        Parameters = LicenseParameters(documentType, documentNumber, zoneCodes, expiryDate, days: null),
+    };
     // ---- MSG-WATER ----
 
     /// <summary>MSG-WATER-01 (WATER-01.2): the OCR Service read nothing, or did not answer.</summary>
@@ -58,10 +82,39 @@ public static class UserMessages
     public static UserMessage OcrValuesNotRead(string indicatorList) => new(
         Water01, $"OMTS could not read {indicatorList} from the photo. Please look at the meter and type in the missing values.", Legacy.Msg04);
 
+    /// <summary>MSG-WATER-03 (BR-WATER-05): the water alert notification.</summary>
+    /// <param name="corrected">The alert of a corrected measurement: "(corrected measurement)" in the text.</param>
+    /// <param name="raftCode">Null while measurements have no raft ("–" in the text).</param>
+    /// <param name="measuredAt">Shown in Vietnam time.</param>
+    /// <param name="valuesOutside">Each value outside with its allowed range.</param>
+    public static UserMessage WaterAlert(
+        bool corrected, string zoneName, string? raftCode, DateTimeOffset measuredAt, IReadOnlyList<WaterValueOutside> valuesOutside) => new(
+        Water03,
+        $"Water alert{(corrected ? " (corrected measurement)" : "")}: zone {zoneName}, raft {raftCode ?? "–"}, measured on {BusinessClock.Format(measuredAt)}. "
+            + $"{string.Join("; ", valuesOutside.Select(v => v.Describe()))}. Please check the water.",
+        Legacy.Msg27)
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["corrected"] = corrected,
+            ["zone_name"] = zoneName,
+            ["raft_code"] = raftCode,
+            ["measurement_time"] = measuredAt.ToOffset(BusinessClock.UtcOffset),
+            ["values_outside"] = valuesOutside,
+        },
+    };
     /// <summary>MSG-WATER-05: the minimum of an indicator is not less than its maximum.</summary>
     /// <param name="indicator">e.g. "pH", or "pH and salinity" when both are wrong.</param>
     public static UserMessage MinimumNotLessThanMaximum(string indicator) => new(
         Water05, $"The minimum of {indicator} must be less than the maximum. The thresholds were not saved. Please correct the values.", Legacy.Msg28);
+
+    /// <summary>MSG-WATER-06 (GFR-04): reminder to measure the water of a zone.</summary>
+    /// <param name="lastDate">The business day of the latest measurement, or the start of the overdue period when there is none.</param>
+    public static UserMessage WaterMeasurementOverdue(string zoneName, DateOnly lastDate) => new(
+        Water06, $"Zone {zoneName} has had no water measurement since {Date(lastDate)}. Please measure the water and record the result in OMTS.", Legacy.Msg26)
+    {
+        Parameters = new Dictionary<string, object?> { ["zone_name"] = zoneName, ["last_date"] = lastDate },
+    };
 
     // ---- MSG-ACCOUNT ----
 
@@ -162,6 +215,12 @@ public static class UserMessages
         "Your preferences are saved. This device does not allow notifications from OMTS. To get them on this device, please turn them on in the device settings. You can still see all notifications in the notification list.",
         Legacy.Msg22);
 
+    /// <summary>MSG-ACCOUNT-22 (ACCOUNT-08.0.E1): the related record of a notification no longer exists.</summary>
+    /// <param name="objectName">e.g. "Zone license"; the first letter is capitalized.</param>
+    /// <param name="recordCode">The code the notification shows for the record; may be empty.</param>
+    public static UserMessage RecordNoLongerExists(string objectName, string recordCode) => new(
+        Account22, $"{string.Join(' ', new[] { Capitalized(objectName), recordCode }.Where(p => p.Length > 0))} no longer exists.");
+
     // ---- MSG-PURCHASE ----
 
     /// <summary>MSG-PURCHASE-03 (PURCHASE-02.0.E1): a quantity to return is not greater than 0 or above what is left.</summary>
@@ -199,27 +258,8 @@ public static class UserMessages
 
     public static readonly UserMessage SessionExpired = new(Legacy.Msg19, "Your login session has expired. Please log in again.");
 
-    public static UserMessage ChannelNotEligible(string channel) => new(
-        Legacy.Msg21, $"The {channel} channel is not configured or not eligible, so it cannot be enabled yet.");
-
-    public static readonly UserMessage MandatoryNotification = new(
-        Legacy.Msg23, "This notification item is mandatory and cannot be turned off.");
-
     public static UserMessage AccountAlreadyLinked(string employeeName) => new(
         Legacy.Msg24, $"This account is already linked to the employee profile {employeeName}.");
-
-    /// <summary>Notification body (replaced by MSG-FARM-01/02 with the notifications rework).</summary>
-    public static UserMessage LicenseExpiry(string documentName, string zoneNames, int days) => new(
-        Legacy.Msg25, $"Document {documentName} of zone {zoneNames} expires in {days} days or has expired.");
-
-    /// <summary>Notification body (replaced by MSG-WATER-06 with the notifications rework).</summary>
-    public static UserMessage WaterMeasurementOverdue(string zoneName) => new(
-        Legacy.Msg26, $"Zone {zoneName} has had no confirmed water measurement for more than 1 month. Please measure and record it.");
-
-    /// <summary>Notification body (replaced by MSG-WATER-03 with the notifications rework).</summary>
-    /// <param name="metricNames">The violated indicators joined by ", ", e.g. "pH, Salinity".</param>
-    public static UserMessage WaterThresholdExceeded(string metricNames, string zoneName) => new(
-        Legacy.Msg27, $"{metricNames} at zone {zoneName} exceeds the set threshold.");
 
     public static readonly UserMessage NotThousands = new(Legacy.Msg41, "The amount must be a multiple of 1,000 VND.");
 
@@ -290,6 +330,31 @@ public static class UserMessages
         Legacy.Msg04, $"The {service} service is not responding. The action has not been completed and the data in OMTS is unchanged; please try again later.");
 
     private static string Capitalized(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
+
+    /// <summary>A date as shown in messages, e.g. "29/11/2026".</summary>
+    private static string Date(DateOnly date) => date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+
+    // {document} of MSG-FARM-01/02: "the license number with its zone".
+    private static string LicenseDocument(string documentTypeName, string documentNumber, IReadOnlyList<string> zoneCodes) =>
+        $"{documentTypeName} {documentNumber} ({string.Join(", ", zoneCodes)})";
+
+    private static Dictionary<string, object?> LicenseParameters(
+        string documentType, string documentNumber, IReadOnlyList<string> zoneCodes, DateOnly expiryDate, int? days)
+    {
+        var parameters = new Dictionary<string, object?>
+        {
+            ["document_type"] = documentType,
+            ["document_number"] = documentNumber,
+            ["zone_codes"] = zoneCodes,
+            ["expiry_date"] = expiryDate,
+        };
+        if (days is { } value)
+        {
+            parameters["days"] = value;
+        }
+
+        return parameters;
+    }
 
     /// <summary>"15 minutes", "1 minute", "45 seconds": whole minutes from one minute up (rounded up).</summary>
     private static string Duration(TimeSpan span)

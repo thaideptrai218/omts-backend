@@ -1,14 +1,17 @@
 namespace OMTS.Application.Features.Authorization.Models;
 
-/// <summary>How the zone of a request is matched against the caller's zone–role grants.</summary>
+/// <summary>How the zone of a request is matched against the caller's zone–role pairs.</summary>
 public enum PermissionScope
 {
-    /// <summary>The request targets one zone (route/query "zoneId"); that zone's or an All zones grant is needed.</summary>
+    /// <summary>The request targets one zone (route/query "zoneId"); a pair in that zone or in All zones is needed.</summary>
     ZoneScoped,
 
-    /// <summary>Cooperative-wide data: only grants assigned at All zones count (section 4.4).</summary>
-    AllZones,
+    /// <summary>
+    /// The records have no zone (supplier payments, debts…): they follow the role only, so any Effective pair of a role
+    /// holding the function is enough, whatever its zone (BR-FARM-08).
+    /// </summary>
+    NoZone,
 
-    /// <summary>A grant in any zone is enough; the handler limits results to the permitted zones.</summary>
+    /// <summary>A pair in any zone is enough; the handler limits results to the permitted zones.</summary>
     AnyZone,
 }

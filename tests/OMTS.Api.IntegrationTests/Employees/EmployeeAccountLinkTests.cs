@@ -99,8 +99,8 @@ public class EmployeeAccountLinkTests(AuthApiFactory factory) : IClassFixture<Au
     {
         var (owner, zone, role) = await SetupAsync(factory);
         var taken = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        var oldRole = await factory.AddRoleAsync($"Old {NewCode()}", (Application.Features.Authorization.PermissionFunctions.Attendance, true, false, false));
-        await factory.UpdateAsync<Role>(oldRole.Id, r => r.StatusId = StatusIds.Usage.Discontinued);
+        // Only the fixed roles exist (BR-FARM-07): any other role id is refused.
+        var unknownRoleId = Guid.NewGuid();
         var closedZone = await factory.AddZoneAsync(NewCode());
         await factory.UpdateAsync<FarmingZone>(closedZone.Id, z => z.StatusId = StatusIds.Usage.Discontinued);
         var usernames = Enumerable.Range(0, 4).Select(_ => $"nv{NewCode()}").ToArray();
@@ -108,7 +108,7 @@ public class EmployeeAccountLinkTests(AuthApiFactory factory) : IClassFixture<Au
         {
             ($"P {NewCode()}", usernames[0], AccountBlock(usernames[0], zone, role, phoneNumber: taken.PhoneNumber), "MSG-ACCOUNT-09"),
             ($"Q {NewCode()}", usernames[1], new { username = usernames[1], grants = Array.Empty<object>() }, "Zone-role pair"),
-            ($"R {NewCode()}", usernames[2], AccountBlock(usernames[2], zone, oldRole), "Role"),
+            ($"R {NewCode()}", usernames[2], AccountBlock(usernames[2], zone, unknownRoleId), "Role"),
             ($"S {NewCode()}", usernames[3], AccountBlock(usernames[3], closedZone, role), "Zone"),
         };
 

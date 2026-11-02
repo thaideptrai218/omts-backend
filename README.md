@@ -72,14 +72,14 @@ on every `docker compose up` and creates nothing twice.
 | `thuonglai2` | Trader (Locked) | – | Refused: the account is locked |
 | `nhanvien.doimk` | Zone Manager | DEMO-01 | Logged in with `mustChangePassword = true` (change it first) |
 | `nhanvien.chuaxacthuc` | Zone Manager | DEMO-02 | Logged in with `phoneVerificationRequired = true` (verify the phone first) |
-| `nhanvien.hethan` | Zone Manager | DEMO-01, grant expired | Refused: no zone–role grant in effect |
+| `nhanvien.hethan` | Zone Manager | DEMO-01, pair revoked | Refused: no Effective zone–role pair (MSG-ACCOUNT-07) |
 
 A password you change stays changed: the seed never resets it. The Owner gets `Demo@1234` only while still on the
 bootstrap temporary password. To get every demo login back, reset the environment with `docker compose down -v`.
 
 The demo data also holds the cooperative profile, the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued),
 license documents (valid, expiring within 30 days, expired), about 10 rafts with lanes per zone, 8 employees (one Left),
-5 suppliers, 15 farming input items and 20 purchase receipts of the last 3 months with payments, discounts and a return.
+5 suppliers, 15 farming input items (codes VT001–VT015, every seed item counted in `con`) and 20 purchase receipts of the last 3 months with payments, discounts and a return.
 `DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰) and one water measurement a day for the
 30 days before the seed day: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
 26.0 ‰) and one voided reading. The mistyped 2.6 ‰ alerted before its correction, so the inboxes hold four sets of water
@@ -89,7 +89,7 @@ Dates are set relative to the day of the first seed and are not moved afterwards
 - After a few weeks the "expiring" license has expired. `docker compose down -v` gives fresh dates.
 - Receipt codes carry the seed date (`PR-<seed date>-nnn`), not the receipt date.
 - The last water measurement is from the day before the seed: a month later without new ones, the zones are overdue and
-  get the 06:00 reminder (MSG26).
+  get the 06:00 reminder (MSG-WATER-06).
 - The receipt list shows the current calendar year by default. Seeded in January–March, part of the history is in the
   previous year: pass `from`/`to` to see it.
 
@@ -166,6 +166,51 @@ Dates and times are ISO 8601. A time sent without a UTC offset (`2026-10-20T08:0
 is Vietnam time (UTC+7), never the server's time zone or UTC; `Z` or an offset such as `+07:00` is kept. Responses always
 carry the offset. Business dates (`from`/`to` filters, receipt dates) are Vietnam dates.
 
+### Roles and zone access
+
+OMTS has three fixed roles (BR-FARM-07): Cooperative Owner, Zone Manager and Accountant. They are not created, edited or
+discontinued: `GET /api/roles` lists the two staff roles with their `code` (`ZONE_MANAGER`, `ACCOUNTANT`) and their
+permissions, the static matrix of SRS §I.4.4 in `FixedRoles`. The Owner grants a staff account zone–role pairs
+(`POST /api/accounts/{id}/grants` with `role` (code) or `roleId`, and a `zoneId` or none for All zones). A pair is Effective
+until it is revoked with a reason; there are no validity dates. On records with a zone a role works only in the zones of
+its pairs; records with no zone (suppliers, supplier payments and debts, customers, payroll…) follow the role only, so an
+Accountant pair for one zone opens them (BR-FARM-08). A staff account without an Effective pair cannot log in.
+
+### Notifications
+
+Every notification a module sends is kept in the list of its recipient account, whatever the preferences and even when
+it could not be pushed (BR-ACCOUNT-12). Each type of `NotificationTypes.All` has a push policy and the roles it is sent
+to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the dispatcher refuses unregistered types.
+
+| Type | Content | Push | Roles |
+|---|---|---|---|
+| `WATER_ALERT` | MSG-WATER-03 | always (mandatory) | Owner, Zone Manager |
+| `WATER_ALERT_WITHDRAWN` | MSG-WATER-04 (not sent yet: WATER PR) | always (mandatory) | Owner, Zone Manager |
+| `WATER_MEASUREMENT_OVERDUE` | MSG-WATER-06 | unless turned off | Owner, Zone Manager |
+| `ZONE_LICENSE_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
+| `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (not sent yet: LABOR PR) | never: list only | Owner |
+
+- Preferences (ACCOUNT-07): `GET`/`PUT /api/me/notification-preferences` list the types of the roles the account
+  holds with `push` on or off (`items: [{ type, push }]`). Mandatory types are shown as always pushed and cannot be
+  turned off; list-only types are not offered. `pushAllowedOnDevice` is false when no device registered by a logged-in
+  session allows notifications; turning push on then still saves the choice and answers MSG-ACCOUNT-21 in `notice`.
+- List (ACCOUNT-08): `GET /api/me/notifications?unreadOnly=&page=&pageSize=` (newest first, `unreadCount` of the whole
+  list), `POST /api/me/notifications/{id}/read`, `POST /api/me/notifications/read-all`. A row keeps its English
+  `title`/`body` and the `messageCode` with `messageParams`, a JSON object of atomic values (never an English phrase) from
+  which the apps build the text in Vietnamese or English; a push carries the same code and parameters. Dates are ISO
+  dates, times ISO 8601 with the Vietnam offset:
+
+  | Code | `messageParams` |
+  |---|---|
+  | MSG-WATER-03 | `corrected` (bool), `zone_name`, `raft_code` (null: no raft yet, "–"), `measurement_time`, `values_outside`: `[{ indicator: PH \| SALINITY, value, unit: "‰" \| null, direction: High \| Low, min, max }]` |
+  | MSG-WATER-06 | `zone_name`, `last_date` |
+  | MSG-FARM-01 / MSG-FARM-02 | `document_type` (license type code), `document_number`, `zone_codes` (list), `expiry_date`, `days` (MSG-FARM-01 only) |
+- `GET /api/me/notifications/{id}/open` checks the access again (GFR-02): 403 MSG-GEN-08 when the user may no longer
+  open the record (e.g. a revoked zone–role pair), 404 MSG-ACCOUNT-22 when the record was removed. A push carries the
+  notification id.
+- The same table keeps SMS and Zalo OA sendings to traders (`channel`, phone, delivery status Sending / Sent / Not
+  sent, provider message id or error code); they are never in a list. No sender uses them yet (SALE-06, TRACE-04).
+
 ### Database (EF Core code-first)
 
 Entities live in `OMTS.Domain`; the DbContext, configurations and migrations live in `OMTS.Infrastructure/Persistence`.
@@ -195,7 +240,7 @@ The OCR Service of the water meter photos (ENV-01) is only faked until its provi
 ### Background jobs
 
 `WaterMeasurementOverdueJob` runs every day at 06:00 (Asia/Ho_Chi_Minh): each In Use zone without a Confirmed water
-measurement for more than one calendar month gets one MSG26 reminder per overdue period (Owners and the zone's staff
+measurement for more than one calendar month gets one MSG-WATER-06 reminder per overdue period (Owners and the zone's staff
 with View on `WATER_MEASUREMENTS`). Like the zone license reminder (07:00), a host started after the run time runs it
 once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A reminder already
 sent is never sent again.
@@ -221,22 +266,32 @@ created by a one-time command run on the server by the deployment operator (not 
    `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:DisplayName`, `Bootstrap:Owner:Username`,
    `Bootstrap:Owner:PhoneNumber`, `Bootstrap:Owner:Email` (optional), `Bootstrap:Owner:TemporaryPassword`.
 2. Run `dotnet OMTS.Api.dll seed --bootstrap` at handover time: it applies migrations, checks the status catalog, creates
-   the default roles (Zone Manager, Accountant) and, if no cooperative exists, the cooperative (Preliminary) and the
+   the rows of the two fixed roles (Zone Manager `ZONE_MANAGER`, Accountant `ACCOUNTANT`; their permissions are the
+   static §I.4.4 matrix, never stored) and, if no cooperative exists, the cooperative (Preliminary) and the
    Owner with the temporary password. The temporary password expires after 24 hours and must be changed at first login.
-   Running it again creates nothing that already exists ("already initialized", exit code 0); only a default role
-   whose name no longer exists (for example after a rename) is created again. Missing secrets give exit code 1 and the
+   Running it again creates nothing that already exists ("already initialized", exit code 0); the roles are found by
+   code. Missing secrets give exit code 1 and the
    names of the missing keys. `--demo` also seeds the demo data of "Run with Docker" (Development only; refused
    in any other environment).
+   Upgrading a database from before the fixed roles (migration `FixedRoles`): the rows named "Zone Manager" and
+   "Accountant" get the codes, other roles get a placeholder code (they are not listed, and their pairs give no
+   permission, login or zone any more), and the validity dates of the pairs are dropped, so expired and future pairs and
+   pairs of discontinued roles become Effective again; of two Effective copies of one pair only the newest stays. Down is
+   lossy (no stored permissions, every role In Use). Demo and test databases are not converted further: reset them
+   (`docker compose down -v`).
+   Upgrading a database from before the purchasing catalogue of SRS 27/10 (migration `PurchaseCatalogueV2`): the item
+   group `RaftMaterial` becomes `Material`, the supplier's free-text "other contacts" become its address, and the
+   migration stops when two farming input items have the same name (rename one first, or reset a demo database).
    An Owner who cannot log in (for example after missing the 24-hour window) is recovered with
    `dotnet OMTS.Api.dll seed --reset-owner-password`. It sets `Bootstrap:Owner:TemporaryPassword` (from configuration, never
    from the command line, so it never lands in shell history) as a new 24-hour temporary password that must be changed at
    first login, ends every session of the Owner and writes an audit row. Set a new value first: the Owner's current
    (expired) password is refused. With several Owners, `Bootstrap:Owner:Username`
    chooses one. Without an Owner, or without a valid password, it changes nothing and exits with code 1.
-3. Start the API and check `GET /health/ready`: 200 when the database, migrations, status catalog, default roles,
-   cooperative and an active Owner are all in place, else 503 listing the failing checks. This is a post-deployment
-   verification, **not** a platform probe: it depends on data the Owner can change (renaming a default role or locking the
-   only Owner turns it 503). Point App Service / Kubernetes readiness and load-balancer probes at `GET /health/db`
+3. Start the API and check `GET /health/ready`: 200 when the database, migrations, status catalog, the two fixed role
+   rows (by code), cooperative and an active Owner are all in place, else 503 listing the failing checks. This is a
+   post-deployment verification, **not** a platform probe: it depends on business data (locking the only Owner turns it
+   503). Point App Service / Kubernetes readiness and load-balancer probes at `GET /health/db`
    (database reachable and migrated). `GET /health` is liveness only.
 
 | Area | Keys |

@@ -29,7 +29,7 @@ public class WaterLogPrivacyRedTeamTests
             a.Email = email;
             a.EmailVerifiedAt = DateTimeOffset.UtcNow;
         });
-        var role = await api.AddRoleAsync($"Water {NewCode()}", (PermissionFunctions.WaterMeasurements, View: true, Create: true, Edit: true));
+        var role = StaffRole.ZoneManager;
         await api.GrantAsync(manager, role, z.Zone);
         var client = await api.LoginAsync(manager.Username);
 

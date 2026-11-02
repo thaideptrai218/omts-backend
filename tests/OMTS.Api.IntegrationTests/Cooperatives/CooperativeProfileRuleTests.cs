@@ -27,8 +27,7 @@ public class CooperativeProfileRuleTests
         var trader = await api.LoginAsync((await api.AddAccountAsync(NewCode(), Password, SubjectType.Trader)).Username);
         var manager = await api.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
         // A custom role with every labor and provenance right still never opens an Owner-only function.
-        var role = await api.AddRoleAsync($"ZM {NewCode()}",
-            (PermissionFunctions.Provenance, true, true, true), (PermissionFunctions.LaborWorkers, true, true, true));
+        var role = StaffRole.ZoneManager;
         await api.GrantAsync(manager, role, null);
         var staff = await api.LoginAsync(manager.Username);
 

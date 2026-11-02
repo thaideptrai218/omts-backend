@@ -5,6 +5,7 @@ using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Models.Messaging;
+using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Models;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Authorization;
@@ -32,7 +33,7 @@ public class NotificationDispatchTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Contains(setup.ManagerAllZones, recipients);
         Assert.DoesNotContain(setup.ManagerOfB, recipients);
         Assert.DoesNotContain(setup.RevokedInA, recipients);
-        Assert.DoesNotContain(setup.ExpiredInA, recipients);
+        Assert.DoesNotContain(setup.AccountantOfA, recipients);
         Assert.DoesNotContain(setup.LockedManagerOfA, recipients);
 
         using var scope = factory.Services.CreateScope();
@@ -43,23 +44,26 @@ public class NotificationDispatchTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Contains(pushed, m => m.Subject == "Water alert");
     }
 
-    // Same rule as AccountAccess: a zone-level grant does not open a cooperative-wide function.
+    // Same rule as AccountAccess: records with no zone follow the role only (BR-FARM-08), so an Accountant pair in any
+    // zone counts for supplier payments; a Zone Manager, whose role does not hold them, never does.
     [Fact]
-    public async Task Cooperative_wide_function_only_counts_all_zones_grants()
+    public async Task Function_on_records_with_no_zone_counts_any_pair_of_a_role_holding_it()
     {
-        var zone = await factory.AddZoneAsync(Code());
-        var role = await factory.AddRoleAsync($"Pay {Code()}", (PermissionFunctions.SupplierPayments, View: true, Create: false, Edit: false));
-        var zoneLevel = await factory.AddAccountAsync(Code(), "Secret123", SubjectType.Staff);
-        var allZones = await factory.AddAccountAsync(Code(), "Secret123", SubjectType.Staff);
-        await factory.GrantAsync(zoneLevel, role, zone);
-        await factory.GrantAsync(allZones, role, null);
+        var (zone, otherZone) = (await factory.AddZoneAsync(Code()), await factory.AddZoneAsync(Code()));
+        var accountantElsewhere = await factory.AddAccountAsync(Code(), AcsTestKit.NewPassword(), SubjectType.Staff);
+        var accountantAllZones = await factory.AddAccountAsync(Code(), AcsTestKit.NewPassword(), SubjectType.Staff);
+        var manager = await factory.AddAccountAsync(Code(), AcsTestKit.NewPassword(), SubjectType.Staff);
+        await factory.GrantAsync(accountantElsewhere, StaffRole.Accountant, otherZone);
+        await factory.GrantAsync(accountantAllZones, StaffRole.Accountant, null);
+        await factory.GrantAsync(manager, StaffRole.ZoneManager, null);
 
         using var scope = factory.Services.CreateScope();
         var recipients = await scope.ServiceProvider.GetRequiredService<IZoneRecipientQuery>()
             .GetRecipientsAsync(zone.Id, PermissionFunctions.SupplierPayments, PermissionAction.View, CancellationToken.None);
 
-        Assert.Contains(allZones.Id, recipients);
-        Assert.DoesNotContain(zoneLevel.Id, recipients);
+        Assert.Contains(accountantElsewhere.Id, recipients);
+        Assert.Contains(accountantAllZones.Id, recipients);
+        Assert.DoesNotContain(manager.Id, recipients);
     }
 
     /// <summary>Recipients query + dispatch + save, as ENV-01 does for a water alert.</summary>
@@ -72,8 +76,13 @@ public class NotificationDispatchTests(AuthApiFactory factory) : IClassFixture<A
             .GetRecipientsAsync(zoneId, PermissionFunctions.WaterMeasurements, PermissionAction.View, CancellationToken.None);
 
         await services.GetRequiredService<INotificationDispatcher>().NotifyAsync(
-            recipients, NotificationTypes.WaterAlert, "Water alert", "pH exceeds the set threshold.", nameof(FarmingZone), zoneCode,
-            isMandatory: true, CancellationToken.None);
+            recipients,
+            new NotificationContent(
+                NotificationTypes.WaterAlert,
+                "Water alert",
+                UserMessages.WaterAlert(false, "Zone", null, DateTimeOffset.UtcNow, [new(WaterValueOutside.Ph, 9.1m, null, WaterValueDirection.High, 7.5m, 8.5m)]),
+                new RelatedRecord(RelatedRecordTypes.FarmingZone, zoneId, zoneCode)),
+            CancellationToken.None);
         await services.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
         return recipients;
     }
@@ -88,7 +97,7 @@ public class PushFailureTests(PushFailureTests.ThrowingPushApiFactory factory) :
     public async Task Push_failure_keeps_the_saved_notification_rows()
     {
         var zone = await factory.AddZoneAsync(NotificationDispatchTests.Code());
-        await factory.AddAccountAsync(NotificationDispatchTests.Code(), "Secret123");
+        await factory.AddAccountAsync(NotificationDispatchTests.Code(), AcsTestKit.NewPassword());
 
         var recipients = await NotificationDispatchTests.NotifyAsync(factory, zone.Id);
 
@@ -117,15 +126,14 @@ public class PushFailureTests(PushFailureTests.ThrowingPushApiFactory factory) :
 
 /// <summary>Accounts around two zones: who must and must not hear about zone A.</summary>
 internal sealed record ZoneRecipientsSetup(
-    Guid Owner, Guid ManagerOfA, Guid ManagerAllZones, Guid ManagerOfB, Guid RevokedInA, Guid ExpiredInA, Guid LockedManagerOfA)
+    Guid Owner, Guid ManagerOfA, Guid ManagerAllZones, Guid ManagerOfB, Guid RevokedInA, Guid AccountantOfA, Guid LockedManagerOfA)
 {
     public static async Task<ZoneRecipientsSetup> CreateAsync(AuthApiFactory api, FarmingZone zoneA, FarmingZone zoneB)
     {
-        const string password = "Secret123";
-        var role = await api.AddRoleAsync($"Water {NotificationDispatchTests.Code()}", (PermissionFunctions.WaterMeasurements, View: true, Create: true, Edit: false));
-        var yesterday = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1);
+        var password = AcsTestKit.NewPassword();
 
-        async Task<Guid> StaffAsync(FarmingZone? zone, Action<Domain.Entities.Identity.AccessGrant>? grant = null, bool locked = false)
+        async Task<Guid> StaffAsync(
+            FarmingZone? zone, Action<Domain.Entities.Identity.AccessGrant>? grant = null, bool locked = false, StaffRole role = StaffRole.ZoneManager)
         {
             var account = await api.AddAccountAsync(NotificationDispatchTests.Code(), password, SubjectType.Staff,
                 a => a.StatusId = locked ? StatusIds.Account.Locked : StatusIds.Account.Active);
@@ -139,7 +147,8 @@ internal sealed record ZoneRecipientsSetup(
             await StaffAsync(null),
             await StaffAsync(zoneB),
             await StaffAsync(zoneA, g => g.StatusId = StatusIds.AccessGrant.Revoked),
-            await StaffAsync(zoneA, g => { g.EffectiveFrom = yesterday.AddDays(-10); g.EffectiveTo = yesterday.AddDays(-1); }),
+            // The Accountant role holds no WATER_MEASUREMENTS right (§I.4.4 WATER-01…03 No).
+            await StaffAsync(zoneA, role: StaffRole.Accountant),
             await StaffAsync(zoneA, locked: true));
     }
 }

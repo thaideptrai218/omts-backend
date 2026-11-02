@@ -265,7 +265,7 @@ public sealed class AuthService(
     {
         if (!await TestPersonaAllowedAsync(account, cancellationToken)) return false;
         if (account.SubjectType != SubjectType.Staff ||
-            await grants.HasEffectiveGrantAsync(account.Id, timeProvider.Today(), cancellationToken)) return true;
+            await grants.HasEffectiveGrantAsync(account.Id, cancellationToken)) return true;
         var testEmployee = testRoles.Value.Enabled && testRoles.Value.OwnerAccountId != Guid.Empty &&
             account.Username == OMTS.Application.Features.Testing.TestRoleNames.Username(testRoles.Value.OwnerAccountId, "Employee");
         return (account.ZaloAccountId is not null || linkingEmployee || testEmployee) &&

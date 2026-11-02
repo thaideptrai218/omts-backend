@@ -13,4 +13,8 @@ public sealed record PushMessage(
     string? Body,
     string? RelatedRecordType,
     string? RelatedRecordCode,
-    IReadOnlyList<string> DeviceTokens);
+    IReadOnlyList<string> DeviceTokens,
+    Guid? NotificationId = null,
+    string? MessageCode = null,
+    Guid? RelatedRecordId = null,
+    string? MessageParams = null);
