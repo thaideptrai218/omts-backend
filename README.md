@@ -252,6 +252,11 @@ created by a one-time command run on the server by the deployment operator (not 
 | Overdue water measurement reminder (ENV-01, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
 | Orphan raft photo and license file clean-up (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
 
+## Design documents
+
+`docs/sds/` holds the detailed design (SDS) of the modules, written from this code. A PR that changes a
+documented module updates its SDS part in the same PR.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) — branches, Jira keys, commit/PR rules, releases.
