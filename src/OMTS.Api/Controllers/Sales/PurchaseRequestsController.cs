@@ -13,7 +13,7 @@ namespace OMTS.Api.Controllers.Sales;
 [ApiController]
 [Authorize]
 [Route("api/purchase-requests")]
-public sealed class PurchaseRequestsController(PurchaseRequestService requests) : ControllerBase
+public sealed class PurchaseRequestsController(PurchaseRequestService requests, PurchaseStaffingService staffing) : ControllerBase
 {
     [HttpGet]
     [RequirePermission(PermissionFunctions.PurchaseRequests, PermissionAction.View, PermissionScope.AnyZone)]
@@ -29,4 +29,19 @@ public sealed class PurchaseRequestsController(PurchaseRequestService requests) 
     [RequireCooperativeOwner]
     public async Task<IActionResult> Respond(Guid id, RespondPurchaseRequest input, CancellationToken ct) =>
         (await requests.RespondAsync(id, input, ct)).ToActionResult(Ok);
+
+    [HttpGet("staffing-employees")]
+    [RequireCooperativeOwner]
+    public async Task<IActionResult> Employees(DateOnly day, CancellationToken ct) =>
+        (await staffing.EmployeesAsync(day, ct)).ToActionResult(Ok);
+
+    [HttpGet("{id:guid}/staffing")]
+    [RequireCooperativeOwner]
+    public async Task<IActionResult> Staffing(Guid id, CancellationToken ct) =>
+        (await staffing.InvitationsAsync(id, ct)).ToActionResult(Ok);
+
+    [HttpPost("{id:guid}/staffing")]
+    [RequireCooperativeOwner]
+    public async Task<IActionResult> Plan(Guid id, PlanPurchaseStaffing input, CancellationToken ct) =>
+        (await staffing.PlanAsync(id, input, ct)).ToActionResult(Ok);
 }

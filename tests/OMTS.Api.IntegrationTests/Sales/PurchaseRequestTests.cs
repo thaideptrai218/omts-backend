@@ -8,6 +8,7 @@ using OMTS.Application.Features.Sales.Requests.Dtos;
 using OMTS.Application.Features.Sales;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Platform;
+using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
@@ -100,6 +101,18 @@ public sealed class PurchaseRequestTests(AuthApiFactory factory) : IClassFixture
         var owner = await OwnerClientAsync();
         Assert.Equal(HttpStatusCode.Forbidden, (await owner.PostAsJsonAsync("/api/me/purchase-requests", Input(product))).StatusCode);
         var reply = Accept(row) with { AcceptedCages = 8, PickupDate = Today.AddDays(2), AllowPayLater = true, Note = "Morning" };
+        var employeeAccount = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff, configure: a => a.ZaloAccountId = NewCode());
+        var employee = new Employee { CooperativeId = (await factory.EnsureCooperativeAsync()).Id, AccountId = employeeAccount.Id, FullName = NewCode() };
+        await factory.UseDbAsync(db => db.Employees.Add(employee));
+        var plan = await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/staffing",
+            new PlanPurchaseStaffing(8, Today.AddDays(1), Today.AddDays(2), 20, [employee.Id], null, row.RowVersion));
+        Assert.True(plan.IsSuccessStatusCode, await plan.Content.ReadAsStringAsync());
+        var worker = await factory.LoginAsync(employeeAccount.Username);
+        var invite = Assert.Single((await worker.GetFromJsonAsync<List<MyPurchaseShiftView>>($"/api/me/purchase-shifts?from={Today:yyyy-MM-dd}&to={Today.AddDays(2):yyyy-MM-dd}"))!);
+        var approval = await worker.PostAsJsonAsync($"/api/me/purchase-shifts/{invite.Id}/response", new RespondPurchaseShift(true, null, invite.RowVersion));
+        Assert.True(approval.IsSuccessStatusCode, await approval.Content.ReadAsStringAsync());
+        row = (await owner.GetFromJsonAsync<PurchaseRequestView>($"/api/purchase-requests/{row.Id}"))!;
+        reply = reply with { RowVersion = row.RowVersion };
         var response = await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/response", reply);
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
         var confirmed = (await trader.GetFromJsonAsync<PurchaseRequestView>($"/api/me/purchase-requests/{row.Id}"))!;

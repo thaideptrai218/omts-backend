@@ -3160,6 +3160,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
+                            Id = 1905,
+                            Code = "AWAITING_STAFF",
+                            DisplayName = "Awaiting staff confirmation",
+                            Group = "PURCHASE_REQUEST",
+                            IsFinal = false,
+                            IsInitial = false,
+                            Meaning = "User decision 31/10/2026: employees approve their shift before the Owner accepts the request.",
+                            SortOrder = 5
+                        },
+                        new
+                        {
                             Id = 101,
                             Code = "IN_USE",
                             DisplayName = "In Use",
@@ -4536,17 +4547,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
-                            Id = 77,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 1901,
-                            GuardCondition = "Positive accepted cage count no larger than requested; pickup date is today or later.",
-                            ReasonRequired = false,
-                            ToStatusId = 1902,
-                            TriggerEvent = "Action",
-                            UseCases = "SALE-03"
-                        },
-                        new
-                        {
                             Id = 78,
                             AllowedPerformers = "Cooperative Owner",
                             FromStatusId = 1901,
@@ -4577,6 +4577,50 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             ToStatusId = 1904,
                             TriggerEvent = "Action",
                             UseCases = "SALE-02"
+                        },
+                        new
+                        {
+                            Id = 81,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 1901,
+                            GuardCondition = "The Owner sends dated shift invitations with a cage capacity.",
+                            ReasonRequired = false,
+                            ToStatusId = 1905,
+                            TriggerEvent = "Action",
+                            UseCases = "SALE-03"
+                        },
+                        new
+                        {
+                            Id = 82,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 1905,
+                            GuardCondition = "The Owner declines with a reason.",
+                            ReasonRequired = true,
+                            ToStatusId = 1903,
+                            TriggerEvent = "Action",
+                            UseCases = "SALE-03"
+                        },
+                        new
+                        {
+                            Id = 83,
+                            AllowedPerformers = "Trader",
+                            FromStatusId = 1905,
+                            GuardCondition = "Only the requesting customer may cancel; release shift reservations.",
+                            ReasonRequired = false,
+                            ToStatusId = 1904,
+                            TriggerEvent = "Action",
+                            UseCases = "SALE-02"
+                        },
+                        new
+                        {
+                            Id = 84,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 1905,
+                            GuardCondition = "Enough distinct employees have approved the dated shift; cages and pickup match the staffing plan.",
+                            ReasonRequired = false,
+                            ToStatusId = 1902,
+                            TriggerEvent = "Action",
+                            UseCases = "SALE-03"
                         },
                         new
                         {
@@ -5368,6 +5412,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<bool>("AllowPayLater")
                         .HasColumnType("bit");
 
+                    b.Property<int?>("CagesPerEmployeePerDay")
+                        .HasColumnType("int");
+
                     b.Property<string>("CancellationReason")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -5399,6 +5446,12 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly>("PickupDate")
                         .HasColumnType("date");
 
+                    b.Property<int?>("PlannedCages")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("PlannedPickupDate")
+                        .HasColumnType("date");
+
                     b.Property<Guid>("ProductId")
                         .HasColumnType("uniqueidentifier");
 
@@ -5426,6 +5479,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<string>("StaffingNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<int>("StatusId")
                         .HasColumnType("int");
 
@@ -5434,6 +5491,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("WorkDate")
+                        .HasColumnType("date");
 
                     b.HasKey("Id");
 
@@ -5454,6 +5514,66 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("PurchaseRequest", t =>
                         {
                             t.HasCheckConstraint("CK_PurchaseRequest_Cages", "[RequestedCages] > 0 AND ([AcceptedCages] IS NULL OR ([AcceptedCages] > 0 AND [AcceptedCages] <= [RequestedCages]))");
+
+                            t.HasCheckConstraint("CK_PurchaseRequest_Staffing", "([PlannedCages] IS NULL AND [WorkDate] IS NULL AND [PlannedPickupDate] IS NULL AND [CagesPerEmployeePerDay] IS NULL) OR ([PlannedCages] IS NOT NULL AND [PlannedCages] > 0 AND [PlannedCages] <= [RequestedCages] AND [WorkDate] IS NOT NULL AND [PlannedPickupDate] IS NOT NULL AND [WorkDate] <= [PlannedPickupDate] AND [CagesPerEmployeePerDay] IS NOT NULL AND [CagesPerEmployeePerDay] > 0)");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.PurchaseShiftInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool?>("Approved")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PurchaseRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateOnly?>("ReservedWorkDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset?>("RespondedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId", "ReservedWorkDate")
+                        .IsUnique()
+                        .HasFilter("[ReservedWorkDate] IS NOT NULL");
+
+                    b.HasIndex("PurchaseRequestId", "EmployeeId")
+                        .IsUnique();
+
+                    b.ToTable("PurchaseShiftInvitation", t =>
+                        {
+                            t.HasCheckConstraint("CK_PurchaseShiftInvitation_Reservation", "[ReservedWorkDate] IS NULL OR ([Approved] IS NOT NULL AND [Approved] = 1 AND [RespondedAt] IS NOT NULL)");
                         });
                 });
 
@@ -7400,6 +7520,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.PurchaseShiftInvitation", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.PurchaseRequest", "PurchaseRequest")
+                        .WithMany("ShiftInvitations")
+                        .HasForeignKey("PurchaseRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("PurchaseRequest");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.SaleTransaction", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Sales.Customer", "Customer")
@@ -7729,6 +7868,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.Customer", b =>
                 {
                     b.Navigation("Orders");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.PurchaseRequest", b =>
+                {
+                    b.Navigation("ShiftInvitations");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.SaleTransaction", b =>

@@ -28,4 +28,10 @@ public class PurchaseRequest : AuditableEntity, IHasStatus
     public Guid? RespondedByAccountId { get; set; }
     public DateTimeOffset? CancelledAt { get; set; }
     public string? CancellationReason { get; set; }
+    public int? PlannedCages { get; set; }
+    public DateOnly? WorkDate { get; set; }
+    public DateOnly? PlannedPickupDate { get; set; }
+    public int? CagesPerEmployeePerDay { get; set; }
+    public string? StaffingNote { get; set; }
+    public ICollection<PurchaseShiftInvitation> ShiftInvitations { get; set; } = [];
 }

@@ -39,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<ZaloLinkService>();
         services.AddScoped<ZaloLocationService>();
         services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseRequestService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseStaffingService>();
         services.AddScoped<OMTS.Application.Features.Sales.Products.SalesProductService>();
         services.AddOptions<OMTS.Application.Features.Testing.Options.TestRoleOptions>();
         services.AddScoped<OMTS.Application.Features.Testing.TestRoleService>();

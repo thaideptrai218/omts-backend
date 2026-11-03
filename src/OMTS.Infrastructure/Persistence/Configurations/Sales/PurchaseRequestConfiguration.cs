@@ -13,6 +13,7 @@ internal sealed class PurchaseRequestConfiguration : IEntityTypeConfiguration<Pu
         b.Property(x => x.Note).HasMaxLength(500);
         b.Property(x => x.ResponseNote).HasMaxLength(500);
         b.Property(x => x.CancellationReason).HasMaxLength(500);
+        b.Property(x => x.StaffingNote).HasMaxLength(500);
         b.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId);
         b.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId);
         b.HasOne(x => x.Status).WithMany().HasForeignKey(x => x.StatusId);
@@ -23,5 +24,10 @@ internal sealed class PurchaseRequestConfiguration : IEntityTypeConfiguration<Pu
         b.HasIndex(x => new { x.CustomerId, x.CreatedAt });
         b.ToTable(t => t.HasCheckConstraint("CK_PurchaseRequest_Cages",
             "[RequestedCages] > 0 AND ([AcceptedCages] IS NULL OR ([AcceptedCages] > 0 AND [AcceptedCages] <= [RequestedCages]))"));
+        b.ToTable(t => t.HasCheckConstraint("CK_PurchaseRequest_Staffing",
+            "([PlannedCages] IS NULL AND [WorkDate] IS NULL AND [PlannedPickupDate] IS NULL AND [CagesPerEmployeePerDay] IS NULL) OR " +
+            "([PlannedCages] IS NOT NULL AND [PlannedCages] > 0 AND [PlannedCages] <= [RequestedCages] AND " +
+            "[WorkDate] IS NOT NULL AND [PlannedPickupDate] IS NOT NULL AND [WorkDate] <= [PlannedPickupDate] AND " +
+            "[CagesPerEmployeePerDay] IS NOT NULL AND [CagesPerEmployeePerDay] > 0)"));
     }
 }

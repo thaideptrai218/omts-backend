@@ -23,7 +23,7 @@ public sealed class PurchaseRequestService(
     IPurchaseRequestRepository requests, ISalesProductRepository products, ICustomerRepository customers,
     IAccountRepository accounts, ICurrentUser user, PermissionService permissions,
     RowVersionGuard versions, IStatusCatalog statuses, AuditLogService audit,
-    INotificationDispatcher notifications, IUnitOfWork uow, TimeProvider clock)
+    INotificationDispatcher notifications, IUnitOfWork uow, TimeProvider clock, PurchaseStaffingService staffing)
 {
     private DateOnly Today => DateOnly.FromDateTime(clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime);
 
@@ -44,7 +44,8 @@ public sealed class PurchaseRequestService(
         int? statusId = status switch
         {
             null or "" or "ALL" => null, "AWAITING_RESPONSE" => S.AwaitingResponse,
-            "ACCEPTED" => S.Accepted, "DECLINED" => S.Declined, "CANCELLED" => S.Cancelled, _ => -1,
+            "ACCEPTED" => S.Accepted, "DECLINED" => S.Declined, "CANCELLED" => S.Cancelled,
+            "AWAITING_STAFF" => S.AwaitingStaff, _ => -1,
         };
         if (statusId == -1) return AppError.Invalid("Status");
         var found = await requests.SearchAsync(customerId, statusId, page, pageSize, ct);
@@ -109,24 +110,34 @@ public sealed class PurchaseRequestService(
         if (who?.IsCooperativeOwner != true) return AppError.Forbidden;
         var row = await requests.GetAsync(id, ct);
         if (row is null) return AppError.NotFound;
-        if (row.StatusId != S.AwaitingResponse) return AppError.AlreadyExists("Answered purchase request", row.Id);
+        if (row.StatusId is not (S.AwaitingResponse or S.AwaitingStaff)) return AppError.AlreadyExists("Answered purchase request", row.Id);
         if (await versions.CheckAsync(row, input.RowVersion, ct) is { } stale) return stale;
         if (input.Note?.Length > 500 || (!input.Accept && string.IsNullOrWhiteSpace(input.Note))) return AppError.Invalid("Response");
         if (input.Accept && (input.AcceptedCages is null or <= 0 || input.AcceptedCages > row.RequestedCages))
             return AppError.Invalid("Accepted cages");
         if (input.Accept && (input.PickupDate is null || input.PickupDate < Today)) return AppError.Invalid("Pickup date");
+        if (input.Accept && await staffing.ValidateAcceptanceAsync(row, input.AcceptedCages, input.PickupDate, ct) is { } insufficient) return insufficient;
+        var before = row.StatusId;
         row.StatusId = input.Accept ? S.Accepted : S.Declined;
         row.AcceptedCages = input.Accept ? input.AcceptedCages : null;
         row.AcceptedPickupDate = input.Accept ? input.PickupDate : null;
         row.AllowPayLater = input.Accept && input.AllowPayLater;
         row.ResponseNote = input.Note?.Trim(); row.RespondedAt = clock.GetUtcNow(); row.RespondedByAccountId = who.AccountId;
         audit.Record(new AuditEntry("PurchaseRequest.Responded", nameof(PurchaseRequest))
-        { RecordId = row.Id, RecordCode = row.Code, Before = new { StatusId = S.AwaitingResponse },
+        { RecordId = row.Id, RecordCode = row.Code, Before = new { StatusId = before },
             After = new { row.StatusId, row.AcceptedCages, row.AcceptedPickupDate, row.AllowPayLater, row.ResponseNote } });
         if (row.Customer.AccountId is { } trader)
             await notifications.NotifyAsync([trader], "PURCHASE_REQUEST_RESPONDED", "HTX phản hồi yêu cầu mua",
                 input.Accept ? $"{row.Code}: chấp nhận {row.AcceptedCages} lồng, nhận {row.AcceptedPickupDate:dd/MM/yyyy}."
                     : $"{row.Code}: từ chối. {row.ResponseNote}", nameof(PurchaseRequest), row.Code, true, ct);
+        if (!input.Accept) await staffing.ReleaseAsync(row, ct);
+        else
+        {
+            var recipients = row.ShiftInvitations.Select(i => i.Employee.AccountId).OfType<Guid>().Distinct().ToList();
+            await notifications.NotifyAsync(recipients, "PURCHASE_SHIFT_CONFIRMED", "HTX đã nhận đơn",
+                $"{row.Code}: HTX đã nhận đơn. Xem trạng thái ca ngày {row.WorkDate:dd/MM/yyyy} trong Công việc của tôi.",
+                nameof(PurchaseRequest), row.Code, false, ct);
+        }
         await uow.SaveChangesAsync(ct);
         return View(row);
     }
@@ -139,11 +150,12 @@ public sealed class PurchaseRequestService(
         if (row is null) return AppError.NotFound;
         if (row.Customer.AccountId != who.AccountId) return AppError.Forbidden;
         if (row.StatusId == S.Cancelled) return View(row);
-        if (row.StatusId is not (S.AwaitingResponse or S.Accepted)) return AppError.Invalid("Purchase request status");
+        if (row.StatusId is not (S.AwaitingResponse or S.AwaitingStaff or S.Accepted)) return AppError.Invalid("Purchase request status");
         if (await versions.CheckAsync(row, input.RowVersion, ct) is { } stale) return stale;
         if (input.Reason?.Length > 500) return AppError.Invalid("Reason");
         var before = row.StatusId;
         row.StatusId = S.Cancelled; row.CancelledAt = clock.GetUtcNow(); row.CancellationReason = input.Reason?.Trim();
+        await staffing.ReleaseAsync(row, ct);
         audit.Record(new AuditEntry("PurchaseRequest.Cancelled", nameof(PurchaseRequest))
         { RecordId = row.Id, RecordCode = row.Code, Before = new { StatusId = before }, After = new { row.StatusId }, Reason = row.CancellationReason });
         await notifications.NotifyAsync(await accounts.ListActiveOwnerIdsAsync(ct), "PURCHASE_REQUEST_CANCELLED",
@@ -157,5 +169,5 @@ public sealed class PurchaseRequestService(
     private PurchaseRequestView View(PurchaseRequest r) => new(
         r.Id, r.Code, r.ProductId, r.ProductName, "Cage", r.RequestedCages, r.PickupDate, r.Note,
         statuses.CodeOf(r.StatusId), r.AcceptedCages, r.AcceptedPickupDate, r.AllowPayLater,
-        r.ResponseNote, r.RespondedAt, r.CancelledAt, r.CancellationReason, r.CreatedAt, r.Customer.Name, RowVersionGuard.Encode(r.RowVersion));
+        r.ResponseNote, r.RespondedAt, r.CancelledAt, r.CancellationReason, r.CreatedAt, r.Customer.Name, RowVersionGuard.Encode(r.RowVersion), PurchaseStaffingService.Summary(r));
 }

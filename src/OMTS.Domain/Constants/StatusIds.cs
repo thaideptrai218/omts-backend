@@ -12,6 +12,8 @@ public static class StatusIds
         public const int Accepted = 1902;
         public const int Declined = 1903;
         public const int Cancelled = 1904;
+        // Yêu cầu ngày 31/10/2026: xác nhận nhân lực trước khi nhận đơn.
+        public const int AwaitingStaff = 1905;
     }
     public static class Usage
     {
