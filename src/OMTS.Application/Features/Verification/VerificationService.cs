@@ -146,9 +146,14 @@ public sealed class VerificationService(
     {
         var now = timeProvider.GetUtcNow();
         var request = await codes.GetByIdAsync(verificationId, cancellationToken);
-        if (request is null || !MayUse(request, callerAccountId) || !request.IsUsable(now))
+        if (request is null || !MayUse(request, callerAccountId))
         {
             return VerificationErrors.WrongCode();
+        }
+
+        if (!request.IsUsable(now))
+        {
+            return request.IsLocked ? Cancelled(request) : VerificationErrors.WrongCode();
         }
 
         var recentRequests = await codes.GetRecentAsync(request.Purpose, request.AccountId, request.Target, now - BudgetWindow, cancellationToken);
@@ -160,7 +165,7 @@ public sealed class VerificationService(
         if (string.IsNullOrWhiteSpace(code) || !codeHasher.Matches(request.Id, code.Trim(), request.CodeHash))
         {
             await CountWrongEntryAsync(request, now, cancellationToken);
-            return VerificationErrors.WrongCode();
+            return request.IsLocked ? Cancelled(request) : VerificationErrors.WrongCode();
         }
 
         var token = SecretHashing.NewToken();
@@ -210,6 +215,14 @@ public sealed class VerificationService(
     }
 
     public static AppError ServiceDown(VerificationChannel channel) => VerificationErrors.ServiceDown(channel);
+
+    /// <summary>
+    /// The 5th wrong entry cancelled the code: that entry and every later one answer MSG-ACCOUNT-17 (BR-ACCOUNT-09).
+    /// Exception: password recovery keeps MSG-ACCOUNT-16, so that a recovery id answers exactly like an id that was
+    /// never issued and does not tell whether the identifier has an account (BR-ACCOUNT-07).
+    /// </summary>
+    private static AppError Cancelled(VerificationCode request) =>
+        request.Purpose == VerificationPurpose.AccountRecovery ? VerificationErrors.WrongCode() : VerificationErrors.CancelledByWrongEntries();
 
     // Registration and recovery run before login; every other request belongs to its account only.
     private static bool MayUse(VerificationCode request, Guid? callerAccountId) =>

@@ -11,8 +11,11 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Accounts;
 
-/// <summary>Contact change started: the code went to the new contact; the old one stays in use until verified (MSG62).</summary>
-public sealed record ContactChangeStarted(Verification.Dtos.VerificationStarted Verification, string Message);
+/// <summary>
+/// Contact change started: the code went to the new contact; the old one stays in use until verified
+/// (MSG-ACCOUNT-19 in <paramref name="Message"/>, its code in <paramref name="MessageCode"/>).
+/// </summary>
+public sealed record ContactChangeStarted(Verification.Dtos.VerificationStarted Verification, string Message, string MessageCode);
 
 /// <summary>
 /// ACS-05 – the holder edits their own profile. A new email or phone number needs the current password and
@@ -39,12 +42,16 @@ public sealed class ProfileService(
         return account is null ? AppError.NotFound : await ViewAsync(account, cancellationToken);
     }
 
-    public async Task<Result<(ProfileView Profile, string Message)>> UpdateAsync(
+    public async Task<Result<(ProfileView Profile, UserMessage Message)>> UpdateAsync(
         Guid accountId, UpdateProfileRequest request, CancellationToken cancellationToken)
     {
+        // The username is read-only here (ACCOUNT-05): MSG-GEN-01 "Username" (MSG20 before).
         if (request.Username is not null)
         {
-            return new AppError(ErrorKind.Validation, UserMessages.UsernameReadOnly);
+            return new AppError(
+                ErrorKind.Validation,
+                UserMessages.Invalid("Username") with { LegacyCode = MessageCodes.Legacy.Msg20 },
+                new Dictionary<string, object?> { ["field"] = "Username" });
         }
 
         var name = request.DisplayName?.Trim();
@@ -77,7 +84,7 @@ public sealed class ProfileService(
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
-        return (await ViewAsync(account, cancellationToken), UserMessages.Saved("Personal profile").Text);
+        return (await ViewAsync(account, cancellationToken), UserMessages.Saved("Personal profile"));
     }
 
     /// <summary>Sends a code to the new email or phone number; nothing changes until it is verified.</summary>
@@ -101,18 +108,27 @@ public sealed class ProfileService(
         var currentVerified = request.Channel == VerificationChannel.Sms
             ? account.PhoneVerifiedAt is null ? null : account.PhoneNumber
             : account.EmailVerifiedAt is null ? null : account.Email;
-        if (target is null || target == currentVerified || await IsUsedByAnotherAccountAsync(request.Channel, target, account.Id, cancellationToken))
+        if (target is null || target == currentVerified)
         {
             return AppError.Invalid(ContactInputs.FieldName(request.Channel));
+        }
+
+        if (await IsUsedByAnotherAccountAsync(request.Channel, target, account.Id, cancellationToken))
+        {
+            return UsedByAnotherAccount(request.Channel);
         }
 
         var purpose = request.Channel == VerificationChannel.Sms
             ? VerificationPurpose.ChangePhone
             : account.EmailVerifiedAt is null ? VerificationPurpose.VerifyEmail : VerificationPurpose.ChangeEmail;
         var started = await verification.StartAsync(purpose, request.Channel, target, account.Id, cancellationToken);
-        return started.IsSuccess
-            ? new ContactChangeStarted(started.Value!, UserMessages.CodeSentToNewContact(started.Value!.MaskedTarget, ContactInputs.ContactName(request.Channel)).Text)
-            : started.Error!;
+        if (!started.IsSuccess)
+        {
+            return started.Error!;
+        }
+
+        var sent = UserMessages.CodeSent(started.Value!.MaskedTarget, (int)VerificationCode.Lifetime.TotalMinutes);
+        return new ContactChangeStarted(started.Value, sent.Text, sent.Code);
     }
 
     public async Task<Result<ContactConfirmed>> ConfirmContactChangeAsync(
@@ -138,7 +154,7 @@ public sealed class ProfileService(
         var (channel, target) = (token.Value!.Channel, token.Value.Target);
         if (await IsUsedByAnotherAccountAsync(channel, target, account.Id, cancellationToken))
         {
-            return AppError.Invalid(ContactInputs.FieldName(channel));
+            return UsedByAnotherAccount(channel);
         }
 
         var now = timeProvider.GetUtcNow();
@@ -170,8 +186,13 @@ public sealed class ProfileService(
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await notifier.NotifyPreviousContactAsync(channel, previous, target, cancellationToken);
-        return new ContactConfirmed(target, hidden, hidden ? UserMessages.OldDocumentsHidden.Text : UserMessages.Saved("Personal profile").Text);
+        var notice = hidden ? UserMessages.OldDocumentsHidden : UserMessages.Saved("Personal profile");
+        return new ContactConfirmed(target, hidden, notice.Text, notice.Code);
     }
+
+    /// <summary>MSG-ACCOUNT-09 (MSG01 before).</summary>
+    private static AppError UsedByAnotherAccount(VerificationChannel channel) =>
+        AppError.UsedByAnotherAccount(ErrorKind.Validation, ContactInputs.FieldName(channel), MessageCodes.Legacy.Msg01);
 
     private async Task<bool> IsUsedByAnotherAccountAsync(VerificationChannel channel, string target, Guid accountId, CancellationToken cancellationToken)
     {

@@ -40,7 +40,7 @@ internal sealed class ExternalServicesStartupCheck(
         if (ocr.Value.Provider == OcrProviderOptions.FakeProvider)
         {
             // The fake invents readings: outside Development it would put fabricated values into production data.
-            throw new InvalidOperationException("Ocr:Provider=Fake is only allowed in Development; leave it unset to read nothing (MSG04, manual entry).");
+            throw new InvalidOperationException("Ocr:Provider=Fake is only allowed in Development; leave it unset to read nothing (MSG-WATER-01, manual entry).");
         }
 
         if (email.Value.Provider == EmailOptions.SmtpProvider && email.Value.Smtp.Security == SmtpSecurity.None)

@@ -8,7 +8,7 @@ namespace OMTS.Api.Filters;
 
 /// <summary>
 /// A multipart upload above the endpoint's <see cref="RequestSizeLimitAttribute"/> answers like every other invalid
-/// file: 400 MSG01 on the endpoint's <see cref="UploadFieldAttribute"/>, through the global invalid model state
+/// file: 400 MSG-GEN-01 on the endpoint's <see cref="UploadFieldAttribute"/>, through the global invalid model state
 /// response. Without this, Kestrel refuses the body while model binding reads the form, which reports the
 /// anonymous field "Request" (TestServer has no body size limit, so only a Kestrel host shows it).
 /// <list type="bullet">

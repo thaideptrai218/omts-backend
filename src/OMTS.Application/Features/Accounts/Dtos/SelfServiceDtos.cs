@@ -10,13 +10,15 @@ public sealed record RegisterTraderRequest(
     string PasswordConfirmation,
     string VerificationToken);
 
-/// <param name="OldDocumentsHidden">Several offline profiles share the number (MSG57); the Owner links them later.</param>
-public sealed record TraderRegistered(Guid AccountId, string Username, bool OldDocumentsHidden, string? Notice);
+/// <param name="OldDocumentsHidden">Several offline profiles share the number; the Owner links them later.</param>
+/// <param name="Notice">MSG-ACCOUNT-02 when <paramref name="OldDocumentsHidden"/>.</param>
+/// <param name="NoticeCode">The code of <paramref name="Notice"/>.</param>
+public sealed record TraderRegistered(Guid AccountId, string Username, bool OldDocumentsHidden, string? Notice, string? NoticeCode);
 
 public sealed record StartRecoveryRequest(string Identifier);
 
-/// <summary>Always the same answer (MSG15), whether or not a code was sent.</summary>
-public sealed record RecoveryStarted(Guid RequestId, string Message);
+/// <summary>Always the same answer (MSG-ACCOUNT-20), whether or not a code was sent.</summary>
+public sealed record RecoveryStarted(Guid RequestId, string Message, string MessageCode);
 
 public sealed record ResetPasswordRequest(string VerificationToken, string NewPassword, string PasswordConfirmation);
 
@@ -36,7 +38,9 @@ public sealed record StartPhoneVerificationRequest(string? PhoneNumber);
 public sealed record ConfirmContactRequest(string VerificationToken);
 
 /// <param name="OldDocumentsHidden">Trader only: several offline profiles share the number (MSG57).</param>
-public sealed record ContactConfirmed(string Contact, bool OldDocumentsHidden, string? Notice);
+/// <param name="Notice">MSG57 when <paramref name="OldDocumentsHidden"/>; otherwise MSG-GEN-05 after a contact change.</param>
+/// <param name="NoticeCode">The code of <paramref name="Notice"/>.</param>
+public sealed record ContactConfirmed(string Contact, bool OldDocumentsHidden, string? Notice, string? NoticeCode);
 
 public sealed record UpdateProfileRequest(string DisplayName, string? RowVersion, string? Username = null);
 

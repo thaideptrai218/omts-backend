@@ -264,7 +264,7 @@ public class DemoDataSeedQaTests
         Assert.Equal(trader.Id, me.GetProperty("accountId").GetGuid());
         var ownerOnly = await traderClient.GetAsync("/api/cooperative/profile");
         Assert.Equal(HttpStatusCode.Forbidden, ownerOnly.StatusCode);
-        Assert.Equal("MSG02", await ownerOnly.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await ownerOnly.ErrorCodeAsync());
 
         // The same endpoint is open to the real Owner, so the refusals above are about the caller.
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync("/api/cooperative/profile")).StatusCode);

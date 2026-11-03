@@ -67,7 +67,7 @@ public class WaterRecordingTests(AuthApiFactory api) : IClassFixture<AuthApiFact
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("Failed", body.GetProperty("ocr").Text("status"));
-        Assert.Equal("MSG04", body.GetProperty("ocr").GetProperty("warning").Text("code"));
+        Assert.Equal("MSG-WATER-01", body.GetProperty("ocr").GetProperty("warning").Text("code"));
         var draft = body.GetProperty("measurement");
         Assert.Equal("Draft", draft.Text("status"));
         Assert.Equal("Manual", draft.Text("inputSource"));
@@ -120,7 +120,7 @@ public class WaterRecordingTests(AuthApiFactory api) : IClassFixture<AuthApiFact
         foreach (var response in new[] { missing, pdf, huge })
         {
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-            Assert.Equal("MSG01", await response.ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
             Assert.Equal("Photo", (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
         }
 
@@ -128,7 +128,7 @@ public class WaterRecordingTests(AuthApiFactory api) : IClassFixture<AuthApiFact
     }
 
     [Fact]
-    public async Task Photo_storage_failure_answers_502_MSG05_and_saves_nothing()
+    public async Task Photo_storage_failure_answers_502_MSG_GEN_03_and_saves_nothing()
     {
         await using var broken = new WaterApiFactory(services: s => s.AddSingleton<OMTS.Application.Common.Interfaces.Storage.IFileStorage, FailingFileStorage>());
         var z = await broken.ZoneAsync();
@@ -137,7 +137,7 @@ public class WaterRecordingTests(AuthApiFactory api) : IClassFixture<AuthApiFact
         var manual = await z.Owner.PostAsync($"{z.Base}/with-photo", ManualForm(Guid.NewGuid(), WaterTestKit.Photo()));
 
         Assert.Equal(HttpStatusCode.BadGateway, recognized.StatusCode);
-        Assert.Equal("MSG05", await recognized.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-03", await recognized.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.BadGateway, manual.StatusCode);
         Assert.Equal(0, await broken.QueryAsync(db => db.WaterMeasurements.CountAsync()));
     }
@@ -228,8 +228,8 @@ public class WaterRecordingTests(AuthApiFactory api) : IClassFixture<AuthApiFact
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.Equal("MSG61", problem.Text("code"));
-        Assert.Equal("Cannot change water measurement from “Confirmed” to “Confirmed”: only a Draft can be confirmed.", problem.Text("detail"));
+        Assert.Equal("MSG-GEN-09", problem.Text("code"));
+        Assert.Equal("Water measurement is Confirmed and cannot be used for this action.", problem.Text("detail"));
     }
 
     [Theory]
@@ -244,8 +244,8 @@ public class WaterRecordingTests(AuthApiFactory api) : IClassFixture<AuthApiFact
         var response = await z.RecordAsync((decimal?)ph, (decimal)salinity);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG01", await response.ErrorCodeAsync());
-        Assert.Equal($"{field} is invalid. Please check and enter it again.", (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("detail"));
+        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
+        Assert.Equal($"{field} is missing or invalid. Please check and enter it again.", (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("detail"));
         Assert.Equal(0, await api.QueryAsync(db => db.WaterMeasurements.CountAsync(m => m.ZoneId == z.Zone.Id)));
     }
 
@@ -306,7 +306,7 @@ public class WaterRecordingTests(AuthApiFactory api) : IClassFixture<AuthApiFact
         foreach (var response in responses)
         {
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-            Assert.Equal("MSG02", await response.ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
         }
 
         Assert.Equal(0, await api.QueryAsync(db => db.WaterMeasurements.CountAsync(m => m.ZoneId == z.Zone.Id)));
@@ -323,7 +323,7 @@ public class WaterRecordingTests(AuthApiFactory api) : IClassFixture<AuthApiFact
         var read = await otherZoneManager.GetAsync($"/api/water-measurements/{draft.Id()}");
 
         Assert.Equal(HttpStatusCode.Forbidden, confirm.StatusCode);
-        Assert.Equal("MSG02", await confirm.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await confirm.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.Forbidden, read.StatusCode);
         Assert.Equal(StatusIds.WaterMeasurement.Draft, await api.QueryAsync(db => db.WaterMeasurements.Where(m => m.Id == draft.Id()).Select(m => m.StatusId).SingleAsync()));
     }

@@ -26,7 +26,7 @@ public sealed class AccountAccess(
     /// <summary>Temporary password still in use: only UC04 is open (UC02 branch 2c).</summary>
     public bool RequiresPasswordChange { get; } = mustChangePassword;
 
-    /// <summary>Traders and staff need a verified phone number before other functions (BR-34, MSG67).</summary>
+    /// <summary>Traders and staff need a verified phone number before other functions (BR-34, MSG-ACCOUNT-04).</summary>
     public bool RequiresPhoneVerification { get; } =
         !phoneVerified && subjectType is SubjectType.Trader or SubjectType.Staff;
 

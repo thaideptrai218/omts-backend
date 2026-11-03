@@ -65,7 +65,7 @@ public class PurchasingSqlServerBugTests
         var paidNow = await world.Owner.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 10_000)) with { AmountPaidNow = 2500, PaidNowMethod = "Cash" });
         Assert.Equal("Amount paid now", await paidNow.FieldAsync(HttpStatusCode.BadRequest, "MSG41"));
         var raft = await world.Owner.PostReceiptAsync(world.Body(new LineBody(world.Material, 1, 10_000)) with { RaftId = Guid.NewGuid() });
-        Assert.Equal("Raft", await raft.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Raft", await raft.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
     }
 
     // H1: Supplier.Name allows 200 characters, but every Supplier.* audit row stores it in AuditEvent.RecordCode (100) → 500.
@@ -108,7 +108,7 @@ public class PurchasingSqlServerBugTests
         var id = await host.QueryAsync(db => db.Suppliers.Where(s => s.PhoneNumber == phone).Select(s => s.Id).SingleAsync());
         foreach (var refused in responses.Where(r => r.StatusCode != HttpStatusCode.Created))
         {
-            Assert.Equal(id, (await refused.ProblemAsync(HttpStatusCode.Conflict, "MSG03")).GetProperty("existingId").GetGuid());
+            Assert.Equal(id, (await refused.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("existingId").GetGuid());
         }
     }
 

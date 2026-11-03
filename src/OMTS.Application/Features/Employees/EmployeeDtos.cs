@@ -69,8 +69,11 @@ public sealed record EmployeeView(
 
 public sealed record EmployeeListItem(Guid Id, string FullName, string? PhoneNumber, IReadOnlyList<ZoneRef> WorkingZones, LinkedAccountView? Account, string Status);
 
+/// <param name="Message">MSG-GEN-05.</param>
+/// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
 /// <param name="TemporaryPassword">Only when a login account was created in the same save; shown once.</param>
-public sealed record EmployeeSaved(EmployeeView Employee, string Message, string? TemporaryPassword = null, DateTimeOffset? TemporaryPasswordExpiresAt = null);
+public sealed record EmployeeSaved(
+    EmployeeView Employee, string Message, string MessageCode, string? TemporaryPassword = null, DateTimeOffset? TemporaryPasswordExpiresAt = null);
 
 /// <summary>Asks the web to let the Owner review the linked account (lock it, or unlock / re-grant it).</summary>
 public sealed record FollowUp(string Action, Guid AccountId);

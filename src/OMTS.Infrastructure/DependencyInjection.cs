@@ -186,7 +186,7 @@ public static class DependencyInjection
         services.AddSingleton<FakeOcrService>();
         services.AddSingleton<NotConfiguredOcrService>();
         // Only the fake (Development/tests) exists until the real OCR provider ticket. Unset or unknown fails
-        // closed: no readings, MSG04 and manual entry, instead of fabricated values.
+        // closed: no readings, MSG-WATER-01 and manual entry, instead of fabricated values.
         services.AddSingleton<IOcrService>(provider =>
         {
             var name = provider.GetRequiredService<IOptions<OcrProviderOptions>>().Value.Provider;

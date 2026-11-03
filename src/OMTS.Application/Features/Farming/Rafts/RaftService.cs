@@ -71,8 +71,13 @@ public sealed class RaftService(
             return AppError.NotFound;
         }
 
+        // FARM-04.0.E3: no raft is added to a Discontinued zone (MSG-GEN-09 naming the zone).
+        if (zone.StatusId != StatusIds.Usage.InUse)
+        {
+            return AppError.NotUsableChoice($"Farming zone {zone.Code}", statusCatalog.DisplayNameOf(zone.StatusId), "Zone");
+        }
+
         var check = new FieldCheck();
-        check.Check(zone.StatusId == StatusIds.Usage.InUse, "Zone");
         // The zone must still be In Use when this save commits: a parallel discontinue then fails with MSG06.
         unitOfWork.MarkChanged(zone);
         var values = Read(request, check, out var lanes, out var drawing);
@@ -162,7 +167,7 @@ public sealed class RaftService(
     }
 
     /// <summary>
-    /// JPEG/PNG photo, at most 10 MB, stored unchanged; a storage failure changes nothing (MSG05). The replaced
+    /// JPEG/PNG photo, at most 10 MB, stored unchanged; a storage failure changes nothing (MSG-GEN-03). The replaced
     /// photo file is removed once the new one is saved.
     /// </summary>
     public async Task<Result<RaftView>> UploadPhotoAsync(Guid raftId, IncomingFile file, CancellationToken cancellationToken)
@@ -182,7 +187,7 @@ public sealed class RaftService(
         var uploaded = await storage.UploadAsync(validated.Files[0], FileCategories.RaftPhotos, cancellationToken);
         if (!uploaded.Succeeded)
         {
-            return new AppError(ErrorKind.BadGateway, UserMessages.FileOperationFailed);
+            return new AppError(ErrorKind.BadGateway, UserMessages.UploadFailed);
         }
 
         var replaced = raft.PhotoUrl;
@@ -206,12 +211,13 @@ public sealed class RaftService(
 
         if (raft.StatusId != StatusIds.Usage.InUse)
         {
-            return WrongStatus(raft, StatusIds.Usage.Discontinued, "the raft is already discontinued");
+            return WrongStatus(raft);
         }
 
-        if (await rafts.GetOpenCycleAsync(raft.Id, cancellationToken) is not null)
+        // FARM-04.3.E1: MSG-GEN-06 naming the open cycle (MSG61 before).
+        if (await rafts.GetOpenCycleAsync(raft.Id, cancellationToken) is { } openCycle)
         {
-            return WrongStatus(raft, StatusIds.Usage.Discontinued, "the raft has an open cultivation cycle");
+            return OpenCycle(openCycle, MessageCodes.Legacy.Msg61);
         }
 
         return await ChangeStatusAsync(raft, StatusIds.Usage.Discontinued, "Raft.Discontinued", request, cancellationToken);
@@ -228,22 +234,21 @@ public sealed class RaftService(
 
         if (raft.StatusId != StatusIds.Usage.Discontinued)
         {
-            return WrongStatus(raft, StatusIds.Usage.InUse, "the raft is already in use");
+            return WrongStatus(raft);
         }
 
         // As on create: the zone row is part of this save, so a parallel zone discontinue fails with MSG06.
         unitOfWork.MarkChanged(raft.Zone);
         return raft.Zone.StatusId == StatusIds.Usage.InUse
             ? await ChangeStatusAsync(raft, StatusIds.Usage.InUse, "Raft.Reactivated", request, cancellationToken)
-            : WrongStatus(raft, StatusIds.Usage.InUse, "the zone is discontinued");
+            : statusChanges.WrongStatus($"Farming zone {raft.Zone.Code}", raft.Zone);
     }
 
     private async Task<LayoutOutcome> ChangeLayoutAsync(Raft raft, IReadOnlyList<LayoutLane> lanes, string? drawing, CancellationToken cancellationToken)
     {
         if (await rafts.GetOpenCycleAsync(raft.Id, cancellationToken) is { } cycle)
         {
-            var name = $"cultivation cycle opened {BusinessClock.ToBusinessDate(cycle.OpenedAt):dd/MM/yyyy}";
-            return new LayoutOutcome(AppError.Conflict(UserMessages.StillInUse(1, name), new Dictionary<string, object?> { ["cycleId"] = cycle.Id }), false);
+            return new LayoutOutcome(OpenCycle(cycle), false);
         }
 
         var removed = raft.Lanes.Where(l => l.LaneNumber > lanes.Count).ToList();
@@ -325,7 +330,14 @@ public sealed class RaftService(
             : await ViewAsync(raft, cancellationToken);
     }
 
-    private AppError WrongStatus(Raft raft, int newStatusId, string reason) => statusChanges.WrongStatus("raft", raft, newStatusId, reason);
+    private AppError WrongStatus(Raft raft) => statusChanges.WrongStatus($"Raft {raft.Code}", raft);
+
+    /// <summary>MSG-GEN-06 naming the open cultivation cycle, with its <c>cycleId</c>.</summary>
+    private static AppError OpenCycle(Domain.Entities.Cultivation.CultivationCycle cycle, string legacyCode = MessageCodes.Legacy.Msg11)
+    {
+        var name = $"cultivation cycle opened {BusinessClock.ToBusinessDate(cycle.OpenedAt):dd/MM/yyyy}";
+        return AppError.Conflict(UserMessages.StillInUse(1, name) with { LegacyCode = legacyCode }, new Dictionary<string, object?> { ["cycleId"] = cycle.Id });
+    }
 
     private static AppError Duplicate(Guid existingId) => new(
         ErrorKind.Conflict,

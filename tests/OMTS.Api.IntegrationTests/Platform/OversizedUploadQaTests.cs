@@ -32,7 +32,7 @@ public class OversizedUploadQaTests(KestrelApiFactory api) : IClassFixture<Kestr
         using var response = await UploadAsync(client, string.Format(path, Guid.NewGuid()), multipartName, megabytes * Megabyte, expectContinue: true);
 
         var problem = await ProblemAsync(response);
-        Assert.Equal((HttpStatusCode.BadRequest, "MSG01", field), (response.StatusCode, Text(problem, "code"), Text(problem, "field")));
+        Assert.Equal((HttpStatusCode.BadRequest, "MSG-GEN-01", field), (response.StatusCode, Text(problem, "code"), Text(problem, "field")));
     }
 
     // A client streaming the file without a Content-Length (Transfer-Encoding: chunked) must get the same answer.
@@ -44,7 +44,7 @@ public class OversizedUploadQaTests(KestrelApiFactory api) : IClassFixture<Kestr
         using var response = await UploadAsync(client, Logo, "file", 4 * Megabyte, expectContinue: false, knownLength: false);
 
         var problem = await ProblemAsync(response);
-        Assert.Equal((HttpStatusCode.BadRequest, "MSG01", "Logo"), (response.StatusCode, Text(problem, "code"), Text(problem, "field")));
+        Assert.Equal((HttpStatusCode.BadRequest, "MSG-GEN-01", "Logo"), (response.StatusCode, Text(problem, "code"), Text(problem, "field")));
     }
 
     // A browser sends the whole body (no Expect: 100-continue). A 7 MB phone photo picked as the logo (limit 3 MB)
@@ -57,7 +57,7 @@ public class OversizedUploadQaTests(KestrelApiFactory api) : IClassFixture<Kestr
         using var response = await UploadAsync(client, Logo, "file", 7 * Megabyte, expectContinue: false);
 
         var problem = await ProblemAsync(response);
-        Assert.Equal((HttpStatusCode.BadRequest, "MSG01", "Logo"), (response.StatusCode, Text(problem, "code"), Text(problem, "field")));
+        Assert.Equal((HttpStatusCode.BadRequest, "MSG-GEN-01", "Logo"), (response.StatusCode, Text(problem, "code"), Text(problem, "field")));
     }
 
     // One mistake (the logo is too big), one answer: the 2.5 MB logo refused by the logo rules (2 MB) and the
@@ -93,7 +93,7 @@ public class OversizedUploadQaTests(KestrelApiFactory api) : IClassFixture<Kestr
         using var gated = await UploadAsync(mustChangeClient, Logo, "file", 4 * Megabyte, expectContinue: true);
 
         Assert.Equal(HttpStatusCode.Unauthorized, unauthenticated.StatusCode);
-        Assert.Equal((HttpStatusCode.Forbidden, "MSG02"), (forbidden.StatusCode, Text(await ProblemAsync(forbidden), "code")));
+        Assert.Equal((HttpStatusCode.Forbidden, "MSG-GEN-08"), (forbidden.StatusCode, Text(await ProblemAsync(forbidden), "code")));
         Assert.Equal((HttpStatusCode.Forbidden, "PASSWORD_CHANGE_REQUIRED"), (gated.StatusCode, Text(await ProblemAsync(gated), "code")));
     }
 

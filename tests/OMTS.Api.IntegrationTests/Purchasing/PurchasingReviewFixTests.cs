@@ -80,7 +80,7 @@ public class PurchasingReviewFixTests(AuthApiFactory factory) : IClassFixture<Au
         var url = $"/api/purchase-receipts/{draft.Id()}";
         var edit = world.Body(new LineBody(world.Other, 2, 100_000));
 
-        Assert.Equal("RowVersion", await (await world.Owner.PutAsJsonAsync(url, edit)).FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("RowVersion", await (await world.Owner.PutAsJsonAsync(url, edit)).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         await (await world.Owner.PutAsJsonAsync(url, edit with { RowVersion = Convert.ToBase64String([1, 2, 3, 4, 5, 6, 7, 8]) })).ProblemAsync(HttpStatusCode.Conflict, "MSG06");
         var saved = await (await world.Owner.PutAsJsonAsync(url, edit with { RowVersion = draft.GetProperty("rowVersion").GetString() })).ReadAsync(HttpStatusCode.OK);
 
@@ -94,12 +94,12 @@ public class PurchasingReviewFixTests(AuthApiFactory factory) : IClassFixture<Au
         var (_, foreignRaft) = await factory.ZoneWithRaftAsync();
         LineBody Line(decimal quantity, decimal price) => new(world.Other, quantity, price);
 
-        Assert.Equal("Raft", await (await world.Owner.PostReceiptAsync(world.Body(Line(1, 1000)) with { RaftId = foreignRaft.Id })).FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
-        Assert.Equal("Line 1", await (await world.Owner.PostReceiptAsync(world.Body(Line(1, 1000.5m)))).FieldAsync(HttpStatusCode.BadRequest, "MSG59"));
-        Assert.Equal("Line 1", await (await world.Owner.PostReceiptAsync(world.Body(Line(1.2345m, 1000)))).FieldAsync(HttpStatusCode.BadRequest, "MSG59"));
-        Assert.Equal("Line 1", await (await world.Owner.PostReceiptAsync(world.Body(Line(999_999_999, 999_999_999_999)))).FieldAsync(HttpStatusCode.BadRequest, "MSG59"));
-        Assert.Equal("Line 2", await (await world.Owner.PostReceiptAsync(world.Body(Line(1, 1000), Line(0, 1000)))).FieldAsync(HttpStatusCode.BadRequest, "MSG59"));
-        Assert.Equal("Discount amount", await (await world.Owner.PostReceiptAsync(world.Body(Line(1, 1000)) with { DiscountAmount = 1_000_000_000_000_000 })).FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Raft", await (await world.Owner.PostReceiptAsync(world.Body(Line(1, 1000)) with { RaftId = foreignRaft.Id })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("Line 1", await (await world.Owner.PostReceiptAsync(world.Body(Line(1, 1000.5m)))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("Line 1", await (await world.Owner.PostReceiptAsync(world.Body(Line(1.2345m, 1000)))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("Line 1", await (await world.Owner.PostReceiptAsync(world.Body(Line(999_999_999, 999_999_999_999)))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("Line 2", await (await world.Owner.PostReceiptAsync(world.Body(Line(1, 1000), Line(0, 1000)))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("Discount amount", await (await world.Owner.PostReceiptAsync(world.Body(Line(1, 1000)) with { DiscountAmount = 1_000_000_000_000_000 })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         await (await world.Owner.PostReceiptAsync(world.Body(Line(1.234m, 1000)) with { RaftId = world.Raft.Id })).ReadAsync(HttpStatusCode.Created);
     }
 
@@ -119,8 +119,8 @@ public class PurchasingReviewFixTests(AuthApiFactory factory) : IClassFixture<Au
             reason = "Broken", returnDate = PurchasingTestKit.Today, refundAmount = 100_000, refundMethod = 99, lines = new[] { new { receiptLineId = line, quantity = 1 } },
         });
 
-        Assert.Equal("Paid now method", await paidNow.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
-        Assert.Equal("Refund method", await refund.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("Paid now method", await paidNow.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("Refund method", await refund.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public class PurchasingReviewFixTests(AuthApiFactory factory) : IClassFixture<Au
         file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
         form.Add(file, "files", "invoice.png");
 
-        await (await world.Owner.PostAsync($"/api/purchase-receipts/{completed.Id()}/invoice-photos", form)).ProblemAsync(HttpStatusCode.Conflict, "MSG61");
+        await (await world.Owner.PostAsync($"/api/purchase-receipts/{completed.Id()}/invoice-photos", form)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public class PurchasingReviewFixTests(AuthApiFactory factory) : IClassFixture<Au
         var wide = await world.Owner.GetAsync("/api/purchase-receipts?from=2000-01-01&to=2100-12-31");
         var huge = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts?zoneId={world.Zone.Id}&page={int.MaxValue}&pageSize=100000");
 
-        Assert.Equal("To date", await wide.FieldAsync(HttpStatusCode.BadRequest, "MSG01"));
+        Assert.Equal("To date", await wide.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         Assert.Equal(100, huge.GetProperty("page").GetProperty("pageSize").GetInt32());
         Assert.Equal(1, huge.GetProperty("totals").GetProperty("count").GetInt32());
     }

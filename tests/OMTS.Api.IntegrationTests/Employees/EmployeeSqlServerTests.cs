@@ -69,7 +69,7 @@ public class EmployeeSqlServerTests
 
         Assert.Equal([id], lower.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()));
         Assert.Equal([id], upper.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()));
-        Assert.Equal("MSG03", await duplicate.ErrorCodeAsync());
+        Assert.Equal("MSG-LABOR-03", await duplicate.ErrorCodeAsync());
         Assert.Equal(1, await QueryAsync(api, db => db.Employees.CountAsync()));
     }
 
@@ -136,7 +136,7 @@ public class EmployeeSqlServerTests
         var refused = await owner.PostAsJsonAsync("/api/employees", Profile($"Refused {NewCode()}", taken, zone.Id, b => b["account"] = AccountBlock(refusedUser, zone, role)));
         var accepted = await CreateAsync(owner, Profile($"Accepted {NewCode()}", NewPhone(), zone.Id, b => b["account"] = AccountBlock(acceptedUser, zone, role)));
 
-        Assert.Equal("MSG03", await refused.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-09", await refused.ErrorCodeAsync());
         Assert.False(await QueryAsync(api, db => db.Accounts.AnyAsync(a => a.Username == refusedUser)));
         Assert.Equal(1, await QueryAsync(api, db => db.Employees.CountAsync()));
         var accountId = await QueryAsync(api, db => db.Accounts.Where(a => a.Username == acceptedUser).Select(a => a.Id).SingleAsync());

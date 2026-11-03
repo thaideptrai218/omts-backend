@@ -42,7 +42,7 @@ public class AcsSqlServerTests
         foreach (var refused in responses.Where(r => r.StatusCode != HttpStatusCode.Created))
         {
             Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
-            Assert.Equal("MSG03", await refused.ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-02", await refused.ErrorCodeAsync());
         }
 
         Assert.Equal(1, await ReadAsync(database, db => db.Accounts.CountAsync(a => a.Username == username)));
@@ -69,7 +69,7 @@ public class AcsSqlServerTests
         Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Created);
         var refused = responses.Single(r => r.StatusCode != HttpStatusCode.Created);
         Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
-        Assert.Equal("MSG14", await refused.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-03", await refused.ErrorCodeAsync());
         Assert.Equal(1, await ReadAsync(database, db => db.Accounts.CountAsync(a => a.PhoneNumber == phone)));
     }
 

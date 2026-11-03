@@ -66,7 +66,7 @@ public class FarmingReviewFixTests(AuthApiFactory factory) : IClassFixture<AuthA
         var problem = await shrink.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.Conflict, shrink.StatusCode);
-        Assert.Equal("MSG11", problem.GetProperty("code").GetString());
+        Assert.Equal("MSG-GEN-06", problem.GetProperty("code").GetString());
         Assert.Equal([5], problem.GetProperty("laneNumbers").EnumerateArray().Select(n => n.GetInt32()));
     }
 

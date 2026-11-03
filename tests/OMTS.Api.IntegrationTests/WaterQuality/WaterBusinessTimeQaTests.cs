@@ -133,7 +133,7 @@ public class WaterBusinessTimeQaTests(AuthApiFactory api) : IClassFixture<AuthAp
             $"{{\"clientOperationId\":\"{Guid.NewGuid()}\",\"ph\":\"seven\",\"salinity\":20,\"confirm\":true}}", System.Text.Encoding.UTF8, "application/json"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG01", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
         Assert.Equal(await FieldAsync(unreadableNumber), await FieldAsync(response));
         Assert.Equal(0, await api.QueryAsync(db => db.WaterMeasurements.CountAsync(m => m.ZoneId == z.Zone.Id)));
     }
@@ -150,7 +150,7 @@ public class WaterBusinessTimeQaTests(AuthApiFactory api) : IClassFixture<AuthAp
         var response = await PostRawAsync(z, measuredAt);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG01", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
     }
 
     // Same root cause on the multipart path (InvariantFormValues → BusinessClock.FromLocal).
@@ -162,7 +162,7 @@ public class WaterBusinessTimeQaTests(AuthApiFactory api) : IClassFixture<AuthAp
         var response = await z.Owner.PostAsync($"{z.Base}/with-photo", Form("0001-01-01T00:00:00"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG01", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
     }
 
     // The multipart field is documented as ISO 8601 (Swagger, README) and the JSON body refuses other formats, but
@@ -178,7 +178,7 @@ public class WaterBusinessTimeQaTests(AuthApiFactory api) : IClassFixture<AuthAp
         var response = await z.Owner.PostAsync($"{z.Base}/with-photo", Form(measuredAt));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG01", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
     }
 
     // BusinessTimeSetup claims no endpoint takes a date and time from the query, the route, a header or a bound form

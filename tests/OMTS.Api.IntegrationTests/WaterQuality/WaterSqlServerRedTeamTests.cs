@@ -37,7 +37,7 @@ public class WaterSqlServerRedTeamTests
         {
             Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
             var code = await refused.ErrorCodeAsync();
-            Assert.True(code is "MSG06" or "MSG61", code);
+            Assert.True(code is "MSG06" or "MSG-GEN-09", code);
         }
 
         await using var db = database.CreateContext();
@@ -111,7 +111,7 @@ public class WaterSqlServerRedTeamTests
         {
             Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
             var code = await refused.ErrorCodeAsync();
-            Assert.True(code is "MSG06" or "MSG61", code);
+            Assert.True(code is "MSG06" or "MSG-GEN-09", code);
         }
 
         await using var db = database.CreateContext();

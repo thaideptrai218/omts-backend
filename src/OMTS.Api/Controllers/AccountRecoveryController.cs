@@ -22,15 +22,19 @@ public sealed class AccountRecoveryController(RegistrationService registration, 
     public async Task<IActionResult> Register(RegisterTraderRequest request, CancellationToken cancellationToken) =>
         (await registration.RegisterAsync(request, cancellationToken)).ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
 
-    /// <summary>ACS-03 – always 202 with MSG15; a code is sent only to a verified identifier of an Active account.</summary>
+    /// <summary>ACS-03 – always 202 with MSG-ACCOUNT-20; a code is sent only to a verified identifier of an Active account.</summary>
     [HttpPost("recovery")]
     [ProducesResponseType<RecoveryStarted>(StatusCodes.Status202Accepted)]
     public async Task<IActionResult> StartRecovery(StartRecoveryRequest request, CancellationToken cancellationToken) =>
         Accepted(await recovery.StartAsync(request, cancellationToken));
 
-    /// <summary>Sets the new password with the token from <c>POST api/verifications/{id}/verify</c>; every session ends.</summary>
+    /// <summary>
+    /// Sets the new password with the token from <c>POST api/verifications/{id}/verify</c>; every session ends.
+    /// Answers MSG-ACCOUNT-10 (<c>message</c>, <c>messageCode</c>).
+    /// </summary>
     [HttpPost("recovery/reset")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> Reset(ResetPasswordRequest request, CancellationToken cancellationToken) =>
-        (await recovery.ResetAsync(request, cancellationToken)).ToActionResult(_ => Ok(new { message = UserMessages.PasswordChanged.Text }));
+        (await recovery.ResetAsync(request, cancellationToken)).ToActionResult(
+            _ => Ok(new { message = UserMessages.PasswordRecovered.Text, messageCode = UserMessages.PasswordRecovered.Code }));
 }

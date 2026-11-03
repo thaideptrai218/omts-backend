@@ -15,7 +15,7 @@ namespace OMTS.Application.Features.Accounts;
 
 /// <summary>
 /// ACS-03 – recover a forgotten password with a code sent to a verified phone number or email. The start
-/// answer is always the same (MSG15), so it never reveals whether an account exists.
+/// answer is always the same (MSG-ACCOUNT-20), so it never reveals whether an account exists.
 /// </summary>
 public sealed class PasswordRecoveryService(
     IAccountRepository accounts,
@@ -55,7 +55,7 @@ public sealed class PasswordRecoveryService(
             }
         }
 
-        return new RecoveryStarted(requestId, UserMessages.RecoveryCodeMaybeSent.Text);
+        return new RecoveryStarted(requestId, UserMessages.RecoveryCodeMaybeSent.Text, UserMessages.RecoveryCodeMaybeSent.Code);
     }
 
     /// <summary>

@@ -52,7 +52,7 @@ public class RaftRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         Assert.Equal("Raft-01", first.Text("code"));
 
         var duplicate = await (await owner.Client.PostAsJsonAsync($"/api/zones/{zoneA}/rafts", NewRaftBody("raft-01"))).ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal("MSG03", duplicate.Text("code"));
+        Assert.Equal("MSG-GEN-02", duplicate.Text("code"));
         Assert.Equal(first.Id(), duplicate.GetProperty("existingRaftId").GetGuid());
 
         // The same code is fine in another zone.
@@ -162,7 +162,7 @@ public class RaftRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
 
         var blocked = await (await owner.Client.PutAsJsonAsync($"/api/rafts/{raft.Id()}", NewRaftBody(raft.Text("code"), lanes: 2) with { RowVersion = shorter.Text("rowVersion") }))
             .ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal("MSG11", blocked.Text("code"));
+        Assert.Equal("MSG-GEN-06", blocked.Text("code"));
         Assert.Equal([3], blocked.GetProperty("laneNumbers").EnumerateArray().Select(n => n.GetInt32()));
         Assert.Contains("lane 3", blocked.Text("detail"));
 
@@ -185,13 +185,13 @@ public class RaftRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         {
             Lanes = [new(1, 40, "A", "B"), new(2, 30, "A", "B")], RowVersion = raft.Text("rowVersion"),
         })).ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal("MSG11", lengths.Text("code"));
+        Assert.Equal("MSG-GEN-06", lengths.Text("code"));
         Assert.Equal(cycle.Id, lengths.GetProperty("cycleId").GetGuid());
         var markers = await owner.Client.PutAsJsonAsync($"/api/rafts/{raft.Id()}", body with
         {
             Lanes = [new(1, 40, "A", "B"), new(2, 40, "A", "Z")], RowVersion = raft.Text("rowVersion"),
         });
-        Assert.Equal("MSG11", await markers.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-06", await markers.ErrorCodeAsync());
 
         var notes = await (await owner.Client.PutAsJsonAsync($"/api/rafts/{raft.Id()}", body with { ConditionNotes = "Rope worn", RowVersion = raft.Text("rowVersion") }))
             .ReadAsync(HttpStatusCode.OK);
@@ -199,8 +199,8 @@ public class RaftRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
 
         var discontinue = await (await owner.Client.PostAsJsonAsync($"/api/rafts/{raft.Id()}/discontinue", new { rowVersion = notes.Text("rowVersion") }))
             .ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal("MSG61", discontinue.Text("code"));
-        Assert.Contains("open cultivation cycle", discontinue.Text("detail"));
+        Assert.Equal("MSG-GEN-06", discontinue.Text("code"));
+        Assert.Contains("cultivation cycle opened", discontinue.Text("detail"));
     }
 
     [Fact]
@@ -217,20 +217,20 @@ public class RaftRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         var discontinued = await (await owner.Client.PostAsJsonAsync($"/api/rafts/{raft.Id()}/discontinue", new { reason = "Storm damage", rowVersion = raft.Text("rowVersion") }))
             .ReadAsync(HttpStatusCode.OK);
         Assert.Equal(StatusIds.Usage.Discontinued, discontinued.GetProperty("statusId").GetInt32());
-        Assert.Equal("MSG61", await (await owner.Client.PostAsJsonAsync($"/api/rafts/{raft.Id()}/discontinue", new { rowVersion = discontinued.Text("rowVersion") })).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-09", await (await owner.Client.PostAsJsonAsync($"/api/rafts/{raft.Id()}/discontinue", new { rowVersion = discontinued.Text("rowVersion") })).ErrorCodeAsync());
 
         // The zone is free now; a raft of a Discontinued zone cannot come back.
         await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/discontinue", new { rowVersion = zone.Text("rowVersion") })).ReadAsync(HttpStatusCode.OK);
         var inStoppedZone = await (await owner.Client.PostAsJsonAsync($"/api/rafts/{raft.Id()}/reactivate", new { rowVersion = discontinued.Text("rowVersion") }))
             .ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal("MSG61", inStoppedZone.Text("code"));
-        Assert.Contains("zone is discontinued", inStoppedZone.Text("detail"));
+        Assert.Equal("MSG-GEN-09", inStoppedZone.Text("code"));
+        Assert.Equal($"Farming zone {zone.Text("code")} is Discontinued and cannot be used for this action.", inStoppedZone.Text("detail"));
 
         await (await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/reactivate", new { rowVersion = zone.Text("rowVersion") })).ReadAsync(HttpStatusCode.OK);
         var back = await (await owner.Client.PostAsJsonAsync($"/api/rafts/{raft.Id()}/reactivate", new { reason = "Repaired", rowVersion = discontinued.Text("rowVersion") }))
             .ReadAsync(HttpStatusCode.OK);
         Assert.Equal(StatusIds.Usage.InUse, back.GetProperty("statusId").GetInt32());
-        Assert.Equal("MSG61", await (await owner.Client.PostAsJsonAsync($"/api/rafts/{raft.Id()}/reactivate", new { rowVersion = back.Text("rowVersion") })).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-09", await (await owner.Client.PostAsJsonAsync($"/api/rafts/{raft.Id()}/reactivate", new { rowVersion = back.Text("rowVersion") })).ErrorCodeAsync());
 
         var audits = await factory.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == raft.Id()).OrderBy(e => e.OccurredAt).ToListAsync());
         Assert.Equal(["Raft.Created", "Raft.Discontinued", "Raft.Reactivated"], audits.Select(a => a.Action));
@@ -289,28 +289,28 @@ public class RaftRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         Assert.Equal(0, detail.GetProperty("materialCost").GetDecimal());
         Assert.Equal(HttpStatusCode.OK, (await staff.Client.GetAsync($"/api/rafts/{raftA.Id()}/condition")).StatusCode);
 
-        Assert.Equal("MSG02", await (await staff.Client.GetAsync($"/api/zones/{zoneB.Id()}/rafts")).ErrorCodeAsync());
-        Assert.Equal("MSG02", await (await staff.Client.GetAsync($"/api/rafts/{raftB.Id()}")).ErrorCodeAsync());
-        Assert.Equal("MSG02", await (await staff.Client.GetAsync($"/api/rafts/{raftB.Id()}/condition")).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await staff.Client.GetAsync($"/api/zones/{zoneB.Id()}/rafts")).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await staff.Client.GetAsync($"/api/rafts/{raftB.Id()}")).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await staff.Client.GetAsync($"/api/rafts/{raftB.Id()}/condition")).ErrorCodeAsync());
 
         // Owner-only writes: even a role holding every function in the zone gets MSG02.
         var trader = await factory.TraderAsync();
         foreach (var client in new[] { staff.Client, trader })
         {
-            Assert.Equal("MSG02", await (await client.PostAsJsonAsync($"/api/zones/{zoneA.Id()}/rafts", NewRaftBody())).ErrorCodeAsync());
-            Assert.Equal("MSG02", await (await client.PutAsJsonAsync($"/api/rafts/{raftA.Id()}", NewRaftBody() with { RowVersion = raftA.Text("rowVersion") })).ErrorCodeAsync());
-            Assert.Equal("MSG02", await (await client.PostAsync($"/api/rafts/{raftA.Id()}/photo", new MultipartFormDataContent { { FileContent(Png), "file", "a.png" } })).ErrorCodeAsync());
-            Assert.Equal("MSG02", await (await client.PostAsJsonAsync($"/api/rafts/{raftA.Id()}/discontinue", new { rowVersion = raftA.Text("rowVersion") })).ErrorCodeAsync());
-            Assert.Equal("MSG02", await (await client.PostAsJsonAsync($"/api/rafts/{raftA.Id()}/reactivate", new { rowVersion = raftA.Text("rowVersion") })).ErrorCodeAsync());
-            Assert.Equal("MSG02", await (await client.PostAsJsonAsync("/api/zones", NewZoneBody())).ErrorCodeAsync());
-            Assert.Equal("MSG02", await (await client.PutAsJsonAsync($"/api/zones/{zoneA.Id()}", NewZoneBody() with { RowVersion = zoneA.Text("rowVersion") })).ErrorCodeAsync());
-            Assert.Equal("MSG02", await (await client.PostAsJsonAsync($"/api/zones/{zoneA.Id()}/discontinue", new { rowVersion = zoneA.Text("rowVersion") })).ErrorCodeAsync());
-            Assert.Equal("MSG02", await (await client.PostAsJsonAsync($"/api/zones/{zoneA.Id()}/reactivate", new { rowVersion = zoneA.Text("rowVersion") })).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.PostAsJsonAsync($"/api/zones/{zoneA.Id()}/rafts", NewRaftBody())).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.PutAsJsonAsync($"/api/rafts/{raftA.Id()}", NewRaftBody() with { RowVersion = raftA.Text("rowVersion") })).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.PostAsync($"/api/rafts/{raftA.Id()}/photo", new MultipartFormDataContent { { FileContent(Png), "file", "a.png" } })).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.PostAsJsonAsync($"/api/rafts/{raftA.Id()}/discontinue", new { rowVersion = raftA.Text("rowVersion") })).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.PostAsJsonAsync($"/api/rafts/{raftA.Id()}/reactivate", new { rowVersion = raftA.Text("rowVersion") })).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.PostAsJsonAsync("/api/zones", NewZoneBody())).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.PutAsJsonAsync($"/api/zones/{zoneA.Id()}", NewZoneBody() with { RowVersion = zoneA.Text("rowVersion") })).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.PostAsJsonAsync($"/api/zones/{zoneA.Id()}/discontinue", new { rowVersion = zoneA.Text("rowVersion") })).ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await (await client.PostAsJsonAsync($"/api/zones/{zoneA.Id()}/reactivate", new { rowVersion = zoneA.Text("rowVersion") })).ErrorCodeAsync());
         }
 
-        Assert.Equal("MSG02", await (await trader.GetAsync($"/api/zones/{zoneA.Id()}/rafts")).ErrorCodeAsync());
-        Assert.Equal("MSG02", await (await trader.GetAsync($"/api/rafts/{raftA.Id()}")).ErrorCodeAsync());
-        Assert.Equal("MSG02", await (await trader.GetAsync($"/api/rafts/{raftA.Id()}/condition")).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await trader.GetAsync($"/api/zones/{zoneA.Id()}/rafts")).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await trader.GetAsync($"/api/rafts/{raftA.Id()}")).ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await (await trader.GetAsync($"/api/rafts/{raftA.Id()}/condition")).ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateClient().GetAsync($"/api/rafts/{raftA.Id()}")).StatusCode);
 
         var unchanged = await factory.QueryAsync(db => db.Rafts.SingleAsync(r => r.Id == raftA.Id()));

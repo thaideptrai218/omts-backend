@@ -21,7 +21,7 @@ public class ReviewFixQaRegressionTests
 
         var response = await owner.PostAsJsonAsync($"/api/employees/{id}/reinstate", new { rowVersion = "" });
 
-        Assert.Equal("MSG01", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
     }
 
     [SqlServerFact]
@@ -36,6 +36,6 @@ public class ReviewFixQaRegressionTests
 
         var response = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = today, rowVersion = "" });
 
-        Assert.Equal("MSG01", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
     }
 }

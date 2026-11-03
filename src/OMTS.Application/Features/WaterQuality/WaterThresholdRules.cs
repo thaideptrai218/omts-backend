@@ -6,7 +6,7 @@ namespace OMTS.Application.Features.WaterQuality;
 
 /// <summary>
 /// ENV-04 input rules: each pair (pH, salinity) is set or cleared together, every value is in range
-/// (MSG01), and the minimum is less than the maximum (MSG28).
+/// (MSG-GEN-01), and the minimum is less than the maximum (MSG-WATER-05).
 /// </summary>
 public static class WaterThresholdRules
 {
@@ -38,9 +38,10 @@ public static class WaterThresholdRules
 
         if (notLess.Count > 0)
         {
+            var indicator = notLess.Count == 2 ? "pH and salinity" : notLess[0] == PhMinField ? "pH" : "salinity";
             return new AppError(
                 ErrorKind.Validation,
-                UserMessages.MinimumNotLessThanMaximum,
+                UserMessages.MinimumNotLessThanMaximum(indicator),
                 new Dictionary<string, object?> { ["field"] = notLess[0], ["fields"] = notLess });
         }
 

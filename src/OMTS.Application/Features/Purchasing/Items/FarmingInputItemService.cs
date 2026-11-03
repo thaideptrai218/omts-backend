@@ -123,13 +123,13 @@ public sealed class FarmingInputItemService(
     }
 
     public Task<Result<FarmingInputItemView>> DiscontinueAsync(Guid itemId, CancellationToken cancellationToken) =>
-        ChangeStatusAsync(itemId, StatusIds.Usage.InUse, StatusIds.Usage.Discontinued, "FarmingInputItem.Discontinued", "the item is already discontinued", cancellationToken);
+        ChangeStatusAsync(itemId, StatusIds.Usage.InUse, StatusIds.Usage.Discontinued, "FarmingInputItem.Discontinued", cancellationToken);
 
     public Task<Result<FarmingInputItemView>> ReactivateAsync(Guid itemId, CancellationToken cancellationToken) =>
-        ChangeStatusAsync(itemId, StatusIds.Usage.Discontinued, StatusIds.Usage.InUse, "FarmingInputItem.Reactivated", "the item is already in use", cancellationToken);
+        ChangeStatusAsync(itemId, StatusIds.Usage.Discontinued, StatusIds.Usage.InUse, "FarmingInputItem.Reactivated", cancellationToken);
 
     private async Task<Result<FarmingInputItemView>> ChangeStatusAsync(
-        Guid itemId, int fromStatusId, int toStatusId, string action, string wrongStatusReason, CancellationToken cancellationToken)
+        Guid itemId, int fromStatusId, int toStatusId, string action, CancellationToken cancellationToken)
     {
         var item = await items.GetForEditAsync(itemId, cancellationToken);
         if (item is null)
@@ -139,8 +139,7 @@ public sealed class FarmingInputItemService(
 
         if (item.StatusId != fromStatusId)
         {
-            return AppError.Conflict(UserMessages.CannotChangeStatus(
-                "farming input item", statusCatalog.DisplayNameOf(item.StatusId), statusCatalog.DisplayNameOf(toStatusId), wrongStatusReason));
+            return AppError.Conflict(UserMessages.WrongStatus($"Farming input item {item.Code}", statusCatalog.DisplayNameOf(item.StatusId)));
         }
 
         item.StatusId = toStatusId;

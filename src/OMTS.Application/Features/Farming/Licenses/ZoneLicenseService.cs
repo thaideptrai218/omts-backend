@@ -70,7 +70,7 @@ public sealed class ZoneLicenseService(
         var uploaded = await UploadAsync(checkedInput.File!, cancellationToken);
         if (uploaded is null)
         {
-            return new AppError(ErrorKind.BadGateway, UserMessages.FileOperationFailed);
+            return new AppError(ErrorKind.BadGateway, UserMessages.UploadFailed);
         }
 
         Apply(document, input, uploaded);
@@ -95,7 +95,9 @@ public sealed class ZoneLicenseService(
 
         if (await licenses.FindReplacementAsync(document.Id, cancellationToken) is { } replacement)
         {
-            return AppError.Conflict(UserMessages.LicenseReplaced(replacement.DocumentNumber), new Dictionary<string, object?> { ["replacementId"] = replacement.Id });
+            return AppError.Conflict(
+                Replaced(document, replacement) with { LegacyCode = MessageCodes.Legacy.LicenseReplaced },
+                new Dictionary<string, object?> { ["replacementId"] = replacement.Id });
         }
 
         var (input, invalid) = ZoneLicenseInput.Read(request);
@@ -113,7 +115,7 @@ public sealed class ZoneLicenseService(
         string? uploaded = null;
         if (checkedInput.File is { } newFile && (uploaded = await UploadAsync(newFile, cancellationToken)) is null)
         {
-            return new AppError(ErrorKind.BadGateway, UserMessages.FileOperationFailed);
+            return new AppError(ErrorKind.BadGateway, UserMessages.UploadFailed);
         }
 
         var before = Snapshot(document, document.ZoneScopes.Select(s => s.ZoneId).ToList());
@@ -157,7 +159,8 @@ public sealed class ZoneLicenseService(
 
         if (await licenses.FindReplacementAsync(old.Id, cancellationToken) is { } existing)
         {
-            return new AppError(ErrorKind.Conflict, UserMessages.AlreadyExists("Replacement license"), new Dictionary<string, object?>
+            // FARM-03.2: only a license that is not Replaced can be replaced (MSG-GEN-09; MSG03 before).
+            return new AppError(ErrorKind.Conflict, Replaced(old, existing) with { LegacyCode = MessageCodes.Legacy.Msg03 }, new Dictionary<string, object?>
             {
                 ["existingId"] = existing.Id, ["replacementId"] = existing.Id,
             });
@@ -176,7 +179,7 @@ public sealed class ZoneLicenseService(
         var uploaded = await UploadAsync(checkedInput.File!, cancellationToken);
         if (uploaded is null)
         {
-            return new AppError(ErrorKind.BadGateway, UserMessages.FileOperationFailed);
+            return new AppError(ErrorKind.BadGateway, UserMessages.UploadFailed);
         }
 
         var document = new ZoneComplianceDocument { ReplacesDocumentId = old.Id };
@@ -228,6 +231,10 @@ public sealed class ZoneLicenseService(
         var result = await storage.UploadAsync(file, FileCategories.ZoneLicenses, cancellationToken);
         return result.Succeeded ? result.Key : null;
     }
+
+    /// <summary>MSG-GEN-09 naming the replacement: a Replaced license is kept as it is (BR-FARM-06).</summary>
+    private static UserMessage Replaced(ZoneComplianceDocument document, ZoneComplianceDocument replacement) =>
+        UserMessages.WrongStatus($"License {document.DocumentNumber}", $"Replaced by {replacement.DocumentNumber}");
 
     private static void Apply(ZoneComplianceDocument document, ZoneLicenseInput input, string? fileKey)
     {

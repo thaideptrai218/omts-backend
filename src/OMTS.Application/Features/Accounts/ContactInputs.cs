@@ -10,9 +10,9 @@ public static class ContactInputs
     public static string? Normalize(VerificationChannel channel, string? input) =>
         channel == VerificationChannel.Sms ? PhoneNumbers.Normalize(input) : EmailAddresses.Normalize(input);
 
-    /// <summary>Field name used in MSG01 for the channel.</summary>
+    /// <summary>Field name used in MSG-GEN-01 for the channel.</summary>
     public static string FieldName(VerificationChannel channel) => channel == VerificationChannel.Sms ? "Phone number" : "Email";
 
-    /// <summary>"phone number" / "email", as used in MSG62.</summary>
+    /// <summary>"phone number" / "email", as used in MSG-ACCOUNT-19.</summary>
     public static string ContactName(VerificationChannel channel) => channel == VerificationChannel.Sms ? "phone number" : "email";
 }

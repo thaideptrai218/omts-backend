@@ -18,7 +18,7 @@ public static class BusinessClock
 
     /// <summary>
     /// <see cref="FromLocal"/> for a value a client sent: false for the first seven hours of year 1, which have no UTC
-    /// instant (they would be before 0001-01-01T00:00Z), so the caller answers "invalid" (MSG01) instead of failing.
+    /// instant (they would be before 0001-01-01T00:00Z), so the caller answers "invalid" (MSG-GEN-01) instead of failing.
     /// </summary>
     public static bool TryFromLocal(DateTime local, out DateTimeOffset instant)
     {

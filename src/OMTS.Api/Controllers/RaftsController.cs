@@ -32,7 +32,7 @@ public sealed class RaftsController(RaftService rafts, RaftConditionService cond
     public async Task<IActionResult> Get(Guid raftId, CancellationToken cancellationToken) =>
         (await rafts.GetAsync(raftId, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>A different lane layout creates a new layout version; blocked with MSG11 while a cycle is open.</summary>
+    /// <summary>A different lane layout creates a new layout version; blocked with MSG-GEN-06 while a cycle is open.</summary>
     [HttpPut("api/rafts/{raftId:guid}")]
     [RequireCooperativeOwner]
     [ProducesResponseType<RaftView>(StatusCodes.Status200OK)]

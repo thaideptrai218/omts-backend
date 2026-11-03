@@ -59,7 +59,7 @@ public class RegistrationTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var start = await factory.CreateClient().PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = existing.PhoneNumber });
 
         Assert.Equal(HttpStatusCode.Conflict, start.StatusCode);
-        Assert.Equal("MSG14", await start.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-03", await start.ErrorCodeAsync());
     }
 
     [Fact]
@@ -76,11 +76,11 @@ public class RegistrationTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var noToken = await client.PostAsJsonAsync("/api/auth/register", Body("Sms", NewPhone(), Password, "not-a-token"));
         var otherTarget = await client.PostAsJsonAsync("/api/auth/register", Body("Sms", NewPhone(), Password, token));
 
-        Assert.Equal("MSG01", await badPhone.ErrorCodeAsync());
-        Assert.Equal("MSG01", await weak.ErrorCodeAsync());
-        Assert.Equal("MSG01", await mismatch.ErrorCodeAsync());
-        Assert.Equal("MSG16", await noToken.ErrorCodeAsync());
-        Assert.Equal("MSG16", await otherTarget.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await badPhone.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await weak.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await mismatch.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-16", await noToken.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-16", await otherTarget.ErrorCodeAsync());
         Assert.False(await factory.QueryAsync(db => db.Accounts.AnyAsync(a => a.PhoneNumber == phone)));
 
         // The token was not consumed by the refused attempts.

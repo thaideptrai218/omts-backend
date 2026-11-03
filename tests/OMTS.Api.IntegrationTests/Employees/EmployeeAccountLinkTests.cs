@@ -66,7 +66,7 @@ public class EmployeeAccountLinkTests(AuthApiFactory factory) : IClassFixture<Au
             (row.GetProperty("displayName").GetString(), row.GetProperty("username").GetString(), row.GetProperty("phoneNumber").GetString(), row.GetProperty("status").GetString()));
         Assert.DoesNotContain(before.EnumerateArray(), a => a.GetProperty("id").GetGuid() == trader.Id || a.GetProperty("id").GetGuid() == otherOwner.Id);
         Assert.DoesNotContain(after.EnumerateArray(), a => a.GetProperty("id").GetGuid() == free.Id);
-        Assert.Equal("MSG13", await login.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-07", await login.ErrorCodeAsync());
         Assert.False(await factory.QueryAsync(db => db.AccessGrants.AnyAsync(g => g.AccountId == free.Id)));
     }
 
@@ -106,7 +106,7 @@ public class EmployeeAccountLinkTests(AuthApiFactory factory) : IClassFixture<Au
         var usernames = Enumerable.Range(0, 4).Select(_ => $"nv{NewCode()}").ToArray();
         var cases = new (string Name, string Username, object Account, string Expected)[]
         {
-            ($"P {NewCode()}", usernames[0], AccountBlock(usernames[0], zone, role, phoneNumber: taken.PhoneNumber), "MSG03"),
+            ($"P {NewCode()}", usernames[0], AccountBlock(usernames[0], zone, role, phoneNumber: taken.PhoneNumber), "MSG-ACCOUNT-09"),
             ($"Q {NewCode()}", usernames[1], new { username = usernames[1], grants = Array.Empty<object>() }, "Zone-role pair"),
             ($"R {NewCode()}", usernames[2], AccountBlock(usernames[2], zone, oldRole), "Role"),
             ($"S {NewCode()}", usernames[3], AccountBlock(usernames[3], closedZone, role), "Zone"),
@@ -115,11 +115,13 @@ public class EmployeeAccountLinkTests(AuthApiFactory factory) : IClassFixture<Au
         foreach (var (name, username, account, expected) in cases)
         {
             var response = await owner.PostAsJsonAsync("/api/employees", Profile(name, NewPhone(), zone.Id, b => b["account"] = account));
-            if (expected == "MSG03")
+            if (expected == "MSG-ACCOUNT-09")
             {
                 Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-                Assert.Equal("Account already exists. The system opens the existing record for you to check and does not create a copy.",
-                    (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString());
+                var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal("MSG-ACCOUNT-09", problem.GetProperty("code").GetString());
+                Assert.Equal("This phone number is already used by another account. Please enter another one.", problem.GetProperty("detail").GetString());
+                Assert.Equal("Phone number", problem.GetProperty("field").GetString());
             }
             else
             {
@@ -145,7 +147,7 @@ public class EmployeeAccountLinkTests(AuthApiFactory factory) : IClassFixture<Au
         var body = await created.Content.ReadFromJsonAsync<JsonElement>();
         var again = await owner.PostAsJsonAsync($"/api/employees/{id}/account", AccountBlock($"nv{NewCode()}", zone, role));
 
-        Assert.Equal("MSG02", await ownerRights.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-08", await ownerRights.ErrorCodeAsync());
         Assert.False(await factory.QueryAsync(db => db.Accounts.AnyAsync(a => a.Username == ownerUsername)));
         Assert.True(await factory.QueryAsync(db => db.AuditEvents.AnyAsync(e => e.Action == "Account.OwnerRightsRefused" && e.RecordCode == ownerUsername)));
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);

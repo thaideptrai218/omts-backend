@@ -25,8 +25,8 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         var stale = await client.PutAsJsonAsync("/api/me/profile", new { displayName = "New name", rowVersion = "AAAAAAAAB9E=" });
         var saved = await client.PutAsJsonAsync("/api/me/profile", new { displayName = "Chủ nhiệm Nguyễn", rowVersion });
 
-        Assert.Equal("MSG20", await username.ErrorCodeAsync());
-        Assert.Equal("MSG01", await empty.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await username.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await empty.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
         Assert.Equal("MSG06", await stale.ErrorCodeAsync());
         Assert.Equal("Personal profile saved.", (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("message").GetString());
@@ -64,8 +64,8 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         var taken = await client.PostAsJsonAsync("/api/me/contact-changes", new { channel = "Sms", target = other.PhoneNumber });
         var same = await client.PostAsJsonAsync("/api/me/contact-changes", new { channel = "Sms", target = owner.PhoneNumber });
 
-        Assert.Equal("MSG01", await taken.ErrorCodeAsync());
-        Assert.Equal("MSG01", await same.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await taken.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await same.ErrorCodeAsync());
     }
 
     [Fact]
@@ -115,7 +115,8 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         var body = await saved.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
-        Assert.Equal("The device has declined push notifications. Other valid channels are still saved.", body.GetProperty("notice").GetString());
+        Assert.StartsWith("Your preferences are saved. This device does not allow notifications from OMTS.", body.GetProperty("notice").GetString());
+        Assert.Equal("MSG-ACCOUNT-21", body.GetProperty("noticeCode").GetString());
         var work = body.GetProperty("categories").EnumerateArray().Single(c => c.GetProperty("category").GetString() == "WORK");
         var channels = work.GetProperty("channels").EnumerateArray().ToDictionary(c => c.GetProperty("channel").GetString()!, c => c.GetProperty("enabled").GetBoolean());
         Assert.False(channels["InApp"]);

@@ -17,7 +17,7 @@ public sealed class CooperativeProfileController(CooperativeProfileService profi
     public async Task<IActionResult> Get(CancellationToken cancellationToken) =>
         (await profiles.GetAsync(cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Validates every field; the first complete save moves Preliminary → Completed (MSG10).</summary>
+    /// <summary>Validates every field; the first complete save moves Preliminary → Completed (MSG-GEN-05).</summary>
     [HttpPut("api/cooperative/profile")]
     [Authorize]
     [RequireCooperativeOwner]

@@ -35,15 +35,17 @@ public class WaterThresholdTests(AuthApiFactory api) : IClassFixture<AuthApiFact
     }
 
     [Fact]
-    public async Task Minimum_not_less_than_maximum_is_MSG28_and_keeps_the_current_thresholds()
+    public async Task Minimum_not_less_than_maximum_is_MSG_WATER_05_and_keeps_the_current_thresholds()
     {
         var z = await api.ZoneAsync();
 
         var response = await z.Owner.PutAsJsonAsync($"/api/zones/{z.Zone.Id}/water-thresholds", new { phMin = 8.5m, phMax = 8.5m, salinityMin = 15m, salinityMax = 30m });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG28", await response.ErrorCodeAsync());
-        Assert.Equal("The minimum value must be less than the maximum value.", (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("detail"));
+        Assert.Equal("MSG-WATER-05", await response.ErrorCodeAsync());
+        Assert.Equal(
+            "The minimum of pH must be less than the maximum. The thresholds were not saved. Please correct the values.",
+            (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("detail"));
         var zone = await api.QueryAsync(db => db.FarmingZones.AsNoTracking().SingleAsync(x => x.Id == z.Zone.Id));
         Assert.Equal((6.5m, 8.5m), (zone.PhMin!.Value, zone.PhMax!.Value));
         Assert.Empty((await api.AuditOfAsync(z.Zone.Id)).Where(e => e.Action == "WaterThreshold.Updated"));
@@ -61,7 +63,7 @@ public class WaterThresholdTests(AuthApiFactory api) : IClassFixture<AuthApiFact
         var response = await z.Owner.PutAsJsonAsync($"/api/zones/{z.Zone.Id}/water-thresholds", new { phMin, phMax, salinityMin = salMin, salinityMax = salMax });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG01", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
         Assert.Equal(field, (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
     }
 
@@ -120,7 +122,7 @@ public class WaterThresholdTests(AuthApiFactory api) : IClassFixture<AuthApiFact
         foreach (var response in new[] { set, setAll, listWithoutWater })
         {
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-            Assert.Equal("MSG02", await response.ErrorCodeAsync());
+            Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
         }
     }
 

@@ -114,7 +114,7 @@ public class OwnerPasswordResetQaTests
         var outcome = await ResetAsync(api, owner.Username);
         var login = await api.CreateClient().PostAsJsonAsync("/api/auth/login", new { identifier = owner.Username, password = ResetPassword });
 
-        Assert.Equal("MSG69", await lockedOut.ErrorCodeAsync());
+        Assert.Equal("MSG-ACCOUNT-06", await lockedOut.ErrorCodeAsync());
         Assert.Equal(DeploymentBootstrapper.Success, outcome.ExitCode);
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         Assert.Empty(await PushDevicesAsync(api, owner.Id));

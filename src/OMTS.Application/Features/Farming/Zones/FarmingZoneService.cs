@@ -141,7 +141,7 @@ public sealed class FarmingZoneService(
         return await ViewAsync(zone, cancellationToken);
     }
 
-    /// <summary>In Use → Discontinued, blocked while the zone still has In Use rafts (MSG11).</summary>
+    /// <summary>In Use → Discontinued, blocked while the zone still has In Use rafts (MSG-GEN-06).</summary>
     public async Task<Result<FarmingZoneView>> DiscontinueAsync(Guid zoneId, ChangeStatusRequest request, CancellationToken cancellationToken)
     {
         var zone = await zones.GetForEditAsync(zoneId, cancellationToken);
@@ -152,7 +152,7 @@ public sealed class FarmingZoneService(
 
         if (zone.StatusId != StatusIds.Usage.InUse)
         {
-            return WrongStatus(zone, StatusIds.Usage.Discontinued, "the zone is already discontinued");
+            return WrongStatus(zone);
         }
 
         var rafts = await zones.InUseRaftCodesAsync(zone.Id, cancellationToken);
@@ -175,7 +175,7 @@ public sealed class FarmingZoneService(
 
         return zone.StatusId == StatusIds.Usage.Discontinued
             ? await ChangeStatusAsync(zone, StatusIds.Usage.InUse, "FarmingZone.Reactivated", request, cancellationToken)
-            : WrongStatus(zone, StatusIds.Usage.InUse, "the zone is already in use");
+            : WrongStatus(zone);
     }
 
     private async Task<Result<FarmingZoneView>> ChangeStatusAsync(
@@ -187,7 +187,7 @@ public sealed class FarmingZoneService(
             : await ViewAsync(zone, cancellationToken);
     }
 
-    private AppError WrongStatus(FarmingZone zone, int newStatusId, string reason) => statusChanges.WrongStatus("farming zone", zone, newStatusId, reason);
+    private AppError WrongStatus(FarmingZone zone) => statusChanges.WrongStatus($"Farming zone {zone.Code}", zone);
 
     private static AppError Duplicate(Guid existingId) => new(
         ErrorKind.Conflict,

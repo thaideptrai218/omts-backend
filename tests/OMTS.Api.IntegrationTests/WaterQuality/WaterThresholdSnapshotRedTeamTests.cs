@@ -113,7 +113,7 @@ public class WaterThresholdSnapshotRedTeamTests(AuthApiFactory api) : IClassFixt
         var response = await a.Owner.PutAsJsonAsync("/api/water-thresholds", new { phMin = 7m, phMax = 8m, salinityMin = 30m, salinityMax = 30m });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG28", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-WATER-05", await response.ErrorCodeAsync());
         Assert.Equal("Salinity minimum", (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
         var zones = await own.QueryAsync(db => db.FarmingZones.AsNoTracking().ToListAsync());
         Assert.All(zones, zone => Assert.Equal((6.5m, 8.5m, 15m, 30m), (zone.PhMin!.Value, zone.PhMax!.Value, zone.SalinityMin!.Value, zone.SalinityMax!.Value)));
@@ -159,7 +159,7 @@ public class WaterThresholdSnapshotRedTeamTests(AuthApiFactory api) : IClassFixt
     private static async Task<string?> FieldAsync(HttpResponseMessage response)
     {
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG01", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("field");
     }
 }

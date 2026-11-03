@@ -59,6 +59,6 @@ public class FarmingStorageFailureTests
     private static async Task AssertFileFailureAsync(HttpResponseMessage response)
     {
         Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
-        Assert.Equal("MSG05", await response.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-03", await response.ErrorCodeAsync());
     }
 }

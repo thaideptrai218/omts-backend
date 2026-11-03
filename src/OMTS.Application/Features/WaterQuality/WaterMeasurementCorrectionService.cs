@@ -189,8 +189,9 @@ public sealed class WaterMeasurementCorrectionService(
     }
 
     /// <summary>
-    /// MSG06 when the chain has a newer version than the one edited; MSG61 when the record's status does
-    /// not allow the change (a Draft cannot be corrected, Corrected and Voided are final).
+    /// MSG06 when the chain has a newer version than the one edited; MSG-GEN-09 when the record's status does
+    /// not allow the change (only a confirmed measurement can be corrected, a Draft can only be voided, Corrected
+    /// and Voided are final).
     /// </summary>
     private async Task<AppError?> CheckVersionAsync(WaterMeasurement measurement, int recordVersion, int target, CancellationToken cancellationToken)
     {
@@ -200,16 +201,9 @@ public sealed class WaterMeasurementCorrectionService(
             return await NewerVersionAsync(chain[^1], measurement.Zone, cancellationToken);
         }
 
-        var reason = (measurement.StatusId, target) switch
+        if ((measurement.StatusId, target) is not ((S.Confirmed, _) or (S.Draft, S.Voided)))
         {
-            (S.Confirmed, _) or (S.Draft, S.Voided) => null,
-            (S.Draft, _) => "only a confirmed measurement can be corrected",
-            (S.Superseded, _) => "only the latest version can be changed",
-            _ => "the measurement has been voided",
-        };
-        if (reason is not null)
-        {
-            return WaterMeasurementStatuses.CannotChange(statusCatalog, measurement.StatusId, target, reason);
+            return WaterMeasurementStatuses.CannotChange(statusCatalog, measurement.StatusId);
         }
 
         return recordVersion == measurement.RecordVersion ? null : AppError.Invalid(WaterValueRules.RecordVersionField);
