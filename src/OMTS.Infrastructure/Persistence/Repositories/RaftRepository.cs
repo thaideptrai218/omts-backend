@@ -64,7 +64,7 @@ internal sealed class RaftRepository(OmtsDbContext db) : IRaftRepository
             .Select(s => new
             {
                 s.Id, s.LaneId, s.SegmentType, s.FromPosition, s.ToPosition, s.SegmentDate, s.RecordedByAccountId, s.ConfirmedByAccountId,
-                s.SeedingId, SeedLotCode = s.Seeding != null ? s.Seeding.SeedLot.InternalCode : null, s.HarvestEventId, s.LotId, s.WriteOffReason,
+                s.SeedingId, SeedLotCode = s.Seeding != null ? s.Seeding.SeedLot.InternalCode : null, s.WriteOffReason,
             })
             .ToListAsync(cancellationToken);
 
@@ -75,7 +75,7 @@ internal sealed class RaftRepository(OmtsDbContext db) : IRaftRepository
             .Select(s => new LaneSegmentDetail(
                 s.Id, s.LaneId, s.SegmentType, s.FromPosition, s.ToPosition, s.SegmentDate,
                 names.GetValueOrDefault(s.RecordedByAccountId), s.ConfirmedByAccountId is { } c ? names.GetValueOrDefault(c) : null,
-                s.SeedingId, s.SeedLotCode, s.HarvestEventId, s.LotId, s.WriteOffReason))
+                s.SeedingId, s.SeedLotCode, s.WriteOffReason))
             .ToList();
     }
 

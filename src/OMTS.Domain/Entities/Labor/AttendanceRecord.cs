@@ -6,7 +6,8 @@ namespace OMTS.Domain.Entities.Labor;
 
 /// <summary>
 /// E41 – Attendance of one person on one day (exactly one of EmployeeId/WorkerId). The contractor of
-/// the day is stored per row so the right intermediary is paid (BR-20).
+/// the day is stored per row so the right intermediary is paid (BR-20). Kept only because ending an
+/// employment checks later attendance (LAB-01); the SRS 27/10 labor module replaces it.
 /// </summary>
 public class AttendanceRecord : AuditableEntity
 {

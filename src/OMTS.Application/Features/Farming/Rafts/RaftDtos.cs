@@ -60,8 +60,6 @@ public sealed record SegmentSourceView(
     string? ConfirmedBy,
     Guid? SeedingEventId,
     string? SeedLotCode,
-    Guid? HarvestEventId,
-    Guid? LotId,
     string? WriteOffReason);
 
 public sealed record PortionView(decimal From, decimal To, PortionCondition Condition, IReadOnlyList<SegmentSourceView> Segments);

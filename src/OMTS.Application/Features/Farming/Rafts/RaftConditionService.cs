@@ -55,5 +55,5 @@ public sealed class RaftConditionService(IRaftRepository rafts, FarmingLookupAcc
     }
 
     private static SegmentSourceView Source(LaneSegmentDetail s) => new(
-        s.Id, s.Type, s.From, s.To, s.Date, s.RecordedBy, s.ConfirmedBy, s.SeedingEventId, s.SeedLotCode, s.HarvestEventId, s.LotId, s.WriteOffReason);
+        s.Id, s.Type, s.From, s.To, s.Date, s.RecordedBy, s.ConfirmedBy, s.SeedingEventId, s.SeedLotCode, s.WriteOffReason);
 }

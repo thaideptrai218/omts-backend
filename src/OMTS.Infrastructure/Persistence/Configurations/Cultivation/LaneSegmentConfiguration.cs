@@ -11,9 +11,6 @@ internal sealed class LaneSegmentConfiguration : IEntityTypeConfiguration<LaneSe
         builder.HasOne(x => x.Cycle).WithMany(c => c.LaneSegments).HasForeignKey(x => x.CycleId);
         builder.HasOne(x => x.Lane).WithMany(l => l.Segments).HasForeignKey(x => x.LaneId);
         builder.HasOne(x => x.Seeding).WithMany(s => s.SeededSegments).HasForeignKey(x => x.SeedingId);
-        builder.HasOne(x => x.Order).WithMany(o => o.PlannedHarvestSegments).HasForeignKey(x => x.OrderId);
-        builder.HasOne(x => x.HarvestEvent).WithMany(h => h.HarvestedSegments).HasForeignKey(x => x.HarvestEventId);
-        builder.HasOne(x => x.Lot).WithMany(l => l.SourceSegments).HasForeignKey(x => x.LotId);
         builder.HasOne(x => x.Log).WithMany().HasForeignKey(x => x.LogId);
         builder.ReferencesAccount(nameof(LaneSegment.RecordedByAccountId), nameof(LaneSegment.ConfirmedByAccountId));
 

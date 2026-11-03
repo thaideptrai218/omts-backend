@@ -1,15 +1,12 @@
 using OMTS.Domain.Entities.Purchasing;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Domain.Common;
-using OMTS.Domain.Entities.AfterSales;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
-using OMTS.Domain.Entities.Finance;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Labor;
 using OMTS.Domain.Entities.Platform;
 using OMTS.Domain.Entities.Sales;
-using OMTS.Domain.Entities.Traceability;
 
 namespace OMTS.Infrastructure.Persistence;
 
@@ -50,44 +47,18 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<CultivationLogEntry> CultivationLogEntries => Set<CultivationLogEntry>();
     public DbSet<WaterMeasurement> WaterMeasurements => Set<WaterMeasurement>();
 
-    // Orders and sales
+    // Products and customers
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Customer> Customers => Set<Customer>();
-    public DbSet<SalesOrder> SalesOrders => Set<SalesOrder>();
-    public DbSet<SaleTransaction> SaleTransactions => Set<SaleTransaction>();
-    public DbSet<PortWeighing> PortWeighings => Set<PortWeighing>();
-    public DbSet<PortHandover> PortHandovers => Set<PortHandover>();
 
-    // Harvest and traceability
-    public DbSet<HarvestEvent> HarvestEvents => Set<HarvestEvent>();
-    public DbSet<TraceabilityLot> TraceabilityLots => Set<TraceabilityLot>();
-    public DbSet<TracePublicationVersion> TracePublicationVersions => Set<TracePublicationVersion>();
-    public DbSet<TraceCorrection> TraceCorrections => Set<TraceCorrection>();
-
-    // Post-sale
-    public DbSet<QualityClaim> QualityClaims => Set<QualityClaim>();
-    public DbSet<SaleAdjustment> SaleAdjustments => Set<SaleAdjustment>();
-    public DbSet<PhysicalReturn> PhysicalReturns => Set<PhysicalReturn>();
-
-    // Customer finance
-    public DbSet<CustomerReceipt> CustomerReceipts => Set<CustomerReceipt>();
-    public DbSet<ReceiptAllocation> ReceiptAllocations => Set<ReceiptAllocation>();
-    public DbSet<CustomerCredit> CustomerCredits => Set<CustomerCredit>();
-    public DbSet<CustomerRefund> CustomerRefunds => Set<CustomerRefund>();
-
-    // Labor
+    // Labor: what ending an employment still checks (LAB-01)
     public DbSet<Contractor> Contractors => Set<Contractor>();
     public DbSet<SeasonalWorker> SeasonalWorkers => Set<SeasonalWorker>();
     public DbSet<WorkAssignment> WorkAssignments => Set<WorkAssignment>();
     public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
-    public DbSet<PayRuleVersion> PayRuleVersions => Set<PayRuleVersion>();
-    public DbSet<PayLine> PayLines => Set<PayLine>();
-    public DbSet<LaborSettlement> LaborSettlements => Set<LaborSettlement>();
-    public DbSet<LaborPayment> LaborPayments => Set<LaborPayment>();
 
     // System
     public DbSet<Notification> Notifications => Set<Notification>();
-    public DbSet<MessageDeliveryAttempt> MessageDeliveryAttempts => Set<MessageDeliveryAttempt>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<Status> Statuses => Set<Status>();
     public DbSet<StatusTransition> StatusTransitions => Set<StatusTransition>();
