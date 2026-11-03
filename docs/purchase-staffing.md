@@ -1,5 +1,7 @@
 # Xác nhận nhân lực trước khi nhận yêu cầu mua
 
+PR review ngày 03/11/2026: nhánh `develop` đã xóa các bảng scaffold cũ, gồm `LaborSettlements` mà nhánh này còn dùng để kiểm tra khóa kỳ công. Thử ghép trong worktree riêng phát hiện xung đột DTO, snapshot và thiếu entity/status trong `WorkforceRepository`; đã hủy thử ghép, giữ nguyên source đã kiểm thử. PR backend giữ draft và cần đồng bộ schema trước khi merge. Chưa áp dụng migration xóa bảng của develop vào DB dev, chưa bỏ kiểm tra khóa kỳ công. Mobile đã ghép bộ khung Zalo từ develop và tiếp nhận `legacyCode` để tương thích mã lỗi SRS mới.
+
 Quyết định trực tiếp của chủ dự án ngày 31/10/2026 bổ sung bước cho SALE-03: thương lái gửi yêu cầu theo lồng → Chủ HTX mời nhân viên xác nhận ca → nhân viên đồng ý hoặc từ chối → Chủ HTX quyết định nhận/từ chối đơn. Không tự động nhận hoặc từ chối đơn khi có phản hồi.
 
 ## Quy tắc
