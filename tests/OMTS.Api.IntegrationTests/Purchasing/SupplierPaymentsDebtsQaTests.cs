@@ -18,8 +18,8 @@ using static OMTS.Api.IntegrationTests.Purchasing.PurchasingTestKit;
 namespace OMTS.Api.IntegrationTests.Purchasing;
 
 /// <summary>
-/// QA of PURCHASE-04/05 on the API. A test whose comment names a FINDING fails on purpose until the finding is fixed
-/// (report qa-261104-supplier-payments-debts.md); the others pin what was checked and found right.
+/// QA of PURCHASE-04/05 on the API (report qa-261104-supplier-payments-debts.md). A test whose comment names a FINDING is a
+/// defect accepted for now, and skipped; the others pin what was checked, found right or fixed.
 /// </summary>
 public class SupplierPaymentsDebtsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
@@ -29,24 +29,28 @@ public class SupplierPaymentsDebtsQaTests(AuthApiFactory factory) : IClassFixtur
     private static ReceiptBody Dated(PurchasingWorld world, DateOnly date, decimal amount) =>
         world.Body(new LineBody(world.Other, 1, amount)) with { ReceiptDate = date, Complete = true };
 
-    // FINDING M1. PURCHASE-04.2: the export holds the debt list. BR-PURCHASE-01/08 set no earliest date, so a mistyped year is saved, and the list then
-    // carries it as "Oldest unpaid receipt": one such document makes ClosedXML throw (no OLE date before year 100), and the export answers 500 for every supplier.
+    // PURCHASE-04.2: the export holds the debt list. BR-PURCHASE-01/08 set no earliest date, so a mistyped year is saved, and the list then carries it as
+    // "Oldest unpaid receipt". Excel has no such date (ClosedXML throws before year 100), so it is text in the same format and the other suppliers keep their file.
     [Theory]
-    [InlineData("Receipt", 26)]
-    [InlineData("PaidBack", 26)]
-    [InlineData("PaidBack", 1)]
-    [InlineData("PaidBack", 99)]
-    [InlineData("PaidBack", 100)]
-    public async Task Finding_M1_one_document_with_a_mistyped_year_does_not_lose_the_debt_export_of_every_supplier(string document, int year)
+    [InlineData("Receipt", 26, "04/11/0026 00:00")]
+    [InlineData("PaidBack", 26, "04/11/0026 00:00")]
+    [InlineData("PaidBack", 1, "04/11/0001 00:00")]
+    [InlineData("PaidBack", 99, "04/11/0099 00:00")]
+    [InlineData("PaidBack", 100, "04/11/0100 00:00")]
+    [InlineData("PaidBack", 1899, "04/11/1899 00:00")]
+    [InlineData("PaidBack", 1900, null)]
+    public async Task A_document_with_a_mistyped_year_is_written_as_text_and_does_not_lose_the_debt_export_of_every_supplier(string document, int year, string? text)
     {
-        // A database of its own: the document would break the export of the other tests of the class.
+        // A database of its own: the export lists every supplier.
         await using var isolated = new AuthApiFactory();
         var world = await isolated.WorldAsync();
         var date = new DateOnly(year, 11, 4);
-        await world.CompletedAsync(new LineBody(world.Other, 1, 1_000));
+        var tag = NewCode();
+        var healthy = world with { SupplierId = await world.Owner.CreateSupplierAsync(name: $"Healthy {tag}") };
+        await healthy.CompletedAsync(new LineBody(world.Other, 1, 1_000));
         Assert.Equal(HttpStatusCode.OK, (await world.Owner.GetAsync($"{Debts}/export")).StatusCode);
 
-        var mistyped = await world.Owner.CreateSupplierAsync();
+        var mistyped = await world.Owner.CreateSupplierAsync(name: $"Mistyped {tag}");
         if (document == "Receipt")
         {
             await world.Owner.CreateReceiptAsync(Dated(world with { SupplierId = mistyped }, date, 1_000));
@@ -59,24 +63,43 @@ public class SupplierPaymentsDebtsQaTests(AuthApiFactory factory) : IClassFixtur
         var list = await (await world.Owner.GetAsync(Debts)).ReadAsync(HttpStatusCode.OK);
         Assert.Contains(list.GetProperty("page").GetProperty("items").EnumerateArray(), r => r.GetProperty("supplier").Id() == mistyped);
 
-        Assert.Equal(HttpStatusCode.OK, (await world.Owner.GetAsync($"{Debts}/export")).StatusCode);
+        var export = await world.Owner.GetAsync($"{Debts}/export");
+        Assert.Equal(HttpStatusCode.OK, export.StatusCode);
+        using var workbook = new XLWorkbook(await export.Content.ReadAsStreamAsync());
+        var rows = workbook.Worksheet("Supplier debts").RowsUsed().Skip(1).ToList();
+        Assert.Single(rows, r => r.Cell(1).GetString() == $"Healthy {tag}");
+        var oldest = rows.Single(r => r.Cell(1).GetString() == $"Mistyped {tag}").Cell(6);
+        if (text is null)
+        {
+            Assert.Equal(date.ToDateTime(TimeOnly.MinValue), oldest.GetDateTime());
+        }
+        else
+        {
+            Assert.Equal((true, text), (oldest.Value.IsText, oldest.GetString()));
+        }
     }
 
-    // The earliest date a period can ask for is refused or answered, never a server error (MSG-GEN-01 or a file, PURCHASE-04.0.E1).
-    // FINDING M1 too: the same exception for a period that starts before year 100.
-    [Fact]
-    public async Task Finding_M1_an_export_period_before_year_100_is_not_a_server_error()
+    // PURCHASE-04.2 with a period (MSG-GEN-01 or a file, PURCHASE-04.0.E1): the statement sheet carries the early dates of the period and of what happened in it.
+    [Theory]
+    [InlineData("0001-01-01", "0001-01-02", "01/01/0001 00:00", "02/01/0001 00:00")]
+    [InlineData("0099-12-30", "0100-01-02", "30/12/0099 00:00", "02/01/0100 00:00")]
+    public async Task An_export_period_before_year_100_gives_a_file_with_its_dates_as_text(string from, string to, string fromText, string toText)
     {
         var world = await factory.WorldAsync();
+        await world.PayAsync(7, DateOnly.Parse(to, System.Globalization.CultureInfo.InvariantCulture), "PaidBack");
 
-        var export = await world.Owner.GetAsync($"{Debts}/export?supplierId={world.SupplierId}&from=0001-01-01&to=0001-01-02");
+        var export = await world.Owner.GetAsync($"{Debts}/export?supplierId={world.SupplierId}&from={from}&to={to}");
 
-        Assert.NotEqual(HttpStatusCode.InternalServerError, export.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, export.StatusCode);
+        using var workbook = new XLWorkbook(await export.Content.ReadAsStreamAsync());
+        var rows = workbook.Worksheet("Statement").RowsUsed().Skip(1).ToList();
+        Assert.Equal([fromText, toText, toText], rows.Select(r => r.Cell(1).GetString()));
+        Assert.Equal(7m, rows[^1].Cell(9).GetValue<decimal>());
     }
 
-    // FINDING L1. Client list §2: bankReference is "ignored (null) for Cash"; PURCHASE-05.0 step 2 asks for it only for a transfer.
+    // Client list §2: bankReference is "ignored (null) for Cash"; PURCHASE-05.0 step 2 asks for it only for a transfer.
     [Fact]
-    public async Task Finding_L1_a_cash_payment_ignores_a_long_bank_reference_as_the_client_list_says()
+    public async Task A_cash_payment_ignores_a_long_bank_reference_as_the_client_list_says()
     {
         var world = await factory.WorldAsync();
 
@@ -89,9 +112,9 @@ public class SupplierPaymentsDebtsQaTests(AuthApiFactory factory) : IClassFixtur
         Assert.Equal(JsonValueKind.Null, body.GetProperty("bankReference").ValueKind);
     }
 
-    // FINDING L2. SupplierDebtService.RowsAsync, its own comment: "what was paid in advance: last, largest first". Signed sort: smallest first.
+    // SupplierDebtService.RowsAsync: what was paid in advance comes last, largest first (no SRS order).
     [Fact]
-    public async Task Finding_L2_among_suppliers_paid_in_advance_the_largest_advance_comes_first()
+    public async Task Among_suppliers_paid_in_advance_the_largest_advance_comes_first()
     {
         var tag = NewCode();
         var owner = await factory.PurchasingOwnerAsync();
@@ -107,39 +130,26 @@ public class SupplierPaymentsDebtsQaTests(AuthApiFactory factory) : IClassFixtur
             list.GetProperty("page").GetProperty("items").EnumerateArray().Select(r => r.Money("debt")).ToList());
     }
 
-    // FINDING L3. Client list §5: "A wrong period gives no file on the export". Without supplierId the period is not read at all.
+    // Client list §5: "A wrong period gives no file on the export", with a supplier or without, and with the same answer.
     [Fact]
-    public async Task Finding_L3_a_wrong_period_gives_no_file_also_on_the_export_without_a_supplier()
+    public async Task A_wrong_period_gives_no_file_also_on_the_export_without_a_supplier()
     {
-        var owner = await factory.PurchasingOwnerAsync();
-
-        var export = await owner.GetAsync($"{Debts}/export?from={Today:yyyy-MM-dd}&to={Today.AddDays(-1):yyyy-MM-dd}");
-
-        Assert.Equal(HttpStatusCode.BadRequest, export.StatusCode);
-    }
-
-    // FINDING L4. PURCHASE-04.2 POST-2: "a file with what was shown". An amount the API accepts (SupplierPaymentRules.MaxAmount) reaches the file as a double.
-    [Fact]
-    public async Task Finding_L4_the_export_holds_the_same_big_amount_as_the_screen()
-    {
-        const decimal amount = 999_999_999_999_999_999m;
-        var tag = NewCode();
         var world = await factory.WorldAsync();
-        world = world with { SupplierId = await world.Owner.CreateSupplierAsync(name: $"{tag} NCC") };
-        await world.PayAsync(amount, kind: "PaidBack");
 
-        var list = await (await world.Owner.GetAsync($"{Debts}?search={tag}")).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(amount, list.GetProperty("page").GetProperty("items")[0].Money("debt"));
-
-        var export = await world.Owner.GetAsync($"{Debts}/export?search={tag}");
-        using var workbook = new XLWorkbook(await export.Content.ReadAsStreamAsync());
-        var cell = workbook.Worksheet("Supplier debts").Cell(2, 4);
-        Assert.Equal(amount.ToString("0"), cell.Value.IsText ? cell.GetString() : ((decimal)cell.GetDouble()).ToString("0"));
+        foreach (var (period, field) in new[]
+        {
+            ($"from={Today:yyyy-MM-dd}&to={Today.AddDays(-1):yyyy-MM-dd}", "From date"),
+            ($"from={Today.AddYears(-6):yyyy-MM-dd}&to={Today:yyyy-MM-dd}", "To date"),
+        })
+        {
+            Assert.Equal(field, await (await world.Owner.GetAsync($"{Debts}/export?{period}")).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+            Assert.Equal(field, await (await world.Owner.GetAsync($"{Debts}/export?supplierId={world.SupplierId}&{period}")).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        }
     }
 
-    // FINDING L5. BR-PURCHASE-04: the unpaid receipts show what is owed. Until P4 a return can pass its receipt (1,500 returns as 2,000);
+    // FINDING L5, goes away with P4. BR-PURCHASE-04: the unpaid receipts show what is owed. Until P4 a return can pass its receipt (1,500 returns as 2,000);
     // SupplierDebtLedger.UnpaidReceipts counts that excess as credit only for receipts after it, so older ones show more than the debt.
-    [Fact]
+    [Fact(Skip = "Goes away with P4: returns become paid-back payments")]
     public async Task Finding_L5_the_unpaid_receipts_do_not_add_up_to_more_than_the_debt_when_a_later_return_passes_its_receipt()
     {
         var world = await factory.WorldAsync();

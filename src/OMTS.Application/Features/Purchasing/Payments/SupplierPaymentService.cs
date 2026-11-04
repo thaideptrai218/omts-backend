@@ -21,6 +21,8 @@ namespace OMTS.Application.Features.Purchasing.Payments;
 /// PURCHASE-05 – money paid to a supplier or paid back by it, and the cancellation of one recorded by mistake. Payments are not
 /// linked to receipts and only change the supplier debt (BR-PURCHASE-04). The API checks the role: no zone, Owner and
 /// Accountant. Each save holds the payment, its audit and the Owner's MSG-PURCHASE-04 (BR-PURCHASE-05).
+/// The supplier row is part of each save and is read before the debt, so of two saves that read one debt only the first
+/// succeeds and the other answers MSG06: the debt told to the Owner and both confirmations rest on a true reading.
 /// </summary>
 public sealed class SupplierPaymentService(
     ISupplierPaymentRepository payments,
@@ -90,6 +92,7 @@ public sealed class SupplierPaymentService(
             RecordedByAccountId = currentUser.AccountId!.Value,
         };
         payments.Add(payment);
+        unitOfWork.MarkChanged(supplier);
         audit.Record(new AuditEntry("SupplierPayment.Recorded", RecordType)
         {
             RecordId = payment.Id,
@@ -102,9 +105,10 @@ public sealed class SupplierPaymentService(
         {
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
-        catch (DuplicateRecordException) when (key is not null)
+        catch (Exception exception) when (key is not null && exception is DuplicateRecordException or ConcurrencyConflictException)
         {
-            // A parallel request with the same key was saved first: this one created nothing.
+            // A parallel request with the same key was saved first: this one created nothing. It loses on the key or on the
+            // supplier row, whichever the save reaches first. With no payment of the key, another save won: MSG06, and the key stays free.
             if (await FirstOfKeyAsync(key, cancellationToken) is { } saved)
             {
                 return saved;
@@ -145,6 +149,7 @@ public sealed class SupplierPaymentService(
         payment.StatusId = StatusIds.SupplierPayment.Cancelled;
         payment.CancelledAt = timeProvider.GetUtcNow();
         payment.CancelReason = reason;
+        unitOfWork.MarkChanged(payment.Supplier);
         audit.Record(new AuditEntry("SupplierPayment.Cancelled", RecordType)
         {
             RecordId = payment.Id,

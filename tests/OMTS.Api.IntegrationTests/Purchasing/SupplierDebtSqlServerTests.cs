@@ -87,7 +87,8 @@ public class SupplierDebtSqlServerTests
         var world = await host.WorldAsync();
         var accountant = await host.StaffAsync(null, StaffRole.Accountant);
 
-        var responses = await InParallelAsync(8, _ => accountant.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, Amount = 1_001, ConfirmAdvance = true }));
+        // A loser answers MSG06 (one reading of the debt, one success) and is sent again.
+        var responses = await InParallelAsync(8, _ => AgainOnConflictAsync(() => accountant.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, Amount = 1_001, ConfirmAdvance = true })));
 
         Assert.All(responses, r => Assert.Equal(HttpStatusCode.Created, r.StatusCode));
         var codes = await host.QueryAsync(db => db.SupplierPayments.Where(p => p.SupplierId == world.SupplierId).Select(p => p.Code).ToListAsync());

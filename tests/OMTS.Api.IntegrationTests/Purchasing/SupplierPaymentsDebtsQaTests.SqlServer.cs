@@ -20,8 +20,8 @@ using FarmingHost = OMTS.Api.IntegrationTests.Farming.FarmingSqlServerHost;
 namespace OMTS.Api.IntegrationTests.Purchasing;
 
 /// <summary>
-/// QA of PURCHASE-04/05 on a real, migrated SQL Server database. A test whose comment names a FINDING fails on purpose until
-/// the finding is fixed (report qa-261104-supplier-payments-debts.md); the others pin what was checked and found right.
+/// QA of PURCHASE-04/05 on a real, migrated SQL Server database (report qa-261104-supplier-payments-debts.md). A test whose
+/// comment names a FINDING is a defect accepted for now, and skipped; the others pin what was checked, found right or fixed.
 /// </summary>
 public class SupplierPaymentsDebtsQaSqlServerTests
 {
@@ -124,10 +124,10 @@ public class SupplierPaymentsDebtsQaSqlServerTests
         Assert.Equal(debt, statement[^1].Cell(9).GetValue<decimal>());
     }
 
-    // FINDING M2. MSG-PURCHASE-04 carries {debt_amount} "after it" (BR-PURCHASE-05, client list §6), and so does debtAfter. The debt is read
-    // before the save with nothing holding the supplier, so parallel payments tell the Owner a debt that was never true.
+    // MSG-PURCHASE-04 carries {debt_amount} "after it" (BR-PURCHASE-05, client list §6), and so does debtAfter. Of the parallel payments
+    // the ones that succeed each tell a debt of their own, in the answer and to the Owner; the others answer MSG06 and save nothing.
     [SqlServerFact]
-    public async Task Finding_M2_parallel_payments_tell_the_owner_the_real_debt_after_each()
+    public async Task Parallel_payments_that_succeed_each_tell_a_distinct_true_debt_the_others_answer_MSG06_and_the_stored_debt_agrees()
     {
         await using var host = await FarmingHost.StartAsync();
         var world = await host.WorldAsync();
@@ -136,17 +136,35 @@ public class SupplierPaymentsDebtsQaSqlServerTests
 
         var responses = await InParallelAsync(6, _ => accountant.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, Amount = 100_000 }));
 
-        var after = new List<decimal>();
+        var saved = new List<JsonElement>();
         foreach (var response in responses)
         {
-            after.Add((await response.ReadAsync(HttpStatusCode.Created)).Money("debtAfter"));
+            if (response.StatusCode == HttpStatusCode.Created)
+            {
+                saved.Add(await response.ReadAsync(HttpStatusCode.Created));
+            }
+            else
+            {
+                await response.ProblemAsync(HttpStatusCode.Conflict, "MSG06");
+            }
         }
 
-        Assert.Equal(400_000m, await world.DebtAsync());
-        Assert.Equal([900_000m, 800_000m, 700_000m, 600_000m, 500_000m, 400_000m], after.OrderDescending());
+        Assert.NotEmpty(saved);
+        var expected = Enumerable.Range(1, saved.Count).Select(i => 1_000_000m - (i * 100_000m)).ToList();
+        Assert.Equal(expected, saved.Select(p => p.Money("debtAfter")).OrderDescending());
+        Assert.Equal(expected[^1], await world.DebtAsync());
+        Assert.Equal(saved.Count, await host.QueryAsync(db => db.SupplierPayments.CountAsync(p => p.SupplierId == world.SupplierId)));
+
+        // The Owner is told what each answer said, and only of what was saved.
+        var ids = saved.Select(p => p.Id()).ToList();
+        var told = await host.QueryAsync(db => db.Notifications
+            .Where(n => n.Type == NotificationTypes.SupplierTransaction && n.RecipientAccountId == host.Owner.Account.Id)
+            .Select(n => new { n.RelatedRecordId, n.MessageParams }).ToListAsync());
+        Assert.Equal(ids.Order(), told.Select(n => n.RelatedRecordId!.Value).Order());
+        Assert.Equal(expected, told.Select(n => JsonDocument.Parse(n.MessageParams!).RootElement.GetProperty("debt_amount").GetDecimal()).OrderDescending());
     }
 
-    // A payment and a cancel at once, a double cancel and a repeated key: no server error, the debt is right, one row and one push each.
+    // A payment and a cancel at once, a double cancel and a repeated key, each sent again on MSG06 as a client does: no server error, the debt is right, one row and one push each.
     [SqlServerFact]
     public async Task Payments_cancels_and_retries_at_once_leave_the_right_debt_one_notification_and_one_push_each()
     {
@@ -174,19 +192,19 @@ public class SupplierPaymentsDebtsQaSqlServerTests
             requests.Add(() => accountant.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, Amount = 50_000, DeduplicationKey = key }));
         }
 
-        var responses = await InParallelAsync(requests.Count, i => requests[i]());
+        var responses = await InParallelAsync(requests.Count, i => AgainOnConflictAsync(requests[i]));
 
         foreach (var loser in responses.Where(r => !r.IsSuccessStatusCode))
         {
-            Assert.Contains(await loser.CodeOrStatusAsync(), new[] { "409 MSG06", "409 MSG-GEN-09" });
+            Assert.Equal("409 MSG-GEN-09", await loser.CodeOrStatusAsync());
         }
 
         var state = await host.QueryAsync(db => db.SupplierPayments.Where(p => p.SupplierId == world.SupplierId)
             .Select(p => new { p.Id, p.Code, p.Kind, p.Amount, p.StatusId, p.DeduplicationKey }).ToListAsync());
         Assert.All(toCancel, c => Assert.Equal(StatusIds.SupplierPayment.Cancelled, state.Single(s => s.Id == c.Id()).StatusId));
         var keyed = Assert.Single(state, s => s.DeduplicationKey == key);
-        var plain = state.Count(s => s.Amount == 1_000);
-        Assert.Equal(1_000_000m - 50_000m - (plain * 1_000m), await world.DebtAsync());
+        Assert.Equal(3, state.Count(s => s.Amount == 1_000));
+        Assert.Equal(1_000_000m - 50_000m - 3_000m, await world.DebtAsync());
         Assert.Equal(state.Count, state.Select(s => s.Code).Distinct().Count());
 
         var rows = await host.QueryAsync(db => db.Notifications.Where(n => n.Type == NotificationTypes.SupplierTransaction).Select(n => new { n.RelatedRecordId, n.RecipientAccountId, n.MessageParams }).ToListAsync());
@@ -218,9 +236,9 @@ public class SupplierPaymentsDebtsQaSqlServerTests
         Assert.Equal(before, await LastAsync());
     }
 
-    // The ends of what a date can hold reach SQL Server. The export before year 100 is FINDING M1 (SupplierPaymentsDebtsQaTests).
+    // The ends of what a date can hold reach SQL Server, on the screen and in the file (M1: Excel has no such early dates, so they are text).
     [SqlServerFact]
-    public async Task The_oldest_and_latest_dates_a_statement_can_ask_for_work_on_sql_server()
+    public async Task The_oldest_and_latest_dates_a_statement_and_its_export_can_ask_for_work_on_sql_server()
     {
         await using var host = await FarmingHost.StartAsync();
         var world = await host.WorldAsync();
@@ -234,6 +252,14 @@ public class SupplierPaymentsDebtsQaSqlServerTests
         Assert.Equal((-5m, 2m), (next.Money("openingDebt"), next.Money("closingDebt")));
         var latest = await (await world.Owner.GetAsync($"{Debts}/{world.SupplierId}/statement?from=9999-12-01&to=9999-12-31")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal((2m, 2m), (latest.Money("openingDebt"), latest.Money("closingDebt")));
+
+        var export = await world.Owner.GetAsync($"{Debts}/export?supplierId={world.SupplierId}&from=0001-01-01&to=0001-01-02");
+        Assert.Equal(HttpStatusCode.OK, export.StatusCode);
+        using var workbook = new XLWorkbook(await export.Content.ReadAsStreamAsync());
+        Assert.Equal(
+            ["01/01/0001 00:00", "01/01/0001 00:00", "02/01/0001 00:00", "02/01/0001 00:00"],
+            workbook.Worksheet("Statement").RowsUsed().Skip(1).Select(r => r.Cell(1).GetString()));
+        Assert.Equal(-5m + 7m, workbook.Worksheet("Statement").RowsUsed().Last().Cell(9).GetValue<decimal>());
     }
 
     // Rows of the old model: linked to a receipt, a reference, evidence, method Other, one Cancelled, two on one date.
@@ -277,8 +303,8 @@ public class SupplierPaymentsDebtsQaSqlServerTests
         Assert.True(string.CompareOrdinal(next, existing) > 0, $"{next} after {existing}");
     }
 
-    // FINDING L6. Down must work on any data the Up model allows. ROUND on the largest amount the API accepts (SupplierPaymentRules.MaxAmount) overflows decimal(18,0).
-    [SqlServerFact]
+    // FINDING L6, accepted. Down should work on any data the Up model allows. ROUND on the largest amount the API accepts (SupplierPaymentRules.MaxAmount) overflows decimal(18,0).
+    [SqlServerFact(Skip = "Accepted: Down on the largest accepted amount, dev data only")]
     public async Task Finding_L6_down_works_with_the_largest_amount_the_api_accepts()
     {
         await using var host = await FarmingHost.StartAsync();

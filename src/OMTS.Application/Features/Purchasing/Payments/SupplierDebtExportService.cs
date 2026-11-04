@@ -22,6 +22,11 @@ public sealed class SupplierDebtExportService(SupplierDebtService debts, ISpread
 
             statement = found.Value;
         }
+        else if (PurchasePeriod.Resolve(query.From, query.To, timeProvider.Today()) is { IsSuccess: false } wrongPeriod)
+        {
+            // The list does not use the period, but a wrong period gives no file, as with a supplier.
+            return wrongPeriod.Error!;
+        }
 
         var sheets = new List<SpreadsheetSheet> { ListSheet(await debts.RowsAsync(query.Search, cancellationToken)) };
         if (statement is not null)

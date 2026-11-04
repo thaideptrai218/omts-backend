@@ -45,9 +45,10 @@ public sealed class SupplierDebtService(
         var today = timeProvider.Today();
         return found
             .Select(s => new SupplierDebtRow(View(s), sums[s.Id].Debt, AgeDays(oldest.GetValueOrDefault(s.Id), today), oldest.GetValueOrDefault(s.Id)))
-            // A debt above zero always has a date, so what has no age is what was paid in advance: last, largest first.
+            // What has no age is what was paid in advance (and a debt with no date, gap OQ-6, which stays before it): last, largest first.
             .OrderByDescending(r => r.DebtAgeDays ?? -1)
-            .ThenByDescending(r => r.Debt)
+            .ThenBy(r => r.Debt < 0)
+            .ThenByDescending(r => Math.Abs(r.Debt))
             .ThenBy(r => r.Supplier.Name, StringComparer.Ordinal)
             .ToList();
     }

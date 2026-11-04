@@ -40,8 +40,8 @@ public static class SupplierPaymentRules
             invalid.Add("Method");
         }
 
-        var reference = Trimmed(request.BankReference);
-        if ((request.Method == PaymentMethod.BankTransfer && reference is null) || reference?.Length > MaxBankReferenceLength)
+        // Asked only on a transfer (PURCHASE-05.0 step 2): any other method ignores it, whatever its length.
+        if (request.Method == PaymentMethod.BankTransfer && Trimmed(request.BankReference)?.Length is null or > MaxBankReferenceLength)
         {
             invalid.Add("Bank reference");
         }
