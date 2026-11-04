@@ -8,7 +8,7 @@ namespace OMTS.Api.IntegrationTests.Platform;
 
 /// <summary>
 /// QA of OMTS-216 on the real process: which environment names and which configuration sources open the demo. Each
-/// refused run must not even create the database. Tests named after a finding (L1_...) fail on purpose.
+/// refused run must not even create the database.
 /// </summary>
 public partial class StagingDemoQaRealProcessTests
 {

@@ -269,7 +269,8 @@ created by a one-time command run on the server by the deployment operator (not 
    Owner with this first password. It must be changed at first login and does not expire. At that login the Owner first
    verifies the phone number by SMS (BR-ACCOUNT-03), so `Sms:Provider` must work before the handover. Running it again creates nothing that already exists ("already initialized", exit code 0); the roles are found by
    code. Missing secrets give exit code 1 and the
-   names of the missing keys. `--demo` also seeds the demo data of "Run with Docker" (in Development, or in Staging as
+   names of the missing keys. Outside Development a database where any account holds the local demo password is refused
+   (exit code 1, nothing written). `--demo` also seeds the demo data of "Run with Docker" (in Development, or in Staging as
    described in [Demo on a shared server](#demo-on-a-shared-server); refused in Production and any other environment).
    Upgrading a database from before the fixed roles (migration `FixedRoles`): the rows named "Zone Manager" and
    "Accountant" get the codes, other roles get a placeholder code (they are not listed, and their pairs give no
@@ -311,7 +312,8 @@ A server several people reach runs in **Staging**. **Never use `docker-compose.y
 Development and binds `0.0.0.0:8080`, so anyone on that network can read every verification code in the anonymous dev
 inbox, open Swagger and log in with the password printed in this README.
 
-`seed --bootstrap --demo` is decided before anything is written (`DemoSeedGate`):
+`seed --bootstrap --demo` is decided before anything is written (`DemoSeedGate`), so run it first, on the empty database,
+not after a plain `seed --bootstrap`:
 
 | Environment | Demo data | Password of the demo accounts |
 |---|---|---|
@@ -319,22 +321,36 @@ inbox, open Swagger and log in with the password printed in this README.
 | Staging | only with `Demo:AllowOutsideDevelopment=true` | the secret `Demo:Password` |
 | Production, any other name | never, whatever the configuration says | – |
 
-`Demo:Password` comes from the secret store of that server, never from a file in the repository. It is refused when it
-is empty, starts or ends with whitespace, is the well-known password in any letter case, or breaks the password rule (8
-to 128 characters with a letter and a digit). A refusal gives exit code 1 and names the key, never the value.
+`Demo:Password` comes from the secret store of that server, never from a file in the repository. `appsettings.Staging.json`
+and `appsettings.Production.json` are ignored by git and left out of the image for this reason; a settings file put beside
+the program by hand is still read. The password is refused when it is empty, starts or ends with whitespace, is the
+well-known password in any letter case, or breaks the password rule (8 to 128 characters with a letter and a digit). A
+refusal gives exit code 1 and names the key, never the value.
 
 To set up the server:
-1. Set `ASPNETCORE_ENVIRONMENT=Staging`, the secrets of "Deployment" step 1 for an **empty** database, one storage folder
-   or container of its own, `Demo__AllowOutsideDevelopment=true` and `Demo__Password`. Use fake data in `Bootstrap:*`.
+1. Set `ASPNETCORE_ENVIRONMENT=Staging` (and not a different `DOTNET_ENVIRONMENT`: when both are set and differ, the seed
+   and the API refuse to start), the secrets of "Deployment" step 1 for an **empty** database, one storage folder or
+   container of its own, `Demo__AllowOutsideDevelopment=true` and `Demo__Password`. Use fake data in `Bootstrap:*`.
 2. Run `dotnet OMTS.Api.dll seed --bootstrap --demo`, start the API and check `GET /health/ready`.
 3. Give the password to the testers privately. The nine logins of "Run with Docker" all use it, the Owner included, and
    land in the same branches. Put the server behind HTTPS: the image itself listens on plain HTTP.
 
-The seed never changes a password it has already set, so a new `Demo:Password` changes no account: to change it, start
-again from an empty database. A database where any account holds `Demo@1234` (first seeded in Development, or restored
-from such a copy) is refused the same way: exit code 1, nothing written, and the message names the accounts, never a
-password. This is checked by `seed --bootstrap --demo` only; starting the API or a bootstrap without `--demo` does not
-check it, so run the demo seed on every new copy of a database.
+**Which database.** The demo only runs on a database with no accounts, or on one it seeded itself: the first run writes a
+`Demo.Seeded` audit row. Any other database with accounts, such as a copy of real data, one behind the migrations or a
+mistaken connection string, is refused: exit code 1, nothing written, no migration applied. **Never run the demo seed on a
+copy of real data: start from an empty database.** Refused too, by the demo seed and also by a plain `seed --bootstrap`
+in any environment but Development: a database where any account holds `Demo@1234` (first seeded in Development, or
+restored from such a copy). The message names the accounts, never a password. Starting the API does not check this, so a
+copy restored onto the server and started without a seed still answers to the printed password.
+
+**Reruns.** A rerun on the demo's own database adds only what is missing. It never touches the Owner's password, forced
+change or verified phone, so `seed --reset-owner-password` stays as it was left, and the seed never changes a password it
+has already set. So:
+- A new `Demo:Password` changes no account: to change it, start again from an empty database.
+- After a run that crashed half way, rerun with the same secret, or start from an empty database. A rerun with a rotated
+  secret exits 0 and can leave two passwords: the accounts seeded before the crash stay on the old one.
+- A tester who sets any account's password to `Demo@1234` makes the next seed refuse the whole server. The password rule
+  does not forbid that value, and the printed password then logs in to that account: start again from an empty database.
 
 **What stays off.** The dev inbox (`/api/dev/sms`, `/email`, `/push`) and Swagger answer 404 outside Development; no
 setting opens them.

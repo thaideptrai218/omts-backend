@@ -25,7 +25,7 @@ namespace OMTS.Api.IntegrationTests.Platform;
 
 /// <summary>
 /// QA of OMTS-216: what the demo step does to a database that is not empty, in what order the steps can be run, and a
-/// crash in the middle. Tests named after a finding (H1_...) fail on purpose until the finding is decided.
+/// crash in the middle.
 /// </summary>
 public partial class StagingDemoQaDatabaseTests
 {
@@ -117,13 +117,13 @@ public partial class StagingDemoQaDatabaseTests
             $"the cooperative now has the demo tax code: {cooperative.TaxCode is not null}, a demo logo: {cooperative.LogoUrl is not null}");
     }
 
-    // The profile step keeps a profile that has a tax code: the one thing of a real cooperative it does respect.
+    // The profile step keeps a profile that has a tax code. Since H1 only the demo's own database gets here.
     [Fact]
     public async Task A_cooperative_with_a_tax_code_keeps_its_profile()
     {
         var taxCode = "0" + Random.Shared.Next(100000000, 999999999);
         await using var host = Host(new AuthApiFactory(), "Staging", "true", AcsTestKit.NewPassword());
-        await RunAsync(host, demo: false);
+        await RunAsync(host, demo: true);
         await ChangeAsync(host, async (db, _) => (await db.Cooperatives.SingleAsync()).TaxCode = taxCode);
 
         Assert.Equal(DeploymentBootstrapper.Success, (await RunAsync(host, demo: true)).ExitCode);
@@ -159,7 +159,8 @@ public partial class StagingDemoQaDatabaseTests
         Assert.True(login.GetProperty("mustChangePassword").GetBoolean());
     }
 
-    // The same cause: a username taken by a real account stops the seed half way, after it wrote to the real database.
+    // The same cause: a username taken by a real account stopped the seed half way, after it wrote to the real database.
+    // Since H1 the run fails earlier, as a refusal and not an exception.
     [Fact]
     public async Task H1_a_demo_run_that_fails_on_a_taken_username_leaves_no_demo_data_in_the_database()
     {
@@ -169,13 +170,13 @@ public partial class StagingDemoQaDatabaseTests
         await OwnerFinishesFirstLoginAsync(host, AcsTestKit.NewPassword());
         await AddAccountNamedAsync(host, "ketoan");
 
-        var failure = await Record.ExceptionAsync(() => RunAsync(host, demo: true));
+        var outcome = await RunAsync(host, demo: true);
 
         using var scope = host.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
         var demoZones = await db.FarmingZones.CountAsync();
         var demoAccounts = await db.Accounts.CountAsync(a => a.Username == "quanlyvung1" || a.Username == "quanlyvung2");
-        Assert.True(failure is not null, "the run did not fail");
+        Assert.True(outcome.ExitCode == DeploymentBootstrapper.Failure, "the run did not fail");
         Assert.True(demoZones == 0 && demoAccounts == 0, $"after the failure: {demoZones} demo zones and {demoAccounts} demo logins stay in the database");
     }
 

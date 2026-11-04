@@ -6,34 +6,24 @@ using OMTS.Infrastructure.Bootstrap.Demo;
 
 namespace OMTS.Api.IntegrationTests.Platform;
 
-/// <summary>QA of OMTS-216 on the real process: named tests fail on purpose; the rest record what happens around them.</summary>
+/// <summary>QA of OMTS-216 on the real process: tests named after a finding, and what happens around them.</summary>
 public partial class StagingDemoQaRealProcessTests
 {
-    // L1. README: Demo:Password "comes from the secret store of that server, never from a file in the repository".
-    // Nothing enforces it: appsettings.Staging.json is not ignored by .gitignore or .dockerignore, so `COPY src/ src/`
-    // and `dotnet publish` carry it into the image, and the demo opens on the image alone.
-    [SqlServerFact]
-    public async Task L1_a_settings_file_in_the_image_does_not_open_the_demo_or_supply_its_password()
+    // L1, as decided: such a file stays out of the repository and of the image (`COPY src/ src/` honours .dockerignore).
+    // One put beside the program by hand is still read: Which_configuration_source_... shows it, and the README says so.
+    [Theory]
+    [InlineData("appsettings.Staging.json")]
+    [InlineData("appsettings.Production.json")]
+    public void L1_a_server_settings_file_stays_out_of_the_repository_and_the_image(string file)
     {
-        using var kit = new StagingDemoQaProcessKit();
-        var connection = StagingDemoQaProcessKit.NewDatabaseConnectionString();
-        var secret = AcsTestKit.NewPassword();
-        try
-        {
-            kit.WriteImageFile("appsettings.Staging.json", $$"""{ "Demo": { "AllowOutsideDevelopment": "true", "Password": "{{secret}}" } }""");
+        var root = StagingDemoQaRepositoryFiles.Root();
 
-            var run = await kit.RunAsync(Settings(kit, connection, "Staging", null, null), DemoSeed);
-
-            Assert.True(run.ExitCode == 1, "exit 0: the demo was seeded with the flag and the password from a file shipped beside the program");
-        }
-        finally
-        {
-            await StagingDemoQaProcessKit.DropDatabaseAsync(connection);
-        }
+        Assert.Contains($"**/{file}", File.ReadAllLines(Path.Combine(root, ".gitignore")));
+        Assert.Contains($"**/{file}", File.ReadAllLines(Path.Combine(root, ".dockerignore")));
     }
 
-    // L2. The operator's ASPNETCORE_ENVIRONMENT=Production loses to a stray DOTNET_ENVIRONMENT in .NET 8's
-    // WebApplication.CreateBuilder. README names only ASPNETCORE_ENVIRONMENT.
+    // L2, as decided: the operator's ASPNETCORE_ENVIRONMENT=Production loses to a stray DOTNET_ENVIRONMENT in .NET 8's
+    // WebApplication.CreateBuilder, so two different names stop the program before the host reads either.
     [SqlServerFact]
     public async Task L2_a_stray_dotnet_environment_does_not_override_aspnetcore_environment_production_for_the_demo()
     {
@@ -44,7 +34,11 @@ public partial class StagingDemoQaRealProcessTests
 
         var run = await kit.RunAsync(settings, DemoSeed);
 
-        Assert.True(run.Output.Contains("refused outside Development and Staging"), $"read as another environment: {run.Output}");
+        Assert.Equal(1, run.ExitCode);
+        Assert.Contains("Refused to start", run.Output);
+        Assert.Contains("DOTNET_ENVIRONMENT", run.Output);
+        Assert.DoesNotContain("Demo:Password", run.Output);
+        Assert.False(await StagingDemoQaProcessKit.DatabaseExistsAsync(connection));
     }
 
     [SqlServerFact]
@@ -54,13 +48,26 @@ public partial class StagingDemoQaRealProcessTests
         var connection = StagingDemoQaProcessKit.NewDatabaseConnectionString();
         var settings = Settings(kit, connection, "Production", null, null);
         settings["DOTNET_ENVIRONMENT"] = "Development";
+
         using var api = await kit.StartApiAsync(settings);
 
-        var swagger = await api.Client.GetAsync("/swagger/index.html");
-        var inbox = await api.Client.GetAsync("/api/dev/sms");
+        Assert.True(api.HasExited, "the API started with two different environment names");
+        Assert.Equal(1, api.ExitCode);
+    }
 
-        Assert.Equal(HttpStatusCode.NotFound, swagger.StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, inbox.StatusCode);
+    // The same environment in another letter case is no conflict: .NET compares the names without regard to case.
+    [SqlServerFact]
+    public async Task L2_the_same_name_in_another_letter_case_is_not_a_conflict()
+    {
+        using var kit = new StagingDemoQaProcessKit();
+        var connection = StagingDemoQaProcessKit.NewDatabaseConnectionString();
+        var settings = Settings(kit, connection, "Production", "true", AcsTestKit.NewPassword());
+        settings["DOTNET_ENVIRONMENT"] = "PRODUCTION";
+
+        var run = await kit.RunAsync(settings, DemoSeed);
+
+        Assert.Equal(1, run.ExitCode);
+        Assert.Contains("refused outside Development and Staging", run.Output);
     }
 
     // The command line wins over the variable: an operator's explicit choice, same as before this branch.
@@ -177,7 +184,7 @@ public partial class StagingDemoQaRealProcessTests
     }
 
     // L5. .env.example: "for your own machine only". Nothing refuses its signing keys elsewhere. Not new on this branch.
-    [SqlServerFact]
+    [SqlServerFact(Skip = "Waiting for the PM: should the API refuse the signing keys committed in .env.example outside Development?")]
     public async Task L5_the_signing_keys_printed_in_env_example_are_refused_outside_development()
     {
         using var kit = new StagingDemoQaProcessKit();

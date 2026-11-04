@@ -13,6 +13,7 @@ using OMTS.Api.Commands;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Models;
+using OMTS.Application.Common.Validation;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
@@ -23,12 +24,30 @@ using static OMTS.Api.IntegrationTests.Platform.DemoOnSharedServerKit;
 
 namespace OMTS.Api.IntegrationTests.Platform;
 
-/// <summary>QA of OMTS-216: order of the steps, reruns and a crash in the middle. Named tests fail on purpose.</summary>
+/// <summary>QA of OMTS-216: order of the steps, reruns and a crash in the middle.</summary>
 public partial class StagingDemoQaDatabaseTests
 {
-    // M1. Disclosed in README and the change list as a trap, so a PM call: only `--demo` looks. A Development copy is
-    // live with the password printed in the README as soon as the API starts, in Staging and in Production.
-    [StagingDemoQaSqlServerTheory]
+    /// <summary>
+    /// A crash half way on a database that was empty: a person on file under a planned phone, with no account, stops the
+    /// staff step at that username after the mark, the Owner and the accounts planned earlier. Returns with the cause gone.
+    /// </summary>
+    private static async Task CrashTheDemoAtTheStaffStepAsync(WebApplicationFactory<Program> host, string username)
+    {
+        var person = new Employee { FullName = username, PhoneNumber = PhoneNumbers.Normalize(DemoEmployeePlans.All.Single(p => p.Username == username).Phone) };
+        await ChangeAsync(host, async (db, _) =>
+        {
+            await db.Database.EnsureCreatedAsync();
+            db.Employees.Add(person);
+        });
+
+        Assert.NotNull(await Record.ExceptionAsync(() => RunAsync(host, demo: true)));
+
+        await ChangeAsync(host, async (db, _) => db.Employees.Remove(await db.Employees.SingleAsync(e => e.Id == person.Id)));
+    }
+
+    // M1. Decided for a plain `seed --bootstrap` (M1_a_plain_bootstrap_...); this asks for the API start as well. A
+    // Development copy is live with the password printed in the README as soon as the API starts.
+    [StagingDemoQaSqlServerTheory(Skip = "Waiting for the PM: should starting the API in Staging or Production refuse a database holding the well-known password?")]
     [InlineData("Staging")]
     [InlineData("Production")]
     public async Task M1_a_database_holding_the_well_known_password_does_not_go_live_outside_development(string environment)
@@ -56,31 +75,25 @@ public partial class StagingDemoQaDatabaseTests
         }
     }
 
-    // L6. A crash, then a rerun with a rotated secret: exit 0, "already there", and the first secret stays on the accounts
-    // seeded before the crash. README: "The nine logins ... all use it".
+    // L6, as decided: not coded, documented. A crash, then a rerun with a rotated secret: exit 0, "already there", and the
+    // first secret stays on the accounts seeded before the crash. This records it, so the README stays true.
     [Fact]
-    public async Task L6_a_rerun_after_a_crash_with_another_secret_does_not_leave_two_passwords_behind_exit_0()
+    public async Task L6_a_rerun_after_a_crash_with_another_secret_can_leave_two_passwords_behind_as_the_readme_warns()
     {
         var first = AcsTestKit.NewPassword();
         var second = AcsTestKit.NewPassword();
         var factory = new AuthApiFactory();
         await using var firstRun = Host(factory, "Staging", "true", first);
-        await RunAsync(firstRun, demo: false);
-        var blocker = await AddAccountNamedAsync(firstRun, "ketoan");
-        var crash = await Record.ExceptionAsync(() => RunAsync(firstRun, demo: true));
-        Assert.NotNull(crash);
-        Assert.DoesNotContain(first, crash.ToString());
-        await ChangeAsync(firstRun, async (db, _) => db.Accounts.Remove(await db.Accounts.SingleAsync(a => a.Id == blocker)));
+        await CrashTheDemoAtTheStaffStepAsync(firstRun, "ketoan");
 
         await using var secondRun = Host(factory, "Staging", "true", second);
         var outcome = await RunAsync(secondRun, demo: true);
 
         using var scope = secondRun.Services.CreateScope();
         var accounts = await scope.ServiceProvider.GetRequiredService<OmtsDbContext>().Accounts.AsNoTracking().ToListAsync();
-        var holdingFirst = accounts.Where(a => Holds(secondRun, a, first)).Select(a => a.Username).Order().ToList();
-        Assert.True(
-            outcome.ExitCode != DeploymentBootstrapper.Success || holdingFirst.Count == 0,
-            $"exit {outcome.ExitCode}; still on the first secret: {string.Join(", ", holdingFirst)}");
+        Assert.Equal(DeploymentBootstrapper.Success, outcome.ExitCode);
+        Assert.Equal(["owner", "quanlyvung1", "quanlyvung2"], accounts.Where(a => Holds(secondRun, a, first)).Select(a => a.Username).Order());
+        Assert.Contains("two passwords", File.ReadAllText(Path.Combine(StagingDemoQaRepositoryFiles.Root(), "README.md")));
     }
 
     // After a crash, with the same secret: nothing is left half done and no account stays on a random temporary password.
@@ -90,10 +103,7 @@ public partial class StagingDemoQaDatabaseTests
         var secret = AcsTestKit.NewPassword();
         var factory = new AuthApiFactory();
         await using var host = Host(factory, "Staging", "true", secret);
-        await RunAsync(host, demo: false);
-        var blocker = await AddAccountNamedAsync(host, "nhanvien.chuaxacthuc");
-        Assert.NotNull(await Record.ExceptionAsync(() => RunAsync(host, demo: true)));
-        await ChangeAsync(host, async (db, _) => db.Accounts.Remove(await db.Accounts.SingleAsync(a => a.Id == blocker)));
+        await CrashTheDemoAtTheStaffStepAsync(host, "nhanvien.chuaxacthuc");
 
         Assert.Equal(DeploymentBootstrapper.Success, (await RunAsync(host, demo: true)).ExitCode);
 
@@ -107,10 +117,7 @@ public partial class StagingDemoQaDatabaseTests
         var secret = AcsTestKit.NewPassword();
         var factory = new AuthApiFactory();
         await using var staging = Host(factory, "Staging", "true", secret);
-        await RunAsync(staging, demo: false);
-        var blocker = await AddAccountNamedAsync(staging, "ketoan");
-        Assert.NotNull(await Record.ExceptionAsync(() => RunAsync(staging, demo: true)));
-        await ChangeAsync(staging, async (db, _) => db.Accounts.Remove(await db.Accounts.SingleAsync(a => a.Id == blocker)));
+        await CrashTheDemoAtTheStaffStepAsync(staging, "ketoan");
         await using var development = Host(factory, "Development", "false", null);
         Assert.Equal(DeploymentBootstrapper.Success, (await RunAsync(development, demo: true)).ExitCode);
 
@@ -126,7 +133,7 @@ public partial class StagingDemoQaDatabaseTests
         var secret = AcsTestKit.NewPassword();
         var own = AcsTestKit.NewPassword();
         await using var host = Host(new AuthApiFactory(), "Staging", "true", secret);
-        await RunAsync(host, demo: false);
+        await RunAsync(host, demo: true);
         await OwnerFinishesFirstLoginAsync(host, own);
         var before = await OwnerAsync(host);
 

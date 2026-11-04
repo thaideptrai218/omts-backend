@@ -32,14 +32,14 @@ internal static class DemoDataSeeder
     ];
 
     public static async Task<IReadOnlyList<string>> SeedAsync(
-        IServiceProvider services, string? ownerUsername, Guid cooperativeId, string password, CancellationToken cancellationToken)
+        IServiceProvider services, string? ownerUsername, Guid cooperativeId, string password, bool ownerLoginMayBeSet, CancellationToken cancellationToken)
     {
         var db = services.GetRequiredService<OmtsDbContext>();
         var owners = db.Accounts.Where(a => a.SubjectType == SubjectType.CooperativeOwner);
         var owner = (ownerUsername is { Length: > 0 } ? await owners.FirstOrDefaultAsync(a => a.Username == ownerUsername, cancellationToken) : null)
             ?? await owners.OrderBy(a => a.CreatedAt).FirstOrDefaultAsync(cancellationToken)
             ?? throw new InvalidOperationException("Demo data needs the Cooperative Owner created by the bootstrap.");
-        var context = new DemoSeedContext(services, db, cooperativeId, owner.Id, password, services.GetRequiredService<TimeProvider>().GetUtcNow());
+        var context = new DemoSeedContext(services, db, cooperativeId, owner.Id, password, ownerLoginMayBeSet, services.GetRequiredService<TimeProvider>().GetUtcNow());
 
         var messages = new List<string>();
         // A system action like the bootstrap itself: no acting account yet.

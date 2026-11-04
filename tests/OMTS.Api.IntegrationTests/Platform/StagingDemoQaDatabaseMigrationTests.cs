@@ -81,8 +81,8 @@ public partial class StagingDemoQaDatabaseTests
         }
     }
 
-    // The check trusts the history table to know there are no accounts. A copy without it passes the check, but the
-    // migrations then stop on the existing tables: exit 1 and no demo account gets the configured password.
+    // The check looks for the account table, not the history: a copy without its history is refused like any other, with
+    // the message, before the migrations would stop on the existing tables. No demo account gets the configured password.
     [SqlServerFact]
     public async Task A_development_copy_with_its_migration_history_wiped_still_ends_in_failure_and_adds_no_demo_data()
     {
@@ -105,8 +105,10 @@ public partial class StagingDemoQaDatabaseTests
             }
 
             await using var staging = OnSqlServer(database, storageRoot, secret);
-            Assert.NotNull(await Record.ExceptionAsync(() => RunAsync(staging, demo: true)));
+            var refused = await RunAsync(staging, demo: true);
 
+            Assert.Equal(DeploymentBootstrapper.Failure, refused.ExitCode);
+            Assert.Contains("well-known", Assert.Single(refused.Messages));
             await using var db = database.CreateContext();
             var hasher = staging.Services.GetRequiredService<IPasswordHasher>();
             var accounts = await db.Accounts.AsNoTracking().ToListAsync();
