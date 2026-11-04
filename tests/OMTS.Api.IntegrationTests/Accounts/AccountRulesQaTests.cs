@@ -408,40 +408,53 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
         Assert.Equal(newPhone, (await StoredAsync(staff)).PhoneNumber);
     }
 
-    // QA-M4 (BR-ACCOUNT-02, BR-ACCOUNT-09): \d takes any Unicode digit, so one number in other digits is a new "number".
+    // BR-ACCOUNT-02, BR-ACCOUNT-09: one number has one spelling, in whatever digits it is entered.
     [Theory]
     [InlineData("0٩١٢٣٤٥٦٧٨")]
     [InlineData("0９１２３４５６７８")]
     [InlineData("0९१२३४५६७८")]
-    public void A_number_in_other_digits_is_refused_or_normalised(string input)
-    {
-        var normalised = PhoneNumbers.Normalize(input);
+    [InlineData("٠٩١٢٣٤٥٦٧٨")]
+    [InlineData("+٨٤٩١٢٣٤٥٦٧٨")]
+    public void A_number_in_other_digits_normalises_to_ascii_digits(string input) =>
+        Assert.Equal("0912345678", PhoneNumbers.Normalize(input));
 
-        Assert.True(normalised is null || normalised == "0912345678", $"Normalised to a different number: {normalised}");
-    }
-
-    // QA-M4 (BR-ACCOUNT-02, BR-ACCOUNT-09): a quoted local part is the same mailbox, but a different "email" here.
+    // BR-ACCOUNT-02, BR-ACCOUNT-09: a quoted local part or a final dot is the same mailbox in another spelling, so it is refused.
     [Theory]
     [InlineData("\"qa\"@example.com")]
     [InlineData("\"q\\a\"@example.com")]
     [InlineData("qa@example.com.")]
-    public void A_quoted_email_is_refused_or_normalised(string input)
-    {
-        var normalised = EmailAddresses.Normalize(input);
+    public void A_quoted_email_or_a_final_dot_is_refused(string input) =>
+        Assert.Null(EmailAddresses.Normalize(input));
 
-        Assert.True(normalised is null || normalised == "qa@example.com", $"Normalised to a different email: {normalised}");
-    }
-
-    // QA-M4 (BR-ACCOUNT-02, BR-ACCOUNT-09): the mailbox of an account, quoted: the check passes, a code goes out, and the account can follow.
+    // BR-ACCOUNT-02, BR-ACCOUNT-09: the mailbox of an account, quoted: refused as invalid, and no code goes out.
     [Fact]
-    public async Task A_taken_email_in_quotes_answers_msg_account_03()
+    public async Task A_taken_email_in_quotes_is_refused_as_invalid_and_gets_no_code()
     {
         var local = NewCode();
         await factory.AddAccountAsync(NewCode(), Pw, SubjectType.Trader, a => { a.Email = $"{local}@example.com"; a.EmailVerifiedAt = DateTimeOffset.UtcNow; });
+        var quoted = $"\"{local}\"@example.com";
 
-        var started = await factory.CreateClient().StartRegistrationAsync("Email", $"\"{local}\"@example.com");
+        var started = await factory.CreateClient().StartRegistrationAsync("Email", quoted);
 
-        Assert.Equal("MSG-ACCOUNT-03", await started.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-01", await started.ErrorCodeAsync());
+        Assert.Equal("Email", (await started.BodyAsync()).GetProperty("field").GetString());
+        Assert.Empty(factory.Services.GetRequiredService<FakeEmailSender>().Inbox.List(quoted));
+    }
+
+    // "Wherever a contact is accepted": staff account, employee, supplier and cooperative profile share the one validator.
+    [Fact]
+    public async Task A_staff_account_in_a_quoted_email_answers_msg_gen_01_and_other_digits_are_stored_as_ascii()
+    {
+        var owner = await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Pw)).Username, Pw);
+        var phone = NewPhone();
+        var arabic = new string(phone.Select((c, i) => i == 0 ? c : (char)(0x0660 + (c - '0'))).ToArray());
+
+        var quoted = await owner.PostAsJsonAsync("/api/accounts", new { displayName = "A", username = $"nv{NewCode()}", phoneNumber = phone, email = "\"qa\"@example.com" });
+        var saved = await owner.PostAsJsonAsync("/api/accounts", new { displayName = "A", username = $"nv{NewCode()}", phoneNumber = arabic });
+
+        Assert.Equal("MSG-GEN-01", await quoted.ErrorCodeAsync());
+        Assert.Equal(HttpStatusCode.Created, saved.StatusCode);
+        Assert.Equal(phone, (await saved.BodyAsync()).GetProperty("account").GetProperty("phoneNumber").GetString());
     }
 
     // Fine: case and format of the contact do not get around the limit, and verifying a code does not clear it.

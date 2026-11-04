@@ -194,7 +194,7 @@ public class AccountRulesQaTestsSqlServer
         Assert.Equal("MSG-ACCOUNT-16", await (await first.EnterAsync(firstId, firstCode)).ErrorCodeAsync());
     }
 
-    // QA-M4 (BR-ACCOUNT-02, BR-ACCOUNT-09): on the real collation too: the same number in other digits gets its own codes and its own account.
+    // BR-ACCOUNT-02, BR-ACCOUNT-09: on the real collation too: a number in other digits is the same number, at the same wait.
     [SqlServerFact]
     public async Task A_number_in_other_digits_does_not_get_a_code_while_the_number_is_at_its_wait()
     {
@@ -207,10 +207,10 @@ public class AccountRulesQaTestsSqlServer
 
         var other = await client.StartRegistrationAsync("Sms", arabic);
 
-        Assert.NotEqual(HttpStatusCode.Created, other.StatusCode);
+        Assert.Equal("MSG-ACCOUNT-18", await other.ErrorCodeAsync());
     }
 
-    // QA-M4 (BR-ACCOUNT-02): an account already has the number; in other digits the check passes and a code goes out.
+    // BR-ACCOUNT-02: an account already has the number; in other digits it is the same number, so it answers MSG-ACCOUNT-03.
     [SqlServerFact]
     public async Task A_taken_number_in_other_digits_answers_msg_account_03()
     {
