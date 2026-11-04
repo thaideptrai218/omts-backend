@@ -23,7 +23,7 @@ internal sealed class DemoOwnerStep : IDemoSeedStep
             return 0;
         }
 
-        owner.PasswordHash = context.Get<IPasswordHasher>().Hash(DemoSeedContext.Password);
+        owner.PasswordHash = context.Get<IPasswordHasher>().Hash(context.Password);
         owner.MustChangePassword = false;
         owner.TemporaryPasswordIssuedAt = null;
         owner.PhoneVerifiedAt ??= context.Now;

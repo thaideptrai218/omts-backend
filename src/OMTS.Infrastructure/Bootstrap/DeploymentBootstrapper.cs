@@ -40,11 +40,17 @@ public sealed class DeploymentBootstrapper(
         var messages = new List<string>();
         var settings = BootstrapSettings.From(configuration);
 
-        // The demo data gives well-known passwords to the Owner and staff accounts: Development only, with no
-        // switch that opens it anywhere else.
-        if (seedDemoData && !environment.IsDevelopment())
+        // The demo data gives one shared password to the Owner, staff and traders. Decided before anything is written.
+        var demoPassword = string.Empty;
+        if (seedDemoData)
         {
-            return new BootstrapOutcome(Failure, ["Demo data is refused outside Development."]);
+            var (password, refusal) = DemoSeedGate.Check(environment, configuration);
+            if (refusal is not null)
+            {
+                return new BootstrapOutcome(Failure, [refusal]);
+            }
+
+            demoPassword = password!;
         }
 
         if (db.Database.IsRelational())
@@ -81,7 +87,7 @@ public sealed class DeploymentBootstrapper(
             cooperative = CreateCooperativeAndOwner(settings);
             messages.Add($"Cooperative created (Preliminary) with Cooperative Owner '{settings.OwnerUsername}'. " +
                 (seedDemoData
-                    ? "Demo mode: the Owner gets the fixed demo password instead."
+                    ? "Demo mode: the Owner gets the demo password instead."
                     : "The first password must be changed at first login and does not expire."));
         }
         else
@@ -95,7 +101,7 @@ public sealed class DeploymentBootstrapper(
         {
             // After the save above: the demo steps act as the Owner, which must exist in the database. The
             // lines never contain a password.
-            messages.AddRange(await DemoDataSeeder.SeedAsync(services, settings.OwnerUsername, cooperative.Id, cancellationToken));
+            messages.AddRange(await DemoDataSeeder.SeedAsync(services, settings.OwnerUsername, cooperative.Id, demoPassword, cancellationToken));
         }
 
         return new BootstrapOutcome(Success, messages);
