@@ -8,6 +8,8 @@ using OMTS.Application.Features.Accounts;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Cooperatives;
 using OMTS.Application.Features.Employees;
+using OMTS.Application.Features.Cultivation.Cycles;
+using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Farming.Licenses;
 using OMTS.Application.Features.Farming.Rafts;
@@ -87,6 +89,14 @@ public static class DependencyInjection
         services.AddScoped<RaftViews>();
         services.AddScoped<RaftPhotoService>();
         services.AddScoped<RaftStatusService>();
+
+        // CYCLE – cultivation cycles and the lane states derived from their records
+        services.AddScoped<LaneStateReader>();
+        services.AddScoped<CultivationCycleViews>();
+        services.AddScoped<CultivationCycleService>();
+        services.AddScoped<CultivationCycleReadService>();
+        services.AddScoped<CultivationProgressService>();
+
         services.AddScoped<UploadedFileSaver>();
         services.AddScoped<OrphanFileCleanupService>();
 

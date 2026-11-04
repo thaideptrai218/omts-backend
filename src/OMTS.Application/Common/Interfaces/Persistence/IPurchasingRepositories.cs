@@ -30,7 +30,7 @@ public interface IFarmingInputItemRepository
     /// <summary>By code or name (contains), optional group and status, ordered by code.</summary>
     Task<IReadOnlyList<FarmingInputItem>> ListAsync(string? search, InputItemGroup? group, int? statusId, CancellationToken cancellationToken);
 
-    /// <summary>True when the item is on a receipt line or is the planned seed of a cultivation cycle.</summary>
+    /// <summary>True when the item is on a receipt line.</summary>
     Task<bool> IsUsedAsync(Guid itemId, CancellationToken cancellationToken);
 
     /// <summary>Which of the items are used by a receipt line or a cycle plan (two grouped queries for a whole list).</summary>

@@ -77,7 +77,7 @@ bootstrap temporary password. To get every demo login back, reset the environmen
 
 The demo data also holds the cooperative profile (with a logo, a cover photo and two certifications: one Valid, one
 expiring within 30 days), the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued), zone licenses (`DEMO-01`:
-an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid license and an older expired one), about 10 rafts with lanes per zone, 8 employees (one Left),
+an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid license and an older expired one), about 10 rafts with lanes per zone (the first five of each In Use zone with an Open cultivation cycle), 8 employees (one Left),
 5 suppliers, 15 farming input items and 20 purchase receipts of the last 3 months with payments, discounts and a return.
 `DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰) and one water measurement a day for the
 30 days before the seed day: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to

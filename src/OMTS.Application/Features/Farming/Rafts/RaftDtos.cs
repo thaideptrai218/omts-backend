@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Employees;
 
 namespace OMTS.Application.Features.Farming.Rafts;
@@ -59,8 +60,5 @@ public sealed record RaftView(
 /// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
 public sealed record RaftSaved(RaftView Raft, string Message, string MessageCode);
 
-/// <summary>
-/// FARM-04.1 lanes of a raft today. Until CYCLE adds the derived state (BR-FARM-03) a lane shows only its status,
-/// In Use or Removed.
-/// </summary>
-public sealed record RaftLanesToday(Guid RaftId, string RaftCode, DateOnly Date, IReadOnlyList<LaneView> Lanes);
+/// <summary>FARM-04.1 every lane of a raft today with its status In Use or Removed and its state of the day (BR-FARM-03).</summary>
+public sealed record RaftLanesToday(Guid RaftId, string RaftCode, DateOnly Date, IReadOnlyList<LaneDayView> Lanes);
