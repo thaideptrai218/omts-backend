@@ -23,6 +23,9 @@ public interface IHarvestLotRepository
     /// <summary>The lot codes built from <paramref name="baseCode"/>: the code itself and those with a suffix.</summary>
     Task<IReadOnlyList<string>> CodesFromAsync(string baseCode, CancellationToken cancellationToken);
 
+    /// <summary>The date of the last harvest lot of the cycle, or null when it has none (BR-CYCLE-06).</summary>
+    Task<DateOnly?> LastHarvestDateAsync(Guid cycleId, CancellationToken cancellationToken);
+
     /// <summary>The lots still for sale whose days count from <paramref name="lastDay"/> or earlier: the day reopened, else the harvest date (GFR-05).</summary>
     Task<int> CountForSaleSinceAtMostAsync(DateOnly lastDay, CancellationToken cancellationToken);
 

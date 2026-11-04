@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -9,13 +9,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 {
     /// <summary>
     /// PR H1a (SRS 27/10, HARVEST-01, HARVEST-03): harvest lots with their lanes and photos, the HARVEST_LOT status group, and the two harvest settings on the cooperative, which the
-    /// existing row takes at the first-setup values 50 and 3 (BR-HARVEST-06). Down drops the lots and settings; stored data is dev and demo only.
+    /// existing row takes at the first-setup values 50 and 3 (BR-HARVEST-06). The record code columns of the audit log and the notifications grow to hold a lot code, which they copy.
+    /// Down drops the lots and settings and cuts a record code longer than the old columns hold to fit them; stored data is dev and demo only.
     /// </summary>
     public partial class HarvestLots : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.AlterColumn<string>(
+                name: "RelatedRecordCode",
+                table: "Notifications",
+                type: "nvarchar(120)",
+                maxLength: 120,
+                nullable: true,
+                oldClrType: typeof(string),
+                oldType: "nvarchar(100)",
+                oldMaxLength: 100,
+                oldNullable: true);
+
             migrationBuilder.AddColumn<decimal>(
                 name: "AverageKgPerCage",
                 table: "Cooperatives",
@@ -31,6 +43,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 type: "int",
                 nullable: false,
                 defaultValue: 3);
+
+            migrationBuilder.AlterColumn<string>(
+                name: "RecordCode",
+                table: "AuditEvents",
+                type: "nvarchar(120)",
+                maxLength: 120,
+                nullable: true,
+                oldClrType: typeof(string),
+                oldType: "nvarchar(100)",
+                oldMaxLength: 100,
+                oldNullable: true);
 
             migrationBuilder.CreateTable(
                 name: "HarvestLots",
@@ -270,6 +293,32 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             migrationBuilder.DropColumn(
                 name: "DaysBeforeAutoClose",
                 table: "Cooperatives");
+
+            // The rows of a long lot code stay in the audit log and the lists; narrowing a column over them would stop the Down.
+            migrationBuilder.Sql("UPDATE Notifications SET RelatedRecordCode = LEFT(RelatedRecordCode, 100) WHERE DATALENGTH(RelatedRecordCode) > 200;");
+            migrationBuilder.Sql("UPDATE AuditEvents SET RecordCode = LEFT(RecordCode, 100) WHERE DATALENGTH(RecordCode) > 200;");
+
+            migrationBuilder.AlterColumn<string>(
+                name: "RelatedRecordCode",
+                table: "Notifications",
+                type: "nvarchar(100)",
+                maxLength: 100,
+                nullable: true,
+                oldClrType: typeof(string),
+                oldType: "nvarchar(120)",
+                oldMaxLength: 120,
+                oldNullable: true);
+
+            migrationBuilder.AlterColumn<string>(
+                name: "RecordCode",
+                table: "AuditEvents",
+                type: "nvarchar(100)",
+                maxLength: 100,
+                nullable: true,
+                oldClrType: typeof(string),
+                oldType: "nvarchar(120)",
+                oldMaxLength: 120,
+                oldNullable: true);
         }
     }
 }

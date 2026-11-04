@@ -41,6 +41,13 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
             .ToListAsync(cancellationToken);
     }
 
+    public Task<DateOnly?> LastHarvestDateAsync(Guid cycleId, CancellationToken cancellationToken) =>
+        db.HarvestLots.AsNoTracking()
+            .Where(l => l.CycleId == cycleId)
+            .OrderByDescending(l => l.HarvestDate)
+            .Select(l => (DateOnly?)l.HarvestDate)
+            .FirstOrDefaultAsync(cancellationToken);
+
     public Task<int> CountForSaleSinceAtMostAsync(DateOnly lastDay, CancellationToken cancellationToken) =>
         db.HarvestLots.AsNoTracking()
             .Where(l => l.StatusId == StatusIds.HarvestLot.Open || l.StatusId == StatusIds.HarvestLot.Reopened)

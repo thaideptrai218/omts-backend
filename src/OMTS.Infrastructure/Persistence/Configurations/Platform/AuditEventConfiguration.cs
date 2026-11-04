@@ -11,7 +11,7 @@ internal sealed class AuditEventConfiguration : IEntityTypeConfiguration<AuditEv
         builder.HasOne(x => x.ActorAccount).WithMany().HasForeignKey(x => x.ActorAccountId);
         builder.Property(x => x.Action).HasMaxLength(Lengths.ShortText);
         builder.Property(x => x.RecordType).HasMaxLength(Lengths.ShortText);
-        builder.Property(x => x.RecordCode).HasMaxLength(Lengths.ShortText);
+        builder.Property(x => x.RecordCode).HasMaxLength(Lengths.LotCode);
         builder.Property(x => x.Reason).HasMaxLength(Lengths.Reason);
         builder.Property(x => x.ViewScope).HasMaxLength(Lengths.ShortText);
         builder.HasIndex(x => new { x.RecordType, x.RecordId });

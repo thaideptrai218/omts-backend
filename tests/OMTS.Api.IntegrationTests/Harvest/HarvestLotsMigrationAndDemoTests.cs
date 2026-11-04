@@ -10,13 +10,14 @@ using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Harvest;
 using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Entities.Platform;
 using OMTS.Domain.Enums;
 using OMTS.Infrastructure.Bootstrap;
 using OMTS.Infrastructure.Persistence;
 
 namespace OMTS.Api.IntegrationTests.Harvest;
 
-/// <summary>The HarvestLots migration (PR H1a) on SQL Server: Up, Down to the schema it found, Up again, the first-setup values on an existing cooperative. The demo lots and their rerun.</summary>
+/// <summary>The HarvestLots migration (PR H1a) on SQL Server: Up, Down to the schema it found, also over copies of a long lot code, Up again, the first-setup values on an existing cooperative. The demo lots and their rerun.</summary>
 public class HarvestLotsMigrationAndDemoTests
 {
     private const string MigrationBefore = "20261104182051_SeedingRecords";
@@ -33,6 +34,9 @@ public class HarvestLotsMigrationAndDemoTests
         (await db.Database.SqlQueryRaw<string>(SchemaQuery).ToListAsync()).Order(StringComparer.Ordinal).ToList();
 
     private static Task<int> ScalarAsync(OmtsDbContext db, string sql) => db.Database.SqlQueryRaw<int>(sql).SingleAsync();
+
+    private static Task<int> RecordCodeLengthAsync(OmtsDbContext db, string table, string column) =>
+        ScalarAsync(db, $"SELECT CHARACTER_MAXIMUM_LENGTH AS [Value] FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{table}' AND COLUMN_NAME = '{column}'");
 
     [SqlServerFact]
     public async Task Up_down_and_up_again_keep_the_rows_around_them_and_end_with_no_pending_model_change()
@@ -77,10 +81,15 @@ public class HarvestLotsMigrationAndDemoTests
             "column HarvestLots EstimatedKg 18 3 0",
             "column HarvestLots KgPerCage 9 2 0",
             "column Cooperatives AverageKgPerCage 9 2 0",
+            "index AuditEvents IX_AuditEvents_RecordType_RecordId 0",
+            "index Notifications IX_Notifications_RelatedRecordType_RelatedRecordId 0",
         })
         {
             Assert.Contains(expected, upSchema);
         }
+
+        Assert.Equal(120, await RecordCodeLengthAsync(db, "AuditEvents", "RecordCode"));
+        Assert.Equal(120, await RecordCodeLengthAsync(db, "Notifications", "RelatedRecordCode"));
 
         Assert.Equal(["CLOSED", "OPEN", "REOPENED"], await db.Statuses.Where(s => s.Group == StatusGroups.HarvestLot).Select(s => s.Code).OrderBy(c => c).ToListAsync());
         Assert.Equal([150, 151, 152], await db.StatusTransitions.Where(t => t.Id >= 150 && t.Id <= 152).Select(t => t.Id).OrderBy(i => i).ToListAsync());
@@ -97,11 +106,19 @@ public class HarvestLotsMigrationAndDemoTests
             LotCode = "KV01-B01-20260102", Raft = cycle.Raft, Cycle = cycle, HarvestedAt = DateTimeOffset.UtcNow, HarvestDate = new DateOnly(2026, 1, 2), CageCount = 1, KgPerCage = 50, EstimatedKg = 50,
             RecordedByAccountId = account.Id, Lanes = [new HarvestLotLane { Lane = lane, IsFinished = true }], Photos = [new HarvestLotPhoto { SortOrder = 1, FileKey = "harvest-lot-photos/k.png" }],
         });
+        // Copies of the longest lot codes: they stay in the audit log and the lists, cut to what the old columns hold, and do not stop the Down.
+        var longCode = new string('K', 120);
+        db.AuditEvents.Add(new AuditEvent { OccurredAt = DateTimeOffset.UtcNow, Action = "HarvestLot.Created", RecordType = "HarvestLot", RecordCode = longCode });
+        db.Notifications.Add(new Notification { RecipientAccountId = account.Id, Type = "HARVEST_LOT_RECORDED", Title = "New harvest lot", RelatedRecordCode = longCode, CreatedAt = DateTimeOffset.UtcNow });
         await db.SaveChangesAsync();
 
         db.ChangeTracker.Clear();
         await migrator.MigrateAsync(MigrationBefore);
         Assert.Equal(oldSchema, await SchemaAsync(db));
+        Assert.Equal(100, await RecordCodeLengthAsync(db, "AuditEvents", "RecordCode"));
+        Assert.Equal(100, await RecordCodeLengthAsync(db, "Notifications", "RelatedRecordCode"));
+        Assert.Equal(100, await ScalarAsync(db, "SELECT LEN(RecordCode) AS [Value] FROM AuditEvents WHERE RecordType = 'HarvestLot'"));
+        Assert.Equal(100, await ScalarAsync(db, "SELECT LEN(RelatedRecordCode) AS [Value] FROM Notifications WHERE Type = 'HARVEST_LOT_RECORDED'"));
         Assert.Equal(1, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM CultivationCycles"));
         Assert.Equal(1, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM Lanes"));
         Assert.Equal(0, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM Statuses WHERE Id BETWEEN 2901 AND 2903"));

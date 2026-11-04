@@ -27,7 +27,7 @@ public class StackMergeQaTestsMigrations
     [
         "20261104071927_FixedRoles", "20261104072127_NotificationsV2", "20261104072225_PurchaseCatalogueV2", "20261104072358_CooperativeProfileV2", "20261104072437_ZonesLicensesV2",
         "20261104072522_PurchaseReceiptsV2", "20261104084901_SupplierPaymentsV2", "20261104100119_PurchaseReturnsV2", "20261104103030_RaftsV2", "20261104113119_CultivationCyclesV2",
-        "20261104124405_CultivationLogs", "20261104164709_MaterialUsages", "20261104182051_SeedingRecords", "20261104200540_HarvestLots",
+        "20261104124405_CultivationLogs", "20261104164709_MaterialUsages", "20261104182051_SeedingRecords", "20261104212952_HarvestLots",
     ];
 
     private const string BeforeTheStack = "20261028151320_RemoveLegacyScaffolding";

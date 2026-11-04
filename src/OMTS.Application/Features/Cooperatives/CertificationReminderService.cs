@@ -60,6 +60,6 @@ public sealed class CertificationReminderService(
         return true;
     }
 
-    // The record code of a notification holds at most 100 characters; a name may hold 200.
+    // The record code of a notification is shorter than a name, which may hold 200 characters: cut to 100.
     private static string RecordCode(string name) => name.Length <= 100 ? name : name[..100];
 }

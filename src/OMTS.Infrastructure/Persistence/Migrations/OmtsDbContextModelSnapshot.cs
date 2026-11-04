@@ -1933,8 +1933,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(1000)");
 
                     b.Property<string>("RecordCode")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
 
                     b.Property<Guid?>("RecordId")
                         .HasColumnType("uniqueidentifier");
@@ -2040,8 +2040,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("RelatedRecordCode")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
 
                     b.Property<Guid?>("RelatedRecordId")
                         .HasColumnType("uniqueidentifier");

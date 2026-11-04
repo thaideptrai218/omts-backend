@@ -9,12 +9,13 @@ using OMTS.Domain.Entities.Farming;
 namespace OMTS.Application.Features.Cultivation.Cycles;
 
 /// <summary>The cycle answers, with the figures and commands worked out when shown.</summary>
-public sealed class CultivationCycleViews(ICultivationCycleRepository cycles, IStatusCatalog statusCatalog, TimeProvider timeProvider)
+public sealed class CultivationCycleViews(ICultivationCycleRepository cycles, IHarvestLotRepository harvestLots, IStatusCatalog statusCatalog, TimeProvider timeProvider)
 {
-    /// <summary>The cycle with its raft and zone loaded. Harvest lots come with H1a: until then no cycle has a last lot.</summary>
+    /// <summary>The cycle with its raft and zone loaded, for one cycle shown at a time: the list items hold no days of farming. An Open cycle counts to today, so only a closed one reads its last lot.</summary>
     public async Task<CycleView> ViewAsync(CultivationCycle cycle, CancellationToken cancellationToken)
     {
         var hasRecords = (await cycles.WithRecordsAsync([cycle.Id], cancellationToken)).Count > 0;
+        var lastLotDate = cycle.CloseDate is null ? null : await harvestLots.LastHarvestDateAsync(cycle.Id, cancellationToken);
         var zoneInUse = cycle.Raft.Zone.StatusId == StatusIds.Usage.InUse;
         return new CycleView(
             cycle.Id,
@@ -28,7 +29,7 @@ public sealed class CultivationCycleViews(ICultivationCycleRepository cycles, IS
             cycle.SeedingCompletedOn,
             cycle.Assessment,
             cycle.ClosedEarly,
-            CycleDaysOfFarming.Count(cycle.StartDate, null, cycle.CloseDate, timeProvider.Today()),
+            CycleDaysOfFarming.Count(cycle.StartDate, lastLotDate, cycle.CloseDate, timeProvider.Today()),
             cycle.StatusId,
             statusCatalog.DisplayNameOf(cycle.StatusId),
             CanEdit(cycle, cycle.Raft, zoneInUse),

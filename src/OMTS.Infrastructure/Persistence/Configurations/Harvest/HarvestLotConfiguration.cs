@@ -6,12 +6,9 @@ namespace OMTS.Infrastructure.Persistence.Configurations.Harvest;
 
 internal sealed class HarvestLotConfiguration : IEntityTypeConfiguration<HarvestLot>
 {
-    // A zone code, a raft code, the date and a suffix (BR-HARVEST-03).
-    private const int LotCodeLength = 120;
-
     public void Configure(EntityTypeBuilder<HarvestLot> builder)
     {
-        builder.Property(x => x.LotCode).HasMaxLength(LotCodeLength);
+        builder.Property(x => x.LotCode).HasMaxLength(Lengths.LotCode);
         builder.HasOne(x => x.Raft).WithMany().HasForeignKey(x => x.RaftId);
         builder.HasOne(x => x.Cycle).WithMany().HasForeignKey(x => x.CycleId);
         builder.HasOne(x => x.Status).WithMany().HasForeignKey(x => x.StatusId);

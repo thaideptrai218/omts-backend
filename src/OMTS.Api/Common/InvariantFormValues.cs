@@ -22,6 +22,9 @@ internal static class InvariantFormValues
     private static readonly string[] OffsetTimeFormats =
         LocalTimeFormats.Skip(1).SelectMany(format => new[] { format + "'Z'", format + "zzz" }).ToArray();
 
+    // A number with a dot. No thousands separator: "400,5" typed with a decimal comma would be read as 4005, ten times too large.
+    private const NumberStyles DecimalStyle = NumberStyles.Number & ~NumberStyles.AllowThousands;
+
     public static bool TryDecimal(string? value, out decimal? result)
     {
         result = null;
@@ -30,7 +33,7 @@ internal static class InvariantFormValues
             return true;
         }
 
-        if (!decimal.TryParse(value.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
+        if (!decimal.TryParse(value.Trim(), DecimalStyle, CultureInfo.InvariantCulture, out var parsed))
         {
             return false;
         }
