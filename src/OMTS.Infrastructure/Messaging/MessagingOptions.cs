@@ -42,11 +42,16 @@ public sealed class SmsOptions
     public const string SectionName = "Sms";
     public const string FakeProvider = "Fake";
     public const string NoneProvider = "None";
+    public const int MinMandatoryTimeoutSeconds = 1;
+    public const int MaxMandatoryTimeoutSeconds = 60;
 
     public string Provider { get; set; } = NoneProvider;
     public FakeSenderOptions Fake { get; set; } = new();
 
-    /// <summary>The longest the answer of a business action waits for the SMS of its mandatory notifications.</summary>
+    /// <summary>
+    /// The longest the answer of a business action waits for the SMS of its mandatory notifications, from
+    /// <see cref="MinMandatoryTimeoutSeconds"/> to <see cref="MaxMandatoryTimeoutSeconds"/>; checked at startup.
+    /// </summary>
     public int MandatoryTimeoutSeconds { get; set; } = 5;
 }
 

@@ -131,7 +131,12 @@ public static class DependencyInjection
     private static void AddMessaging(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<EmailOptions>().Bind(configuration.GetSection(EmailOptions.SectionName));
-        services.AddOptions<SmsOptions>().Bind(configuration.GetSection(SmsOptions.SectionName));
+        services.AddOptions<SmsOptions>()
+            .Bind(configuration.GetSection(SmsOptions.SectionName))
+            .Validate(
+                o => o.MandatoryTimeoutSeconds is >= SmsOptions.MinMandatoryTimeoutSeconds and <= SmsOptions.MaxMandatoryTimeoutSeconds,
+                $"{SmsOptions.SectionName}:MandatoryTimeoutSeconds must be from {SmsOptions.MinMandatoryTimeoutSeconds} to {SmsOptions.MaxMandatoryTimeoutSeconds}.")
+            .ValidateOnStart();
         services.AddOptions<PushOptions>().Bind(configuration.GetSection(PushOptions.SectionName));
 
         services.AddSingleton<FakeEmailSender>();

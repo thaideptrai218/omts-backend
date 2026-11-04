@@ -9,7 +9,7 @@ namespace OMTS.Infrastructure.Messaging;
 /// <see cref="SmsOptions.MandatoryTimeoutSeconds"/>, also with a provider that ignores its cancellation, so a failed or
 /// slow SMS leaves the business action as it is (GFR-06). Nothing is retried: a provider that timed out may have
 /// delivered, and a second send could reach the phone twice. Logs hold the type and the account id only, never the
-/// phone number or the text.
+/// phone number, the text or what a provider answered, which could repeat them.
 /// </summary>
 internal sealed class MandatorySmsDelivery(ISmsSender sender, IOptions<SmsOptions> options, ILogger<MandatorySmsDelivery> logger)
 {
@@ -20,6 +20,19 @@ internal sealed class MandatorySmsDelivery(ISmsSender sender, IOptions<SmsOption
             return;
         }
 
+        try
+        {
+            await SendAllAsync(messages);
+        }
+        catch (Exception exception)
+        {
+            // The save is committed: nothing may reach its caller. The exception type only, as below.
+            logger.LogError("{Count} mandatory SMS not sent: {ErrorType}", messages.Count, exception.GetType().Name);
+        }
+    }
+
+    private async Task SendAllAsync(IReadOnlyList<MandatorySmsMessage> messages)
+    {
         // One log for the whole save, not one per recipient and not the per-number warning of the unconfigured sender.
         if (options.Value.Provider == SmsOptions.NoneProvider)
         {
@@ -49,7 +62,7 @@ internal sealed class MandatorySmsDelivery(ISmsSender sender, IOptions<SmsOption
 
     private async Task SendWithinTimeoutAsync(IReadOnlyList<MandatorySmsMessage> messages)
     {
-        var seconds = Math.Max(1, options.Value.MandatoryTimeoutSeconds);
+        var seconds = options.Value.MandatoryTimeoutSeconds;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(seconds));
         var token = timeout.Token;
         // Task.Run: a provider that blocks before its first await must not hold the others or the answer.
@@ -71,7 +84,8 @@ internal sealed class MandatorySmsDelivery(ISmsSender sender, IOptions<SmsOption
             var result = await sender.SendAsync(message.PhoneNumber!, message.Text, cancellationToken);
             if (!result.Succeeded)
             {
-                logger.LogWarning("Mandatory SMS {Type} to account {AccountId} failed: {Error}", message.Type, message.RecipientAccountId, result.ErrorCode);
+                // A fixed outcome: a provider's error code could repeat the phone number or the text.
+                logger.LogWarning("Mandatory SMS {Type} to account {AccountId} failed: the provider refused it.", message.Type, message.RecipientAccountId);
             }
         }
         catch (Exception exception)

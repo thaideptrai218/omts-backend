@@ -1,15 +1,22 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using OMTS.Application.Common.Messages;
 
 namespace OMTS.Application.Features.Notifications;
 
 /// <summary>
 /// The text of a mandatory SMS. It fits one SMS whatever the content: at most <see cref="MaxLength"/> characters of the
 /// GSM 7-bit alphabet. Vietnamese letters lose their marks, because one Unicode character would turn the SMS into
-/// UCS-2, which holds 70 characters per part and is often refused or charged more. The text never holds a long number:
-/// a money type carries only its name, document code and amount; any other type carries the MSG text with every run of
-/// 8 or more digits masked, so a bank account number cannot get through by mistake.
+/// UCS-2, which holds 70 characters per part and is often refused or charged more. A money type carries only its name,
+/// document code and amount, so a bank account number cannot get in (decision 2). Any other type carries the MSG text,
+/// built from its own fields, which read as they are.
+/// <para>
+/// A text over the limit gives way in one order (<see cref="NotificationSmsLayouts"/>), and the values, the allowed
+/// ranges, the time and the expiry date never do: (1) the free text down to its short minimum, zone name or zone list
+/// first, then raft code or license type name, then license number; (2) the closing sentence; (3) the shorter wording of
+/// the water alert; (4) the free text below its minimum, in the same order. A text without a layout is cut at the end.
+/// </para>
 /// </summary>
 public static partial class NotificationSmsText
 {
@@ -18,7 +25,6 @@ public static partial class NotificationSmsText
     /// <summary>The characters a text may hold: each one is a single septet of the GSM 7-bit default alphabet.</summary>
     public const string Alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 @$_!\"#%&'()*+,-./:;<=>?";
 
-    private const string Masked = "***";
     private const string Shortened = "...";
     private const int MaxWordCut = 20;
 
@@ -34,9 +40,46 @@ public static partial class NotificationSmsText
     }.SelectMany(group => group.Item2.Select(letter => (letter, plain: group.Item1))).ToDictionary(pair => pair.letter, pair => pair.plain);
 
     public static string Render(NotificationTypeDefinition definition, NotificationSmsRule rule, NotificationContent content) =>
-        Shorten(rule.AmountParameter is { } amountParameter
-            ? ToAlphabet(DocumentCodeAndAmount(definition, amountParameter, content))
-            : LongNumber().Replace(ToAlphabet(content.Message.Text), Masked));
+        Shorten(
+            rule.AmountParameter is { } amountParameter ? ToAlphabet(DocumentCodeAndAmount(definition, amountParameter, content)) : MessageText(content.Message),
+            MaxLength);
+
+    private static string MessageText(UserMessage message)
+    {
+        var whole = ToAlphabet(message.Text);
+        if (whole.Length <= MaxLength || NotificationSmsLayouts.Of(message) is not { } layout)
+        {
+            return whole;
+        }
+
+        var freeText = layout.FreeText.Select(field => ToAlphabet(field.Text)).ToList();
+        var minimums = layout.FreeText.Select(field => field.Minimum).ToList();
+        foreach (var form in layout.Forms)
+        {
+            if (FitFreeText(form, freeText, minimums) is { } fitted)
+            {
+                return fitted;
+            }
+        }
+
+        // Only the widest values with a raft code come here: the free text goes below its minimum before a value does.
+        return FitFreeText(layout.Forms[^1], freeText, freeText.Select(_ => Shortened.Length).ToList()) ?? whole;
+    }
+
+    /// <summary>The form with its free text shortened in order, or null when it does not fit with each field at its minimum.</summary>
+    private static string? FitFreeText(NotificationSmsForm form, IReadOnlyList<string> freeText, IReadOnlyList<int> minimums)
+    {
+        var kept = freeText.ToList();
+        var excess = ToAlphabet(form(kept)).Length - MaxLength;
+        for (var i = 0; i < kept.Count && excess > 0; i++)
+        {
+            var shortened = Shorten(kept[i], Math.Max(minimums[i], kept[i].Length - excess));
+            excess -= kept[i].Length - shortened.Length;
+            kept[i] = shortened;
+        }
+
+        return excess > 0 ? null : ToAlphabet(form(kept));
+    }
 
     private static string DocumentCodeAndAmount(NotificationTypeDefinition definition, string amountParameter, NotificationContent content)
     {
@@ -74,22 +117,19 @@ public static partial class NotificationSmsText
         _ => " ",
     };
 
-    private static string Shorten(string text)
+    /// <param name="maxLength">At least the length of <see cref="Shortened"/>.</param>
+    private static string Shorten(string text, int maxLength)
     {
-        if (text.Length <= MaxLength)
+        if (text.Length <= maxLength)
         {
             return text;
         }
 
         // At a word when one ends near the limit; a very long name is cut where it stands.
-        var head = text[..(MaxLength - Shortened.Length)];
+        var head = text[..(maxLength - Shortened.Length)];
         var lastSpace = head.LastIndexOf(' ');
-        return (lastSpace >= head.Length - MaxWordCut ? head[..lastSpace] : head).TrimEnd(' ', ',', ';', ':', '.') + Shortened;
+        return (lastSpace >= head.Length - Math.Min(MaxWordCut, head.Length / 2) ? head[..lastSpace] : head).TrimEnd(' ', ',', ';', ':', '.') + Shortened;
     }
-
-    // 8 or more digits, also when grouped by single spaces, dots or dashes. Dates and times are split by '/' and ':'.
-    [GeneratedRegex(@"\d(?:[ .\-]?\d){7,}")]
-    private static partial Regex LongNumber();
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Spaces();

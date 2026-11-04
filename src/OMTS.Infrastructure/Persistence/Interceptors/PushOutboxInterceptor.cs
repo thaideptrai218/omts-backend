@@ -13,7 +13,11 @@ internal sealed class PushOutboxInterceptor(
     PushOutbox outbox, IPushSender pushSender, MandatorySmsDelivery mandatorySms, ILogger<PushOutboxInterceptor> logger)
     : SaveChangesInterceptor
 {
+    // The limit of one push.
     private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(10);
+
+    // How long the answer waits for all the pushes of a save, whatever their number or what a provider does with its cancellation.
+    private static readonly TimeSpan PushWait = SendTimeout;
 
     public override int SavedChanges(SaveChangesCompletedEventData eventData, int result)
     {
@@ -46,8 +50,31 @@ internal sealed class PushOutboxInterceptor(
         return Task.CompletedTask;
     }
 
-    // Together: a provider of one channel that hangs must not hold the other channel back.
-    private Task SendPendingAsync() => Task.WhenAll(SendPushAsync(outbox.TakeAll()), mandatorySms.SendAsync(outbox.TakeAllSms()));
+    // Each channel on its own thread: a provider that hangs or blocks its thread must not hold the other channel back.
+    // The wait is bounded by the longer of PushWait and the SMS limit (at most 60 seconds, checked at startup); what is
+    // left of either channel goes on without the answer.
+    private async Task SendPendingAsync()
+    {
+        var pushes = outbox.TakeAll();
+        var sms = outbox.TakeAllSms();
+        if (pushes.Count == 0 && sms.Count == 0)
+        {
+            return;
+        }
+
+        var smsSent = Task.Run(() => mandatorySms.SendAsync(sms), CancellationToken.None);
+        var pushesSent = Task.Run(() => SendPushAsync(pushes), CancellationToken.None);
+        try
+        {
+            await pushesSent.WaitAsync(PushWait);
+        }
+        catch (TimeoutException)
+        {
+            logger.LogWarning("{Count} push messages of a save not all answered after {Seconds} seconds; the save is kept.", pushes.Count, PushWait.TotalSeconds);
+        }
+
+        await smsSent;
+    }
 
     private async Task SendPushAsync(IReadOnlyList<PushMessage> messages)
     {

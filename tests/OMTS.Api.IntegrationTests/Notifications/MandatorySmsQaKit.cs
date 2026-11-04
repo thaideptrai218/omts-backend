@@ -158,11 +158,15 @@ public static class MandatorySmsQaKit
     public sealed class BlockingPushSender : IPushSender, IDisposable
     {
         private readonly ManualResetEventSlim _release = new();
+        private int _calls;
+
+        public int Calls => Volatile.Read(ref _calls);
 
         public void Release() => _release.Set();
 
         public Task<DeliveryResult> SendAsync(PushMessage message, CancellationToken cancellationToken = default)
         {
+            Interlocked.Increment(ref _calls);
             _release.Wait(TimeSpan.FromSeconds(60), CancellationToken.None);
             return Task.FromResult(DeliveryResult.Sent("id"));
         }

@@ -31,8 +31,7 @@ public class MandatorySmsRecipientTests(AuthApiFactory api) : IClassFixture<Auth
         await z.RecordedAsync(9.1m, 20m, client: managerClient);
 
         var toOwner = Assert.Single(api.SmsTo(z.OwnerAccount));
-        // The code of a test zone is random hex, sometimes long digits that the rule masks: the name is not asserted.
-        Assert.StartsWith("Water alert: zone Zone ", toOwner.Text);
+        Assert.StartsWith($"Water alert: zone {z.Zone.Name},", toOwner.Text);
         Assert.Contains("pH 9.1 is too high", toOwner.Text);
         // A Zone Manager still gets the safety alert of their own reading (decision 3 is about the Owner).
         Assert.Single(api.SmsTo(manager));

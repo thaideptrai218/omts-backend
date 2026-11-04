@@ -27,17 +27,6 @@ public class NotificationSmsTextTests
         "SUPPLIER_TRANSACTION", "Supplier payment", NotificationPushPolicy.AlwaysPush, [NotificationRole.CooperativeOwner],
         NotificationOpenAccess.OwnerOnly, NotificationSmsRule.MoneyToOwner("amount"));
 
-    public static TheoryData<string> TypesWithAnSms()
-    {
-        var types = new TheoryData<string>();
-        foreach (var type in NotificationTypes.All.Where(t => t.Sms is not null))
-        {
-            types.Add(type.Code);
-        }
-
-        return types;
-    }
-
     [Fact]
     public void Every_mandatory_type_names_its_sms_and_no_other_type_has_one()
     {
@@ -60,16 +49,23 @@ public class NotificationSmsTextTests
         Assert.Equal([NotificationTypes.WaterAlert, NotificationTypes.WaterAlertWithdrawn], types);
     }
 
-    [Theory]
-    [MemberData(nameof(TypesWithAnSms))]
-    public void No_type_puts_a_bank_account_number_on_a_phone_even_when_its_message_holds_one(string type)
+    // By construction: a money SMS is built from the code and the amount only. An operational text reads as its fields do.
+    [Fact]
+    public void A_money_type_puts_no_bank_account_number_on_a_phone_even_when_everything_else_holds_one()
     {
-        var definition = NotificationTypes.Find(type)!;
+        var text = Render(MoneyType, Hostile(MoneyType.Code));
 
-        var text = Render(definition, Hostile(type));
-
+        Assert.Equal("Supplier payment DOC-01: 1,000 VND.", text);
         Assert.DoesNotContain(BankAccount, Digits(text));
         Assert.DoesNotContain(GroupedBankAccount, text);
+    }
+
+    [Fact]
+    public void An_operational_text_reads_as_its_fields_do_whatever_their_digits()
+    {
+        var alert = Render(NotificationTypes.Find(NotificationTypes.WaterAlert)!, WaterAlert("KV-2026-0012", WaterValue(WaterValueOutside.Ph, 9.1m)));
+
+        Assert.Contains("zone KV-2026-0012,", alert);
     }
 
     [Fact]

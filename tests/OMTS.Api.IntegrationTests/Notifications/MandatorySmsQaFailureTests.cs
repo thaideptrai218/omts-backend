@@ -171,18 +171,15 @@ public class MandatorySmsQaFailureTests
         Assert.Contains(api.Logs.Lines, l => l.Contains("2 mandatory SMS had no answer after 5 seconds"));
     }
 
+    // Adapted to L1: the limit is checked at startup, from 1 to 60 seconds. These counted as 1 second before.
     [Theory]
     [InlineData("0")]
     [InlineData("-5")]
-    public async Task A_zero_or_negative_limit_counts_as_1_second(string value)
+    public async Task A_zero_or_negative_limit_stops_the_host_at_startup(string value)
     {
-        await using var api = Host(new HangingSmsSender(), settings: (Timeout, value));
-        var z = await api.ZoneAsync();
-        var (managerClient, _) = await api.StaffAsync(z.Zone);
+        await using var api = Host(settings: (Timeout, value));
 
-        await z.RecordedAsync(9.1m, 20m, client: managerClient);
-
-        Assert.Contains(api.Logs.Lines, l => l.Contains("mandatory SMS had no answer after 1 seconds"));
+        Assert.Contains(Timeout, Assert.ThrowsAny<Exception>(() => api.CreateClient()).ToString());
     }
 
     [Theory]
@@ -197,11 +194,13 @@ public class MandatorySmsQaFailureTests
         Assert.ThrowsAny<Exception>(() => api.CreateClient());
     }
 
-    // The largest value a CancellationTokenSource takes: 2^32 - 2 milliseconds.
-    [Fact]
-    public async Task The_largest_limit_a_timer_takes_works()
+    // Adapted to L1: the largest limit is now 60 seconds, no longer the 4294967 a CancellationTokenSource takes.
+    [Theory]
+    [InlineData("1")]
+    [InlineData("60")]
+    public async Task The_smallest_and_the_largest_limit_work(string value)
     {
-        await using var api = Host(settings: (Timeout, "4294967"));
+        await using var api = Host(settings: (Timeout, value));
         var z = await api.ZoneAsync();
         var (managerClient, manager) = await api.StaffAsync(z.Zone);
 
@@ -210,20 +209,18 @@ public class MandatorySmsQaFailureTests
         Assert.Single(api.SmsTo(manager));
     }
 
-    // The class promises "never throws". new CancellationTokenSource(TimeSpan) refuses more than 49.7 days and the interceptor rethrows it.
+    // Adapted to L1: such a limit used to answer 500 after the commit. The decision refuses it at startup, so no request gets that far;
+    // MandatorySmsAfterCommitWaitTests holds the same limit past the check and shows the answer stays as it is.
     [Theory]
+    [InlineData("61")]
+    [InlineData("4294967")]
     [InlineData("4294968")]
     [InlineData("2147483647")]
-    public async Task L1_a_limit_over_49_days_leaves_the_answer_as_it_is_and_sends_the_sms(string value)
+    public async Task L1_a_limit_over_60_seconds_stops_the_host_at_startup(string value)
     {
         await using var api = Host(settings: (Timeout, value));
-        var z = await api.ZoneAsync();
-        var (managerClient, manager) = await api.StaffAsync(z.Zone);
 
-        var response = await z.RecordAsync(9.1m, 20m, client: managerClient);
-
-        var rows = await api.NotificationCountAsync(manager.Id, NotificationTypes.WaterAlert);
-        Assert.Equal((HttpStatusCode.Created, 1, 1), (response.StatusCode, rows, api.SmsTo(manager).Count));
+        Assert.Contains(Timeout, Assert.ThrowsAny<Exception>(() => api.CreateClient()).ToString());
     }
 
     [Fact]
@@ -240,7 +237,7 @@ public class MandatorySmsQaFailureTests
         Assert.NotEmpty(pushes.List(z.OwnerAccount.Id.ToString()));
     }
 
-    // The SMS is on its way although the push never answers. The answer itself does wait for that push, as it did before this branch.
+    // The SMS is on its way although the push never answers. The answer itself waits for that push, up to 10 seconds (MandatorySmsAfterCommitWaitTests).
     [Fact]
     public async Task The_sms_goes_out_while_an_async_push_hangs()
     {
@@ -259,7 +256,7 @@ public class MandatorySmsQaFailureTests
         Assert.Equal(HttpStatusCode.Created, (await answer).StatusCode);
     }
 
-    // PushOutboxInterceptor: "a provider of one channel that hangs must not hold the other channel back". SendPushAsync runs first and synchronously.
+    // PushOutboxInterceptor: "a provider that hangs or blocks its thread must not hold the other channel back".
     [Fact]
     public async Task L2_the_sms_goes_out_while_a_push_provider_blocks_its_thread()
     {

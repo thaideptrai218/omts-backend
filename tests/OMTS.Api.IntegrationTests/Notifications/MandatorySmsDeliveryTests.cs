@@ -49,7 +49,9 @@ public class MandatorySmsDeliveryTests
 
         Assert.Equal(2, (await api.AlertsOfAsync(measurement.Id())).Count);
         Assert.Single(api.SmsTo(z.OwnerAccount));
-        Assert.Contains(api.Logs.Lines, l => l.Contains($"Mandatory SMS WATER_ALERT to account {manager.Id} failed: FAKE_CONFIGURED_FAILURE"));
+        // A fixed outcome: what a provider answers could repeat the number or the text.
+        Assert.Contains(api.Logs.Lines, l => l.Contains($"Mandatory SMS WATER_ALERT to account {manager.Id} failed: the provider refused it."));
+        Assert.DoesNotContain(api.Logs.Lines, l => l.Contains("Mandatory SMS") && l.Contains("FAKE_CONFIGURED_FAILURE"));
     }
 
     // The provider never answers and ignores its cancellation: the answer waits for the timeout, not for the provider.

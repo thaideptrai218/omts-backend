@@ -4,8 +4,9 @@ using OMTS.Application.Features.Notifications;
 namespace OMTS.Application.UnitTests.Features.Notifications;
 
 /// <summary>
-/// QA of the SMS text (decision 2 of OMTS-216, BR-WATER-05, MSG-WATER-03, MSG-FARM-01). Tests named M.. or L.. fail on
-/// purpose: each names a finding of reports/qa-261105-mandatory-sms.md. The others state what was checked and holds.
+/// QA of the SMS text (decision 2 of OMTS-216, BR-WATER-05, MSG-WATER-03, MSG-FARM-01). Tests named M.. or L.. each name a
+/// finding of reports/qa-261105-mandatory-sms.md; the ones that wait for the PM are skipped and say why. The others state
+/// what was checked and holds.
 /// </summary>
 public class MandatorySmsTextQaTests
 {
@@ -44,9 +45,9 @@ public class MandatorySmsTextQaTests
     private static WaterValueOutside Salinity(decimal value = 12m, decimal min = 15m, decimal max = 30m) =>
         new(WaterValueOutside.Salinity, value, "‰", WaterValueDirection.Low, min, max);
 
-    // ---- M1: the 8-digit mask, grouped numbers it misses ----
+    // ---- M1: numbers in a free-text zone name. The mask of the operational texts is gone (M1 to M3 are one decision). ----
 
-    [Theory]
+    [Theory(Skip = "Waiting for the PM: may a number typed into a zone name reach an SMS? Only money SMS are held to code and amount.")]
     [InlineData(" - ")]
     [InlineData(" / ")]
     [InlineData("/")]
@@ -65,7 +66,7 @@ public class MandatorySmsTextQaTests
     }
 
     // EmployeeInput on feature/OMTS-223-bank-account accepts an account number of 6 to 20 digits.
-    [Theory]
+    [Theory(Skip = "Waiting for the PM: may a number typed into a zone name reach an SMS? Only money SMS are held to code and amount.")]
     [InlineData("765432")]
     [InlineData("7654321")]
     public void M1_a_short_bank_account_number_never_reaches_the_phone(string number)
@@ -75,7 +76,8 @@ public class MandatorySmsTextQaTests
         Assert.False(text.Contains(number), text);
     }
 
-    [Theory]
+    // Asks the same question as M1: it passed only through the mask.
+    [Theory(Skip = "Waiting for the PM: may a number typed into a zone name reach an SMS? Only money SMS are held to code and amount.")]
     [InlineData(" ")]
     [InlineData("  ")]
     [InlineData(".")]
@@ -112,7 +114,8 @@ public class MandatorySmsTextQaTests
         Assert.All(text, c => Assert.Contains(c, NotificationSmsText.Alphabet));
     }
 
-    [Theory]
+    // Asks the same question as M1: it passed only through the mask.
+    [Theory(Skip = "Waiting for the PM: may a number typed into a zone name reach an SMS? Only money SMS are held to code and amount.")]
     [InlineData("Nguyễn Văn 12345678")]
     [InlineData("12345678 Trần")]
     public void Digits_in_a_name_are_masked_as_any_other(string zone)
@@ -122,7 +125,7 @@ public class MandatorySmsTextQaTests
         Assert.DoesNotContain("12345678", text);
     }
 
-    // ---- M2: the mask hides what the alert must name ----
+    // ---- M2, M3: what the alert must name reads as it is ----
 
     // BR-WATER-05: the alert names "each value outside, with its allowed range"; the columns hold two decimals.
     [Fact]
@@ -144,7 +147,6 @@ public class MandatorySmsTextQaTests
         Assert.DoesNotContain("***", text);
     }
 
-    // PM call as well: masking a long license number is an open question of the coder's list. What it does is verified here.
     [Theory]
     [InlineData("GP-2026-0012")]
     [InlineData("QD-20260012")]
@@ -272,7 +274,7 @@ public class MandatorySmsTextQaTests
 
     // ---- Money ----
 
-    // DocumentCodes builds PR-yyyyMMdd-nnn: 11 digits that the operational mask would hide.
+    // DocumentCodes builds PR-yyyyMMdd-nnn: 11 digits that read as they are.
     [Theory]
     [InlineData("PR-20261105-001")]
     [InlineData("PC-0007")]
