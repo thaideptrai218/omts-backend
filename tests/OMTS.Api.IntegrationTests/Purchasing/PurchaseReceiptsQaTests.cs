@@ -44,7 +44,8 @@ public class PurchaseReceiptsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         yield return (HttpMethod.Post, $"{Receipts}/{completed}/cancel", () => Json(new { reason = "QA" }), true);
         yield return (HttpMethod.Post, $"{Receipts}/{completed}/correct", () => Json(new { reason = "QA", lines = Array.Empty<object>() }), true);
         yield return (HttpMethod.Get, $"{Receipts}/{completed}/copy", () => null, true);
-        yield return (HttpMethod.Post, $"{Receipts}/{completed}/returns", () => Json(new ReturnBody { DebtReductionAmount = 1_000, Lines = [] }), true);
+        yield return (HttpMethod.Post, $"{Receipts}/{completed}/returns", () => Json(new ReturnBody { Lines = [] }), true);
+        yield return (HttpMethod.Post, $"/api/purchase-returns/{returnId}/cancel", () => Json(new { reason = "QA" }), true);
     }
 
     [Fact]
@@ -54,7 +55,7 @@ public class PurchaseReceiptsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 1_000)));
         var completed = await world.CompletedAsync(new LineBody(world.Seed, 10, 1_000));
         var returned = await world.CompletedAsync(new LineBody(world.Other, 2, 1_000));
-        var returnId = (await (await world.Owner.PostReturnAsync(returned.Id(), new ReturnBody { DebtReductionAmount = 1_000, Lines = [new ReturnLineBody(returned.LineOf(world.Other), 1)] }))
+        var returnId = (await (await world.Owner.PostReturnAsync(returned.Id(), new ReturnBody { Lines = [new ReturnLineBody(returned.LineOf(world.Other), 1)] }))
             .ReadAsync(HttpStatusCode.Created)).GetProperty("returns")[0].Id();
         var receiptsBefore = await factory.QueryAsync(db => db.PurchaseReceipts.CountAsync(r => r.SupplierId == world.SupplierId));
         var anonymous = factory.CreateClient();

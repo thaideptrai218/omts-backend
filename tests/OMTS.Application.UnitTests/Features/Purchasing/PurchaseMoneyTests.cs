@@ -65,15 +65,15 @@ public class PurchaseMoneyTests
     }
 
     [Fact]
-    public void The_total_keeps_its_dongs_and_the_debt_share_of_a_receipt_follows_its_returns_and_refunds()
+    public void The_total_keeps_its_dongs_and_the_debt_share_of_a_receipt_counts_its_returns_that_are_not_cancelled()
     {
         var receipt = Receipt((InputItemGroup.Seed, 100, 9_000), (InputItemGroup.Other, 1.5m, 333));
         var line = receipt.Lines.First();
+        receipt.Returns.Add(new PurchaseReturn { Lines = [new PurchaseReturnLine { ReceiptLineId = line.Id, Quantity = 10, ReturnValue = 90_000 }] });
         receipt.Returns.Add(new PurchaseReturn
         {
-            RefundAmount = 20_000,
-            DebtReductionAmount = 70_000,
-            Lines = [new PurchaseReturnLine { ReceiptLineId = line.Id, Quantity = 10, ReturnValue = 90_000 }],
+            StatusId = StatusIds.PurchaseReturn.Cancelled,
+            Lines = [new PurchaseReturnLine { ReceiptLineId = line.Id, Quantity = 1, ReturnValue = 9_000 }],
         });
 
         var figures = PurchaseMoney.Of(receipt);
@@ -81,31 +81,16 @@ public class PurchaseMoneyTests
         Assert.Equal(900_500, figures.Total);
         Assert.Equal(900_500, PurchaseMoney.Total(receipt.Lines));
         Assert.Equal(90_000, figures.Returned);
-        Assert.Equal(20_000, figures.Refunded);
-        Assert.Equal(900_500 - 90_000 + 20_000, figures.DebtShare);
+        Assert.Equal(900_500 - 90_000, figures.DebtShare);
+        Assert.Single(PurchaseMoney.RecordedReturns(receipt));
     }
 
     [Theory]
-    [InlineData(10, 10_000, 1_000_000, 0, 100_000)]
-    [InlineData(1, 500, 1_500, 0, 1_000)]
-    [InlineData(1, 500, 1_500, 1_000, 1_000)]
-    [InlineData(1, 500, 1_500, 2_000, 0)]
-    public void A_return_value_is_whole_thousands_capped_by_what_is_left_of_its_line(
-        decimal quantity, decimal unitPrice, decimal lineAmount, decimal alreadyReturned, decimal expected)
-    {
-        var line = new PurchaseReceiptLine { Quantity = 100, UnitPrice = unitPrice, LineAmount = lineAmount };
-        Assert.Equal(expected, PurchaseMoney.CappedReturnValue(quantity, line, alreadyReturned));
-    }
-
-    [Fact]
-    public void The_fit_caps_the_total_and_puts_the_remainder_on_the_last_lines()
-    {
-        Assert.Equal([1_000_000m, 1_000_000m, 999_000m], PurchaseMoney.FitToReceipt([1_000_000, 1_000_000, 1_000_000], 2_999_000, true));
-        Assert.Equal([1_000_000m, 999_000m], PurchaseMoney.FitToReceipt([1_000_000, 1_000_000], 1_999_000, false));
-        Assert.Equal([500_000m, 0m], PurchaseMoney.FitToReceipt([500_000, 500_000], 500_000, false));
-        Assert.Equal([2_000_000m], PurchaseMoney.FitToReceipt([1_999_000], 2_000_000, true));
-        Assert.Equal([1_000_000m], PurchaseMoney.FitToReceipt([1_000_000], 5_000_000, false));
-    }
+    [InlineData(1, "TH000001")]
+    [InlineData(999_999, "TH999999")]
+    [InlineData(1_000_000, "TH1000000")]
+    public void Return_codes_are_TH_and_at_least_six_digits(int number, string code) =>
+        Assert.Equal(code, DocumentCodes.ReturnCode(number));
 
     [Theory]
     [InlineData(1, "PN000001")]

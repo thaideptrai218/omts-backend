@@ -93,13 +93,12 @@ namespace OMTS.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            // Lossy: the old model has no Cancelled return and only whole thousands.
+            // Lossy: the old model has no Cancelled return and only whole thousands. The TH counter stays: the rows keep their TH codes.
             migrationBuilder.Sql(
                 """
                 DELETE FROM PurchaseReturnLines WHERE ReturnId IN (SELECT Id FROM PurchaseReturns WHERE StatusId = 1902);
                 DELETE FROM PurchaseReturns WHERE StatusId = 1902;
                 UPDATE PurchaseReturnLines SET ReturnValue = ROUND(ReturnValue, -3) WHERE ReturnValue % 1000 <> 0;
-                DELETE FROM DocumentSequences WHERE [Key] = N'TH';
                 """);
 
             migrationBuilder.DropForeignKey(

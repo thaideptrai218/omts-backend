@@ -65,7 +65,7 @@ public class SupplierDebtApiTests(AuthApiFactory factory) : IClassFixture<AuthAp
         var cancelledReceipt = await owner.CreateReceiptAsync(Dated(world, 30, 999_000));
         await (await owner.CancelAsync(cancelledReceipt.Id(), "Wrong")).ReadAsync(HttpStatusCode.OK);
         await owner.CreateReceiptAsync(Dated(world, 40, 888_000) with { Complete = false });
-        await (await owner.PostReturnAsync(second.Id(), new ReturnBody { DebtReductionAmount = 50_000, Lines = [new ReturnLineBody(second.LineOf(world.Other), 0.25m)] })).ReadAsync(HttpStatusCode.Created);
+        await world.ReturnAsync(second.Id(), second.LineOf(world.Other), 0.25m);
         await world.PayAsync(180_000);
         var mistake = await world.PayAsync(70_000);
         await (await owner.CancelPaymentAsync(mistake.Id(), "Mistake")).ReadAsync(HttpStatusCode.OK);

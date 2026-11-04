@@ -29,7 +29,7 @@ public class PurchasingMessageCodeQaTests(AuthApiFactory factory) : IClassFixtur
         var world = await factory.WorldAsync();
         var receipt = await world.CompletedAsync(new LineBody(world.Other, 4, 25_000));
         var line = receipt.LineOf(world.Other);
-        var body = new ReturnBody { DebtReductionAmount = 25_000, RefundAmount = 0 };
+        var body = new ReturnBody {  };
 
         var zero = await (await world.Owner.PostReturnAsync(receipt.Id(), body with { Lines = [new ReturnLineBody(line, 0)] }))
             .SrsProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-03", "MSG59");
@@ -38,7 +38,7 @@ public class PurchasingMessageCodeQaTests(AuthApiFactory factory) : IClassFixtur
 
         var itemName = await factory.QueryAsync(db => db.FarmingInputItems.Where(i => i.Id == world.Other).Select(i => i.Name).SingleAsync());
         Assert.Equal($"{itemName}: enter a quantity greater than 0 and at most 4 bag. Received 4 bag, already returned 0 bag.", zero.Detail());
-        Assert.Equal(("Line 1", 4m), (zero.Str("field"), zero.GetProperty("limit").GetDecimal()));
+        Assert.Equal(("Line 1", 4m), (zero.Str("field"), zero.GetProperty("maxQuantity").GetDecimal()));
         Assert.Equal("Line 1 is missing or invalid. Please check and enter it again.", missing.Detail());
     }
 }

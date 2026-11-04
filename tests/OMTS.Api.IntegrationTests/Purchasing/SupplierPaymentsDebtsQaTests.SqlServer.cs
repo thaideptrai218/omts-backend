@@ -28,7 +28,7 @@ public class SupplierPaymentsDebtsQaSqlServerTests
     private const string Debts = "/api/supplier-debts";
 
     // Awkward data on one supplier, by hand: half-up lines, a zero-priced line and receipt, two receipts on a day, an advance older
-    // than every receipt, a 1-dong payment, money paid back, a return with a refund, and what must not count.
+    // than every receipt, a 1-dong payment, money paid back, a return, and what must not count (also a cancelled return).
     // List, detail, statement and export must agree, and the pure ledger must agree with the SQL sums on every day.
     [SqlServerFact]
     public async Task List_detail_statement_export_pure_ledger_and_sql_sums_agree_on_awkward_data()
@@ -58,23 +58,22 @@ public class SupplierPaymentsDebtsQaSqlServerTests
         var wrong = await owner.CreateReceiptAsync(Receipt(36, true, new LineBody(world.Other, 1, 999_000)));
         await (await owner.CancelAsync(wrong.Id(), "Wrong")).ReadAsync(HttpStatusCode.OK);
         await owner.CreateReceiptAsync(Receipt(35, false, new LineBody(world.Other, 1, 888_000)));
-        await (await owner.PostReturnAsync(second.Id(), new ReturnBody
-        {
-            ReturnDate = Today.AddDays(-30), RefundAmount = 25_000, RefundMethod = "Cash", DebtReductionAmount = 225_000, Lines = [new ReturnLineBody(second.LineOf(world.Other), 0.25m)],
-        })).ReadAsync(HttpStatusCode.Created);
+        var mistakenReturn = (await world.ReturnAsync(second.Id(), second.LineOf(world.Other), 0.5m)).GetProperty("returns")[0].Id();
+        await (await owner.CancelReturnAsync(mistakenReturn, "Not sent back")).ReadAsync(HttpStatusCode.OK);
+        await world.ReturnAsync(second.Id(), second.LineOf(world.Other), 0.25m);
         await (await owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, Amount = 77_777, Method = "BankTransfer", BankReference = $"FT-{tag}" })).ReadAsync(HttpStatusCode.Created);
 
-        // 569,593 + 1,000,000 + 0 + 1,000,002 − 250,000 + 25,000 − 200,001 − 1 + 7 − 77,777.
-        const decimal debt = 2_066_823m;
+        // 569,593 + 1,000,000 + 0 + 1,000,002 − 250,000 − 200,001 − 1 + 7 − 77,777.
+        const decimal debt = 2_041_823m;
         var list = await (await owner.GetAsync($"{Debts}?search={tag}")).ReadAsync(HttpStatusCode.OK);
         var row = Assert.Single(list.GetProperty("page").GetProperty("items").EnumerateArray());
         Assert.Equal((debt, 40, debt, 0m), (row.Money("debt"), row.GetProperty("debtAgeDays").GetInt32(), list.Money("totalOwed"), list.Money("totalAdvance")));
 
-        // FIFO: 200,002 + 77,777 − 7 − 25,000 = 252,772 held; it goes on the first receipt of the oldest day.
+        // FIFO: 200,002 + 77,777 − 7 = 277,772 held; it goes on the first receipt of the oldest day.
         var detail = await (await owner.GetAsync($"{Debts}/{world.SupplierId}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal((debt, 40), (detail.Money("debtToday"), detail.GetProperty("debtAgeDays").GetInt32()));
         Assert.Equal(
-            [(first.Id(), 252_772m, 316_821m, 40), (second.Id(), 0m, 750_000m, 40), (today.Id(), 0m, 1_000_002m, 0)],
+            [(first.Id(), 277_772m, 291_821m, 40), (second.Id(), 0m, 750_000m, 40), (today.Id(), 0m, 1_000_002m, 0)],
             detail.GetProperty("unpaidReceipts").EnumerateArray().Select(r => (r.Id(), r.Money("covered"), r.Money("remaining"), r.GetProperty("ageDays").GetInt32())).ToList());
         Assert.Equal(debt, detail.GetProperty("unpaidReceipts").EnumerateArray().Sum(r => r.Money("remaining")));
 
@@ -84,7 +83,7 @@ public class SupplierPaymentsDebtsQaSqlServerTests
         Assert.Equal((0m, debt, debt), (whole.Money("openingDebt"), whole.Money("closingDebt"), whole.Money("debtToday")));
         Assert.Equal(whole.Money("closingDebt"), whole.Money("openingDebt") + entries.Sum(e => e.Money("amount")));
         Assert.Equal(debt, entries[^1].Money("debtAfter"));
-        Assert.DoesNotContain(entries, e => e.Id() == mistake.Id() || e.Id() == mistakeBack.Id() || e.Id() == wrong.Id());
+        Assert.DoesNotContain(entries, e => e.Id() == mistake.Id() || e.Id() == mistakeBack.Id() || e.Id() == wrong.Id() || e.Id() == mistakenReturn);
 
         // Any cut gives closing = next opening, and the SQL sums at any day equal the running debt of the pure ledger.
         foreach (var cut in new[] { -101, -100, -40, -39, -38, -37, -30, -1 })
