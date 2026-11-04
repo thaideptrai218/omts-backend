@@ -3453,10 +3453,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.OwnsOne("OMTS.Domain.Entities.Identity.BankAccountInfo", "BankAccount", b1 =>
+                    b.OwnsOne("OMTS.Domain.Entities.Identity.ReceivingBankAccount", "BankAccount", b1 =>
                         {
                             b1.Property<Guid>("CooperativeId")
                                 .HasColumnType("uniqueidentifier");
+
+                            b1.Property<DateTimeOffset>("AcceptedAt")
+                                .HasColumnType("datetimeoffset");
 
                             b1.Property<string>("AccountHolderName")
                                 .IsRequired()
@@ -3467,6 +3470,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                                 .IsRequired()
                                 .HasMaxLength(50)
                                 .HasColumnType("nvarchar(50)");
+
+                            b1.Property<string>("BankBin")
+                                .IsRequired()
+                                .HasMaxLength(6)
+                                .HasColumnType("nvarchar(6)");
 
                             b1.Property<string>("BankName")
                                 .IsRequired()

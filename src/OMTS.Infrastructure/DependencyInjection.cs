@@ -1,12 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using OMTS.Application.Features.Verification;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Ocr;
+using OMTS.Application.Common.Interfaces.Payments;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Interfaces.Reports;
 using OMTS.Application.Common.Interfaces.Storage;
@@ -17,6 +19,7 @@ using OMTS.Infrastructure.Jobs;
 using OMTS.Infrastructure.Messaging;
 using OMTS.Infrastructure.Messaging.Fakes;
 using OMTS.Infrastructure.Ocr;
+using OMTS.Infrastructure.Payments;
 using OMTS.Infrastructure.Persistence;
 using OMTS.Infrastructure.Persistence.Interceptors;
 using OMTS.Infrastructure.Persistence.Queries;
@@ -62,6 +65,7 @@ public static class DependencyInjection
         services.AddScoped<IAuditEventRepository, AuditEventRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IRelatedRecordQuery, RelatedRecordQuery>();
+        services.AddScoped<ISentInvoiceQrCodeQuery, SentInvoiceQrCodeQuery>();
         services.AddScoped<IZoneRecipientQuery, ZoneRecipientQuery>();
         services.AddScoped<IVerificationCodeRepository, VerificationCodeRepository>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
@@ -89,6 +93,7 @@ public static class DependencyInjection
         services.AddMessaging(configuration);
         services.AddFileStorage(configuration);
         services.AddOcr(configuration);
+        services.AddPayments(configuration);
         services.AddSingleton<ISpreadsheetWriter, ClosedXmlSpreadsheetWriter>();
 
         services.AddScoped<DeploymentBootstrapper>();
@@ -194,6 +199,24 @@ public static class DependencyInjection
             return name == OcrProviderOptions.FakeProvider
                 ? provider.GetRequiredService<FakeOcrService>()
                 : provider.GetRequiredService<NotConfiguredOcrService>();
+        });
+    }
+
+    private static void AddPayments(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<PaymentNotificationOptions>().Bind(configuration.GetSection(PaymentNotificationOptions.SectionName));
+        services.AddOptions<PaymentProviderOptions>().Bind(configuration.GetSection(PaymentProviderOptions.SectionName));
+        services.AddSingleton<FakePaymentNotificationService>();
+        services.AddSingleton<IPaymentNotificationService>(provider =>
+        {
+            var name = provider.GetRequiredService<IOptions<PaymentProviderOptions>>().Value.Provider;
+            return name switch
+            {
+                PaymentProviderOptions.FakeProvider when provider.GetRequiredService<IHostEnvironment>().IsDevelopment() =>
+                    provider.GetRequiredService<FakePaymentNotificationService>(),
+                PaymentProviderOptions.FakeProvider or PaymentProviderOptions.NoneProvider => new UnconfiguredPaymentNotificationService(),
+                var other => throw UnknownProvider(PaymentProviderOptions.SectionName, other),
+            };
         });
     }
 

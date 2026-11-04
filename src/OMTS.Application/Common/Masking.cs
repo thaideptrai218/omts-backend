@@ -19,6 +19,10 @@ public static class Masking
             : $"{phoneNumber[..3]}{new string('*', phoneNumber.Length - 6)}{phoneNumber[^3..]}";
     }
 
+    /// <summary>A bank account number, for audit rows and logs: "0011223344" → "******3344".</summary>
+    public static string AccountNumber(string number) =>
+        number.Length <= 4 ? number : new string('*', number.Length - 4) + number[^4..];
+
     /// <summary>"nguyen@mail.com" → "n***@mail.com".</summary>
     public static string Email(string? email)
     {

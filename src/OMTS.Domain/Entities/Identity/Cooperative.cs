@@ -28,8 +28,8 @@ public class Cooperative : AuditableEntity, IHasStatus
     /// </summary>
     public string? LogoUrl { get; set; }
 
-    /// <summary>Used to build the VietQR payment QR (UC48); never shown on the traceability page.</summary>
-    public BankAccountInfo? BankAccount { get; set; }
+    /// <summary>The receiving bank account (DEBT-01); null until one is accepted and saved.</summary>
+    public ReceivingBankAccount? BankAccount { get; set; }
 
     public int StatusId { get; set; } = StatusIds.Cooperative.Draft;
     public Status Status { get; set; } = null!;

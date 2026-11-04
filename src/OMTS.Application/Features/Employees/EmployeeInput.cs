@@ -57,8 +57,7 @@ public sealed partial record EmployeeInput(
     }
 
     /// <summary>"0123456789" → "******6789": bank numbers appear masked in the audit log.</summary>
-    public static string MaskAccountNumber(string number) =>
-        number.Length <= 4 ? number : new string('*', number.Length - 4) + number[^4..];
+    public static string MaskAccountNumber(string number) => Common.Masking.AccountNumber(number);
 
     private static string? Optional(string? value, int max, string field, List<string> invalid)
     {

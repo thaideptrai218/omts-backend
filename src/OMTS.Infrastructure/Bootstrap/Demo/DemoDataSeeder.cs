@@ -20,6 +20,7 @@ internal static class DemoDataSeeder
     private static readonly IDemoSeedStep[] Steps =
     [
         new DemoCooperativeProfileStep(),
+        new DemoReceivingBankAccountStep(),
         new DemoFarmingZoneStep(),
         new DemoZoneLicenseStep(),
         new DemoRaftStep(),
