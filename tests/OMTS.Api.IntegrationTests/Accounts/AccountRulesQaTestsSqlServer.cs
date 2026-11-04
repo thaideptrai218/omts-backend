@@ -16,7 +16,6 @@ namespace OMTS.Api.IntegrationTests.Accounts;
 
 /// <summary>
 /// Independent QA of the account rules (OMTS-216) on SQL Server: races on the limits and on uniqueness, and the migration.
-/// A test whose comment starts with QA-n fails on purpose: it shows finding n of reports/qa-261104-account-rules.md.
 /// </summary>
 public class AccountRulesQaTestsSqlServer
 {
