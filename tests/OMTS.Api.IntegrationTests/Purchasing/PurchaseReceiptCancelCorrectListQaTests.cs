@@ -111,7 +111,7 @@ public class PurchaseReceiptCancelCorrectListQaTests(AuthApiFactory factory) : I
         var line = receipt.LineOf(world.Seed);
         await factory.SeedAsync(world.Raft.Id, line, null);
 
-        var below = await (await CorrectAsync(world.Owner, receipt.Id(), new { reason = "Counted again", lines = new[] { new { lineId = line, quantity = 49.999m } } }))
+        var below = await (await CorrectAsync(world.Owner, receipt.Id(), new { reason = "Counted again", lines = new[] { new { lineId = line, quantity = 49.99m } } }))
             .ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-10");
         Assert.Equal(("Line 1", 50m, 50m, 0m), (below.GetProperty("field").GetString(), below.Money("minQuantity"), below.Money("seededQuantity"), below.Money("returnedQuantity")));
 

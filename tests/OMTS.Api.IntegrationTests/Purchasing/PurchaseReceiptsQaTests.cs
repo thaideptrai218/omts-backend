@@ -128,15 +128,15 @@ public class PurchaseReceiptsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         Assert.Equal(StatusIds.PurchaseReceipt.Draft, await StatusAsync(draft.Id()));
     }
 
-    // BR-PURCHASE-02: each line to the dong, half away from zero (banker's rounding would give 2 and 0), and the total is the
-    // sum of the rounded lines (1,504, not the 1,502 of the unrounded sum), the same in every figure that shows it.
+    // BR-PURCHASE-02: each line half up to the dong (banker's rounding would give 2 and 0), and the total is the sum of the
+    // rounded lines (1,504, not the 1,502 of the rounded sum), the same in every figure that shows it.
     [Fact]
-    public async Task Halves_round_away_from_zero_and_the_total_is_the_sum_of_the_rounded_lines_everywhere()
+    public async Task Halves_round_up_and_the_total_is_the_sum_of_the_rounded_lines_everywhere()
     {
         var world = await factory.WorldAsync();
         var lines = new[]
         {
-            new LineBody(world.Other, 2.5m, 1), new LineBody(world.Other, 0.001m, 500), world.MaterialForRaft(1.5m, 333),
+            new LineBody(world.Other, 2.5m, 1), new LineBody(world.Other, 0.5m, 1), world.MaterialForRaft(1.5m, 333),
             new LineBody(world.Seed, 1.5m, 333), new LineBody(world.Other, 1.5m, 333),
         };
 

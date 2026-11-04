@@ -351,7 +351,7 @@ public class PurchasingSqlServerTests
         var receipt = await owner.CreateReceiptAsync(new ReceiptBody
         {
             SupplierId = supplier.Id(), Notes = new string('ả', 1000), Complete = true,
-            Lines = [new LineBody(item.Id(), 999_999.999m, 1000), new LineBody(world.Seed, 1, 1, new string('ừ', 100), world.Raft.Id)],
+            Lines = [new LineBody(item.Id(), 999_999.99m, 1000), new LineBody(world.Seed, 1, 10, new string('ừ', 100), world.Raft.Id)],
         });
         Assert.Equal(1_000_000_000m, receipt.Money("total"));
 

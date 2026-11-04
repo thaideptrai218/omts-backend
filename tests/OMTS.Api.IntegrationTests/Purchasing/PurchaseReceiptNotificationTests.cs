@@ -95,6 +95,46 @@ public class PurchaseReceiptNotificationTests(AuthApiFactory factory) : IClassFi
         Assert.Equal(StatusIds.PurchaseReceipt.Cancelled, await factory.QueryAsync(db => db.PurchaseReceipts.Where(r => r.Id == receipt.Id()).Select(r => r.StatusId).SingleAsync()));
     }
 
+    // BR-PURCHASE-05, PM 03/11: the Owner who acts is told like any other Owner, in the list and by push. MSG-PURCHASE-08
+    // goes out whenever the debt is below zero after the cancellation: when it goes below zero, when it was already, and
+    // when a receipt worth nothing leaves it where it was.
+    [Fact]
+    public async Task The_owner_who_acts_is_notified_and_each_cancellation_leaving_the_debt_below_zero_sends_MSG_PURCHASE_08()
+    {
+        var world = await factory.WorldAsync();
+        var ownerId = await OwnerIdAsync(world);
+        var paid = await world.PaidAsync(100_000, new LineBody(world.Other, 1, 100_000));
+        var unpaid = await world.CompletedAsync(new LineBody(world.Other, 1, 50_000));
+        var free = await world.CompletedAsync(new LineBody(world.Other, 1, 0));
+        var unrelated = await world.CompletedAsync(new LineBody(world.Other, 1, 200_000));
+
+        foreach (var receipt in new[] { paid, unpaid, free, unrelated })
+        {
+            Assert.Single(await RowsToAsync(ownerId, receipt, NotificationTypes.PurchaseReceiptCompleted));
+            Assert.Single(Pushes(ownerId), p => p.MessageCode == "MSG-PURCHASE-01" && CodeOf(p) == receipt.GetProperty("code").GetString());
+        }
+
+        // Debt 250,000 → 50,000: still above zero, so nothing is sent.
+        await (await world.Owner.CancelAsync(unrelated.Id(), "Entered twice")).ReadAsync(HttpStatusCode.OK);
+        Assert.Empty(await RowsToAsync(ownerId, unrelated, NotificationTypes.PurchaseReceiptCancelledPaidInAdvance));
+
+        // 50,000 → −50,000 goes below zero; −50,000 → −100,000 was already; −100,000 stays there with a receipt worth nothing.
+        foreach (var (receipt, advance) in new[] { (paid, 50_000m), (unpaid, 100_000m), (free, 100_000m) })
+        {
+            await (await world.Owner.CancelAsync(receipt.Id(), "Wrong supplier")).ReadAsync(HttpStatusCode.OK);
+
+            var row = Assert.Single(await RowsToAsync(ownerId, receipt, NotificationTypes.PurchaseReceiptCancelledPaidInAdvance));
+            Assert.Equal("MSG-PURCHASE-08", row.MessageCode);
+            Assert.Equal(advance, JsonDocument.Parse(row.MessageParams!).RootElement.GetProperty("advance_amount").GetDecimal());
+            Assert.Single(Pushes(ownerId), p => p.MessageCode == "MSG-PURCHASE-08" && CodeOf(p) == receipt.GetProperty("code").GetString());
+        }
+    }
+
+    private static string? CodeOf(FakeMessage push) => push.MessageParams!.Value.GetProperty("receipt_code").GetString();
+
+    private Task<List<Domain.Entities.Platform.Notification>> RowsToAsync(Guid accountId, JsonElement receipt, string type) =>
+        factory.QueryAsync(db => db.Notifications.Where(n => n.RecipientAccountId == accountId && n.RelatedRecordId == receipt.Id() && n.Type == type).ToListAsync());
+
     private Task<Guid> OwnerIdAsync(PurchasingWorld world) =>
         factory.QueryAsync(db => db.Suppliers.Where(s => s.Id == world.SupplierId).Select(s => s.CreatedBy!.Value).SingleAsync());
 

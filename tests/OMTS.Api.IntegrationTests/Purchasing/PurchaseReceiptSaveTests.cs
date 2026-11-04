@@ -12,7 +12,7 @@ using static OMTS.Api.IntegrationTests.Purchasing.PurchasingTestKit;
 namespace OMTS.Api.IntegrationTests.Purchasing;
 
 /// <summary>
-/// PURCHASE-01 (SRS 27/10): PN codes and seed lot codes (GBR-04), amounts not rounded (BR-PURCHASE-02), drafts with only a
+/// PURCHASE-01 (SRS 27/10): PN codes and seed lot codes (GBR-04), lines half up to the dong (BR-PURCHASE-02), drafts with only a
 /// supplier and incomplete lines (BR-PURCHASE-03), a raft per Seed or Material line among the caller's zones
 /// (BR-PURCHASE-01), receipts without zone (BR-FARM-08) and the own-draft rule.
 /// </summary>
@@ -104,7 +104,7 @@ public class PurchaseReceiptSaveTests(AuthApiFactory factory) : IClassFixture<Au
             (world.Body(new LineBody(world.Seed, 1, 1000, new string('s', 101))), "Line 1 supplier lot code"),
             (world.Body() with { Complete = true }, "Lines"),
             (world.Body(line, new LineBody(world.Other, 0, 1000)), "Line 2"),
-            (world.Body(new LineBody(world.Other, 1.2345m, 1000)), "Line 1"),
+            (world.Body(new LineBody(world.Other, 1.234m, 1000)), "Line 1"),
             (world.Body(new LineBody(world.Other, 1, 1000.5m)), "Line 1"),
             (world.Body(new LineBody(world.Other, 1, -1)), "Line 1"),
             (world.Body(new LineBody(world.Other, 999_999_999, 999_999_999_999)), "Line 1"),

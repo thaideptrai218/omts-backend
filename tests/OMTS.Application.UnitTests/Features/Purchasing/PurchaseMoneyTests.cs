@@ -5,20 +5,56 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.UnitTests.Features.Purchasing;
 
-/// <summary>BR-PURCHASE-02: a line is its quantity × unit price, to the dong only (never to thousands); the total is their sum.</summary>
+/// <summary>BR-PURCHASE-02: a line is its quantity × unit price, half up to the dong (never to thousands); the total is the sum of the rounded lines.</summary>
 public class PurchaseMoneyTests
 {
+    // Decimals, not doubles: the halves must be exact. The comments give what rounding to even would wrongly answer.
+    public static TheoryData<decimal, decimal> HalfUpVectors => new()
+    {
+        { 0.5m, 1m }, // to even: 0
+        { 1.5m, 2m },
+        { 2.5m, 3m }, // to even: 2
+        { 4.5m, 5m }, // to even: 4
+        { 561_242.5m, 561_243m }, // to even: 561,242
+        { 0m, 0m },
+        { 0.49m, 0m },
+        { 0.51m, 1m },
+        { 2.4999m, 2m },
+        { 1_000m, 1_000m },
+    };
+
     [Theory]
-    [InlineData(1.5, 333, 500)]
-    [InlineData(3, 499, 1497)]
-    [InlineData(2.5, 1300, 3250)]
-    [InlineData(12.345, 85000, 1049325)]
-    [InlineData(0.001, 499, 0)]
-    [InlineData(0.001, 500, 1)]
-    [InlineData(2.25, 1001, 2252)]
-    [InlineData(7, 0, 0)]
-    public void Line_amount_is_quantity_times_unit_price_rounded_to_the_dong_away_from_zero(decimal quantity, decimal unitPrice, decimal expected) =>
+    [MemberData(nameof(HalfUpVectors))]
+    public void Halves_round_up_to_the_whole_dong(decimal amount, decimal expected) =>
+        Assert.Equal(expected, PurchaseMoney.RoundHalfUp(amount));
+
+    public static TheoryData<decimal, decimal, decimal> LineVectors => new()
+    {
+        { 12.335m, 45_500m, 561_243m }, // the PM's example: 561,242.5
+        { 12.5m, 45_501m, 568_763m }, // 568,762.5, to even: 568,762
+        { 1.5m, 333m, 500m }, // 499.5
+        { 0.5m, 1m, 1m }, // to even: 0
+        { 2.5m, 1m, 3m }, // to even: 2
+        { 2.25m, 1_001m, 2_252m }, // 2,252.25
+        { 3m, 499m, 1_497m }, // never to thousands
+        { 2.5m, 1_300m, 3_250m },
+        { 7m, 0m, 0m },
+    };
+
+    [Theory]
+    [MemberData(nameof(LineVectors))]
+    public void Line_amount_is_quantity_times_unit_price_half_up_to_the_dong(decimal quantity, decimal unitPrice, decimal expected) =>
         Assert.Equal(expected, PurchaseMoney.LineAmount(quantity, unitPrice));
+
+    [Fact]
+    public void The_total_is_the_sum_of_the_rounded_lines_not_the_rounded_sum()
+    {
+        // 0.5 + 0.5 + 0.5 = 1.5 would round to 2; the rounded lines 1 + 1 + 1 are 3.
+        var receipt = Receipt((InputItemGroup.Other, 0.5m, 1), (InputItemGroup.Other, 0.5m, 1), (InputItemGroup.Other, 0.5m, 1));
+
+        Assert.Equal(3, PurchaseMoney.Total(receipt.Lines));
+        Assert.Equal(3, PurchaseMoney.Of(receipt).Total);
+    }
 
     [Fact]
     public void A_draft_line_without_quantity_or_unit_price_is_worth_nothing_yet()
@@ -29,7 +65,7 @@ public class PurchaseMoneyTests
     }
 
     [Fact]
-    public void The_total_is_the_sum_of_the_unrounded_line_amounts_and_the_outstanding_follows_returns_payments_and_refunds()
+    public void The_total_keeps_its_dongs_and_the_outstanding_follows_returns_payments_and_refunds()
     {
         var receipt = Receipt((InputItemGroup.Seed, 100, 9_000), (InputItemGroup.Other, 1.5m, 333));
         receipt.Payments.Add(new SupplierPayment { Amount = 300_000, StatusId = StatusIds.SupplierPayment.Recorded });
