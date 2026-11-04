@@ -28,6 +28,9 @@ public static class RelatedRecordTypes
     /// <summary>A cultivation log (CYCLE-04); it has no code of its own, so the code shown is its raft's.</summary>
     public const string CultivationLog = "CultivationLog";
 
+    /// <summary>A cultivation cycle (CYCLE-02); it has no code of its own, so the code shown is its raft's.</summary>
+    public const string CultivationCycle = "CultivationCycle";
+
     /// <summary>A purchase receipt (PURCHASE-01, PURCHASE-06); it has no zone.</summary>
     public const string PurchaseReceipt = "PurchaseReceipt";
 
@@ -42,6 +45,7 @@ public static class RelatedRecordTypes
         [CooperativeCertification] = "Certification",
         [Account] = "Account",
         [CultivationLog] = "Cultivation log",
+        [CultivationCycle] = "Cultivation cycle",
         [PurchaseReceipt] = "Purchase receipt",
         [SupplierPayment] = "Supplier payment",
     };

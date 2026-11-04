@@ -9,20 +9,20 @@ namespace OMTS.Application.Features.Cultivation.Progress;
 public sealed record LaneDay(CycleSpan? Cycle, IReadOnlyDictionary<Guid, LaneState> States, IReadOnlySet<Guid> LanesWithRecords);
 
 /// <summary>
-/// Reads the records <see cref="LaneStateRules"/> works from. C2 feeds the seeding sessions and H1a the harvest lots here, in this
-/// one place. Until they exist no lane has a record (the old SeedingEvent names no lane), so every lane is Not seeded.
+/// Reads the records <see cref="LaneStateRules"/> works from: the seeding sessions, and H1a feeds the harvest lots here, in this one place. Until they exist no lane
+/// is in a lot, so a seeded lane is Growing.
 /// </summary>
-public sealed class LaneStateReader(ICultivationCycleQuery cycles)
+public sealed class LaneStateReader(ICultivationCycleQuery cycles, ISeedingRecordRepository seedingRecords)
 {
-    private static readonly LaneSeeding[] NoSeedings = [];
     private static readonly LaneHarvest[] NoHarvests = [];
 
     public async Task<LaneDay> ReadAsync(Raft raft, DateOnly date, CancellationToken cancellationToken)
     {
         var cycle = await cycles.CycleOnDateAsync(raft.Id, date, cancellationToken);
+        var seedings = cycle is null ? [] : await seedingRecords.LaneSeedingsAsync(cycle.Id, cancellationToken);
         return new LaneDay(
             cycle,
-            LaneStateRules.StatesOn(date, cycle, raft.Lanes.Select(l => l.Id), NoSeedings, NoHarvests),
-            LaneStateRules.LanesWithRecords(cycle, NoSeedings, NoHarvests));
+            LaneStateRules.StatesOn(date, cycle, raft.Lanes.Select(l => l.Id), seedings, NoHarvests),
+            LaneStateRules.LanesWithRecords(cycle, seedings, NoHarvests));
     }
 }

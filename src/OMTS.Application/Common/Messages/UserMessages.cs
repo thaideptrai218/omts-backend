@@ -124,6 +124,28 @@ public static class UserMessages
     public static UserMessage MinimumNotLessThanMaximum(string indicator) => new(
         Water05, $"The minimum of {indicator} must be less than the maximum. The thresholds were not saved. Please correct the values.", Legacy.Msg28);
 
+    /// <summary>MSG-CYCLE-01 (CYCLE-02.1): the confirmation before marking the seeding complete; the second sentence appears only when some lanes have no seed yet.</summary>
+    public static UserMessage FinishSeedingQuestion(string raftCode, IReadOnlyList<int> notSeededLanes)
+    {
+        var lanes = string.Join(", ", notSeededLanes);
+        var noSeed = notSeededLanes.Count == 0 ? string.Empty : $" {notSeededLanes.Count} lane(s) have no seed yet (lanes {lanes}); you can still seed them later.";
+        return new UserMessage(Cycle01, $"Finish seeding of raft {raftCode}?{noSeed} The Cooperative Owner will be asked to review the seeding.")
+        {
+            Parameters = new Dictionary<string, object?> { ["raft_code"] = raftCode, ["count"] = notSeededLanes.Count, ["lane_numbers"] = notSeededLanes },
+        };
+    }
+
+    /// <summary>MSG-CYCLE-02 (CYCLE-02.1): notification to the Cooperative Owner when the seeding of a raft is marked complete.</summary>
+    public static UserMessage SeedingFinished(string raftCode, int seededCount, int laneCount) => new(
+        Cycle02, $"Raft {raftCode}: seeding is finished; {seededCount} of {laneCount} lanes have seed. Please review the seeding sessions.")
+    {
+        Parameters = new Dictionary<string, object?> { ["raft_code"] = raftCode, ["seeded_count"] = seededCount, ["lane_count"] = laneCount },
+    };
+
+    /// <summary>MSG-CYCLE-03 (CYCLE-02.0.E1): no seed lot can be chosen (GBR-04).</summary>
+    public static readonly UserMessage NoSeedLot = new(
+        Cycle03, "There is no seed lot to choose: no completed purchase receipt for seed exists yet. Please complete the purchase receipt for the seed first.");
+
     /// <summary>MSG-CYCLE-04 (CYCLE-04): notification to the Cooperative Owner when a cultivation log is saved.</summary>
     public static UserMessage CultivationLogRecorded(string raftCode, DateOnly visitDate) => new(
         Cycle04, $"Raft {raftCode}: a cultivation log was recorded for the visit on {Date(visitDate)}. Please review it.")

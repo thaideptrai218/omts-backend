@@ -70,12 +70,6 @@ public interface IPurchaseReceiptRepository
     /// <summary>Receipt with supplier, lines (items, rafts and their zones) and returns (lines), tracked.</summary>
     Task<PurchaseReceipt?> GetForEditAsync(Guid receiptId, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Per seed lot (receipt line): the quantity seeded from it, and whether a seeding session without a quantity uses it
-    /// (counted as fully seeded). Reads the old seeding events until CYCLE-02 replaces them (GBR-04).
-    /// </summary>
-    Task<IReadOnlyDictionary<Guid, (decimal Seeded, bool UnknownQuantity)>> SeededAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken);
-
     /// <summary>One page (1-based) of matching receipts with figures computed in SQL, newest first, and the totals of all matches.</summary>
     Task<(IReadOnlyList<ReceiptFigureRow> Items, ReceiptListTotals Totals)> PageFiguresAsync(
         PurchaseReceiptFilter filter, int page, int pageSize, CancellationToken cancellationToken);

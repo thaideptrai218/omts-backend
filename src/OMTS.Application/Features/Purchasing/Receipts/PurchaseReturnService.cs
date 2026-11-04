@@ -22,6 +22,7 @@ namespace OMTS.Application.Features.Purchasing.Receipts;
 /// </summary>
 public sealed class PurchaseReturnService(
     IPurchaseReceiptRepository receipts,
+    ISeedLotUsageQuery seedUsage,
     PurchaseReceiptViews views,
     PurchaseReceiptAccess access,
     IDocumentNumberAllocator numbers,
@@ -55,7 +56,7 @@ public sealed class PurchaseReturnService(
         }
 
         var inputs = request.Lines!;
-        var seeded = await receipts.SeededAsync(receipt.Lines.Select(l => l.Id).ToList(), cancellationToken);
+        var seeded = await seedUsage.SeededAsync(receipt.Lines.Select(l => l.Id).ToList(), cancellationToken);
         if (PurchaseReturnRules.QuantityError(receipt, inputs, seeded, PurchaseReceiptViews.ReturnedQuantities(receipt)) is { } quantityError)
         {
             return quantityError;
