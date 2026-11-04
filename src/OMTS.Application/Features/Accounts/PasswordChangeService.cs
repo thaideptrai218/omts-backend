@@ -62,7 +62,20 @@ public sealed class PasswordChangeService(
             return new AppError(ErrorKind.Unauthorized, UserMessages.SessionExpired);
         }
 
+        // BR-ACCOUNT-06: an expired temporary password can no longer be used, also by the session it opened.
+        var now = timeProvider.GetUtcNow();
+        if (account.IsTemporaryPasswordExpired(now))
+        {
+            return new AppError(ErrorKind.Forbidden, UserMessages.TemporaryPasswordExpired);
+        }
+
         if (!PasswordPolicy.IsValid(request.NewPassword) || request.NewPassword != request.PasswordConfirmation)
+        {
+            return AppError.Invalid("Password");
+        }
+
+        // ACCOUNT-04 POST-1: the temporary password no longer works, so it cannot be the new one (ACCOUNT-04.0.E2).
+        if (account.MustChangePassword && passwordHasher.Verify(account.PasswordHash, request.NewPassword) != PasswordCheck.Failed)
         {
             return AppError.Invalid("Password");
         }
@@ -73,7 +86,6 @@ public sealed class PasswordChangeService(
             return proof;
         }
 
-        var now = timeProvider.GetUtcNow();
         account.PasswordHash = passwordHasher.Hash(request.NewPassword);
         account.MustChangePassword = false;
         account.TemporaryPasswordIssuedAt = null;

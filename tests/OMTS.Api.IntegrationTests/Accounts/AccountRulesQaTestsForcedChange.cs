@@ -58,8 +58,8 @@ public partial class AccountRulesQaTestsForcedChange(AuthApiFactory factory) : I
         Assert.Empty(await SweepAsync(client, OpenInTheSecondStep, "PASSWORD_CHANGE_REQUIRED"));
     }
 
-    // QA-M5 (ACCOUNT-04 POST-1: the temporary password no longer works): the forced change takes the temporary password itself
-    // as the new one, so the password that the Owner or the deployer knows stays in use, and the flag is gone.
+    // ACCOUNT-04 POST-1, ACCOUNT-04.0.E2: the temporary password no longer works after the forced change, so it cannot be the new
+    // one: MSG-GEN-01 naming the field, and the forced change stays open.
     [Fact]
     public async Task The_forced_change_refuses_the_temporary_password_as_the_new_one()
     {
@@ -69,10 +69,12 @@ public partial class AccountRulesQaTestsForcedChange(AuthApiFactory factory) : I
         var changed = await client.PostAsJsonAsync("/api/me/password", new { newPassword = Pw, passwordConfirmation = Pw });
 
         Assert.Equal(HttpStatusCode.BadRequest, changed.StatusCode);
+        Assert.Equal("MSG-GEN-01", await changed.ErrorCodeAsync());
+        Assert.Equal("Password", (await changed.BodyAsync()).GetProperty("field").GetString());
+        Assert.True((await factory.QueryAsync(db => db.Accounts.AsNoTracking().SingleAsync(a => a.Id == staff.Id))).MustChangePassword);
     }
 
-    // QA-L8 (BR-ACCOUNT-06: an expired temporary password can no longer be used): the login and the refresh refuse it, but the
-    // session it opened still sets a new password, and now with no proof at all.
+    // BR-ACCOUNT-06: an expired temporary password can no longer be used, and that holds for the session it opened too.
     [Fact]
     public async Task A_session_of_an_expired_temporary_password_cannot_set_a_new_password()
     {
@@ -83,7 +85,9 @@ public partial class AccountRulesQaTestsForcedChange(AuthApiFactory factory) : I
 
         var changed = await client.PostAsJsonAsync("/api/me/password", new { newPassword, passwordConfirmation = newPassword });
 
+        Assert.Equal(HttpStatusCode.Forbidden, changed.StatusCode);
         Assert.Equal("MSG-ACCOUNT-08", await changed.ErrorCodeAsync());
+        Assert.Equal(staff.PasswordHash, (await factory.QueryAsync(db => db.Accounts.AsNoTracking().SingleAsync(a => a.Id == staff.Id))).PasswordHash);
     }
 
     // QA-L6 (ACCOUNT-02.1 step 2: the number entered by the Owner is shown partly hidden; no other function is offered): in the
@@ -99,7 +103,8 @@ public partial class AccountRulesQaTestsForcedChange(AuthApiFactory factory) : I
         Assert.NotEqual(staff.PhoneNumber, profile.GetProperty("phoneNumber").GetString());
     }
 
-    // QA-L7 (LABOR-01, MSG-ACCOUNT-23): the temporary password of an employee account comes without the code the client fills in.
+    // LABOR-01, MSG-ACCOUNT-23: the temporary password of an employee account comes with the code the client fills in, also
+    // when the account is added later; a save without an account has neither.
     [Fact]
     public async Task An_employee_account_answers_msg_account_23_with_its_temporary_password()
     {
@@ -109,9 +114,14 @@ public partial class AccountRulesQaTestsForcedChange(AuthApiFactory factory) : I
 
         var saved = await owner.PostAsJsonAsync("/api/employees", EmployeeRequests.Profile(
             $"Nhân viên {NewCode()}", NewPhone(), zone.Id, body => body["account"] = new { username = $"nv{NewCode()}" }));
+        var noAccount = await owner.PostAsJsonAsync("/api/employees", EmployeeRequests.Profile($"Nhân viên {NewCode()}", NewPhone(), zone.Id));
+        var noAccountBody = await noAccount.BodyAsync();
+        var later = await owner.PostAsJsonAsync($"/api/employees/{noAccountBody.GetProperty("employee").GetProperty("id").GetGuid()}/account", new { username = $"nv{NewCode()}" });
 
         Assert.Equal(HttpStatusCode.Created, saved.StatusCode);
-        Assert.Contains("MSG-ACCOUNT-23", await saved.Content.ReadAsStringAsync());
+        Assert.Equal("MSG-ACCOUNT-23", (await saved.BodyAsync()).GetProperty("accountMessageCode").GetString());
+        Assert.Equal("MSG-ACCOUNT-23", (await later.BodyAsync()).GetProperty("accountMessageCode").GetString());
+        Assert.False(noAccountBody.TryGetProperty("accountMessageCode", out var none) && none.ValueKind != JsonValueKind.Null);
     }
 
     // Accepted risk, PM decision 03/11, in the report as a question: not a failure. An Owner's first password that leaks, even a month

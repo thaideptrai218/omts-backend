@@ -454,7 +454,8 @@ public sealed class EmployeeService(
             saved.Text,
             saved.Code,
             created?.TemporaryPassword,
-            created?.TemporaryPasswordExpiresAt);
+            created?.TemporaryPasswordExpiresAt,
+            created?.MessageCode);
     }
 
     private static void Apply(Employee employee, EmployeeInput input)
