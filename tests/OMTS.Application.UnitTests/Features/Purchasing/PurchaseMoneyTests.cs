@@ -65,11 +65,9 @@ public class PurchaseMoneyTests
     }
 
     [Fact]
-    public void The_total_keeps_its_dongs_and_the_outstanding_follows_returns_payments_and_refunds()
+    public void The_total_keeps_its_dongs_and_the_debt_share_of_a_receipt_follows_its_returns_and_refunds()
     {
         var receipt = Receipt((InputItemGroup.Seed, 100, 9_000), (InputItemGroup.Other, 1.5m, 333));
-        receipt.Payments.Add(new SupplierPayment { Amount = 300_000, StatusId = StatusIds.SupplierPayment.Recorded });
-        receipt.Payments.Add(new SupplierPayment { Amount = 50_000, StatusId = StatusIds.SupplierPayment.Cancelled });
         var line = receipt.Lines.First();
         receipt.Returns.Add(new PurchaseReturn
         {
@@ -83,8 +81,8 @@ public class PurchaseMoneyTests
         Assert.Equal(900_500, figures.Total);
         Assert.Equal(900_500, PurchaseMoney.Total(receipt.Lines));
         Assert.Equal(90_000, figures.Returned);
-        Assert.Equal(280_000, figures.NetPaid);
-        Assert.Equal(900_500 - 90_000 - 280_000, figures.Outstanding);
+        Assert.Equal(20_000, figures.Refunded);
+        Assert.Equal(900_500 - 90_000 + 20_000, figures.DebtShare);
     }
 
     [Theory]
@@ -116,6 +114,13 @@ public class PurchaseMoneyTests
     [InlineData(1_000_000, "PN1000000")]
     public void Receipt_codes_are_PN_and_at_least_six_digits(int number, string code) =>
         Assert.Equal(code, DocumentCodes.ReceiptCode(number));
+
+    [Theory]
+    [InlineData(1, "TT000001")]
+    [InlineData(999_999, "TT999999")]
+    [InlineData(1_000_000, "TT1000000")]
+    public void Payment_codes_are_TT_and_at_least_six_digits(int number, string code) =>
+        Assert.Equal(code, DocumentCodes.PaymentCode(number));
 
     [Fact]
     public void The_seed_lot_code_is_the_receipt_code_and_the_line_number() =>

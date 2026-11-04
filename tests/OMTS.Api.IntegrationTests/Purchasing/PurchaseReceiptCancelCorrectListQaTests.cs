@@ -63,8 +63,7 @@ public class PurchaseReceiptCancelCorrectListQaTests(AuthApiFactory factory) : I
         var revoked = await factory.AddAccountAsync(NewCode(), password, SubjectType.Staff);
         await factory.GrantAsync(revoked, StaffRole.Accountant, null, g => { g.StatusId = StatusIds.AccessGrant.Revoked; g.RevokedAt = DateTimeOffset.UtcNow; g.RevokeReason = "QA"; });
         var manager = await StaffAsync(StaffRole.ZoneManager, world.Zone.Id);
-        var receipt = await world.CompletedAsync(new LineBody(world.Other, 5, 100_000));
-        await (await world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = receipt.Id(), Amount = 300_000 })).ReadAsync(HttpStatusCode.Created);
+        var receipt = await world.PaidAsync(300_000, new LineBody(world.Other, 5, 100_000));
 
         await (await world.Owner.CancelAsync(receipt.Id(), "Wrong supplier")).ReadAsync(HttpStatusCode.OK);
 
@@ -87,7 +86,7 @@ public class PurchaseReceiptCancelCorrectListQaTests(AuthApiFactory factory) : I
         var paid = await world.PaidAsync(100_000, new LineBody(world.Other, 1, 100_000));
         var unpaid = await world.CompletedAsync(new LineBody(world.Other, 1, 50_000));
         await (await world.Owner.CancelAsync(paid.Id(), "Wrong supplier")).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(-50_000m, await DebtAsync(world));
+        Assert.Equal(-50_000m, await world.DebtAsync());
 
         var preview = await (await world.Owner.GetAsync($"{Receipts}/{unpaid.Id()}/cancel-preview")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal((true, -50_000m, -100_000m, 100_000m, "MSG-PURCHASE-07"),
@@ -95,7 +94,7 @@ public class PurchaseReceiptCancelCorrectListQaTests(AuthApiFactory factory) : I
 
         await (await world.Owner.CancelAsync(unpaid.Id(), "Not delivered")).ReadAsync(HttpStatusCode.OK);
 
-        Assert.Equal(preview.Money("debtAfter"), await DebtAsync(world));
+        Assert.Equal(preview.Money("debtAfter"), await world.DebtAsync());
         var advance = await factory.QueryAsync(db => db.Notifications
             .Where(n => n.RelatedRecordId == unpaid.Id() && n.Type == NotificationTypes.PurchaseReceiptCancelledPaidInAdvance).Select(n => n.MessageParams).FirstAsync());
         Assert.Equal(preview.Money("advanceAfter"), JsonDocument.Parse(advance!).RootElement.GetProperty("advance_amount").GetDecimal());
@@ -204,7 +203,4 @@ public class PurchaseReceiptCancelCorrectListQaTests(AuthApiFactory factory) : I
         await FixedRoleTestKit.GrantAsync(factory, staff, role, zoneId);
         return staff.Id;
     }
-
-    private async Task<decimal> DebtAsync(PurchasingWorld world) =>
-        (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}/debt")).GetProperty("totals").Money("outstanding");
 }

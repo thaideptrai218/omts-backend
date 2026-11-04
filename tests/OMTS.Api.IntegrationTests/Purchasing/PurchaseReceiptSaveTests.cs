@@ -52,8 +52,7 @@ public class PurchaseReceiptSaveTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal([500m, 2_252m, 0m], receipt.GetProperty("lines").EnumerateArray().Select(l => l.Money("lineAmount")));
         Assert.Equal(2_752m, receipt.Money("total"));
         Assert.Equal(500m, await factory.QueryAsync(db => db.PurchaseReceiptLines.Where(l => l.ReceiptId == receipt.Id() && l.LineNumber == 1).Select(l => l.LineAmount).SingleAsync()));
-        var debt = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}/debt");
-        Assert.Equal(2_752m, debt.GetProperty("totals").Money("outstanding"));
+        Assert.Equal(2_752m, await world.DebtAsync());
     }
 
     [Fact]

@@ -146,7 +146,7 @@ public class PurchaseReceiptsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         Assert.Equal(1_504m, receipt.Money("total"));
         var row = Assert.Single((await world.Owner.GetFromJsonAsync<JsonElement>($"{Receipts}?supplierId={world.SupplierId}")).GetProperty("page").GetProperty("items").EnumerateArray());
         Assert.Equal(1_504m, row.Money("total"));
-        Assert.Equal(1_504m, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}/debt")).GetProperty("totals").Money("outstanding"));
+        Assert.Equal(1_504m, await world.DebtAsync());
         Assert.Equal(1_504m, (await world.Owner.GetFromJsonAsync<JsonElement>($"{Receipts}/{receipt.Id()}/cancel-preview")).Money("debtBefore"));
         Assert.Equal(500m, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{world.Raft.Id}")).Money("materialCost"));
         var notification = Assert.Single((await world.Owner.NotificationPageAsync()).Items(),
