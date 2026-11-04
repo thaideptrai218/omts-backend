@@ -15,8 +15,6 @@ namespace OMTS.Api.IntegrationTests.Cooperatives;
 /// <summary>FARM-01 v2 on a real SQL Server: the CooperativeProfileV2 migration both ways, column lengths, real rowversions.</summary>
 public class CooperativeProfileV2SqlServerTests
 {
-    private const string MigrationBefore = "20261031010823_NotificationsV2";
-
     // The cooperative status is dropped (SRS 27/10) and comes back on Down: Completed with a tax code, else Preliminary.
     [SqlServerFact]
     public async Task Migration_drops_the_cooperative_status_keeps_the_cooperatives_and_down_puts_it_back()
@@ -24,7 +22,10 @@ public class CooperativeProfileV2SqlServerTests
         await using var database = SqlServerTestDatabase.Create();
         await using var db = database.CreateContext();
         var migrator = db.GetService<IMigrator>();
-        await migrator.MigrateAsync(MigrationBefore);
+        // By position, not by name: a rebase gives the migrations new timestamps.
+        var all = db.Database.GetMigrations().ToList();
+        var migrationBefore = all[all.FindIndex(m => m.EndsWith("_CooperativeProfileV2", StringComparison.Ordinal)) - 1];
+        await migrator.MigrateAsync(migrationBefore);
         var (preliminary, completed) = (Guid.NewGuid(), Guid.NewGuid());
         await db.Database.ExecuteSqlAsync($"INSERT INTO Cooperatives (Id, FullName, StatusId, CreatedAt) VALUES ({preliminary}, N'HTX A', 201, SYSDATETIMEOFFSET())");
         await db.Database.ExecuteSqlAsync(
@@ -39,7 +40,7 @@ public class CooperativeProfileV2SqlServerTests
         Assert.Equal(["HTX A", "HTX B"], await db.Cooperatives.OrderBy(c => c.FullName).Select(c => c.FullName).ToListAsync());
         Assert.Equal(0, await db.CooperativeCertifications.CountAsync());
 
-        await migrator.MigrateAsync(MigrationBefore);
+        await migrator.MigrateAsync(migrationBefore);
 
         Assert.Equal(201, await db.Database.SqlQuery<int>($"SELECT StatusId AS [Value] FROM Cooperatives WHERE Id = {preliminary}").SingleAsync());
         Assert.Equal(202, await db.Database.SqlQuery<int>($"SELECT StatusId AS [Value] FROM Cooperatives WHERE Id = {completed}").SingleAsync());
