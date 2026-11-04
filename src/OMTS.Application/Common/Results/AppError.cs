@@ -41,6 +41,15 @@ public sealed record AppError(ErrorKind Kind, UserMessage Message, IReadOnlyDict
 
     public static readonly AppError NotFound = new(ErrorKind.NotFound, UserMessages.NotFound);
 
+    /// <summary>
+    /// MSG-ACCOUNT-06 (423): login is paused (BR-ACCOUNT-05). <c>retryAfterSeconds</c> is {retry_time} of the text: the
+    /// length of the pause, the same for every identifier, so it does not tell which identifiers exist.
+    /// </summary>
+    public static readonly AppError LoginPaused = new(
+        ErrorKind.Locked,
+        UserMessages.TooManyLoginAttempts,
+        new Dictionary<string, object?> { ["retryAfterSeconds"] = (int)Domain.Entities.Identity.Account.TemporaryLockDuration.TotalSeconds });
+
     /// <summary>MSG-GEN-02 with the id of the record that already exists.</summary>
     public static AppError AlreadyExists(string item, Guid existingId) =>
         new(ErrorKind.Conflict, UserMessages.AlreadyExists(item), new Dictionary<string, object?> { ["existingId"] = existingId });

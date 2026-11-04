@@ -7,15 +7,15 @@ namespace OMTS.Application.Features.Employees;
 public sealed record EmployeeBankAccountInput(string? BankName, string? AccountNumber, string? AccountHolderName);
 
 /// <summary>
-/// Optional login account created together with the employee (ACS-09 extends LAB-01). Display name and
-/// phone default to the employee's; at least one zone–role row.
+/// Optional login account created together with the employee (ACCOUNT-09 from LABOR-01). Display name and phone default to
+/// the employee's; the zone–role rows are optional, as the pairs can be granted later in FARM-05.
 /// </summary>
 public sealed record NewEmployeeAccount(
     string Username,
     string? DisplayName,
     string? PhoneNumber,
     string? Email,
-    IReadOnlyList<GrantDraft> Grants,
+    IReadOnlyList<GrantDraft>? Grants = null,
     SubjectType? SubjectType = null);
 
 /// <param name="AccountId">

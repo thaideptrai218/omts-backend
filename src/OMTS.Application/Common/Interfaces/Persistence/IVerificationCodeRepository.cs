@@ -16,6 +16,12 @@ public interface IVerificationCodeRepository
     /// <summary>SMS codes sent since the time, system-wide.</summary>
     Task<int> CountSmsSendsAsync(DateTimeOffset since, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// When codes went out after <paramref name="since"/> for one purpose and one target, oldest first, over all
+    /// requests and accounts (BR-ACCOUNT-09), read fresh from the store so that parallel sends see each other.
+    /// </summary>
+    Task<IReadOnlyList<DateTimeOffset>> GetSendTimesAsync(VerificationPurpose purpose, string target, DateTimeOffset since, CancellationToken cancellationToken);
+
     Task<VerificationCode?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
     Task<VerificationCode?> GetByTokenHashAsync(string tokenHash, CancellationToken cancellationToken);

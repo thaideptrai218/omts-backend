@@ -17,6 +17,16 @@ internal sealed class VerificationCodeRepository(OmtsDbContext db) : IVerificati
     public async Task<int> CountSmsSendsAsync(DateTimeOffset since, CancellationToken cancellationToken) =>
         await db.VerificationCodes.Where(c => c.Channel == VerificationChannel.Sms && c.LastSentAt >= since).SumAsync(c => (int?)c.SendCount, cancellationToken) ?? 0;
 
+    public async Task<IReadOnlyList<DateTimeOffset>> GetSendTimesAsync(
+        VerificationPurpose purpose, string target, DateTimeOffset since, CancellationToken cancellationToken)
+    {
+        var requests = await db.VerificationCodes.AsNoTracking()
+            .Where(c => c.Purpose == purpose && c.Target == target && c.LastSentAt > since)
+            .Select(c => c.SendTimes)
+            .ToListAsync(cancellationToken);
+        return requests.SelectMany(times => times).Where(sent => sent > since).Order().ToList();
+    }
+
     public Task<VerificationCode?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         db.VerificationCodes.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
 

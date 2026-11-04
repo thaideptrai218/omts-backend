@@ -25,28 +25,25 @@ public sealed class VerificationService(
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
 {
-    /// <summary>Window of the limits that hold across requests and delivery methods of one subject.</summary>
+    /// <summary>The hour of the limits on codes (BR-ACCOUNT-09) and of the guards around them.</summary>
     public static readonly TimeSpan BudgetWindow = TimeSpan.FromHours(1);
 
     /// <summary>New requests per purpose and subject (account, or target before registration) per hour.</summary>
     public const int MaxRequestsPerWindow = 5;
 
-    /// <summary>Wrong codes per purpose and subject per hour, over all its requests (blocks code guessing).</summary>
-    public const int MaxFailedAttemptsPerWindow = 10;
-
     /// <summary>
     /// Opens a request and sends its code. A newer request replaces the open ones of the same purpose
     /// (another target or delivery method). Limits: see <see cref="VerificationThrottle"/>. The request is
-    /// saved before its code is sent, so parallel starts of one subject cannot all send: a start that finds
-    /// another fresh request backs off with 429. When sending fails the request is removed again, so a failed
-    /// send changes nothing.
+    /// saved before its code is sent, so parallel starts cannot all send: a start that finds another fresh
+    /// request backs off with 429. When sending fails the request is removed again, so a failed send changes
+    /// nothing.
     /// </summary>
     public async Task<Result<VerificationStarted>> StartAsync(
         VerificationPurpose purpose, VerificationChannel channel, string target, Guid? accountId, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
         var recentRequests = await codes.GetRecentAsync(purpose, accountId, target, now - BudgetWindow, cancellationToken);
-        if (await throttle.CheckStartAsync(recentRequests, channel, target, now, cancellationToken) is { } limited)
+        if (await throttle.CheckStartAsync(recentRequests, purpose, channel, target, now, cancellationToken) is { } limited)
         {
             return limited;
         }
@@ -60,6 +57,7 @@ public sealed class VerificationService(
             Target = target,
             CreatedAt = now,
             LastSentAt = now,
+            SendTimes = [now],
             ExpiresAt = now + VerificationCode.Lifetime,
         };
         request.CodeHash = codeHasher.Hash(request.Id, code);
@@ -67,10 +65,10 @@ public sealed class VerificationService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         var parallel = (await codes.GetRecentAsync(purpose, accountId, target, now - VerificationCode.ResendInterval, cancellationToken))
-            .FirstOrDefault(c => c.Id != request.Id);
+            .FirstOrDefault(c => c.Id != request.Id && now < c.NextResendAt);
         var refused = parallel is not null
-            ? VerificationErrors.WaitBeforeNewRequest(parallel, now)
-            : await throttle.CheckSavedSendAsync(channel, target, now, cancellationToken);
+            ? VerificationErrors.WaitBeforeNextCode(parallel.NextResendAt, now)
+            : await throttle.CheckSavedSendAsync(purpose, channel, target, now, cancellationToken);
         if (refused is not null || !(await SendAsync(channel, target, code, cancellationToken)).Succeeded)
         {
             codes.Remove(request);
@@ -79,12 +77,13 @@ public sealed class VerificationService(
         }
 
         await CancelAsync(recentRequests.Where(c => c.IsOpen).ToList(), now, cancellationToken);
-        return Started(request);
+        return await StartedAsync(request, now, cancellationToken);
     }
 
     /// <summary>
-    /// Sends a new code for the same request; the old code stops working. At most 3 sends, 60 s apart. The
-    /// send is recorded before the code goes out, so parallel resends of one request send once.
+    /// Sends a new code for the same request; the old code stops working. The limits of <see cref="VerificationThrottle"/>
+    /// hold: once they allow a new code, the same request can have it. The send is recorded before the code goes out, so
+    /// parallel resends of one request send once.
     /// </summary>
     public async Task<Result<VerificationStarted>> ResendAsync(Guid verificationId, Guid? callerAccountId, CancellationToken cancellationToken)
     {
@@ -98,21 +97,17 @@ public sealed class VerificationService(
             return VerificationErrors.WrongCode();
         }
 
-        if (!request.CanResend(now))
-        {
-            return VerificationErrors.TooSoon(request, now);
-        }
-
-        if (await throttle.CheckSendAsync(request.Channel, request.Target, now, cancellationToken) is { } refused)
+        if (await throttle.CheckResendAsync(request.Purpose, request.Channel, request.Target, now, cancellationToken) is { } refused)
         {
             return refused;
         }
 
-        var previous = (request.CodeHash, request.SendCount, request.LastSentAt, request.ExpiresAt);
+        var previous = (request.CodeHash, request.SendCount, request.LastSentAt, request.SendTimes, request.ExpiresAt);
         var code = SecretHashing.NewSixDigitCode();
         request.CodeHash = codeHasher.Hash(request.Id, code);
         request.SendCount++;
         request.LastSentAt = now;
+        request.SendTimes = [.. request.SendTimes.Where(sent => sent > now - BudgetWindow), now];
         request.ExpiresAt = now + VerificationCode.Lifetime;
         try
         {
@@ -122,24 +117,25 @@ public sealed class VerificationService(
         {
             // A parallel resend (or entry) changed the request first.
             await unitOfWork.ReloadAsync(request, cancellationToken);
-            return VerificationErrors.TooSoon(request, now);
+            return VerificationErrors.WaitBeforeNextCode(request.NextResendAt, now, await throttle.CodesLeftAsync(request.Purpose, request.Target, now, cancellationToken));
         }
 
-        var overLimit = await throttle.CheckSavedSendAsync(request.Channel, request.Target, now, cancellationToken);
+        var overLimit = await throttle.CheckSavedSendAsync(request.Purpose, request.Channel, request.Target, now, cancellationToken);
         if (overLimit is not null || !(await SendAsync(request.Channel, request.Target, code, cancellationToken)).Succeeded)
         {
             // The previous code stays valid until its expiry, unless the request changed meanwhile.
-            (request.CodeHash, request.SendCount, request.LastSentAt, request.ExpiresAt) = previous;
+            (request.CodeHash, request.SendCount, request.LastSentAt, request.SendTimes, request.ExpiresAt) = previous;
             await SaveQuietlyAsync(cancellationToken);
             return overLimit ?? ServiceDown(request.Channel);
         }
 
-        return Started(request);
+        return await StartedAsync(request, now, cancellationToken);
     }
 
     /// <summary>
-    /// Checks the code. A wrong code counts an attempt; the 5th wrong entry locks the request (a new one is
-    /// needed). A correct code is used up and yields a single-use token valid 10 minutes.
+    /// Checks the code. A wrong code counts an attempt; the 5th wrong entry cancels it (a new one is needed). A
+    /// correct code is used up and yields a single-use token valid 10 minutes. The limit of 3 codes per hour also
+    /// caps the guesses: 15 per hour for one purpose and target.
     /// </summary>
     public async Task<Result<VerificationTokenIssued>> VerifyAsync(
         Guid verificationId, string? code, Guid? callerAccountId, CancellationToken cancellationToken)
@@ -154,12 +150,6 @@ public sealed class VerificationService(
         if (!request.IsUsable(now))
         {
             return request.IsLocked ? Cancelled(request) : VerificationErrors.WrongCode();
-        }
-
-        var recentRequests = await codes.GetRecentAsync(request.Purpose, request.AccountId, request.Target, now - BudgetWindow, cancellationToken);
-        if (recentRequests.Sum(c => c.FailedAttempts) >= MaxFailedAttemptsPerWindow)
-        {
-            return VerificationErrors.TooManyAttempts();
         }
 
         if (string.IsNullOrWhiteSpace(code) || !codeHasher.Matches(request.Id, code.Trim(), request.CodeHash))
@@ -269,11 +259,11 @@ public sealed class VerificationService(
         }
     }
 
-    private static VerificationStarted Started(VerificationCode request) => new(
+    private async Task<VerificationStarted> StartedAsync(VerificationCode request, DateTimeOffset now, CancellationToken cancellationToken) => new(
         request.Id,
         request.Channel == VerificationChannel.Sms ? Masking.Phone(request.Target) : Masking.Email(request.Target),
         request.ExpiresAt,
-        request.SendsLeft,
+        await throttle.CodesLeftAsync(request.Purpose, request.Target, now, cancellationToken),
         request.NextResendAt);
 
     // Each conflict round saves one entry and a request locks after a few, so this covers any burst the

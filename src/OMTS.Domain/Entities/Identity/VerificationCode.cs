@@ -5,14 +5,15 @@ namespace OMTS.Domain.Entities.Identity;
 
 /// <summary>
 /// Technical entity (SDS): one verification request (ACS-06) proving possession of a phone number or
-/// email. Its 6-digit code is valid 5 minutes, allows at most 5 wrong entries and 3 sends at least 60
-/// seconds apart (NFR-01). A correct code yields a single-use verification token, valid 10 minutes, that
-/// the calling use case consumes. Only hashes of the code and the token are stored.
+/// email. Its 6-digit code is valid 5 minutes and is cancelled by the 5th wrong entry; one purpose and one phone
+/// number or email get at most 3 codes per hour, at least 60 seconds apart (BR-ACCOUNT-09). A correct code yields
+/// a single-use verification token, valid 10 minutes, that the calling use case consumes. Only hashes of the code
+/// and the token are stored.
 /// </summary>
 public class VerificationCode : Entity
 {
     public const int MaxFailedAttempts = 5;
-    public const int MaxSends = 3;
+    public const int MaxCodesPerHour = 3;
     public static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(5);
     public static readonly TimeSpan ResendInterval = TimeSpan.FromSeconds(60);
     public static readonly TimeSpan TokenLifetime = TimeSpan.FromMinutes(10);
@@ -33,6 +34,10 @@ public class VerificationCode : Entity
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset LastSentAt { get; set; }
     public int SendCount { get; set; } = 1;
+
+    /// <summary>When the codes of this request went out during the last hour (the rolling limit of BR-ACCOUNT-09).</summary>
+    public List<DateTimeOffset> SendTimes { get; set; } = [];
+
     public int FailedAttempts { get; set; }
 
     /// <summary>When the code was entered correctly; it can never be used again.</summary>
@@ -53,13 +58,9 @@ public class VerificationCode : Entity
 
     public bool IsLocked => FailedAttempts >= MaxFailedAttempts;
 
-    public int SendsLeft => Math.Max(0, MaxSends - SendCount);
-
     public bool IsOpen => ConsumedAt is null && CancelledAt is null;
 
     public bool IsUsable(DateTimeOffset now) => IsOpen && now < ExpiresAt && !IsLocked;
-
-    public bool CanResend(DateTimeOffset now) => IsOpen && !IsLocked && SendCount < MaxSends && now - LastSentAt >= ResendInterval;
 
     public DateTimeOffset NextResendAt => LastSentAt + ResendInterval;
 

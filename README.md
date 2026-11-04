@@ -265,8 +265,8 @@ created by a one-time command run on the server by the deployment operator (not 
 2. Run `dotnet OMTS.Api.dll seed --bootstrap` at handover time: it applies migrations, checks the status catalog, creates
    the rows of the two fixed roles (Zone Manager `ZONE_MANAGER`, Accountant `ACCOUNTANT`; their permissions are the
    static §I.4.4 matrix, never stored) and, if no cooperative exists, the cooperative (Preliminary) and the
-   Owner with the temporary password. The temporary password expires after 24 hours and must be changed at first login.
-   Running it again creates nothing that already exists ("already initialized", exit code 0); the roles are found by
+   Owner with this first password. It must be changed at first login and does not expire. At that login the Owner first
+   verifies the phone number by SMS (BR-ACCOUNT-03), so `Sms:Provider` must work before the handover. Running it again creates nothing that already exists ("already initialized", exit code 0); the roles are found by
    code. Missing secrets give exit code 1 and the
    names of the missing keys. `--demo` also seeds the demo data of "Run with Docker" (Development only; refused
    in any other environment).
@@ -276,11 +276,11 @@ created by a one-time command run on the server by the deployment operator (not 
    pairs of discontinued roles become Effective again; of two Effective copies of one pair only the newest stays. Down is
    lossy (no stored permissions, every role In Use). Demo and test databases are not converted further: reset them
    (`docker compose down -v`).
-   An Owner who cannot log in (for example after missing the 24-hour window) is recovered with
+   An Owner who cannot log in (for example after losing the first password) is recovered with
    `dotnet OMTS.Api.dll seed --reset-owner-password`. It sets `Bootstrap:Owner:TemporaryPassword` (from configuration, never
-   from the command line, so it never lands in shell history) as a new 24-hour temporary password that must be changed at
-   first login, ends every session of the Owner and writes an audit row. Set a new value first: the Owner's current
-   (expired) password is refused. With several Owners, `Bootstrap:Owner:Username`
+   from the command line, so it never lands in shell history) as a new password that must be changed at first login and
+   does not expire, ends every session of the Owner and writes an audit row. Set a new value first: the Owner's current
+   password is refused. With several Owners, `Bootstrap:Owner:Username`
    chooses one. Without an Owner, or without a valid password, it changes nothing and exits with code 1.
 3. Start the API and check `GET /health/ready`: 200 when the database, migrations, status catalog, the two fixed role
    rows (by code), cooperative and an active Owner are all in place, else 503 listing the failing checks. This is a
@@ -299,7 +299,7 @@ created by a one-time command run on the server by the deployment operator (not 
 | Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30) |
 | CORS: the web app calls the API from the browser. Set its origin in every deployed environment; empty means no CORS. Development allows `http://localhost:3000`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`) |
 | Reverse proxy: X-Forwarded-For is trusted only from these addresses (and loopback), so the limits see the real client | `ForwardedHeaders:KnownProxies` (e.g. `10.0.0.4`), `ForwardedHeaders:KnownNetworks` (e.g. `10.0.0.0/24`) |
-| Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG-ACCOUNT-13 and a critical log entry is written (one number or address gets at most 10 codes per hour) | `Verification:DailySmsLimit` (default 500) |
+| Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG-ACCOUNT-13 and a critical log entry is written (BR-ACCOUNT-09: one purpose and one number or address get at most 3 codes per hour, at least 60 seconds apart; over all purposes one number or address gets at most 10) | `Verification:DailySmsLimit` (default 500) |
 | Zone license reminder (FARM-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
 | Overdue water measurement reminder (ENV-01, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
 | Orphan raft photo and license file clean-up (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |

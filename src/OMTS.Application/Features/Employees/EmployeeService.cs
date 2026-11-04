@@ -92,7 +92,7 @@ public sealed class EmployeeService(
         }
 
         audit.Record(new AuditEntry("Employee.Created", nameof(Employee)) { RecordId = employee.Id, After = Snapshot(employee, input.WorkingZoneIds) });
-        if (await SaveAsync(input, null, cancellationToken) is { } duplicate)
+        if (await SaveAsync(input, null, cancellationToken, created) is { } duplicate)
         {
             return duplicate;
         }
@@ -168,9 +168,10 @@ public sealed class EmployeeService(
 
     /// <summary>
     /// Saves; a parallel save of the same person passes the pre-check, so the unique index refuses the second
-    /// one, which then gets the same MSG-LABOR-03 as the pre-check. Other duplicates are left to the exception handler.
+    /// one, which then gets the same MSG-LABOR-03 as the pre-check, and a login account whose username, phone number or
+    /// email was taken meanwhile gets MSG-ACCOUNT-09. Other duplicates are left to the exception handler.
     /// </summary>
-    private async Task<AppError?> SaveAsync(EmployeeInput input, Guid? employeeId, CancellationToken cancellationToken)
+    private async Task<AppError?> SaveAsync(EmployeeInput input, Guid? employeeId, CancellationToken cancellationToken, StaffAccountWithPassword? created = null)
     {
         try
         {
@@ -184,9 +185,17 @@ public sealed class EmployeeService(
                 return SamePerson(same);
             }
 
+            if (created is not null && await FindTakenFieldAsync(created, cancellationToken) is { } taken)
+            {
+                return taken;
+            }
+
             throw;
         }
     }
+
+    private Task<AppError?> FindTakenFieldAsync(StaffAccountWithPassword created, CancellationToken cancellationToken) =>
+        staffAccounts.FindTakenFieldAsync(created.Account.Username, created.Account.PhoneNumber, created.Account.Email, null, cancellationToken);
 
     /// <summary>Creates the login account of an employee who has none yet; the temporary password is returned once.</summary>
     public async Task<Result<EmployeeSaved>> CreateAccountAsync(Guid id, NewEmployeeAccount request, CancellationToken cancellationToken)
@@ -213,7 +222,20 @@ public sealed class EmployeeService(
             return created.Error!;
         }
 
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DuplicateRecordException)
+        {
+            if (await FindTakenFieldAsync(created.Value!, cancellationToken) is { } taken)
+            {
+                return taken;
+            }
+
+            throw;
+        }
+
         return await SavedAsync(employee.Id, created.Value, cancellationToken);
     }
 

@@ -1,4 +1,5 @@
 using OMTS.Application.Common.Concurrency;
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
@@ -158,7 +159,6 @@ public sealed class ProfileService(
         }
 
         var now = timeProvider.GetUtcNow();
-        var hidden = false;
         var previous = channel == VerificationChannel.Sms
             ? account.PhoneVerifiedAt is null ? null : account.PhoneNumber
             : account.EmailVerifiedAt is null ? null : account.Email;
@@ -168,7 +168,10 @@ public sealed class ProfileService(
             before = new { account.PhoneNumber };
             account.PhoneNumber = target;
             account.PhoneVerifiedAt = now;
-            hidden = account.SubjectType == SubjectType.Trader && await customerLinker.ApplyVerifiedPhoneAsync(account, target, cancellationToken);
+            if (account.SubjectType == SubjectType.Trader)
+            {
+                await customerLinker.ApplyVerifiedPhoneAsync(account, target, cancellationToken);
+            }
         }
         else
         {
@@ -184,10 +187,19 @@ public sealed class ProfileService(
             Before = before,
             After = channel == VerificationChannel.Sms ? new { account.PhoneNumber } : new { account.Email },
         });
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DuplicateRecordException)
+        {
+            // Another account took the contact between the check above and this save (unique index).
+            return UsedByAnotherAccount(channel);
+        }
+
         await notifier.NotifyPreviousContactAsync(channel, previous, target, cancellationToken);
-        var notice = hidden ? UserMessages.OldDocumentsHidden : UserMessages.Saved("Personal profile");
-        return new ContactConfirmed(target, hidden, notice.Text, notice.Code);
+        var saved = UserMessages.Saved("Personal profile");
+        return new ContactConfirmed(target, saved.Text, saved.Code);
     }
 
     /// <summary>MSG-ACCOUNT-09 (MSG01 before).</summary>
@@ -198,7 +210,7 @@ public sealed class ProfileService(
     {
         var owner = channel == VerificationChannel.Sms
             ? await accounts.FindByPhoneAsync(target, cancellationToken)
-            : await accounts.FindByVerifiedEmailAsync(target, cancellationToken);
+            : await accounts.FindByEmailAsync(target, cancellationToken);
         return owner is not null && owner.Id != accountId;
     }
 

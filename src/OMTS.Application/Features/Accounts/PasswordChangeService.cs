@@ -20,8 +20,9 @@ namespace OMTS.Application.Features.Accounts;
 public sealed record PasswordChanged(AuthTokens Tokens, string Message, string MessageCode);
 
 /// <summary>
-/// ACS-04 – the logged-in user changes the password after proving identity (current password, or a code
-/// sent to the verified email), including the forced change after a temporary password.
+/// ACCOUNT-04 – the logged-in user changes the password after proving identity (current password, or a code sent to
+/// the verified email). The forced change after a temporary password asks for no proof: the user has just entered it
+/// to log in (ACCOUNT-04.1).
 /// </summary>
 public sealed class PasswordChangeService(
     IAccountRepository accounts,
@@ -66,8 +67,8 @@ public sealed class PasswordChangeService(
             return AppError.Invalid("Password");
         }
 
-        var proof = await CheckProofAsync(account, request, cancellationToken);
-        if (proof is not null)
+        var proofKind = account.MustChangePassword ? "TemporaryPasswordLogin" : request.CurrentPassword is not null ? "CurrentPassword" : "EmailCode";
+        if (!account.MustChangePassword && await CheckProofAsync(account, request, cancellationToken) is { } proof)
         {
             return proof;
         }
@@ -81,7 +82,7 @@ public sealed class PasswordChangeService(
         {
             RecordId = account.Id,
             RecordCode = account.Username,
-            After = new { Proof = request.CurrentPassword is not null ? "CurrentPassword" : "EmailCode", SessionsRevoked = true },
+            After = new { Proof = proofKind, SessionsRevoked = true },
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
 

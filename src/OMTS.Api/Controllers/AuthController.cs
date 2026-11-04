@@ -6,6 +6,7 @@ using OMTS.Api.Extensions;
 using OMTS.Api.Filters;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Messages;
+using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Auth.Dtos;
 
@@ -59,7 +60,7 @@ public sealed class AuthController(AuthService authService, ICurrentUser current
         return result.Error switch
         {
             AuthError.InvalidCredentials => ProblemResults.Create(StatusCodes.Status401Unauthorized, UserMessages.LoginIncorrect),
-            AuthError.TemporarilyLocked => ProblemResults.Create(StatusCodes.Status423Locked, UserMessages.TooManyLoginAttempts),
+            AuthError.TemporarilyLocked => AppError.LoginPaused.ToProblem(),
             AuthError.AccessDenied => ProblemResults.Create(StatusCodes.Status403Forbidden, UserMessages.AccountUnusable),
             AuthError.TemporaryPasswordExpired => ProblemResults.Create(StatusCodes.Status403Forbidden, UserMessages.TemporaryPasswordExpired),
             _ => ProblemResults.Create(StatusCodes.Status401Unauthorized, UserMessages.SessionExpired),

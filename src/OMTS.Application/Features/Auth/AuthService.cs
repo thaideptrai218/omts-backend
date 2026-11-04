@@ -275,7 +275,7 @@ public sealed class AuthService(
             account.DisplayName,
             account.SubjectType,
             account.MustChangePassword,
-            // Traders and staff must verify a phone number before other functions (BR-34, ACS-02).
-            PhoneVerificationRequired: account.SubjectType is SubjectType.Trader or SubjectType.Staff && account.PhoneVerifiedAt is null);
+            // Every account must verify a phone number before other functions (BR-ACCOUNT-03, ACCOUNT-02.1).
+            PhoneVerificationRequired: account.PhoneVerifiedAt is null);
     }
 }

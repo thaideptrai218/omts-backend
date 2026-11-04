@@ -8,9 +8,9 @@ using OMTS.Application.Features.Authorization;
 namespace OMTS.Api.Filters;
 
 /// <summary>
-/// Global gate for authenticated requests: a temporary password must be changed first (UC02 branch 2c),
-/// then traders and staff must verify a phone number (BR-34, MSG-ACCOUNT-04). Only endpoints marked with the
-/// matching attribute stay reachable meanwhile. Runs before <see cref="RequirePermissionAttribute"/>.
+/// Global gate for authenticated requests, in the order of ACCOUNT-02: first a verified phone number (step 5,
+/// MSG-ACCOUNT-04, for every account), then the change of a temporary password (step 6). Only endpoints marked with the
+/// attribute of the current step stay reachable meanwhile. Runs before <see cref="RequirePermissionAttribute"/>.
 /// </summary>
 public sealed class AccountStateGateFilter(ICurrentUser currentUser, PermissionService permissionService) : IAsyncAuthorizationFilter
 {
@@ -30,13 +30,16 @@ public sealed class AccountStateGateFilter(ICurrentUser currentUser, PermissionS
             return;
         }
 
-        if (access.RequiresPasswordChange && !metadata.OfType<AllowWhenPasswordChangeRequiredAttribute>().Any())
+        if (access.RequiresPhoneVerification)
+        {
+            if (!metadata.OfType<AllowWhenPhoneUnverifiedAttribute>().Any())
+            {
+                context.Result = ProblemResults.Create(StatusCodes.Status403Forbidden, UserMessages.PhoneVerificationRequired);
+            }
+        }
+        else if (access.RequiresPasswordChange && !metadata.OfType<AllowWhenPasswordChangeRequiredAttribute>().Any())
         {
             context.Result = ProblemResults.Create(StatusCodes.Status403Forbidden, UserMessages.PasswordChangeRequired);
-        }
-        else if (access.RequiresPhoneVerification && !metadata.OfType<AllowWhenPhoneUnverifiedAttribute>().Any())
-        {
-            context.Result = ProblemResults.Create(StatusCodes.Status403Forbidden, UserMessages.PhoneVerificationRequired);
         }
     }
 }
