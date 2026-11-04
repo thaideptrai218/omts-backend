@@ -32,7 +32,7 @@ internal sealed class DemoCultivationLogStep : IDemoSeedStep
         foreach (var (zoneCode, manager) in Zones)
         {
             var zoneId = await context.Db.FarmingZones.Where(z => z.Code == zoneCode).Select(z => z.Id).SingleAsync(cancellationToken);
-            var actor = await ActorAsync(context, manager, zoneId, cancellationToken);
+            var actor = await ActorAsync(context, PermissionFunctions.CultivationLogs, manager, zoneId, cancellationToken);
             using var acting = context.Get<AmbientActor>().Use(actor);
             for (var number = 1; number <= RaftsWithLogs; number++)
             {
@@ -69,11 +69,11 @@ internal sealed class DemoCultivationLogStep : IDemoSeedStep
     }
 
     /// <summary>The Zone Manager of the zone while they can record there, else the Owner.</summary>
-    private static async Task<Guid> ActorAsync(DemoSeedContext context, string username, Guid zoneId, CancellationToken cancellationToken)
+    internal static async Task<Guid> ActorAsync(DemoSeedContext context, string function, string username, Guid zoneId, CancellationToken cancellationToken)
     {
         var managerId = await context.Db.Accounts.Where(a => a.Username == username).Select(a => (Guid?)a.Id).FirstOrDefaultAsync(cancellationToken);
         var access = managerId is { } id ? await context.Get<PermissionService>().GetAccessAsync(id, cancellationToken) : null;
-        return access is not null && access.Allows(PermissionFunctions.CultivationLogs, PermissionAction.Create, PermissionScope.ZoneScoped, zoneId)
+        return access is not null && access.Allows(function, PermissionAction.Create, PermissionScope.ZoneScoped, zoneId)
             ? access.AccountId
             : context.OwnerId;
     }

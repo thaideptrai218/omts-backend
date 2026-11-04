@@ -29,6 +29,7 @@ internal static class DemoDataSeeder
         new DemoTraderStep(),
         new DemoSupplierStep(),
         new DemoInputItemStep(),
+        new DemoMaterialUsageStep(),
         new DemoPurchaseReceiptStep(),
         new DemoWaterMeasurementStep(),
     ];
