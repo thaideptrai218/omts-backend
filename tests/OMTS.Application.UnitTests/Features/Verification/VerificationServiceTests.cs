@@ -63,7 +63,32 @@ public partial class VerificationServiceTests
         // The 5th wrong entry cancels the code, and so is every later entry, a right one too: MSG-ACCOUNT-17 (400).
         AssertCancelled(await Service.VerifyAsync(locked, "000000", AccountId, default));
         AssertCancelled(await Service.VerifyAsync(locked, _sms.LastCode, AccountId, default));
-        AssertWrongCode(await Service.ResendAsync(locked, AccountId, default));
+        AssertCancelled(await Service.ResendAsync(locked, AccountId, default));
+    }
+
+    // BR-ACCOUNT-09: a new code has its own 5 wrong entries; a resend that could not be sent keeps the count of the working code.
+    [Fact]
+    public async Task A_resent_code_has_its_own_five_wrong_entries_and_a_failed_resend_keeps_the_count()
+    {
+        var started = await StartAsync();
+        for (var i = 0; i < 4; i++)
+        {
+            AssertWrongCode(await Service.VerifyAsync(started, "000000", AccountId, default));
+        }
+
+        _time.Advance(TimeSpan.FromSeconds(60));
+        _sms.Fail = true;
+        Assert.Equal(ErrorKind.ServiceUnavailable, (await Service.ResendAsync(started, AccountId, default)).Error?.Kind);
+        Assert.Equal(4, _codes.All.Single().FailedAttempts);
+
+        _sms.Fail = false;
+        Assert.True((await Service.ResendAsync(started, AccountId, default)).IsSuccess);
+        for (var i = 0; i < 4; i++)
+        {
+            AssertWrongCode(await Service.VerifyAsync(started, "000000", AccountId, default));
+        }
+
+        Assert.True((await Service.VerifyAsync(started, _sms.LastCode, AccountId, default)).IsSuccess);
     }
 
     [Fact]
@@ -410,8 +435,13 @@ public partial class VerificationServiceTests
 
         public void Remove(VerificationCode code) => All.Remove(code);
 
-        public Task<int> CountSendsToTargetAsync(string target, DateTimeOffset since, CancellationToken cancellationToken) =>
-            Task.FromResult(All.Where(c => c.Target == target && c.LastSentAt >= since).Sum(c => c.SendCount));
+        public Task<IReadOnlyList<DateTimeOffset>> GetSendTimesToTargetAsync(string target, DateTimeOffset since, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<DateTimeOffset>>(All
+                .Where(c => c.Target == target)
+                .SelectMany(c => c.SendTimes)
+                .Where(sent => sent > since)
+                .Order()
+                .ToList());
 
         public Task<int> CountSmsSendsAsync(DateTimeOffset since, CancellationToken cancellationToken) =>
             Task.FromResult(All.Where(c => c.Channel == VerificationChannel.Sms && c.LastSentAt >= since).Sum(c => c.SendCount));
@@ -435,6 +465,11 @@ public partial class VerificationServiceTests
             Task.FromResult<IReadOnlyList<VerificationCode>>(All
                 .Where(c => c.Purpose == purpose && c.CreatedAt >= since && (accountId != null ? c.AccountId == accountId : c.AccountId == null && c.Target == target))
                 .OrderByDescending(c => c.CreatedAt)
+                .ToList());
+
+        public Task<IReadOnlyList<VerificationCode>> ListOpenAsync(VerificationPurpose purpose, string target, DateTimeOffset now, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<VerificationCode>>(All
+                .Where(c => c.Purpose == purpose && c.Target == target && c.IsOpen && c.ExpiresAt > now)
                 .ToList());
 
         public Task<IReadOnlyList<VerificationCode>> ListUsableOfAccountAsync(Guid accountId, VerificationChannel channel, DateTimeOffset now, CancellationToken cancellationToken) =>

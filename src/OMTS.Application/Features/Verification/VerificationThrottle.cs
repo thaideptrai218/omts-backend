@@ -52,22 +52,22 @@ public sealed class VerificationThrottle(
 
         if (recent.FirstOrDefault(c => now < c.NextResendAt) is { } latest)
         {
-            return VerificationErrors.WaitBeforeNextCode(latest.NextResendAt, now);
+            return VerificationErrors.WaitBeforeNextCode(latest.NextResendAt, now, await CodesLeftAsync(purpose, target, now, cancellationToken));
         }
 
         if (recent.Count >= VerificationService.MaxRequestsPerWindow)
         {
-            return VerificationErrors.WaitBeforeNextCode(recent[^1].CreatedAt + VerificationService.BudgetWindow, now);
+            return VerificationErrors.WaitBeforeNextCode(recent[^1].CreatedAt + VerificationService.BudgetWindow, now, await CodesLeftAsync(purpose, target, now, cancellationToken));
         }
 
-        return await CheckCountsAsync(channel, target, now, alreadySaved: 0, cancellationToken);
+        return await CheckCountsAsync(purpose, channel, target, now, alreadySaved: 0, cancellationToken);
     }
 
     /// <summary>Null when one more code of this request may be sent.</summary>
     public async Task<AppError?> CheckResendAsync(
         VerificationPurpose purpose, VerificationChannel channel, string target, DateTimeOffset now, CancellationToken cancellationToken) =>
         await CheckCodeLimitAsync(purpose, target, now, alreadySaved: 0, cancellationToken)
-            ?? await CheckCountsAsync(channel, target, now, alreadySaved: 0, cancellationToken);
+            ?? await CheckCountsAsync(purpose, channel, target, now, alreadySaved: 0, cancellationToken);
 
     /// <summary>
     /// The same limits once this send is saved (counted among the sends): null when it still fits. Parallel
@@ -77,7 +77,7 @@ public sealed class VerificationThrottle(
     public async Task<AppError?> CheckSavedSendAsync(
         VerificationPurpose purpose, VerificationChannel channel, string target, DateTimeOffset now, CancellationToken cancellationToken) =>
         await CheckCodeLimitAsync(purpose, target, now, alreadySaved: 1, cancellationToken)
-            ?? await CheckCountsAsync(channel, target, now, alreadySaved: 1, cancellationToken);
+            ?? await CheckCountsAsync(purpose, channel, target, now, alreadySaved: 1, cancellationToken);
 
     /// <summary>Codes this purpose and target can still get in the current hour.</summary>
     public async Task<int> CodesLeftAsync(VerificationPurpose purpose, string target, DateTimeOffset now, CancellationToken cancellationToken) =>
@@ -113,11 +113,15 @@ public sealed class VerificationThrottle(
     private static int CodesLeft(int sent) => Math.Max(0, VerificationCode.MaxCodesPerHour - sent);
 
     private async Task<AppError?> CheckCountsAsync(
-        VerificationChannel channel, string target, DateTimeOffset now, int alreadySaved, CancellationToken cancellationToken)
+        VerificationPurpose purpose, VerificationChannel channel, string target, DateTimeOffset now, int alreadySaved, CancellationToken cancellationToken)
     {
-        if (await codes.CountSendsToTargetAsync(target, now - VerificationService.BudgetWindow, cancellationToken) - alreadySaved >= MaxSendsPerTargetPerWindow)
+        // Newest last, so the send being checked is at the end: the hour counts from the oldest send that has to leave.
+        var sends = await codes.GetSendTimesToTargetAsync(target, now - VerificationService.BudgetWindow, cancellationToken);
+        if (sends.Count - alreadySaved >= MaxSendsPerTargetPerWindow)
         {
-            return VerificationErrors.WaitBeforeNextCode(now + VerificationService.BudgetWindow, now);
+            var oldest = sends[sends.Count - alreadySaved - MaxSendsPerTargetPerWindow];
+            var codesLeft = CodesLeft((await SendTimesAsync(purpose, target, now, cancellationToken)).Count - alreadySaved);
+            return VerificationErrors.WaitBeforeNextCode(oldest + VerificationService.BudgetWindow, now, codesLeft);
         }
 
         if (channel != VerificationChannel.Sms)

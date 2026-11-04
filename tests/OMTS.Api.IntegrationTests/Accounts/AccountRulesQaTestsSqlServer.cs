@@ -155,6 +155,45 @@ public class AccountRulesQaTestsSqlServer
         Assert.Equal("MSG-ACCOUNT-09", await refused.ErrorCodeAsync());
     }
 
+    // BR-ACCOUNT-09 on the real rows: a change of the number by its holder cancels the recovery of the old number, the token that
+    // proves the new number is used and not cancelled, and a new code cancels the earlier one of another account.
+    [SqlServerFact]
+    public async Task A_change_of_the_number_and_a_new_code_cancel_the_earlier_codes()
+    {
+        await using var database = await MigratedAsync();
+        await using var api = new SqlServerApiFactory(database);
+        var holder = await api.AddAccountAsync(NewCode(), Pw);
+        var oldPhone = holder.PhoneNumber!;
+        var client = api.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", (await LoginTokensAsync(client, holder.Username, Pw)).GetProperty("accessToken").GetString());
+        var anonymous = api.CreateClient();
+        var requestId = (await (await anonymous.PostAsJsonAsync("/api/auth/recovery", new { identifier = oldPhone })).BodyAsync()).GetProperty("requestId").GetGuid();
+        var recoveryToken = await VerifyAsync(anonymous, requestId, SmsCode(api, oldPhone));
+
+        var newPhone = NewPhone();
+        var changeId = await VerificationIdAsync(await client.PostAsJsonAsync("/api/me/contact-changes", new { channel = "Sms", target = newPhone, currentPassword = Pw }));
+        var changeToken = await VerifyAsync(client, changeId, SmsCode(api, newPhone));
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/me/contact-changes/confirm", new { verificationToken = changeToken })).StatusCode);
+
+        var newPassword = NewPassword();
+        var reset = await anonymous.PostAsJsonAsync("/api/auth/recovery/reset", new { verificationToken = recoveryToken, newPassword, passwordConfirmation = newPassword });
+        Assert.Equal("MSG-ACCOUNT-16", await reset.ErrorCodeAsync());
+
+        var contested = NewPhone();
+        var (first, second) = (await TraderAsync(api), await TraderAsync(api));
+        var firstId = await VerificationIdAsync(await first.PostAsJsonAsync("/api/me/phone-verification", new { phoneNumber = contested }));
+        var firstCode = SmsCode(api, contested);
+        await using (var db = database.CreateContext())
+        {
+            (await db.VerificationCodes.SingleAsync(c => c.Id == firstId)).AgeBy(TwoMinutes);
+            await db.SaveChangesAsync();
+        }
+
+        await VerificationIdAsync(await second.PostAsJsonAsync("/api/me/phone-verification", new { phoneNumber = contested }));
+
+        Assert.Equal("MSG-ACCOUNT-16", await (await first.EnterAsync(firstId, firstCode)).ErrorCodeAsync());
+    }
+
     // QA-M4 (BR-ACCOUNT-02, BR-ACCOUNT-09): on the real collation too: the same number in other digits gets its own codes and its own account.
     [SqlServerFact]
     public async Task A_number_in_other_digits_does_not_get_a_code_while_the_number_is_at_its_wait()
@@ -279,6 +318,14 @@ public class AccountRulesQaTestsSqlServer
         Assert.Equal("one@example.com", after["one"]);
         Assert.Equal("two@example.com", after["two"]);
         Assert.Null(after["three"]);
+    }
+
+    private static async Task<HttpClient> TraderAsync(SqlServerApiFactory api)
+    {
+        var trader = await api.AddAccountAsync(NewCode(), Pw, SubjectType.Trader);
+        var client = api.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", (await LoginTokensAsync(client, trader.Username, Pw)).GetProperty("accessToken").GetString());
+        return client;
     }
 
     private static async Task<SqlServerTestDatabase> MigratedAsync()

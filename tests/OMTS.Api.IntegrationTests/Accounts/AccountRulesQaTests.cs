@@ -9,6 +9,7 @@ using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Validation;
 using OMTS.Application.Features.Auth;
+using OMTS.Application.Features.Verification;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
 using OMTS.Infrastructure.Messaging.Fakes;
@@ -147,10 +148,10 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
         Assert.InRange((await paused.BodyAsync()).GetProperty("retryAfterSeconds").GetInt32(), 895, 900);
     }
 
-    // QA-L1 (PM decision 03/11): MSG-ACCOUNT-18 carries the real wait, also when the guard per target refuses. All ten
-    // sends leave the hour in one minute, and it says 3600 seconds.
+    // PM decision 03/11: MSG-ACCOUNT-18 carries the real wait, also when the guard per target refuses. All ten sends leave the
+    // hour in one minute, so a client can try again then, and the refusal says how many codes the purpose and number have left.
     [Fact]
-    public async Task Too_many_codes_to_one_target_answers_the_real_wait()
+    public async Task The_guard_per_target_answers_the_time_until_a_send_leaves_the_hour()
     {
         var phone = NewPhone();
         var sent = DateTimeOffset.UtcNow.AddMinutes(-59);
@@ -175,11 +176,35 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
         var refused = await factory.CreateClient().StartRegistrationAsync("Sms", phone);
 
         Assert.Equal("MSG-ACCOUNT-18", await refused.ErrorCodeAsync());
-        Assert.InRange((await refused.BodyAsync()).GetProperty("retryAfterSeconds").GetInt32(), 1, 120);
+        var body = await refused.BodyAsync();
+        Assert.InRange(body.GetProperty("retryAfterSeconds").GetInt32(), 1, 120);
+        Assert.Equal(VerificationCode.MaxCodesPerHour, body.GetProperty("sendsLeft").GetInt32());
     }
 
-    // QA-M3 (BR-ACCOUNT-09: a code can be entered wrongly 5 times): the new code of a resend inherits the wrong entries of the
-    // old one, so after 4 wrong entries the first typing error on the new code cancels it, and its right code is refused.
+    // The guard counts the sends that are in the hour: a request whose last send is recent does not count its older sends.
+    [Fact]
+    public async Task The_guard_per_target_does_not_count_sends_older_than_the_hour()
+    {
+        var phone = NewPhone();
+        var now = DateTimeOffset.UtcNow;
+        await factory.UseDbAsync(db => db.VerificationCodes.Add(new VerificationCode
+        {
+            Purpose = VerificationPurpose.ChangePhone,
+            Channel = VerificationChannel.Sms,
+            Target = phone,
+            CodeHash = NewCode(),
+            CreatedAt = now.AddHours(-2),
+            LastSentAt = now.AddMinutes(-5),
+            SendCount = VerificationThrottle.MaxSendsPerTargetPerWindow,
+            SendTimes = [now.AddMinutes(-5)],
+            ExpiresAt = now,
+        }));
+
+        Assert.Equal(HttpStatusCode.Created, (await factory.CreateClient().StartRegistrationAsync("Sms", phone)).StatusCode);
+    }
+
+    // BR-ACCOUNT-09: a code can be entered wrongly 5 times, and a resend gives a new code: one typing error on it after 4 wrong
+    // entries on the old one leaves its right code working.
     [Fact]
     public async Task The_new_code_of_a_resend_has_its_own_five_wrong_entries()
     {
@@ -199,9 +224,10 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
         Assert.Equal(HttpStatusCode.OK, (await client.EnterAsync(id, newCode)).StatusCode);
     }
 
-    // QA-L2 (ACCOUNT-06.0.E2): resend of a cancelled code answers MSG-ACCOUNT-16, whose text offers Resend code again.
+    // ACCOUNT-06.0.E2: a resend of a code cancelled by its 5th wrong entry answers MSG-ACCOUNT-17, not -16 whose text offers Resend
+    // code again. Recovery keeps -16 (BR-ACCOUNT-07): see VerificationAbuseTests.
     [Fact]
-    public async Task Resend_of_a_cancelled_code_says_it_was_cancelled()
+    public async Task Resend_of_a_cancelled_code_answers_msg_account_17()
     {
         var phone = NewPhone();
         var client = factory.CreateClient();
@@ -216,8 +242,8 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
         Assert.Equal("MSG-ACCOUNT-17", await (await client.PostAsync($"/api/verifications/{id}/resend", null)).ErrorCodeAsync());
     }
 
-    // QA-L3 (BR-ACCOUNT-09, ACCOUNT-06 step 4: only the latest code works): a request opened more than an hour ago is not
-    // cancelled by a new code, although a resend made its code current.
+    // BR-ACCOUNT-09, ACCOUNT-06 step 4: only the latest code works, also when the earlier one is on a request opened more than an
+    // hour ago that a resend made current.
     [Fact]
     public async Task A_new_code_cancels_an_earlier_code_of_a_request_older_than_an_hour()
     {
@@ -234,7 +260,7 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
         Assert.Equal("MSG-ACCOUNT-16", await (await client.EnterAsync(id, earlierCode)).ErrorCodeAsync());
     }
 
-    // QA-L3 (same rule): the code of one account stays valid after a new code for the same purpose and number to another account.
+    // Same rule: a new code for the same purpose and number cancels the earlier one, also when another account asked for it.
     [Fact]
     public async Task A_new_code_for_another_account_cancels_the_earlier_code_of_that_number()
     {

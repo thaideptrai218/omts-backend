@@ -118,6 +118,7 @@ public class AcsReviewHardeningTests(AuthApiFactory factory) : IClassFixture<Aut
             LastSentAt = sentAt,
             ExpiresAt = sentAt,
             SendCount = Application.Features.Verification.VerificationThrottle.MaxSendsPerTargetPerWindow,
+            SendTimes = Enumerable.Repeat(sentAt, Application.Features.Verification.VerificationThrottle.MaxSendsPerTargetPerWindow).ToList(),
         }));
         var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
         var client = await factory.LoginAsync(trader.Username);
