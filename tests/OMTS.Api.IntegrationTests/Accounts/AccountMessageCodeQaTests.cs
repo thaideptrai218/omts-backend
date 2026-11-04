@@ -300,7 +300,7 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
             noEmail.Detail());
     }
 
-    // The current-password check counts like a login (deviation 4): the 5th failure is MSG-ACCOUNT-06 (MSG69 before), 423.
+    // The current-password check counts like a login (deviation 4): the 5th failure is MSG-ACCOUNT-06 (MSG69 before), 423, with the whole pause left.
     [Fact]
     public async Task Fifth_wrong_current_password_is_msg_account_06()
     {

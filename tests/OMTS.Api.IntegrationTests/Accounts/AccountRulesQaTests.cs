@@ -1,13 +1,10 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
-using System.Reflection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Internal;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Validation;
@@ -47,28 +44,27 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
             $"real identifier {existing.TotalMilliseconds:F0} ms, unknown identifier {unknown.TotalMilliseconds:F0} ms");
     }
 
-    // QA-M2 (BR-ACCOUNT-05, BR-ACCOUNT-07): failures of one real number in several formats share one count, those of an
-    // unknown number are counted per spelling, so the 5th failure tells them apart: 423 against 401.
+    // BR-ACCOUNT-05, BR-ACCOUNT-07: all formats of one number share one count, real or unknown, so the 5th failure answers alike.
     [Fact]
-    public async Task Login_failures_in_several_formats_answer_the_same_for_a_real_and_an_unknown_number()
+    public async Task Login_failures_share_one_count_over_the_formats_of_a_real_or_an_unknown_number()
     {
         var real = await factory.AddAccountAsync(NewCode(), Pw);
 
         var forReal = await FailLoginInEveryFormatAsync(real.PhoneNumber!);
         var forUnknown = await FailLoginInEveryFormatAsync(NewPhone());
 
+        Assert.Equal(HttpStatusCode.Locked, forReal[^1]);
         Assert.Equal(forUnknown, forReal);
     }
 
-    // QA-M2, second form: the pause of an unknown identifier starts again with each attempt, and the count of a real account never
-    // ages. Polled every 14 minutes, an unknown identifier stays paused where a real account is free again after 15; 4 failures,
-    // 16 minutes and one more failure pause a real account but not an unknown identifier. The cache clock is set by reflection,
-    // as the counter has no clock of its own.
+    // BR-ACCOUNT-05, BR-ACCOUNT-07: the count of an unknown identifier behaves like that of an account. Failures during the pause
+    // do not extend it, so polled every 14 minutes it is free again after 15; and the count does not age, so 4 failures, 16 minutes
+    // and one more failure pause it.
     [Fact]
-    public void The_count_of_an_unknown_identifier_ages_like_the_count_of_an_account()
+    public void An_unknown_identifier_pauses_and_counts_like_an_account()
     {
-        using var polled = new UnknownLoginCounter();
-        var polledClock = SetClock(polled);
+        var polledClock = new MovableClock();
+        using var polled = new UnknownLoginCounter(timeProvider: polledClock);
         for (var i = 0; i < Account.MaxFailedLogins; i++)
         {
             polled.RegisterFailure("polled");
@@ -76,11 +72,12 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
 
         polledClock.Advance(TimeSpan.FromMinutes(14));
         polled.RegisterFailure("polled");
+        var leftAfterFourteenMinutes = polled.PauseLeft("polled");
         polledClock.Advance(TimeSpan.FromMinutes(14));
-        var afterTheRealPause = polled.RegisterFailure("polled");
+        var afterThePause = polled.RegisterFailure("polled");
 
-        using var spaced = new UnknownLoginCounter();
-        var spacedClock = SetClock(spaced);
+        var spacedClock = new MovableClock();
+        using var spaced = new UnknownLoginCounter(timeProvider: spacedClock);
         for (var i = 0; i < Account.MaxFailedLogins - 1; i++)
         {
             spaced.RegisterFailure("spaced");
@@ -89,13 +86,16 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
         spacedClock.Advance(TimeSpan.FromMinutes(16));
         var fifthInARow = spaced.RegisterFailure("spaced");
 
-        Assert.True(afterTheRealPause < Account.MaxFailedLogins, $"28 minutes after the pause began, the count is {afterTheRealPause}: still paused.");
-        Assert.True(fifthInARow >= Account.MaxFailedLogins, $"The 5th failure in a row counts {fifthInARow}: not paused, as an account would be.");
+        Assert.Equal(TimeSpan.FromMinutes(1), leftAfterFourteenMinutes);
+        Assert.Equal(1, afterThePause);
+        Assert.Null(polled.PauseLeft("polled"));
+        Assert.Equal(Account.MaxFailedLogins, fifthInARow);
+        Assert.Equal(Account.TemporaryLockDuration, spaced.PauseLeft("spaced"));
     }
 
-    // QA-H1 (PM decision 03/11): MSG-ACCOUNT-06 carries the real wait. One minute before the pause ends it says 900 seconds.
+    // PM decision 03/11: MSG-ACCOUNT-06 carries the time left of the pause, in retryAfterSeconds and in the text.
     [Fact]
-    public async Task Login_pause_answers_the_real_wait()
+    public async Task Msg_account_06_carries_the_time_left_of_the_pause()
     {
         var account = await factory.AddAccountAsync(NewCode(), Pw);
         var client = factory.CreateClient();
@@ -108,7 +108,43 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
         var paused = await client.PostAsJsonAsync("/api/auth/login", new { identifier = account.Username, password = Pw });
 
         Assert.Equal("MSG-ACCOUNT-06", await paused.ErrorCodeAsync());
-        Assert.InRange((await paused.BodyAsync()).GetProperty("retryAfterSeconds").GetInt32(), 1, 60);
+        var body = await paused.BodyAsync();
+        Assert.InRange(body.GetProperty("retryAfterSeconds").GetInt32(), 1, 60);
+        Assert.EndsWith("after 1 minute.", body.GetProperty("detail").GetString());
+    }
+
+    // PM decision 03/11: the same on a wrong current check of the signed-in user.
+    [Fact]
+    public async Task Msg_account_06_on_a_wrong_current_entry_carries_the_time_left_of_the_pause()
+    {
+        var account = await factory.AddAccountAsync(NewCode(), Pw);
+        var client = await factory.LoginAsync(account.Username, Pw);
+        await factory.UpdateAsync<Account>(account.Id, a => a.LockoutEndAt = DateTimeOffset.UtcNow.AddSeconds(90));
+        var newOne = NewPassword();
+
+        var paused = await client.PostAsJsonAsync("/api/me/password", new { currentPassword = NewPassword(), newPassword = newOne, passwordConfirmation = newOne });
+
+        Assert.Equal("MSG-ACCOUNT-06", await paused.ErrorCodeAsync());
+        var body = await paused.BodyAsync();
+        Assert.InRange(body.GetProperty("retryAfterSeconds").GetInt32(), 1, 90);
+        Assert.EndsWith("after 2 minutes.", body.GetProperty("detail").GetString());
+    }
+
+    // BR-ACCOUNT-07: an unknown identifier answers the same 423 with the time left: the first answer is the length of the pause.
+    [Fact]
+    public async Task An_unknown_identifier_answers_msg_account_06_with_the_length_of_the_pause()
+    {
+        var client = factory.CreateClient();
+        var identifier = NewPhone();
+        for (var i = 1; i < Account.MaxFailedLogins; i++)
+        {
+            await client.PostAsJsonAsync("/api/auth/login", new { identifier, password = NewPassword() });
+        }
+
+        var paused = await client.PostAsJsonAsync("/api/auth/login", new { identifier, password = NewPassword() });
+
+        Assert.Equal("MSG-ACCOUNT-06", await paused.ErrorCodeAsync());
+        Assert.InRange((await paused.BodyAsync()).GetProperty("retryAfterSeconds").GetInt32(), 895, 900);
     }
 
     // QA-L1 (PM decision 03/11): MSG-ACCOUNT-18 carries the real wait, also when the guard per target refuses. All ten
@@ -396,21 +432,13 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
         Assert.Equal(3, factory.Services.GetRequiredService<FakeSmsSender>().Inbox.List(real.PhoneNumber!).Count);
     }
 
-    private static MovableClock SetClock(UnknownLoginCounter counter)
+    private sealed class MovableClock : TimeProvider
     {
-        const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
-        var cache = typeof(UnknownLoginCounter).GetField("_cache", Private)!.GetValue(counter)!;
-        var options = (MemoryCacheOptions)typeof(MemoryCache).GetField("_options", Private)!.GetValue(cache)!;
-        var clock = new MovableClock();
-        options.Clock = clock;
-        return clock;
-    }
+        private DateTimeOffset _now = DateTimeOffset.UtcNow;
 
-    private sealed class MovableClock : ISystemClock
-    {
-        public DateTimeOffset UtcNow { get; private set; } = DateTimeOffset.UtcNow;
+        public void Advance(TimeSpan by) => _now += by;
 
-        public void Advance(TimeSpan by) => UtcNow += by;
+        public override DateTimeOffset GetUtcNow() => _now;
     }
 
     private async Task<HttpClient> TraderWithoutPhoneAsync()

@@ -141,10 +141,11 @@ public static class UserMessages
 
     /// <summary>
     /// MSG-ACCOUNT-06: login is paused for <see cref="Account.TemporaryLockDuration"/> after too many failed
-    /// attempts. The retry time is the length of the pause, the same for every identifier (BR-ACCOUNT-05).
+    /// attempts (BR-ACCOUNT-05).
     /// </summary>
-    public static readonly UserMessage TooManyLoginAttempts = new(
-        Account06, $"Too many failed login attempts. Please try again after {Duration(Account.TemporaryLockDuration)}.", Legacy.Msg69);
+    /// <param name="waitSeconds">What is left of the pause: {retry_time} in the text.</param>
+    public static UserMessage TooManyLoginAttempts(int waitSeconds) => new(
+        Account06, $"Too many failed login attempts. Please try again after {Duration(TimeSpan.FromSeconds(waitSeconds))}.", Legacy.Msg69);
 
     /// <summary>MSG-ACCOUNT-07: the account is Locked or has no effective zone–role pair.</summary>
     public static readonly UserMessage AccountUnusable = new(

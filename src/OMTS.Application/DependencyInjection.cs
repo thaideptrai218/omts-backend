@@ -33,7 +33,7 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddMemoryCache();
 
-        services.AddSingleton(_ => new UnknownLoginCounter());
+        services.AddSingleton(provider => new UnknownLoginCounter(timeProvider: provider.GetRequiredService<TimeProvider>()));
         services.AddScoped<AuthService>();
 
         services.AddSingleton<PermissionCache>();

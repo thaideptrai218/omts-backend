@@ -39,11 +39,13 @@ public sealed class AuthService(
     public async Task<AuthResult> LoginAsync(LoginRequest request, ClientInfo client, CancellationToken cancellationToken)
     {
         var identifier = request.Identifier.Trim();
-        var account = await accounts.FindByLoginIdentifierAsync(
-            identifier, PhoneNumbers.Normalize(identifier), EmailAddresses.Normalize(identifier), cancellationToken);
+        var phone = PhoneNumbers.Normalize(identifier);
+        var email = EmailAddresses.Normalize(identifier);
+        var account = await accounts.FindByLoginIdentifierAsync(identifier, phone, email, cancellationToken);
         if (account is null)
         {
-            return FailUnknownIdentifier(identifier, request.Password);
+            // Normalised as the lookup is: every format of one number finds one row, so it shares one count here too.
+            return FailUnknownIdentifier(phone ?? email ?? identifier, request.Password);
         }
 
         // Hashed once: a retry re-applies the outcome to the re-read account, it does not hash again.
@@ -52,7 +54,8 @@ public sealed class AuthService(
         {
             try
             {
-                if (account.IsTemporarilyLocked(timeProvider.GetUtcNow()))
+                var now = timeProvider.GetUtcNow();
+                if (account.IsTemporarilyLocked(now))
                 {
                     // Hashed like a locked unknown identifier, so the answer time does not tell them apart.
                     if (passwordCheck is null)
@@ -60,7 +63,7 @@ public sealed class AuthService(
                         VerifyAgainstDummyHash(request.Password);
                     }
 
-                    return AuthResult.Failure(AuthError.TemporarilyLocked);
+                    return AuthResult.Paused(account.LockoutEndAt!.Value - now);
                 }
 
                 passwordCheck ??= passwordHasher.Verify(account.PasswordHash, request.Password);
@@ -144,7 +147,9 @@ public sealed class AuthService(
         {
             account.RegisterFailedLogin(now);
             await unitOfWork.SaveChangesAsync(cancellationToken);
-            return AuthResult.Failure(account.IsTemporarilyLocked(now) ? AuthError.TemporarilyLocked : AuthError.InvalidCredentials);
+            return account.IsTemporarilyLocked(now)
+                ? AuthResult.Paused(account.LockoutEndAt!.Value - now)
+                : AuthResult.Failure(AuthError.InvalidCredentials);
         }
 
         // Status checks only after the password is proven, so they reveal nothing to a guesser.
@@ -214,14 +219,16 @@ public sealed class AuthService(
 
     /// <summary>
     /// Unknown identifiers behave like accounts: same hashing time, and after 5 failures the same MSG-ACCOUNT-06
-    /// for 15 minutes, so the lockout cannot be used to find out which identifiers exist.
+    /// with the time left of a 15-minute pause, so the pause cannot be used to find out which identifiers exist.
     /// </summary>
     private AuthResult FailUnknownIdentifier(string identifier, string password)
     {
         VerifyAgainstDummyHash(password);
 
-        var failures = unknownLogins.RegisterFailure(identifier);
-        return AuthResult.Failure(failures >= Account.MaxFailedLogins ? AuthError.TemporarilyLocked : AuthError.InvalidCredentials);
+        unknownLogins.RegisterFailure(identifier);
+        return unknownLogins.PauseLeft(identifier) is { } pauseLeft
+            ? AuthResult.Paused(pauseLeft)
+            : AuthResult.Failure(AuthError.InvalidCredentials);
     }
 
     private async Task RevokeReplayedSessionAsync(string refreshToken, DateTimeOffset now, CancellationToken cancellationToken)
