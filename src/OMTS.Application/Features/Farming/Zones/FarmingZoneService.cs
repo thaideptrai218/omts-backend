@@ -130,7 +130,7 @@ public sealed class FarmingZoneService(
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, Snapshot(zone));
         if (changedAfter is not null)
         {
-            // Old water measurements keep the measurement point stored on them; only the zone changes.
+            // Only the zone changes: a water measurement points to it and keeps no copy of these values.
             audit.Record(new AuditEntry("FarmingZone.Updated", RecordType)
             {
                 RecordId = zone.Id, RecordCode = zone.Code, ZoneId = zone.Id, Before = changedBefore, After = changedAfter,

@@ -40,21 +40,25 @@ public sealed class WaterMeterPhotoStore(IFileStorage storage, IWaterMeasurement
         return (checkedPhoto.Files[0], key);
     }
 
-    /// <summary>Whether <paramref name="key"/> is a stored photo of this account that no measurement uses yet.</summary>
-    public async Task<bool> IsUsableAsync(string? key, Guid accountId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Checks <paramref name="key"/> on every storage provider alike. One photo has one spelling: anything but the stored
+    /// form is refused before the database or the storage is asked, because the unique index and the orphan job compare
+    /// the text.
+    /// </summary>
+    public async Task<WaterPhotoCheck> CheckAsync(string? key, Guid accountId, CancellationToken cancellationToken)
     {
-        if (key is null || key.Length > MaxKeyLength || !key.StartsWith($"{OwnerFolder(accountId)}/", StringComparison.Ordinal) || key.Contains("..", StringComparison.Ordinal))
+        if (key is null || !key.StartsWith($"{OwnerFolder(accountId)}/", StringComparison.Ordinal) || !StoredFileKey.IsValid(key))
         {
-            return false;
+            return WaterPhotoCheck.Refused;
         }
 
         if (await measurements.IsPhotoUsedAsync(key, cancellationToken))
         {
-            return false;
+            return WaterPhotoCheck.AlreadyUsed;
         }
 
         await using var stored = await storage.OpenReadAsync(key, cancellationToken);
-        return stored is not null;
+        return stored is null ? WaterPhotoCheck.Refused : WaterPhotoCheck.Usable;
     }
 
     private static string OwnerFolder(Guid accountId) => $"{FileCategories.WaterMeterPhotos}/{accountId:N}";

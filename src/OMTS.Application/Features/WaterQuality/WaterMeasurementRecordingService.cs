@@ -85,10 +85,7 @@ public sealed class WaterMeasurementRecordingService(
         var previous = await measurements.FindByClientOperationAsync(accountId, operationId, cancellationToken);
         if (previous is not null)
         {
-            // The same operation id for another zone is a client error, not a re-send.
-            return previous.ZoneId == zoneId
-                ? new RecordedWaterMeasurement(await views.DetailAsync(previous, previous.Zone, cancellationToken), Replayed: true)
-                : AppError.Invalid(ClientOperationField);
+            return await ReSendAsync(previous, zoneId, cancellationToken);
         }
 
         if (zone.StatusId != StatusIds.Usage.InUse)
@@ -103,7 +100,15 @@ public sealed class WaterMeasurementRecordingService(
             invalid.Add(RaftField);
         }
 
-        if (!await photos.IsUsableAsync(request.PhotoKey, accountId, cancellationToken))
+        var photoCheck = await photos.CheckAsync(request.PhotoKey, accountId, cancellationToken);
+        if (photoCheck == WaterPhotoCheck.AlreadyUsed
+            && await measurements.FindByClientOperationAsync(accountId, operationId, cancellationToken) is { } overtaken)
+        {
+            // The first request of this re-send committed after the look-up above: the photo is used by its own record.
+            return await ReSendAsync(overtaken, zoneId, cancellationToken);
+        }
+
+        if (photoCheck != WaterPhotoCheck.Usable)
         {
             invalid.Add(PhotoField);
         }
@@ -151,6 +156,12 @@ public sealed class WaterMeasurementRecordingService(
 
         return new RecordedWaterMeasurement(await views.DetailAsync(measurement, zone, cancellationToken), Replayed: false);
     }
+
+    // The same operation id for another zone is a client error, not a re-send.
+    private async Task<Result<RecordedWaterMeasurement>> ReSendAsync(WaterMeasurement saved, Guid zoneId, CancellationToken cancellationToken) =>
+        saved.ZoneId == zoneId
+            ? new RecordedWaterMeasurement(await views.DetailAsync(saved, saved.Zone, cancellationToken), Replayed: true)
+            : AppError.Invalid(ClientOperationField);
 
     private Guid CallerId() => currentUser.AccountId ?? throw new InvalidOperationException("Water measurements need an authenticated caller.");
 }

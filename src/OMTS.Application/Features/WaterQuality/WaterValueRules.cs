@@ -2,7 +2,7 @@ namespace OMTS.Application.Features.WaterQuality;
 
 /// <summary>
 /// Field rules of WATER-01, WATER-02 and WATER-04 (BR-WATER-03): pH 0…14, salinity 0…50 ‰, temperature 0…45 °C,
-/// at most 2 decimals, no future time.
+/// at most 2 decimals, no future time, and no time before the history can list it (WATER-01 POST-1).
 /// </summary>
 public static class WaterValueRules
 {
@@ -26,7 +26,8 @@ public static class WaterValueRules
 
     public static bool IsValidTemperature(decimal value) => InRange(value, MaxTemperature);
 
-    public static bool IsValidMeasuredAt(DateTimeOffset measuredAt, DateTimeOffset now) => measuredAt <= now + FutureTolerance;
+    public static bool IsValidMeasuredAt(DateTimeOffset measuredAt, DateTimeOffset now) =>
+        measuredAt >= WaterPeriod.EarliestInstant && measuredAt <= now + FutureTolerance;
 
     /// <summary>Names the missing or invalid fields of a set of values: every value is required (WATER-01 step 8, WATER-02 step 4).</summary>
     public static List<string> InvalidFields(decimal? ph, decimal? salinity, decimal? temperature, DateTimeOffset? measuredAt, DateTimeOffset now)

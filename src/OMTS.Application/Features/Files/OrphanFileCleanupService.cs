@@ -35,7 +35,8 @@ public sealed class OrphanFileCleanupService(IFileStorage storage, IStoredFileRe
             return 0;
         }
 
-        // Read after the listing: a record saved in between points to a file younger than the grace period.
+        // Read after the listing: a record saved in between points to a file younger than the grace period. The exception,
+        // accepted: a meter photo has no expiry, so one older than that can be recorded in the moment the daily job runs.
         var referenced = await references.ReferencedKeysAsync(category, cancellationToken);
         if (!stored.Any(f => referenced.Contains(f.Key)))
         {

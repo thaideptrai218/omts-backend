@@ -44,6 +44,17 @@ public class WaterInputRulesTests
     }
 
     [Fact]
+    public void Measured_at_starts_on_the_first_business_day_the_history_can_list()
+    {
+        var firstInstant = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.FromHours(7));
+
+        Assert.True(WaterValueRules.IsValidMeasuredAt(firstInstant, Now));
+        Assert.True(WaterValueRules.IsValidMeasuredAt(firstInstant.ToUniversalTime(), Now));
+        Assert.False(WaterValueRules.IsValidMeasuredAt(firstInstant.AddTicks(-1), Now));
+        Assert.False(WaterValueRules.IsValidMeasuredAt(DateTimeOffset.MinValue, Now));
+    }
+
+    [Fact]
     public void Every_value_is_required_and_the_missing_or_invalid_ones_are_named()
     {
         Assert.Equal(["pH", "Salinity", "Temperature", "Measured at"], WaterValueRules.InvalidFields(null, null, null, null, Now));

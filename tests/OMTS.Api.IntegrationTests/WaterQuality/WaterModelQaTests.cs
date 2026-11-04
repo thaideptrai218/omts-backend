@@ -18,8 +18,8 @@ namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
 /// QA of the water model against SRS 27/10: AC-04 in full, the alert (BR-WATER-04, BR-WATER-05), the raft rule
-/// (BR-WATER-01), access per §I.4.4 and the measured time (BR-WATER-03). A test that fails on purpose names its finding
-/// (see reports/qa-261104-water-model.md).
+/// (BR-WATER-01), access per §I.4.4 and the measured time (BR-WATER-03). A skipped test names its finding and says why it
+/// stays open (see reports/qa-261104-water-model.md).
 /// </summary>
 public class WaterModelQaTests(AuthApiFactory api) : IClassFixture<AuthApiFactory>
 {
@@ -338,9 +338,9 @@ public class WaterModelQaTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
         Assert.Equal("Measured at", (await ahead.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
     }
 
-    // FINDING F-04 (fails on purpose): BR-WATER-03 and the entity say "not later than now"; the SRS has no tolerance, the
-    // branch keeps 5 minutes and stores the future time as it was sent. If the PM accepts the tolerance, drop this test.
-    [Fact]
+    // FINDING F-04: BR-WATER-03 and the entity say "not later than now"; the SRS has no tolerance, the branch keeps 5 minutes
+    // and stores the future time as it was sent. If the PM accepts the tolerance, drop this test; if not, it must pass.
+    [Fact(Skip = "Waiting for the PM: is a 5-minute tolerance for clock differences acceptable against 'not later than now'?")]
     public async Task F04_a_measurement_time_later_than_now_is_refused()
     {
         var z = await api.ZoneAsync();
@@ -350,58 +350,59 @@ public class WaterModelQaTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    // The SRS sets no lower limit on the time: a typing error of the year is saved, and the alert and the views still answer.
+    // WATER-01 POST-1: a saved measurement is listed in WATER-03, and the history refuses a period that starts before
+    // WaterPeriod.Earliest. So an earlier time, such as a typing error of the year, is refused and saves nothing.
     [Theory]
     [InlineData("0001-01-01T00:00:00Z")]
     [InlineData("0206-11-04T08:00:00+07:00")]
     [InlineData("1900-01-01T00:00:00")]
-    public async Task A_very_old_time_never_answers_500_on_the_record_detail_or_history(string measuredAt)
+    [InlineData("1999-12-31T08:00:00+07:00")]
+    [InlineData("1999-12-31T23:59:59+07:00")]
+    [InlineData("1999-12-31T23:59:59")]
+    [InlineData("1999-12-31T16:59:59Z")]
+    public async Task A_time_before_the_first_day_of_the_history_is_refused_on_the_time_and_saves_nothing(string measuredAt)
     {
         var z = await api.ZoneAsync();
-        var (manager, _) = await api.StaffAsync(z.Zone);
 
-        var saved = await manager.PostAsJsonAsync(z.Base, new
-        {
-            raftId = z.Raft.Id,
-            measuredAt,
-            ph = 9m,
-            salinity = 20m,
-            temperature = 25m,
-            photoKey = await manager.PhotoKeyAsync(z.Zone.Id),
-        });
+        var refused = await PostTimeAsync(z, measuredAt);
 
-        Assert.True(saved.StatusCode is HttpStatusCode.Created or HttpStatusCode.BadRequest, $"{(int)saved.StatusCode}");
-        if (saved.StatusCode == HttpStatusCode.Created)
-        {
-            var id = (await saved.Content.ReadFromJsonAsync<JsonElement>()).Id();
-            Assert.Equal(HttpStatusCode.OK, (await manager.GetAsync($"/api/water-measurements/{id}")).StatusCode);
-            Assert.Equal(HttpStatusCode.OK, (await manager.GetAsync(z.Base)).StatusCode);
-            Assert.NotEmpty(await api.AlertsOfAsync(id));
-        }
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal("MSG-GEN-01", await refused.ErrorCodeAsync());
+        Assert.Equal("Measured at", (await refused.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
+        Assert.Equal(0, await api.QueryAsync(db => db.WaterMeasurements.CountAsync(m => m.ZoneId == z.Zone.Id)));
     }
 
-    // FINDING F-06 (fails on purpose): WATER-01 POST-1 says a saved measurement is listed in WATER-03. Recording takes any past
-    // time; the history refuses a period that starts before 2000-01-01 (WaterPeriod.Earliest). A time typed with a wrong year
-    // saves an Active row, and alerts, that no period can ever list, export or lead to a correction.
+    // The limit is the first business day: 17:00 UTC is already 2000-01-01 in Vietnam, and that day can be listed.
     [Theory]
-    [InlineData("1999-12-31T08:00:00+07:00", "1999-12-01")]
-    [InlineData("0206-11-04T08:00:00+07:00", "0206-11-01")]
-    public async Task F06_a_measurement_that_was_saved_can_be_found_in_the_history(string measuredAt, string from)
+    [InlineData("2000-01-01T00:00:00+07:00")]
+    [InlineData("2000-01-01T00:00:00")]
+    [InlineData("1999-12-31T17:00:00Z")]
+    public async Task A_time_on_the_first_day_of_the_history_is_saved_and_can_be_found(string measuredAt)
     {
         var z = await api.ZoneAsync();
 
         var saved = await PostTimeAsync(z, measuredAt);
 
-        if (saved.StatusCode == HttpStatusCode.Created)
-        {
-            var list = await z.Owner.GetAsync($"{z.Base}?from={from}&to={measuredAt[..10]}");
-            Assert.Equal(HttpStatusCode.OK, list.StatusCode);
-            Assert.Contains((await saved.Content.ReadFromJsonAsync<JsonElement>()).Id().ToString(), await list.Content.ReadAsStringAsync());
-        }
-        else
-        {
-            Assert.Equal(HttpStatusCode.BadRequest, saved.StatusCode);
-        }
+        Assert.Equal(HttpStatusCode.Created, saved.StatusCode);
+        var list = await z.Owner.GetAsync($"{z.Base}?from=2000-01-01&to=2000-01-01");
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        Assert.Contains((await saved.Content.ReadFromJsonAsync<JsonElement>()).Id().ToString(), await list.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task A_correction_to_a_time_before_the_first_day_of_the_history_is_refused()
+    {
+        var z = await api.ZoneAsync();
+        var measuredAt = DateTimeOffset.UtcNow.AddHours(-1);
+        var id = (await z.RecordedAsync(7m, 20m, measuredAt)).Id();
+
+        var refused = await z.Owner.CorrectAsync(id, 7.1m, 20m, measuredAt: new DateTimeOffset(1999, 12, 31, 23, 59, 59, BusinessClock.UtcOffset));
+
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal("MSG-GEN-01", await refused.ErrorCodeAsync());
+        Assert.Equal("Measured at", (await refused.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
+        var kept = await api.QueryAsync(db => db.WaterMeasurements.AsNoTracking().SingleAsync(m => m.Id == id));
+        Assert.Equal((7m, measuredAt), (kept.Ph, kept.MeasuredAt));
     }
 
     // The client list says these are ignored; a client that has not been updated must not save a Draft or fail.

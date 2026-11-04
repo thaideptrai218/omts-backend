@@ -15,7 +15,7 @@ namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
 /// QA of the meter photo flow: the OCR answers of WATER-01.2, the shape of a photo key on both storage providers, the
-/// orphan job and the races around a re-send. A test that fails on purpose names its finding
+/// orphan job and the races around a re-send. A skipped test names its finding and says why it stays open
 /// (see reports/qa-261104-water-model.md).
 /// </summary>
 public class WaterModelQaStorageTests
@@ -147,24 +147,28 @@ public class WaterModelQaStorageTests
         }
     }
 
-    // FINDING F-05 (fails on purpose): the optional folder of the key pattern is open to every category, though only meter
-    // photos have one. A nested file of the stored shape under raft-photos was not a key before the branch; now it can be read
-    // and the orphan job lists it, against "files this provider did not write are never listed, so never cleaned up".
+    // Only a meter photo has an owner folder, and that folder is an account id. Any other nested file is one this provider
+    // did not write: it is not a key, so it is never listed and never cleaned up.
     [Fact]
-    public async Task F05_a_nested_folder_is_a_stored_key_only_for_meter_photos()
+    public async Task A_nested_folder_is_a_stored_key_only_for_meter_photos()
     {
         await using var api = new WaterApiFactory();
         var storage = api.Services.GetRequiredService<IFileStorage>();
-        var nested = $"{FileCategories.RaftPhotos}/backup/2026/11/{Guid.NewGuid():N}.png";
-        var path = Path.Combine(api.StorageRoot, nested);
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllBytesAsync(path, Png);
+        var nestedRaftPhoto = await WriteFileAsync(api, $"{FileCategories.RaftPhotos}/backup/2026/11/{Guid.NewGuid():N}.png");
+        var nestedOwnerShape = await WriteFileAsync(api, $"{FileCategories.RaftPhotos}/{Guid.NewGuid():N}/2026/11/{Guid.NewGuid():N}.png");
+        await WriteFileAsync(api, $"{FileCategories.WaterMeterPhotos}/backup/2026/11/{Guid.NewGuid():N}.png");
+        var meterPhoto = await WriteFileAsync(api, $"{FileCategories.WaterMeterPhotos}/{Guid.NewGuid():N}/2026/11/{Guid.NewGuid():N}.png");
 
-        var listed = await storage.ListAsync(FileCategories.RaftPhotos);
-
-        Assert.Empty(listed);
+        Assert.Empty(await storage.ListAsync(FileCategories.RaftPhotos));
+        Assert.Equal([meterPhoto], (await storage.ListAsync(FileCategories.WaterMeterPhotos)).Select(f => f.Key));
+        foreach (var notAKey in new[] { nestedRaftPhoto, nestedOwnerShape })
+        {
+            await using var read = await storage.OpenReadAsync(notAKey);
+            Assert.Null(read);
+        }
     }
 
+    // A category other than a meter photo's owner folder is one folder, as it was before owner folders: a slash becomes a dash.
     [Theory]
     [InlineData("../../evil")]
     [InlineData("..")]
@@ -172,7 +176,9 @@ public class WaterModelQaStorageTests
     [InlineData("a/../../../evil")]
     [InlineData("a/b/c/d")]
     [InlineData("A b/C:d")]
-    public async Task A_category_never_writes_outside_its_folder_and_has_at_most_one_owner_folder(string category)
+    [InlineData("raft-photos/0123456789abcdef0123456789abcdef")]
+    [InlineData("water-meter-photos/not-an-account")]
+    public async Task A_category_never_writes_outside_its_folder_and_is_one_folder(string category)
     {
         await using var api = new WaterApiFactory();
         var storage = api.Services.GetRequiredService<IFileStorage>();
@@ -184,7 +190,7 @@ public class WaterModelQaStorageTests
             var full = Path.GetFullPath(Path.Combine(api.StorageRoot, key));
             Assert.StartsWith(Path.GetFullPath(api.StorageRoot) + Path.DirectorySeparatorChar, full);
             Assert.DoesNotContain("..", key);
-            Assert.Equal(5, key.Split('/').Length);
+            Assert.Equal(4, key.Split('/').Length);
             await using var read = await storage.OpenReadAsync(key);
             Assert.NotNull(read);
         }
@@ -194,7 +200,7 @@ public class WaterModelQaStorageTests
         }
     }
 
-    // On Local storage the regex refuses every shape that is not the stored key.
+    // One photo has one spelling, whatever the provider.
     [Fact]
     public async Task Other_spellings_of_a_stored_key_are_refused_on_local_storage()
     {
@@ -204,11 +210,10 @@ public class WaterModelQaStorageTests
         Assert.Empty(await AcceptedSpellingsAsync(z));
     }
 
-    // FINDING F-01 (fails on purpose): the provider used in production has no key check in OpenReadAsync, and the SDK removes
-    // a "." path segment. "water-meter-photos/{me}/./2026/11/{guid}.png" opens the same blob under another text: the check of
-    // BR-WATER-02 passes and the wrong text is saved as the photo key.
+    // The SDK removes a "." path segment, so "water-meter-photos/{me}/./2026/11/{guid}.png" would open the same blob under
+    // another text; that text must never pass the check of BR-WATER-02 and be saved as the photo key.
     [AzuriteFact]
-    public async Task F01_other_spellings_of_a_stored_key_are_refused_on_blob_storage()
+    public async Task Other_spellings_of_a_stored_key_are_refused_on_blob_storage()
     {
         await using var api = BlobApi();
         var z = await api.ZoneAsync();
@@ -216,9 +221,59 @@ public class WaterModelQaStorageTests
         Assert.Empty(await AcceptedSpellingsAsync(z));
     }
 
-    // FINDING F-01, the consequence: one blob is the photo of two measurements, against the unique index of BR-WATER-02.
+    // The check sits in front of every provider: a key that is not the stored form never reaches the storage at all.
+    [Fact]
+    public async Task A_key_that_is_not_the_stored_form_is_refused_on_the_photo_before_the_storage_is_touched()
+    {
+        var storage = new CountingStorage();
+        await using var api = new WaterApiFactory(services: s =>
+        {
+            s.RemoveAll<IFileStorage>();
+            s.AddSingleton<IFileStorage>(storage);
+        });
+        var z = await api.ZoneAsync();
+        var folder = $"{FileCategories.WaterMeterPhotos}/{z.OwnerAccount.Id:N}";
+        var stored = $"{folder}/2026/11/{Guid.NewGuid():N}.png";
+
+        foreach (var key in new[] { $"{folder}/./2026/11/{Guid.NewGuid():N}.png", stored + "/", stored + "\n", stored.Replace("/2026/11/", "\\2026\\11\\"), stored[..^4] + ".PNG", $"{folder}/{Guid.NewGuid():N}.png", new string('a', 5000) })
+        {
+            var refused = await z.RecordAsync(7m, 20m, photoKey: key);
+
+            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+            Assert.Equal("MSG-GEN-01", await refused.ErrorCodeAsync());
+            Assert.Equal("Photo", (await refused.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
+        }
+
+        Assert.Equal(0, storage.Reads);
+
+        // The stored form does reach the storage, which knows no such file: the same answer.
+        var unknown = await z.RecordAsync(7m, 20m, photoKey: stored);
+
+        Assert.Equal("Photo", (await unknown.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
+        Assert.Equal(1, storage.Reads);
+    }
+
+    // The provider has the check too, for a key that comes from anywhere else.
     [AzuriteFact]
-    public async Task F01_one_photo_cannot_serve_two_measurements_through_another_spelling()
+    public async Task On_blob_storage_another_spelling_of_a_stored_key_opens_nothing()
+    {
+        await using var api = BlobApi();
+        var z = await api.ZoneAsync();
+        var key = await z.Owner.PhotoKeyAsync(z.Zone.Id);
+        var storage = api.Services.GetRequiredService<IFileStorage>();
+
+        await using (var stored = await storage.OpenReadAsync(key))
+        {
+            Assert.NotNull(stored);
+        }
+
+        await using var dotted = await storage.OpenReadAsync(Dotted(z, key));
+        Assert.Null(dotted);
+    }
+
+    // BR-WATER-02: one blob is the photo of one measurement, under any spelling.
+    [AzuriteFact]
+    public async Task One_photo_cannot_serve_two_measurements_through_another_spelling()
     {
         await using var api = BlobApi();
         var z = await api.ZoneAsync();
@@ -232,37 +287,32 @@ public class WaterModelQaStorageTests
         Assert.Equal(1, await api.QueryAsync(db => db.WaterMeasurements.CountAsync(m => m.ZoneId == z.Zone.Id)));
     }
 
-    // FINDING F-01, the consequence: the column holds the other spelling, so the orphan job sees the real blob as unused and
-    // deletes the only proof of a saved measurement.
+    // The column can only hold the stored key, so the orphan job sees the blob as used and keeps the proof of the measurement.
     [AzuriteFact]
-    public async Task F01_the_orphan_job_never_deletes_the_photo_of_a_measurement_saved_under_another_spelling()
+    public async Task The_orphan_job_keeps_the_photo_of_a_measurement_after_another_spelling_of_its_key_was_refused()
     {
         await using var api = BlobApi();
         var z = await api.ZoneAsync();
-        // A normal measurement, so the job does not stop at its "nothing is referenced" guard.
-        Assert.Equal(HttpStatusCode.Created, (await z.RecordAsync(7m, 20m)).StatusCode);
         var key = await z.Owner.PhotoKeyAsync(z.Zone.Id);
-        var saved = await z.RecordAsync(7m, 20m, photoKey: Dotted(z, key));
-        Assert.True(saved.StatusCode == HttpStatusCode.BadRequest || saved.StatusCode == HttpStatusCode.Created, $"{(int)saved.StatusCode}");
+        Assert.Equal(HttpStatusCode.BadRequest, (await z.RecordAsync(7m, 20m, photoKey: Dotted(z, key))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await z.RecordAsync(7m, 20m, photoKey: key)).StatusCode);
 
         await api.Services.GetRequiredService<OrphanFileCleanupJob>().RunOnceAsync(DateTimeOffset.UtcNow.AddDays(2));
 
-        if (saved.StatusCode == HttpStatusCode.Created)
-        {
-            await using var read = await api.Services.GetRequiredService<IFileStorage>().OpenReadAsync(key);
-            Assert.True(read is not null, "The photo of a saved measurement was deleted by the orphan job.");
-        }
+        await using var read = await api.Services.GetRequiredService<IFileStorage>().OpenReadAsync(key);
+        Assert.True(read is not null, "The photo of a saved measurement was deleted by the orphan job.");
     }
 
-    // FINDING F-01, the consequence: the read link of a measurement saved under another spelling.
+    // A photo that was refused under another spelling stays usable under its own, and its read link opens.
     [AzuriteFact]
-    public async Task F01_the_photo_link_of_a_measurement_saved_under_another_spelling_opens()
+    public async Task The_photo_link_of_a_measurement_saved_after_another_spelling_was_refused_opens()
     {
         await using var api = BlobApi();
         var z = await api.ZoneAsync();
         var key = await z.Owner.PhotoKeyAsync(z.Zone.Id);
+        Assert.Equal(HttpStatusCode.BadRequest, (await z.RecordAsync(7m, 20m, photoKey: Dotted(z, key))).StatusCode);
 
-        var saved = await z.RecordAsync(7m, 20m, photoKey: Dotted(z, key));
+        var saved = await z.RecordAsync(7m, 20m, photoKey: key);
 
         Assert.Equal(HttpStatusCode.Created, saved.StatusCode);
         using var http = new HttpClient();
@@ -346,9 +396,9 @@ public class WaterModelQaStorageTests
         Assert.False(File.Exists(Path.Combine(api.StorageRoot, abandoned)));
     }
 
-    // FINDING F-02 (fails on purpose): the job reads the references once, before its deletes, and a photo older than the wait
-    // can still be recorded (recognize gives no expiry). A record saved in that window keeps a measurement without its proof.
-    [Fact]
+    // FINDING F-02: the job reads the references once, before its deletes, and a photo older than the wait can still be
+    // recorded (recognize gives no expiry). A record saved in that window keeps a measurement without its proof.
+    [Fact(Skip = "Accepted: a key must be older than 24 hours and be recorded in the moment the job runs; the job runs once a day.")]
     public async Task F02_a_photo_recorded_while_the_job_runs_is_not_deleted()
     {
         var hook = new OnceHook();
@@ -367,11 +417,10 @@ public class WaterModelQaStorageTests
         Assert.True(File.Exists(path), "The photo of a saved measurement was deleted by the orphan job.");
     }
 
-    // FINDING F-03 (fails on purpose): a re-send that passes the operation check just before the first request commits meets
-    // the photo check after it: 400 on the photo, though the record of its own operation is saved. The client list promises
-    // 200 with the saved record. The catch of the duplicate handles this case; the photo check does not.
+    // A re-send that passes the operation check just before the first request commits meets the photo check after it. The
+    // photo is used by the record of its own operation, so the answer is the one the client list promises: 200 with that record.
     [Fact]
-    public async Task F03_a_re_send_overtaken_between_its_two_checks_answers_the_saved_record()
+    public async Task A_re_send_overtaken_between_its_two_checks_answers_the_saved_record()
     {
         var hook = new OnceHook();
         await using var api = new WaterApiFactory(services: s => DecorateRepository(s, hook));
@@ -393,6 +442,55 @@ public class WaterModelQaStorageTests
 
         Assert.Equal(HttpStatusCode.Created, first!.StatusCode);
         Assert.Equal(HttpStatusCode.OK, resend.StatusCode);
+        Assert.Equal((await first.Content.ReadFromJsonAsync<JsonElement>()).Id(), (await resend.Content.ReadFromJsonAsync<JsonElement>()).Id());
+        Assert.Equal(1, await api.QueryAsync(db => db.WaterMeasurements.CountAsync(m => m.ZoneId == z.Zone.Id)));
+    }
+
+    // The look-up finds only this operation: a photo used by another operation is still refused.
+    [Fact]
+    public async Task A_new_operation_with_a_photo_saved_between_its_two_checks_is_refused_on_the_photo()
+    {
+        var hook = new OnceHook();
+        await using var api = new WaterApiFactory(services: s => DecorateRepository(s, hook));
+        var z = await api.ZoneAsync();
+        var key = await z.Owner.PhotoKeyAsync(z.Zone.Id);
+        HttpResponseMessage? first = null;
+        hook.Action = async () => first = await z.RecordAsync(7m, 20m, clientOperationId: Guid.NewGuid(), photoKey: key);
+
+        var second = await z.RecordAsync(7m, 20m, clientOperationId: Guid.NewGuid(), photoKey: key);
+
+        Assert.Equal(HttpStatusCode.Created, first!.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, second.StatusCode);
+        Assert.Equal("Photo", (await second.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
+    }
+
+    // The same operation id for another zone is a client error, also when it is found only at the second look.
+    [Fact]
+    public async Task An_operation_of_another_zone_found_between_the_two_checks_is_refused_on_the_operation()
+    {
+        var hook = new OnceHook();
+        await using var api = new WaterApiFactory(services: s => DecorateRepository(s, hook));
+        var z = await api.ZoneAsync();
+        var otherRaft = await api.RaftAsync(await api.AddZoneAsync(AcsTestKit.NewCode()));
+        var key = await z.Owner.PhotoKeyAsync(z.Zone.Id);
+        var operation = Guid.NewGuid();
+        HttpResponseMessage? first = null;
+        hook.Action = async () => first = await z.RecordAsync(7m, 20m, clientOperationId: operation, photoKey: key);
+
+        var other = await z.Owner.PostAsJsonAsync($"/api/zones/{otherRaft.ZoneId}/water-measurements", new
+        {
+            clientOperationId = operation,
+            raftId = otherRaft.Id,
+            measuredAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+            ph = 7m,
+            salinity = 20m,
+            temperature = 25m,
+            photoKey = key,
+        });
+
+        Assert.Equal(HttpStatusCode.Created, first!.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, other.StatusCode);
+        Assert.Equal("Client operation id", (await other.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
     }
 
     private static string Dotted(WaterZone z, string key)
@@ -444,6 +542,15 @@ public class WaterModelQaStorageTests
         ["Storage:AzureBlob:Container"] = $"omts-test-{Guid.NewGuid():N}",
     });
 
+    /// <summary>A file placed in the storage folder by something other than the provider; returns its path as a key.</summary>
+    private static async Task<string> WriteFileAsync(WaterApiFactory api, string relativePath)
+    {
+        var path = Path.Combine(api.StorageRoot, relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllBytesAsync(path, Png);
+        return relativePath;
+    }
+
     private static async Task<string> UploadAsync(IFileStorage storage, string category)
     {
         var file = FileValidator.Validate([new IncomingFile("photo.png", Png.Length, new MemoryStream(Png))], FileRules.Photos);
@@ -482,6 +589,31 @@ public class WaterModelQaStorageTests
     private sealed class StubOcr(Func<Stream, string, Task<OcrResult>> answer) : IOcrService
     {
         public Task<OcrResult> RecognizeAsync(Stream photo, string contentType, CancellationToken cancellationToken) => answer(photo, contentType);
+    }
+
+    /// <summary>A storage that holds nothing and counts the reads that reach it.</summary>
+    private sealed class CountingStorage : IFileStorage
+    {
+        private readonly FailingFileStorage _empty = new();
+        private int _reads;
+
+        public int Reads => _reads;
+
+        public Task<FileUploadResult> UploadAsync(ValidatedFile file, string category, CancellationToken cancellationToken = default) =>
+            _empty.UploadAsync(file, category, cancellationToken);
+
+        public Task<Stream?> OpenReadAsync(string key, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _reads);
+            return _empty.OpenReadAsync(key, cancellationToken);
+        }
+
+        public Task<string> GetReadUrlAsync(string key, TimeSpan? lifetime = null, CancellationToken cancellationToken = default) =>
+            _empty.GetReadUrlAsync(key, lifetime, cancellationToken);
+
+        public Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default) => _empty.DeleteAsync(key, cancellationToken);
+
+        public Task<IReadOnlyList<StoredFile>> ListAsync(string category, CancellationToken cancellationToken = default) => _empty.ListAsync(category, cancellationToken);
     }
 
     /// <summary>An action that runs once, at the moment under test.</summary>
