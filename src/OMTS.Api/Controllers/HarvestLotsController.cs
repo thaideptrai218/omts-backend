@@ -13,7 +13,8 @@ namespace OMTS.Api.Controllers;
 /// </summary>
 [ApiController]
 [Authorize]
-public sealed class HarvestLotsController(HarvestLotReadService reads, HarvestLotRecordingService recording) : ControllerBase
+public sealed class HarvestLotsController(
+    HarvestLotReadService reads, HarvestLotRecordingService recording, HarvestLotCorrectionService corrections, HarvestLotRemovalService removals, HarvestLotForSaleService forSale) : ControllerBase
 {
     private const string PhotosField = "Photos";
 
@@ -51,6 +52,44 @@ public sealed class HarvestLotsController(HarvestLotReadService reads, HarvestLo
     [ProducesResponseType<HarvestLotView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Get(Guid lotId, CancellationToken cancellationToken) =>
         (await reads.GetAsync(lotId, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// Corrects a lot while its cycle is Open: the recording Zone Manager or the Cooperative Owner. Multipart: the fields of a record, one <c>keepPhotoKeys</c> field per photo to keep, one <c>photos</c>
+    /// part per new photo, <c>reason</c> and <c>rowVersion</c>. Left out, <c>estimatedKg</c> stays, or when the cages changed is worked out with the kg per cage of the lot. Does not tell the Owner again.
+    /// </summary>
+    [HttpPut("api/harvest-lots/{lotId:guid}")]
+    [RequestSizeLimit(MaxUploadBytes)]
+    [UploadField(PhotosField)]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType<HarvestLotSaved>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Correct(Guid lotId, [FromForm] HarvestLotForm form, CancellationToken cancellationToken)
+    {
+        InvariantFormValues.TryInt(form.CageCount, out var cageCount);
+        var estimatedIsRead = InvariantFormValues.TryDecimal(form.EstimatedKg, out var estimatedKg);
+        var request = new CorrectHarvestLotRequest(
+            Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, form.KeepPhotoKeys, form.Reason, form.RowVersion, !estimatedIsRead,
+            Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)));
+        return (await corrections.CorrectAsync(lotId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken)).ToActionResult(Ok);
+    }
+
+    /// <summary>Removes a lot and its photos while its cycle is Open and it is on no sales invoice; ask with MSG-GEN-04 first. 204; the audit log keeps it with the reason.</summary>
+    [HttpPost("api/harvest-lots/{lotId:guid}/remove")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Remove(Guid lotId, RemoveHarvestLotRequest request, CancellationToken cancellationToken) =>
+        (await removals.RemoveAsync(lotId, request, cancellationToken)).ToActionResult(_ => NoContent());
+
+    /// <summary>The lots for sale in the zones of the caller, the latest harvest first: what a sales invoice chooses from (SALE-05 step 1).</summary>
+    [HttpGet("api/harvest-lots/for-sale")]
+    [ProducesResponseType<HarvestLotsForSale>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ForSale([FromQuery] Guid? zoneId, CancellationToken cancellationToken) =>
+        (await forSale.ListAsync(zoneId, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>How many lots are for sale now, of one zone or of every zone: the open harvest lots of the operations dashboard, for the Owner alone (FARM-06, BR-FARM-10).</summary>
+    [HttpGet("api/harvest-lots/for-sale/count")]
+    [RequireCooperativeOwner]
+    [ProducesResponseType<HarvestLotForSaleCount>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ForSaleCount([FromQuery] Guid? zoneId, CancellationToken cancellationToken) =>
+        Ok(await forSale.CountAsync(zoneId, cancellationToken));
 
     /// <summary>The numbers sent; empty when none was; null when one cannot be read, so it is refused, not dropped.</summary>
     private static List<int>? Numbers(string?[]? values)

@@ -13,4 +13,7 @@ public interface IHarvestLotSalesQuery
 
     /// <summary>The lot is on a sales invoice, also a cancelled one, which keeps its lines (BR-HARVEST-05, PM default).</summary>
     Task<bool> IsOnAnyInvoiceAsync(Guid lotId, CancellationToken cancellationToken);
+
+    /// <summary>Those of the lots that are on a sales invoice, by the same rule: what the commands of a list of lots are worked out from.</summary>
+    Task<IReadOnlySet<Guid>> LotsOnAnyInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);
 }

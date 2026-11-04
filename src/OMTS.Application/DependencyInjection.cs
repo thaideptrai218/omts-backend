@@ -121,7 +121,11 @@ public static class DependencyInjection
         services.AddScoped<HarvestLotViews>();
         services.AddScoped<HarvestLotNotifier>();
         services.AddScoped<HarvestLotRecordingService>();
+        services.AddScoped<HarvestLotEditReader>();
+        services.AddScoped<HarvestLotCorrectionService>();
+        services.AddScoped<HarvestLotRemovalService>();
         services.AddScoped<HarvestLotReadService>();
+        services.AddScoped<HarvestLotForSaleService>();
         services.AddScoped<HarvestLotStatusService>();
         services.AddScoped<HarvestSettingsService>();
 
