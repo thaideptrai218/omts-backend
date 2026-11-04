@@ -37,7 +37,7 @@ public class MaterialUsagesMigrationTests
         var oldSchema = await SchemaAsync(db);
         Assert.DoesNotContain("table MaterialUsages", oldSchema);
 
-        var raft = new Raft { Zone = new FarmingZone { Cooperative = new Cooperative { FullName = "HTX" }, Code = "KV01", Name = "A" }, Code = "B01", Size = "1" };
+        var raft = new Raft { Zone = new FarmingZone { CooperativeId = await OldSchemaRows.CooperativeAsync(db), Code = "KV01", Name = "A" }, Code = "B01", Size = "1" };
         var item = new FarmingInputItem { Code = "MAT", Name = "Buoy", Group = MaterialUsage.ItemGroup, Unit = "piece" };
         var account = new Account { Username = "owner", DisplayName = "Owner", SubjectType = SubjectType.CooperativeOwner, StatusId = StatusIds.Account.Active };
         db.AddRange(raft, item, account);

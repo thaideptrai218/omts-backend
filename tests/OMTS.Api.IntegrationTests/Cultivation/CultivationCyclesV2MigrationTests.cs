@@ -27,7 +27,7 @@ public class CultivationCyclesV2MigrationTests
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync(MigrationBefore);
 
-        var zone = new FarmingZone { Cooperative = new Cooperative { FullName = "HTX" }, Code = "KV01", Name = "A" };
+        var zone = new FarmingZone { CooperativeId = await OldSchemaRows.CooperativeAsync(db), Code = "KV01", Name = "A" };
         var (raft, raftTwo) = (new Raft { Zone = zone, Code = "B01", Size = "1" }, new Raft { Zone = zone, Code = "B02", Size = "1" });
         db.Rafts.AddRange(raft, raftTwo);
         await db.SaveChangesAsync();

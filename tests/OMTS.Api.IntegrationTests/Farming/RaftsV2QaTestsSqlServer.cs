@@ -264,7 +264,7 @@ public class RaftsV2QaTestsSqlServer
         await using var db = database.CreateContext();
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync(MigrationBefore);
-        var zone = new FarmingZone { Cooperative = new Cooperative { FullName = "HTX" }, Code = "KV01", Name = "A" };
+        var zone = new FarmingZone { CooperativeId = await OldSchemaRows.CooperativeAsync(db), Code = "KV01", Name = "A" };
         db.FarmingZones.Add(zone);
         await db.SaveChangesAsync();
         var (spaces, secondOnly) = (Guid.NewGuid(), Guid.NewGuid());

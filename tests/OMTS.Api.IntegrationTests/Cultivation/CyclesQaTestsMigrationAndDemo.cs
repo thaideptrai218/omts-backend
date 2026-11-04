@@ -40,7 +40,7 @@ public class CyclesQaTestsMigrationAndDemo
         await migrator.MigrateAsync(MigrationBefore);
         var oldSchema = await SchemaAsync(db);
 
-        var zone = new FarmingZone { Cooperative = new Cooperative { FullName = "HTX" }, Code = "KV01", Name = "A" };
+        var zone = new FarmingZone { CooperativeId = await OldSchemaRows.CooperativeAsync(db), Code = "KV01", Name = "A" };
         var (raft, raftTwo) = (new Raft { Zone = zone, Code = "B01", Size = "1" }, new Raft { Zone = zone, Code = "B02", Size = "1" });
         var seed = new FarmingInputItem { Code = "VT001", Name = "Seed", Group = InputItemGroup.Seed, Unit = "con" };
         db.AddRange(raft, raftTwo, seed);
@@ -114,6 +114,9 @@ public class CyclesQaTestsMigrationAndDemo
         {
             await db.CultivationLogPhotos.ExecuteDeleteAsync();
             await db.CultivationLogs.ExecuteDeleteAsync();
+            await db.HarvestLotPhotos.ExecuteDeleteAsync();
+            await db.HarvestLotLanes.ExecuteDeleteAsync();
+            await db.HarvestLots.ExecuteDeleteAsync();
             await db.SeedingRecordLanes.ExecuteDeleteAsync();
             await db.SeedingRecords.ExecuteDeleteAsync();
             await db.CultivationCycles.ExecuteDeleteAsync();

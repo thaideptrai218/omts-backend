@@ -27,7 +27,7 @@ public class StackMergeQaTestsMigrations
     [
         "20261104071927_FixedRoles", "20261104072127_NotificationsV2", "20261104072225_PurchaseCatalogueV2", "20261104072358_CooperativeProfileV2", "20261104072437_ZonesLicensesV2",
         "20261104072522_PurchaseReceiptsV2", "20261104084901_SupplierPaymentsV2", "20261104100119_PurchaseReturnsV2", "20261104103030_RaftsV2", "20261104113119_CultivationCyclesV2",
-        "20261104124405_CultivationLogs", "20261104164709_MaterialUsages", "20261104182051_SeedingRecords",
+        "20261104124405_CultivationLogs", "20261104164709_MaterialUsages", "20261104182051_SeedingRecords", "20261104200540_HarvestLots",
     ];
 
     private const string BeforeTheStack = "20261028151320_RemoveLegacyScaffolding";
@@ -258,7 +258,7 @@ public class StackMergeQaTestsMigrations
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync("20261104164709_MaterialUsages");
         var oldSchema = await ReadAsync(db, SchemaQuery);
-        var cycle = new CultivationCycle { Raft = new Raft { Zone = new FarmingZone { Cooperative = new Cooperative { FullName = "HTX" }, Code = "KV01", Name = "A" }, Code = "B01", Size = "1" }, StartDate = new DateOnly(2026, 1, 1) };
+        var cycle = new CultivationCycle { Raft = new Raft { Zone = new FarmingZone { CooperativeId = await OldSchemaRows.CooperativeAsync(db), Code = "KV01", Name = "A" }, Code = "B01", Size = "1" }, StartDate = new DateOnly(2026, 1, 1) };
         var account = new Account { Username = "owner", DisplayName = "Owner", SubjectType = SubjectType.CooperativeOwner, StatusId = StatusIds.Account.Active };
         var item = new FarmingInputItem { Code = "VT001", Name = "Seed", Group = InputItemGroup.Seed, Unit = "con" };
         var receipt = new PurchaseReceipt { Code = "PN000001", Supplier = new Supplier { Name = "S", PhoneNumber = "0900000002" }, ReceiptDate = new DateOnly(2026, 1, 1), RecordedByAccountId = Guid.Empty, StatusId = StatusIds.PurchaseReceipt.Completed };

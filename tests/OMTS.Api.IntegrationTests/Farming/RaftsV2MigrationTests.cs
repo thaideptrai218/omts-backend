@@ -32,9 +32,9 @@ public class RaftsV2MigrationTests
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync(MigrationBefore);
 
-        // Cooperatives, zones and accounts are unchanged by the migration, so the current model writes them.
+        // Zones and accounts are unchanged by the migration, so the current model writes them.
         var account = new Account { Username = NewCode(), DisplayName = "Owner", PasswordHash = NewPassword(), SubjectType = SubjectType.CooperativeOwner, StatusId = StatusIds.Account.Active };
-        var zone = new FarmingZone { Cooperative = new Cooperative { FullName = "HTX" }, Code = "KV01", Name = "A" };
+        var zone = new FarmingZone { CooperativeId = await OldSchemaRows.CooperativeAsync(db), Code = "KV01", Name = "A" };
         db.Accounts.Add(account);
         db.FarmingZones.Add(zone);
         await db.SaveChangesAsync();
