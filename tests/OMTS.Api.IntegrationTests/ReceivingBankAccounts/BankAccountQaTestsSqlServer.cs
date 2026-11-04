@@ -157,11 +157,13 @@ public sealed class BankAccountQaTestsSqlServer : IDisposable
         var pending = slowOwner.PutAsJsonAsync(Route, Body(await ReceivingBankAccountTestKit.RowVersionAsync(owner), Bidv, SecondNumber));
         await asked.Task.WaitAsync(TimeSpan.FromSeconds(30));
 
-        // No session of this database holds a transaction or a lock on a row while the service is asked.
-        Assert.Equal(0, await QueryAsync(api, db => db.Database.SqlQueryRaw<int>(
-            "SELECT COUNT(*) AS [Value] FROM sys.dm_exec_sessions WHERE database_id = DB_ID() AND open_transaction_count > 0 AND session_id <> @@SPID").SingleAsync()));
-        Assert.Equal(0, await QueryAsync(api, db => db.Database.SqlQueryRaw<int>(
-            "SELECT COUNT(*) AS [Value] FROM sys.dm_tran_locks WHERE resource_database_id = DB_ID() AND resource_type <> 'DATABASE' AND request_session_id <> @@SPID").SingleAsync()));
+        // No session of this database holds a transaction or a lock on a row while the service is asked. The background jobs of
+        // the test hosts read this database too, so one sight of a lock proves nothing: the request holds its own until the
+        // release below, so it could never reach zero here.
+        await AssertNoneHeldDuringTheWaitAsync(api, "open transactions",
+            "SELECT COUNT(*) AS [Value] FROM sys.dm_exec_sessions WHERE database_id = DB_ID() AND open_transaction_count > 0 AND session_id <> @@SPID");
+        await AssertNoneHeldDuringTheWaitAsync(api, "locks",
+            "SELECT COUNT(*) AS [Value] FROM sys.dm_tran_locks WHERE resource_database_id = DB_ID() AND resource_type <> 'DATABASE' AND request_session_id <> @@SPID");
 
         // Reads, a profile save and a logo all go through at once.
         Assert.Equal(old, (await AccountAsync(owner)).GetRawText());
@@ -179,6 +181,25 @@ public sealed class BankAccountQaTestsSqlServer : IDisposable
         Assert.Equal(("HTX trong lúc chờ", stored.LogoUrl, stored.TaxCode), (after.FullName, after.LogoUrl, after.TaxCode));
         Assert.Equal(1, await QueryAsync(api, db => db.AuditEvents.CountAsync(e => e.Action == AuditAction)));
         Assert.DoesNotContain(SecondNumber, string.Join('\n', api.Logs.Lines));
+    }
+
+    private static async Task AssertNoneHeldDuringTheWaitAsync(SqlServerApiFactory api, string what, string countSql)
+    {
+        var count = -1;
+        for (var attempt = 0; attempt < 75 && count != 0; attempt++)
+        {
+            if (attempt > 0)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(200));
+            }
+
+            count = await QueryAsync(api, db => db.Database.SqlQueryRaw<int>(countSql).SingleAsync());
+        }
+
+        var holders = count == 0 ? string.Empty : string.Join("; ", await QueryAsync(api, db => db.Database.SqlQueryRaw<string>(
+            "SELECT CONCAT(l.request_session_id, ' ', l.resource_type, ' ', l.request_mode, ' ', s.program_name) AS [Value] FROM sys.dm_tran_locks l " +
+            "JOIN sys.dm_exec_sessions s ON s.session_id = l.request_session_id WHERE l.resource_database_id = DB_ID() AND l.resource_type <> 'DATABASE' AND l.request_session_id <> @@SPID").ToListAsync()));
+        Assert.True(count == 0, $"{count} {what} held for the whole wait. {holders}");
     }
 
     // The client list, row "The record changed since it was read": "409 MSG06, with currentRowVersion. Also when another save
