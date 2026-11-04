@@ -7,7 +7,6 @@ using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Notifications;
-using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Identity;
@@ -64,9 +63,10 @@ public class WaterOverdueSqlServerTests
         await using (var db = database.CreateContext())
         {
             db.Rafts.AddRange(closedRaft, secondRaft);
+            await db.SaveChangesAsync();
             db.CultivationCycles.Add(new CultivationCycle { RaftId = seeded.Raft.Id, OpenedAt = new DateTimeOffset(2026, 5, 15, 17, 30, 0, TimeSpan.Zero) });
-            db.CultivationCycles.Add(new CultivationCycle { Raft = secondRaft, OpenedAt = new DateTimeOffset(2026, 7, 1, 8, 0, 0, BusinessClock.UtcOffset) });
-            db.CultivationCycles.Add(new CultivationCycle { Raft = closedRaft, OpenedAt = DateTimeOffset.UtcNow.AddMonths(-3), StatusId = StatusIds.CultivationCycle.Closed });
+            db.CultivationCycles.Add(WaterOverdueTestKit.OpenCycle(secondRaft.Id, new DateOnly(2026, 7, 1)));
+            db.CultivationCycles.Add(WaterOverdueTestKit.ClosedCycle(closedRaft.Id, new DateOnly(2026, 1, 1)));
             await db.SaveChangesAsync();
         }
 

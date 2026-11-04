@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Features.Authorization;
 using OMTS.Domain.Constants;
-using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
@@ -104,13 +103,7 @@ public class WaterOverdueReminderTests
         await measuredLongAgo.AddMeasurementAsync(Today.AddMonths(-6));
         var closedCycle = await api.ZoneAsync();
         await closedCycle.AddMeasurementAsync(Today.AddMonths(-6));
-        await api.UseDbAsync(db => db.CultivationCycles.Add(new CultivationCycle
-        {
-            RaftId = closedCycle.Raft.Id,
-            OpenedAt = LocalMorning(Today.AddMonths(-8)),
-            ClosedAt = LocalMorning(Today.AddMonths(-7)),
-            StatusId = StatusIds.CultivationCycle.Closed,
-        }));
+        await api.UseDbAsync(db => db.CultivationCycles.Add(ClosedCycle(closedCycle.Raft.Id, Today.AddMonths(-8))));
 
         Assert.Equal(0, await api.RemindOnAsync(Today));
 
