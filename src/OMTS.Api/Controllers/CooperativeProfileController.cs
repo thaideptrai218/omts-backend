@@ -100,11 +100,11 @@ public sealed class CooperativeProfileController(CooperativeProfileService profi
 
     /// <summary>
     /// The current cover photo (anonymous), at the URL the profile returns; a new cover photo gets a new URL, and a
-    /// replaced or removed one is 404.
+    /// replaced or removed one is 404. Never cached, so a removal takes effect at once.
     /// </summary>
     [HttpGet(CooperativePublicFiles.CoverPhotoFilesPath + "/{year}/{month}/{file}")]
     [AllowAnonymous]
-    [ResponseCache(Duration = 300)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> PublicCoverPhotoFile(string year, string month, string file, CancellationToken cancellationToken) =>
         FileOrNotFound(await coverPhotos.OpenFileAsync($"{year}/{month}/{file}", cancellationToken));
 

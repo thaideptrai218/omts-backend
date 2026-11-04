@@ -206,6 +206,55 @@ public class CooperativeCoverPhotoTests
         Assert.Equal(await CoverKeyAsync(api), Assert.Single(aged, k => k.StartsWith("cooperative-covers/") && k != orphanCover));
     }
 
+    // A database whose cover or certificate file is not in this storage belongs to another environment, even though it
+    // holds a cooperative: the files of this storage are kept.
+    [Fact]
+    public async Task Orphan_clean_up_deletes_nothing_when_the_files_the_database_points_to_are_not_stored()
+    {
+        using var api = new AuthApiFactory();
+        var owner = await api.NewOwnerAsync();
+        await (await owner.UploadCoverPhotoAsync(Png)).ReadAsync(HttpStatusCode.OK);
+        await owner.CreateCertificationAsync();
+        foreach (var key in AllKeys(api))
+        {
+            File.Delete(Path.Combine(api.StorageRoot, key));
+        }
+
+        var storage = api.Services.GetRequiredService<IFileStorage>();
+        var others = new[]
+        {
+            (await storage.UploadAsync(Validated(Png), FileCategories.CooperativeCoverPhotos)).Key!,
+            (await storage.UploadAsync(Validated(Pdf), FileCategories.CooperativeCertifications)).Key!,
+        };
+
+        Assert.Equal(0, await api.Services.GetRequiredService<OrphanFileCleanupJob>().RunOnceAsync(DateTimeOffset.UtcNow.AddDays(2)));
+
+        Assert.Equal(others.Order(), AllKeys(api).Order());
+        Assert.Equal(2, api.Logs.Lines.Count(l => l.StartsWith("Warning:") && l.Contains("skipped: none of its 1 stored files is referenced")));
+    }
+
+    // Removed means 404 at once: neither the file nor its 404 may be kept by a browser or a proxy.
+    [Fact]
+    public async Task Cover_route_answers_are_never_cached()
+    {
+        using var api = new AuthApiFactory();
+        var owner = await api.NewOwnerAsync();
+        var url = (await (await owner.UploadCoverPhotoAsync(Png)).ReadAsync(HttpStatusCode.OK)).GetProperty("profile").Text("coverPhotoUrl");
+        var anonymous = api.CreateClient();
+
+        var served = await anonymous.GetAsync(url);
+        await (await owner.DeleteAsync(CoverPhoto)).ReadAsync(HttpStatusCode.OK);
+        var removed = await anonymous.GetAsync(url);
+
+        Assert.Equal(HttpStatusCode.OK, served.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, removed.StatusCode);
+        foreach (var response in new[] { served, removed })
+        {
+            Assert.True(response.Headers.CacheControl?.NoStore, response.Headers.CacheControl?.ToString());
+            Assert.Null(response.Headers.CacheControl?.MaxAge);
+        }
+    }
+
     private static Task<string?> CoverKeyAsync(AuthApiFactory api) => api.QueryAsync(db => db.Cooperatives.Select(c => c.CoverPhotoUrl).SingleAsync());
 
     private static string? Key(string? json) =>

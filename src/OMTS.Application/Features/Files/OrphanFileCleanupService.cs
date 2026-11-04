@@ -27,7 +27,8 @@ public sealed class OrphanFileCleanupService(
 
     /// <summary>
     /// Categories of the cooperative whose files may all be unreferenced in a real database: the cover photo was removed,
-    /// or the last certification. For them the database is known to be this environment's when it holds the cooperative.
+    /// or the last certification. While the database points to no file of the category, it counts as this environment's
+    /// when it holds the cooperative.
     /// </summary>
     private static readonly IReadOnlySet<string> CooperativeCategories =
         new HashSet<string>(StringComparer.Ordinal) { FileCategories.CooperativeCoverPhotos, FileCategories.CooperativeCertifications };
@@ -35,9 +36,9 @@ public sealed class OrphanFileCleanupService(
     /// <summary>
     /// Deletes the category's files written before <paramref name="writtenBefore"/> that no record points to, and
     /// returns how many were deleted. Younger files are kept: their upload may still wait for the save pointing to it.
-    /// Nothing is deleted (a warning is logged) when the database does not look like this storage's own: for raft photos
-    /// and license files when no stored file of the category at all is referenced, for the cooperative's cover photos
-    /// and certificate files when the database holds no cooperative.
+    /// Nothing is deleted (a warning is logged) when the database does not look like this storage's own: when it points
+    /// to files of the category but none of them is stored, for raft photos and license files also when it points to none
+    /// at all, and for the cooperative's cover photos and certificate files when it holds no cooperative.
     /// </summary>
     public async Task<int> CleanAsync(string category, DateTimeOffset writtenBefore, CancellationToken cancellationToken)
     {
@@ -55,7 +56,7 @@ public sealed class OrphanFileCleanupService(
 
         // Read after the listing: a record saved in between points to a file younger than the grace period.
         var referenced = await references.ReferencedKeysAsync(category, cancellationToken);
-        if (CooperativeCategories.Contains(category))
+        if (CooperativeCategories.Contains(category) && referenced.Count == 0)
         {
             if (!await cooperatives.ExistsAsync(cancellationToken))
             {
