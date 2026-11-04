@@ -18,4 +18,20 @@ internal static class FormFileExtensions
 
         return new IncomingFile(file.FileName, file.Length, stream);
     }
+
+    /// <summary>The uploads of a form field; none when the field was left out.</summary>
+    public static async Task<IReadOnlyList<IncomingFile>> ToIncomingFilesAsync(this IEnumerable<IFormFile>? files, CancellationToken cancellationToken)
+    {
+        var incoming = new List<IncomingFile>();
+        foreach (var file in files ?? [])
+        {
+            incoming.Add(await file.ToIncomingFileAsync(cancellationToken));
+        }
+
+        return incoming;
+    }
+
+    /// <summary>A file came under another part name: model binding would drop it without a word, so the service refuses it after its access check (GFR-02).</summary>
+    public static bool HasPartOtherThan(this IFormFileCollection files, string partName) =>
+        files.Any(f => !f.Name.Equals(partName, StringComparison.OrdinalIgnoreCase));
 }

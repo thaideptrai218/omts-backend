@@ -26,4 +26,7 @@ public static class FileCategories
 
     /// <summary>CYCLE-04 photos of a cultivation log, <c>CultivationLogPhoto.FileKey</c>. Staff only, never public (BR-FARM-09).</summary>
     public const string CultivationLogPhotos = "cultivation-log-photos";
+
+    /// <summary>HARVEST-01 photos of a harvest lot, <c>HarvestLotPhoto.FileKey</c>.</summary>
+    public const string HarvestLotPhotos = "harvest-lot-photos";
 }

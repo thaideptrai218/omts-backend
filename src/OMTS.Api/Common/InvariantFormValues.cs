@@ -39,6 +39,23 @@ internal static class InvariantFormValues
         return true;
     }
 
+    public static bool TryInt(string? value, out int? result)
+    {
+        result = null;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        if (!int.TryParse(value.Trim(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return false;
+        }
+
+        result = parsed;
+        return true;
+    }
+
     public static bool TryGuid(string? value, out Guid? result)
     {
         result = null;

@@ -73,6 +73,14 @@ public static class StatusIds
         public const int Cancelled = 1902;
     }
 
+    /// <summary>HARVEST_LOT (BR-HARVEST-04): Open and Reopened lots are for sale; a Closed lot can be reopened by the system.</summary>
+    public static class HarvestLot
+    {
+        public const int Open = 2901;
+        public const int Reopened = 2902;
+        public const int Closed = 2903;
+    }
+
     public static class MessageDelivery
     {
         public const int Sending = 1601;

@@ -17,4 +17,5 @@ public static class StatusGroups
     public const string SupplierPayment = "SUPPLIER_PAYMENT";
     public const string Lane = "LANE";
     public const string PurchaseReturn = "PURCHASE_RETURN";
+    public const string HarvestLot = "HARVEST_LOT";
 }

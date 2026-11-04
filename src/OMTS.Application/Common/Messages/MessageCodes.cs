@@ -23,6 +23,10 @@ public static class MessageCodes
     public const string Cycle02 = "MSG-CYCLE-02";
     public const string Cycle03 = "MSG-CYCLE-03";
     public const string Cycle04 = "MSG-CYCLE-04";
+    public const string Cycle08 = "MSG-CYCLE-08";
+
+    public const string Harvest01 = "MSG-HARVEST-01";
+    public const string Harvest03 = "MSG-HARVEST-03";
 
     public const string Water01 = "MSG-WATER-01";
     public const string Water03 = "MSG-WATER-03";
@@ -66,14 +70,14 @@ public static class MessageCodes
     /// <summary>
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-22, the
     /// related record of a notification no longer exists (ACCOUNT-08 is new in PR 0.5); MSG-CYCLE-01/02/03, the seeding questions
-    /// and the notice (CYCLE-02 is new in PR C2); MSG-CYCLE-04, a new cultivation log to review (CYCLE-04 is new in PR C4); MSG-PURCHASE-01/07/08, the purchase receipt notifications and the advance
+    /// and the notice (CYCLE-02 is new in PR C2); MSG-CYCLE-04, a new cultivation log to review (CYCLE-04 is new in PR C4); MSG-CYCLE-08, MSG-HARVEST-01/03, the reminder to close a cycle, the harvest notice and the lowered days (HARVEST-01 and HARVEST-03 are new in PR H1a); MSG-PURCHASE-01/07/08, the purchase receipt notifications and the advance
     /// warning, and MSG-PURCHASE-10, the Owner's correction (OMTS-218 P2); MSG-PURCHASE-04/05/06, the transaction
     /// notification and the two payment confirmations (OMTS-218 P3); MSG-PURCHASE-02, the confirmation of the Owner's
     /// approval of a return (OMTS-218 P4).
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
-        Account22, Cycle01, Cycle02, Cycle03, Cycle04, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10,
+        Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle08, Harvest01, Harvest03, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10,
     };
 
     /// <summary>

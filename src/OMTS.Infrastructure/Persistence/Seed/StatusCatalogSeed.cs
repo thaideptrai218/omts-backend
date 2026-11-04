@@ -15,6 +15,7 @@ internal static class StatusCatalogSeed
     private const string OwnerForStaffAdminForTraders =
         "Cooperative Owner (staff accounts); System Administrator (trader accounts, platform administration outside the cooperative app)";
     private const string SystemActor = "System";
+    private const string LotCloser = "Cooperative Owner; Zone Manager; System";
     private const string Action = "Action";
 
     public static readonly Status[] Statuses =
@@ -56,6 +57,10 @@ internal static class StatusCatalogSeed
 
         NewStatus(S.Lane.InUse, G.Lane, "IN_USE", "In Use", "Seeded and harvested.", initial: true),
         NewStatus(S.Lane.Removed, G.Lane, "REMOVED", "Removed", "Removed at the end of the raft; keeps its number and records."),
+
+        NewStatus(S.HarvestLot.Open, G.HarvestLot, "OPEN", "Open", "For sale: it can be chosen on a sales invoice.", initial: true),
+        NewStatus(S.HarvestLot.Reopened, G.HarvestLot, "REOPENED", "Reopened", "Closed earlier and for sale again; the days before automatic close count from the day it was reopened."),
+        NewStatus(S.HarvestLot.Closed, G.HarvestLot, "CLOSED", "Closed", "No longer for sale; its close reason is kept. The system can reopen it."),
     ];
 
     public static readonly StatusTransition[] Transitions =
@@ -93,6 +98,11 @@ internal static class StatusCatalogSeed
 
         NewTransition(76, S.Lane.InUse, S.Lane.Removed, "FARM-04", Owner, Action, "The raft has no open cycle; the last lanes are removed first (BR-FARM-04).", false),
         NewTransition(77, S.Lane.Removed, S.Lane.InUse, "FARM-04", Owner, Action, "The raft has no open cycle; Removed lanes return in number order before new numbers (BR-FARM-04).", false),
+
+        // BR-HARVEST-04: closed in one of four ways; only the system reopens a lot. 80–140 are taken or reserved on other branches.
+        NewTransition(150, S.HarvestLot.Open, S.HarvestLot.Closed, "HARVEST-02, GFR-05, SALE-05, SALE-07, CLAIM-03", LotCloser, Action, "Sold whole lot, closed with the leftover kg, or the time limit reached.", false),
+        NewTransition(151, S.HarvestLot.Reopened, S.HarvestLot.Closed, "HARVEST-02, GFR-05, SALE-05, SALE-07, CLAIM-03", LotCloser, Action, "Closed again in the same four ways.", false),
+        NewTransition(152, S.HarvestLot.Closed, S.HarvestLot.Reopened, "CLAIM-03, SALE-07, SALE-08", SystemActor, SystemActor, "A sales return puts oysters back, or the invoice that closed the lot is cancelled or loses its tick.", false),
     ];
 
     private static Status NewStatus(int id, string group, string code, string displayName, string meaning, bool initial = false, bool final = false) =>

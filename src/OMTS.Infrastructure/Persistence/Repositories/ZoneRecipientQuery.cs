@@ -37,6 +37,16 @@ internal sealed class ZoneRecipientQuery(OmtsDbContext db) : IZoneRecipientQuery
             .Select(a => a.Id)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Guid>> GetZoneManagersOrOwnersAsync(Guid zoneId, CancellationToken cancellationToken)
+    {
+        var managers = await ActiveStaffPairs([FixedRoles.ZoneManagerCode])
+            .Where(g => g.ZoneId == null || g.ZoneId == zoneId)
+            .Select(g => g.AccountId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        return managers.Count > 0 ? managers : await GetCooperativeOwnersAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Guid>> GetOwnersAndRolesAsync(IReadOnlyCollection<StaffRole> staffRoles, CancellationToken cancellationToken)
     {
         var roleCodes = staffRoles.Select(r => FixedRoles.Of(r).Code).ToList();

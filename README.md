@@ -86,6 +86,7 @@ receipts), one amount of money paid back and one payment cancelled feed the supp
 list holds a MSG-PURCHASE-01 notification for each completed receipt and a MSG-PURCHASE-04 for each transaction.
 Rafts `B1-01`, `B1-02`, `B2-01`, `B2-02` have material usage inside their Open cycles, and `B1-06`, `B2-06` a repair with no cycle, recorded by the zone's manager.
 The first three rafts of each In Use zone have seeding sessions by the zone's manager: the first with a re-hung lane and its seeding marked complete (the Owner has a MSG-CYCLE-02), the second with a lane left Not seeded, the third with every lane seeded. The rafts `B1-04`, `B1-05`, `B2-04`, `B2-05` keep a cycle with no record, which can still be cancelled. Receipts with seeded lots can no longer be cancelled.
+Rafts `B1-01` and `B2-01` have two harvest lots of the seed day (the second with `-2`), one lane Being harvested and one Harvested; `B1-02` has every seeded lane finished, so `quanlyvung1` has the reminder to close its cycle (MSG-CYCLE-08), and the Owner has a MSG-HARVEST-01 for each lot. Harvest settings are at their first-setup values, 50 kg per cage and 3 days.
 `DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰) and one water measurement a day for the
 30 days before the seed day: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
 26.0 ‰) and one voided reading. The mistyped 2.6 ‰ alerted before its correction, so the inboxes hold four sets of water
@@ -211,6 +212,8 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (not sent yet: LABOR PR) | never: list only | Owner |
 | `CULTIVATION_LOG_RECORDED` | MSG-CYCLE-04, when a cultivation log is saved, not on a correction, not to the Owner who recorded it | unless turned off | Owner |
 | `CYCLE_SEEDING_COMPLETED` | MSG-CYCLE-02, when the seeding of a raft is marked complete (once per cycle), not to the Owner who marked it | unless turned off | Owner |
+| `HARVEST_LOT_RECORDED` | MSG-HARVEST-01, when a harvest lot is recorded, not on a correction, not to the Owner who recorded it | unless turned off | Owner |
+| `CYCLE_CLOSE_REMINDER` | MSG-CYCLE-08, once per cycle, when a harvest makes every seeded lane Harvested: to the Zone Managers of the zone (All zones too), or to the Owners when it has none, not to the Owner who recorded it | always (mandatory) | Owner, Zone Manager |
 | `PURCHASE_RECEIPT_COMPLETED` | MSG-PURCHASE-01, when a receipt is completed (never for a draft), also when the Owner completed it | unless turned off | Owner |
 | `PURCHASE_RECEIPT_CANCELLED_ADVANCE` | MSG-PURCHASE-08, when a cancelled receipt leaves the supplier debt below zero | unless turned off | Owner, Accountant |
 | `SUPPLIER_TRANSACTION` | MSG-PURCHASE-04, for a supplier payment, money paid back or a cancelled one, also when the Owner did it | always (mandatory) | Owner |
@@ -287,10 +290,10 @@ license and the licenses of a Discontinued zone are not. After a resume, each of
 current state at the next check if that notice was not sent yet; nothing is sent twice. A new expiry date re-arms both
 notices.
 
-A replaced raft photo, license file, cooperative cover photo, certificate file or cultivation log photo is removed right after the save (a removed
+A replaced raft photo, license file, cooperative cover photo, certificate file, cultivation log photo or harvest lot photo is removed right after the save (a removed
 certification, cover photo or cultivation log too), and the upload of a failed save right away. `OrphanFileCleanupJob` runs every day at
 03:00 (Asia/Ho_Chi_Minh), with no catch-up at start unless `CatchUpOnStart` is set, and deletes what such a removal left behind: raft photos (`raft-photos/`), license files
-(`zone-licenses/`), cover photos (`cooperative-covers/`), certificate files (`cooperative-certifications/`) and cultivation log photos (`cultivation-log-photos/`) that no
+(`zone-licenses/`), cover photos (`cooperative-covers/`), certificate files (`cooperative-certifications/`), cultivation log photos (`cultivation-log-photos/`) and harvest lot photos (`harvest-lot-photos/`) that no
 record points to and that were written more than the grace period (24 hours) ago. No other storage folder is scanned, so
 cooperative logos are kept for ever.
 
@@ -301,7 +304,7 @@ license folder in which not one stored file (old or new) is referenced by the da
 there and a warning is logged. Cover photos and certificate files may all be unreferenced in a real database (cover
 removed, last certification removed), so their folders are skipped only when the database holds no cooperative. Every
 cultivation log may be removed too, so its folder is skipped when the database holds no cooperative or has no
-`CultivationLog` audit row: it never held a log, while those rows stay after the last log is removed.
+`CultivationLog` audit row: it never held a log, while those rows stay after the last log is removed. Harvest lot photos follow the same rule, with the `HarvestLot` audit row.
 
 ## Deployment
 

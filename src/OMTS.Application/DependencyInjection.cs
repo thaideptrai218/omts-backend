@@ -18,6 +18,7 @@ using OMTS.Application.Features.Farming.Licenses;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Application.Features.Farming.Zones;
 using OMTS.Application.Features.Files;
+using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
@@ -98,7 +99,7 @@ public static class DependencyInjection
         services.AddScoped<CultivationCycleViews>();
         services.AddScoped<CycleWriteGuard>();
         services.AddScoped<CultivationLogViews>();
-        services.AddScoped<CultivationLogPhotoStore>();
+        services.AddScoped<RecordPhotoStore>();
         services.AddScoped<CultivationLogService>();
         services.AddScoped<CultivationLogCorrectionService>();
         services.AddScoped<CultivationLogReadService>();
@@ -116,6 +117,13 @@ public static class DependencyInjection
         services.AddScoped<CultivationCycleService>();
         services.AddScoped<CultivationCycleReadService>();
         services.AddScoped<CultivationProgressService>();
+        // HARVEST-01, HARVEST-03 and what SALE and CLAIM call on a lot
+        services.AddScoped<HarvestLotViews>();
+        services.AddScoped<HarvestLotNotifier>();
+        services.AddScoped<HarvestLotRecordingService>();
+        services.AddScoped<HarvestLotReadService>();
+        services.AddScoped<HarvestLotStatusService>();
+        services.AddScoped<HarvestSettingsService>();
 
         services.AddScoped<UploadedFileSaver>();
         services.AddScoped<OrphanFileCleanupService>();

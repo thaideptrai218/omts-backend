@@ -51,6 +51,12 @@ public class Cooperative : AuditableEntity
     /// <summary>Used to build the VietQR payment QR (UC48); never shown on the traceability page.</summary>
     public BankAccountInfo? BankAccount { get; set; }
 
+    /// <summary>HARVEST-03: greater than 0, 50 when OMTS is first set up. Used only for lots recorded after a change (BR-HARVEST-06).</summary>
+    public decimal AverageKgPerCage { get; set; } = 50m;
+
+    /// <summary>HARVEST-03: a whole number of at least 1, 3 when OMTS is first set up. Applies to every lot still for sale from the next daily close check (BR-HARVEST-06).</summary>
+    public int DaysBeforeAutoClose { get; set; } = 3;
+
     public ICollection<FarmingZone> FarmingZones { get; set; } = [];
     public ICollection<Employee> Employees { get; set; } = [];
     public ICollection<Customer> Customers { get; set; } = [];

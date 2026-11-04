@@ -2,11 +2,12 @@ using Microsoft.Extensions.Logging;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Interfaces.Storage;
 using OMTS.Application.Features.Cultivation.CultivationLogs;
+using OMTS.Application.Features.Harvest;
 
 namespace OMTS.Application.Features.Files;
 
 /// <summary>
-/// Removes FARM and cultivation log files no record points to: a removal that failed after a replace or a failed save, or a host that
+/// Removes FARM, cultivation log and harvest lot files no record points to: a removal that failed after a replace or a failed save, or a host that
 /// stopped between upload and save. Only <see cref="Categories"/> are scanned. Cooperative logos never are: every
 /// logo file is kept, since published traceability versions show the logo of their publication time (FARM-01).
 /// Each environment needs a storage container (or folder) of its own: files its database does not know are deleted.
@@ -19,23 +20,30 @@ public sealed class OrphanFileCleanupService(
     ILogger<OrphanFileCleanupService> logger)
 {
     /// <summary>
-    /// Raft photos, license files, cooperative cover photos, certificate files and cultivation log photos: each belongs to
+    /// Raft photos, license files, cooperative cover photos, certificate files, cultivation log photos and harvest lot photos: each belongs to
     /// one column, so "no record points to it" is certain.
     /// </summary>
     public static readonly IReadOnlyList<string> Categories =
     [
         FileCategories.RaftPhotos, FileCategories.ZoneLicenses, FileCategories.CooperativeCoverPhotos, FileCategories.CooperativeCertifications,
-        FileCategories.CultivationLogPhotos,
+        FileCategories.CultivationLogPhotos, FileCategories.HarvestLotPhotos,
     ];
 
     /// <summary>
     /// Categories whose files may all be unreferenced in a real database: the cover photo was removed, the last certification,
-    /// or the last cultivation log. While the database points to no file of the category, it is taken as this environment's
+    /// the last cultivation log, or no lot has a photo (they are optional). While the database points to no file of the category, it is taken as this environment's
     /// when it holds the cooperative, see <see cref="CleanAsync"/>.
     /// </summary>
     private static readonly IReadOnlySet<string> MayAllBeUnreferenced = new HashSet<string>(StringComparer.Ordinal)
     {
-        FileCategories.CooperativeCoverPhotos, FileCategories.CooperativeCertifications, FileCategories.CultivationLogPhotos,
+        FileCategories.CooperativeCoverPhotos, FileCategories.CooperativeCertifications, FileCategories.CultivationLogPhotos, FileCategories.HarvestLotPhotos,
+    };
+
+    /// <summary>The audit record type of the records that can all be removed, with their name in the warning: the audit rows outlive them.</summary>
+    private static readonly IReadOnlyDictionary<string, (string RecordType, string Name)> RecordsOfCategory = new Dictionary<string, (string, string)>(StringComparer.Ordinal)
+    {
+        [FileCategories.CultivationLogPhotos] = (CultivationLogAudit.RecordType, "cultivation log"),
+        [FileCategories.HarvestLotPhotos] = (HarvestLotAudit.RecordType, "harvest lot"),
     };
 
     /// <summary>
@@ -43,8 +51,8 @@ public sealed class OrphanFileCleanupService(
     /// returns how many were deleted. Younger files are kept: their upload may still wait for the save pointing to it.
     /// Nothing is deleted (a warning is logged) when the database does not look like this storage's own: when it points
     /// to files of the category but none of them is stored, for raft photos and license files also when it points to none
-    /// at all, for cover photos, certificate files and cultivation log photos when it holds no cooperative, and for
-    /// cultivation log photos also when it never held a log.
+    /// at all, for cover photos, certificate files, cultivation log photos and harvest lot photos when it holds no cooperative, and for
+    /// cultivation log and harvest lot photos also when it never held such a record.
     /// </summary>
     public async Task<int> CleanAsync(string category, DateTimeOffset writtenBefore, CancellationToken cancellationToken)
     {
@@ -73,13 +81,13 @@ public sealed class OrphanFileCleanupService(
                 return 0;
             }
 
-            // Every deployed database holds its cooperative from the bootstrap, so that says little about old log photos. The audit rows of a log
-            // outlive it: with none, this database never held a log and these photos are another environment's. After the last real removal they are still there.
-            if (category == FileCategories.CultivationLogPhotos && !await auditEvents.AnyOfRecordTypeAsync(CultivationLogAudit.RecordType, cancellationToken))
+            // Every deployed database holds its cooperative from the bootstrap, so that says little about old photos. The audit rows of a record
+            // outlive it: with none, this database never held such a record and these photos are another environment's. After the last real removal they are still there.
+            if (RecordsOfCategory.TryGetValue(category, out var records) && !await auditEvents.AnyOfRecordTypeAsync(records.RecordType, cancellationToken))
             {
                 logger.LogWarning(
-                    "Orphan file clean-up of {Category} skipped: the database never held a cultivation log; check that this environment has a storage of its own.",
-                    category);
+                    "Orphan file clean-up of {Category} skipped: the database never held a {Record}; check that this environment has a storage of its own.",
+                    category, records.Name);
                 return 0;
             }
         }
