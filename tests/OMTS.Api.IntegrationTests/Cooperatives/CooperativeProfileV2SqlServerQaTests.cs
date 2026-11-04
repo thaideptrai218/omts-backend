@@ -123,6 +123,8 @@ public class CooperativeProfileV2SqlServerQaTests
         Assert.Equal(
             [("FileUrl", 2000), ("Issuer", 400), ("Name", 400), ("Number", 200)],
             await ColumnLengthsAsync(db, "CooperativeCertifications", "Name", "Number", "Issuer", "FileUrl"));
+        // The expiry date is required by the validation only, so a "No expiry" tick needs no migration.
+        Assert.Equal(1, await ScalarAsync(db, "SELECT CAST(is_nullable AS int) AS [Value] FROM sys.columns WHERE object_id = OBJECT_ID('CooperativeCertifications') AND name = 'ExpiryDate'"));
         Assert.Equal(1, await ScalarAsync(db,
             "SELECT COUNT(*) AS [Value] FROM sys.foreign_keys WHERE name = 'FK_CooperativeCertifications_Cooperatives_CooperativeId' AND delete_referential_action = 0"));
 

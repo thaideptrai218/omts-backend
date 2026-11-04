@@ -16,19 +16,22 @@ public sealed class CooperativeProfileViews(ICooperativeRepository cooperatives,
 {
     public async Task<CooperativeProfileView> ProfileAsync(Cooperative c, CancellationToken cancellationToken)
     {
-        var today = timeProvider.Today();
+        var now = timeProvider.GetUtcNow();
+        var today = BusinessClock.ToBusinessDate(now);
+        var stored = await cooperatives.ListCertificationsAsync(c.Id, cancellationToken);
         var certifications = new List<CooperativeCertificationView>();
-        foreach (var certification in await cooperatives.ListCertificationsAsync(c.Id, cancellationToken))
+        foreach (var certification in stored)
         {
             certifications.Add(await CertificationAsync(certification, today, cancellationToken));
         }
 
         var logoUrl = CooperativePublicFiles.UrlOf(c.LogoUrl, FileCategories.CooperativeLogos, CooperativePublicFiles.LogoFilesPath);
         var coverPhotoUrl = CooperativePublicFiles.UrlOf(c.CoverPhotoUrl, FileCategories.CooperativeCoverPhotos, CooperativePublicFiles.CoverPhotoFilesPath);
+        var preview = Preview(c, logoUrl, coverPhotoUrl, await PublicCertificationsAsync(stored, now, cancellationToken));
         return new CooperativeProfileView(
             c.Id, c.FullName, c.ShortName, c.TaxCode, c.YearEstablished, c.OfficeAddress, c.PhoneNumber, c.Email, c.Website,
             c.SocialLink, c.IntroductionVi, c.IntroductionEn, c.LegalRepresentative, BusinessLinesOf(c), logoUrl, coverPhotoUrl,
-            today, certifications, Preview(c, logoUrl, coverPhotoUrl, certifications), RowVersionGuard.Encode(c.RowVersion));
+            today, certifications, preview, RowVersionGuard.Encode(c.RowVersion));
     }
 
     public async Task<CooperativeCertificationView> CertificationAsync(CooperativeCertification c, DateOnly today, CancellationToken cancellationToken)
@@ -43,15 +46,39 @@ public sealed class CooperativeProfileViews(ICooperativeRepository cooperatives,
         string.IsNullOrEmpty(c.BusinessLines) ? [] : JsonSerializer.Deserialize<List<string>>(c.BusinessLines) ?? [];
 
     /// <summary>
+    /// The certifications the provenance page shows, with their files (BR-ORIGIN-01: the page's data holds only what the
+    /// page shows): an Expired one is left out with its file, and the signed URL of the others ends before they turn
+    /// Expired (<see cref="CertificationStateRules.PublicFileLifetime"/>), so a page opened on the expiry day loses the file
+    /// at the business midnight. The file itself stays stored for the Owner.
+    /// </summary>
+    private async Task<IReadOnlyList<PublicCertification>> PublicCertificationsAsync(
+        IEnumerable<CooperativeCertification> certifications, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var today = BusinessClock.ToBusinessDate(now);
+        var shown = new List<PublicCertification>();
+        foreach (var c in certifications)
+        {
+            var state = CertificationStateRules.StateOn(c.ExpiryDate, today);
+            if (state == CertificationState.Expired)
+            {
+                continue;
+            }
+
+            var fileUrl = c.FileUrl is null
+                ? null
+                : await storage.GetReadUrlAsync(c.FileUrl, CertificationStateRules.PublicFileLifetime(c.ExpiryDate, now), cancellationToken);
+            shown.Add(new PublicCertification(c.Name, c.Number, c.Issuer, c.ExpiryDate, state, fileUrl));
+        }
+
+        return shown;
+    }
+
+    /// <summary>
     /// The provenance page block: the current profile without the tax code and internal fields, the English introduction
-    /// falling back to the Vietnamese one, and only the certifications that are not Expired (no file).
+    /// falling back to the Vietnamese one, and only the certifications that are not Expired.
     /// </summary>
     private static PublicCooperativePreview Preview(
-        Cooperative c, string? logoUrl, string? coverPhotoUrl, IEnumerable<CooperativeCertificationView> certifications) => new(
+        Cooperative c, string? logoUrl, string? coverPhotoUrl, IReadOnlyList<PublicCertification> certifications) => new(
         c.FullName, c.ShortName, c.YearEstablished, c.OfficeAddress, c.PhoneNumber, c.Email, c.Website, c.SocialLink,
-        logoUrl, coverPhotoUrl, c.IntroductionVi, c.IntroductionEn ?? c.IntroductionVi,
-        certifications
-            .Where(x => x.State != CertificationState.Expired)
-            .Select(x => new PublicCertification(x.Name, x.Number, x.Issuer, x.ExpiryDate, x.State))
-            .ToList());
+        logoUrl, coverPhotoUrl, c.IntroductionVi, c.IntroductionEn ?? c.IntroductionVi, certifications);
 }

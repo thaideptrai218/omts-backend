@@ -23,7 +23,7 @@ internal sealed partial record CooperativeProfileInput(
     IReadOnlyList<string> BusinessLines)
 {
     public const int MaxText = 255;
-    public const int MaxShortName = 100;
+    public const int MaxShortName = 20;
     public const int MaxAddress = 500;
     public const int MaxIntroduction = 4000;
     public const int FirstYear = 1900;

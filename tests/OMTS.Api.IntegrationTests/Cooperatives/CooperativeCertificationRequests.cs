@@ -17,7 +17,7 @@ public sealed record CertificationFields
     public string? Name { get; init; } = $"VietGAP {NewCode()}";
     public string? Number { get; init; } = $"VG-{NewCode()}";
     public string? Issuer { get; init; } = "Trung tâm Chứng nhận Phù hợp";
-    public DateOnly? ExpiryDate { get; init; }
+    public DateOnly? ExpiryDate { get; init; } = DateOnly.FromDateTime(DateTime.UtcNow).AddYears(2);
     public string? RowVersion { get; init; }
     public byte[]? File { get; init; } = FarmingTestKit.Pdf;
     public string FileName { get; init; } = "certificate.pdf";

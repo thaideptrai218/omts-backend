@@ -78,12 +78,12 @@ public class CooperativeCertificationTests
         using var api = new StillClockApiFactory(DateTimeOffset.UtcNow);
         var owner = await api.NewOwnerAsync();
         var today = api.Today;
-        var cases = new (int? Days, string State)[] { (31, "Valid"), (30, "ExpiringSoon"), (1, "ExpiringSoon"), (0, "ExpiringSoon"), (-1, "Expired"), (null, "Valid") };
+        var cases = new (int Days, string State)[] { (31, "Valid"), (30, "ExpiringSoon"), (1, "ExpiringSoon"), (0, "ExpiringSoon"), (-1, "Expired") };
 
-        static string NameOf(int? days) => $"Cert {days?.ToString() ?? "without expiry"}";
+        static string NameOf(int days) => $"Cert {days}";
         foreach (var (days, state) in cases)
         {
-            var saved = await owner.CreateCertificationAsync(new CertificationFields { Name = NameOf(days), ExpiryDate = days is { } d ? today.AddDays(d) : null });
+            var saved = await owner.CreateCertificationAsync(new CertificationFields { Name = NameOf(days), ExpiryDate = today.AddDays(days) });
             Assert.True(state == saved.Text("state"), $"{days} days: expected {state}, got {saved.Text("state")}");
         }
 
@@ -92,7 +92,59 @@ public class CooperativeCertificationTests
         Assert.Equal(cases.ToDictionary(c => NameOf(c.Days), c => c.State), listed);
         var profile = await owner.GetFromJsonAsync<JsonElement>("/api/cooperative/profile");
         Assert.Equal(today, DateOnly.Parse(profile.Text("asOf")));
-        Assert.Equal(6, profile.GetProperty("certifications").GetArrayLength());
+        Assert.Equal(5, profile.GetProperty("certifications").GetArrayLength());
+    }
+
+    // The expiry date is required on add and on edit, whether the field is left out or blank (MSG-GEN-01 naming it).
+    [Fact]
+    public async Task Missing_expiry_date_is_msg_gen_01_with_its_field_and_nothing_is_saved()
+    {
+        using var api = new AuthApiFactory();
+        var owner = await api.NewOwnerAsync();
+        var noField = await owner.AddCertificationAsync(new CertificationFields { ExpiryDate = null });
+        var blankForm = new CertificationFields { ExpiryDate = null }.ToForm();
+        blankForm.Add(new StringContent(string.Empty), "expiryDate");
+        var blank = await owner.PostAsync(Certifications, blankForm);
+        var withOthers = await owner.AddCertificationAsync(new CertificationFields { Name = "  ", ExpiryDate = null, File = null });
+
+        var problem = await noField.ReadAsync(HttpStatusCode.BadRequest);
+        Assert.Equal(("MSG-GEN-01", "Expiry date"), (problem.Text("code"), problem.Text("field")));
+        Assert.Equal("Expiry date is missing or invalid. Please check and enter it again.", problem.Text("detail"));
+        Assert.Equal(["Expiry date"], await blank.InvalidFieldsAsync());
+        Assert.Equal(["Name", "Expiry date", "File"], await withOthers.InvalidFieldsAsync());
+        Assert.False(await api.QueryAsync(db => db.CooperativeCertifications.AnyAsync()));
+        Assert.Empty(api.StoredFiles(FileCategories.CooperativeCertifications));
+
+        var id = (await owner.CreateCertificationAsync()).Id();
+        var version = await api.IssueCertificationVersionAsync(id);
+        var edit = await owner.PutAsync($"{Certifications}/{id}", new CertificationFields { ExpiryDate = null, File = null, RowVersion = version }.ToForm());
+
+        Assert.Equal(["Expiry date"], await edit.InvalidFieldsAsync());
+        Assert.NotNull(await api.QueryAsync(db => db.CooperativeCertifications.Where(c => c.Id == id).Select(c => c.ExpiryDate).SingleAsync()));
+    }
+
+    // The column stays nullable: a row saved without a date (before the rule, or by the "No expiry" tick to come) is
+    // always Valid, stays on the public block with its file, and needs a date at its next edit.
+    [Fact]
+    public async Task A_stored_row_without_an_expiry_date_stays_valid_and_public_and_its_next_edit_needs_a_date()
+    {
+        using var api = new StillClockApiFactory(DateTimeOffset.UtcNow);
+        var owner = await api.NewOwnerAsync();
+        var id = (await owner.CreateCertificationAsync(new CertificationFields { Name = "Không hết hạn", File = Png, FileName = "cert.png" })).Id();
+        await api.UpdateAsync<CooperativeCertification>(id, c => c.ExpiryDate = null);
+        var version = await api.IssueCertificationVersionAsync(id);
+
+        var listed = Assert.Single((await (await owner.GetAsync(Certifications)).ReadAsync(HttpStatusCode.OK)).EnumerateArray());
+        var profile = await owner.GetFromJsonAsync<JsonElement>("/api/cooperative/profile");
+        var shown = Assert.Single(profile.GetProperty("publicPreview").GetProperty("certifications").EnumerateArray());
+        var edit = await owner.PutAsync($"{Certifications}/{id}", new CertificationFields { Name = "Không hết hạn", ExpiryDate = null, File = null, RowVersion = version }.ToForm());
+        var dated = await owner.PutAsync($"{Certifications}/{id}", new CertificationFields { Name = "Không hết hạn", ExpiryDate = api.Today.AddDays(400), File = null, RowVersion = version }.ToForm());
+
+        Assert.Equal(("Valid", JsonValueKind.Null), (listed.Text("state"), listed.GetProperty("expiryDate").ValueKind));
+        Assert.Equal(("Valid", JsonValueKind.Null), (shown.Text("state"), shown.GetProperty("expiryDate").ValueKind));
+        Assert.Equal(Png, await api.CreateClient().GetByteArrayAsync(shown.Text("fileUrl")));
+        Assert.Equal(["Expiry date"], await edit.InvalidFieldsAsync());
+        Assert.Equal("Valid", (await dated.ReadAsync(HttpStatusCode.OK)).GetProperty("certification").Text("state"));
     }
 
     [Fact]

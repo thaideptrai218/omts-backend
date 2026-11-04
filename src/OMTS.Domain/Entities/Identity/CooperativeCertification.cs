@@ -16,7 +16,7 @@ public class CooperativeCertification : AuditableEntity
     public string? Number { get; set; }
     public string? Issuer { get; set; }
 
-    /// <summary>Empty for a certification that does not expire: it is always Valid.</summary>
+    /// <summary>Required by FARM-01.1 on every save, not by the database: a row without a date is always Valid.</summary>
     public DateOnly? ExpiryDate { get; set; }
 
     /// <summary>Storage key of the certificate file (image or PDF).</summary>

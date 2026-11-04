@@ -15,7 +15,7 @@ public sealed record SaveCooperativeCertificationRequest
     /// <example>Trung tâm Chứng nhận Phù hợp Quacert</example>
     public string? Issuer { get; init; }
 
-    /// <summary>yyyy-MM-dd; empty for a certification that does not expire.</summary>
+    /// <summary>Required, yyyy-MM-dd.</summary>
     /// <example>2028-06-30</example>
     public DateOnly? ExpiryDate { get; init; }
 
@@ -24,6 +24,7 @@ public sealed record SaveCooperativeCertificationRequest
     public string? RowVersion { get; init; }
 }
 
+/// <param name="ExpiryDate">Null only on a row saved before the date became required.</param>
 /// <param name="State">Valid, ExpiringSoon or Expired as of today (BR-FARM-06).</param>
 /// <param name="FileUrl">Short-lived read URL of the certificate file.</param>
 public sealed record CooperativeCertificationView(

@@ -25,7 +25,7 @@ public class CooperativeProfileSqlServerTests
         var saved = await owner.PutAsJsonAsync("/api/cooperative/profile", Valid(await RowVersionAsync(owner), b =>
         {
             b["fullName"] = Vietnamese(255);
-            b["shortName"] = Vietnamese(100);
+            b["shortName"] = Vietnamese(20);
             b["taxCode"] = "0109876543-001";
             b["officeAddress"] = Vietnamese(500);
             b["email"] = $"{new string('e', 60)}@{new string('d', 60)}.{new string('d', 60)}.{new string('d', 60)}.{new string('d', 8)}.vn";
@@ -40,7 +40,7 @@ public class CooperativeProfileSqlServerTests
         Assert.True(saved.StatusCode == HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
         var stored = await QueryAsync(api, db => db.Cooperatives.AsNoTracking().SingleAsync());
         Assert.Equal((Vietnamese(255), Vietnamese(500), 255), (stored.FullName, stored.OfficeAddress, stored.Website!.Length));
-        Assert.Equal((Vietnamese(100), 255, Vietnamese(4000), Vietnamese(4000)), (stored.ShortName, stored.SocialLink!.Length, stored.IntroductionVi, stored.IntroductionEn));
+        Assert.Equal((Vietnamese(20), 255, Vietnamese(4000), Vietnamese(4000)), (stored.ShortName, stored.SocialLink!.Length, stored.IntroductionVi, stored.IntroductionEn));
         var reread = await owner.GetFromJsonAsync<JsonElement>("/api/cooperative/profile");
         Assert.Equal([line], reread.GetProperty("businessLines").EnumerateArray().Select(l => l.GetString()));
     }

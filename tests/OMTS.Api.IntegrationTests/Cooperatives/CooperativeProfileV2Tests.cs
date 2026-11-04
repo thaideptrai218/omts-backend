@@ -66,7 +66,7 @@ public class CooperativeProfileV2Tests
 
         var invalid = await owner.PutAsJsonAsync("/api/cooperative/profile", Valid(rowVersion, b =>
         {
-            b["shortName"] = new string('s', 101);
+            b["shortName"] = new string('s', 21);
             b["yearEstablished"] = 1899;
             b["socialLink"] = "http://www.facebook.com/htxtrungnam";
             b["introductionVi"] = new string('v', 4001);
@@ -92,8 +92,34 @@ public class CooperativeProfileV2Tests
         }
     }
 
-    // BR-FARM-09: the public block never holds the tax code or an Expired certification; BR-ORIGIN-02: the English
-    // introduction falls back to the Vietnamese one.
+    // Required, at most 20 characters after trimming (it starts every SMS); accents count as one character.
+    [Fact]
+    public async Task Short_name_is_required_and_at_most_20_characters()
+    {
+        using var api = new AuthApiFactory();
+        await api.EnsureCooperativeAsync();
+        var owner = await api.NewOwnerAsync();
+        var rowVersion = await RowVersionAsync(owner);
+
+        var tooLong = await owner.PutAsJsonAsync("/api/cooperative/profile", Valid(rowVersion, b => b["shortName"] = new string('ắ', 21)));
+        var missing = await owner.PutAsJsonAsync("/api/cooperative/profile", Valid(rowVersion, b => b.Remove("shortName")));
+        var empty = await owner.PutAsJsonAsync("/api/cooperative/profile", Valid(rowVersion, b => b["shortName"] = string.Empty));
+
+        foreach (var response in new[] { tooLong, missing, empty })
+        {
+            var problem = await response.ReadAsync(HttpStatusCode.BadRequest);
+            Assert.Equal(("MSG-GEN-01", "Short name"), (problem.Text("code"), problem.Text("field")));
+        }
+
+        Assert.False(await api.QueryAsync(db => db.AuditEvents.AnyAsync(e => e.RecordType == nameof(Cooperative))));
+
+        var twenty = new string('ắ', 20);
+        var atLimit = await owner.PutAsJsonAsync("/api/cooperative/profile", Valid(rowVersion, b => b["shortName"] = $"  {twenty} "));
+        Assert.Equal(twenty, (await atLimit.ReadAsync(HttpStatusCode.OK)).GetProperty("profile").Text("shortName"));
+    }
+
+    // BR-FARM-09: the public block never holds the tax code or an Expired certification; BR-ORIGIN-01: it holds the file
+    // of the others and nothing of an Expired one; BR-ORIGIN-02: the English introduction falls back to the Vietnamese one.
     [Fact]
     public async Task Preview_shows_the_public_block_without_the_tax_code_and_expired_certifications()
     {
@@ -102,9 +128,10 @@ public class CooperativeProfileV2Tests
         var owner = await api.NewOwnerAsync();
         await (await owner.PutAsJsonAsync("/api/cooperative/profile", Valid(await RowVersionAsync(owner), b => b["introductionEn"] = null)))
             .ReadAsync(HttpStatusCode.OK);
-        await owner.CreateCertificationAsync(new CertificationFields { Name = "A expired", Number = "EXP-1", ExpiryDate = api.Today.AddDays(-1) });
-        await owner.CreateCertificationAsync(new CertificationFields { Name = "B expiring", Number = "SOON-1", Issuer = "Quacert", ExpiryDate = api.Today.AddDays(30) });
-        await owner.CreateCertificationAsync(new CertificationFields { Name = "C valid", Number = "OK-1", ExpiryDate = api.Today.AddDays(31) });
+        var expiredId = (await owner.CreateCertificationAsync(new CertificationFields { Name = "A expired", Number = "EXP-1", ExpiryDate = api.Today.AddDays(-1) })).Id();
+        await owner.CreateCertificationAsync(new CertificationFields { Name = "B expiring", Number = "SOON-1", Issuer = "Quacert", ExpiryDate = api.Today.AddDays(30), File = CooperativeProfileRequests.Png, FileName = "soon.png" });
+        await owner.CreateCertificationAsync(new CertificationFields { Name = "C valid", Number = "OK-1", ExpiryDate = api.Today.AddDays(31), File = CooperativeProfileRequests.Jpeg, FileName = "ok.jpg" });
+        var expiredKey = await api.QueryAsync(db => db.CooperativeCertifications.Where(c => c.Id == expiredId).Select(c => c.FileUrl).SingleAsync());
 
         var profile = await owner.GetFromJsonAsync<JsonElement>("/api/cooperative/profile");
         var preview = profile.GetProperty("publicPreview");
@@ -118,7 +145,10 @@ public class CooperativeProfileV2Tests
         Assert.Equal(["B expiring", "C valid"], certifications.Select(c => c.Text("name")));
         Assert.Equal(["ExpiringSoon", "Valid"], certifications.Select(c => c.Text("state")));
         Assert.Equal(("SOON-1", "Quacert", api.Today.AddDays(30)), (certifications[0].Text("number"), certifications[0].Text("issuer"), DateOnly.Parse(certifications[0].Text("expiryDate"))));
-        Assert.Equal(["name", "number", "issuer", "expiryDate", "state"], certifications[0].EnumerateObject().Select(p => p.Name));
+        Assert.All(certifications, c => Assert.Equal(["name", "number", "issuer", "expiryDate", "state", "fileUrl"], c.EnumerateObject().Select(p => p.Name)));
+        var anonymous = api.CreateClient();
+        Assert.Equal(CooperativeProfileRequests.Png, await anonymous.GetByteArrayAsync(certifications[0].Text("fileUrl")));
+        Assert.Equal(CooperativeProfileRequests.Jpeg, await anonymous.GetByteArrayAsync(certifications[1].Text("fileUrl")));
 
         var raw = preview.GetRawText();
         Assert.DoesNotContain("taxCode", raw, StringComparison.OrdinalIgnoreCase);
@@ -126,6 +156,8 @@ public class CooperativeProfileV2Tests
         Assert.DoesNotContain("EXP-1", raw);
         Assert.DoesNotContain("Nguyễn Văn Nam", raw);
         Assert.DoesNotContain("Thương mại thủy sản", raw);
-        Assert.DoesNotContain("/api/files/", raw);
+        // Nothing of the Expired certification's file, which the Owner's own list still has.
+        Assert.DoesNotContain(expiredKey!, raw);
+        Assert.Contains(expiredKey!, profile.GetProperty("certifications")[0].Text("fileUrl"));
     }
 }

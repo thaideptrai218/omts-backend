@@ -1,13 +1,18 @@
 namespace OMTS.Application.Features.Cooperatives;
 
-/// <summary>A certification as the provenance page shows it: only those that are not Expired (BR-FARM-09).</summary>
+/// <summary>A certification as the provenance page shows it: only those that are not Expired (BR-FARM-09), with the file.</summary>
+/// <param name="ExpiryDate">Null only on a row saved before the date became required.</param>
 /// <param name="State">Valid or ExpiringSoon.</param>
-public sealed record PublicCertification(string Name, string? Number, string? Issuer, DateOnly? ExpiryDate, CertificationState State);
+/// <param name="FileUrl">
+/// Signed read URL of the certificate file: at most 10 minutes, and never past the expiry day, so ask for it again rather
+/// than keeping it. Null when the row has no file.
+/// </param>
+public sealed record PublicCertification(string Name, string? Number, string? Issuer, DateOnly? ExpiryDate, CertificationState State, string? FileUrl);
 
 /// <summary>
-/// The cooperative block of the provenance page, exactly as the public page will show it (BR-FARM-09, BR-ORIGIN-02):
-/// never the tax code, the legal representative, the business lines or an Expired certification. Built from the saved
-/// data: the client previews unsaved edits with the same rules.
+/// The cooperative block of the provenance page, exactly as the public page will show it (BR-FARM-09, BR-ORIGIN-01,
+/// BR-ORIGIN-02): never the tax code, the legal representative, the business lines or an Expired certification or its
+/// file. Built from the saved data: the client previews unsaved edits with the same rules.
 /// </summary>
 /// <param name="IntroductionEn">The English introduction, or the Vietnamese one when it is empty (BR-ORIGIN-02).</param>
 public sealed record PublicCooperativePreview(
@@ -62,7 +67,7 @@ public sealed record UpdateCooperativeProfileRequest
     /// <example>Hợp tác xã Nuôi trồng thủy sản Trung Nam</example>
     public string? FullName { get; init; }
 
-    /// <summary>At most 100 characters; used in SMS texts and on the provenance page.</summary>
+    /// <summary>At most 20 characters: it starts every SMS. Also on the provenance page.</summary>
     /// <example>HTX Trung Nam</example>
     public string? ShortName { get; init; }
 

@@ -156,7 +156,10 @@ public sealed class CooperativeCertificationService(
             ? await cooperatives.GetCertificationAsync(cooperative.Id, id, cancellationToken)
             : null;
 
-    /// <summary>Name required; number, issuer and expiry date optional; the file (image or PDF, 10 MB) required on add.</summary>
+    /// <summary>
+    /// Name and expiry date required; number and issuer optional; the file (image or PDF, 10 MB) required on add. The
+    /// expiry date is required here only: the column stays nullable, so a row without a date keeps working (always Valid).
+    /// </summary>
     private static (Input Input, ValidatedFile? File, IReadOnlyList<string> Invalid) Read(
         SaveCooperativeCertificationRequest request, IncomingFile? file, bool fileRequired)
     {
@@ -166,6 +169,7 @@ public sealed class CooperativeCertificationService(
             check.Optional(request.Number, "Number", MaxNumber),
             check.Optional(request.Issuer, "Issuer", MaxIssuer),
             request.ExpiryDate);
+        check.Check(request.ExpiryDate is not null, "Expiry date");
 
         ValidatedFile? validated = null;
         if (file is not null || fileRequired)

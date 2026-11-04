@@ -16,8 +16,8 @@ namespace OMTS.Api.IntegrationTests.Cooperatives;
 
 /// <summary>
 /// QA of OMTS-217 PR 0.7, FARM-01.1 certifications: the derived state at the business midnight (BR-FARM-06, UTC+7), a
-/// stale edit that brings a file, failed saves around the upload (GFR-01, nothing half-saved), an unreadable expiry date
-/// and what an anonymous caller can reach of the certificate files.
+/// stale edit that brings a file, failed saves around the upload (GFR-01, nothing half-saved), an unreadable expiry date,
+/// the public file link at the expiry midnight and what an anonymous caller can reach of the certificate files.
 /// </summary>
 public class CooperativeCertificationQaTests
 {
@@ -124,7 +124,7 @@ public class CooperativeCertificationQaTests
     {
         using var api = new AuthApiFactory();
         var owner = await api.NewOwnerAsync();
-        var form = new CertificationFields().ToForm();
+        var form = new CertificationFields { ExpiryDate = null }.ToForm();
         form.Add(new StringContent("31/02/2027"), "expiryDate");
 
         var response = await owner.PostAsync(Certifications, form);
@@ -136,11 +136,48 @@ public class CooperativeCertificationQaTests
         Assert.Empty(StoredKeys(api, FileCategories.CooperativeCertifications));
     }
 
-    // BR-ORIGIN-01/04: a certificate file is internal. Anonymous callers get 401 on every FARM-01 endpoint, the public
-    // logo and cover routes never reach a certificate file of the same shape, and the Owner's signed link stops working
-    // when it is tampered with, when the file is replaced and when the certification is removed.
+    // BR-ORIGIN-01: the file of a certification that is not Expired is on the provenance page block, and its link ends
+    // with the last second of the expiry day: refused at the business midnight, when the certification turns Expired and
+    // leaves the block. A later expiry keeps the full 10 minutes across that midnight. The Owner keeps the file of an
+    // Expired certification through the Owner-only list.
     [Fact]
-    public async Task Certificate_files_are_reachable_only_through_the_owners_signed_link_of_the_current_file()
+    public async Task Public_file_link_dies_at_the_midnight_the_certification_turns_expired_and_the_owner_keeps_the_file()
+    {
+        using var api = new MovableClockApiFactory();
+        var owner = await api.NewOwnerAsync();
+        var midnight = NextBusinessMidnight(DateTimeOffset.UtcNow);
+        var day = BusinessClock.ToBusinessDate(midnight.AddTicks(-1));
+        var issuedAt = midnight.AddMinutes(-5);
+        api.Clock.Set(issuedAt);
+        await owner.CreateCertificationAsync(new CertificationFields { Name = "A last day", ExpiryDate = day, File = Png, FileName = "a.png" });
+        await owner.CreateCertificationAsync(new CertificationFields { Name = "B next day", ExpiryDate = day.AddDays(1), File = Png, FileName = "b.png" });
+
+        var before = (await owner.GetFromJsonAsync<JsonElement>(Profile)).GetProperty("publicPreview").GetProperty("certifications").EnumerateArray().ToList();
+        var (lastDayLink, nextDayLink) = (before[0].Text("fileUrl"), before[1].Text("fileUrl"));
+        var anonymous = api.CreateClient();
+
+        Assert.Equal(midnight.AddSeconds(-1).ToUnixTimeSeconds(), ExpiresOf(lastDayLink));
+        Assert.Equal(issuedAt.AddMinutes(10).ToUnixTimeSeconds(), ExpiresOf(nextDayLink));
+
+        api.Clock.Set(midnight.AddTicks(-1));
+        Assert.Equal(Png, await anonymous.GetByteArrayAsync(lastDayLink));
+
+        api.Clock.Set(midnight);
+        Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync(lastDayLink)).StatusCode);
+        Assert.Equal(Png, await anonymous.GetByteArrayAsync(nextDayLink));
+
+        var after = await owner.GetFromJsonAsync<JsonElement>(Profile);
+        Assert.Equal(["B next day"], after.GetProperty("publicPreview").GetProperty("certifications").EnumerateArray().Select(c => c.Text("name")));
+        var expired = after.GetProperty("certifications").EnumerateArray().Single(c => c.Text("name") == "A last day");
+        Assert.Equal("Expired", expired.Text("state"));
+        Assert.Equal(Png, await owner.GetByteArrayAsync(expired.Text("fileUrl")));
+    }
+
+    // The stored file has no anonymous route of its own: anonymous callers get 401 on every FARM-01 endpoint, the public
+    // logo and cover routes never reach a certificate file of the same shape, and a signed link stops working when it is
+    // tampered with, when the file is replaced and when the certification is removed.
+    [Fact]
+    public async Task Certificate_files_are_reachable_only_through_a_signed_link_of_the_current_file()
     {
         using var api = new AuthApiFactory();
         var owner = await api.NewOwnerAsync();
@@ -174,6 +211,8 @@ public class CooperativeCertificationQaTests
         await (await owner.DeleteAsync($"{Certifications}/{id}?rowVersion={Uri.EscapeDataString(version)}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync(newLink)).StatusCode);
     }
+
+    private static long ExpiresOf(string link) => long.Parse(Regex.Match(link, @"expires=(\d+)").Groups[1].Value);
 
     private static async Task<(DateOnly AsOf, List<string> States, List<string> Public, List<string> Listed)> StatesAsync(HttpClient owner)
     {
