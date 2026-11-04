@@ -1728,6 +1728,26 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("AuditEvents");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Platform.DocumentSequence", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<long>("LastValue")
+                        .HasColumnType("bigint");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("DocumentSequences");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Platform.Notification", b =>
                 {
                     b.Property<Guid>("Id")
