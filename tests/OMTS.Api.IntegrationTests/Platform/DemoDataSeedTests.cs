@@ -28,6 +28,7 @@ public class DemoDataSeedTests
         ("Accounts", db => db.Accounts.CountAsync()),
         ("AccessGrants", db => db.AccessGrants.CountAsync()),
         ("Customers", db => db.Customers.CountAsync()),
+        ("Products", db => db.Products.CountAsync()),
         ("Employees", db => db.Employees.CountAsync()),
         ("FarmingZones", db => db.FarmingZones.CountAsync()),
         ("ZoneComplianceDocuments", db => db.ZoneComplianceDocuments.CountAsync()),
@@ -117,6 +118,14 @@ public class DemoDataSeedTests
         Assert.Equal(1, await db.Employees.CountAsync(e => e.StatusId == StatusIds.Employee.Left));
         Assert.Equal(5, await db.Suppliers.CountAsync());
         Assert.Equal(15, await db.FarmingInputItems.CountAsync());
+        // SALE-11: a price list with one Discontinued product to resume. SALE-04: the two trader profiles and five offline
+        // ones, every offline number checked, the last two the same buyer to merge.
+        Assert.Equal(4, await db.Products.CountAsync());
+        Assert.Equal(1, await db.Products.CountAsync(p => p.StatusId == StatusIds.Usage.Discontinued));
+        Assert.All(await db.Products.ToListAsync(), p => Assert.True(p.UnitPrice > 0));
+        Assert.Equal(7, await db.Customers.CountAsync());
+        Assert.Equal(2, await db.Customers.CountAsync(c => c.AccountId != null));
+        Assert.Equal(5, await db.Customers.CountAsync(c => c.AccountId == null && c.PhoneCheckedByStaff));
 
         var statuses = await db.PurchaseReceipts.GroupBy(r => r.StatusId).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
         Assert.Equal(20, statuses.Sum(s => s.Count));
