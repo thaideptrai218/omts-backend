@@ -37,9 +37,9 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
         return await factory.LoginAsync(account.Username, password);
     }
 
-    // FINDING L1. PURCHASE-02.0.E1/E2: invalid data is MSG-GEN-01. `lines: [null]` reaches PurchaseReturnRules.InvalidFields, which reads lines[i].ReceiptLineId.
+    // PURCHASE-02.0.E1/E2: invalid data is MSG-GEN-01, also `lines: [null]`.
     [Fact]
-    public async Task Finding_L1_a_null_line_in_a_return_is_MSG_GEN_01_not_a_server_error()
+    public async Task A_null_line_in_a_return_is_MSG_GEN_01_not_a_server_error()
     {
         var world = await factory.WorldAsync();
         var receipt = await world.CompletedAsync(new LineBody(world.Other, 4, 25_000));
@@ -49,9 +49,9 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
         await response.ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
     }
 
-    // FINDING L1, the same in the Owner's correction (CorrectAsync reads l.LineId of each input).
+    // The same in the Owner's correction.
     [Fact]
-    public async Task Finding_L1_a_null_line_in_a_correction_is_MSG_GEN_01_not_a_server_error()
+    public async Task A_null_line_in_a_correction_is_MSG_GEN_01_not_a_server_error()
     {
         var world = await factory.WorldAsync();
         var receipt = await world.CompletedAsync(new LineBody(world.Other, 4, 25_000));
@@ -109,10 +109,9 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
         Assert.Equal((0m, 30m, 20m), (corrected.LineViewOf(world.Seed).Money("returnable"), corrected.LineViewOf(world.Seed).Money("seeded"), corrected.LineViewOf(world.Seed).Money("returnedQuantity")));
     }
 
-    // FINDING L2 (reachable once CYCLE-02 writes seeding sessions). GBR-04: seeding does not compare with what is left, so seeded + returned can pass the quantity received.
-    // PurchaseReceiptCorrectionService.CheckLine compares even an unchanged quantity with seeded + returned, so the Owner can no longer correct the unit price.
+    // GBR-04: seeding does not compare with what is left, so seeded + returned can pass the quantity received. The Owner can still correct the unit price.
     [Fact]
-    public async Task Finding_L2_a_price_correction_is_not_refused_for_a_quantity_it_does_not_change_after_seeding_passed_what_is_left()
+    public async Task A_price_correction_is_not_refused_for_a_quantity_it_does_not_change_after_seeding_passed_what_is_left()
     {
         var world = await factory.WorldAsync();
         var receipt = await world.CompletedAsync(new LineBody(world.Seed, 10, 1_000));
@@ -127,7 +126,7 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
 
     // The same rule, with a session that holds no quantity: it counts as all seeded, so the minimum is always above the quantity.
     [Fact]
-    public async Task Finding_L2_a_price_correction_is_not_refused_after_a_seeding_without_a_quantity_on_a_line_with_a_return()
+    public async Task A_price_correction_is_not_refused_after_a_seeding_without_a_quantity_on_a_line_with_a_return()
     {
         var world = await factory.WorldAsync();
         var receipt = await world.CompletedAsync(new LineBody(world.Seed, 10, 1_000));
@@ -220,7 +219,7 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
 
     // FINDING L3. Parts of a line round one by one (client list §2): the whole line sent back in parts takes a dong more than the line. Nothing was paid, yet BR-PURCHASE-04
     // makes the debt below zero "paid in advance": the supplier appears on the debt list, in the total advance. PM 03/11 rounds "each line" and does not say what parts add up to.
-    [Fact]
+    [Fact(Skip = "Waiting for the PM: should the part that finishes a line take what is left of it, or is a one-dong advance accepted?")]
     public async Task Finding_L3_a_line_sent_back_whole_in_parts_leaves_no_debt_and_no_advance_when_nothing_was_paid()
     {
         var world = await factory.WorldAsync();

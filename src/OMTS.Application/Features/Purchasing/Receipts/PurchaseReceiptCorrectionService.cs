@@ -55,7 +55,7 @@ public sealed class PurchaseReceiptCorrectionService(
             invalid.Add("Reason");
         }
 
-        if (inputs.Count == 0 || inputs.Any(l => l.LineId is not { } id || !lines.ContainsKey(id)) || inputs.Select(l => l.LineId).Distinct().Count() != inputs.Count)
+        if (inputs.Count == 0 || inputs.Any(l => l?.LineId is not { } id || !lines.ContainsKey(id)) || inputs.Select(l => l?.LineId).Distinct().Count() != inputs.Count)
         {
             invalid.Add("Lines");
         }
@@ -108,7 +108,7 @@ public sealed class PurchaseReceiptCorrectionService(
         return await views.ViewAsync(receipt.Id, cancellationToken);
     }
 
-    /// <summary>BR-PURCHASE-01 values, and a quantity never below seeded + returned (MSG-PURCHASE-10).</summary>
+    /// <summary>BR-PURCHASE-01 values, and a changed quantity never below seeded + returned (MSG-PURCHASE-10).</summary>
     private static AppError? CheckLine(PurchaseReceiptLine line, CorrectionLineInput input, (decimal Seeded, bool UnknownQuantity) seeded, decimal returned)
     {
         var field = $"Line {line.LineNumber}";
@@ -124,6 +124,12 @@ public sealed class PurchaseReceiptCorrectionService(
         if (input.SupplierLotCode is { } lotCode && (line.Item?.Group != InputItemGroup.Seed || lotCode.Trim().Length > 100))
         {
             return AppError.Invalid($"{field} supplier lot code");
+        }
+
+        // Seeding does not compare with what is left (GBR-04), so seeded + returned can pass the quantity: that must not stop a price correction.
+        if (quantity == line.Quantity)
+        {
+            return null;
         }
 
         // A seeding without a quantity counts as the whole line seeded: its quantity cannot be lowered.

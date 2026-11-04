@@ -23,13 +23,13 @@ public static class PurchaseReturnRules
         var known = receipt.Lines.Select(l => l.Id).ToHashSet();
         for (var i = 0; i < lines.Count; i++)
         {
-            if (lines[i].ReceiptLineId is not { } lineId || !known.Contains(lineId))
+            if (lines[i]?.ReceiptLineId is not { } lineId || !known.Contains(lineId))
             {
                 invalid.Add($"Line {i + 1}");
             }
         }
 
-        if (lines.Count == 0 || lines.Select(l => l.ReceiptLineId).Distinct().Count() != lines.Count)
+        if (lines.Count == 0 || lines.Select(l => l?.ReceiptLineId).Distinct().Count() != lines.Count)
         {
             invalid.Add("Lines");
         }
