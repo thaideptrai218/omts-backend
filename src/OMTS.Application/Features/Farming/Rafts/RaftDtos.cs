@@ -30,6 +30,9 @@ public sealed record RaftPhotoView(Guid Id, int SortOrder, string Url);
 public sealed record RaftListItem(
     Guid Id, Guid ZoneId, string Code, decimal? Latitude, decimal? Longitude, string? Size, int LaneCount, int StatusId, string Status);
 
+/// <summary>A raft in the filters of purchase receipts and material cost: names it, and nothing else of FARM-04.</summary>
+public sealed record RaftLookupItem(Guid Id, string Code, string ZoneCode);
+
 /// <param name="Photos">At most three, in slot order.</param>
 /// <param name="LaneCount">The number of lanes In Use.</param>
 /// <param name="Lanes">Every lane of the raft in number order, the Removed ones included.</param>

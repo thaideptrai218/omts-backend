@@ -140,8 +140,8 @@ public class RaftsV2QaTestsAccess(AuthApiFactory factory) : IClassFixture<AuthAp
         Assert.Contains(refused.StatusCode, new[] { HttpStatusCode.Forbidden, HttpStatusCode.Unauthorized });
     }
 
-    // FINDING M-1. §I.4.4: FARM-04 and CYCLE-05 are "No" for the Accountant, whose scope lists no raft or lane right; decision Q27 keeps
-    // the raft reads for the Zone Manager only (CYCLE, HARVEST, WATER screens). Actual: 200 with the photo links and the lanes of today.
+    // §I.4.4: FARM-04 and CYCLE-05 are "No" for the Accountant, whose scope lists no raft or lane right; decision Q27 keeps the raft reads for the
+    // Zone Manager only (CYCLE, HARVEST, WATER screens). The Accountant still sees the zone, on the map too, without its rafts.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -150,15 +150,40 @@ public class RaftsV2QaTestsAccess(AuthApiFactory factory) : IClassFixture<AuthAp
         var (_, zoneA, _, raft, _) = await ArrangeAsync();
         var accountant = await factory.StaffAsync(allZones ? null : await factory.ZoneEntityAsync(zoneA.Id()), StaffRole.Accountant);
 
-        var shown = new List<string>();
         foreach (var call in ReadCalls(accountant.Client, zoneA.Id(), raft.Id()))
         {
             var answer = await call;
-            shown.Add($"{answer.RequestMessage!.RequestUri!.AbsolutePath.Replace(zoneA.Id().ToString(), "{zone}").Replace(raft.Id().ToString(), "{raft}")} = {(int)answer.StatusCode}");
+            Assert.Equal(HttpStatusCode.Forbidden, answer.StatusCode);
+            Assert.Equal("MSG-GEN-08", await answer.ErrorCodeAsync());
         }
 
-        var onMap = (await accountant.Client.GetFromJsonAsync<JsonElement>("/api/zones/map")).EnumerateArray().Where(z => z.Id() == zoneA.Id()).Sum(z => z.GetProperty("rafts").GetArrayLength());
-        shown.Add($"rafts on /api/zones/map = {onMap}");
-        Assert.True(shown.Take(3).All(s => s.EndsWith("= 403", StringComparison.Ordinal)) && onMap == 0, string.Join(", ", shown));
+        await (await accountant.Client.GetAsync($"/api/zones/{zoneA.Id()}")).ReadAsync(HttpStatusCode.OK);
+        var onMap = (await accountant.Client.GetFromJsonAsync<JsonElement>("/api/zones/map")).EnumerateArray().Single(z => z.Id() == zoneA.Id());
+        Assert.Equal(0, onMap.GetProperty("rafts").GetArrayLength());
+    }
+
+    // BR-FARM-08, per pair: one person, Zone Manager in zone A and Accountant in zone B, reads the rafts of A and not those of B.
+    [Fact]
+    public async Task A_person_with_both_roles_reads_only_the_rafts_of_the_zone_manager_pair()
+    {
+        var (owner, zoneA, zoneB, raftA, _) = await ArrangeAsync();
+        var raftB = await owner.CreateRaftAsync(zoneB.Id());
+        var (staff, _) = await factory.StaffAccountAsync(await factory.ZoneEntityAsync(zoneA.Id()));
+        await factory.GrantAsync(staff, StaffRole.Accountant, await factory.ZoneEntityAsync(zoneB.Id()));
+        var client = await factory.LoginAsync(staff.Username);
+
+        foreach (var call in ReadCalls(client, zoneA.Id(), raftA.Id()))
+        {
+            await (await call).ReadAsync(HttpStatusCode.OK);
+        }
+
+        foreach (var call in ReadCalls(client, zoneB.Id(), raftB.Id()))
+        {
+            Assert.Equal("MSG-GEN-08", await (await call).ErrorCodeAsync());
+        }
+
+        var map = (await client.GetFromJsonAsync<JsonElement>("/api/zones/map")).EnumerateArray().ToDictionary(z => z.Id(), z => z.GetProperty("rafts").GetArrayLength());
+        Assert.Equal(1, map[zoneA.Id()]);
+        Assert.Equal(0, map[zoneB.Id()]);
     }
 }

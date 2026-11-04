@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
@@ -29,6 +31,12 @@ internal sealed class RaftRepository(OmtsDbContext db) : IRaftRepository
             .Include(r => r.Lanes)
             .Where(r => r.ZoneId == zoneId && (statusId == null || r.StatusId == statusId))
             .OrderBy(r => r.Code)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<RaftLookupItem>> ListForLookupAsync(PermittedZones permitted, CancellationToken cancellationToken) =>
+        await (permitted.AllZones ? db.Rafts.AsNoTracking() : db.Rafts.AsNoTracking().Where(r => permitted.ZoneIds.Contains(r.ZoneId)))
+            .OrderBy(r => r.Zone.Code).ThenBy(r => r.Code)
+            .Select(r => new RaftLookupItem(r.Id, r.Code, r.Zone.Code))
             .ToListAsync(cancellationToken);
 
     public Task<CultivationCycle?> GetOpenCycleAsync(Guid raftId, CancellationToken cancellationToken) =>

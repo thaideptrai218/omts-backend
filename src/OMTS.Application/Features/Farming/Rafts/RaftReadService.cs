@@ -6,8 +6,9 @@ using OMTS.Application.Common.Results;
 namespace OMTS.Application.Features.Farming.Rafts;
 
 /// <summary>
-/// FARM-04 reads, open to staff of the raft's zone (BR-FARM-08; a Zone Manager needs them for the CYCLE, HARVEST and WATER
-/// screens). The code proposal is for the Cooperative Owner (API filter).
+/// FARM-04 reads, open to the Cooperative Owner and to a Zone Manager in its zones (BR-FARM-08; it needs them for the CYCLE,
+/// HARVEST and WATER screens), not to an Accountant (<see cref="FarmingLookupAccess.VisibleRaftZonesAsync"/>). The code
+/// proposal is for the Cooperative Owner (API filter).
 /// </summary>
 public sealed class RaftReadService(
     IRaftRepository rafts,
@@ -24,7 +25,7 @@ public sealed class RaftReadService(
             return AppError.NotFound;
         }
 
-        if (!await lookupAccess.CanSeeZoneAsync(zoneId, cancellationToken))
+        if (!(await lookupAccess.VisibleRaftZonesAsync(cancellationToken)).Allows(zoneId))
         {
             return AppError.Forbidden;
         }
@@ -42,7 +43,7 @@ public sealed class RaftReadService(
             return AppError.NotFound;
         }
 
-        return await lookupAccess.CanSeeZoneAsync(raft.ZoneId, cancellationToken) ? await views.ViewAsync(raft, cancellationToken) : AppError.Forbidden;
+        return (await lookupAccess.VisibleRaftZonesAsync(cancellationToken)).Allows(raft.ZoneId) ? await views.ViewAsync(raft, cancellationToken) : AppError.Forbidden;
     }
 
     /// <summary>The proposed code of a new raft of the zone ({zone code}-B01, -B02…; GBR-03); the Owner may replace it.</summary>
@@ -63,7 +64,7 @@ public sealed class RaftReadService(
             return AppError.NotFound;
         }
 
-        return await lookupAccess.CanSeeZoneAsync(raft.ZoneId, cancellationToken)
+        return (await lookupAccess.VisibleRaftZonesAsync(cancellationToken)).Allows(raft.ZoneId)
             ? new RaftLanesToday(raft.Id, raft.Code, timeProvider.Today(), views.Lanes(raft))
             : AppError.Forbidden;
     }

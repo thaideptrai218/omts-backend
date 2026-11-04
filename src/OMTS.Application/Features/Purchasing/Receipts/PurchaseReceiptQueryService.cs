@@ -8,6 +8,7 @@ using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Employees;
+using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Enums;
@@ -88,6 +89,14 @@ public sealed class PurchaseReceiptQueryService(
                 new RaftRef(first.Raft!.Id, first.Raft.Code), new ZoneRef(first.Zone.Id, first.Zone.Code, first.Zone.Name), costs.Sum(c => c.MaterialCost), costs);
         }).OrderBy(r => r.Zone.Code).ThenBy(r => r.Raft.Code).ToList();
     }
+
+    /// <summary>
+    /// The raft filter of the list and of the material cost: the rafts of the zones whose receipts the caller may view,
+    /// Discontinued ones included because old receipts name them. It is how an Accountant, who may not read rafts (§I.4.4
+    /// FARM-04 No), fills a filter of PURCHASE-03 (R), so it holds id and codes only.
+    /// </summary>
+    public async Task<IReadOnlyList<RaftLookupItem>> RaftLookupAsync(CancellationToken cancellationToken) =>
+        await rafts.ListForLookupAsync(await zoneAccess.PermittedZonesAsync(PermissionFunctions.PurchaseReceipts, PermissionAction.View, cancellationToken), cancellationToken);
 
     /// <summary>The same rows and totals as the list, as an .xlsx file (Export permission, zones limited the same way).</summary>
     public async Task<Result<ExportedFile>> ExportAsync(PurchaseReceiptQuery query, CancellationToken cancellationToken)

@@ -10,7 +10,7 @@ namespace OMTS.Api.Controllers;
 
 /// <summary>
 /// FARM-04 – rafts with their lanes and photos. Writes are Cooperative Owner only; lists, detail and the lanes of today
-/// are open to staff holding a grant in the raft's zone.
+/// are open to the Owner and to a Zone Manager in the raft's zone, not to an Accountant (§I.4.4).
 /// </summary>
 [ApiController]
 [Authorize]

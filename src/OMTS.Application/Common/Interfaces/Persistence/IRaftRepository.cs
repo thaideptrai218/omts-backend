@@ -1,3 +1,5 @@
+using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
 
@@ -16,6 +18,9 @@ public interface IRaftRepository
 
     /// <summary>Rafts of a zone with their lanes, optional status, ordered by code.</summary>
     Task<IReadOnlyList<Raft>> ListByZoneAsync(Guid zoneId, int? statusId, CancellationToken cancellationToken);
+
+    /// <summary>Id, code and zone code of the rafts of these zones, Discontinued ones included, by zone code and code.</summary>
+    Task<IReadOnlyList<RaftLookupItem>> ListForLookupAsync(PermittedZones permitted, CancellationToken cancellationToken);
 
     Task<CultivationCycle?> GetOpenCycleAsync(Guid raftId, CancellationToken cancellationToken);
 
