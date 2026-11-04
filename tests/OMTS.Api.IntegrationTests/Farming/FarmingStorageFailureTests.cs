@@ -42,15 +42,15 @@ public class FarmingStorageFailureTests
         await AssertFileFailureAsync(edit);
         var replace = await owner.Client.PostAsync($"/api/zone-licenses/{existing.Id}/replace", new LicenseFields { DocumentNumber = number, EffectiveDate = Today }.ToForm());
         await AssertFileFailureAsync(replace);
-        var photo = await owner.Client.PostAsync($"/api/rafts/{raft.Id()}/photo", new MultipartFormDataContent { { FileContent(Png), "file", "raft.png" } });
+        var photo = await owner.Client.UploadRaftPhotoAsync(raft.Id());
         await AssertFileFailureAsync(photo);
 
         Assert.Equal(0, await factory.QueryAsync(db => db.ZoneComplianceDocuments.CountAsync(d => d.DocumentNumber == number || d.ReplacesDocumentId == existing.Id)));
         var kept = await factory.QueryAsync(db => db.ZoneComplianceDocuments.SingleAsync(d => d.Id == existing.Id));
         Assert.Null(kept.Holder);
         Assert.Equal(existing.EvidenceFileUrl, kept.EvidenceFileUrl);
-        Assert.Null((await factory.QueryAsync(db => db.Rafts.SingleAsync(r => r.Id == raft.Id()))).PhotoUrl);
-        Assert.Equal(0, await factory.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordType == "ZoneLicense" || (e.RecordId == raft.Id() && e.Action == "Raft.Updated"))));
+        Assert.Empty(await factory.RaftPhotoKeysAsync(raft.Id()));
+        Assert.Equal(0, await factory.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordType == "ZoneLicense" || (e.RecordId == raft.Id() && e.Action == "Raft.PhotosChanged"))));
         // Only the two blocking files: no stored file was left behind.
         Assert.Equal(2, Directory.GetFileSystemEntries(factory.StorageRoot, "*", SearchOption.AllDirectories).Length);
     }

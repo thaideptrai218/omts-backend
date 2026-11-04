@@ -57,24 +57,21 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
     }
 
     [Fact]
-    public async Task Raft_layout_is_versioned_and_blocked_while_a_cycle_is_open()
+    public async Task Raft_lanes_change_and_are_blocked_while_a_cycle_is_open()
     {
         var owner = await OwnerAsync();
         var zoneId = (await CreateZoneAsync(owner)).GetProperty("id").GetGuid();
 
         var created = await owner.PostAsJsonAsync($"/api/zones/{zoneId}/rafts", RaftBody(NewCode(), lanes: 5));
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-        var raft = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var raft = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("raft");
         var raftId = raft.GetProperty("id").GetGuid();
-        Assert.Equal(1, raft.GetProperty("layoutVersion").GetInt32());
+        Assert.Equal(5, raft.GetProperty("laneCount").GetInt32());
         // No purchase receipt is linked to the raft yet (INP-03).
         Assert.Equal(0, raft.GetProperty("materialCost").GetDecimal());
 
-        var gap = await owner.PostAsJsonAsync($"/api/zones/{zoneId}/rafts", RaftBody(NewCode(), lanes: 2) with
-        {
-            Lanes = [new(1, 10, "A", "B"), new(3, 10, "A", "B")],
-        });
-        Assert.Equal("MSG-GEN-01", await gap.ErrorCodeAsync());
+        var noLanes = await owner.PostAsJsonAsync($"/api/zones/{zoneId}/rafts", RaftBody(NewCode(), lanes: 0));
+        Assert.Equal("MSG-GEN-01", await noLanes.ErrorCodeAsync());
 
         // A zone with In Use rafts cannot be discontinued.
         var discontinueZone = await owner.PostAsJsonAsync($"/api/zones/{zoneId}/discontinue", new { rowVersion = await ZoneRowVersionAsync(owner, zoneId) });
@@ -85,8 +82,8 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
             RowVersion = raft.GetProperty("rowVersion").GetString(),
         });
         Assert.Equal(HttpStatusCode.OK, relaid.StatusCode);
-        var second = await relaid.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(2, second.GetProperty("layoutVersion").GetInt32());
+        var second = (await relaid.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("raft");
+        Assert.Equal(6, second.GetProperty("laneCount").GetInt32());
         Assert.Equal(6, second.GetProperty("lanes").GetArrayLength());
 
         await factory.UseDbAsync(db => db.CultivationCycles.Add(new CultivationCycle { RaftId = raftId, OpenedAt = DateTimeOffset.UtcNow.AddDays(-1) }));
@@ -98,9 +95,9 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
         var discontinue = await owner.PostAsJsonAsync($"/api/rafts/{raftId}/discontinue", new { rowVersion = second.GetProperty("rowVersion").GetString() });
         Assert.Equal("MSG-GEN-06", await discontinue.ErrorCodeAsync());
 
-        var condition = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raftId}/condition");
-        Assert.Equal(6, condition.GetProperty("lanes").GetArrayLength());
-        Assert.All(condition.GetProperty("lanes").EnumerateArray(), lane => Assert.Equal("NotSeeded", lane.GetProperty("summary").GetString()));
+        var today = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raftId}/lanes/today");
+        Assert.Equal(6, today.GetProperty("lanes").GetArrayLength());
+        Assert.All(today.GetProperty("lanes").EnumerateArray(), lane => Assert.Equal("In Use", lane.GetProperty("status").GetString()));
     }
 
     [Fact]
@@ -165,9 +162,7 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
 
     private static ZoneBodyDto ZoneBody(string code) => new(code, $"Zone {code}", "Bai Tu Long bay", 21.05m, 107.35m, 12.5m, "Buoy 3");
 
-    private static RaftBodyDto RaftBody(string code, int lanes) => new(
-        code, 21.05m, 107.35m, "Raft row 2", "40 m x 20 m", null,
-        Enumerable.Range(1, lanes).Select(n => new LaneDto(n, 40, "A", "B")).ToList());
+    private static RaftBodyDto RaftBody(string code, int lanes) => new(code, 21.05m, 107.35m, "Raft row 2", "40 m x 20 m", null, lanes);
 
     private static MultipartFormDataContent LicenseForm(Guid? zoneId, DateOnly effective, DateOnly expiry, string? rowVersion = null)
     {
@@ -197,8 +192,6 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
     private sealed record ZoneBodyDto(
         string Code, string Name, string Location, decimal? Latitude, decimal? Longitude, decimal Area, string WaterMeasurementPoint, string? RowVersion = null);
 
-    private sealed record LaneDto(int LaneNumber, decimal Length, string MarkerA, string MarkerB);
-
     private sealed record RaftBodyDto(
-        string Code, decimal Latitude, decimal Longitude, string Location, string Size, string? ConditionNotes, IReadOnlyList<LaneDto> Lanes, string? RowVersion = null);
+        string Code, decimal Latitude, decimal Longitude, string Location, string Size, string? ConditionNotes, int LaneCount, string? RowVersion = null);
 }

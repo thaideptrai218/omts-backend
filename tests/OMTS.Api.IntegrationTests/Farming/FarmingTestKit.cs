@@ -21,11 +21,8 @@ public sealed record Actor(HttpClient Client, Account Account, AccessGrant? Gran
 public sealed record ZoneBody(
     string? Code, string? Name, string? Location, decimal? Latitude, decimal? Longitude, decimal? Area, string? WaterMeasurementPoint, string? RowVersion = null);
 
-public sealed record LaneBody(int LaneNumber, decimal? Length, string? MarkerA, string? MarkerB);
-
 public sealed record RaftBody(
-    string? Code, decimal? Latitude, decimal? Longitude, string? Location, string? Size, string? ConditionNotes,
-    IReadOnlyList<LaneBody>? Lanes, object? LayoutDrawing = null, string? RowVersion = null);
+    string? Code, decimal? Latitude, decimal? Longitude, string? Location, string? Size, string? ConditionNotes, int? LaneCount, string? RowVersion = null);
 
 /// <summary>
 /// FARM-03 multipart form fields; <see cref="File"/> null sends no file. The expiry date is required since PR 0.8: it
@@ -147,9 +144,8 @@ public static class FarmingTestKit
         return new ZoneBody(code, $"Zone {code}", "Bai Tu Long bay", 21.05m, 107.35m, 12.5m, "Buoy 3");
     }
 
-    public static RaftBody NewRaftBody(string? code = null, int lanes = 5, decimal length = 40) => new(
-        code ?? NewCode(), 21.05m, 107.35m, "Raft row 2", "40 m x 20 m", null,
-        Enumerable.Range(1, lanes).Select(n => new LaneBody(n, length, "A", "B")).ToList());
+    public static RaftBody NewRaftBody(string? code = null, int lanes = 5) => new(
+        code ?? NewCode(), 21.05m, 107.35m, "Raft row 2", "40 m x 20 m", null, lanes);
 
     /// <summary>Creates a zone and returns the saved zone, the <c>zone</c> of the answer (FARM-02.0 step 6).</summary>
     public static async Task<JsonElement> CreateZoneAsync(this HttpClient owner, ZoneBody? body = null) =>
@@ -159,8 +155,29 @@ public static class FarmingTestKit
     public static async Task<JsonElement> EditZoneAsync(this HttpClient owner, Guid zoneId, ZoneBody body) =>
         (await (await owner.PutAsJsonAsync($"/api/zones/{zoneId}", body)).ReadAsync(HttpStatusCode.OK)).GetProperty("zone");
 
+    /// <summary>Creates a raft and returns the saved raft, the <c>raft</c> of the answer (FARM-04.0 step 6).</summary>
     public static async Task<JsonElement> CreateRaftAsync(this HttpClient owner, Guid zoneId, RaftBody? body = null) =>
-        await (await owner.PostAsJsonAsync($"/api/zones/{zoneId}/rafts", body ?? NewRaftBody())).ReadAsync(HttpStatusCode.Created);
+        (await (await owner.PostAsJsonAsync($"/api/zones/{zoneId}/rafts", body ?? NewRaftBody())).ReadAsync(HttpStatusCode.Created)).GetProperty("raft");
+
+    /// <summary>Edits a raft and returns the saved raft, the <c>raft</c> of the answer (FARM-04.2).</summary>
+    public static async Task<JsonElement> EditRaftAsync(this HttpClient owner, Guid raftId, RaftBody body) =>
+        (await (await owner.PutAsJsonAsync($"/api/rafts/{raftId}", body)).ReadAsync(HttpStatusCode.OK)).GetProperty("raft");
+
+    /// <summary>Posts one photo; the answer is the caller's to read.</summary>
+    public static Task<HttpResponseMessage> UploadRaftPhotoAsync(this HttpClient client, Guid raftId, byte[]? bytes = null, string name = "raft.png") =>
+        client.PostAsync($"/api/rafts/{raftId}/photos", new MultipartFormDataContent { { FileContent(bytes ?? Png, "image/png"), "file", name } });
+
+    /// <summary>Adds one photo and returns the saved raft.</summary>
+    public static async Task<JsonElement> AddRaftPhotoAsync(this HttpClient owner, Guid raftId, byte[]? bytes = null) =>
+        (await (await owner.UploadRaftPhotoAsync(raftId, bytes)).ReadAsync(HttpStatusCode.OK)).GetProperty("raft");
+
+    /// <summary>Storage keys of the photos of a raft, in slot order, read from the database.</summary>
+    public static Task<List<string>> RaftPhotoKeysAsync(this AuthApiFactory factory, Guid raftId) =>
+        factory.QueryAsync(db => db.RaftPhotos.Where(p => p.RaftId == raftId).OrderBy(p => p.SortOrder).Select(p => p.FileKey).ToListAsync());
+
+    /// <summary>Lane numbers of a raft answer that have the status, in number order.</summary>
+    public static List<int> LaneNumbers(this JsonElement raft, int statusId) => raft.GetProperty("lanes").EnumerateArray()
+        .Where(l => l.GetProperty("statusId").GetInt32() == statusId).Select(l => l.GetProperty("laneNumber").GetInt32()).ToList();
 
     public static async Task<JsonElement> CreateLicenseAsync(this HttpClient owner, LicenseFields fields) =>
         await (await owner.PostAsync("/api/zone-licenses", fields.ToForm())).ReadAsync(HttpStatusCode.Created);
@@ -199,20 +216,6 @@ public static class FarmingTestKit
         };
         await factory.UseDbAsync(db => db.CultivationCycles.Add(cycle));
         return cycle;
-    }
-
-    /// <summary>A lane segment as the CULT/HARV modules will record it (they do not exist yet).</summary>
-    public static async Task<LaneSegment> AddSegmentAsync(
-        this AuthApiFactory factory, Guid cycleId, Guid laneId, LaneSegmentType type, decimal from, decimal to, DateOnly date,
-        Guid recordedBy, string? writeOffReason = null)
-    {
-        var segment = new LaneSegment
-        {
-            CycleId = cycleId, LaneId = laneId, SegmentType = type, FromPosition = from, ToPosition = to, SegmentDate = date,
-            RecordedByAccountId = recordedBy, WriteOffReason = writeOffReason,
-        };
-        await factory.UseDbAsync(db => db.LaneSegments.Add(segment));
-        return segment;
     }
 
     /// <summary>
