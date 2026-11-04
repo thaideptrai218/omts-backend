@@ -45,7 +45,7 @@ public class ExpiryReminderAndZoneCodeRulesTests
         Assert.Equal((null, null), (record.ExpiringReminderSentAt, record.ExpiredReminderSentAt));
     }
 
-    // GFR-03 "only the newest license of a zone": the latest effective date that is not Replaced, then the latest recorded.
+    // The newest license of a zone (zone badge and overview): the latest effective date that is not Replaced, then the latest recorded.
     [Fact]
     public void Newest_license_of_a_zone_skips_replaced_ones_and_breaks_ties_by_record_time()
     {

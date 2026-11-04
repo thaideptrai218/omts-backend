@@ -6,7 +6,7 @@ namespace OMTS.Application.Features.Farming.Licenses;
 /// <summary>One license of a zone with its state on the day asked for.</summary>
 public sealed record ZoneLicenseRow(LicenseWithReplacement License, LicenseState State);
 
-/// <summary>FARM-03 licenses of a zone as of a date, and the newest license that GFR-03 reminds.</summary>
+/// <summary>FARM-03 licenses of a zone as of a date, and the newest license that the zone list badge and overview show.</summary>
 public static class ZoneLicenseOverview
 {
     /// <summary>The licenses of <paramref name="zoneId"/> with their state on <paramref name="day"/>, newest first.</summary>
@@ -16,8 +16,8 @@ public static class ZoneLicenseOverview
             .ToList();
 
     /// <summary>
-    /// The newest license of the zone that is not Replaced: the latest effective date, then the latest recorded. Only this
-    /// one is reminded (GFR-03), and its state is the badge of the zone.
+    /// The newest license of the zone that is not Replaced: the latest effective date, then the latest recorded. For display
+    /// only: its state is the badge of the zone. GFR-03 reminds every license that is not Replaced, not only this one.
     /// </summary>
     public static LicenseWithReplacement? Newest(Guid zoneId, IEnumerable<LicenseWithReplacement> licenses) =>
         NewestFirst(licenses.Where(l => l.Document.ZoneId == zoneId && !l.IsReplaced)).FirstOrDefault();

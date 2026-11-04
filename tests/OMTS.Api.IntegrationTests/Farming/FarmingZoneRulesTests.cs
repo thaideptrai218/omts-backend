@@ -216,7 +216,7 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(100, capped.GetProperty("pageSize").GetInt32());
     }
 
-    // The badge is the state today of the zone's newest license that is not Replaced (the one GFR-03 reminds).
+    // The badge is the state today of the zone's newest license that is not Replaced.
     [Fact]
     public async Task License_badge_shows_the_state_of_the_newest_license_today_to_the_owner_only()
     {

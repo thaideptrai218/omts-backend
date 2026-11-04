@@ -187,7 +187,7 @@ public sealed class FarmingZoneService(
 
     /// <summary>
     /// FARM-02.3 Resume: Discontinued → In Use with the same code and history, always allowed. Its rafts keep their own
-    /// status, and its newest license is reminded again from the next check (GFR-03).
+    /// status, and its licenses that are not Replaced are reminded again from the next check (GFR-03).
     /// </summary>
     public async Task<Result<FarmingZoneView>> ReactivateAsync(Guid zoneId, ChangeStatusRequest request, CancellationToken cancellationToken)
     {

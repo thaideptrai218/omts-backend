@@ -43,7 +43,6 @@ public class ZoneLicenseReminderFailureTests(FailingNoticeApiFactory factory) : 
     public async Task A_failing_license_is_logged_and_skipped_while_the_others_are_reminded()
     {
         var owner = await factory.OwnerAsync();
-        // Two zones: only the newest license of a zone is reminded.
         var failing = await owner.Client.CreateLicenseAsync(new LicenseFields
         {
             DocumentNumber = $"GP-{FailingNoticeApiFactory.Marker}-{NewCode()}", ZoneId = (await owner.Client.CreateZoneAsync()).Id(),

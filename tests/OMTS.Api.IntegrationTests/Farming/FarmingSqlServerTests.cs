@@ -161,8 +161,9 @@ public class FarmingSqlServerTests
         var raft = await owner.CreateRaftAsync(zoneA.Id(), NewRaftBody(lanes: 3));
         await owner.CreateRaftAsync(zoneB.Id());
         var license = await owner.CreateLicenseAsync(new LicenseFields { ZoneId = zoneA.Id(), EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(30) });
-        // Zone B: an older expired license next to a newer valid one (only the newest one counts for the badge and reminder).
-        await owner.CreateLicenseAsync(new LicenseFields { ZoneId = zoneB.Id(), EffectiveDate = Today.AddYears(-3), ExpiryDate = Today.AddDays(-30) });
+        // Zone B: an older expired license next to a newer valid one (only the newest one counts for the badge; the older
+        // one, not Replaced, still gets its Expired reminder).
+        var olderExpired = await owner.CreateLicenseAsync(new LicenseFields { ZoneId = zoneB.Id(), EffectiveDate = Today.AddYears(-3), ExpiryDate = Today.AddDays(-30) });
         await owner.CreateLicenseAsync(new LicenseFields { ZoneId = zoneB.Id(), EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(31) });
         var staff = await host.StaffInZoneAsync(zoneA.Id());
 
@@ -196,8 +197,11 @@ public class FarmingSqlServerTests
         Assert.Equal([3], blocked.GetProperty("laneNumbers").EnumerateArray().Select(n => n.GetInt32()));
 
         var job = host.Api.Services.GetRequiredService<ZoneLicenseReminderJob>();
-        Assert.Equal(1, await job.RunOnceAsync(Today));
+        Assert.Equal(2, await job.RunOnceAsync(Today));
         Assert.Equal(0, await job.RunOnceAsync(Today));
+        var olderExpiredId = olderExpired.Id();
+        Assert.Equal("MSG-FARM-02", await host.QueryAsync(db => db.Notifications
+            .Where(n => n.RelatedRecordId == olderExpiredId).Select(n => n.MessageCode).SingleAsync()));
         var licenseId = license.Id();
         var recipients = await host.QueryAsync(db => db.Notifications
             .Where(n => n.Type == NotificationTypes.ZoneLicenseExpiry && n.RelatedRecordId == licenseId).Select(n => n.RecipientAccountId).ToListAsync());

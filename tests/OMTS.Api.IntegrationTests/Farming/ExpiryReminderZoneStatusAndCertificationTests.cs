@@ -84,6 +84,33 @@ public class ExpiryReminderZoneStatusAndCertificationTests(AuthApiFactory factor
         Assert.All(late, n => Assert.Contains("in 5 days.", n.Body!, StringComparison.Ordinal));
     }
 
+    // Two licenses of one zone: after a resume each gets only the notice of its own state not sent yet.
+    [Fact]
+    public async Task After_a_resume_each_license_of_the_zone_gets_only_its_own_notice_not_sent_yet()
+    {
+        var owner = await factory.OwnerAsync();
+        var zone = await owner.Client.CreateZoneAsync();
+        var told = await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zone.Id(), EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(20) });
+        var untold = await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zone.Id(), EffectiveDate = Today.AddYears(-2), ExpiryDate = Today.AddDays(40) });
+        await Job.RunOnceAsync(Today);
+        var owners = (await ActiveOwnersAsync()).Count;
+        Assert.Equal(owners, (await NoticesAsync(told.Id())).Count);
+        Assert.Empty(await NoticesAsync(untold.Id()));
+
+        var stopped = await DiscontinueAsync(owner.Client, zone);
+        await Job.RunOnceAsync(Today.AddDays(15));
+        Assert.Empty(await NoticesAsync(untold.Id()));
+
+        await ResumeAsync(owner.Client, zone, stopped);
+        await Job.RunOnceAsync(Today.AddDays(15));
+        await Job.RunOnceAsync(Today.AddDays(15));
+
+        Assert.Equal(owners, (await NoticesAsync(told.Id())).Count);
+        var late = await NoticesAsync(untold.Id());
+        Assert.Equal(owners, late.Count);
+        Assert.All(late, n => Assert.Contains("in 25 days.", n.Body!, StringComparison.Ordinal));
+    }
+
     // GFR-03 covers the cooperative certifications: the Owner only, mandatory, once per state, re-armed by a new expiry date.
     [Fact]
     public async Task Certifications_are_reminded_to_the_owner_once_per_state()

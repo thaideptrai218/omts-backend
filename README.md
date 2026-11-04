@@ -262,8 +262,8 @@ sent is never sent again.
 The expiry reminder (GFR-03, `ZoneLicenseReminderJob`, 07:00) checks the zone licenses and the cooperative certifications.
 It notifies the active Cooperative Owners only (mandatory push), once when a record becomes Expiring soon (30 days or fewer,
 MSG-FARM-01) and once when it becomes Expired (MSG-FARM-02); a record found already Expired gets the Expired notice only.
-Only the newest license of an In Use zone is reminded (the latest effective date that is not Replaced): a Replaced
-license and the licenses of a Discontinued zone are not. After a resume, the newest license gets the notice of its
+Every license of an In Use zone that is not Replaced is reminded on its own state, not only the newest one: a Replaced
+license and the licenses of a Discontinued zone are not. After a resume, each of these licenses gets the notice of its
 current state at the next check if that notice was not sent yet; nothing is sent twice. A new expiry date re-arms both
 notices.
 

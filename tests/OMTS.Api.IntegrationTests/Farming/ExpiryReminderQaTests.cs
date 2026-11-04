@@ -17,7 +17,7 @@ namespace OMTS.Api.IntegrationTests.Farming;
 
 /// <summary>
 /// QA of OMTS-217 PR 0.8, GFR-03: the exact day boundaries of licenses and certifications with their parameters, a
-/// replacement reminded on its own, a newest license that is not effective yet, locked Owners, the mandatory type.
+/// replacement reminded on its own, a license that is not effective yet, locked Owners, the mandatory type.
 /// </summary>
 public class ExpiryReminderQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
@@ -123,9 +123,10 @@ public class ExpiryReminderQaTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(["MSG-FARM-01", "MSG-FARM-02"], (await NoticesAsync(owner, replacement)).Select(n => n.MessageCode).Order());
     }
 
-    // "Newest" is by effective date: a license starting later takes over at once; it is told only once it is effective.
+    // A license starting later does not take the notices of the current one: each is told on its own state, the later one
+    // only once it is effective.
     [Fact]
-    public async Task A_newest_license_not_yet_effective_is_told_from_its_effective_date_and_the_older_one_not_at_all()
+    public async Task A_license_not_yet_effective_is_told_from_its_effective_date_and_the_current_one_on_its_own()
     {
         var today = Today;
         var owner = await factory.OwnerAsync();
@@ -134,12 +135,12 @@ public class ExpiryReminderQaTests(AuthApiFactory factory) : IClassFixture<AuthA
         var later = (await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zone.Id(), EffectiveDate = today.AddDays(5), ExpiryDate = today.AddDays(25) })).Id();
 
         await Job.RunOnceAsync(today);
-        Assert.Empty(await NoticesAsync(owner, current));
+        Assert.Equal(10, Params(Assert.Single(await NoticesAsync(owner, current))).GetProperty("days").GetInt32());
         Assert.Empty(await NoticesAsync(owner, later));
 
         await Job.RunOnceAsync(today.AddDays(5));
 
-        Assert.Empty(await NoticesAsync(owner, current));
+        Assert.Single(await NoticesAsync(owner, current));
         Assert.Equal(20, Params(Assert.Single(await NoticesAsync(owner, later))).GetProperty("days").GetInt32());
     }
 

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.Farming.Licenses;
 using OMTS.Application.Features.Notifications;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
@@ -17,8 +18,8 @@ using static OMTS.Api.IntegrationTests.Farming.FarmingTestKit;
 namespace OMTS.Api.IntegrationTests.Farming;
 
 /// <summary>
-/// GFR-03 for zone licenses: the Cooperative Owner only, a mandatory type, one notice per state, only the newest license of
-/// a zone, idempotent runs, re-arming on a new expiry date.
+/// GFR-03 for zone licenses: the Cooperative Owner only, a mandatory type, one notice per state, every license of a zone
+/// that is not Replaced, idempotent runs, re-arming on a new expiry date.
 /// </summary>
 public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
@@ -40,7 +41,7 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
         };
 
         var license = await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zoneA.Id, EffectiveDate = Today.AddDays(-300), ExpiryDate = Today.AddDays(30) });
-        // An older license of the same zone: only the newest license of a zone is reminded.
+        // An older license of the same zone, not Replaced: reminded on its own state.
         var older = await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zoneA.Id, EffectiveDate = Today.AddDays(-900), ExpiryDate = Today.AddDays(-10) });
         var notDueYet = await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zoneB.Id, EffectiveDate = Today.AddDays(-300), ExpiryDate = Today.AddDays(31) });
         var replaced = await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zoneC.Id, EffectiveDate = Today.AddDays(-300), ExpiryDate = Today.AddDays(5) });
@@ -66,7 +67,9 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
             // A mandatory type (BR-ACCOUNT-11).
             Assert.True(n.IsMandatory);
         });
-        Assert.Empty(await NoticesAsync(older.Id()));
+        var olderFirst = await NoticesAsync(older.Id());
+        Assert.Equal(owners, olderFirst.Select(n => n.RecipientAccountId).Order());
+        Assert.All(olderFirst, n => Assert.Equal("MSG-FARM-02", n.MessageCode));
         Assert.Empty(await NoticesAsync(notDueYet.Id()));
         Assert.Empty(await NoticesAsync(replaced.Id()));
 
@@ -79,8 +82,69 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
         Assert.Equal(owners.Count * 2, all.Count);
         Assert.Equal(owners.Count, all.Count(n => n.MessageCode == "MSG-FARM-02" && n.Title == "Zone license expired"
             && n.Body!.EndsWith($"expired on {Date(Today.AddDays(30))}. Please renew it and record the new one.", StringComparison.Ordinal)));
-        Assert.Empty(await NoticesAsync(older.Id()));
+        Assert.Equal(owners.Count, (await NoticesAsync(older.Id())).Count);
         Assert.Empty(await NoticesAsync(replaced.Id()));
+    }
+
+    // OMTS-217, PM council 03/11: GFR-03 covers every license that is not Replaced, not only the newest one of the zone.
+    [Fact]
+    public async Task Every_license_of_a_zone_that_is_not_replaced_is_reminded_once_and_a_replaced_one_is_not()
+    {
+        using var api = new AuthApiFactory();
+        var owner = await api.OwnerAsync();
+        var zone = (await owner.Client.CreateZoneAsync()).Id();
+        var newer = await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zone, DocumentType = null, EffectiveDate = Today.AddDays(-100), ExpiryDate = Today.AddDays(20) });
+        var older = await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zone, EffectiveDate = Today.AddDays(-300), ExpiryDate = Today.AddDays(10) });
+        var replaced = await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zone, EffectiveDate = Today.AddDays(-400), ExpiryDate = Today.AddDays(5) });
+        var replacement = await (await owner.Client.PostAsync($"/api/zone-licenses/{replaced.Id()}/replace", new LicenseFields
+        {
+            EffectiveDate = Today.AddDays(-50), ExpiryDate = Today.AddYears(5),
+        }.ToForm())).ReadAsync(HttpStatusCode.Created);
+        var job = api.Services.GetRequiredService<ZoneLicenseReminderJob>();
+
+        Assert.Equal(2, await job.RunOnceAsync(Today));
+
+        // Each on its own state and markers, to the Owner.
+        var notices = await api.QueryAsync(db => db.Notifications.Where(n => n.Type == NotificationTypes.ZoneLicenseExpiry).ToListAsync());
+        Assert.Equal(new[] { newer.Id(), older.Id() }.Order(), notices.Select(n => n.RelatedRecordId!.Value).Order());
+        Assert.All(notices, n => Assert.Equal((owner.Account.Id, "MSG-FARM-01"), (n.RecipientAccountId, n.MessageCode)));
+        Assert.Contains(", in 20 days.", notices.Single(n => n.RelatedRecordId == newer.Id()).Body, StringComparison.Ordinal);
+        Assert.Contains(", in 10 days.", notices.Single(n => n.RelatedRecordId == older.Id()).Body, StringComparison.Ordinal);
+        var saved = await api.QueryAsync(db => db.ZoneComplianceDocuments.ToDictionaryAsync(d => d.Id));
+        Assert.NotNull(saved[newer.Id()].ExpiringReminderSentAt);
+        Assert.NotNull(saved[older.Id()].ExpiringReminderSentAt);
+        Assert.Null(saved[replaced.Id()].ExpiringReminderSentAt);
+        Assert.Null(saved[replacement.Id()].ExpiringReminderSentAt);
+
+        // The next day nothing is due again.
+        Assert.Equal(0, await job.RunOnceAsync(Today.AddDays(1)));
+        Assert.Equal(2, await api.QueryAsync(db => db.Notifications.CountAsync(n => n.Type == NotificationTypes.ZoneLicenseExpiry)));
+
+        // The older license expires while the newer one is still Expiring soon: only its own state moves on.
+        Assert.Equal(1, await job.RunOnceAsync(Today.AddDays(11)));
+        var expired = Assert.Single(await api.QueryAsync(db => db.Notifications.Where(n => n.MessageCode == "MSG-FARM-02").ToListAsync()));
+        Assert.Equal(older.Id(), expired.RelatedRecordId);
+    }
+
+    // A license replaced after the candidates were listed is still not reminded: the service checks it again.
+    [Fact]
+    public async Task A_license_replaced_after_the_candidate_list_gets_no_notice()
+    {
+        using var api = new AuthApiFactory();
+        var owner = await api.OwnerAsync();
+        var zone = (await owner.Client.CreateZoneAsync()).Id();
+        var license = await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zone, EffectiveDate = Today.AddDays(-300), ExpiryDate = Today.AddDays(5) });
+        using var scope = api.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ZoneLicenseReminderService>();
+        Assert.Contains(license.Id(), await service.CandidateIdsAsync(Today, default));
+
+        await (await owner.Client.PostAsync($"/api/zone-licenses/{license.Id()}/replace", new LicenseFields
+        {
+            EffectiveDate = Today, ExpiryDate = Today.AddYears(5),
+        }.ToForm())).ReadAsync(HttpStatusCode.Created);
+
+        Assert.False(await service.RemindAsync(license.Id(), Today, default));
+        Assert.Empty(await api.QueryAsync(db => db.Notifications.Where(n => n.RelatedRecordId == license.Id()).ToListAsync()));
     }
 
     // A record entered when it is already Expired gets the Expired notice only, at the next check (GFR-03).

@@ -71,7 +71,7 @@ public sealed record ZoneLicenseView(
     string RowVersion);
 
 /// <summary>One license of a zone's list, with its state on the day asked for.</summary>
-/// <param name="IsNewest">The newest license that is not Replaced: the one GFR-03 reminds.</param>
+/// <param name="IsNewest">The newest license that is not Replaced: the one the zone list badge shows (GFR-03 reminds them all).</param>
 public sealed record ZoneLicenseRowView(
     string? DocumentType,
     string? DocumentTypeName,

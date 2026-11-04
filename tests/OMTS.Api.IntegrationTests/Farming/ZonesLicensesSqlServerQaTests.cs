@@ -228,9 +228,9 @@ public class ZonesLicensesSqlServerQaTests
         Assert.Equal(new string('Đ', 50), JsonDocument.Parse(notices[license.Id()].MessageParams!).RootElement.GetProperty("zone_codes")[0].GetString());
     }
 
-    // The demo data behaves as its comments say on the first daily check after a rerun of the seed: two notices, then none.
+    // The demo data behaves as its comments say on the first daily check after a rerun of the seed: three notices, then none.
     [SqlServerFact]
-    public async Task After_a_rerun_of_the_demo_seed_the_job_reminds_only_the_two_records_meant_for_it()
+    public async Task After_a_rerun_of_the_demo_seed_the_job_reminds_only_the_three_records_meant_for_it()
     {
         var storageRoot = Path.Combine(Path.GetTempPath(), $"omts-demo-files-{Guid.NewGuid():N}");
         try
@@ -252,7 +252,7 @@ public class ZonesLicensesSqlServerQaTests
             }
 
             var job = api.Services.GetRequiredService<ZoneLicenseReminderJob>();
-            Assert.Equal(2, await job.RunOnceAsync(Today));
+            Assert.Equal(3, await job.RunOnceAsync(Today));
             Assert.Equal(0, await job.RunOnceAsync(Today));
 
             using var read = api.Services.CreateScope();
@@ -261,7 +261,7 @@ public class ZonesLicensesSqlServerQaTests
                 .Where(n => n.Type == OMTS.Application.Features.Notifications.NotificationTypes.ZoneLicenseExpiry
                     || n.Type == OMTS.Application.Features.Notifications.NotificationTypes.CooperativeCertificationExpiry)
                 .Select(n => n.RelatedRecordCode).Distinct().ToListAsync();
-            Assert.Equal(new[] { "ATTP-DEMO-2024-02", "NTTS-2025-DEMO-01" }, codes.Order());
+            Assert.Equal(new[] { "ATTP-DEMO-02", "ATTP-DEMO-2024-02", "NTTS-2025-DEMO-01" }, codes.Order());
         }
         finally
         {

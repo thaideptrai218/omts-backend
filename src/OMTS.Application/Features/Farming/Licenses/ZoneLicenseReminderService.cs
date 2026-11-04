@@ -6,12 +6,13 @@ using OMTS.Domain.Constants;
 namespace OMTS.Application.Features.Farming.Licenses;
 
 /// <summary>
-/// GFR-03 for zone licenses, one license per call so that a failing license is skipped without touching the others. Only
-/// the newest license of an In Use zone is reminded (a Replaced license and the licenses of a discontinued zone are not):
-/// once when it becomes Expiring soon (MSG-FARM-01) and once when it becomes Expired (MSG-FARM-02), to the active
-/// Cooperative Owners only, as the mandatory type ZONE_LICENSE_EXPIRY (BR-ACCOUNT-11). The markers make a second run on
-/// the same day, a catch-up or a discontinue and resume of the zone send nothing twice: after a resume, the newest license
-/// gets the notice of its current state at the next check if that notice was not sent yet.
+/// GFR-03 for zone licenses, one license per call so that a failing license is skipped without touching the others. Every
+/// license of an In Use zone that is not Replaced is reminded, on its own state and markers, whatever its type and whether
+/// or not it is the newest of the zone (a Replaced license and the licenses of a discontinued zone are not): once when it
+/// becomes Expiring soon (MSG-FARM-01) and once when it becomes Expired (MSG-FARM-02), to the active Cooperative Owners
+/// only, as the mandatory type ZONE_LICENSE_EXPIRY (BR-ACCOUNT-11). The markers make a second run on the same day, a
+/// catch-up or a discontinue and resume of the zone send nothing twice: after a resume, each of these licenses gets the
+/// notice of its current state at the next check if that notice was not sent yet.
 /// </summary>
 public sealed class ZoneLicenseReminderService(
     IZoneLicenseRepository licenses,
@@ -33,13 +34,13 @@ public sealed class ZoneLicenseReminderService(
             return false;
         }
 
-        var newest = ZoneLicenseOverview.Newest(document.ZoneId, await licenses.ListForZonesAsync([document.ZoneId], cancellationToken));
-        if (newest?.Document.Id != document.Id)
+        // Checked again here: the license may have been replaced since the candidates were listed.
+        if (await licenses.FindReplacementAsync(document.Id, cancellationToken) is not null)
         {
             return false;
         }
 
-        var state = LicenseStateRules.StateOn(ZoneLicenseOverview.Facts(newest), today);
+        var state = LicenseStateRules.StateOn(new LicenseFacts(document.EffectiveDate, document.ExpiryDate, ReplacedOn: null), today);
         if (ExpiryReminderRule.Due(state == LicenseState.ExpiringSoon, state == LicenseState.Expired, document) is not { } notice)
         {
             return false;

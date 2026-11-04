@@ -7,7 +7,7 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 /// FARM-03: licenses of the In Use demo zones, one zone each, dated from today and matched by number. DEMO-01: a license
 /// that expired 400 days ago, replaced by the current one, which expires in 20 days (the daily reminder sends MSG-FARM-01
 /// for it). DEMO-02: the current license, valid for 700 more days, and an older food safety commitment that expired
-/// 15 days ago (shown Expired, not reminded: only the newest license of a zone is, GFR-03).
+/// 15 days ago (the daily reminder sends MSG-FARM-02 for it: every license that is not Replaced is reminded, GFR-03).
 /// </summary>
 internal sealed class DemoZoneLicenseStep : IDemoSeedStep
 {
