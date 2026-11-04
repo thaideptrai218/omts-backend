@@ -204,7 +204,13 @@ public static class DependencyInjection
 
     private static void AddPayments(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddOptions<PaymentNotificationOptions>().Bind(configuration.GetSection(PaymentNotificationOptions.SectionName));
+        // A text that is no number already fails the binding, and ValidateOnStart brings that to startup too.
+        services.AddOptions<PaymentNotificationOptions>()
+            .Bind(configuration.GetSection(PaymentNotificationOptions.SectionName))
+            .Validate(
+                o => o.TimeoutSeconds is >= PaymentNotificationOptions.MinTimeoutSeconds and <= PaymentNotificationOptions.MaxTimeoutSeconds,
+                $"{PaymentNotificationOptions.SectionName}:TimeoutSeconds must be from {PaymentNotificationOptions.MinTimeoutSeconds} to {PaymentNotificationOptions.MaxTimeoutSeconds} seconds.")
+            .ValidateOnStart();
         services.AddOptions<PaymentProviderOptions>().Bind(configuration.GetSection(PaymentProviderOptions.SectionName));
         services.AddSingleton<FakePaymentNotificationService>();
         services.AddSingleton<IPaymentNotificationService>(provider =>

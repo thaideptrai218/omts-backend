@@ -18,14 +18,17 @@ public sealed class ReceivingAccountAcceptance(
 {
     public async Task<AccountAcceptanceResult> AskAsync(ReceivingAccountToAccept account, CancellationToken cancellationToken)
     {
-        var timeout = TimeSpan.FromSeconds(Math.Max(1, options.Value.TimeoutSeconds));
-        using var timeoutSource = new CancellationTokenSource(timeout, timeProvider);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
+        // Not "using": a provider that ignores its token outlives this method and may still look at the token.
+        var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(options.Value.TimeoutSeconds), timeProvider);
+        var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
+        Task<AccountAcceptanceResult>? call = null;
         AccountAcceptanceResult answer;
         try
         {
-            // WaitAsync also ends the wait for a provider that ignores the token.
-            answer = await service.AcceptAccountAsync(account, linked.Token).WaitAsync(timeout, timeProvider, cancellationToken);
+            // The wait ends on the very token the provider holds, so it is always told, and a provider that ignores it
+            // still cannot hold up the answer.
+            call = service.AcceptAccountAsync(account, linked.Token);
+            answer = await call.WaitAsync(linked.Token);
         }
         catch (Exception exception) when (exception is TimeoutException || (exception is OperationCanceledException && !cancellationToken.IsCancellationRequested))
         {
@@ -37,14 +40,45 @@ public sealed class ReceivingAccountAcceptance(
             logger.LogError("Payment Notification Service call failed: {ExceptionType}", exception.GetType().Name);
             answer = AccountAcceptanceResult.Unavailable("ERROR");
         }
+        finally
+        {
+            DisposeWhenTheCallEnds(call, linked, timeoutSource);
+        }
 
         if (answer.Outcome != AccountAcceptanceOutcome.Accepted)
         {
             logger.LogWarning(
                 "Payment Notification Service did not accept account {Account}: {Outcome} {Reason}",
-                Masking.AccountNumber(account.AccountNumber), answer.Outcome, answer.Reason);
+                Masking.ReceivingAccountNumber(account.AccountNumber), answer.Outcome, answer.Reason);
         }
 
         return answer;
+    }
+
+    private static void DisposeWhenTheCallEnds(Task? call, CancellationTokenSource linked, CancellationTokenSource timeoutSource)
+    {
+        void Dispose()
+        {
+            linked.Dispose();
+            timeoutSource.Dispose();
+        }
+
+        if (call is null)
+        {
+            Dispose();
+            return;
+        }
+
+        // On the thread pool, not inline: the call often ends inside the Cancel of these very sources.
+        _ = call.ContinueWith(
+            ended =>
+            {
+                // Observed: a failure that comes after the user has the answer has nobody left to tell.
+                _ = ended.Exception;
+                Dispose();
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.None,
+            TaskScheduler.Default);
     }
 }

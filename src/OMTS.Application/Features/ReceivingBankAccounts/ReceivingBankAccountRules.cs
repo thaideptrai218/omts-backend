@@ -1,5 +1,8 @@
+using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using OMTS.Application.Common.Interfaces.Payments;
+using OMTS.Application.Common.Validation;
 
 namespace OMTS.Application.Features.ReceivingBankAccounts;
 
@@ -36,14 +39,21 @@ public static partial class ReceivingBankAccountRules
             invalid.Add(AccountNumberField);
         }
 
-        var holder = request.AccountHolderName?.Trim() ?? string.Empty;
-        if (holder.Length is 0 or > MaxAccountHolderName || holder.Any(char.IsControl))
+        // A control character inside the name stays a refusal, as the form promises. What shows nothing is removed and the
+        // Unicode line and paragraph separators become a space, before the service, the question or the database sees it.
+        var entered = request.AccountHolderName?.Trim() ?? string.Empty;
+        var holder = DisplayNames.Normalize(entered);
+        if (holder.Length > MaxAccountHolderName || entered.Any(char.IsControl) || HasNothingToRead(holder))
         {
             invalid.Add(AccountHolderField);
         }
 
         return (new ReceivingAccountToAccept(bank?.Bin ?? string.Empty, bank?.ShortName ?? string.Empty, number, holder.ToUpperInvariant()), invalid);
     }
+
+    // Empty, or only marks with no letter to sit on: the name is missing (BR-DEBT-01). An emoji does count as something to read.
+    private static bool HasNothingToRead(string name) => name.EnumerateRunes().All(rune =>
+        Rune.GetUnicodeCategory(rune) is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark or UnicodeCategory.EnclosingMark);
 
     [GeneratedRegex(@"\A[0-9A-Za-z]{1,19}\z")]
     private static partial Regex AccountNumberPattern();

@@ -47,20 +47,31 @@ public sealed class BankAccountQaTestsProvider
         Assert.DoesNotContain(SecretSetting, string.Join('\n', factory.Logs.Lines));
     }
 
+    // Adapted with L3: these once counted as 1 second; the lead decided that a value that cannot be meant stops the host.
     [Theory]
     [InlineData("0")]
     [InlineData("-5")]
-    public async Task A_timeout_below_one_second_counts_as_one_second(string seconds)
+    [InlineData("301")]
+    public void A_timeout_outside_its_range_stops_the_host_and_names_the_setting(string seconds)
+    {
+        using var factory = new AuthApiFactory();
+        using var api = factory.WithWebHostBuilder(b => b.UseSetting("Payments:TimeoutSeconds", seconds));
+
+        var failure = Assert.ThrowsAny<Exception>(() => api.CreateClient());
+
+        Assert.Contains("Payments:TimeoutSeconds", failure.ToString());
+    }
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("300")]
+    public async Task A_timeout_at_the_ends_of_its_range_works(string seconds)
     {
         using var factory = new AuthApiFactory();
         await using var api = factory.WithWebHostBuilder(b => b.UseSetting("Payments:TimeoutSeconds", seconds));
         var owner = await OwnerAsync(factory, api);
 
-        var saved = await owner.PutAsJsonAsync(Route, Body(await RowVersionAsync(owner)));
-        var silent = await owner.PutAsJsonAsync(Route, Body(await RowVersionAsync(owner), number: SilentForFake));
-
-        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, silent.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await owner.PutAsJsonAsync(Route, Body(await RowVersionAsync(owner)))).StatusCode);
     }
 
     // ExternalServicesStartupCheck: "a configuration error stops the host instead of failing the first user request". The
@@ -89,11 +100,15 @@ public sealed class BankAccountQaTestsProvider
     }
 
     // The branch states that its numbers hold letters so that nobody takes them for a real account. Digits only at a real
-    // bank could be someone's account, so these are reported for the lead to decide, not guessed at.
+    // bank could be someone's account. Reported for the lead to decide: where the employee rule allows digits only, the
+    // lead chose the fictional pattern 9999 0000 0xxx, which this now accepts (see IsObviouslyNoAccount).
     [Fact]
     public void L5_demo_employees_hold_no_number_that_could_be_a_real_account()
     {
-        var plausible = DemoEmployeePlans.All.Where(p => p.BankAccountNumber.All(char.IsAsciiDigit)).Select(p => $"{p.BankName} {p.BankAccountNumber}").ToList();
+        var plausible = DemoEmployeePlans.All
+            .Where(p => p.BankAccountNumber.All(char.IsAsciiDigit) && !IsObviouslyNoAccount(p.BankAccountNumber))
+            .Select(p => $"{p.BankName} {p.BankAccountNumber}")
+            .ToList();
 
         Assert.Empty(plausible);
     }
@@ -119,7 +134,8 @@ public sealed class BankAccountQaTestsProvider
         Assert.Empty(plausible.Where(p => !IsObviouslyNoAccount(p.Split(' ')[^1])).Distinct());
     }
 
-    private static bool IsObviouslyNoAccount(string number) => number.Distinct().Count() == 1;
+    private static bool IsObviouslyNoAccount(string number) =>
+        number.Distinct().Count() == 1 || number.StartsWith("99990000", StringComparison.Ordinal);
 
     private static string RepositoryRoot()
     {

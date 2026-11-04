@@ -142,6 +142,8 @@ public sealed class BankAccountQaTestsMigrationAndDemo
 
             Assert.Equal(DeploymentBootstrapper.Success, outcome.ExitCode);
             Assert.True(await QueryAsync(api, db => db.FarmingZones.AnyAsync()));
+            Assert.Contains(outcome.Messages, m => m.StartsWith("Demo receiving bank account: skipped", StringComparison.Ordinal) && m.Contains("MSG-DEBT-02"));
+            Assert.Null(await QueryAsync(api, db => db.Cooperatives.AsNoTracking().Select(c => c.BankAccount).SingleAsync()));
         }
         finally
         {

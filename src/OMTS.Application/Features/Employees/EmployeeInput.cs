@@ -56,7 +56,7 @@ public sealed partial record EmployeeInput(
             : (new EmployeeInput(fullName, phone!, request.Birthday, address, area, ward, other, notes, zones, bank), invalid);
     }
 
-    /// <summary>"0123456789" → "******6789": bank numbers appear masked in the audit log.</summary>
+    /// <summary>"999900000001" → "********0001": bank numbers appear masked in the audit log.</summary>
     public static string MaskAccountNumber(string number) => Common.Masking.AccountNumber(number);
 
     private static string? Optional(string? value, int max, string field, List<string> invalid)

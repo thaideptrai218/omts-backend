@@ -1,5 +1,6 @@
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Payments;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
@@ -77,7 +78,17 @@ public sealed class ReceivingBankAccountService(
             Before = before,
             After = Snapshot(cooperative.BankAccount),
         });
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (ConcurrencyConflictException)
+        {
+            // Overtaken during the wait, the normal way to lose this race. The same answer as the check above, from the
+            // row as it now is: the version to read again, who saved and when. The request ends here and saves nothing more.
+            await unitOfWork.ReloadAsync(cooperative, cancellationToken);
+            return await rowVersions.ConflictAsync(cooperative, cancellationToken);
+        }
 
         var saved = UserMessages.Saved("Receiving bank account");
         return new ReceivingBankAccountSaved(View(cooperative), saved.Text, saved.Code);
@@ -115,7 +126,7 @@ public sealed class ReceivingBankAccountService(
         {
             account.BankBin,
             account.BankName,
-            AccountNumber = Masking.AccountNumber(account.AccountNumber),
+            AccountNumber = Masking.ReceivingAccountNumber(account.AccountNumber),
             account.AccountHolderName,
             account.AcceptedAt,
         };

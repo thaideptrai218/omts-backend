@@ -6,16 +6,17 @@ namespace OMTS.Application.UnitTests.Features.ReceivingBankAccounts;
 /// The VietQR text. Where each expected value comes from:
 /// <list type="bullet">
 /// <item>"123456789" → 0x29B1: the published check value of CRC-16/CCITT-FALSE.</item>
-/// <item><see cref="PublishedExample"/>: a published example (viblo.asia, "Tự viết bộ tạo và đọc mã VietQR"), its CRC 79AB
-/// recomputed with a separate script that does not use this code. Its account 0123456789 is a placeholder.</item>
+/// <item><see cref="ExampleOfThePublishedShape"/>: a published example (viblo.asia, "Tự viết bộ tạo và đọc mã VietQR") with a
+/// fictional account of the same length in place of its digits: every field and length as published. The separate script that
+/// does not use this code reproduces the published CRC 79AB from the published text, and gives 5D1F for this one.</item>
 /// <item>The other full strings: assembled by hand and their CRC computed with that same separate script, so they pin the
 /// code against an independent calculation, not against itself.</item>
 /// </list>
 /// </summary>
 public sealed class VietQrPayloadTests
 {
-    private const string PublishedExample =
-        "00020101021238540010A00000072701240006970423011001234567890208QRIBFTTA530370454061500005802VN62120808DH123456630479AB";
+    private const string ExampleOfThePublishedShape =
+        "00020101021238540010A000000727012400069704230110DEMO0000010208QRIBFTTA530370454061500005802VN62120808DH12345663045D1F";
 
     [Fact]
     public void The_crc_gives_the_published_check_value() => Assert.Equal(0x29B1, EmvQrEncoding.Crc16Ccitt("123456789"));
@@ -24,8 +25,8 @@ public sealed class VietQrPayloadTests
     public void The_crc_of_nothing_is_its_initial_value() => Assert.Equal(0xFFFF, EmvQrEncoding.Crc16Ccitt(string.Empty));
 
     [Fact]
-    public void The_published_example_is_built_to_the_letter() =>
-        Assert.Equal(PublishedExample, VietQrPayload.Build("970423", "0123456789", 150000, "DH123456"));
+    public void The_example_of_the_published_shape_is_built_to_the_letter() =>
+        Assert.Equal(ExampleOfThePublishedShape, VietQrPayload.Build("970423", "DEMO000001", 150000, "DH123456"));
 
     [Theory]
     [InlineData("970436", "0000000000", 1L, "HD000001", "00020101021238540010A00000072701240006970436011000000000000208QRIBFTTA5303704540115802VN62120808HD0000016304F668")]

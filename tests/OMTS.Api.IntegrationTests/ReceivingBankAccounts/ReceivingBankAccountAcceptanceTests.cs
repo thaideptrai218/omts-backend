@@ -3,8 +3,11 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Interfaces.Payments;
+using OMTS.Application.Features.ReceivingBankAccounts;
 using static OMTS.Api.IntegrationTests.ReceivingBankAccounts.ReceivingBankAccountTestKit;
 
 namespace OMTS.Api.IntegrationTests.ReceivingBankAccounts;
@@ -140,6 +143,82 @@ public sealed class ReceivingBankAccountAcceptanceTests
         await owner.PutAsJsonAsync(Route, Body(await RowVersionAsync(owner), $" {Bidv} ", holder: " htx trung nam "));
 
         Assert.Equal(new ReceivingAccountToAccept(Bidv, "BIDV", FirstNumber, "HTX TRUNG NAM"), asked);
+    }
+
+    // Format characters and Unicode line separators never reach the service, the question or the database.
+    [Theory]
+    [InlineData("HTX\u2028TRUNG NAM", "HTX TRUNG NAM")]
+    [InlineData("HTX\u2029TRUNG NAM", "HTX TRUNG NAM")]
+    [InlineData("HTX\u200B TRUNG NAM", "HTX TRUNG NAM")]
+    [InlineData("HTX \u202EMAN GNURT", "HTX MAN GNURT")]
+    [InlineData("\uFEFFHTX\u00AD TRUNG\u2060 NAM\u200D", "HTX TRUNG NAM")]
+    public async Task What_shows_nothing_is_removed_before_the_service_the_question_and_the_database(string entered, string clean)
+    {
+        ReceivingAccountToAccept? asked = null;
+        var service = new ScriptedPaymentService((account, _) =>
+        {
+            asked = account;
+            return Task.FromResult(AccountAcceptanceResult.Accepted);
+        });
+        using var factory = new AuthApiFactory();
+        await using var api = WithService(factory, service);
+        var owner = await OwnerAsync(factory, api);
+
+        var question = await ProblemAsync(await owner.PutAsJsonAsync(Route, Body(await RowVersionAsync(owner), holder: entered, confirm: false)));
+        var saved = await owner.PutAsJsonAsync(Route, Body(await RowVersionAsync(owner), holder: entered));
+
+        Assert.Equal(clean, question.GetProperty("accountHolder").GetString());
+        Assert.Equal(clean, asked!.AccountHolderName);
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        Assert.Equal(clean, (await AccountAsync(owner)).GetProperty("accountHolderName").GetString());
+    }
+
+    // The sources are disposed when the call ends: not while a provider that ignores its token may still use it, and not never.
+    [Fact]
+    public async Task A_service_that_ignores_its_token_does_not_hold_up_the_answer_and_its_token_lasts_as_long_as_the_call()
+    {
+        var end = new TaskCompletionSource<AccountAcceptanceResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken given = default;
+        var service = new ScriptedPaymentService((_, token) =>
+        {
+            given = token;
+            return end.Task;
+        });
+        var acceptance = new ReceivingAccountAcceptance(
+            service,
+            Options.Create(new PaymentNotificationOptions { TimeoutSeconds = 1 }),
+            TimeProvider.System,
+            NullLogger<ReceivingAccountAcceptance>.Instance);
+
+        var answer = await Task.Run(() => acceptance.AskAsync(new ReceivingAccountToAccept(Bidv, "BIDV", FirstNumber, "HTX"), CancellationToken.None))
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(AccountAcceptanceOutcome.Unavailable, answer.Outcome);
+        Assert.True(given.IsCancellationRequested);
+        Assert.False(IsDisposed(given));
+
+        end.SetResult(AccountAcceptanceResult.Accepted);
+
+        var limit = TimeProvider.System.GetTimestamp();
+        while (!IsDisposed(given) && TimeProvider.System.GetElapsedTime(limit) < TimeSpan.FromSeconds(10))
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.True(IsDisposed(given));
+    }
+
+    private static bool IsDisposed(CancellationToken token)
+    {
+        try
+        {
+            _ = token.WaitHandle;
+            return false;
+        }
+        catch (ObjectDisposedException)
+        {
+            return true;
+        }
     }
 
     private static async Task SaveFirstAccountAsync(HttpClient owner) =>

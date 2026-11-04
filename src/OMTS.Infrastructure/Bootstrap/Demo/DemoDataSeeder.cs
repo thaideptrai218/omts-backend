@@ -50,7 +50,9 @@ internal static class DemoDataSeeder
         using var acting = services.GetRequiredService<AmbientActor>().Use(owner.Id);
         foreach (var step in Steps)
         {
-            messages.Add(Describe(step.Name, await step.RunAsync(context, cancellationToken)));
+            context.SkipReason = null;
+            var created = await step.RunAsync(context, cancellationToken);
+            messages.Add(context.SkipReason is { } reason ? $"Demo {step.Name}: skipped, {reason}" : Describe(step.Name, created));
         }
 
         return messages;

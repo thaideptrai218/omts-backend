@@ -25,7 +25,7 @@ public sealed class FakePaymentNotificationService(IOptions<PaymentProviderOptio
             return AccountAcceptanceResult.Rejected("FAKE_CONFIGURED_REFUSAL");
         }
 
-        logger.LogInformation("Fake payment notification service accepted account {Account}", Masking.AccountNumber(account.AccountNumber));
+        logger.LogInformation("Fake payment notification service accepted account {Account}", Masking.ReceivingAccountNumber(account.AccountNumber));
         return AccountAcceptanceResult.Accepted;
     }
 }
