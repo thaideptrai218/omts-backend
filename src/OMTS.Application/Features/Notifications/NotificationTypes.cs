@@ -29,7 +29,7 @@ public static class NotificationTypes
     /// <summary>MSG-PURCHASE-01, the new purchase receipt, to the Owner when a receipt is completed (BR-PURCHASE-05); push can be turned off.</summary>
     public const string PurchaseReceiptCompleted = "PURCHASE_RECEIPT_COMPLETED";
 
-    /// <summary>MSG-PURCHASE-08, a receipt cancellation that brings the supplier debt below zero, to the Accountant and the Owner (BR-PURCHASE-05).</summary>
+    /// <summary>MSG-PURCHASE-08, a receipt cancellation after which the supplier debt is below zero, to the Accountant and the Owner (BR-PURCHASE-05).</summary>
     public const string PurchaseReceiptCancelledPaidInAdvance = "PURCHASE_RECEIPT_CANCELLED_ADVANCE";
 
     public static readonly IReadOnlyList<NotificationTypeDefinition> All =

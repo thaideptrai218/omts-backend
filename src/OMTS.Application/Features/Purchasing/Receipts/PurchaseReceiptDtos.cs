@@ -64,7 +64,7 @@ public sealed record ReceiptLineView(
 public sealed record ReceiptReturnView(Guid Id, string Code, DateOnly ReturnDate, string Reason, decimal ReturnValue, decimal RefundAmount, decimal DebtReductionAmount);
 
 /// <summary>PURCHASE-03.1 / SCR-PURCHASE-02: the receipt with its lines and rafts, its returns and, when Cancelled, the reason.</summary>
-/// <param name="Total">Σ line amounts, not rounded (BR-PURCHASE-02).</param>
+/// <param name="Total">Σ line amounts, each rounded half up to the dong (BR-PURCHASE-02).</param>
 /// <param name="Returned">Σ of its purchase returns.</param>
 public sealed record PurchaseReceiptView(
     Guid Id,

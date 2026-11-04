@@ -112,7 +112,8 @@ public sealed class PurchaseReceiptCorrectionService(
     {
         var field = $"Line {line.LineNumber}";
         var (quantity, price) = (input.Quantity ?? line.Quantity ?? 0, input.UnitPrice ?? line.UnitPrice ?? 0);
-        if (quantity <= 0 || quantity > PurchaseReceiptValidator.MaxQuantity || decimal.Round(quantity, 3) != quantity
+        // A quantity saved before the 2-decimal rule and left unchanged does not stop the Owner correcting the price of the line.
+        if (quantity <= 0 || quantity > PurchaseReceiptValidator.MaxQuantity || (quantity != line.Quantity && !PurchaseReceiptValidator.HasAllowedDecimals(quantity))
             || price < 0 || price > PurchaseReceiptValidator.MaxAmount || decimal.Truncate(price) != price
             || quantity * price > PurchaseReceiptValidator.MaxAmount)
         {

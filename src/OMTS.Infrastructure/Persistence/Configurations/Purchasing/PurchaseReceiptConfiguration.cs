@@ -32,7 +32,7 @@ internal sealed class PurchaseReceiptLineConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.Unit).HasMaxLength(30);
         builder.Property(x => x.Quantity).HasPrecision(18, 3);
         builder.Property(x => x.UnitPrice).HasPrecision(18, 0);
-        // Rounded to the dong, not to thousands (BR-PURCHASE-02).
+        // Rounded half up to the dong, not to thousands (BR-PURCHASE-02): PurchaseMoney.RoundHalfUp.
         builder.Property(x => x.LineAmount).HasPrecision(18, 0);
         builder.Property(x => x.SupplierLotCode).HasMaxLength(Lengths.ShortText);
     }

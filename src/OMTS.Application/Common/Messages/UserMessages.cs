@@ -221,7 +221,7 @@ public static class UserMessages
     // ---- MSG-PURCHASE ----
 
     /// <summary>MSG-PURCHASE-01 (BR-PURCHASE-05): notification to the Owner when a purchase receipt is completed.</summary>
-    /// <param name="totalAmount">The total of the receipt in VND, not rounded (BR-PURCHASE-02).</param>
+    /// <param name="totalAmount">The total of the receipt in whole VND: the sum of its rounded lines (BR-PURCHASE-02).</param>
     public static UserMessage ReceiptCompleted(string userName, string receiptCode, string supplierName, int lineCount, decimal totalAmount) => new(
         Purchase01, $"{userName} completed purchase receipt {receiptCode} from {supplierName}: {lineCount} lines, {Vnd(totalAmount)} VND.")
     {

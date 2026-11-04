@@ -30,6 +30,9 @@ public sealed class PurchaseReceiptValidator(
     public const decimal MaxQuantity = 1_000_000_000m;
     public const int MaxLines = 200;
 
+    /// <summary>A quantity has at most 2 decimals (PM 03/11); the column keeps its 3 for rows saved before the rule.</summary>
+    public static bool HasAllowedDecimals(decimal quantity) => decimal.Round(quantity, 2) == quantity;
+
     /// <summary>Checks of every save, Draft or not; returns the items and rafts of the lines.</summary>
     public async Task<(ReceiptLineRefs Refs, AppError? Error)> CheckDraftAsync(SavePurchaseReceiptRequest request, CancellationToken cancellationToken)
     {
@@ -83,9 +86,9 @@ public sealed class PurchaseReceiptValidator(
             return (refs, AppError.InvalidFields(invalid));
         }
 
-        // Stored as decimal(18,3) quantities and decimal(18,0) prices: refuse what the database would round or overflow.
+        // At most 2 decimals, whole prices stored as decimal(18,0): refuse what the rule forbids or the database would round or overflow.
         var badLine = lines.ToList().FindIndex(l =>
-            (l.Quantity is { } q && (q <= 0 || q > MaxQuantity || decimal.Round(q, 3) != q))
+            (l.Quantity is { } q && (q <= 0 || q > MaxQuantity || !HasAllowedDecimals(q)))
             || (l.UnitPrice is { } p && (p < 0 || p > MaxAmount || decimal.Truncate(p) != p))
             || (l.Quantity is { } lq && l.UnitPrice is { } lp && lq * lp > MaxAmount));
         return (refs, badLine >= 0 ? InvalidLine(badLine + 1) : null);
@@ -132,8 +135,8 @@ public sealed class PurchaseReceiptValidator(
             return AppError.InvalidFields(invalid);
         }
 
-        // BR-PURCHASE-01: a quantity greater than 0 and a unit price of 0 or more.
-        var incomplete = lines.FirstOrDefault(l => l.Quantity is not > 0 || l.UnitPrice is not >= 0);
+        // BR-PURCHASE-01: a quantity greater than 0 and a unit price of 0 or more; a Draft saved before the 2-decimal rule is refused here too.
+        var incomplete = lines.FirstOrDefault(l => l.Quantity is not > 0 || !HasAllowedDecimals(l.Quantity.Value) || l.UnitPrice is not >= 0);
         return incomplete is null ? null : InvalidLine(incomplete.LineNumber);
     }
 

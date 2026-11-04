@@ -4,7 +4,7 @@ using OMTS.Domain.Entities.Purchasing;
 namespace OMTS.Application.Features.Purchasing;
 
 /// <summary>Money figures of one purchase receipt in VND (PURCHASE-01…03; payments until PURCHASE-05 unties them).</summary>
-/// <param name="Total">Σ line amounts (BR-PURCHASE-02).</param>
+/// <param name="Total">Σ rounded line amounts (BR-PURCHASE-02).</param>
 /// <param name="Returned">Σ return values of its purchase returns.</param>
 /// <param name="Paid">Σ Recorded payments still allocated to the receipt.</param>
 /// <param name="Refunded">Σ refunds received on its returns.</param>
@@ -21,22 +21,27 @@ public static class PurchaseMoney
 {
     public const decimal Thousand = 1000m;
 
-    public static decimal RoundToThousand(decimal amount) => Math.Round(amount / Thousand, MidpointRounding.AwayFromZero) * Thousand;
+    /// <summary>
+    /// The rounding of purchasing money: half up to a whole number (BR-PURCHASE-02, PM 03/11), so 561,242.5 is 561,243 where
+    /// the .NET default (half to even) gives 561,242. These amounts are never negative, and there "away from zero" is half
+    /// up; MidpointRounding.ToPositiveInfinity is not, it is a ceiling.
+    /// </summary>
+    public static decimal RoundHalfUp(decimal amount) => Math.Round(amount, 0, MidpointRounding.AwayFromZero);
+
+    /// <summary>Only the return values of the old return logic, until P4 moves them to the rule of <see cref="RoundHalfUp"/>. Never a receipt line or total.</summary>
+    public static decimal RoundToThousand(decimal amount) => RoundHalfUp(amount / Thousand) * Thousand;
 
     /// <summary>Supplier payments and the money of purchase returns are still whole thousands until PURCHASE-02/05 change them.</summary>
     public static bool IsThousands(decimal amount) => amount % Thousand == 0;
 
-    /// <summary>
-    /// Quantity × unit price, rounded to the dong only (BR-PURCHASE-02: amounts are not rounded; VND has no smaller unit,
-    /// so 1.5 × 333 = 499.5 is 500).
-    /// </summary>
-    public static decimal LineAmount(decimal quantity, decimal unitPrice) => Math.Round(quantity * unitPrice, 0, MidpointRounding.AwayFromZero);
+    /// <summary>Quantity × unit price, half up to the dong and never to thousands (BR-PURCHASE-02): 12.5 × 45,501 = 568,762.5 is 568,763.</summary>
+    public static decimal LineAmount(decimal quantity, decimal unitPrice) => RoundHalfUp(quantity * unitPrice);
 
     /// <summary>The amount of a line, 0 while a Draft line has no quantity or no unit price yet.</summary>
     public static decimal LineAmount(decimal? quantity, decimal? unitPrice) =>
         quantity is { } q && unitPrice is { } p ? LineAmount(q, p) : 0;
 
-    /// <summary>The total of a receipt: the sum of its line amounts.</summary>
+    /// <summary>The total of a receipt: the sum of its rounded line amounts, not the rounded sum of the products (BR-PURCHASE-02).</summary>
     public static decimal Total(IEnumerable<PurchaseReceiptLine> lines) => lines.Sum(l => l.LineAmount);
 
     /// <summary>Value of returned goods: quantity × unit price, rounded to the nearest 1,000 VND (the return rework, P4, makes it exact).</summary>
