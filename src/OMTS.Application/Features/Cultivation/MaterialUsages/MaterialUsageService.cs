@@ -50,7 +50,8 @@ public sealed class MaterialUsageService(
         }
 
         var lines = request.Items ?? [];
-        var itemIds = lines.Select(l => l.ItemId).OfType<Guid>().Distinct().ToList();
+        // A JSON body can hold a null line, which CheckLines refuses.
+        var itemIds = lines.Select(l => l?.ItemId).OfType<Guid>().Distinct().ToList();
         var found = (await items.GetByIdsAsync(itemIds, cancellationToken)).ToDictionary(i => i.Id);
         var check = new FieldCheck();
         MaterialUsageValues.CheckDate(check, request.UsageDate, timeProvider.Today());
@@ -98,9 +99,9 @@ public sealed class MaterialUsageService(
         var seen = new HashSet<Guid>();
         for (var i = 0; i < lines.Count; i++)
         {
-            var isMaterial = lines[i].ItemId is { } itemId && MaterialUsageValues.IsMaterial(found.GetValueOrDefault(itemId)) && seen.Add(itemId);
+            var isMaterial = lines[i]?.ItemId is { } itemId && MaterialUsageValues.IsMaterial(found.GetValueOrDefault(itemId)) && seen.Add(itemId);
             check.Check(isMaterial, MaterialUsageValues.LineItemField(i));
-            MaterialUsageValues.CheckQuantity(check, lines[i].Quantity, MaterialUsageValues.LineQuantityField(i));
+            MaterialUsageValues.CheckQuantity(check, lines[i]?.Quantity, MaterialUsageValues.LineQuantityField(i));
         }
     }
 
