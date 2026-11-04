@@ -27,11 +27,28 @@ internal sealed class UnitOfWork(OmtsDbContext db) : IUnitOfWork
             // 2601/2627: duplicate key in a unique index or constraint.
             throw new DuplicateRecordException(exception);
         }
-        catch (DbUpdateException exception) when (exception.InnerException is SqlException { Number: 1205 })
+        catch (Exception exception) when (IsDeadlockVictim(exception))
         {
-            // 1205: this save was the deadlock victim and changed nothing. Parallel saves met, as in a row version conflict.
+            // The whole save was rolled back because another save got in the way, so the caller reloads and tries again.
             throw new ConcurrencyConflictException(exception);
         }
+    }
+
+    /// <summary>
+    /// SQL Server error 1205. EF wraps it in an InvalidOperationException ("transient failure") when no retry strategy
+    /// is configured, so the whole chain is searched.
+    /// </summary>
+    private static bool IsDeadlockVictim(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is SqlException { Number: 1205 })
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public Task ReloadAsync(object entity, CancellationToken cancellationToken = default) =>
