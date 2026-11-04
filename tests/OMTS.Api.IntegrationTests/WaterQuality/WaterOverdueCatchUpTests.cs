@@ -12,8 +12,8 @@ namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
 /// OMTS-214: the overdue water measurement job catches up once when the host starts after its run time
-/// (<c>Jobs:WaterMeasurementOverdue</c>, like the zone license reminder); the once-per-period marker keeps a second
-/// start on the same day from sending anything.
+/// (<c>Jobs:WaterMeasurementOverdue</c>, like the zone license reminder); the zone's marker keeps a second start on the
+/// same day from sending anything.
 /// </summary>
 public class WaterOverdueCatchUpTests
 {
@@ -26,6 +26,7 @@ public class WaterOverdueCatchUpTests
         await using var api = new WaterApiFactory();
         var z = await api.ZoneAsync();
         var (_, staff) = await api.StaffAsync(z.Zone);
+        await z.OpenCycleAsync(Today.AddMonths(-3));
         await z.RecordedAsync(7m, 20m, measuredAt: DateTimeOffset.UtcNow.AddDays(-40));
         var afterRunTime = new FixedClock(new DateTimeOffset(Today.ToDateTime(new TimeOnly(8, 0)), BusinessClock.UtcOffset));
 
@@ -33,7 +34,7 @@ public class WaterOverdueCatchUpTests
         var first = await RecipientsAsync(api, z);
         await StartAndWaitForRunsAsync(api, afterRunTime, runs: 2);
 
-        Assert.Equal(new[] { z.OwnerAccount.Id, staff.Id }.Order(), first.Order());
+        Assert.Equal([staff.Id], first);
         Assert.Equal(first, await RecipientsAsync(api, z));
         Assert.Contains(api.Logs.Lines, l => l.Contains($"{RunLine} 1 zones"));
         Assert.Contains(api.Logs.Lines, l => l.Contains($"{RunLine} 0 zones"));
@@ -132,7 +133,7 @@ public class WaterOverdueCatchUpTests
 
     private static Task<List<Guid>> RecipientsAsync(WaterApiFactory api, WaterZone z) =>
         api.QueryAsync(db => db.Notifications.AsNoTracking()
-            .Where(n => n.Type == NotificationTypes.WaterMeasurementOverdue && n.RelatedRecordCode == z.Zone.Code)
+            .Where(n => n.Type == NotificationTypes.WaterMeasurementOverdue && n.RelatedRecordId == z.Zone.Id)
             .Select(n => n.RecipientAccountId)
             .OrderBy(id => id)
             .ToListAsync());

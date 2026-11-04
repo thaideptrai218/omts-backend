@@ -8,8 +8,8 @@ namespace OMTS.Infrastructure.Jobs;
 /// <summary>
 /// Runs <see cref="WaterMeasurementOverdueReminder"/> once a day at <see cref="WaterMeasurementOverdueOptions.RunAt"/>
 /// business local time, and once at start when the host starts after it (<see cref="DailyJobHostedService"/>). Each run
-/// has its own scope. The reminder sends once per overdue period, so a catch-up, a second run on the same day or a
-/// missed day never sends a reminder twice.
+/// has its own scope. The reminder sends at most once a month per zone, so a catch-up, a second run on the same day or
+/// a missed day never sends a reminder twice.
 /// </summary>
 internal sealed class WaterMeasurementOverdueJob(
     IServiceScopeFactory scopes,

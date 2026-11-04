@@ -30,8 +30,8 @@ public class FarmingZone : AuditableEntity, IHasStatus
     public decimal? TemperatureMax { get; set; }
 
     /// <summary>
-    /// When the overdue water measurement reminder (MSG-WATER-06) was last sent; one reminder per overdue period,
-    /// the period ending with a newer active measurement.
+    /// The start of the business day the overdue water measurement reminder (MSG-WATER-06) was last sent: the next one
+    /// waits a month from that day (GFR-04).
     /// </summary>
     public DateTimeOffset? WaterOverdueRemindedAt { get; set; }
 

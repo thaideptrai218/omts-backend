@@ -88,8 +88,7 @@ sets of water alerts (the demo records as the Owner, who is not told of their ow
 Dates are set relative to the day of the first seed and are not moved afterwards:
 - After a few weeks the "expiring" license has expired. `docker compose down -v` gives fresh dates.
 - Receipt codes carry the seed date (`PR-<seed date>-nnn`), not the receipt date.
-- The last water measurement is from the day before the seed: a month later without new ones, the zones are overdue and
-  get the 06:00 reminder (MSG-WATER-06).
+- The demo has no Open cycle yet, so GFR-04 sends no reminder (MSG-WATER-06) in the demo until the cycle demo data arrives.
 - The receipt list shows the current calendar year by default. Seeded in January–March, part of the history is in the
   previous year: pass `from`/`to` to see it.
 
@@ -185,7 +184,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 |---|---|---|---|
 | `WATER_ALERT` | MSG-WATER-03 | always (mandatory) | Owner, Zone Manager |
 | `WATER_ALERT_WITHDRAWN` | MSG-WATER-04 | always (mandatory) | Owner, Zone Manager |
-| `WATER_MEASUREMENT_OVERDUE` | MSG-WATER-06 | unless turned off | Owner, Zone Manager |
+| `WATER_MEASUREMENT_OVERDUE` | MSG-WATER-06 | unless turned off | Zone Manager; Owner when the zone has none |
 | `ZONE_LICENSE_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
 | `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (not sent yet: LABOR PR) | never: list only | Owner |
 
@@ -238,11 +237,13 @@ The OCR Service of the water meter photos (WATER-01) is only faked until its pro
 
 ### Background jobs
 
-`WaterMeasurementOverdueJob` runs every day at 06:00 (Asia/Ho_Chi_Minh): each In Use zone without an Active water
-measurement for more than one calendar month gets one MSG-WATER-06 reminder per overdue period (Owners and the zone's staff
-with View on `WATER_MEASUREMENTS`). Like the zone license reminder (07:00), a host started after the run time runs it
-once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A reminder already
-sent is never sent again.
+`WaterMeasurementOverdueJob` runs every day at 06:00 (Asia/Ho_Chi_Minh), GFR-04: each In Use zone with a raft that has an
+Open cycle counts from the later of its latest Active water measurement and its earliest Open cycle start. More than one
+calendar month after that date it gets MSG-WATER-06, sent to the Zone Managers of the zone, or to the Owners when it has
+none, and sent again a month after the last reminder while no new measurement moves the date. A void moves the date back;
+the repeat still counts from the last reminder. Like the zone license reminder (07:00), a host started after the run time
+runs it once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A second run
+on the same day sends nothing.
 
 A replaced raft photo or license file is removed right after the save, and the upload of a failed save right away.
 `OrphanFileCleanupJob` runs every day at 03:00 (Asia/Ho_Chi_Minh) and deletes what such a removal left behind: raft
@@ -304,7 +305,7 @@ created by a one-time command run on the server by the deployment operator (not 
 | Reverse proxy: X-Forwarded-For is trusted only from these addresses (and loopback), so the limits see the real client | `ForwardedHeaders:KnownProxies` (e.g. `10.0.0.4`), `ForwardedHeaders:KnownNetworks` (e.g. `10.0.0.0/24`) |
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG-ACCOUNT-13 and a critical log entry is written (one number or address gets at most 10 codes per hour) | `Verification:DailySmsLimit` (default 500) |
 | Zone license reminder (FARM-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
-| Overdue water measurement reminder (ENV-01, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
+| Overdue water measurement reminder (GFR-04, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
 | Orphan raft photo, license file and meter photo clean-up (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
 
 ## Design documents

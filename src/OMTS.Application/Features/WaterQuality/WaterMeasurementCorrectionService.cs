@@ -24,7 +24,6 @@ namespace OMTS.Application.Features.WaterQuality;
 public sealed class WaterMeasurementCorrectionService(
     WaterCorrectionPreconditions preconditions,
     WaterCorrectionNotifier notifier,
-    WaterOverdueRearm overdue,
     WaterMeasurementViewBuilder views,
     IStatusCatalog statusCatalog,
     AuditLogService audit,
@@ -94,8 +93,6 @@ public sealed class WaterMeasurementCorrectionService(
 
         var outsideBefore = WaterAlertService.Evaluate(measurement).ValuesOutside;
         var measuredAtBefore = measurement.MeasuredAt;
-        // A correction that moves the answer to the last overdue reminder before the zone's other measurements re-arms it.
-        await overdue.BeforeCorrectionAsync(measurement, request.MeasuredAt!.Value, cancellationToken);
         var before = WaterMeasurementAudit.Snapshot(measurement, statusCatalog);
         measurement.MeasuredAt = request.MeasuredAt!.Value;
         measurement.Ph = request.Ph!.Value;
@@ -125,8 +122,6 @@ public sealed class WaterMeasurementCorrectionService(
             return AppError.InvalidFields([WaterValueRules.ReasonField]);
         }
 
-        // Voiding the measurement that answered the last overdue reminder re-arms it (WaterOverdueRule).
-        await overdue.BeforeVoidAsync(measurement, cancellationToken);
         await notifier.AfterVoidAsync(measurement, reason, CallerId(), cancellationToken);
         var before = WaterMeasurementAudit.Snapshot(measurement, statusCatalog);
         measurement.StatusId = S.Voided;

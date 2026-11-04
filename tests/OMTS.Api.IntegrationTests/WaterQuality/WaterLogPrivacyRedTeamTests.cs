@@ -32,6 +32,7 @@ public class WaterLogPrivacyRedTeamTests
         var role = StaffRole.ZoneManager;
         await api.GrantAsync(manager, role, z.Zone);
         var client = await api.LoginAsync(manager.Username);
+        await z.OpenCycleAsync(TimeProvider.System.Today().AddMonths(-3));
 
         var alerting = await z.RecordedAsync(9.4m, 20m, client: client, measuredAt: DateTimeOffset.UtcNow.AddDays(-40));
         Assert.Equal(HttpStatusCode.OK, (await z.RecognizeAsync(client: client)).StatusCode);

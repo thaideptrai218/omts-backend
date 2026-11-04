@@ -4,16 +4,6 @@ using OMTS.Domain.Entities.Farming;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
-/// <summary>A zone with the measurement time of its latest Active water measurement (overdue reminder).</summary>
-/// <param name="LatestMeasuredAt">When the latest measurement was made; null when the zone has none.</param>
-/// <param name="LatestSavedAt">When that measurement was saved.</param>
-/// <param name="LatestId">Id of that measurement.</param>
-public sealed record ZoneLatestWaterMeasurement(
-    FarmingZone Zone,
-    DateTimeOffset? LatestMeasuredAt,
-    DateTimeOffset? LatestSavedAt = null,
-    Guid? LatestId = null);
-
 /// <summary>
 /// Water measurements (WATER-01…WATER-03) and the water data of zones (thresholds WATER-04, overdue marker).
 /// Time ranges are [from, toExclusive). Measurements come with their raft.
@@ -51,15 +41,13 @@ public interface IWaterMeasurementRepository
         Guid zoneId, DateTimeOffset from, DateTimeOffset toExclusive, IReadOnlyCollection<int> statusIds, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Every In Use zone (tracked) with its latest Active measurement time; Voided does not count. Measurements taken at
-    /// the same time are ordered by the time they were saved, then id, so the latest one is always the same.
+    /// The latest Active measurement of each zone that has one (not tracked, without its raft); Voided does not count.
+    /// Measurements taken at the same time are ordered by the time they were saved, then id, so the latest one is always
+    /// the same.
     /// </summary>
-    Task<IReadOnlyList<ZoneLatestWaterMeasurement>> ListInUseZonesWithLatestActiveAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyDictionary<Guid, WaterMeasurement>> LatestActiveByZoneAsync(CancellationToken cancellationToken);
 
-    /// <summary>
-    /// The zone's <paramref name="count"/> latest Active measurements (not tracked), latest first, in the order of
-    /// <see cref="ListInUseZonesWithLatestActiveAsync"/>: the first is the one its overdue period starts at.
-    /// </summary>
+    /// <summary>The zone's <paramref name="count"/> latest Active measurements (not tracked), latest first, in the order of <see cref="LatestActiveByZoneAsync"/>.</summary>
     Task<IReadOnlyList<WaterMeasurement>> ListLatestActiveAsync(Guid zoneId, int count, CancellationToken cancellationToken);
 
     /// <summary>Display names of the given accounts that exist.</summary>

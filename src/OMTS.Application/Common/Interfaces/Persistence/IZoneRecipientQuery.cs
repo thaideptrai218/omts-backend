@@ -13,4 +13,10 @@ public interface IZoneRecipientQuery
     /// </summary>
     Task<IReadOnlyList<Guid>> GetRecipientsAsync(
         Guid zoneId, string functionCode, PermissionAction action, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Active staff holding an Effective Zone Manager pair on <paramref name="zoneId"/> or at All zones (BR-FARM-08); when
+    /// the zone has none, every active Cooperative Owner instead (GFR-04).
+    /// </summary>
+    Task<IReadOnlyList<Guid>> GetZoneManagersOrOwnersAsync(Guid zoneId, CancellationToken cancellationToken);
 }
