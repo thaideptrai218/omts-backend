@@ -53,6 +53,9 @@ internal static class StatusCatalogSeed
 
         NewStatus(S.SupplierPayment.Recorded, G.SupplierPayment, "RECORDED", "Recorded", "Counts in the supplier debt; cannot be edited.", initial: true),
         NewStatus(S.SupplierPayment.Cancelled, G.SupplierPayment, "CANCELLED", "Cancelled", "Recorded by mistake; no longer counts in the supplier debt.", final: true),
+
+        NewStatus(S.PurchaseReturn.Recorded, G.PurchaseReturn, "RECORDED", "Recorded", "Lowers the supplier debt and the material cost of the raft; cannot be edited.", initial: true),
+        NewStatus(S.PurchaseReturn.Cancelled, G.PurchaseReturn, "CANCELLED", "Cancelled", "Recorded by mistake; no longer counts.", final: true),
     ];
 
     public static readonly StatusTransition[] Transitions =
@@ -86,6 +89,7 @@ internal static class StatusCatalogSeed
         NewTransition(70, S.PurchaseReceipt.Draft, S.PurchaseReceipt.Completed, "PURCHASE-01", "Zone Manager (own drafts); Cooperative Owner", Action, "Supplier In Use, date received not later than today, and every line complete with an input item In Use, a quantity greater than 0 and a unit price of 0 or more.", false),
         NewTransition(72, S.PurchaseReceipt.Completed, S.PurchaseReceipt.Cancelled, "PURCHASE-06", "Zone Manager (own receipts); Cooperative Owner", Action, "No seed lot of the receipt has been seeded and the receipt has no purchase return that is not cancelled.", true),
         NewTransition(73, S.SupplierPayment.Recorded, S.SupplierPayment.Cancelled, "PURCHASE-05", "Accountant; Cooperative Owner", Action, "A payment recorded by mistake; payments are never cancelled with a purchase receipt.", true),
+        NewTransition(74, S.PurchaseReturn.Recorded, S.PurchaseReturn.Cancelled, "PURCHASE-02", Owner, Action, "A return recorded by mistake; it no longer counts in the supplier debt, the material cost of a raft or the quantity returned.", true),
     ];
 
     private static Status NewStatus(int id, string group, string code, string displayName, string meaning, bool initial = false, bool final = false) =>

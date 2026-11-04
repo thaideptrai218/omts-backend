@@ -70,9 +70,6 @@ public interface IPurchaseReceiptRepository
     /// <summary>Receipt with supplier, lines (items, rafts and their zones) and returns (lines), tracked.</summary>
     Task<PurchaseReceipt?> GetForEditAsync(Guid receiptId, CancellationToken cancellationToken);
 
-    /// <summary>Return codes already used that start with <paramref name="prefix"/>.</summary>
-    Task<int> CountReturnCodesAsync(string prefix, CancellationToken cancellationToken);
-
     /// <summary>
     /// Per seed lot (receipt line): the quantity seeded from it, and whether a seeding session without a quantity uses it
     /// (counted as fully seeded). Reads the old seeding events until CYCLE-02 replaces them (GBR-04).

@@ -42,6 +42,7 @@ public sealed record LineRaftRef(Guid Id, string Code, Guid ZoneId, string ZoneC
 
 /// <param name="SeedLotCode">PN000123-1 on a Seed line of a Completed receipt (GBR-04); null otherwise.</param>
 /// <param name="Seeded">Quantity seeded from the seed lot (0 for other lines).</param>
+/// <param name="ReturnedQuantity">Quantity on its returns that are not cancelled.</param>
 /// <param name="Returnable">Received − seeded − already returned (0 on a Draft line without quantity).</param>
 public sealed record ReceiptLineView(
     Guid Id,
@@ -61,11 +62,23 @@ public sealed record ReceiptLineView(
     decimal ReturnedQuantity,
     decimal Returnable);
 
-public sealed record ReceiptReturnView(Guid Id, string Code, DateOnly ReturnDate, string Reason, decimal ReturnValue, decimal RefundAmount, decimal DebtReductionAmount);
+/// <summary>A purchase return of the receipt, Cancelled ones included (with their reason); <paramref name="ReturnValue"/> is the amount as recorded.</summary>
+public sealed record ReceiptReturnView(
+    Guid Id,
+    string Code,
+    DateOnly ReturnDate,
+    string Reason,
+    decimal ReturnValue,
+    int StatusId,
+    string Status,
+    DateTimeOffset? CancelledAt,
+    string? CancelReason,
+    AccountRef RecordedBy,
+    string RowVersion);
 
 /// <summary>PURCHASE-03.1 / SCR-PURCHASE-02: the receipt with its lines and rafts, its returns and, when Cancelled, the reason.</summary>
 /// <param name="Total">Σ line amounts, each rounded half up to the dong (BR-PURCHASE-02).</param>
-/// <param name="Returned">Σ of its purchase returns.</param>
+/// <param name="Returned">Σ of its purchase returns that are not cancelled, as recorded.</param>
 public sealed record PurchaseReceiptView(
     Guid Id,
     string Code,

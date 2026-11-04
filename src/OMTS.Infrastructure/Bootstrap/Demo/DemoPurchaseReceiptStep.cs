@@ -8,9 +8,9 @@ using OMTS.Domain.Enums;
 namespace OMTS.Infrastructure.Bootstrap.Demo;
 
 /// <summary>
-/// PURCHASE-01/05/06 (and the returns of today): the twenty demo receipts of <see cref="DemoReceiptPlans"/>, saved through the
-/// receipt, cancellation, return and payment services with their real dates (the services accept past receipt, payment and
-/// return dates), so totals, supplier debts and raft material costs are computed by the normal rules. The Owner is notified
+/// PURCHASE-01/02/05/06: the twenty demo receipts of <see cref="DemoReceiptPlans"/>, saved through the receipt, cancellation,
+/// return and payment services with their real dates (the services accept past receipt and payment dates; a return is dated
+/// by hand, see <see cref="ReturnAsync"/>), so totals, supplier debts and raft material costs are computed by the normal rules. The Owner is notified
 /// of each completed receipt (MSG-PURCHASE-01) and each payment (MSG-PURCHASE-04). Each receipt is found by its plan code at
 /// the start of its notes; every follow-up (payment, return, cancel) is checked against the stored state or carries a
 /// deduplication key, so an interrupted run is completed by the next one.
@@ -89,19 +89,41 @@ internal sealed class DemoPurchaseReceiptStep : IDemoSeedStep
                 $"payment {i + 1} of {plan.Code}");
         }
 
-        if (plan.Return is { } partialReturn && !await db.PurchaseReturns.AnyAsync(r => r.ReceiptId == receiptId, cancellationToken))
+        if (plan.Return is { } planned)
         {
-            var view = DemoSeedContext.Ensure(await context.Get<PurchaseReceiptService>().GetAsync(receiptId, cancellationToken), $"reading {plan.Code}");
-            var line = view.Lines.Single(l => l.ItemCode == partialReturn.Item);
-            DemoSeedContext.Ensure(await context.Get<PurchaseReturnService>().CreateAsync(receiptId, new CreatePurchaseReturnRequest(
-                context.Today.AddDays(-partialReturn.DaysAgo), partialReturn.Reason, partialReturn.Refund, partialReturn.Refund > 0 ? PaymentMethod.Cash : null,
-                partialReturn.DebtReduction, [new ReturnLineInput(line.Id, partialReturn.Quantity)]), cancellationToken), $"return of {plan.Code}");
+            await ReturnAsync(context, plan.Code, planned, receiptId, cancellationToken);
         }
 
         if (plan.Outcome == DemoReceiptOutcome.Cancelled)
         {
             DemoSeedContext.Ensure(await context.Get<PurchaseReceiptCancellationService>().CancelAsync(
                 receiptId, new CancelReceiptRequest(plan.CancelReason), cancellationToken), $"cancelling {plan.Code}");
+        }
+    }
+
+    /// <summary>
+    /// The return of a receipt, then its cancellation by the Owner when planned. The service dates a return today (BR-PURCHASE-07);
+    /// the demo moves it into the history it builds, the only place a return date is ever set by hand.
+    /// </summary>
+    private static async Task ReturnAsync(DemoSeedContext context, string code, DemoReturn planned, Guid receiptId, CancellationToken cancellationToken)
+    {
+        var db = context.Db;
+        var returns = context.Get<PurchaseReturnService>();
+        var stored = await db.PurchaseReturns.FirstOrDefaultAsync(r => r.ReceiptId == receiptId, cancellationToken);
+        if (stored is null)
+        {
+            var view = DemoSeedContext.Ensure(await context.Get<PurchaseReceiptService>().GetAsync(receiptId, cancellationToken), $"reading {code}");
+            var line = view.Lines.Single(l => l.ItemCode == planned.Item);
+            DemoSeedContext.Ensure(await returns.CreateAsync(
+                receiptId, new CreatePurchaseReturnRequest(planned.Reason, [new ReturnLineInput(line.Id, planned.Quantity)]), cancellationToken), $"return of {code}");
+            stored = await db.PurchaseReturns.SingleAsync(r => r.ReceiptId == receiptId, cancellationToken);
+            stored.ReturnDate = context.Today.AddDays(-planned.DaysAgo);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        if (planned.CancelReason is { } reason && stored.StatusId == StatusIds.PurchaseReturn.Recorded)
+        {
+            DemoSeedContext.Ensure(await returns.CancelAsync(stored.Id, new CancelPurchaseReturnRequest(reason), cancellationToken), $"cancelling the return of {code}");
         }
     }
 

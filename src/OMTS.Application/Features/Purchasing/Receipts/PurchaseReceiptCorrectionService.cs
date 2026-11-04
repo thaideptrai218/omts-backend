@@ -13,9 +13,10 @@ namespace OMTS.Application.Features.Purchasing.Receipts;
 
 /// <summary>
 /// PURCHASE-06.2 – the Owner corrects a Completed receipt that can no longer be cancelled (a seed lot seeded, or a purchase
-/// return): the unit price, the quantity (not below seeded + returned, MSG-PURCHASE-10) and the supplier's lot code of its
-/// lines, with a reason; never the supplier or the items (BR-PURCHASE-09). The audit log keeps the values before and after.
-/// The supplier debt and raft material costs follow the new amounts; no notification is sent (BR-PURCHASE-05).
+/// return that is not cancelled): the unit price, the quantity (not below seeded + returned, MSG-PURCHASE-10) and the supplier's
+/// lot code of its lines, with a reason; never the supplier or the items (BR-PURCHASE-09). The audit log keeps the values before
+/// and after. The supplier debt and raft material costs follow the new line amounts, while the returns already recorded keep
+/// the amounts they had (PM 03/11); no notification is sent (BR-PURCHASE-05).
 /// </summary>
 public sealed class PurchaseReceiptCorrectionService(
     IPurchaseReceiptRepository receipts,

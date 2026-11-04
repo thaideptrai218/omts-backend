@@ -66,6 +66,12 @@ public static class StatusIds
         public const int Cancelled = 1802;
     }
 
+    public static class PurchaseReturn
+    {
+        public const int Recorded = 1901;
+        public const int Cancelled = 1902;
+    }
+
     public static class MessageDelivery
     {
         public const int Sending = 1601;

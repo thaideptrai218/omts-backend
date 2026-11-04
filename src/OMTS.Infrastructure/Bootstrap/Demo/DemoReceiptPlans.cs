@@ -16,8 +16,8 @@ internal sealed record DemoReceiptLine(string Item, decimal Quantity, decimal Un
 /// <summary>A payment to the supplier of the receipt, <paramref name="DaysAgo"/> days before today; it is not linked to the receipt (BR-PURCHASE-04).</summary>
 internal sealed record DemoPayment(int DaysAgo, decimal Amount, PaymentMethod Method);
 
-/// <summary>A partial return (INP-05) of one line: refund plus debt reduction equal the returned value.</summary>
-internal sealed record DemoReturn(string Item, decimal Quantity, int DaysAgo, decimal Refund, decimal DebtReduction, string Reason);
+/// <summary>A partial return (PURCHASE-02) of one line; with <paramref name="CancelReason"/>, the Owner then cancels it as recorded by mistake.</summary>
+internal sealed record DemoReturn(string Item, decimal Quantity, int DaysAgo, string Reason, string? CancelReason = null);
 
 /// <param name="Code">Business code of the demo receipt, kept at the start of its notes: the service gives the receipt its own PN code, so this is what makes the seed repeatable.</param>
 /// <param name="RaftZone">Zone of <paramref name="RaftNumber"/>.</param>
@@ -37,7 +37,7 @@ internal sealed record DemoReceiptPlan(
 
 /// <summary>
 /// Twenty purchase receipts over the last 85 days: 16 Completed (paid in full, partly or not at all, one with a partial
-/// return), 2 Cancelled and 2 Draft. Material lines name the raft they were bought for, and so do two seed receipts. One
+/// return, one with a return cancelled by the Owner), 2 Cancelled and 2 Draft. Material lines name the raft they were bought for, and so do two seed receipts. One
 /// line has a fractional quantity, so its amount is not a whole thousand (BR-PURCHASE-02).
 /// </summary>
 internal static class DemoReceiptPlans
@@ -66,7 +66,7 @@ internal static class DemoReceiptPlans
         new("DEMO-R04", Company, 70, Done, "Lưới bao hàu cho bè B2-01",
             [new("VT007", 400, 12_000), new("VT010", 30, 48_000)], D2, 1,
             Payments: [new(55, 2_000_000, Transfer)],
-            Return: new("VT007", 50, 40, 300_000, 300_000, "Lưới bị rách mép, trả lại nhà cung cấp")),
+            Return: new("VT007", 50, 40, "Lưới bị rách mép, trả lại nhà cung cấp")),
         new("DEMO-R05", Shop, 65, Done, "Gỗ và cọc neo bè B1-02",
             [new("VT008", 40, 220_000), new("VT009", 8, 450_000)], D1, 2, Payments: [new(65, 12_000_000, Transfer)]),
         new("DEMO-R06", Store, 60, Done, "Dầu và găng tay tháng 8",
@@ -87,7 +87,8 @@ internal static class DemoReceiptPlans
         new("DEMO-R13", SeedFarm, 25, Done, "Nhập giống bản địa đợt 2",
             [new("VT003", 25000, 700, "LOT-BL-0928")], Payments: [new(25, 17_000_000, Transfer)]),
         new("DEMO-R14", Company, 20, Done, "Dây và lưới bè B1-04",
-            [new("VT006", 4, 650_000), new("VT007", 300, 12_000)], D1, 4, Payments: [new(20, 2_000_000, Cash)]),
+            [new("VT006", 4, 650_000), new("VT007", 300, 12_000)], D1, 4, Payments: [new(20, 2_000_000, Cash)],
+            Return: new("VT006", 1, 18, "Dây bị sờn, trả lại nhà cung cấp", "Ghi nhầm phiếu, hàng không trả lại")),
         new("DEMO-R15", Store, 12, Done, "Dầu diesel tháng 10",
             [new("VT011", 250, 21_000)], Payments: [new(12, 5_250_000, Cash)]),
         new("DEMO-R16", Shop, 8, Done, "Gỗ khung bè B2-03",

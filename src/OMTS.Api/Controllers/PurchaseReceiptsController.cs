@@ -9,9 +9,9 @@ using OMTS.Application.Features.Purchasing.Receipts;
 namespace OMTS.Api.Controllers;
 
 /// <summary>
-/// PURCHASE-01, PURCHASE-03, PURCHASE-06 – purchase receipts (and their returns until the PURCHASE-02 rework). Receipts have
-/// no zone: they follow the role only (BR-FARM-08), so the filter checks the PURCHASE_RECEIPTS action of the role; the
-/// handlers add the record rules (own drafts and own cancellations, rafts of the caller's zones).
+/// PURCHASE-01, PURCHASE-02, PURCHASE-03, PURCHASE-06 – purchase receipts and their returns. Receipts have no zone: they
+/// follow the role only (BR-FARM-08), so the filter checks the PURCHASE_RECEIPTS action of the role; the handlers add the
+/// record rules (own drafts and own cancellations, rafts of the caller's zones).
 /// </summary>
 [ApiController]
 [Authorize]
@@ -106,6 +106,7 @@ public sealed class PurchaseReceiptsController(
     public async Task<IActionResult> Copy(Guid id, CancellationToken cancellationToken) =>
         (await copies.CopyAsync(id, cancellationToken)).ToActionResult(Ok);
 
+    /// <summary>PURCHASE-02.0: dated today; a Zone Manager answers MSG-PURCHASE-02 with <c>ownerApproved: true</c>.</summary>
     [HttpPost(Receipts + "/{id:guid}/returns")]
     [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Create, PermissionScope.NoZone)]
     [ProducesResponseType<PurchaseReceiptView>(StatusCodes.Status201Created)]
@@ -123,4 +124,11 @@ public sealed class PurchaseReceiptsController(
     [ProducesResponseType<PurchaseReturnView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetReturn(Guid id, CancellationToken cancellationToken) =>
         (await returns.GetAsync(id, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>PURCHASE-02.1: the Owner cancels a return recorded by mistake, with a reason; answers the receipt.</summary>
+    [HttpPost("api/purchase-returns/{id:guid}/cancel")]
+    [RequireCooperativeOwner]
+    [ProducesResponseType<PurchaseReceiptView>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> CancelReturn(Guid id, CancelPurchaseReturnRequest request, CancellationToken cancellationToken) =>
+        (await returns.CancelAsync(id, request, cancellationToken)).ToActionResult(Ok);
 }

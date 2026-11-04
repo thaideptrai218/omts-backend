@@ -130,9 +130,6 @@ internal sealed partial class PurchaseReceiptRepository(OmtsDbContext db) : IPur
             .AsSplitQuery()
             .FirstOrDefaultAsync(r => r.Id == receiptId, cancellationToken);
 
-    public Task<int> CountReturnCodesAsync(string prefix, CancellationToken cancellationToken) =>
-        db.PurchaseReturns.CountAsync(r => r.Code.StartsWith(prefix), cancellationToken);
-
     public async Task<IReadOnlyDictionary<Guid, (decimal Seeded, bool UnknownQuantity)>> SeededAsync(
         IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken)
     {
