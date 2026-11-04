@@ -34,7 +34,7 @@ public class NotificationsV2SqlServerQaTests(ITestOutputHelper output)
         "N'IX_Notifications_DeliveryStatusId', N'IX_Notifications_RecipientAccountId_Channel_CreatedAt', N'IX_Notifications_RelatedRecordType_RelatedRecordId'";
 
     [SqlServerFact]
-    public async Task Migration_down_restores_the_old_schema_and_statuses_with_rows_kept_and_up_again_matches_the_model()
+    public async Task Migration_down_restores_the_old_schema_removes_the_delivery_statuses_with_rows_kept_and_up_again_matches_the_model()
     {
         await using var database = SqlServerTestDatabase.Create();
         await using var db = database.CreateContext();
@@ -58,12 +58,9 @@ public class NotificationsV2SqlServerQaTests(ITestOutputHelper output)
 
         Assert.Equal((0, 0, 0), await SchemaAsync(db));
         Assert.Equal(2, await ScalarAsync<int>(db, "SELECT COUNT(*) AS [Value] FROM [Notifications]"));
-        Assert.Equal(("FAILED", "Failed"), (
-            await ScalarAsync<string>(db, "SELECT [Code] AS [Value] FROM [Statuses] WHERE [Id] = 1603"),
-            await ScalarAsync<string>(db, "SELECT [DisplayName] AS [Value] FROM [Statuses] WHERE [Id] = 1603")));
-        Assert.Equal(("UC70", "System; time"), (
-            await ScalarAsync<string>(db, "SELECT [UseCases] AS [Value] FROM [StatusTransitions] WHERE [Id] = 54"),
-            await ScalarAsync<string>(db, "SELECT [TriggerEvent] AS [Value] FROM [StatusTransitions] WHERE [Id] = 54")));
+        // The delivery statuses of the SMS rows come with this migration (the cleanup before it removed the group).
+        Assert.Equal(0, await ScalarAsync<int>(db, "SELECT COUNT(*) AS [Value] FROM [Statuses] WHERE [Group] = N'MESSAGE_DELIVERY'"));
+        Assert.Equal(0, await ScalarAsync<int>(db, "SELECT COUNT(*) AS [Value] FROM [StatusTransitions] WHERE [Id] IN (53, 54)"));
 
         await db.Database.MigrateAsync();
 
