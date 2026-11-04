@@ -207,6 +207,13 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   notification id.
 - The same table keeps SMS and Zalo OA sendings to traders (`channel`, phone, delivery status Sending / Sent / Not
   sent, provider message id or error code); they are never in a list. No sender uses them yet (SALE-06, TRACE-04).
+- Mandatory types also go out as one SMS (PM decision OMTS-216, 03/11): to the Owners among the recipients and, for the
+  water alert and its withdrawal, to the Zone Managers of the zone among them. The rule is data on the type
+  (`NotificationSmsRule`, `NotificationTypes.All`). The SMS shares the queue of the push: sent once, only after the save
+  commits, never for a failed save, never retried, and not kept as a row. A failed or slow SMS changes nothing; a
+  recipient without a verified phone number gets none and a log line. The text is the MSG text without Vietnamese marks,
+  at most 160 GSM 7-bit characters with long digit runs masked; a money type (`MoneyToOwner`) carries only its name,
+  document code and amount, never a bank account number. Logs hold the type and the account id only.
 
 ### Database (EF Core code-first)
 
@@ -291,7 +298,7 @@ created by a one-time command run on the server by the deployment operator (not 
 | Area | Keys |
 |---|---|
 | Email (`Email:Provider` = `Smtp` or `Fake`; `Email:Smtp:Security` = `StartTls` (587), `SslOnConnect` (465) or `None`, which is refused outside Development) | `Email:Smtp:Host`, `Port`, `Security`, `Username`, `Password`, `FromAddress`, `FromName`, `TimeoutSeconds`, `Email:Fake:FailFor` |
-| SMS (`Sms:Provider` = `None`, the default: nothing is sent and phone verification cannot complete; `Fake` keeps messages in the dev inbox and is set in Development only) | `Sms:Fake:FailFor` (test numbers that fail) |
+| SMS (`Sms:Provider` = `None`, the default: nothing is sent, phone verification cannot complete and each save with mandatory SMS writes one warning; `Fake` keeps messages in the dev inbox and is set in Development only) | `Sms:Fake:FailFor` (test numbers that fail), `Sms:MandatoryTimeoutSeconds` (default 5: the longest the answer of an action waits for the SMS of its mandatory notifications) |
 | Push (`Push:Provider` = `None` by default, `Fake` in Development) | `Push:Fake:FailFor` |
 | OCR (`Ocr:Provider` unset by default: meter photos are not read and the values are entered by hand (MSG-WATER-01); `Fake` invents readings, so it is set in Development only and stops the host elsewhere) | `Ocr:TimeoutSeconds` (default 15), `Ocr:UncertainBelow` (default 0.8), `Ocr:Fake:Mode` (`Success`, `Fail`, `Timeout`), `Ocr:Fake:Ph`, `Ocr:Fake:Salinity`, `Ocr:Fake:Confidence` |
 | File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development; one container or folder per environment, see Background jobs) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |

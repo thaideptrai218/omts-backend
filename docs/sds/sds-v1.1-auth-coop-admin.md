@@ -28,7 +28,7 @@ Clean Architecture, one ASP.NET Core 8 API:
 - **OMTS.Infrastructure**: EF Core 8 (SQL Server) repositories, unit of work, interceptors, JWT/PBKDF2, adapters (SMTP email, SMS/push fakes, file storage), bootstrap command, health checks.
 - **OMTS.Api**: controllers (thin: bind request → call service → `ToActionResult`), filters, rate limiting, problem details.
 
-Each use case runs in one HTTP request scope: the services of the request share one `OmtsDbContext`, and a single `IUnitOfWork.SaveChangesAsync` commits the change, its audit rows and in-app notifications together. Push messages are sent only after the commit.
+Each use case runs in one HTTP request scope: the services of the request share one `OmtsDbContext`, and a single `IUnitOfWork.SaveChangesAsync` commits the change, its audit rows and in-app notifications together. Push messages and the SMS of mandatory notifications are sent only after the commit.
 
 ## 2. Class diagrams
 

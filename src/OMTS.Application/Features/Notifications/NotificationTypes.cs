@@ -29,14 +29,17 @@ public static class NotificationTypes
     public static readonly IReadOnlyList<NotificationTypeDefinition> All =
     [
         new(WaterAlert, "Water alert", AlwaysPush, [CooperativeOwner, ZoneManager],
-            NotificationOpenAccess.InZone(PermissionFunctions.WaterMeasurements, PermissionAction.View)),
+            NotificationOpenAccess.InZone(PermissionFunctions.WaterMeasurements, PermissionAction.View),
+            NotificationSmsRule.MessageTextTo(CooperativeOwner, ZoneManager)),
         // The withdrawal is part of the mandatory water alert: BR-ACCOUNT-11 names WATER-02, which sends it (gap Q21).
         new(WaterAlertWithdrawn, "Water alert withdrawn", AlwaysPush, [CooperativeOwner, ZoneManager],
-            NotificationOpenAccess.InZone(PermissionFunctions.WaterMeasurements, PermissionAction.View)),
+            NotificationOpenAccess.InZone(PermissionFunctions.WaterMeasurements, PermissionAction.View),
+            NotificationSmsRule.MessageTextTo(CooperativeOwner, ZoneManager)),
         // Opens Record water measurement (WATER-01) with the zone chosen (GFR-04).
         new(WaterMeasurementOverdue, "Water measurement reminder", Default, [CooperativeOwner, ZoneManager],
             NotificationOpenAccess.InZone(PermissionFunctions.WaterMeasurements, PermissionAction.Create)),
-        new(ZoneLicenseExpiry, "Zone license expiry reminder", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new(ZoneLicenseExpiry, "Zone license expiry reminder", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
+            NotificationSmsRule.MessageTextTo(CooperativeOwner)),
         new(StaffAccountLockReminder, "Reminder to lock a staff account", NeverPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
     ];
 

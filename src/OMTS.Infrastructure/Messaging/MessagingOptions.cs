@@ -45,6 +45,9 @@ public sealed class SmsOptions
 
     public string Provider { get; set; } = NoneProvider;
     public FakeSenderOptions Fake { get; set; } = new();
+
+    /// <summary>The longest the answer of a business action waits for the SMS of its mandatory notifications.</summary>
+    public int MandatoryTimeoutSeconds { get; set; } = 5;
 }
 
 /// <summary>"Push" section. Only the fake exists until the real push provider ticket; "None" sends nothing.</summary>

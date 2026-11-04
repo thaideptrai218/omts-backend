@@ -63,6 +63,7 @@ public static class DependencyInjection
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IRelatedRecordQuery, RelatedRecordQuery>();
         services.AddScoped<IZoneRecipientQuery, ZoneRecipientQuery>();
+        services.AddScoped<IMandatorySmsRecipientQuery, MandatorySmsRecipientQuery>();
         services.AddScoped<IVerificationCodeRepository, VerificationCodeRepository>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<ICooperativeRepository, CooperativeRepository>();
@@ -161,6 +162,8 @@ public static class DependencyInjection
 
         services.AddScoped<PushOutbox>();
         services.AddScoped<IPushOutbox>(provider => provider.GetRequiredService<PushOutbox>());
+        services.AddScoped<IMandatorySmsOutbox>(provider => provider.GetRequiredService<PushOutbox>());
+        services.AddSingleton<MandatorySmsDelivery>();
 
         // Resolves the configured adapters at startup, so a configuration error stops the host right away.
         services.AddHostedService<ExternalServicesStartupCheck>();

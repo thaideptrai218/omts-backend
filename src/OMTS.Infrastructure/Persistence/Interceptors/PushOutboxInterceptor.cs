@@ -6,10 +6,11 @@ using OMTS.Infrastructure.Messaging;
 namespace OMTS.Infrastructure.Persistence.Interceptors;
 
 /// <summary>
-/// Sends the queued push messages once the save has committed. A push failure is logged and never rolls
-/// back the business change; a failed save drops the queue so nothing unsaved is announced.
+/// Sends the queued push messages and mandatory SMS once the save has committed. A failure is logged and never rolls
+/// back the business change; a failed or cancelled save drops the queue so nothing unsaved is announced.
 /// </summary>
-internal sealed class PushOutboxInterceptor(PushOutbox outbox, IPushSender pushSender, ILogger<PushOutboxInterceptor> logger)
+internal sealed class PushOutboxInterceptor(
+    PushOutbox outbox, IPushSender pushSender, MandatorySmsDelivery mandatorySms, ILogger<PushOutboxInterceptor> logger)
     : SaveChangesInterceptor
 {
     private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(10);
@@ -37,9 +38,20 @@ internal sealed class PushOutboxInterceptor(PushOutbox outbox, IPushSender pushS
         return Task.CompletedTask;
     }
 
-    private async Task SendPendingAsync()
+    public override void SaveChangesCanceled(DbContextEventData eventData) => outbox.Discard();
+
+    public override Task SaveChangesCanceledAsync(DbContextEventData eventData, CancellationToken cancellationToken = default)
     {
-        foreach (var message in outbox.TakeAll())
+        outbox.Discard();
+        return Task.CompletedTask;
+    }
+
+    // Together: a provider of one channel that hangs must not hold the other channel back.
+    private Task SendPendingAsync() => Task.WhenAll(SendPushAsync(outbox.TakeAll()), mandatorySms.SendAsync(outbox.TakeAllSms()));
+
+    private async Task SendPushAsync(IReadOnlyList<PushMessage> messages)
+    {
+        foreach (var message in messages)
         {
             try
             {
