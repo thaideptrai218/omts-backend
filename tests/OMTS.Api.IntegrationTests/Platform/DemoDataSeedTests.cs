@@ -85,7 +85,8 @@ public class DemoDataSeedTests
         }
     }
 
-    // Any environment but Development, and no setting reopens it (the old Bootstrap:SeedDemoData switch is gone).
+    // Outside Development the old Bootstrap:SeedDemoData switch reopens nothing; only Staging has a flag of its own
+    // (DemoSeedGateTests).
     [Theory]
     [InlineData("Production")]
     [InlineData("Staging")]
@@ -97,7 +98,7 @@ public class DemoDataSeedTests
         var refused = await RunAsync(host);
 
         Assert.Equal(DeploymentBootstrapper.Failure, refused.ExitCode);
-        Assert.Contains(refused.Messages, m => m.Contains("refused outside Development"));
+        Assert.Contains(refused.Messages, m => m.Contains("refused"));
         using var scope = host.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
         Assert.False(await db.Cooperatives.AnyAsync());
