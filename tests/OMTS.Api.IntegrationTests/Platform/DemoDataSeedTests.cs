@@ -34,6 +34,7 @@ public class DemoDataSeedTests
         ("ZoneComplianceDocuments", db => db.ZoneComplianceDocuments.CountAsync()),
         ("Rafts", db => db.Rafts.CountAsync()),
         ("Lanes", db => db.Lanes.CountAsync()),
+        ("CultivationCycles", db => db.CultivationCycles.CountAsync()),
         ("Suppliers", db => db.Suppliers.CountAsync()),
         ("FarmingInputItems", db => db.FarmingInputItems.CountAsync()),
         ("PurchaseReceipts", db => db.PurchaseReceipts.CountAsync()),
@@ -136,6 +137,13 @@ public class DemoDataSeedTests
         Assert.Equal(6, await db.RaftPhotos.CountAsync());
         Assert.Equal(2, await db.Lanes.CountAsync(l => l.StatusId == StatusIds.Lane.Removed));
         Assert.Equal(2, await db.Rafts.CountAsync(r => r.Latitude == null && r.Longitude == null));
+        // CYCLE-01: five Open cycles per In Use zone, started weeks ago, for the later PRs and the GFR-04 reminder.
+        var cycles = await db.CultivationCycles.AsNoTracking().Include(c => c.Raft).ToListAsync();
+        Assert.Equal(10, cycles.Count);
+        Assert.All(cycles, c => Assert.Equal(StatusIds.CultivationCycle.Open, c.StatusId));
+        Assert.All(cycles, c => Assert.Equal(StatusIds.Usage.InUse, c.Raft.StatusId));
+        Assert.All(cycles, c => Assert.True(c.StartDate < businessToday.AddDays(-30)));
+        Assert.Equal(6, cycles.Count(c => c.ExpectedHarvestDate is not null));
         Assert.Equal(8, await db.Employees.CountAsync());
         Assert.Equal(1, await db.Employees.CountAsync(e => e.StatusId == StatusIds.Employee.Left));
         Assert.Equal(5, await db.Suppliers.CountAsync());
