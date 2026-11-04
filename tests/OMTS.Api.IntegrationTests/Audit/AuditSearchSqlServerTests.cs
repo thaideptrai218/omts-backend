@@ -149,7 +149,7 @@ public class AuditSearchSqlServerTests
     [SqlServerFact]
     public async Task The_migration_names_the_zone_licenses_of_stored_notifications_as_the_audit_log_does()
     {
-        const string notificationsV2 = "20261031010823_NotificationsV2";
+        const string notificationsV2 = "20261104072127_NotificationsV2";
         await using var database = SqlServerTestDatabase.Create();
         await using var db = database.CreateContext();
         var migrator = db.GetService<IMigrator>();
