@@ -103,8 +103,8 @@ public class CyclesQaTestsMigrationAndDemo
         Assert.Equal(starts.Select(c => (c.Id, c.StartDate, Convert.ToBase64String(c.RowVersion))), after.Select(c => (c.Id, c.StartDate, Convert.ToBase64String(c.RowVersion))));
     }
 
-    // Finding L5. A demo database from before this PR has rafts but no cycle and no "Started" row. The other steps leave what exists as it is, but this one
-    // starts a cycle on every one of the first five rafts: one the user discontinued refuses it, Ensure throws, and the seed stops before staff, receipts and water.
+    // Finding L5. A demo database from before this PR has rafts but no cycle and no "Started" row. Like the other steps, this one leaves what exists as it is:
+    // a raft the user discontinued gets no cycle, and the seed goes on to staff, receipts and water.
     [SqlServerFact]
     public async Task A_demo_rerun_on_an_older_database_skips_a_raft_the_user_discontinued()
     {
@@ -124,6 +124,21 @@ public class CyclesQaTestsMigrationAndDemo
 
         Assert.Equal(DeploymentBootstrapper.Success, rerun.ExitCode);
         Assert.False(await UseDbAsync(host.App, db => db.CultivationCycles.AnyAsync(c => c.RaftId == raftId)));
+    }
+
+    // The same older database with its Open rows and no "Started" row: a start would be refused, so the rerun leaves them as they are.
+    [SqlServerFact]
+    public async Task A_demo_rerun_leaves_a_raft_with_a_cycle_and_no_audit_row_as_it_is()
+    {
+        await using var host = new DemoHost();
+        Assert.Equal(DeploymentBootstrapper.Success, (await RunAsync(host.App)).ExitCode);
+        await UseDbAsync(host.App, db => db.AuditEvents.Where(e => e.Action == "CultivationCycle.Started").ExecuteDeleteAsync());
+        var before = await UseDbAsync(host.App, db => db.CultivationCycles.OrderBy(c => c.Id).Select(c => c.Id).ToListAsync());
+
+        var rerun = await RunAsync(host.App);
+
+        Assert.Equal(DeploymentBootstrapper.Success, rerun.ExitCode);
+        Assert.Equal(before, await UseDbAsync(host.App, db => db.CultivationCycles.OrderBy(c => c.Id).Select(c => c.Id).ToListAsync()));
     }
 
     private static async Task<BootstrapOutcome> RunAsync(WebApplicationFactory<Program> app)

@@ -149,9 +149,10 @@ public class CultivationCycleEditCancelTests(AuthApiFactory factory) : IClassFix
         var cycle = await owner.StartCycleAsync(raft.Id());
         await AddSeedingAsync(cycle.Id(), Today);
 
-        var refused = await (await owner.CancelCycleAsync(cycle.Id(), cycle.Text("rowVersion"))).SrsProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09", "MSG61");
+        var refused = await (await owner.CancelCycleAsync(cycle.Id(), cycle.Text("rowVersion"))).SrsProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-06", "MSG11");
 
-        Assert.Contains("in use by its records", refused.Detail());
+        Assert.Equal($"Cannot proceed because 1 records are still in use: records of the cultivation cycle started {Today:dd/MM/yyyy}. Please handle these records first.", refused.Detail());
+        Assert.Equal(cycle.Id(), refused.GetProperty("cycleId").GetGuid());
         Assert.False((await owner.GetFromJsonAsync<JsonElement>($"/api/cultivation-cycles/{cycle.Id()}")).Flag("canCancel"));
     }
 
@@ -166,6 +167,6 @@ public class CultivationCycleEditCancelTests(AuthApiFactory factory) : IClassFix
 
         var answer = await owner.CancelCycleAsync(cycle.Id(), cycle.Text("rowVersion"));
 
-        Assert.Equal("MSG-GEN-09", await answer.ErrorCodeAsync());
+        Assert.Equal("MSG-GEN-06", await answer.ErrorCodeAsync());
     }
 }

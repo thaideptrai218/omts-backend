@@ -20,6 +20,6 @@ public class SeedingEvent : AuditableEntity
     /// <summary>Optional, in the seed lot's original unit.</summary>
     public decimal? SeedQuantity { get; set; }
 
-    /// <summary>Required when the seed differs from the cycle's planned seed type.</summary>
+    /// <summary>From the old seeding flow: a cycle no longer plans a seed type, and nothing reads this until SeedingRecord replaces this entity.</summary>
     public string? PlanDeviationReason { get; set; }
 }

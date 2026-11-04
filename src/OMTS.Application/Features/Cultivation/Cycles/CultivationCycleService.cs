@@ -8,7 +8,6 @@ using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
-using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
@@ -56,7 +55,7 @@ public sealed class CultivationCycleService(
 
         if (await cycleQuery.OpenCycleAsync(raft.Id, cancellationToken) is { } open)
         {
-            return OpenCycleExists(raft, open);
+            return RaftStatusService.OpenCycle(open);
         }
 
         var today = timeProvider.Today();
@@ -182,7 +181,7 @@ public sealed class CultivationCycleService(
         {
             if (await cycleQuery.OpenCycleAsync(raft.Id, cancellationToken) is { } open)
             {
-                return OpenCycleExists(raft, open);
+                return RaftStatusService.OpenCycle(open);
             }
 
             if (exception is DuplicateRecordException)
@@ -198,14 +197,13 @@ public sealed class CultivationCycleService(
     private AppError? Refusal(CultivationCycle cycle) =>
         cycle.StatusId != StatusIds.CultivationCycle.Open ? Refused(cycle.Raft, "Closed") : raftViews.EditRefusal(cycle.Raft);
 
-    private static AppError OpenCycleExists(Raft raft, CycleSpan open) =>
-        AppError.Conflict(UserMessages.WrongStatus(CycleOf(raft), "Open"), new Dictionary<string, object?> { ["cycleId"] = open.Id });
+    /// <summary>MSG-GEN-06, as a cycle with records blocks the cancel the way an Open cycle blocks a start or a lane change.</summary>
+    private static AppError HasRecords(CultivationCycle cycle) => AppError.Conflict(
+        UserMessages.StillInUse(1, $"records of the cultivation cycle started {cycle.StartDate:dd/MM/yyyy}"),
+        new Dictionary<string, object?> { ["cycleId"] = cycle.Id });
 
-    private static AppError HasRecords(CultivationCycle cycle) => Refused(cycle.Raft, "in use by its records");
-
-    private static AppError Refused(Raft raft, string status) => AppError.Conflict(UserMessages.WrongStatus(CycleOf(raft), status));
-
-    private static string CycleOf(Raft raft) => $"The cultivation cycle of raft {raft.Code}";
+    private static AppError Refused(Raft raft, string status) =>
+        AppError.Conflict(UserMessages.WrongStatus($"The cultivation cycle of raft {raft.Code}", status));
 
     private static AuditEntry Entry(string action, CultivationCycle cycle) =>
         new(action, RecordType) { RecordId = cycle.Id, RecordCode = cycle.Raft.Code, ZoneId = cycle.Raft.ZoneId };

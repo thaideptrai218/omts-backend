@@ -25,7 +25,7 @@ public sealed class CultivationCyclesController(
     public async Task<IActionResult> ListOfZone(Guid zoneId, CancellationToken cancellationToken) =>
         (await reads.ListOfZoneAsync(zoneId, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Starts a cycle; without a start date it starts today. MSG-GEN-09 for a Discontinued raft or an Open cycle.</summary>
+    /// <summary>Starts a cycle; without a start date it starts today. MSG-GEN-09 for a Discontinued raft, MSG-GEN-06 for an Open cycle.</summary>
     [HttpPost("api/rafts/{raftId:guid}/cultivation-cycles")]
     [ProducesResponseType<CycleStarted>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Start(Guid raftId, StartCycleRequest request, CancellationToken cancellationToken) =>

@@ -13,8 +13,8 @@ public sealed record EditCycleRequest(DateOnly? StartDate, decimal? ExpectedSeed
 public sealed record CancelCycleRequest(string? RowVersion);
 
 /// <param name="DaysOfFarming">Both the first and the last day count; the last day of an Open cycle is today.</param>
-/// <param name="CanEdit">The cycle is Open on a raft In Use (CYCLE-01 PRE-3).</param>
-/// <param name="CanCancel">The cycle is Open on a raft In Use and has no record yet (CYCLE-01 PRE-3).</param>
+/// <param name="CanEdit">The cycle is Open on a raft In Use in a zone In Use (CYCLE-01 PRE-3).</param>
+/// <param name="CanCancel">The cycle can be edited and has no record yet (CYCLE-01 PRE-3).</param>
 public sealed record CycleView(
     Guid Id,
     Guid RaftId,
@@ -72,6 +72,6 @@ public sealed record LaneDayView(Guid Id, int LaneNumber, int StatusId, string S
 /// <summary>CYCLE-05: the lanes of a raft on a date with the cycle that was open then.</summary>
 /// <param name="Cycle">The cycle open on <paramref name="Date"/>, or null: the raft had none, so every lane is Not seeded.</param>
 /// <param name="Lanes">Lanes In Use, and Removed lanes that have records in the cycle, in number order.</param>
-/// <param name="NotSeededLanes">The numbers of the lanes In Use that are Not seeded on the date (BR-CYCLE-02).</param>
+/// <param name="NotSeededLanes">The numbers of the lanes on this view, In Use and Not seeded on the date (BR-CYCLE-02).</param>
 public sealed record CultivationProgressView(
     Guid RaftId, string RaftCode, DateOnly Date, CycleView? Cycle, IReadOnlyList<LaneDayView> Lanes, IReadOnlyList<int> NotSeededLanes);

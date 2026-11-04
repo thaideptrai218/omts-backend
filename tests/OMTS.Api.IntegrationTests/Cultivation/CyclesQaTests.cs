@@ -11,7 +11,7 @@ using static OMTS.Api.IntegrationTests.Farming.FarmingTestKit;
 
 namespace OMTS.Api.IntegrationTests.Cultivation;
 
-/// <summary>Independent QA of CYCLE-01 and CYCLE-05. A test that names a finding fails on purpose.</summary>
+/// <summary>Independent QA of CYCLE-01 and CYCLE-05. A test that names a finding holds its fix.</summary>
 public class CyclesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
     private async Task<(HttpClient Owner, Guid ZoneId, JsonElement Raft)> OwnerWithRaftAsync(int lanes = 3)
@@ -177,8 +177,8 @@ public class CyclesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         Assert.Equal("MSG-GEN-01", await future.ErrorCodeAsync());
     }
 
-    // Finding L4. CYCLE-05.1 shows "the state of each lane on that date", but the view takes the lanes of today: lanes added after the close appear on the
-    // closed cycle as Not seeded and are counted in notSeededLanes, on a date when they did not exist.
+    // Finding L4. CYCLE-05.1 shows "the state of each lane on that date": lanes added after the close are not on the closed cycle, nor counted in notSeededLanes.
+    // They are on the views of today, and on no earlier date without a cycle.
     [Fact]
     public async Task Lanes_added_after_a_cycle_closed_are_not_on_its_view()
     {
@@ -189,10 +189,37 @@ public class CyclesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         var view = await owner.ProgressAsync(raft.Id(), $"?cycleId={closed.Id}");
 
         Assert.Equal([1, 2, 3], view.GetProperty("notSeededLanes").EnumerateArray().Select(n => n.GetInt32()));
+        Assert.Equal([1, 2, 3], view.LaneNumbers(StatusIds.Lane.InUse));
+        Assert.Equal([1, 2, 3], (await owner.ProgressAsync(raft.Id(), $"?cycleId={closed.Id}&date={Today.AddDays(-20):yyyy-MM-dd}")).LaneNumbers(StatusIds.Lane.InUse));
+
+        var today = await owner.ProgressAsync(raft.Id());
+        Assert.Equal([1, 2, 3, 4, 5], today.LaneNumbers(StatusIds.Lane.InUse));
+        Assert.Equal([1, 2, 3, 4, 5], today.GetProperty("notSeededLanes").EnumerateArray().Select(n => n.GetInt32()));
+        Assert.Equal([1, 2, 3, 4, 5], (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/lanes/today")).LaneNumbers(StatusIds.Lane.InUse));
+        Assert.Empty((await owner.ProgressAsync(raft.Id(), $"?date={Today.AddDays(-5):yyyy-MM-dd}")).LaneNumbers(StatusIds.Lane.InUse));
     }
 
-    // Finding L1. The list says "commands are true only when the use case would accept them" (CYCLE-01 PRE-3), but canEdit and canCancel ignore the zone
-    // that EditRefusal checks: a raft In Use in a Discontinued zone offers both, and both answer 409.
+    // L4 must not empty a cycle whose start is dated back on a raft recorded later, as every demo cycle is: its lanes are on each of its days.
+    [Fact]
+    public async Task An_open_cycle_dated_back_keeps_its_lanes_on_every_day_of_it()
+    {
+        var (owner, _, raft) = await OwnerWithRaftAsync(lanes: 3);
+        var start = Today.AddDays(-30);
+        var open = await owner.StartCycleAsync(raft.Id(), new CycleBody(start));
+
+        foreach (var query in new[] { "", $"?cycleId={open.Id()}", $"?date={start:yyyy-MM-dd}", $"?cycleId={open.Id()}&date={start.AddDays(10):yyyy-MM-dd}" })
+        {
+            var view = await owner.ProgressAsync(raft.Id(), query);
+            Assert.Equal([1, 2, 3], view.LaneNumbers(StatusIds.Lane.InUse));
+            Assert.Equal([1, 2, 3], view.GetProperty("notSeededLanes").EnumerateArray().Select(n => n.GetInt32()));
+        }
+
+        Assert.Equal(3, (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/lanes/today")).GetProperty("lanes").GetArrayLength());
+        Assert.Empty((await owner.ProgressAsync(raft.Id(), $"?date={start.AddDays(-1):yyyy-MM-dd}")).LaneNumbers(StatusIds.Lane.InUse));
+    }
+
+    // Finding L1. The list says "commands are true only when the use case would accept them" (CYCLE-01 PRE-3): canEdit and canCancel check the zone
+    // as EditRefusal does, so a raft In Use in a Discontinued zone offers neither.
     [Fact]
     public async Task A_cycle_in_a_discontinued_zone_does_not_offer_edit_or_cancel()
     {
@@ -205,11 +232,16 @@ public class CyclesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         var row = await owner.ZoneRowAsync(zoneId, raft.Id());
         Assert.False(row.Flag("canEdit"), "zone list canEdit");
         Assert.False(row.Flag("canCancel"), "zone list canCancel");
-        Assert.False((await owner.GetFromJsonAsync<JsonElement>($"/api/cultivation-cycles/{cycle.Id()}")).Flag("canEdit"), "cycle canEdit");
+        var view = await owner.GetFromJsonAsync<JsonElement>($"/api/cultivation-cycles/{cycle.Id()}");
+        Assert.False(view.Flag("canEdit"), "cycle canEdit");
+        Assert.False(view.Flag("canCancel"), "cycle canCancel");
+        var onProgress = (await owner.ProgressAsync(raft.Id())).GetProperty("cycle");
+        Assert.False(onProgress.Flag("canEdit"), "progress canEdit");
+        Assert.False(onProgress.Flag("canCancel"), "progress canCancel");
     }
 
-    // Finding L2. MSG-GEN-06 is "Blocked because related records are still in use"; MSG-GEN-09 is for "a discontinued, locked or closed record".
-    // "is in use by its records" is no status, and the cycle is none of the three.
+    // Finding L2. MSG-GEN-06 is "Blocked because related records are still in use"; MSG-GEN-09 is for "a discontinued, locked or closed record",
+    // and the cycle is none of the three.
     [Fact]
     public async Task A_cancel_with_records_answers_msg_gen_06()
     {
@@ -220,7 +252,7 @@ public class CyclesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         Assert.Equal("MSG-GEN-06", await (await owner.CancelCycleAsync(cycle.Id(), cycle.Text("rowVersion"))).ErrorCodeAsync());
     }
 
-    // Finding L3. MSG-GEN-06 also reads "or a cycle is open", and the lane change and the discontinue of this very raft answer it with the same cycleId.
+    // Finding L3. MSG-GEN-06 also reads "or a cycle is open", and the lane change and the discontinue of this very raft answer it too, with the same cycleId.
     [Fact]
     public async Task A_start_on_a_raft_with_an_open_cycle_answers_msg_gen_06_as_the_lane_change_does()
     {

@@ -78,8 +78,8 @@ public sealed class CultivationCycleReadService(
                 cycle is null ? null : views.ListItem(cycle),
                 lastClose,
                 noOpenCycle && zoneInUse && raft.StatusId == StatusIds.Usage.InUse && (lastClose is null || lastClose < today),
-                CultivationCycleViews.CanEdit(cycle, raft),
-                CultivationCycleViews.CanCancel(cycle, raft, cycle is not null && withRecords.Contains(cycle.Id)));
+                CultivationCycleViews.CanEdit(cycle, raft, zoneInUse),
+                CultivationCycleViews.CanCancel(cycle, raft, zoneInUse, cycle is not null && withRecords.Contains(cycle.Id)));
         }).ToList();
     }
 

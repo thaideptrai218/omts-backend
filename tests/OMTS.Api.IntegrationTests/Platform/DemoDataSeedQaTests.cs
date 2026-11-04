@@ -42,6 +42,7 @@ public class DemoDataSeedQaTests
         ("ZoneComplianceDocuments", db => db.ZoneComplianceDocuments.CountAsync()),
         ("Rafts", db => db.Rafts.CountAsync()),
         ("Lanes", db => db.Lanes.CountAsync()),
+        ("CultivationCycles", db => db.CultivationCycles.CountAsync()),
         ("Suppliers", db => db.Suppliers.CountAsync()),
         ("FarmingInputItems", db => db.FarmingInputItems.CountAsync()),
         ("PurchaseReceipts", db => db.PurchaseReceipts.CountAsync()),

@@ -148,14 +148,14 @@ public class CultivationCycleStartTests(AuthApiFactory factory) : IClassFixture<
 
     // BR-CYCLE-01: at most one Open cycle per raft; the refusal names it.
     [Fact]
-    public async Task A_second_start_answers_msg_gen_09_naming_the_open_cycle()
+    public async Task A_second_start_answers_msg_gen_06_naming_the_open_cycle()
     {
         var (owner, raft) = await OwnerWithRaftAsync();
         var open = await owner.StartCycleAsync(raft.Id());
 
-        var refused = await (await owner.PostCycleAsync(raft.Id())).SrsProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09", "MSG61");
+        var refused = await (await owner.PostCycleAsync(raft.Id())).SrsProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-06", "MSG11");
 
-        Assert.Equal($"The cultivation cycle of raft {raft.Text("code")} is Open and cannot be used for this action.", refused.Detail());
+        Assert.Equal($"Cannot proceed because 1 records are still in use: cultivation cycle started {Today:dd/MM/yyyy}. Please handle these records first.", refused.Detail());
         Assert.Equal(open.Id(), refused.GetProperty("cycleId").GetGuid());
         Assert.Single(await factory.QueryAsync(db => db.CultivationCycles.Where(c => c.RaftId == raft.Id()).ToListAsync()));
     }

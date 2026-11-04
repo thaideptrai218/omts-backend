@@ -7,6 +7,7 @@ using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
+using OMTS.Domain.Entities.Farming;
 
 namespace OMTS.Application.Features.Cultivation.Progress;
 
@@ -60,15 +61,26 @@ public sealed class CultivationProgressService(
         }
 
         var day = await laneStates.ReadAsync(raft, shown, cancellationToken);
-        var lanes = raftViews.LanesOn(raft, day.States)
-            .Where(l => l.StatusId == StatusIds.Lane.InUse || day.LanesWithRecords.Contains(l.Id))
-            .ToList();
+        var cycle = day.Cycle is { } span ? await cycles.GetAsync(span.Id, cancellationToken) : null;
+        var onView = raft.Lanes
+            .Where(l => (l.StatusId == StatusIds.Lane.InUse && WasOnRaft(l, shown, cycle)) || day.LanesWithRecords.Contains(l.Id))
+            .Select(l => l.Id)
+            .ToHashSet();
+        var lanes = raftViews.LanesOn(raft, day.States).Where(l => onView.Contains(l.Id)).ToList();
         return new CultivationProgressView(
             raft.Id,
             raft.Code,
             shown,
-            day.Cycle is { } span && await cycles.GetAsync(span.Id, cancellationToken) is { } cycle ? await cycleViews.ViewAsync(cycle, cancellationToken) : null,
+            cycle is null ? null : await cycleViews.ViewAsync(cycle, cancellationToken),
             lanes,
             lanes.Where(l => l.StatusId == StatusIds.Lane.InUse && l.State == LaneState.NotSeeded).Select(l => l.LaneNumber).ToList());
     }
+
+    /// <summary>
+    /// A lane created after the date, in Vietnam time, is not on that date. A start can be dated back, and a raft can be recorded after
+    /// its first cycle began, so a lane already there when the cycle was recorded belongs to every day of it. No lane is added while
+    /// a cycle is Open, so an Open cycle keeps all its lanes. Lane history is not kept.
+    /// </summary>
+    private static bool WasOnRaft(Lane lane, DateOnly date, CultivationCycle? cycle) =>
+        BusinessClock.ToBusinessDate(lane.CreatedAt) <= date || (cycle is not null && lane.CreatedAt <= cycle.CreatedAt);
 }

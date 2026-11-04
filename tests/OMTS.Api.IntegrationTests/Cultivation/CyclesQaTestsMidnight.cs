@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Farming;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Domain.Constants;
 using static OMTS.Api.IntegrationTests.Farming.FarmingTestKit;
 
 namespace OMTS.Api.IntegrationTests.Cultivation;
@@ -84,6 +85,26 @@ public class CyclesQaTestsMidnight
         Assert.Equal(day, (await owner.StartCycleAsync(closedYesterday)).Date("startDate"));
         Assert.Equal(["Start date"], await (await owner.PostCycleAsync(closedToday)).InvalidFieldsAsync());
         Assert.False((await owner.ZoneRowAsync(zoneId, closedToday)).Flag("canStart"));
+    }
+
+    // L4: a lane belongs to its date in Vietnam: added a minute after midnight, it is on the new day and not on the old one, on one UTC date.
+    [Fact]
+    public async Task A_lane_added_a_minute_after_midnight_in_vietnam_is_not_on_the_day_before()
+    {
+        var (api, owner, zoneId) = await ArrangeAsync();
+        using var host = api;
+        var (oldDay, newDay) = (Today.AddDays(-1), Today);
+
+        api.Clock.At = MidnightInVietnam(newDay).AddMinutes(-1);
+        var raft = await owner.CreateRaftAsync(zoneId, NewRaftBody(lanes: 2));
+
+        api.Clock.At = MidnightInVietnam(newDay).AddMinutes(1);
+        await owner.EditRaftAsync(raft.Id(), NewRaftBody(raft.Text("code"), lanes: 3) with { RowVersion = raft.Text("rowVersion") });
+
+        Assert.Equal(oldDay, DateOnly.FromDateTime(api.Clock.GetUtcNow().UtcDateTime));
+        Assert.Equal([1, 2], (await owner.ProgressAsync(raft.Id(), $"?date={oldDay:yyyy-MM-dd}")).LaneNumbers(StatusIds.Lane.InUse));
+        Assert.Equal([1, 2, 3], (await owner.ProgressAsync(raft.Id())).LaneNumbers(StatusIds.Lane.InUse));
+        Assert.Equal([1, 2, 3], (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/lanes/today")).LaneNumbers(StatusIds.Lane.InUse));
     }
 
     // BR-CYCLE-01: a raft closed today can start its next cycle from tomorrow, and "tomorrow" begins at midnight in Vietnam.

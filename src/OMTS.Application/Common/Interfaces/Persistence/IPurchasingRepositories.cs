@@ -33,7 +33,7 @@ public interface IFarmingInputItemRepository
     /// <summary>True when the item is on a receipt line.</summary>
     Task<bool> IsUsedAsync(Guid itemId, CancellationToken cancellationToken);
 
-    /// <summary>Which of the items are used by a receipt line or a cycle plan (two grouped queries for a whole list).</summary>
+    /// <summary>Which of the items are used by a receipt line (one query for a whole list).</summary>
     Task<IReadOnlySet<Guid>> UsedAmongAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken);
 
     void Add(FarmingInputItem item);

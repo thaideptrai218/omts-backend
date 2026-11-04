@@ -49,7 +49,7 @@ public class CultivationCycleSqlServerTests
 
     // Each loser answers as the pre-check does, whether it lost on the raft row, on the index or as a deadlock victim.
     [SqlServerFact]
-    public async Task Parallel_starts_leave_one_open_cycle_and_every_other_answer_is_msg_gen_09_naming_it()
+    public async Task Parallel_starts_leave_one_open_cycle_and_every_other_answer_is_msg_gen_06_naming_it()
     {
         await using var host = await FarmingSqlServerHost.StartAsync();
         var owner = host.Owner.Client;
@@ -67,7 +67,7 @@ public class CultivationCycleSqlServerTests
             foreach (var lost in answers.Where(a => a.StatusCode != HttpStatusCode.Created))
             {
                 var body = await lost.ReadAsync(HttpStatusCode.Conflict);
-                Assert.True(body.Text("code") == "MSG-GEN-09", shown);
+                Assert.True(body.Text("code") == "MSG-GEN-06", shown);
                 Assert.Equal(cycle.Id, body.GetProperty("cycleId").GetGuid());
             }
         }

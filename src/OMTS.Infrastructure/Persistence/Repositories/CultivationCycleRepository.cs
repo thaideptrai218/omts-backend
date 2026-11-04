@@ -10,7 +10,7 @@ internal sealed class CultivationCycleRepository(OmtsDbContext db) : ICultivatio
         db.CultivationCycles.Include(c => c.Raft).ThenInclude(r => r.Zone).FirstOrDefaultAsync(c => c.Id == cycleId, cancellationToken);
 
     public Task<CultivationCycle?> GetAsync(Guid cycleId, CancellationToken cancellationToken) =>
-        db.CultivationCycles.AsNoTracking().Include(c => c.Raft).FirstOrDefaultAsync(c => c.Id == cycleId, cancellationToken);
+        db.CultivationCycles.AsNoTracking().Include(c => c.Raft).ThenInclude(r => r.Zone).FirstOrDefaultAsync(c => c.Id == cycleId, cancellationToken);
 
     public async Task<IReadOnlyList<CultivationCycle>> ListByRaftAsync(Guid raftId, CancellationToken cancellationToken) =>
         await db.CultivationCycles.AsNoTracking().Where(c => c.RaftId == raftId).OrderByDescending(c => c.StartDate).ToListAsync(cancellationToken);
