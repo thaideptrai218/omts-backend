@@ -123,7 +123,9 @@ public class ExpiryReminderZoneStatusAndCertificationTests(AuthApiFactory factor
         var expiring = await owner.Client.CreateCertificationAsync(new CertificationFields { ExpiryDate = Today.AddDays(15) });
         var expired = await owner.Client.CreateCertificationAsync(new CertificationFields { Number = null, ExpiryDate = Today.AddDays(-3) });
         var far = await owner.Client.CreateCertificationAsync(new CertificationFields { ExpiryDate = Today.AddDays(31) });
-        var never = await owner.Client.CreateCertificationAsync(new CertificationFields { ExpiryDate = null });
+        // The API now requires an expiry date; a row stored without one is still never reminded.
+        var never = await owner.Client.CreateCertificationAsync(new CertificationFields { ExpiryDate = Today.AddDays(400) });
+        await factory.UpdateAsync<CooperativeCertification>(never.Id(), c => c.ExpiryDate = null);
 
         await Job.RunOnceAsync(Today);
         await Job.RunOnceAsync(Today);
