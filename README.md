@@ -77,7 +77,7 @@ bootstrap temporary password. To get every demo login back, reset the environmen
 
 The demo data also holds the cooperative profile (with a logo, a cover photo and two certifications: one Valid, one
 expiring within 30 days), the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued), zone licenses (`DEMO-01`:
-an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid license and an older expired one), about 10 rafts with lanes per zone (the first five of each In Use zone with an Open cultivation cycle), 8 employees (one Left),
+an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid license and an older expired one), about 10 rafts with lanes per zone (the first five of each In Use zone with an Open cultivation cycle, the first three of them with cultivation logs by the zone's manager), 8 employees (one Left),
 5 suppliers, 15 farming input items and 20 purchase receipts of the last 3 months with payments, discounts and a return.
 `DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰) and one water measurement a day for the
 30 days before the seed day: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
@@ -267,10 +267,10 @@ license and the licenses of a Discontinued zone are not. After a resume, each of
 current state at the next check if that notice was not sent yet; nothing is sent twice. A new expiry date re-arms both
 notices.
 
-A replaced raft photo, license file, cooperative cover photo or certificate file is removed right after the save (a removed
-certification or cover photo too), and the upload of a failed save right away. `OrphanFileCleanupJob` runs every day at
+A replaced raft photo, license file, cooperative cover photo, certificate file or cultivation log photo is removed right after the save (a removed
+certification, cover photo or cultivation log too), and the upload of a failed save right away. `OrphanFileCleanupJob` runs every day at
 03:00 (Asia/Ho_Chi_Minh), with no catch-up at start unless `CatchUpOnStart` is set, and deletes what such a removal left behind: raft photos (`raft-photos/`), license files
-(`zone-licenses/`), cover photos (`cooperative-covers/`) and certificate files (`cooperative-certifications/`) that no
+(`zone-licenses/`), cover photos (`cooperative-covers/`), certificate files (`cooperative-certifications/`) and cultivation log photos (`cultivation-log-photos/`) that no
 record points to and that were written more than the grace period (24 hours) ago. No other storage folder is scanned, so
 cooperative logos are kept for ever.
 
@@ -330,7 +330,7 @@ created by a one-time command run on the server by the deployment operator (not 
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG-ACCOUNT-13 and a critical log entry is written (one number or address gets at most 10 codes per hour) | `Verification:DailySmsLimit` (default 500) |
 | Expiry reminder of zone licenses and certifications (GFR-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
 | Overdue water measurement reminder (ENV-01, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
-| Orphan file clean-up: raft photos, license files, cover photos, certificate files (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `CatchUpOnStart` (default `false`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
+| Orphan file clean-up: raft photos, license files, cover photos, certificate files, cultivation log photos (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `CatchUpOnStart` (default `false`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
 
 ## Design documents
 

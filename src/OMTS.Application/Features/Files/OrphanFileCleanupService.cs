@@ -5,7 +5,7 @@ using OMTS.Application.Common.Interfaces.Storage;
 namespace OMTS.Application.Features.Files;
 
 /// <summary>
-/// Removes FARM files no record points to: a removal that failed after a replace or a failed save, or a host that
+/// Removes FARM and cultivation log files no record points to: a removal that failed after a replace or a failed save, or a host that
 /// stopped between upload and save. Only <see cref="Categories"/> are scanned. Cooperative logos never are: every
 /// logo file is kept, since published traceability versions show the logo of their publication time (FARM-01).
 /// Each environment needs a storage container (or folder) of its own: files its database does not know are deleted.

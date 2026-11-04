@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Farming;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -78,6 +80,25 @@ public class CultivationLogOrphanFileTests
 
         Assert.Equal([photo], StoredKeys(factory, Category));
         Assert.Contains(factory.Logs.Lines, l => l.StartsWith("Warning:") && l.Contains(Category) && l.Contains("the database holds no cooperative"));
+    }
+
+    // One spelling per key: what the blob store lists is exactly what the upload answered, under the category as written.
+    [AzuriteFact]
+    public async Task Blob_storage_lists_and_deletes_a_photo_under_the_one_key_it_wrote()
+    {
+        await using var api = new AuthApiFactory().WithWebHostBuilder(b => b
+            .UseSetting("Storage:Provider", "AzureBlob")
+            .UseSetting("Storage:AzureBlob:ConnectionString", Environment.GetEnvironmentVariable(AzuriteFactAttribute.VariableName))
+            .UseSetting("Storage:AzureBlob:Container", $"omts-test-{Guid.NewGuid():N}"));
+        var storage = api.Services.GetRequiredService<IFileStorage>();
+
+        var key = await StoreAsync(api.Services, Png);
+
+        Assert.StartsWith($"{Category}/", key);
+        Assert.Equal([key], (await storage.ListAsync(Category)).Select(f => f.Key));
+        await Assert.ThrowsAsync<ArgumentException>(() => storage.ListAsync(Category.ToUpperInvariant()));
+        Assert.True(await storage.DeleteAsync(key));
+        Assert.Empty(await storage.ListAsync(Category));
     }
 
     // The referenced keys are read from SQL Server; every file counts as old here, so only the reference decides.
