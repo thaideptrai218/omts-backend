@@ -146,9 +146,9 @@ public class PurchasingSqlServerTests
         await host.UseDbAsync(db =>
         {
             db.CultivationCycles.Add(cycle);
-            db.SeedingEvents.Add(new Domain.Entities.Cultivation.SeedingEvent
+            db.SeedingRecords.Add(new Domain.Entities.Cultivation.SeedingRecord
             {
-                CycleId = cycle.Id, SeedLotId = line, SeedingDate = Today, SeedQuantity = 40, RecordedByAccountId = host.Owner.Account.Id,
+                CycleId = cycle.Id, SeedLotLineId = line, SeedingDate = Today, Quantity = 40, RecordedByAccountId = host.Owner.Account.Id,
             });
         });
 

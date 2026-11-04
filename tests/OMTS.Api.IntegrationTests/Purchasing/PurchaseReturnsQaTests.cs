@@ -126,13 +126,13 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
 
     // The same rule, with a session that holds no quantity: it counts as all seeded, so the minimum is always above the quantity.
     [Fact]
-    public async Task A_price_correction_is_not_refused_after_a_seeding_without_a_quantity_on_a_line_with_a_return()
+    public async Task A_price_correction_is_not_refused_when_seeded_and_returned_pass_the_quantity_of_the_line()
     {
         var world = await factory.WorldAsync();
         var receipt = await world.CompletedAsync(new LineBody(world.Seed, 10, 1_000));
         var line = receipt.LineOf(world.Seed);
         await world.ReturnAsync(receipt.Id(), line, 4);
-        await factory.SeedAsync(world.Raft.Id, line, null);
+        await factory.SeedAsync(world.Raft.Id, line, 8);
 
         var corrected = await (await world.Owner.CorrectAsync(receipt.Id(), "Invoice price", new { lineId = line, unitPrice = 900 })).ReadAsync(HttpStatusCode.OK);
 

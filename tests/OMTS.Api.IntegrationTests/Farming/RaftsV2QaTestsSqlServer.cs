@@ -274,13 +274,16 @@ public class RaftsV2QaTestsSqlServer
             INSERT INTO Lanes (Id, RaftId, LaneNumber, CreatedAt) VALUES (NEWID(), {secondOnly}, 1, SYSDATETIMEOFFSET());
             """);
 
+        // RaftsV2 itself leaves the seeding table alone; SeedingRecords replaces it later.
+        await migrator.MigrateAsync("20261104103030_RaftsV2");
+        Assert.Equal(1, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.tables WHERE name = 'SeedingEvents'"));
+
         await migrator.MigrateAsync();
 
         Assert.False(db.Database.HasPendingModelChanges());
         Assert.Empty(await db.RaftPhotos.AsNoTracking().ToListAsync());
         Assert.Equal(StatusIds.Lane.InUse, await db.Lanes.AsNoTracking().Select(l => l.StatusId).SingleAsync());
         Assert.Equal(StatusIds.Usage.Discontinued, await db.Rafts.AsNoTracking().Where(r => r.Id == secondOnly).Select(r => r.StatusId).SingleAsync());
-        Assert.Equal(1, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.tables WHERE name = 'SeedingEvents'"));
         Assert.Equal(1, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.indexes WHERE name = 'IX_RaftPhotos_RaftId_SortOrder' AND is_unique = 1"));
         Assert.Equal(1, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.check_constraints WHERE name = 'CK_RaftPhoto_SortOrder'"));
         Assert.Equal(1, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.foreign_keys WHERE name = 'FK_Lanes_Statuses_StatusId'"));

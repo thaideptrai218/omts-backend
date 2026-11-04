@@ -114,6 +114,8 @@ public class CyclesQaTestsMigrationAndDemo
         {
             await db.CultivationLogPhotos.ExecuteDeleteAsync();
             await db.CultivationLogs.ExecuteDeleteAsync();
+            await db.SeedingRecordLanes.ExecuteDeleteAsync();
+            await db.SeedingRecords.ExecuteDeleteAsync();
             await db.CultivationCycles.ExecuteDeleteAsync();
             await db.AuditEvents.Where(e => e.Action == "CultivationCycle.Started").ExecuteDeleteAsync();
             var raft = await db.Rafts.Where(r => r.Code == "B1-03").SingleAsync();
