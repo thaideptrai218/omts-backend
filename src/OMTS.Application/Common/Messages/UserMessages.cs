@@ -241,33 +241,29 @@ public static class UserMessages
         Purchase03, $"{itemName}: enter a quantity greater than 0 and at most {maxQuantity} {unit}. {limitExplanation}".TrimEnd(), legacyCode);
 
     /// <summary>MSG-PURCHASE-04 (BR-PURCHASE-05): notification to the Owner of a payment, money paid back or a cancelled payment; always pushed.</summary>
-    /// <param name="transactionKind">Which transaction, so a client can word it in its own language: Payment, PaidBack, PaymentCancelled or PaidBackCancelled.</param>
+    /// <param name="transaction">The English {transaction_text}: what was recorded, up to the code ("the cancellation of payment"), from which the text is built.</param>
+    /// <param name="transactionKind">The atomic parameter clients word it from: Payment, PaidBack, PaymentCancelled or PaidBackCancelled.</param>
+    /// <param name="preposition">"to" or "by" the supplier.</param>
     /// <param name="debtAmount">The supplier debt after it; below zero when paid in advance.</param>
     public static UserMessage SupplierTransaction(
-        string userName, string transactionKind, string transactionText, string supplierName, string paymentCode, decimal amount, decimal debtAmount)
+        string userName, string transaction, string transactionKind, string paymentCode, decimal amount, string preposition, string supplierName, decimal debtAmount)
     {
         var debtText = debtAmount < 0
             ? $"The cooperative has now paid {supplierName} {Vnd(-debtAmount)} VND in advance."
             : $"The cooperative now owes {supplierName} {Vnd(debtAmount)} VND.";
-        return new UserMessage(Purchase04, $"{userName} recorded {transactionText}. {debtText}")
+        return new UserMessage(Purchase04, $"{userName} recorded {transaction} {paymentCode} of {Vnd(amount)} VND {preposition} {supplierName}. {debtText}")
         {
             Parameters = new Dictionary<string, object?>
             {
                 ["user_name"] = userName,
                 ["transaction_kind"] = transactionKind,
-                ["transaction_text"] = transactionText,
-                ["debt_text"] = debtText,
-                ["supplier_name"] = supplierName,
                 ["payment_code"] = paymentCode,
                 ["amount"] = amount,
+                ["supplier_name"] = supplierName,
                 ["debt_amount"] = debtAmount,
             },
         };
     }
-
-    /// <summary>The {transaction_text} of MSG-PURCHASE-04, also shown as the English body of the notification.</summary>
-    public static string SupplierTransactionText(string kindText, string paymentCode, decimal amount, string preposition, string supplierName) =>
-        $"{kindText} {paymentCode} of {Vnd(amount)} VND {preposition} {supplierName}";
 
     /// <summary>MSG-PURCHASE-05 (PURCHASE-05.1): the payment is larger than the debt, or the debt is zero or below; a confirmation.</summary>
     /// <param name="debtAmount">What the cooperative owes, 0 when it has already paid in advance (the exact debt goes in the details of the answer).</param>

@@ -62,7 +62,7 @@ public class SupplierDebtSqlServerTests
         var after = await (await owner.GetAsync($"{Debts}/{world.SupplierId}/statement?from={Today.AddDays(-5):yyyy-MM-dd}&to={Today:yyyy-MM-dd}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal((before.Money("closingDebt"), debt), (after.Money("openingDebt"), after.Money("closingDebt")));
         Assert.Equal(
-            [("Receipt", 500_000m), ("Return", -125_000m), ("ReturnRefund", 25_000m), ("PaidBack", 7m)],
+            [("Receipt", 500_000m), ("PaidBack", 7m), ("Return", -125_000m), ("ReturnRefund", 25_000m)],
             after.GetProperty("entries").EnumerateArray().Select(e => (e.GetProperty("kind").GetString(), e.Money("amount"))).ToList());
         Assert.Equal(after.Money("openingDebt") + after.GetProperty("entries").EnumerateArray().Sum(e => e.Money("amount")), after.Money("closingDebt"));
 
@@ -75,6 +75,9 @@ public class SupplierDebtSqlServerTests
         // The cancel preview reads the same debt; a receipt with a return cannot be cancelled.
         var preview = await (await owner.GetAsync($"/api/purchase-receipts/{old.Id()}/cancel-preview")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal((debt, debt - 569_263m), (preview.Money("debtBefore"), preview.Money("debtAfter")));
+        // What leaves the debt with a receipt is its total less its returns, plus the money those brought back.
+        var blocked = await (await owner.GetAsync($"/api/purchase-receipts/{recent.Id()}/cancel-preview")).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal(("Returned", debt - 400_000m), (blocked.GetProperty("blocked").GetProperty("kind").GetString(), blocked.Money("debtAfter")));
     }
 
     [SqlServerFact]

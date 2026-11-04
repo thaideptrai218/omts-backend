@@ -23,33 +23,23 @@ public sealed class SupplierPaymentNotifications(
     {
         var owners = await recipients.GetOwnersAndRolesAsync([], cancellationToken);
         var paidBack = payment.Kind == SupplierPaymentKind.PaidBack;
-        var kindText = (cancelled, paidBack) switch
+        var transaction = (cancelled, paidBack) switch
         {
             (false, false) => "payment",
             (false, true) => "money paid back",
             (true, false) => "the cancellation of payment",
             (true, true) => "the cancellation of money paid back",
         };
-        var kindCode = $"{(paidBack ? "PaidBack" : "Payment")}{(cancelled ? "Cancelled" : string.Empty)}";
-        var text = UserMessages.SupplierTransactionText(kindText, payment.Code, payment.Amount, paidBack ? "by" : "to", supplierName);
         var message = UserMessages.SupplierTransaction(
-            await ActorNameAsync(cancellationToken), kindCode, text, supplierName, payment.Code, payment.Amount, debtAfter);
+            await PurchasingActorName.OfAsync(currentUser, accounts, cancellationToken),
+            transaction,
+            $"{(paidBack ? "PaidBack" : "Payment")}{(cancelled ? "Cancelled" : string.Empty)}",
+            payment.Code, payment.Amount, paidBack ? "by" : "to", supplierName, debtAfter);
         await notifications.NotifyAsync(
             owners,
             new NotificationContent(
                 NotificationTypes.SupplierTransaction, "Supplier payment transaction", message,
                 new RelatedRecord(RelatedRecordTypes.SupplierPayment, payment.Id, payment.Code)),
             cancellationToken);
-    }
-
-    private async Task<string> ActorNameAsync(CancellationToken cancellationToken)
-    {
-        if (currentUser.AccountId is not { } accountId)
-        {
-            return "The system";
-        }
-
-        var names = await accounts.GetDisplayNamesAsync([accountId], cancellationToken);
-        return names.GetValueOrDefault(accountId) ?? "A user";
     }
 }
