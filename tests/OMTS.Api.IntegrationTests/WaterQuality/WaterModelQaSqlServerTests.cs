@@ -100,10 +100,15 @@ public class WaterModelQaSqlServerTests
 
         var responses = await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => client.VoidAsync(id)));
 
-        Assert.Contains(responses, r => r.StatusCode == HttpStatusCode.OK);
-        Assert.All(responses, r => Assert.True(r.StatusCode is HttpStatusCode.OK or HttpStatusCode.Conflict, $"{(int)r.StatusCode}"));
+        Assert.Single(responses, r => r.StatusCode == HttpStatusCode.OK);
+        foreach (var refused in responses.Where(r => r.StatusCode != HttpStatusCode.OK))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+            Assert.Equal("MSG-GEN-09", await refused.ErrorCodeAsync());
+        }
+
         await using var db = database.CreateContext();
-        Assert.Equal(responses.Count(r => r.StatusCode == HttpStatusCode.OK), await db.AuditEvents.CountAsync(e => e.RecordId == id && e.Action == "WaterMeasurement.Voided"));
+        Assert.Equal(1, await db.AuditEvents.CountAsync(e => e.RecordId == id && e.Action == "WaterMeasurement.Voided"));
     }
 
     // Records and threshold changes side by side: no 500, and each copy is one whole set of thresholds, never a mix.

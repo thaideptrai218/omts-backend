@@ -149,16 +149,24 @@ public static class WaterTestKit
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
-    public static Task<HttpResponseMessage> CorrectAsync(
-        this HttpClient client, Guid id, decimal ph, decimal salinity, string? reason = "Đọc nhầm số", DateTimeOffset? measuredAt = null, decimal? temperature = 25m) =>
-        client.PostAsJsonAsync($"/api/water-measurements/{id}/corrections", new
+    /// <summary>The correction request; without <paramref name="raftId"/> it names the raft the measurement has, as the caller can read it.</summary>
+    public static async Task<HttpResponseMessage> CorrectAsync(
+        this HttpClient client, Guid id, decimal ph, decimal salinity, string? reason = "Đọc nhầm số", DateTimeOffset? measuredAt = null, decimal? temperature = 25m, Guid? raftId = null) =>
+        await client.PostAsJsonAsync($"/api/water-measurements/{id}/corrections", new
         {
+            raftId = raftId ?? await CurrentRaftAsync(client, id),
             ph,
             salinity,
             temperature,
             measuredAt = measuredAt ?? DateTimeOffset.UtcNow.AddMinutes(-10),
             reason,
         });
+
+    private static async Task<Guid?> CurrentRaftAsync(HttpClient client, Guid id)
+    {
+        var detail = await client.GetAsync($"/api/water-measurements/{id}");
+        return detail.IsSuccessStatusCode ? (await detail.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("raftId").GetGuid() : null;
+    }
 
     public static Task<HttpResponseMessage> VoidAsync(this HttpClient client, Guid id, string? reason = "Ghi nhầm vùng") =>
         client.PostAsJsonAsync($"/api/water-measurements/{id}/void", new { reason });
@@ -171,6 +179,12 @@ public static class WaterTestKit
     public static Task<List<Notification>> AlertsOfAsync(this AuthApiFactory api, Guid measurementId) =>
         api.QueryAsync(db => db.Notifications.AsNoTracking()
             .Where(n => n.Type == NotificationTypes.WaterAlert && n.RelatedRecordId == measurementId)
+            .ToListAsync());
+
+    /// <summary>WATER_ALERT_WITHDRAWN rows (MSG-WATER-04) of one measurement.</summary>
+    public static Task<List<Notification>> WithdrawalsOfAsync(this AuthApiFactory api, Guid measurementId) =>
+        api.QueryAsync(db => db.Notifications.AsNoTracking()
+            .Where(n => n.Type == NotificationTypes.WaterAlertWithdrawn && n.RelatedRecordId == measurementId)
             .ToListAsync());
 
     public static Task<List<AuditEvent>> AuditOfAsync(this AuthApiFactory api, Guid recordId) =>
