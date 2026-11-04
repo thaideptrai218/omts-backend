@@ -37,7 +37,7 @@ internal static class DemoOnSharedServerKit
             }
         });
 
-    public static WebApplicationFactory<Program> StagingOnSqlServer(SqlServerTestDatabase database, string storageRoot, string password) =>
+    public static WebApplicationFactory<Program> OnSqlServer(SqlServerTestDatabase database, string storageRoot, string password, string environment = "Staging") =>
         new SqlServerApiFactory(database, new Dictionary<string, string?>
         {
             [BootstrapSettings.CooperativeFullNameKey] = "Hợp tác xã Nuôi hàu Vân Đồn",
@@ -52,7 +52,7 @@ internal static class DemoOnSharedServerKit
             ["Push:Provider"] = "None",
             [DemoSeedGate.AllowOutsideDevelopmentKey] = "true",
             [DemoSeedGate.PasswordKey] = password,
-        }).WithWebHostBuilder(b => b.UseEnvironment("Staging"));
+        }).WithWebHostBuilder(b => b.UseEnvironment(environment));
 
     public static async Task<BootstrapOutcome> RunAsync(WebApplicationFactory<Program> api, bool demo)
     {

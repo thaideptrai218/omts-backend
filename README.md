@@ -330,8 +330,11 @@ To set up the server:
 3. Give the password to the testers privately. The nine logins of "Run with Docker" all use it, the Owner included, and
    land in the same branches. Put the server behind HTTPS: the image itself listens on plain HTTP.
 
-The seed never changes a password it has already set. A new `Demo:Password` changes no account, and a database first
-seeded in Development keeps `Demo@1234`: to change either, start again from an empty database.
+The seed never changes a password it has already set, so a new `Demo:Password` changes no account: to change it, start
+again from an empty database. A database where any account holds `Demo@1234` (first seeded in Development, or restored
+from such a copy) is refused the same way: exit code 1, nothing written, and the message names the accounts, never a
+password. This is checked by `seed --bootstrap --demo` only; starting the API or a bootstrap without `--demo` does not
+check it, so run the demo seed on every new copy of a database.
 
 **What stays off.** The dev inbox (`/api/dev/sms`, `/email`, `/push`) and Swagger answer 404 outside Development; no
 setting opens them.

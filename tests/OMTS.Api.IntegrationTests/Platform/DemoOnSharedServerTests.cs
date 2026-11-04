@@ -64,7 +64,7 @@ public class DemoOnSharedServerTests
         await using var database = SqlServerTestDatabase.Create();
         try
         {
-            await using (var refused = StagingOnSqlServer(database, storageRoot, DemoSeedGate.WellKnownPassword))
+            await using (var refused = OnSqlServer(database, storageRoot, DemoSeedGate.WellKnownPassword))
             {
                 Assert.Equal(DeploymentBootstrapper.Failure, (await RunAsync(refused, demo: true)).ExitCode);
             }
@@ -74,7 +74,7 @@ public class DemoOnSharedServerTests
                 Assert.False(await db.Database.CanConnectAsync());
             }
 
-            await using var api = StagingOnSqlServer(database, storageRoot, secret);
+            await using var api = OnSqlServer(database, storageRoot, secret);
             var outcome = await RunAsync(api, demo: true);
 
             Assert.True(outcome.ExitCode == DeploymentBootstrapper.Success, string.Join(Environment.NewLine, outcome.Messages));

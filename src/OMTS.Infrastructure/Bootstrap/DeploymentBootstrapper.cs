@@ -45,6 +45,7 @@ public sealed class DeploymentBootstrapper(
         if (seedDemoData)
         {
             var (password, refusal) = DemoSeedGate.Check(environment, configuration);
+            refusal ??= await DemoSeedGate.DatabaseRefusalAsync(environment, db, passwordHasher, cancellationToken);
             if (refusal is not null)
             {
                 return new BootstrapOutcome(Failure, [refusal]);
