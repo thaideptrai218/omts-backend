@@ -5,12 +5,11 @@ using OMTS.Domain.Entities.Cultivation;
 namespace OMTS.Application.Features.WaterQuality;
 
 /// <summary>
-/// ENV-02 → overdue reminder (OMTS-214): a void of the zone's latest Confirmed measurement, or a correction that moves it
-/// to a day before the zone's other measurements, removes it as the zone's latest. When it became known after the last
-/// reminder (it answered that reminder) this re-opens the overdue period the reminder was about, so the zone's marker
-/// is cleared and the next run reminds again if the zone is overdue. Anything else keeps the marker: the zone's latest
-/// measurement is unchanged, the reminder was sent while the removed measurement was already the latest one, or the
-/// corrected version stays the latest and the reminder rule itself decides (<see cref="WaterOverdueRule.PeriodKnownAt"/>).
+/// Interim until OMTS-219 W3 deletes this class (GFR-04 recomputes the base date on every run). WATER-02 → overdue
+/// reminder: a void of the zone's latest Active measurement, or a correction that moves it to a day before the zone's
+/// other measurements, removes it as the zone's latest. When it was saved after the last reminder (it answered that
+/// reminder) this re-opens the overdue period the reminder was about, so the zone's marker is cleared and the next run
+/// reminds again if the zone is overdue. Anything else keeps the marker.
 /// </summary>
 public sealed class WaterOverdueRearm(IWaterMeasurementRepository measurements)
 {
@@ -25,25 +24,24 @@ public sealed class WaterOverdueRearm(IWaterMeasurementRepository measurements)
     private async Task ReArmWhenTheAnswerIsRemovedAsync(WaterMeasurement measurement, DateTimeOffset? correctedMeasuredAt, CancellationToken cancellationToken)
     {
         var zone = measurement.Zone;
-        if (measurement.StatusId != StatusIds.WaterMeasurement.Confirmed || zone.WaterOverdueRemindedAt is not { } remindedAt)
+        if (measurement.StatusId != StatusIds.WaterMeasurement.Active || zone.WaterOverdueRemindedAt is not { } remindedAt)
         {
             return;
         }
 
-        var latest = await measurements.ListLatestConfirmedAsync(measurement.ZoneId, 2, cancellationToken);
+        var latest = await measurements.ListLatestActiveAsync(measurement.ZoneId, 2, cancellationToken);
         if (latest.Count == 0 || latest[0].Id != measurement.Id)
         {
             return;
         }
 
-        // The new version stays the zone's latest unless it is measured before the next one (a tie goes to the newer confirmation).
+        // The corrected measurement stays the zone's latest unless it is measured before the next one.
         if (correctedMeasuredAt is { } at && (latest.Count == 1 || at >= latest[1].MeasuredAt))
         {
             return;
         }
 
-        var chain = await measurements.GetVersionChainAsync(measurement.Id, cancellationToken);
-        if (WaterOverdueRule.PeriodKnownAt(chain, upTo: measurement.Id) > remindedAt)
+        if (measurement.CreatedAt > remindedAt)
         {
             zone.WaterOverdueRemindedAt = null;
         }

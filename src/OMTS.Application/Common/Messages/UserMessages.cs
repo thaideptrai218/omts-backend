@@ -74,20 +74,25 @@ public static class UserMessages
     };
     // ---- MSG-WATER ----
 
-    /// <summary>MSG-WATER-01 (WATER-01.2): the OCR Service read nothing, or did not answer.</summary>
+    /// <summary>MSG-WATER-01 (WATER-01.2): the OCR Service could not read one or more values, or did not answer.</summary>
     /// <param name="indicatorList">The values not read, e.g. "pH and salinity".</param>
     public static UserMessage OcrValuesNotRead(string indicatorList) => new(
         Water01, $"OMTS could not read {indicatorList} from the photo. Please look at the meter and type in the missing values.", Legacy.Msg04);
 
+    /// <summary>MSG-WATER-02 (WATER-01 step 8): before saving, a value is outside the water thresholds of the zone.</summary>
+    /// <param name="valuesOutside">Each value outside with its allowed range.</param>
+    public static UserMessage WaterValuesOutsideBeforeSave(IReadOnlyList<WaterValueOutside> valuesOutside) => new(
+        Water02, $"{string.Join("; ", valuesOutside.Select(v => v.Describe()))}. Please check the meter again before you save.");
+
     /// <summary>MSG-WATER-03 (BR-WATER-05): the water alert notification.</summary>
     /// <param name="corrected">The alert of a corrected measurement: "(corrected measurement)" in the text.</param>
-    /// <param name="raftCode">Null while measurements have no raft ("–" in the text).</param>
+    /// <param name="raftCode">The raft where the water was measured.</param>
     /// <param name="measuredAt">Shown in Vietnam time.</param>
     /// <param name="valuesOutside">Each value outside with its allowed range.</param>
     public static UserMessage WaterAlert(
-        bool corrected, string zoneName, string? raftCode, DateTimeOffset measuredAt, IReadOnlyList<WaterValueOutside> valuesOutside) => new(
+        bool corrected, string zoneName, string raftCode, DateTimeOffset measuredAt, IReadOnlyList<WaterValueOutside> valuesOutside) => new(
         Water03,
-        $"Water alert{(corrected ? " (corrected measurement)" : "")}: zone {zoneName}, raft {raftCode ?? "–"}, measured on {BusinessClock.Format(measuredAt)}. "
+        $"Water alert{(corrected ? " (corrected measurement)" : "")}: zone {zoneName}, raft {raftCode}, measured on {BusinessClock.Format(measuredAt)}. "
             + $"{string.Join("; ", valuesOutside.Select(v => v.Describe()))}. Please check the water.",
         Legacy.Msg27)
     {

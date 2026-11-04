@@ -5,8 +5,8 @@ namespace OMTS.Api.Extensions;
 
 /// <summary>
 /// One rule for every time the API reads: without a UTC offset it is Vietnam time (UTC+7, <c>BusinessClock</c>).
-/// JSON bodies use <see cref="BusinessTimeJsonConverter"/>, multipart fields <see cref="InvariantFormValues"/>; no
-/// endpoint takes a date and time from the query or the route (period filters are dates, yyyy-MM-dd).
+/// JSON bodies use <see cref="BusinessTimeJsonConverter"/>; no endpoint takes a date and time from the query, the route
+/// or a form field (period filters are dates, yyyy-MM-dd).
 /// </summary>
 public static class BusinessTimeSetup
 {

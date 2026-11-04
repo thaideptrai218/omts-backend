@@ -10,7 +10,6 @@ public sealed record SaveFarmingZoneRequest(
     decimal? Latitude,
     decimal? Longitude,
     decimal? Area,
-    string? WaterMeasurementPoint,
     string? RowVersion = null);
 
 /// <summary>Discontinue / reactivate body; the reason is optional and goes to the audit log.</summary>
@@ -36,7 +35,6 @@ public sealed record FarmingZoneView(
     decimal? Latitude,
     decimal? Longitude,
     decimal? Area,
-    string? WaterMeasurementPoint,
     int StatusId,
     string Status,
     int InUseRaftCount,

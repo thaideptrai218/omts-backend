@@ -37,10 +37,8 @@ internal static class StatusCatalogSeed
         NewStatus(S.CultivationCycle.Open, G.CultivationCycle, "OPEN", "Open", "The cycle is in progress; seeding, logging and harvesting are allowed.", initial: true),
         NewStatus(S.CultivationCycle.Closed, G.CultivationCycle, "CLOSED", "Closed", "The cycle has ended; the raft can open a new cycle.", final: true),
 
-        NewStatus(S.WaterMeasurement.Draft, G.WaterMeasurement, "DRAFT", "Draft", "OCR or manually entered values not yet confirmed; not used for reports or alerts.", initial: true),
-        NewStatus(S.WaterMeasurement.Confirmed, G.WaterMeasurement, "CONFIRMED", "Confirmed", "Checked against the photo and confirmed; used for alerts and reports."),
-        NewStatus(S.WaterMeasurement.Superseded, G.WaterMeasurement, "SUPERSEDED", "Corrected", "Replaced by a new correction version; the old record is kept for reference.", final: true),
-        NewStatus(S.WaterMeasurement.Voided, G.WaterMeasurement, "VOIDED", "Voided", "Recorded by mistake and voided with a reason; excluded from charts, reports, exports and the overdue check.", final: true),
+        NewStatus(S.WaterMeasurement.Active, G.WaterMeasurement, "ACTIVE", "Active", "Counts in the charts and the water alert of the zone.", initial: true),
+        NewStatus(S.WaterMeasurement.Voided, G.WaterMeasurement, "VOIDED", "Voided", "Kept in the history with its reason; no longer counts.", final: true),
 
         // SMS and Zalo OA sendings kept as Notification rows (BR-SALE-09, GFR-06).
         NewStatus(S.MessageDelivery.Sending, G.MessageDelivery, "SENDING", "Sending", "Handed to the SMS Service or Zalo OA, no answer yet.", initial: true),
@@ -72,15 +70,12 @@ internal static class StatusCatalogSeed
 
         NewTransition(9, S.CultivationCycle.Open, S.CultivationCycle.Closed, "UC27", OwnerOrZoneManager, Action, "The seeded portion has been fully harvested or written off (BR-21).", false),
 
-        NewTransition(10, S.WaterMeasurement.Draft, S.WaterMeasurement.Confirmed, "UC26", OwnerOrZoneManager, Action, "Check against the photo and confirm the values.", false),
-        NewTransition(11, S.WaterMeasurement.Confirmed, S.WaterMeasurement.Superseded, "UC26", OwnerOrZoneManager, Action, "Save a new correction version.", true),
-
+        // 10–11, 55–56 were the water transitions of the SRS 22/10 model (OMTS-219); their ids are not reused.
         // 12–52 were the transitions of the removed SRS 22/10 groups (OMTS-216); their ids are not reused.
         NewTransition(53, S.MessageDelivery.Sending, S.MessageDelivery.Sent, "SALE-06, SALE-03, CLAIM-02, TRACE-04", SystemActor, SystemActor, "The SMS Service or Zalo OA accepts the message.", false),
         NewTransition(54, S.MessageDelivery.Sending, S.MessageDelivery.NotSent, "SALE-06, SALE-03, CLAIM-02, TRACE-04", SystemActor, SystemActor, "The SMS Service or Zalo OA does not accept the message.", false),
 
-        NewTransition(55, S.WaterMeasurement.Draft, S.WaterMeasurement.Voided, "ENV-02", OwnerOrZoneManager, Action, "Void a wrong draft.", true),
-        NewTransition(56, S.WaterMeasurement.Confirmed, S.WaterMeasurement.Voided, "ENV-02", OwnerOrZoneManager, Action, "Void the latest version of a wrong measurement.", true),
+        NewTransition(80, S.WaterMeasurement.Active, S.WaterMeasurement.Voided, "WATER-02", "Zone Manager (own); Cooperative Owner", Action, "Void a wrong measurement with a reason.", true),
 
         NewTransition(70, S.PurchaseReceipt.Draft, S.PurchaseReceipt.Completed, "INP-03", OwnerOrZoneManager, Action, "Full validation of supplier, zone, raft, lines and amounts passes.", false),
         NewTransition(71, S.PurchaseReceipt.Draft, S.PurchaseReceipt.Cancelled, "INP-04", OwnerOrZoneManager, Action, "Cancel a draft that will not be completed.", true),

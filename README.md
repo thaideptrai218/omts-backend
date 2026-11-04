@@ -78,10 +78,12 @@ bootstrap temporary password. To get every demo login back, reset the environmen
 The demo data also holds the cooperative profile, the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued),
 license documents (valid, expiring within 30 days, expired), about 10 rafts with lanes per zone, 8 employees (one Left),
 5 suppliers, 15 farming input items and 20 purchase receipts of the last 3 months with payments, discounts and a return.
-`DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰) and one water measurement a day for the
-30 days before the seed day: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
-26.0 ‰) and one voided reading. The mistyped 2.6 ‰ alerted before its correction, so the inboxes hold four sets of water
-alerts. Phone numbers are fake (`0900 000 0xx`).
+`DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰, temperature 15–32 °C) and one water
+measurement a day for the 30 days before the seed day, going round the rafts In Use of the zone, each with its temperature
+and a placeholder meter photo: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
+26.0 ‰) and one voided reading. The mistyped 2.6 ‰ alerted before its correction, so the Zone Managers' inboxes hold four
+sets of water alerts (the demo records as the Owner, who is not told of their own action). Phone numbers are fake
+(`0900 000 0xx`).
 
 Dates are set relative to the day of the first seed and are not moved afterwards:
 - After a few weeks the "expiring" license has expired. `docker compose down -v` gives fresh dates.
@@ -230,13 +232,13 @@ lists the tokens a real provider would deliver to: those registered (`POST /api/
 logged in. These endpoints answer 404 outside
 Development; they are anonymous, so never expose a Development environment publicly. Local storage writes under `src/OMTS.Api/App_Data/files` (git-ignored); for Azurite set
 `Storage:Provider=AzureBlob` and `Storage:AzureBlob:ConnectionString=UseDevelopmentStorage=true`.
-The OCR Service of the water meter photos (ENV-01) is only faked until its provider ticket: the fake answers with
-`Ocr:Fake` (default pH 7.8, salinity 25.5), unless the photo bytes contain a marker such as `ph9.1_sal20`, `conf0.6`,
-`at2026-10-20T08:00`, `ocr-fail` or `ocr-timeout` (used by the tests).
+The OCR Service of the water meter photos (WATER-01) is only faked until its provider ticket: the fake answers with
+`Ocr:Fake` (default pH 7.8, salinity 25.5, temperature 28.5), unless the photo bytes contain a marker such as
+`ph9.1_sal20_tmp28.5`, `conf0.6`, `at2026-10-20T08:00`, `ocr-fail` or `ocr-timeout` (used by the tests).
 
 ### Background jobs
 
-`WaterMeasurementOverdueJob` runs every day at 06:00 (Asia/Ho_Chi_Minh): each In Use zone without a Confirmed water
+`WaterMeasurementOverdueJob` runs every day at 06:00 (Asia/Ho_Chi_Minh): each In Use zone without an Active water
 measurement for more than one calendar month gets one MSG-WATER-06 reminder per overdue period (Owners and the zone's staff
 with View on `WATER_MEASUREMENTS`). Like the zone license reminder (07:00), a host started after the run time runs it
 once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A reminder already
@@ -244,8 +246,9 @@ sent is never sent again.
 
 A replaced raft photo or license file is removed right after the save, and the upload of a failed save right away.
 `OrphanFileCleanupJob` runs every day at 03:00 (Asia/Ho_Chi_Minh) and deletes what such a removal left behind: raft
-photos (`raft-photos/`) and license files (`zone-licenses/`) that no raft or license points to and that were written more
-than the grace period (24 hours) ago. No other storage folder is scanned, so cooperative logos are kept for ever.
+photos (`raft-photos/`), license files (`zone-licenses/`) and water meter photos (`water-meter-photos/`, a recognition
+that was never saved as a measurement) that no record points to and that were written more than the grace period
+(24 hours) ago. No other storage folder is scanned, so cooperative logos are kept for ever.
 
 **Every environment must use its own storage container (`Storage:AzureBlob:Container`) or folder
 (`Storage:Local:RootPath`); never share one between environments.** The job deletes the files its own database does not
@@ -302,7 +305,7 @@ created by a one-time command run on the server by the deployment operator (not 
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG-ACCOUNT-13 and a critical log entry is written (one number or address gets at most 10 codes per hour) | `Verification:DailySmsLimit` (default 500) |
 | Zone license reminder (FARM-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
 | Overdue water measurement reminder (ENV-01, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
-| Orphan raft photo and license file clean-up (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
+| Orphan raft photo, license file and meter photo clean-up (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
 
 ## Design documents
 

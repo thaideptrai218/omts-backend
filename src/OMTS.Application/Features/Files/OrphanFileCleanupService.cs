@@ -5,15 +5,16 @@ using OMTS.Application.Common.Interfaces.Storage;
 namespace OMTS.Application.Features.Files;
 
 /// <summary>
-/// Removes FARM files no record points to: a removal that failed after a replace or a failed save, or a host that
-/// stopped between upload and save. Only <see cref="Categories"/> are scanned. Cooperative logos never are: every
-/// logo file is kept, since published traceability versions show the logo of their publication time (FARM-01).
-/// Each environment needs a storage container (or folder) of its own: files its database does not know are deleted.
+/// Removes files no record points to: a removal that failed after a replace or a failed save, a host that stopped
+/// between upload and save, or a meter photo whose recognition was never saved as a measurement. Only
+/// <see cref="Categories"/> are scanned. Cooperative logos never are: every logo file is kept, since published
+/// traceability versions show the logo of their publication time (FARM-01). Each environment needs a storage container
+/// (or folder) of its own: files its database does not know are deleted.
 /// </summary>
 public sealed class OrphanFileCleanupService(IFileStorage storage, IStoredFileReferenceQuery references, ILogger<OrphanFileCleanupService> logger)
 {
-    /// <summary>Raft photos and license files: each belongs to one column, so "no record points to it" is certain.</summary>
-    public static readonly IReadOnlyList<string> Categories = [FileCategories.RaftPhotos, FileCategories.ZoneLicenses];
+    /// <summary>Raft photos, license files and meter photos: each belongs to one column, so "no record points to it" is certain.</summary>
+    public static readonly IReadOnlyList<string> Categories = [FileCategories.RaftPhotos, FileCategories.ZoneLicenses, FileCategories.WaterMeterPhotos];
 
     /// <summary>
     /// Deletes the category's files written before <paramref name="writtenBefore"/> that no record points to, and
@@ -24,7 +25,7 @@ public sealed class OrphanFileCleanupService(IFileStorage storage, IStoredFileRe
     {
         if (!Categories.Contains(category))
         {
-            throw new ArgumentOutOfRangeException(nameof(category), category, "Only raft photos and license files are cleaned up.");
+            throw new ArgumentOutOfRangeException(nameof(category), category, "Only raft photos, license files and meter photos are cleaned up.");
         }
 
         var stored = await storage.ListAsync(category, cancellationToken);

@@ -1,31 +1,26 @@
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
-using OMTS.Application.Common.Interfaces.Storage;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
-using OMTS.Application.Features.Authorization;
-using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Files;
 using OMTS.Application.Features.WaterQuality.Dtos;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
-using OMTS.Domain.Entities.Farming;
-using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.WaterQuality;
 
 /// <summary>
-/// ENV-01 – record water measurements: photo → OCR draft → confirmation, or manual entry / offline sync in
-/// one request. Re-sending a client operation returns the record already saved and never creates a second
-/// record, alert or notification (NFR-15). Drafts are never evaluated against thresholds.
+/// WATER-01 – record a water measurement in two steps: recognize stores the meter photo and answers the OCR suggestions
+/// without saving a measurement; the record request saves the values the user confirmed as Active with a copy of the
+/// zone thresholds, and alerts when a value is outside them. Nothing exists before that confirmation (AC-04). Re-sending
+/// a client operation returns the record already saved and never creates a second record, alert or notification.
 /// </summary>
 public sealed class WaterMeasurementRecordingService(
     IWaterMeasurementRepository measurements,
-    ZoneAccessGuard zoneAccess,
-    IFileStorage storage,
+    WaterMeterPhotoStore photos,
     WaterMeterRecognizer recognizer,
     WaterAlertService alerts,
     WaterMeasurementViewBuilder views,
@@ -35,32 +30,18 @@ public sealed class WaterMeasurementRecordingService(
     ICurrentUser currentUser,
     TimeProvider timeProvider)
 {
-    public const string PhotoCategory = "water-meter-photos";
     public const string PhotoField = "Photo";
     public const string ZoneField = "Zone";
+    public const string RaftField = "Raft";
     public const string ClientOperationField = "Client operation id";
 
-    /// <summary>Stores the meter photo, reads it with OCR and saves a Draft; an OCR failure still saves the Draft.</summary>
-    public async Task<Result<RecognitionResult>> RecognizeAsync(
-        Guid zoneId, IncomingFile? photo, Guid? clientOperationId, CancellationToken cancellationToken)
+    /// <summary>Stores the photo and reads it (steps 5–6). An OCR failure still answers the key: the user types the values in.</summary>
+    public async Task<Result<RecognitionResult>> RecognizeAsync(Guid zoneId, IncomingFile? photo, CancellationToken cancellationToken)
     {
-        var accountId = CallerId();
         var zone = await measurements.GetZoneAsync(zoneId, track: false, cancellationToken);
         if (zone is null)
         {
             return AppError.NotFound;
-        }
-
-        var operationId = clientOperationId is { } given && given != Guid.Empty ? given : Guid.NewGuid();
-        var (previous, mismatch) = await FindPreviousAsync(accountId, operationId, zoneId, cancellationToken);
-        if (mismatch is not null)
-        {
-            return mismatch;
-        }
-
-        if (previous is not null)
-        {
-            return new RecognitionResult(await views.DetailAsync(previous, previous.Zone, cancellationToken), OcrOutcome.NotCalled);
         }
 
         if (zone.StatusId != StatusIds.Usage.InUse)
@@ -68,76 +49,30 @@ public sealed class WaterMeasurementRecordingService(
             return AppError.Invalid(ZoneField);
         }
 
-        var stored = await StorePhotoAsync(photo, required: true, cancellationToken);
+        if (!await measurements.HasRaftInUseAsync(zoneId, cancellationToken))
+        {
+            return AppError.Invalid(RaftField);
+        }
+
+        var stored = await photos.StoreAsync(photo, CallerId(), cancellationToken);
         if (!stored.IsSuccess)
         {
             return stored.Error!;
         }
 
-        var (file, key) = stored.Value!.Value;
+        var (file, key) = stored.Value;
         var outcome = await recognizer.RecognizeAsync(file.File.Content, file.ContentType, cancellationToken);
-        var draft = New(zone, accountId, operationId);
-        draft.PhotoUrl = key;
-        WaterMeterRecognizer.Apply(draft, outcome);
-        measurements.Add(draft);
-        audit.Record(Entry(WaterMeasurementAudit.Created, draft, before: null));
-
-        if (await SaveOrFindPreviousAsync(accountId, operationId, cancellationToken) is { } raced)
-        {
-            return new RecognitionResult(await views.DetailAsync(raced, raced.Zone, cancellationToken), OcrOutcome.NotCalled);
-        }
-
-        return new RecognitionResult(await views.DetailAsync(draft, zone, cancellationToken), outcome);
+        var outside = WaterThresholdEvaluator.Evaluate(outcome.Ph?.Value, outcome.Salinity?.Value, outcome.Temperature?.Value, WaterThresholds.Of(zone));
+        return new RecognitionResult(
+            key,
+            timeProvider.GetUtcNow(),
+            outcome,
+            outside.ValuesOutside,
+            outside.Exceeded ? UserMessages.WaterValuesOutsideBeforeSave(outside.ValuesOutside) : null);
     }
 
-    /// <summary>Sends the photo of a Draft that has no OCR values yet (kept offline "for recognition once online") to OCR.</summary>
-    public async Task<Result<RecognitionResult>> RecognizeAgainAsync(Guid id, CancellationToken cancellationToken)
-    {
-        var draft = await measurements.GetAsync(id, cancellationToken);
-        if (draft is null)
-        {
-            return AppError.NotFound;
-        }
-
-        if (!await zoneAccess.AllowsAsync(PermissionFunctions.WaterMeasurements, PermissionAction.Create, draft.ZoneId, cancellationToken))
-        {
-            return AppError.Forbidden;
-        }
-
-        if (draft.StatusId != StatusIds.WaterMeasurement.Draft)
-        {
-            return WaterMeasurementStatuses.CannotChange(statusCatalog, draft.StatusId);
-        }
-
-        if (draft.PhotoUrl is not { } key || FileValidator.ContentTypeOfKey(key) is not { } contentType)
-        {
-            return AppError.Invalid(PhotoField);
-        }
-
-        if (draft.OcrPh is not null || draft.OcrSalinity is not null || draft.OcrMeasuredAt is not null)
-        {
-            return new RecognitionResult(await views.DetailAsync(draft, draft.Zone, cancellationToken), OcrOutcome.NotCalled);
-        }
-
-        await using var content = await storage.OpenReadAsync(key, cancellationToken);
-        if (content is null)
-        {
-            return new AppError(ErrorKind.BadGateway, UserMessages.FileOperationFailed);
-        }
-
-        var outcome = await recognizer.RecognizeAsync(content, contentType, cancellationToken);
-        if (outcome.Status == OcrStatus.Success)
-        {
-            WaterMeterRecognizer.Apply(draft, outcome);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-
-        return new RecognitionResult(await views.DetailAsync(draft, draft.Zone, cancellationToken), outcome);
-    }
-
-    /// <summary>Manual entry and offline sync: <c>confirm=true</c> saves a Confirmed record (with the alert check), else a Draft.</summary>
-    public async Task<Result<RecordedWaterMeasurement>> RecordAsync(
-        Guid zoneId, RecordWaterMeasurementRequest request, IncomingFile? photo, CancellationToken cancellationToken)
+    /// <summary>Saves the confirmed values (steps 8–10).</summary>
+    public async Task<Result<RecordedWaterMeasurement>> RecordAsync(Guid zoneId, RecordWaterMeasurementRequest request, CancellationToken cancellationToken)
     {
         var accountId = CallerId();
         var zone = await measurements.GetZoneAsync(zoneId, track: false, cancellationToken);
@@ -146,20 +81,14 @@ public sealed class WaterMeasurementRecordingService(
             return AppError.NotFound;
         }
 
-        if (request.ClientOperationId is not { } operationId || operationId == Guid.Empty)
-        {
-            return AppError.Invalid(ClientOperationField);
-        }
-
-        var (previous, mismatch) = await FindPreviousAsync(accountId, operationId, zoneId, cancellationToken);
-        if (mismatch is not null)
-        {
-            return mismatch;
-        }
-
+        var operationId = request.ClientOperationId is { } given && given != Guid.Empty ? given : Guid.NewGuid();
+        var previous = await measurements.FindByClientOperationAsync(accountId, operationId, cancellationToken);
         if (previous is not null)
         {
-            return new RecordedWaterMeasurement(await views.DetailAsync(previous, previous.Zone, cancellationToken), Replayed: true);
+            // The same operation id for another zone is a client error, not a re-send.
+            return previous.ZoneId == zoneId
+                ? new RecordedWaterMeasurement(await views.DetailAsync(previous, previous.Zone, cancellationToken), Replayed: true)
+                : AppError.Invalid(ClientOperationField);
         }
 
         if (zone.StatusId != StatusIds.Usage.InUse)
@@ -167,152 +96,60 @@ public sealed class WaterMeasurementRecordingService(
             return AppError.Invalid(ZoneField);
         }
 
-        var invalid = WaterValueRules.InvalidFields(request.Ph, request.Salinity, request.MeasuredAt, timeProvider.GetUtcNow(), required: request.Confirm);
+        var invalid = WaterValueRules.InvalidFields(request.Ph, request.Salinity, request.Temperature, request.MeasuredAt, timeProvider.GetUtcNow());
+        var raft = request.RaftId is { } raftId ? await measurements.GetRaftAsync(raftId, cancellationToken) : null;
+        if (raft is null || raft.ZoneId != zoneId || raft.StatusId != StatusIds.Usage.InUse)
+        {
+            invalid.Add(RaftField);
+        }
+
+        if (!await photos.IsUsableAsync(request.PhotoKey, accountId, cancellationToken))
+        {
+            invalid.Add(PhotoField);
+        }
+
         if (invalid.Count > 0)
         {
             return AppError.InvalidFields(invalid);
         }
 
-        var stored = await StorePhotoAsync(photo, required: false, cancellationToken);
-        if (!stored.IsSuccess)
+        var measurement = new WaterMeasurement
         {
-            return stored.Error!;
-        }
-
-        var measurement = New(zone, accountId, operationId);
-        measurement.MeasuredAt = request.MeasuredAt ?? measurement.MeasuredAt;
-        measurement.Ph = request.Ph;
-        measurement.Salinity = request.Salinity;
-        measurement.PhotoUrl = stored.Value?.Key;
+            ZoneId = zoneId,
+            RaftId = raft!.Id,
+            MeasuredAt = request.MeasuredAt!.Value,
+            Ph = request.Ph!.Value,
+            Salinity = request.Salinity!.Value,
+            Temperature = request.Temperature!.Value,
+            PhotoUrl = request.PhotoKey!,
+            ClientOperationId = operationId,
+            MeasuredByAccountId = accountId,
+        };
+        WaterThresholds.Of(zone).CopyTo(measurement);
         measurements.Add(measurement);
-        if (request.Confirm)
+        await alerts.EvaluateAsync(measurement, zone.Name, raft.Code, accountId, corrected: false, cancellationToken);
+        audit.Record(new AuditEntry(WaterMeasurementAudit.Created, WaterMeasurementAudit.RecordType)
         {
-            await alerts.ConfirmAsync(measurement, zone, WaterThresholds.Of(zone), accountId, cancellationToken);
-        }
+            RecordId = measurement.Id,
+            ZoneId = zoneId,
+            After = WaterMeasurementAudit.Snapshot(measurement, statusCatalog),
+        });
 
-        audit.Record(Entry(request.Confirm ? WaterMeasurementAudit.Confirmed : WaterMeasurementAudit.Created, measurement, before: null));
-        if (await SaveOrFindPreviousAsync(accountId, operationId, cancellationToken) is { } raced)
-        {
-            return new RecordedWaterMeasurement(await views.DetailAsync(raced, raced.Zone, cancellationToken), Replayed: true);
-        }
-
-        return new RecordedWaterMeasurement(await views.DetailAsync(measurement, zone, cancellationToken), Replayed: false);
-    }
-
-    /// <summary>Draft → Confirmed with the final values (omitted values keep the draft's), then the threshold check.</summary>
-    public async Task<Result<WaterMeasurementDetail>> ConfirmAsync(Guid id, ConfirmWaterMeasurementRequest request, CancellationToken cancellationToken)
-    {
-        var measurement = await measurements.GetAsync(id, cancellationToken);
-        if (measurement is null)
-        {
-            return AppError.NotFound;
-        }
-
-        if (!await zoneAccess.AllowsAsync(PermissionFunctions.WaterMeasurements, PermissionAction.Create, measurement.ZoneId, cancellationToken))
-        {
-            return AppError.Forbidden;
-        }
-
-        if (measurement.StatusId != StatusIds.WaterMeasurement.Draft)
-        {
-            return WaterMeasurementStatuses.CannotChange(statusCatalog, measurement.StatusId);
-        }
-
-        if (measurement.Zone.StatusId != StatusIds.Usage.InUse)
-        {
-            return AppError.Invalid(ZoneField);
-        }
-
-        var (ph, salinity, measuredAt) = (request.Ph ?? measurement.Ph, request.Salinity ?? measurement.Salinity, request.MeasuredAt ?? measurement.MeasuredAt);
-        var invalid = WaterValueRules.InvalidFields(ph, salinity, measuredAt, timeProvider.GetUtcNow(), required: true);
-        if (invalid.Count > 0)
-        {
-            return AppError.InvalidFields(invalid);
-        }
-
-        var before = WaterMeasurementAudit.Snapshot(measurement, statusCatalog);
-        (measurement.Ph, measurement.Salinity, measurement.MeasuredAt) = (ph, salinity, measuredAt);
-        await alerts.ConfirmAsync(measurement, measurement.Zone, WaterThresholds.Of(measurement.Zone), CallerId(), cancellationToken);
-        audit.Record(Entry(WaterMeasurementAudit.Confirmed, measurement, before));
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return await views.DetailAsync(measurement, measurement.Zone, cancellationToken);
-    }
-
-    private WaterMeasurement New(FarmingZone zone, Guid accountId, Guid operationId) => new()
-    {
-        ZoneId = zone.Id,
-        // Copied once; a later zone edit does not rewrite history.
-        MeasurementPoint = zone.WaterMeasurementPoint,
-        MeasuredAt = timeProvider.GetUtcNow(),
-        InputSource = MeasurementInputSource.Manual,
-        ClientOperationId = operationId,
-        MeasuredByAccountId = accountId,
-        StatusId = StatusIds.WaterMeasurement.Draft,
-    };
-
-    private AuditEntry Entry(string action, WaterMeasurement measurement, object? before) => new(action, WaterMeasurementAudit.RecordType)
-    {
-        RecordId = measurement.Id,
-        ZoneId = measurement.ZoneId,
-        Before = before,
-        After = WaterMeasurementAudit.Snapshot(measurement, statusCatalog),
-    };
-
-    /// <summary>The checked photo and its storage key; nothing when an optional photo is absent.</summary>
-    private async Task<Result<(ValidatedFile File, string Key)?>> StorePhotoAsync(IncomingFile? photo, bool required, CancellationToken cancellationToken)
-    {
-        if (photo is null)
-        {
-            return required ? AppError.Invalid(PhotoField) : Result<(ValidatedFile File, string Key)?>.Success(null);
-        }
-
-        var checkedPhoto = FileValidator.Validate([photo], FileRules.Photos);
-        if (!checkedPhoto.IsValid)
-        {
-            return AppError.Invalid(PhotoField, checkedPhoto.Problem);
-        }
-
-        // Stored at original quality: it is the OCR evidence.
-        var uploaded = await storage.UploadAsync(checkedPhoto.Files[0], PhotoCategory, cancellationToken);
-        if (uploaded is not { Succeeded: true, Key: { } key })
-        {
-            return new AppError(ErrorKind.BadGateway, UserMessages.UploadFailed);
-        }
-
-        return Result<(ValidatedFile, string)?>.Success((checkedPhoto.Files[0], key));
-    }
-
-    private async Task<(WaterMeasurement? Previous, AppError? Mismatch)> FindPreviousAsync(
-        Guid accountId, Guid operationId, Guid zoneId, CancellationToken cancellationToken)
-    {
-        var previous = await measurements.FindByClientOperationAsync(accountId, operationId, cancellationToken);
-        if (previous is null)
-        {
-            return (null, null);
-        }
-
-        // The same operation id for another zone is a client error, not a re-send.
-        return previous.ZoneId == zoneId ? (previous, null) : (null, AppError.Invalid(ClientOperationField));
-    }
-
-    // A concurrent re-send passed the check above: the unique index keeps one record, the loser answers with it.
-    private async Task<WaterMeasurement?> SaveOrFindPreviousAsync(Guid accountId, Guid operationId, CancellationToken cancellationToken)
-    {
         try
         {
             await unitOfWork.SaveChangesAsync(cancellationToken);
-            return null;
         }
         catch (DuplicateRecordException)
         {
-            var previous = await measurements.FindByClientOperationAsync(accountId, operationId, cancellationToken);
-            if (previous is null)
-            {
-                throw;
-            }
-
-            return previous;
+            // A concurrent re-send or a second use of the photo passed the checks above: the unique indexes keep one
+            // record, and the loser answers with it, or with the refused photo.
+            var raced = await measurements.FindByClientOperationAsync(accountId, operationId, cancellationToken);
+            return raced is null
+                ? AppError.Invalid(PhotoField)
+                : new RecordedWaterMeasurement(await views.DetailAsync(raced, raced.Zone, cancellationToken), Replayed: true);
         }
+
+        return new RecordedWaterMeasurement(await views.DetailAsync(measurement, zone, cancellationToken), Replayed: false);
     }
 
     private Guid CallerId() => currentUser.AccountId ?? throw new InvalidOperationException("Water measurements need an authenticated caller.");

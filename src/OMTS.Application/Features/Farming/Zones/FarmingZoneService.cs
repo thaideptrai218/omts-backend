@@ -212,7 +212,7 @@ public sealed class FarmingZoneService(
         var badges = await BadgesAsync([zone.Id], await lookupAccess.VisibleZonesAsync(cancellationToken), cancellationToken);
         var rafts = await zones.InUseRaftCodesAsync(zone.Id, cancellationToken);
         return new FarmingZoneView(
-            zone.Id, zone.Code, zone.Name, zone.Location, zone.Latitude, zone.Longitude, zone.Area, zone.WaterMeasurementPoint,
+            zone.Id, zone.Code, zone.Name, zone.Location, zone.Latitude, zone.Longitude, zone.Area,
             zone.StatusId, statusCatalog.DisplayNameOf(zone.StatusId), rafts.Count, badges.GetValueOrDefault(zone.Id),
             RowVersionGuard.Encode(zone.RowVersion));
     }
@@ -225,8 +225,7 @@ public sealed class FarmingZoneService(
         var location = check.Required(request.Location, "Location", 500);
         check.Coordinates(request.Latitude, request.Longitude, required: true);
         check.Check(request.Area is > 0 and < 100_000_000_000_000m, "Area");
-        var point = check.Required(request.WaterMeasurementPoint, "Water measurement point", 200);
-        values = new ZoneValues(code, name, location, request.Latitude, request.Longitude, request.Area, point);
+        values = new ZoneValues(code, name, location, request.Latitude, request.Longitude, request.Area);
         return check;
     }
 
@@ -238,11 +237,9 @@ public sealed class FarmingZoneService(
         zone.Latitude = values.Latitude;
         zone.Longitude = values.Longitude;
         zone.Area = values.Area;
-        zone.WaterMeasurementPoint = values.WaterMeasurementPoint;
     }
 
-    private static object Snapshot(FarmingZone z) => new { z.Code, z.Name, z.Location, z.Latitude, z.Longitude, z.Area, z.WaterMeasurementPoint };
+    private static object Snapshot(FarmingZone z) => new { z.Code, z.Name, z.Location, z.Latitude, z.Longitude, z.Area };
 
-    private sealed record ZoneValues(
-        string Code, string Name, string Location, decimal? Latitude, decimal? Longitude, decimal? Area, string WaterMeasurementPoint);
+    private sealed record ZoneValues(string Code, string Name, string Location, decimal? Latitude, decimal? Longitude, decimal? Area);
 }

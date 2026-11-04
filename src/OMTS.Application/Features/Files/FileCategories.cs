@@ -11,4 +11,7 @@ public static class FileCategories
 
     /// <summary>FARM-03 license document, <c>ZoneComplianceDocument.EvidenceFileUrl</c>.</summary>
     public const string ZoneLicenses = "zone-licenses";
+
+    /// <summary>WATER-01 meter photo, <c>WaterMeasurement.PhotoUrl</c>; each account uploads under a folder of its own.</summary>
+    public const string WaterMeterPhotos = "water-meter-photos";
 }
