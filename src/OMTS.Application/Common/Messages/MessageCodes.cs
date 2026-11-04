@@ -47,6 +47,9 @@ public static class MessageCodes
 
     public const string Purchase01 = "MSG-PURCHASE-01";
     public const string Purchase03 = "MSG-PURCHASE-03";
+    public const string Purchase04 = "MSG-PURCHASE-04";
+    public const string Purchase05 = "MSG-PURCHASE-05";
+    public const string Purchase06 = "MSG-PURCHASE-06";
     public const string Purchase07 = "MSG-PURCHASE-07";
     public const string Purchase08 = "MSG-PURCHASE-08";
     public const string Purchase09 = "MSG-PURCHASE-09";
@@ -57,11 +60,12 @@ public static class MessageCodes
     /// <summary>
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-22, the
     /// related record of a notification no longer exists (ACCOUNT-08 is new in PR 0.5); MSG-PURCHASE-01/07/08, the
-    /// purchase receipt notifications and the advance warning, and MSG-PURCHASE-10, the Owner's correction (OMTS-218 P2).
+    /// purchase receipt notifications and the advance warning, and MSG-PURCHASE-10, the Owner's correction (OMTS-218 P2);
+    /// MSG-PURCHASE-04/05/06, the transaction notification and the two payment confirmations (OMTS-218 P3).
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
-        Account22, Purchase01, Purchase07, Purchase08, Purchase10,
+        Account22, Purchase01, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10,
     };
 
     /// <summary>
@@ -121,8 +125,8 @@ public static class MessageCodes
         /// <item>MSG06: edit conflict (NFR-09, still cited by Part IV).</item>
         /// <item>MSG19: session expired.</item>
         /// <item>MSG24: the account is already linked to another employee (LABOR).</item>
-        /// <item>MSG41: multiple of 1,000 VND (BR-PURCHASE-02 drops the rule in the PURCHASE PR).</item>
-        /// <item>MSG45: receipt discount, paid-now and refund limits (fields not in the SRS; PURCHASE PR).</item>
+        /// <item>MSG41: multiple of 1,000 VND, only the refund and debt reduction of a purchase return now (dropped with PURCHASE-02, P4).</item>
+        /// <item>MSG45: refund and debt reduction limits of a purchase return (fields not in the SRS; P4).</item>
         /// <item>MSG57: old documents hidden after a phone verification (PR 0.4, BR-ACCOUNT-04).</item>
         /// <item>MSG58: someone else is editing the record (NFR-13, still cited by Part IV).</item>
         /// <item>NOT_FOUND, TOO_MANY_REQUESTS (per-IP limit), UNEXPECTED_ERROR, PASSWORD_CHANGE_REQUIRED: technical codes.</item>

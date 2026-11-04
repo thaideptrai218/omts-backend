@@ -24,6 +24,8 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
             // No zone: the type's function is checked by role only (BR-FARM-08). A removed Draft no longer exists.
             case RelatedRecordTypes.PurchaseReceipt:
                 return await db.PurchaseReceipts.AnyAsync(r => r.Id == recordId, cancellationToken) ? new RelatedRecordLocation(null) : null;
+            case RelatedRecordTypes.SupplierPayment:
+                return await db.SupplierPayments.AnyAsync(p => p.Id == recordId, cancellationToken) ? new RelatedRecordLocation(null) : null;
             default:
                 return null;
         }

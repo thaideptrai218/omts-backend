@@ -25,6 +25,9 @@ public static class RelatedRecordTypes
     /// <summary>A purchase receipt (PURCHASE-01, PURCHASE-06); it has no zone.</summary>
     public const string PurchaseReceipt = "PurchaseReceipt";
 
+    /// <summary>A supplier payment or money paid back (PURCHASE-05); it has no zone and is never removed, only cancelled.</summary>
+    public const string SupplierPayment = "SupplierPayment";
+
     public static readonly IReadOnlyDictionary<string, string> Names = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         [WaterMeasurement] = "Water measurement",
@@ -32,5 +35,6 @@ public static class RelatedRecordTypes
         [ZoneLicense] = "Zone license",
         [Account] = "Account",
         [PurchaseReceipt] = "Purchase receipt",
+        [SupplierPayment] = "Supplier payment",
     };
 }

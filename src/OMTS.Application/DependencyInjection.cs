@@ -97,7 +97,9 @@ public static class DependencyInjection
         services.AddScoped<PurchaseReturnService>();
         services.AddScoped<PurchaseReceiptQueryService>();
         services.AddScoped<SupplierPaymentService>();
+        services.AddScoped<SupplierPaymentNotifications>();
         services.AddScoped<SupplierDebtService>();
+        services.AddScoped<SupplierDebtExportService>();
 
         // ENV-01…ENV-04 water quality monitoring and the overdue measurement reminder
         services.AddSingleton<EditingPresenceTracker>();

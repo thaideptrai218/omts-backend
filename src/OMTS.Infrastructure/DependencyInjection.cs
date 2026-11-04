@@ -78,6 +78,7 @@ public static class DependencyInjection
         services.AddScoped<IFarmingInputItemRepository, FarmingInputItemRepository>();
         services.AddScoped<IPurchaseReceiptRepository, PurchaseReceiptRepository>();
         services.AddScoped<ISupplierPaymentRepository, SupplierPaymentRepository>();
+        services.AddScoped<ISupplierDebtQuery, SupplierDebtQuery>();
         services.AddScoped<IWaterMeasurementRepository, WaterMeasurementRepository>();
         services.AddSingleton<IStatusCatalog, StatusCatalog>();
 

@@ -7,9 +7,9 @@ using OMTS.Domain.Enums;
 namespace OMTS.Infrastructure.Persistence.Repositories;
 
 /// <summary>
-/// PURCHASE-03 / supplier debt read side: money figures are summed by SQL and paged or grouped in the database, so a list,
-/// its totals, the export, the raft material cost and the supplier debts never materialize receipts with their lines,
-/// returns and payments. The item group, item and raft filters are line filters (PURCHASE-03 step 3).
+/// PURCHASE-03 read side: money figures are summed by SQL and paged or grouped in the database, so a list, its totals, the
+/// export and the raft material cost never materialize receipts with their lines and returns. The item group, item and raft
+/// filters are line filters (PURCHASE-03 step 3).
 /// </summary>
 internal sealed partial class PurchaseReceiptRepository
 {
@@ -76,33 +76,6 @@ internal sealed partial class PurchaseReceiptRepository
         return (lineRows, returnRows);
     }
 
-    public async Task<IReadOnlyList<ReceiptFigureRow>> CompletedFiguresOfSupplierAsync(Guid supplierId, CancellationToken cancellationToken) =>
-        await Figures(db.PurchaseReceipts.AsNoTracking().Where(r => r.SupplierId == supplierId && r.StatusId == StatusIds.PurchaseReceipt.Completed)
-                .OrderBy(r => r.ReceiptDate).ThenBy(r => r.Code), null)
-            .ToListAsync(cancellationToken);
-
-    public async Task<IReadOnlyList<SupplierDebtFigures>> SupplierDebtFiguresAsync(IReadOnlyCollection<Guid>? supplierIds, CancellationToken cancellationToken)
-    {
-        // One grouped query per kind of figure, merged per supplier: nothing but the sums leaves the database.
-        var completed = db.PurchaseReceipts.AsNoTracking()
-            .Where(r => r.StatusId == StatusIds.PurchaseReceipt.Completed && (supplierIds == null || supplierIds.Contains(r.SupplierId)));
-        var ids = completed.Select(r => r.Id);
-        var receipts = await completed.GroupBy(r => r.SupplierId)
-            .Select(g => new { g.Key, Name = g.Max(r => r.Supplier.Name) })
-            .ToListAsync(cancellationToken);
-        var totals = await db.PurchaseReceiptLines.Where(l => ids.Contains(l.ReceiptId))
-            .GroupBy(l => l.Receipt.SupplierId).Select(g => new { g.Key, Amount = g.Sum(l => l.LineAmount) }).ToDictionaryAsync(x => x.Key, x => x.Amount, cancellationToken);
-        var returned = await db.PurchaseReturnLines.Where(l => ids.Contains(l.Return.ReceiptId))
-            .GroupBy(l => l.Return.Receipt.SupplierId).Select(g => new { g.Key, Amount = g.Sum(l => l.ReturnValue) }).ToDictionaryAsync(x => x.Key, x => x.Amount, cancellationToken);
-        var paid = await RecordedPayments(ids)
-            .GroupBy(p => p.Receipt!.SupplierId).Select(g => new { g.Key, Amount = g.Sum(p => p.Amount) }).ToDictionaryAsync(x => x.Key, x => x.Amount, cancellationToken);
-        var refunded = await db.PurchaseReturns.Where(r => ids.Contains(r.ReceiptId))
-            .GroupBy(r => r.Receipt.SupplierId).Select(g => new { g.Key, Amount = g.Sum(r => r.RefundAmount) }).ToDictionaryAsync(x => x.Key, x => x.Amount, cancellationToken);
-        return receipts.Select(r => new SupplierDebtFigures(
-            r.Key, r.Name ?? string.Empty, totals.GetValueOrDefault(r.Key), returned.GetValueOrDefault(r.Key),
-            paid.GetValueOrDefault(r.Key), refunded.GetValueOrDefault(r.Key))).ToList();
-    }
-
     /// <summary>
     /// Σ of the matching lines of the matching Completed receipts received in the period, and Σ of the returns of those
     /// lines dated in the period whatever the date received (PURCHASE-03 step 3, BR-FARM-05).
@@ -126,13 +99,10 @@ internal sealed partial class PurchaseReceiptRepository
         return (receipts, returns);
     }
 
-    private IQueryable<SupplierPayment> RecordedPayments(IQueryable<Guid> receiptIds) =>
-        db.SupplierPayments.Where(p => p.StatusId == StatusIds.SupplierPayment.Recorded && p.ReceiptId != null && receiptIds.Contains(p.ReceiptId.Value));
-
     private static IOrderedQueryable<PurchaseReceipt> Newest(IQueryable<PurchaseReceipt> rows) =>
         rows.OrderByDescending(r => r.ReceiptDate).ThenByDescending(r => r.Code);
 
-    /// <summary>The receipt with its total, the total of the lines matching the filter, returns, recorded payments and refunds as SQL subqueries.</summary>
+    /// <summary>The receipt with its total and the total of the lines matching the filter, as SQL subqueries.</summary>
     private static IQueryable<ReceiptFigureRow> Figures(IQueryable<PurchaseReceipt> receipts, PurchaseReceiptFilter? filter)
     {
         var (group, itemId, raftId) = (filter?.ItemGroup, filter?.ItemId, filter?.RaftId);
@@ -140,10 +110,7 @@ internal sealed partial class PurchaseReceiptRepository
             r.Id, r.Code, r.ReceiptDate, r.SupplierId, r.Supplier.Name, r.Supplier.PhoneNumber, r.StatusId, r.RecordedByAccountId,
             r.Lines.Sum(l => (decimal?)l.LineAmount) ?? 0m,
             r.Lines.Where(l => (group == null || (l.Item != null && l.Item.Group == group)) && (itemId == null || l.ItemId == itemId) && (raftId == null || l.RaftId == raftId))
-                .Sum(l => (decimal?)l.LineAmount) ?? 0m,
-            r.Returns.SelectMany(x => x.Lines).Sum(l => (decimal?)l.ReturnValue) ?? 0m,
-            r.Payments.Where(p => p.StatusId == StatusIds.SupplierPayment.Recorded).Sum(p => (decimal?)p.Amount) ?? 0m,
-            r.Returns.Sum(x => (decimal?)x.RefundAmount) ?? 0m));
+                .Sum(l => (decimal?)l.LineAmount) ?? 0m));
     }
 
     private static IQueryable<PurchaseReceiptLine> MatchingLines(PurchaseReceiptFilter filter, IQueryable<PurchaseReceiptLine> lines)

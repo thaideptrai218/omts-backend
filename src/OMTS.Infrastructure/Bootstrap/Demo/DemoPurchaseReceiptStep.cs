@@ -8,12 +8,12 @@ using OMTS.Domain.Enums;
 namespace OMTS.Infrastructure.Bootstrap.Demo;
 
 /// <summary>
-/// PURCHASE-01/06 (and the returns and payments of today): the twenty demo receipts of <see cref="DemoReceiptPlans"/>, saved
-/// through the receipt, cancellation, return and payment services with their real dates (the services accept past receipt,
-/// payment and return dates), so totals, supplier debts and raft material costs are computed by the normal rules. The
-/// Owner is notified of each completed receipt (MSG-PURCHASE-01). Each receipt is found by its plan code at the start of its
-/// notes; every follow-up (payment, return, cancel) is checked against the stored state, so an interrupted run is completed
-/// by the next one.
+/// PURCHASE-01/05/06 (and the returns of today): the twenty demo receipts of <see cref="DemoReceiptPlans"/>, saved through the
+/// receipt, cancellation, return and payment services with their real dates (the services accept past receipt, payment and
+/// return dates), so totals, supplier debts and raft material costs are computed by the normal rules. The Owner is notified
+/// of each completed receipt (MSG-PURCHASE-01) and each payment (MSG-PURCHASE-04). Each receipt is found by its plan code at
+/// the start of its notes; every follow-up (payment, return, cancel) is checked against the stored state or carries a
+/// deduplication key, so an interrupted run is completed by the next one.
 /// </summary>
 internal sealed class DemoPurchaseReceiptStep : IDemoSeedStep
 {
@@ -40,6 +40,7 @@ internal sealed class DemoPurchaseReceiptStep : IDemoSeedStep
             await FollowUpAsync(context, plan, receiptId.Value, supplierId, cancellationToken);
         }
 
+        await SupplierTransactionsAsync(context, cancellationToken);
         return created;
     }
 
@@ -79,8 +80,12 @@ internal sealed class DemoPurchaseReceiptStep : IDemoSeedStep
         for (var i = 0; i < (plan.Payments?.Length ?? 0); i++)
         {
             var payment = plan.Payments![i];
+            var key = $"{plan.Code}-PAY{i + 1}";
+            // Payments are not linked to receipts: the plan only says when each was made (BR-PURCHASE-04). The demo answers Yes
+            // to the advance warning, because a supplier's later receipts use up what it was paid first (BR-PURCHASE-08).
             DemoSeedContext.Ensure(await payments.RecordAsync(new RecordSupplierPaymentRequest(
-                supplierId, receiptId, payment.Amount, context.Today.AddDays(-payment.DaysAgo), payment.Method, null, $"{plan.Code}-PAY{i + 1}"), cancellationToken),
+                supplierId, SupplierPaymentKind.Payment, context.Today.AddDays(-payment.DaysAgo), payment.Amount, payment.Method,
+                payment.Method == PaymentMethod.BankTransfer ? $"FT-{key}" : null, ConfirmAdvance: true, DeduplicationKey: key), cancellationToken),
                 $"payment {i + 1} of {plan.Code}");
         }
 
@@ -97,6 +102,27 @@ internal sealed class DemoPurchaseReceiptStep : IDemoSeedStep
         {
             DemoSeedContext.Ensure(await context.Get<PurchaseReceiptCancellationService>().CancelAsync(
                 receiptId, new CancelReceiptRequest(plan.CancelReason), cancellationToken), $"cancelling {plan.Code}");
+        }
+    }
+
+    /// <summary>PURCHASE-05.2 and 05.3: money a supplier paid back after a return, and a payment recorded by mistake then cancelled.</summary>
+    private static async Task SupplierTransactionsAsync(DemoSeedContext context, CancellationToken cancellationToken)
+    {
+        var db = context.Db;
+        var payments = context.Get<SupplierPaymentService>();
+        var company = PhoneNumbers.Normalize(DemoSupplierStep.MaterialCompanyPhone);
+        var supplierId = await db.Suppliers.Where(s => s.PhoneNumber == company).Select(s => s.Id).SingleAsync(cancellationToken);
+        DemoSeedContext.Ensure(await payments.RecordAsync(new RecordSupplierPaymentRequest(
+            supplierId, SupplierPaymentKind.PaidBack, context.Today.AddDays(-15), 500_000, PaymentMethod.Cash,
+            Note: "Hoàn tiền phần lưới rách đã trả lại", DeduplicationKey: "DEMO-PAIDBACK-1"), cancellationToken), "money paid back");
+
+        var mistake = DemoSeedContext.Ensure(await payments.RecordAsync(new RecordSupplierPaymentRequest(
+            supplierId, SupplierPaymentKind.Payment, context.Today.AddDays(-9), 1_250_000, PaymentMethod.BankTransfer,
+            "FT-DEMO-NHAM-1", "Chuyển nhầm số tiền", ConfirmAdvance: true, DeduplicationKey: "DEMO-MISTAKE-1"), cancellationToken), "the mistaken payment");
+        if (mistake.StatusId == StatusIds.SupplierPayment.Recorded)
+        {
+            DemoSeedContext.Ensure(await payments.CancelAsync(
+                mistake.Id, new CancelSupplierPaymentRequest("Ghi nhầm số tiền, đã ghi lại"), cancellationToken), "cancelling the mistaken payment");
         }
     }
 }
