@@ -276,11 +276,11 @@ public sealed class FarmingZoneService(
         var code = check.Required(request.Code, "Code", SequentialCodes.ZoneCodeMaxLength);
         var name = check.Required(request.Name, "Name", 200);
         var location = check.Required(request.Location, "Location", 500);
-        check.Coordinates(request.Latitude, request.Longitude, required: true);
+        var (latitude, longitude) = check.Coordinates(request.Latitude, request.Longitude, required: true);
         check.Check(request.Area is > 0 and < 100_000_000_000_000m, "Area");
         // Optional since SRS 27/10: water is measured per zone with no fixed point (BR-WATER-01).
         var point = check.Optional(request.WaterMeasurementPoint, "Water measurement point", 200);
-        values = new ZoneValues(code, name, location, request.Latitude, request.Longitude, request.Area, point);
+        values = new ZoneValues(code, name, location, latitude, longitude, request.Area, point);
         return check;
     }
 

@@ -52,7 +52,7 @@ public sealed class RaftsController(RaftReadService reads, RaftService rafts, Ra
     public async Task<IActionResult> Update(Guid raftId, SaveRaftRequest request, CancellationToken cancellationToken) =>
         (await rafts.UpdateAsync(raftId, request, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Adds one photo, at most three per raft. Multipart field <c>file</c>: JPEG or PNG, at most 10 MB.</summary>
+    /// <summary>Adds one photo, at most three per raft. Multipart field <c>file</c>, once: JPEG or PNG, at most 10 MB.</summary>
     [HttpPost("api/rafts/{raftId:guid}/photos")]
     [RequireCooperativeOwner]
     [RequestSizeLimit(11 * 1024 * 1024)]
@@ -63,6 +63,12 @@ public sealed class RaftsController(RaftReadService reads, RaftService rafts, Ra
         if (file is null)
         {
             return AppError.Invalid("Photo").ToProblem();
+        }
+
+        // The binder keeps the first of several parts named "file": refused, so no photo is dropped without a word.
+        if (Request.Form.Files.GetFiles(nameof(file)).Count > 1)
+        {
+            return AppError.Invalid("Photo", "Send one photo per request.").ToProblem();
         }
 
         return (await photos.AddAsync(raftId, await file.ToIncomingFileAsync(cancellationToken), cancellationToken)).ToActionResult(Ok);

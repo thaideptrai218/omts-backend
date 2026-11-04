@@ -9,12 +9,12 @@ internal sealed record RaftValues(string Code, decimal? Latitude, decimal? Longi
     {
         var check = new FieldCheck();
         var code = check.Required(request.Code, "Code", SequentialCodes.RaftCodeMaxLength);
-        check.Coordinates(request.Latitude, request.Longitude, required: false);
+        var (latitude, longitude) = check.Coordinates(request.Latitude, request.Longitude, required: false);
         var location = check.Optional(request.Location, "Location", 500);
         var size = check.Required(request.Size, "Size", 100);
         var notes = check.Optional(request.ConditionNotes, "Condition notes", 2000);
         check.Check(request.LaneCount is >= 1 and <= RaftLaneChange.MaxLaneCount, "Number of lanes");
-        values = new RaftValues(code, request.Latitude, request.Longitude, location, size, notes, request.LaneCount ?? 0);
+        values = new RaftValues(code, latitude, longitude, location, size, notes, request.LaneCount ?? 0);
         return check;
     }
 

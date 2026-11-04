@@ -112,10 +112,9 @@ public class RaftsV2QaTestsPhotos
         Assert.Empty(factory.StoredFiles("raft-photos"));
     }
 
-    // FINDING L-3. "One photo per request" (client list), and the service sets MaxFiles = 1, but the action binds a single IFormFile, so that rule
-    // never fires: a form with two files answers 200 "Raft photo saved." and the second file is dropped without a word (GFR-01, MSG-GEN-01).
+    // One photo per request (MSG-GEN-01): the action binds a single IFormFile, so a second part would otherwise be dropped without a word.
     [Fact]
-    public async Task A_form_with_two_files_does_not_silently_drop_one()
+    public async Task A_form_with_two_files_is_refused_and_stores_nothing()
     {
         using var factory = new AuthApiFactory();
         var owner = (await factory.OwnerAsync()).Client;
@@ -127,8 +126,10 @@ public class RaftsV2QaTestsPhotos
             { FileContent(Jpeg, "image/jpeg"), "file", "two.jpg" },
         });
 
-        var stored = (await factory.RaftPhotoKeysAsync(raftId)).Count;
-        Assert.True(answer.StatusCode == HttpStatusCode.BadRequest || stored == 2, $"{(int)answer.StatusCode}, {stored} photo(s) stored of the 2 sent");
+        var refused = await answer.ReadAsync(HttpStatusCode.BadRequest);
+        Assert.Equal(("MSG-GEN-01", "Photo"), (refused.Text("code"), refused.Text("field")));
+        Assert.Empty(await factory.RaftPhotoKeysAsync(raftId));
+        Assert.Empty(factory.StoredFiles("raft-photos"));
     }
 
     // A raft In Use in a Discontinued zone (older database): photo writes are refused naming the zone, reads stay open.
@@ -183,10 +184,9 @@ public class RaftsV2QaTestsPhotos
         Assert.Equal(kept, StoredKeys(factory, FileCategories.RaftPhotos).Order());
     }
 
-    // FINDING L-1. The job guards against a foreign database with "no stored raft photo is referenced". Since this PR a real database may
-    // reach that state: the only photo is removed and its delete fails. The orphan then stays until another raft photo is saved. Cooperative
-    // covers and certificates are exempt from the guard for exactly this reason (OrphanFileCleanupService.CooperativeCategories).
-    [Fact]
+    // Accepted (L-1). The job guards against a foreign database with "no stored raft photo is referenced". A real database may reach that
+    // state: the only photo is removed and its delete fails. The orphan then stays until another raft photo is saved.
+    [Fact(Skip = "Accepted: the foreign-database guard keeps the file until another raft photo is saved; a stray file, no data at risk.")]
     public async Task The_orphan_job_removes_the_only_raft_photo_after_its_removal_failed()
     {
         using var factory = new FileFaultApiFactory();

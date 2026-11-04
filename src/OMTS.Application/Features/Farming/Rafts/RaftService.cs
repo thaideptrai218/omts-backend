@@ -65,7 +65,29 @@ public sealed class RaftService(
         {
             RecordId = raft.Id, RecordCode = raft.Code, ZoneId = raft.ZoneId, After = new { Raft = RaftValues.Snapshot(raft), values.LaneCount },
         });
-        return await SaveAsync(raft, null, cancellationToken) ?? (Result<RaftSaved>)await views.SavedAsync(raft, "Raft", cancellationToken);
+        return await SaveNewAsync(raft, cancellationToken) ?? (Result<RaftSaved>)await views.SavedAsync(raft, "Raft", cancellationToken);
+    }
+
+    /// <summary>
+    /// Saves a new raft with its zone row, so a parallel create of the same code usually loses on the row version of the
+    /// zone before it reaches the unique index. That loser answers like the pre-check too (MSG-GEN-02 with the existing
+    /// raft, FARM-04.0.E1); with no such raft, the zone itself changed meanwhile (MSG06). Null when saved.
+    /// </summary>
+    private async Task<AppError?> SaveNewAsync(Raft raft, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await SaveAsync(raft, null, cancellationToken);
+        }
+        catch (ConcurrencyConflictException)
+        {
+            if (await rafts.FindByCodeAsync(raft.ZoneId, raft.Code, null, cancellationToken) is { } existing)
+            {
+                return Duplicate(existing.Id);
+            }
+
+            throw;
+        }
     }
 
     /// <summary>
