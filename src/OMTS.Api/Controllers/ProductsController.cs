@@ -7,8 +7,8 @@ using OMTS.Application.Features.Sales.Products;
 namespace OMTS.Api.Controllers;
 
 /// <summary>
-/// SALE-11 – the price list. Writes are Cooperative Owner only. Reads are checked by the service: the Owner sees every
-/// product; a Zone Manager (SALE-05) and a trader (SALE-01) see those In Use, the trader with no price.
+/// SALE-11 – the price list. Writes are Cooperative Owner only. Reads: the Owner sees every product; a Zone Manager
+/// (SALE-05) and a trader (SALE-01) see those In Use, the trader with no price; others are refused by the route filter.
 /// </summary>
 [ApiController]
 [Route("api/products")]
@@ -16,11 +16,13 @@ namespace OMTS.Api.Controllers;
 public sealed class ProductsController(ProductService products, ProductReadService reads) : ControllerBase
 {
     [HttpGet]
+    [RequireProductReader]
     [ProducesResponseType<IReadOnlyList<ProductView>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> List(string? search, int? statusId, CancellationToken cancellationToken) =>
         (await reads.ListAsync(search, statusId, cancellationToken)).ToActionResult(Ok);
 
     [HttpGet("{id:guid}")]
+    [RequireProductReader]
     [ProducesResponseType<ProductView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken) =>
         (await reads.GetAsync(id, cancellationToken)).ToActionResult(Ok);

@@ -15,8 +15,11 @@ public interface ICustomerRepository
     /// <summary>Another profile that has this phone number and is not merged (BR-SALE-04).</summary>
     Task<Customer?> FindByPhoneAsync(string phoneNumber, Guid? exceptCustomerId, CancellationToken cancellationToken);
 
-    /// <summary>Profiles not merged, by name or phone number (contains), ordered by name, with their accounts.</summary>
-    Task<(IReadOnlyList<Customer> Items, int Total)> SearchAsync(string? search, int page, int pageSize, CancellationToken cancellationToken);
+    /// <summary>
+    /// Profiles not merged, by name or phone number (contains), ordered by name, with their accounts. <paramref name="phoneNumber"/>
+    /// is the search read as a whole number, normalized, when it reads as one: also a match.
+    /// </summary>
+    Task<(IReadOnlyList<Customer> Items, int Total)> SearchAsync(string? search, string? phoneNumber, int page, int pageSize, CancellationToken cancellationToken);
 
     void Add(Customer customer);
 }

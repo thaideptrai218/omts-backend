@@ -28,11 +28,23 @@ public sealed class CustomerService(
     internal const string MergedStatus = "Merged";
     internal const string RecordType = nameof(Customer);
     private const int MaxAuditCodeLength = 100;
+    private const int MaxPageSize = 100;
 
+    /// <summary>
+    /// SALE-04 step 2: by name or phone number. A search that reads as a whole number is also looked up as stored, so
+    /// <c>+84…</c>, spaces and dots find it. Longer than any name, it finds nothing.
+    /// </summary>
     public async Task<Paged<CustomerListItem>> SearchAsync(string? search, int page, int pageSize, CancellationToken cancellationToken)
     {
-        (page, pageSize) = (Math.Max(page, 1), Math.Clamp(pageSize, 1, 100));
-        var (items, total) = await customers.SearchAsync(search, page, pageSize, cancellationToken);
+        // The upper bound keeps (page - 1) * pageSize inside int.
+        (page, pageSize) = (Math.Clamp(page, 1, int.MaxValue / MaxPageSize), Math.Clamp(pageSize, 1, MaxPageSize));
+        var text = DisplayNames.Normalize(search);
+        if (text.Length > DisplayNames.MaxLength)
+        {
+            return new Paged<CustomerListItem>([], page, pageSize, 0);
+        }
+
+        var (items, total) = await customers.SearchAsync(text, PhoneNumbers.Normalize(text), page, pageSize, cancellationToken);
         return new Paged<CustomerListItem>(
             items.Select(c => new CustomerListItem(c.Id, c.Name, c.PhoneNumber, c.Address, c.AccountId is not null, RowVersionGuard.Encode(c.RowVersion))).ToList(),
             page, pageSize, total);
@@ -82,6 +94,12 @@ public sealed class CustomerService(
             return AppError.Conflict(UserMessages.WrongStatus($"{ObjectName} {customer.Name}", MergedStatus));
         }
 
+        // First (NFR-09): a form read before the trader changed the number holds the old one, and is stale, not a change.
+        if (await rowVersions.CheckAsync(customer, request.RowVersion, cancellationToken) is { } conflict)
+        {
+            return conflict;
+        }
+
         var locked = customer.AccountId is not null;
         if (locked && !string.IsNullOrWhiteSpace(request.PhoneNumber) && PhoneNumbers.Normalize(request.PhoneNumber) != customer.PhoneNumber)
         {
@@ -97,11 +115,6 @@ public sealed class CustomerService(
         if (!locked && await DuplicateAsync(values.PhoneNumber!, customer.Id, cancellationToken) is { } duplicate)
         {
             return duplicate;
-        }
-
-        if (await rowVersions.CheckAsync(customer, request.RowVersion, cancellationToken) is { } conflict)
-        {
-            return conflict;
         }
 
         var before = Snapshot(customer);

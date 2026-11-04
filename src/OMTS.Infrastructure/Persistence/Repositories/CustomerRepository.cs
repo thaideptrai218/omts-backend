@@ -21,13 +21,15 @@ internal sealed class CustomerRepository(OmtsDbContext db) : ICustomerRepository
         db.Customers.AsNoTracking()
             .FirstOrDefaultAsync(c => c.PhoneNumber == phoneNumber && c.MergedIntoCustomerId == null && c.Id != exceptCustomerId, cancellationToken);
 
-    public async Task<(IReadOnlyList<Customer> Items, int Total)> SearchAsync(string? search, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<(IReadOnlyList<Customer> Items, int Total)> SearchAsync(string? search, string? phoneNumber, int page, int pageSize, CancellationToken cancellationToken)
     {
         var query = db.Customers.AsNoTracking().Where(c => c.MergedIntoCustomerId == null);
         if (!string.IsNullOrWhiteSpace(search))
         {
             var text = search.Trim();
-            query = query.Where(c => c.Name.Contains(text) || (c.PhoneNumber != null && c.PhoneNumber.Contains(text)));
+            query = phoneNumber is null
+                ? query.Where(c => c.Name.Contains(text) || (c.PhoneNumber != null && c.PhoneNumber.Contains(text)))
+                : query.Where(c => c.Name.Contains(text) || (c.PhoneNumber != null && (c.PhoneNumber.Contains(text) || c.PhoneNumber == phoneNumber)));
         }
 
         var total = await query.CountAsync(cancellationToken);

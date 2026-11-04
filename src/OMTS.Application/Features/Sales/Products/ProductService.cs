@@ -4,6 +4,7 @@ using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Common.Validation;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Domain.Constants;
@@ -25,7 +26,6 @@ public sealed class ProductService(
 {
     private const string RecordType = nameof(Product);
     private const string ObjectName = "Product";
-    private const int MaxNameLength = 200;
     private const int MaxAuditCodeLength = 100;
 
     /// <summary>The largest amount the column holds (18 digits).</summary>
@@ -162,8 +162,8 @@ public sealed class ProductService(
     private static (Values Values, List<string> Invalid) Validate(SaveProductRequest request)
     {
         var invalid = new List<string>();
-        var name = request.Name?.Trim() ?? string.Empty;
-        if (name.Length is 0 or > MaxNameLength)
+        var name = DisplayNames.Normalize(request.Name);
+        if (name.Length is 0 or > DisplayNames.MaxLength)
         {
             invalid.Add("Name");
         }

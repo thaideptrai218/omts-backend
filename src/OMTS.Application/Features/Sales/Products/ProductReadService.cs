@@ -2,6 +2,7 @@ using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Common.Validation;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Domain.Constants;
@@ -29,7 +30,10 @@ public sealed class ProductReadService(
         Trader,
     }
 
-    /// <summary>The Owner may filter by status; the others always get those In Use.</summary>
+    /// <summary>For the route filter, which answers before the request is read, like the permission filter of other routes.</summary>
+    public async Task<bool> MayReadAsync(CancellationToken cancellationToken) => await ReaderAsync(cancellationToken) != Reader.None;
+
+    /// <summary>The Owner may filter by status; the others always get those In Use. Longer than any name, a search finds nothing.</summary>
     public async Task<Result<IReadOnlyList<ProductView>>> ListAsync(string? search, int? statusId, CancellationToken cancellationToken)
     {
         var reader = await ReaderAsync(cancellationToken);
@@ -38,7 +42,13 @@ public sealed class ProductReadService(
             return AppError.Forbidden;
         }
 
-        var found = await products.ListAsync(search, reader == Reader.Owner ? statusId : StatusIds.Usage.InUse, cancellationToken);
+        var text = DisplayNames.Normalize(search);
+        if (text.Length > DisplayNames.MaxLength)
+        {
+            return new List<ProductView>();
+        }
+
+        var found = await products.ListAsync(text, reader == Reader.Owner ? statusId : StatusIds.Usage.InUse, cancellationToken);
         return found.Select(p => View(p, reader)).ToList();
     }
 

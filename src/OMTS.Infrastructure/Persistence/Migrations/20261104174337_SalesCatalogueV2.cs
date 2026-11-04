@@ -12,12 +12,20 @@ namespace OMTS.Infrastructure.Persistence.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             // Dev and demo data only, and no service wrote products before. The one conversion the new unique name needs:
-            // a repeated name takes its old code, the last moment the code exists.
+            // a repeated name takes its old code, the last moment the code exists. A row that already holds the name this
+            // makes repeats it in turn and takes its own code on the next round. A row ending in its own code is done, so
+            // each row changes at most once and the rounds end.
             migrationBuilder.Sql(
                 """
-                UPDATE p SET [Name] = LEFT(p.[Name], 200 - LEN(p.[Code]) - 3) + N' (' + p.[Code] + N')'
-                FROM [Products] p
-                WHERE EXISTS (SELECT 1 FROM [Products] o WHERE o.[Name] = p.[Name] AND o.[Id] <> p.[Id]);
+                DECLARE @renamed int = 1;
+                WHILE @renamed > 0
+                BEGIN
+                    UPDATE p SET [Name] = LEFT(p.[Name], 200 - DATALENGTH(p.[Code]) / 2 - 3) + N' (' + p.[Code] + N')'
+                    FROM [Products] p
+                    WHERE EXISTS (SELECT 1 FROM [Products] o WHERE o.[Name] = p.[Name] AND o.[Id] <> p.[Id])
+                        AND RIGHT(p.[Name], DATALENGTH(p.[Code]) / 2 + 3) <> N' (' + p.[Code] + N')';
+                    SET @renamed = @@ROWCOUNT;
+                END;
                 """);
 
             migrationBuilder.DropForeignKey(

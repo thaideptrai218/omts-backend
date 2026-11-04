@@ -6,15 +6,14 @@ namespace OMTS.Application.Features.Sales.Customers;
 /// <param name="PhoneNumber">Normalized; null when the number is locked and so not read from the request.</param>
 internal sealed record CustomerEntries(string Name, string? PhoneNumber, string? Address, string? Note)
 {
-    private const int MaxNameLength = 200;
     private const int MaxAddressLength = 500;
     private const int MaxNoteLength = 1000;
 
     public static (CustomerEntries Entries, List<string> Invalid) From(SaveCustomerRequest request, bool phoneLocked)
     {
         var invalid = new List<string>();
-        var name = request.Name?.Trim() ?? string.Empty;
-        if (name.Length is 0 or > MaxNameLength)
+        var name = DisplayNames.Normalize(request.Name);
+        if (name.Length is 0 or > DisplayNames.MaxLength)
         {
             invalid.Add("Name");
         }
