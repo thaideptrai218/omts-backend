@@ -148,7 +148,7 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
     private async Task<HttpClient> StaffInZoneAsync(Guid zoneId)
     {
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        var role = await factory.AddRoleAsync(NewCode(), (PermissionFunctions.CultivationCycles, true, true, true));
+        var role = StaffRole.ZoneManager;
         await factory.GrantAsync(staff, role, await factory.QueryAsync(db => db.FarmingZones.SingleAsync(z => z.Id == zoneId)));
         return await factory.LoginAsync(staff.Username);
     }

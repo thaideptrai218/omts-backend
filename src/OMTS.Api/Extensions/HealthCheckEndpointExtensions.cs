@@ -11,9 +11,9 @@ public static class HealthCheckEndpointExtensions
     /// <summary>
     /// <c>/health</c>: plain liveness, runs no check. <c>/health/db</c>: database reachable and migrated, for
     /// platform readiness and load-balancer probes. <c>/health/ready</c>: the post-deployment verification,
-    /// 200 when the deployment is complete (database, migrations, status catalog, default roles, cooperative,
-    /// active Owner). It depends on data the Owner can change (renaming a default role, locking the only
-    /// Owner turns it 503), so it must not be used as a probe that takes instances out of rotation. The
+    /// 200 when the deployment is complete (database, migrations, status catalog, the fixed role rows, cooperative,
+    /// active Owner). It depends on business data (locking the only Owner turns it 503), so it must not be used as a
+    /// probe that takes instances out of rotation. The
     /// checked endpoints answer 503 with the names of the failing checks only; all are anonymous and never
     /// return business data.
     /// </summary>

@@ -146,8 +146,8 @@ public class WaterRecordingTests(AuthApiFactory api) : IClassFixture<AuthApiFact
     public async Task Confirmed_ph_above_max_alerts_each_recipient_exactly_once_even_when_sent_twice()
     {
         var z = await api.ZoneAsync();
-        var (_, manager) = await api.StaffAsync(z.Zone, create: true);
-        var (_, otherZoneManager) = await api.StaffAsync((await api.ZoneAsync()).Zone, create: true);
+        var (_, manager) = await api.StaffAsync(z.Zone);
+        var (_, otherZoneManager) = await api.StaffAsync((await api.ZoneAsync()).Zone);
         var operationId = Guid.NewGuid();
 
         var first = await z.RecordAsync(9.1m, 20m, clientOperationId: operationId);
@@ -282,13 +282,14 @@ public class WaterRecordingTests(AuthApiFactory api) : IClassFixture<AuthApiFact
     }
 
     [Fact]
-    public async Task Staff_without_a_grant_in_the_zone_or_without_create_is_refused_and_nothing_is_saved()
+    public async Task Staff_without_a_grant_in_the_zone_or_without_water_rights_is_refused_and_nothing_is_saved()
     {
         var z = await api.ZoneAsync();
         var other = await api.ZoneAsync();
-        var (otherZone, _) = await api.StaffAsync(other.Zone, create: true);
-        var (viewOnly, _) = await api.StaffAsync(z.Zone);
-        var (revokedClient, revokedAccount) = await api.StaffAsync(z.Zone, create: true);
+        var (otherZone, _) = await api.StaffAsync(other.Zone);
+        // WATER-01 is No for the Accountant (§I.4.4).
+        var (viewOnly, _) = await api.StaffAsync(z.Zone, StaffRole.Accountant);
+        var (revokedClient, revokedAccount) = await api.StaffAsync(z.Zone);
         var grant = await api.QueryAsync(db => db.AccessGrants.SingleAsync(g => g.AccountId == revokedAccount.Id));
         await api.UpdateAsync<OMTS.Domain.Entities.Identity.AccessGrant>(grant.Id, g => g.StatusId = StatusIds.AccessGrant.Revoked);
         var trader = await api.LoginAsync((await api.AddAccountAsync(NewCode(), Password, SubjectType.Trader)).Username);
@@ -317,7 +318,7 @@ public class WaterRecordingTests(AuthApiFactory api) : IClassFixture<AuthApiFact
     {
         var z = await api.ZoneAsync();
         var draft = await z.RecordedAsync(7m, 20m, confirm: false);
-        var (otherZoneManager, _) = await api.StaffAsync((await api.ZoneAsync()).Zone, create: true, edit: true);
+        var (otherZoneManager, _) = await api.StaffAsync((await api.ZoneAsync()).Zone);
 
         var confirm = await otherZoneManager.PostAsJsonAsync($"/api/water-measurements/{draft.Id()}/confirm", new { });
         var read = await otherZoneManager.GetAsync($"/api/water-measurements/{draft.Id()}");
@@ -332,7 +333,7 @@ public class WaterRecordingTests(AuthApiFactory api) : IClassFixture<AuthApiFact
     public async Task Zone_manager_with_create_records_in_the_granted_zone()
     {
         var z = await api.ZoneAsync();
-        var (manager, account) = await api.StaffAsync(z.Zone, create: true);
+        var (manager, account) = await api.StaffAsync(z.Zone);
 
         var body = await z.RecordedAsync(7.2m, 21m, client: manager);
 

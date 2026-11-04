@@ -7,6 +7,7 @@ using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Features.Authorization;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Enums;
 using static OMTS.Api.IntegrationTests.Farming.FarmingTestKit;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
@@ -273,8 +274,8 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         var zoneB = await owner.Client.CreateZoneAsync();
         var entityA = await factory.ZoneEntityAsync(zoneA.Id());
 
-        // Any role counts for reading (here one without any farming function).
-        var staffA = await factory.StaffAsync(entityA, (PermissionFunctions.SalesInvoices, true, false, false));
+        // Any role counts for reading (here the Accountant, which holds no farming function).
+        var staffA = await factory.StaffAsync(entityA, StaffRole.Accountant);
         Assert.Equal(HttpStatusCode.OK, (await staffA.Client.GetAsync($"/api/zones/{zoneA.Id()}")).StatusCode);
         Assert.Equal("MSG-GEN-08", await (await staffA.Client.GetAsync($"/api/zones/{zoneB.Id()}")).ErrorCodeAsync());
         Assert.Equal([zoneA.Id()], (await staffA.Client.GetFromJsonAsync<JsonElement>("/api/zones/lookup")).EnumerateArray().Select(z => z.Id()));
@@ -283,17 +284,12 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         var everywhere = await factory.StaffAsync(null);
         Assert.Equal(HttpStatusCode.OK, (await everywhere.Client.GetAsync($"/api/zones/{zoneB.Id()}")).StatusCode);
 
-        // A grant revoked or expired after login opens nothing any more.
+        // A pair revoked after login opens nothing any more.
         var revoked = await factory.StaffAsync(entityA);
         await factory.UpdateAsync<AccessGrant>(revoked.Grant!.Id, g => { g.StatusId = StatusIds.AccessGrant.Revoked; g.RevokedAt = DateTimeOffset.UtcNow; });
-        var expired = await factory.StaffAsync(entityA);
-        await factory.UpdateAsync<AccessGrant>(expired.Grant!.Id, g => { g.EffectiveFrom = Today.AddDays(-30); g.EffectiveTo = Today.AddDays(-1); });
-        foreach (var lapsed in new[] { revoked, expired })
-        {
-            Assert.Equal("MSG-GEN-08", await (await lapsed.Client.GetAsync($"/api/zones/{zoneA.Id()}")).ErrorCodeAsync());
-            Assert.Empty((await lapsed.Client.GetFromJsonAsync<JsonElement>("/api/zones/lookup")).EnumerateArray());
-            Assert.Empty((await lapsed.Client.GetFromJsonAsync<JsonElement>("/api/zones/map")).EnumerateArray());
-        }
+        Assert.Equal("MSG-GEN-08", await (await revoked.Client.GetAsync($"/api/zones/{zoneA.Id()}")).ErrorCodeAsync());
+        Assert.Empty((await revoked.Client.GetFromJsonAsync<JsonElement>("/api/zones/lookup")).EnumerateArray());
+        Assert.Empty((await revoked.Client.GetFromJsonAsync<JsonElement>("/api/zones/map")).EnumerateArray());
 
         var trader = await factory.TraderAsync();
         Assert.Equal("MSG-GEN-08", await (await trader.GetAsync($"/api/zones/{zoneA.Id()}")).ErrorCodeAsync());

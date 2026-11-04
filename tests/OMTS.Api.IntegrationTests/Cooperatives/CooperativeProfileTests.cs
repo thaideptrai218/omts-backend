@@ -87,7 +87,7 @@ public class CooperativeProfileTests
         using var api = new AuthApiFactory();
         await api.EnsureCooperativeAsync();
         var staff = await api.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        var role = await api.AddRoleAsync($"R {NewCode()}", (Application.Features.Authorization.PermissionFunctions.WaterMeasurements, true, true, true));
+        var role = StaffRole.ZoneManager;
         await api.GrantAsync(staff, role, null);
         var client = await api.LoginAsync(staff.Username);
 

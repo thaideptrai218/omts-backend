@@ -1,9 +1,10 @@
 namespace OMTS.Application.Features.Authorization.Models;
 
 /// <summary>
-/// One grantable function of the catalog (BR-19). <see cref="CooperativeWide"/> functions are not tied to a
-/// zone, so only grants assigned at All zones apply; <see cref="SupportedActions"/> are the only
-/// permissions a role may hold on it (View is always among them).
+/// One function of the catalog (BR-FARM-07). <see cref="CooperativeWide"/> functions work on records with no zone, so
+/// they follow the role only: any Effective pair of a role holding the function is enough, whatever its zone
+/// (BR-FARM-08). <see cref="SupportedActions"/> are the actions the function has; a fixed role holds some of them
+/// (View is always among them), the Cooperative Owner all of them.
 /// </summary>
 public sealed record FunctionDefinition(
     string Code,

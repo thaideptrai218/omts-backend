@@ -221,11 +221,10 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
         var otherManager = await factory.ZoneManagerAsync(otherZone);
         await (await otherManager.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await otherManager.GetAsync($"/api/purchase-returns/{returnId}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        var viewer = await factory.PurchasingStaffAsync(world.Zone, new Perm(PermissionFunctions.PurchaseReceipts));
+        // The Accountant views receipts and returns but creates none (§I.4.4 PURCHASE-02 No, PURCHASE-03 R).
+        var viewer = await factory.AccountantAsync(world.Zone);
         await (await viewer.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await viewer.GetAsync($"/api/purchase-returns/{returnId}")).ReadAsync(HttpStatusCode.OK);
-        var editorOnly = await factory.PurchasingStaffAsync(world.Zone, new Perm(PermissionFunctions.PurchaseReceipts, Edit: true, Delete: true));
-        await (await editorOnly.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         Assert.Equal(1, await factory.QueryAsync(db => db.PurchaseReturns.CountAsync(r => r.ReceiptId == receipt.Id())));
 
         var manager = await factory.ZoneManagerAsync(world.Zone);

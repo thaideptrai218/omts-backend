@@ -188,7 +188,7 @@ public class DemoDataSeedTests
         Assert.Equal(HttpStatusCode.OK, unverified.Status);
         Assert.True(unverified.Body.GetProperty("phoneVerificationRequired").GetBoolean());
 
-        // Locked trader, and staff whose only grant has expired: refused with MSG13 after the password is proven. The
+        // Locked trader, and staff whose only pair is revoked: refused with MSG-ACCOUNT-07 after the password is proven. The
         // message does not say why, so the data shows each account is refused for its own reason.
         foreach (var username in new[] { "thuonglai2", "nhanvien.hethan" })
         {
@@ -201,12 +201,17 @@ public class DemoDataSeedTests
         var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
         var locked = await db.Accounts.SingleAsync(a => a.Username == "thuonglai2");
         Assert.Equal(StatusIds.Account.Locked, locked.StatusId);
-        var expired = await db.Accounts.SingleAsync(a => a.Username == "nhanvien.hethan");
-        Assert.Equal(StatusIds.Account.Active, expired.StatusId);
-        var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime);
-        var grants = await db.AccessGrants.Where(g => g.AccountId == expired.Id).ToListAsync();
+        var revoked = await db.Accounts.SingleAsync(a => a.Username == "nhanvien.hethan");
+        Assert.Equal(StatusIds.Account.Active, revoked.StatusId);
+        var grants = await db.AccessGrants.Where(g => g.AccountId == revoked.Id).ToListAsync();
         Assert.NotEmpty(grants);
-        Assert.All(grants, g => Assert.True(g.EffectiveTo < today));
+        // Its only pair is Revoked with a reason (FARM-05.1), kept in the history of the account.
+        Assert.All(grants, g =>
+        {
+            Assert.Equal(StatusIds.AccessGrant.Revoked, g.StatusId);
+            Assert.NotNull(g.RevokedAt);
+            Assert.False(string.IsNullOrWhiteSpace(g.RevokeReason));
+        });
     }
 
     private static async Task<IReadOnlyDictionary<string, int>> CountsAsync(SqlServerApiFactory api)

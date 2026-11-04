@@ -1,10 +1,13 @@
-using OMTS.Application.Features.Authorization.Models;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.AccessManagement.Dtos;
 
-/// <summary>One zone–role row of a grant form; <see cref="ZoneId"/> null means All zones.</summary>
-public sealed record GrantDraft(Guid? ZoneId, Guid RoleId, DateOnly? EffectiveFrom = null, DateOnly? EffectiveTo = null);
+/// <summary>
+/// One zone–role row of a grant form (FARM-05): the fixed role by <see cref="RoleId"/> or by <see cref="Role"/> code
+/// (ZONE_MANAGER or ACCOUNTANT; both may be sent if they name the same role), and a zone or All zones
+/// (<see cref="ZoneId"/> null). A pair is Effective from its grant until it is revoked.
+/// </summary>
+public sealed record GrantDraft(Guid? ZoneId, Guid? RoleId = null, string? Role = null);
 
 /// <param name="SubjectType">Only Staff accounts can be created; any other value is refused and audited.</param>
 public sealed record CreateStaffAccountRequest(
@@ -38,44 +41,33 @@ public sealed record StaffAccountWithPassword(StaffAccountView Account, string T
 
 public sealed record Paged<T>(IReadOnlyList<T> Items, int Page, int PageSize, int Total);
 
-/// <param name="State">Effective, Expired, NotYetEffective or Revoked (Expired is derived from EffectiveTo).</param>
+/// <summary>A zone–role pair of the Zone access screen (SCR-FARM-04): effective and revoked pairs with their dates.</summary>
+/// <param name="Role">Code of the fixed role: ZONE_MANAGER or ACCOUNTANT.</param>
+/// <param name="State">Effective or Revoked.</param>
+/// <param name="GrantedAt">When the Owner granted the pair.</param>
 public sealed record GrantRow(
     Guid Id,
     Guid? ZoneId,
     string? ZoneName,
     bool AllZones,
     Guid RoleId,
+    string Role,
     string RoleName,
-    DateOnly EffectiveFrom,
-    DateOnly? EffectiveTo,
     string State,
+    DateTimeOffset GrantedAt,
+    Guid GrantedByAccountId,
+    string? GrantedByName,
     DateTimeOffset? RevokedAt,
+    Guid? RevokedByAccountId,
+    string? RevokedByName,
     string? RevokeReason);
 
 public sealed record PermissionPreviewRequest(IReadOnlyList<GrantDraft> Grants);
 
-/// <summary>What the draft rows would allow: per function, the actions and where (All zones or zone ids).</summary>
-public sealed record PermissionPreviewItem(string Function, string Name, IReadOnlyList<string> Actions, bool AllZones, IReadOnlyList<Guid> ZoneIds);
+/// <summary>A fixed role (BR-FARM-07) with its permissions of the §I.4.4 matrix; read only.</summary>
+/// <param name="Code">ZONE_MANAGER or ACCOUNTANT.</param>
+public sealed record RoleView(Guid Id, string Code, string Name, string? Description, IReadOnlyList<RolePermissionView> Permissions);
 
-public sealed record RolePermissionInput(string FunctionCode, IReadOnlyList<PermissionAction> Actions, DataScope DataScope = DataScope.AssignedZone);
-
-public sealed record SaveRoleRequest(string Name, string? Description, IReadOnlyList<RolePermissionInput> Permissions, string? RowVersion = null);
-
-public sealed record CopyRoleRequest(string Name, string? Description = null);
-
-public sealed record RoleView(
-    Guid Id,
-    string Name,
-    string? Description,
-    string Status,
-    IReadOnlyList<RolePermissionView> Permissions,
-    string RowVersion);
-
-public sealed record RolePermissionView(string FunctionCode, IReadOnlyList<string> Actions, DataScope DataScope);
-
-/// <param name="ConfirmMessage">MSG-GEN-04, shown before saving an edit of a role in use.</param>
-/// <param name="ConfirmMessageCode">The code of <paramref name="ConfirmMessage"/>.</param>
-public sealed record RoleImpact(
-    int AccountCount, int ZoneCount, bool AllZonesGranted, IReadOnlyList<string> Accounts, string ConfirmMessage, string ConfirmMessageCode);
+public sealed record RolePermissionView(string FunctionCode, IReadOnlyList<string> Actions);
 
 public sealed record FunctionCatalogItem(string Code, string Name, bool CooperativeWide, bool IsDashboardTile, IReadOnlyList<string> SupportedActions);

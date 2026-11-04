@@ -281,7 +281,7 @@ public class RaftRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         var zoneB = await owner.Client.CreateZoneAsync();
         var raftA = await owner.Client.CreateRaftAsync(zoneA.Id());
         var raftB = await owner.Client.CreateRaftAsync(zoneB.Id());
-        var staff = await factory.StaffAsync(await factory.ZoneEntityAsync(zoneA.Id()), EveryFunction());
+        var staff = await factory.StaffAsync(await factory.ZoneEntityAsync(zoneA.Id()));
 
         Assert.Equal([raftA.Id()], (await staff.Client.GetFromJsonAsync<JsonElement>($"/api/zones/{zoneA.Id()}/rafts")).EnumerateArray().Select(r => r.Id()));
         var detail = await staff.Client.GetFromJsonAsync<JsonElement>($"/api/rafts/{raftA.Id()}");

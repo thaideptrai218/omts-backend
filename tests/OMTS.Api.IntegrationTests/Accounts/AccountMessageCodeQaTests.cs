@@ -280,9 +280,8 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
     {
         var other = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
         var zone = await factory.AddZoneAsync(NewCode());
-        var role = await factory.AddRoleAsync($"R {NewCode()}", (PermissionFunctions.WaterMeasurements, View: true, Create: false, Edit: false));
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff, a => a.PhoneVerifiedAt = null);
-        await factory.GrantAsync(staff, role, zone);
+        await factory.GrantAsync(staff, StaffRole.ZoneManager, zone);
         var staffClient = await factory.LoginAsync(staff.Username);
         var owner = await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Password)).Username);
 

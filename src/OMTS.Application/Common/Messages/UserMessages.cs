@@ -25,10 +25,6 @@ public static class UserMessages
     public static readonly UserMessage UploadFailed = new(
         Gen03, "The file could not be uploaded. Your other entries are kept; please try again.", Legacy.Msg05);
 
-    /// <summary>MSG-GEN-04 for a role edit (the roles become fixed in a later PR).</summary>
-    public static readonly UserMessage ConfirmRoleEdit = new(
-        Gen04, "Are you sure you want to edit this role? This action is recorded in the audit log.", Legacy.Msg09);
-
     /// <summary>MSG-GEN-05: a record is saved.</summary>
     public static UserMessage Saved(string what) => new(Gen05, $"{what} saved.", Legacy.Msg10);
 

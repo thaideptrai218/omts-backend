@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Features.Authorization;
 using OMTS.Domain.Constants;
+using OMTS.Domain.Enums;
 using static OMTS.Api.IntegrationTests.Purchasing.PurchasingTestKit;
 
 namespace OMTS.Api.IntegrationTests.Purchasing;
@@ -232,34 +233,37 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
     }
 
     [Fact]
-    public async Task Supplier_payments_need_an_all_zones_grant_and_the_accountant_only_reads_receipts()
+    public async Task Supplier_payments_follow_the_accountant_role_in_any_zone_and_the_accountant_only_reads_receipts()
     {
         var world = await factory.WorldAsync();
         var receipt = await world.CompletedAsync(0, 0, new LineBody(world.Seed, 10, 100_000));
         var body = new PaymentBody { SupplierId = world.SupplierId, ReceiptId = receipt.Id(), Amount = 100_000 };
+        var (otherZone, _) = await factory.ZoneWithRaftAsync();
 
-        var zoneOnly = await factory.PurchasingStaffAsync(world.Zone, new Perm(PermissionFunctions.SupplierPayments, true, true));
-        var manager = await factory.ZoneManagerAsync(world.Zone);
-        foreach (var refused in new[] { zoneOnly, manager })
+        // PURCHASE-04/05 are No for the Zone Manager, even at All zones.
+        foreach (var refused in new[] { await factory.ZoneManagerAsync(world.Zone), await factory.PurchasingStaffAsync(null, StaffRole.ZoneManager) })
         {
             await (await refused.PostPaymentAsync(body)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
             await (await refused.GetAsync("/api/supplier-payments")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
             await (await refused.GetAsync($"/api/suppliers/{world.SupplierId}/debt")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         }
 
-        var viewOnly = await factory.PurchasingStaffAsync(null, new Perm(PermissionFunctions.SupplierPayments));
-        await (await viewOnly.GetAsync("/api/supplier-payments")).ReadAsync(HttpStatusCode.OK);
-        await (await viewOnly.PostPaymentAsync(body)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        // Supplier payments and debts have no zone: an Accountant pair for any zone opens them (BR-FARM-08, AC-01).
+        var zoneAccountant = await factory.AccountantAsync(otherZone);
+        await (await zoneAccountant.GetAsync("/api/supplier-payments")).ReadAsync(HttpStatusCode.OK);
+        await (await zoneAccountant.GetAsync($"/api/suppliers/{world.SupplierId}/debt")).ReadAsync(HttpStatusCode.OK);
+        await (await zoneAccountant.PostPaymentAsync(body with { Amount = 1_000 })).ReadAsync(HttpStatusCode.Created);
 
         var accountant = await factory.AccountantAsync();
         await (await accountant.PostPaymentAsync(body)).ReadAsync(HttpStatusCode.Created);
         await (await accountant.GetAsync("/api/suppliers/debts")).ReadAsync(HttpStatusCode.OK);
         await (await accountant.GetAsync($"/api/purchase-receipts/{receipt.Id()}")).ReadAsync(HttpStatusCode.OK);
         await (await accountant.GetAsync("/api/purchase-receipts")).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(HttpStatusCode.OK, (await accountant.GetAsync("/api/purchase-receipts/export")).StatusCode);
+        // View only (§I.4.4 PURCHASE-03 R): no export.
+        Assert.Equal(HttpStatusCode.Forbidden, (await accountant.GetAsync("/api/purchase-receipts/export")).StatusCode);
         await (await accountant.GetAsync("/api/farming-input-items")).ReadAsync(HttpStatusCode.OK);
 
-        // Read-only on INP-03…INP-05.
+        // Read-only on PURCHASE-01…03 and PURCHASE-06.
         await (await accountant.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 1000)))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await accountant.CancelAsync(receipt.Id(), "x", true)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await accountant.PostReturnAsync(receipt.Id(), new ReturnBody { DebtReductionAmount = 100_000, Lines = [new ReturnLineBody(receipt.LineOf(world.Seed), 1)] }))

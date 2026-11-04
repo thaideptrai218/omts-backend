@@ -3,7 +3,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
-using OMTS.Application.Features.Authorization;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
@@ -38,7 +37,7 @@ public class StaffAccountTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     {
         var (_, zone, role) = await SetupAsync();
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        await factory.GrantAsync(staff, await factory.AddRoleAsync($"All {NewCode()}", (PermissionFunctions.WaterMeasurements, true, true, true)), null);
+        await factory.GrantAsync(staff, StaffRole.ZoneManager, null);
         var client = await factory.LoginAsync(staff.Username);
 
         var list = await client.GetAsync("/api/accounts");
@@ -151,7 +150,7 @@ public class StaffAccountTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     {
         var owner = await factory.AddAccountAsync(NewCode(), Password);
         var zone = await factory.AddZoneAsync(NewCode());
-        var role = await factory.AddRoleAsync($"Zone role {NewCode()}", (PermissionFunctions.WaterMeasurements, true, true, false));
+        var role = await factory.RoleAsync(StaffRole.ZoneManager);
         return (await factory.LoginAsync(owner.Username), zone, role);
     }
 

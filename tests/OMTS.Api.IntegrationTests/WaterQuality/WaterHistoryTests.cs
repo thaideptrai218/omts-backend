@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Reports;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
@@ -169,11 +170,12 @@ public class WaterHistoryTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
     }
 
     [Fact]
-    public async Task Export_needs_the_export_permission_and_never_contains_drafts_or_voided_records()
+    public async Task Export_needs_a_role_with_water_rights_in_the_zone_and_never_contains_drafts_or_voided_records()
     {
         var (z, _) = await SeedAsync();
-        var (viewer, _) = await api.StaffAsync(z.Zone);
-        var (exporter, _) = await api.StaffAsync(z.Zone, export: true);
+        // WATER-03 is No for the Accountant and Full* for the Zone Manager (§I.4.4).
+        var (viewer, _) = await api.StaffAsync(z.Zone, StaffRole.Accountant);
+        var (exporter, _) = await api.StaffAsync(z.Zone);
 
         var refused = await viewer.GetAsync($"{z.Base}/export");
         var allowed = await exporter.GetAsync($"{z.Base}/export?status=All");
@@ -202,7 +204,7 @@ public class WaterHistoryTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
     public async Task Zone_not_granted_is_403_for_history_chart_and_detail()
     {
         var (z, ids) = await SeedAsync();
-        var (outsider, _) = await api.StaffAsync((await api.ZoneAsync()).Zone, export: true);
+        var (outsider, _) = await api.StaffAsync((await api.ZoneAsync()).Zone);
         var (viewer, _) = await api.StaffAsync(z.Zone);
 
         foreach (var url in new[] { z.Base, $"{z.Base}/chart", $"{z.Base}/export", $"/api/water-measurements/{ids.Corrected}" })

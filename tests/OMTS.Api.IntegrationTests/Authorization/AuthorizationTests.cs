@@ -11,11 +11,12 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Api.IntegrationTests.Authorization;
 
+/// <summary>GFR-02 with the fixed roles of §I.4.4 (BR-FARM-07/08): zone limits, role-only records and immediate changes.</summary>
 public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
     private const string Password = "Secret123";
 
-    // NFR-01: a grant in zone A opens zone A only.
+    // NFR-01: a pair in zone A opens zone A only.
     [Fact]
     public async Task Zone_grant_allows_its_zone_and_denies_other_zones()
     {
@@ -28,44 +29,50 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal("MSG-GEN-08", await ErrorCodeAsync(otherZone));
     }
 
+    // §I.4.4 WATER-01…03: the Accountant role has no water rights, even in a zone of its pair.
     [Fact]
-    public async Task Action_not_granted_by_the_role_is_denied()
+    public async Task Function_not_held_by_the_role_is_denied_in_the_zone_of_the_pair()
     {
         var zone = await factory.AddZoneAsync(NewCode());
-        var client = await StaffWithGrantAsync(zone);
+        var client = await StaffWithGrantAsync(zone, StaffRole.Accountant);
 
+        var view = await client.GetAsync($"/test-only/zones/{zone.Id}/water-measurements");
         var create = await client.PostAsync($"/test-only/zones/{zone.Id}/water-measurements", null);
 
-        Assert.Equal(HttpStatusCode.Forbidden, create.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, view.StatusCode);
+        Assert.Equal("MSG-GEN-08", await ErrorCodeAsync(create));
     }
 
-    // UC11: an All zones grant applies to every zone and to cooperative-wide data.
+    // FARM-05: an All zones pair applies to every zone, also to zones created later (BR-FARM-08).
     [Fact]
     public async Task All_zones_grant_applies_everywhere()
     {
-        var zone = await factory.AddZoneAsync(NewCode());
         var client = await StaffWithGrantAsync(zone: null);
+        var zoneCreatedLater = await factory.AddZoneAsync(NewCode());
 
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zone.Id}/water-measurements")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/test-only/supplier-payments")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zoneCreatedLater.Id}/water-measurements")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/test-only/zones/{zoneCreatedLater.Id}/water-measurements", null)).StatusCode);
     }
 
-    // Section 4.4: cooperative-wide data needs a role assigned at All zones.
+    // BR-FARM-08, P-6: records with no zone follow the role only, so an Accountant pair for one zone opens supplier
+    // payments; a Zone Manager pair, even for All zones, does not (PURCHASE-04/05 No for the Zone Manager).
     [Fact]
-    public async Task Zone_grant_does_not_open_cooperative_wide_data()
+    public async Task Records_with_no_zone_follow_the_role_only()
     {
         var zone = await factory.AddZoneAsync(NewCode());
-        var client = await StaffWithGrantAsync(zone);
+        var zoneAccountant = await StaffWithGrantAsync(zone, StaffRole.Accountant);
+        var allZonesManager = await StaffWithGrantAsync(null);
 
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/test-only/supplier-payments")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await zoneAccountant.GetAsync("/test-only/supplier-payments")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await allZonesManager.GetAsync("/test-only/supplier-payments")).StatusCode);
     }
 
-    // BR-19: revoking applies immediately, even though the permission was just cached.
+    // GFR-02: revoking applies from the next action, even though the permission was just cached.
     [Fact]
     public async Task Revoked_grant_is_denied_immediately()
     {
         var zone = await factory.AddZoneAsync(NewCode());
-        var (client, _, grant, _) = await StaffSetupAsync(zone);
+        var (client, _, grant) = await StaffSetupAsync(zone);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zone.Id}/water-measurements")).StatusCode);
 
         await factory.UpdateAsync<AccessGrant>(grant.Id, g =>
@@ -77,76 +84,42 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/test-only/zones/{zone.Id}/water-measurements")).StatusCode);
     }
 
-    // BR-19: role permission edits apply immediately to every account holding the role.
+    // GFR-02: a new pair applies from the next action, although the refusal was just cached.
     [Fact]
-    public async Task Role_permission_change_applies_immediately()
+    public async Task New_grant_applies_immediately()
     {
         var zone = await factory.AddZoneAsync(NewCode());
-        var (client, _, _, role) = await StaffSetupAsync(zone);
+        var (client, account, _) = await StaffSetupAsync(zone, role: StaffRole.Accountant);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsync($"/test-only/zones/{zone.Id}/water-measurements", null)).StatusCode);
 
-        await factory.UseDbAsync(db =>
-        {
-            var permission = db.RolePermissions.Single(p => p.RoleId == role.Id && p.FunctionCode == PermissionFunctions.WaterMeasurements);
-            permission.CanCreate = true;
-        });
+        await factory.GrantAsync(account, StaffRole.ZoneManager, zone);
 
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/test-only/zones/{zone.Id}/water-measurements", null)).StatusCode);
     }
 
-    // FARM-05: "Expired" is derived from EffectiveTo; the grant stops applying although its status stays Effective.
-    [Fact]
-    public async Task Expired_grant_is_denied()
-    {
-        var (zoneA, zoneB) = (await factory.AddZoneAsync(NewCode()), await factory.AddZoneAsync(NewCode()));
-        var (client, account, _, role) = await StaffSetupAsync(zoneA);
-        var yesterday = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1);
-        await factory.GrantAsync(account, role, zoneB, g =>
-        {
-            g.EffectiveFrom = yesterday.AddDays(-10);
-            g.EffectiveTo = yesterday;
-        });
-
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zoneA.Id}/water-measurements")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/test-only/zones/{zoneB.Id}/water-measurements")).StatusCode);
-    }
-
-    // ACS-10: a discontinued role no longer gives its permissions, effective on the next request.
-    [Fact]
-    public async Task Discontinued_role_is_denied_immediately()
-    {
-        var zone = await factory.AddZoneAsync(NewCode());
-        var (client, _, _, role) = await StaffSetupAsync(zone);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/test-only/zones/{zone.Id}/water-measurements")).StatusCode);
-
-        await factory.UpdateAsync<Role>(role.Id, r => r.StatusId = StatusIds.Usage.Discontinued);
-
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/test-only/zones/{zone.Id}/water-measurements")).StatusCode);
-    }
-
-    // FARM-05: permissions are the union of the roles granted in a zone, each limited to its own zone.
+    // FARM-05 POST-2: one account may hold different roles in different zones; each role is limited to its zones.
     [Fact]
     public async Task Permissions_are_the_union_of_roles_limited_to_their_zones()
     {
         var (zoneA, zoneB) = (await factory.AddZoneAsync(NewCode()), await factory.AddZoneAsync(NewCode()));
-        var (client, account, _, _) = await StaffSetupAsync(zoneA);
-        var creator = await factory.AddRoleAsync($"Role {NewCode()}", (PermissionFunctions.WaterMeasurements, View: true, Create: true, Edit: false));
-        await factory.GrantAsync(account, creator, zoneB);
+        var (client, account, _) = await StaffSetupAsync(zoneA, role: StaffRole.Accountant);
+        await factory.GrantAsync(account, StaffRole.ZoneManager, zoneB);
 
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/test-only/zones/{zoneB.Id}/water-measurements", null)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsync($"/test-only/zones/{zoneA.Id}/water-measurements", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/test-only/supplier-payments")).StatusCode);
 
         // A second role in zone A adds its rights there too.
-        await factory.GrantAsync(account, creator, zoneA);
+        await factory.GrantAsync(account, StaffRole.ZoneManager, zoneA);
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/test-only/zones/{zoneA.Id}/water-measurements", null)).StatusCode);
     }
 
-    // UC11 branch 1b: locking invalidates every open session.
+    // ACCOUNT-09.2: locking invalidates every open session.
     [Fact]
     public async Task Locked_account_is_rejected_with_an_existing_token()
     {
         var zone = await factory.AddZoneAsync(NewCode());
-        var (client, account, _, _) = await StaffSetupAsync(zone);
+        var (client, account, _) = await StaffSetupAsync(zone);
 
         await factory.UpdateAsync<Account>(account.Id, a => a.StatusId = StatusIds.Account.Locked);
 
@@ -189,7 +162,7 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     public async Task Unverified_phone_gate_allows_only_phone_verification()
     {
         var zone = await factory.AddZoneAsync(NewCode());
-        var (client, account, _, _) = await StaffSetupAsync(zone, a => a.PhoneVerifiedAt = null);
+        var (client, account, _) = await StaffSetupAsync(zone, a => a.PhoneVerifiedAt = null);
 
         var blocked = await client.GetAsync($"/test-only/zones/{zone.Id}/water-measurements");
         Assert.Equal(HttpStatusCode.Forbidden, blocked.StatusCode);
@@ -202,34 +175,36 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     }
 
     [Fact]
-    public async Task Me_permissions_lists_functions_per_zone()
+    public async Task Me_permissions_lists_the_fixed_role_functions_per_zone()
     {
         var zone = await factory.AddZoneAsync(NewCode());
         var client = await StaffWithGrantAsync(zone);
 
         var permissions = await client.GetFromJsonAsync<JsonElement>("/api/me/permissions");
 
-        var water = permissions.GetProperty("functions").EnumerateArray()
-            .Single(f => f.GetProperty("function").GetString() == PermissionFunctions.WaterMeasurements);
+        var functions = permissions.GetProperty("functions").EnumerateArray().ToDictionary(f => f.GetProperty("function").GetString()!);
+        var water = functions[PermissionFunctions.WaterMeasurements];
         Assert.False(water.GetProperty("allZones").GetBoolean());
         Assert.Equal(zone.Id, water.GetProperty("zoneIds")[0].GetGuid());
-        Assert.Equal(new string?[] { "View" }, water.GetProperty("actions").EnumerateArray().Select(a => a.GetString()));
-        Assert.Equal(zone.Code, permissions.GetProperty("grants")[0].GetProperty("zoneCode").GetString());
+        Assert.Equal(new string?[] { "View", "Create", "Edit", "Export" }, water.GetProperty("actions").EnumerateArray().Select(a => a.GetString()));
+        // Suppliers have no zone: the role opens them everywhere (BR-FARM-08). Dashboard tiles are Owner-only (FARM-06).
+        Assert.True(functions[PermissionFunctions.Suppliers].GetProperty("allZones").GetBoolean());
+        Assert.DoesNotContain(functions.Keys, f => f.StartsWith("DASHBOARD_", StringComparison.Ordinal));
+        var grant = permissions.GetProperty("grants")[0];
+        Assert.Equal(zone.Code, grant.GetProperty("zoneCode").GetString());
+        Assert.Equal(FixedRoles.ZoneManagerCode, grant.GetProperty("roleCode").GetString());
     }
 
-    private async Task<HttpClient> StaffWithGrantAsync(FarmingZone? zone) => (await StaffSetupAsync(zone)).Client;
+    private async Task<HttpClient> StaffWithGrantAsync(FarmingZone? zone, StaffRole role = StaffRole.ZoneManager) =>
+        (await StaffSetupAsync(zone, role: role)).Client;
 
-    /// <summary>A staff account holding a role that may only view water measurements, granted in <paramref name="zone"/> (null = All zones).</summary>
-    private async Task<(HttpClient Client, Account Account, AccessGrant Grant, Role Role)> StaffSetupAsync(
-        FarmingZone? zone, Action<Account>? configure = null)
+    /// <summary>A staff account holding one pair of the fixed <paramref name="role"/> in <paramref name="zone"/> (null = All zones).</summary>
+    private async Task<(HttpClient Client, Account Account, AccessGrant Grant)> StaffSetupAsync(
+        FarmingZone? zone, Action<Account>? configure = null, StaffRole role = StaffRole.ZoneManager)
     {
         var account = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff, configure);
-        var role = await factory.AddRoleAsync(
-            $"Role {NewCode()}",
-            (PermissionFunctions.WaterMeasurements, View: true, Create: false, Edit: false),
-            (PermissionFunctions.SupplierPayments, View: true, Create: false, Edit: false));
         var grant = await factory.GrantAsync(account, role, zone);
-        return (await LoginAsync(account.Username), account, grant, role);
+        return (await LoginAsync(account.Username), account, grant);
     }
 
     private async Task<HttpClient> LoginAsync(string username)
@@ -242,7 +217,7 @@ public class AuthorizationTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         return client;
     }
 
-    private static string NewCode() => Guid.NewGuid().ToString("N")[..10];
+    private static string NewCode() => AcsTestKit.NewCode();
 
     private static async Task<string?> ErrorCodeAsync(HttpResponseMessage response) =>
         (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString();

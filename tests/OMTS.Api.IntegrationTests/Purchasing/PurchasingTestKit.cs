@@ -13,12 +13,6 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
 namespace OMTS.Api.IntegrationTests.Purchasing;
 
-/// <summary>One permission of a test role; Export is stored as the "EXPORT" other permission.</summary>
-public sealed record Perm(string Function, bool View = true, bool Create = false, bool Edit = false, bool Delete = false, bool Export = false)
-{
-    public static Perm Full(string function) => new(function, true, true, true, true, true);
-}
-
 public sealed record LineBody(Guid? ItemId, decimal? Quantity, decimal? UnitPrice, string? SupplierLotCode = null, string? ActualSource = null);
 
 /// <summary>INP-03 request body; every field can be left out (null) to check the validation.</summary>
@@ -79,32 +73,24 @@ public static class PurchasingTestKit
         return await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Password)).Username);
     }
 
-    /// <summary>Logged-in staff with one grant in <paramref name="zone"/> (All zones when null) of a role holding <paramref name="permissions"/>.</summary>
-    public static async Task<HttpClient> PurchasingStaffAsync(this AuthApiFactory factory, FarmingZone? zone, params Perm[] permissions)
+    /// <summary>Logged-in staff with one pair of the fixed <paramref name="role"/> in <paramref name="zone"/> (All zones when null).</summary>
+    public static async Task<HttpClient> PurchasingStaffAsync(this AuthApiFactory factory, FarmingZone? zone, StaffRole role)
     {
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        var role = new Role { Name = NewCode() };
-        foreach (var p in permissions)
-        {
-            role.Permissions.Add(new RolePermission
-            {
-                FunctionCode = p.Function, CanView = p.View, CanCreate = p.Create, CanEdit = p.Edit, CanDelete = p.Delete,
-                OtherPermissions = p.Export ? ["EXPORT"] : [],
-            });
-        }
-
-        await factory.UseDbAsync(db => db.Roles.Add(role));
         await factory.GrantAsync(staff, role, zone);
         return await factory.LoginAsync(staff.Username);
     }
 
     /// <summary>A Zone Manager of <paramref name="zone"/>: suppliers and every purchase receipt action there.</summary>
     public static Task<HttpClient> ZoneManagerAsync(this AuthApiFactory factory, FarmingZone zone) =>
-        factory.PurchasingStaffAsync(zone, Perm.Full(PermissionFunctions.PurchaseReceipts), new Perm(PermissionFunctions.Suppliers, true, true, true));
+        factory.PurchasingStaffAsync(zone, StaffRole.ZoneManager);
 
-    /// <summary>An Accountant: All zones supplier payments and read-only purchase receipts.</summary>
-    public static Task<HttpClient> AccountantAsync(this AuthApiFactory factory) =>
-        factory.PurchasingStaffAsync(null, new Perm(PermissionFunctions.SupplierPayments, true, true, Export: true), new Perm(PermissionFunctions.PurchaseReceipts, Export: true));
+    /// <summary>
+    /// An Accountant, at All zones unless <paramref name="zone"/> is given: supplier payments and debts (records with no
+    /// zone, so any pair works), and View of suppliers and purchase receipts.
+    /// </summary>
+    public static Task<HttpClient> AccountantAsync(this AuthApiFactory factory, FarmingZone? zone = null) =>
+        factory.PurchasingStaffAsync(zone, StaffRole.Accountant);
 
     public static async Task<(FarmingZone Zone, Raft Raft)> ZoneWithRaftAsync(this AuthApiFactory factory)
     {

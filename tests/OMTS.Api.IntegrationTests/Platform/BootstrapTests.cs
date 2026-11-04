@@ -58,8 +58,10 @@ public class BootstrapTests
         Assert.Contains(second.Messages, m => m.Contains("already initialized"));
         Assert.Equal(1, await db.Cooperatives.CountAsync());
         Assert.Equal(1, await db.Accounts.CountAsync(a => a.SubjectType == SubjectType.CooperativeOwner));
-        var roleNames = DefaultRoles.All.Select(r => r.Name).ToList();
-        Assert.Equal(2, await db.Roles.CountAsync(r => roleNames.Contains(r.Name)));
+        // Exactly the two fixed roles (BR-FARM-07), found by code.
+        Assert.Equal(
+            FixedRoles.All.Select(r => (r.Code, r.Name)).Order(),
+            (await db.Roles.Select(r => new { r.Code, r.Name }).ToListAsync()).Select(r => (r.Code, r.Name)).Order());
 
         var audit = await db.AuditEvents.Where(e => e.Action == "Cooperative.Created" || e.Action == "Account.Created").ToListAsync();
         Assert.Equal(2, audit.Count);

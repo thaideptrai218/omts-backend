@@ -97,7 +97,7 @@ public class PurchasingSqlServerTests
     {
         await using var host = await FarmingHost.StartAsync();
         var world = await host.WorldAsync();
-        var accountant = await host.StaffAsync(null, new Perm(PermissionFunctions.SupplierPayments, true, true));
+        var accountant = await host.StaffAsync(null, Domain.Enums.StaffRole.Accountant);
         var receipt = await world.CompletedAsync(0, 0, new LineBody(world.Other, 10, 100_000));
 
         var responses = await InParallelAsync(6, _ => accountant.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = receipt.Id(), Amount = 400_000 }));

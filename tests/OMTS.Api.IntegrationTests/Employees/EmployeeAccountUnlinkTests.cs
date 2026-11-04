@@ -56,9 +56,9 @@ public class EmployeeAccountUnlinkTests(AuthApiFactory factory) : IClassFixture<
     [Fact]
     public async Task Delete_unlinks_once_with_one_audit_row_and_a_repeat_changes_nothing()
     {
-        var (owner, zone, role) = await SetupAsync(factory);
+        var (owner, zone, _) = await SetupAsync(factory);
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        await factory.GrantAsync(staff, role, zone);
+        await factory.GrantAsync(staff, StaffRole.ZoneManager, zone);
         var id = IdOf(await CreateAsync(owner, Profile($"Unlink {NewCode()}", NewPhone(), zone.Id, b => b["accountId"] = staff.Id)));
 
         var unlinked = await (await owner.DeleteAsync($"/api/employees/{id}/account")).ReadAsync(HttpStatusCode.OK);
@@ -87,8 +87,7 @@ public class EmployeeAccountUnlinkTests(AuthApiFactory factory) : IClassFixture<
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
         var id = IdOf(await CreateAsync(owner, Profile($"Guarded {NewCode()}", NewPhone(), zone.Id, b => b["accountId"] = staff.Id)));
         var manager = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
-        await factory.GrantAsync(manager, await factory.AddRoleAsync($"ZM {NewCode()}",
-            (PermissionFunctions.LaborWorkers, true, true, true), (PermissionFunctions.Attendance, true, true, true)), null);
+        await factory.GrantAsync(manager, StaffRole.ZoneManager, null);
         var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
 
         foreach (var client in new[] { await factory.LoginAsync(manager.Username), await factory.LoginAsync(trader.Username) })
