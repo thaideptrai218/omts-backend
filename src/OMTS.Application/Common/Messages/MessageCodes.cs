@@ -55,7 +55,7 @@ public static class MessageCodes
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-22, the
     /// related record of a notification no longer exists (ACCOUNT-08 is new in PR 0.5).
     /// </summary>
-    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal) { Account22 };
+    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal) { Account22, Water02 };
 
     /// <summary>
     /// Codes of the old list. Most are only sent as <c>legacyCode</c> next to the new code, for one release.
