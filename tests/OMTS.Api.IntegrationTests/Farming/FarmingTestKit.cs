@@ -204,15 +204,16 @@ public static class FarmingTestKit
 
     public static string Text(this JsonElement element, string property) => element.GetProperty(property).GetString()!;
 
+    /// <summary>A cycle row as it stands in the database: Closed with a close date, else Open.</summary>
     public static async Task<CultivationCycle> AddCycleAsync(
-        this AuthApiFactory factory, Guid raftId, DateTimeOffset openedAt, DateTimeOffset? closedAt = null)
+        this AuthApiFactory factory, Guid raftId, DateOnly startDate, DateOnly? closeDate = null)
     {
         var cycle = new CultivationCycle
         {
             RaftId = raftId,
-            OpenedAt = openedAt,
-            ClosedAt = closedAt,
-            StatusId = closedAt is null ? StatusIds.CultivationCycle.Open : StatusIds.CultivationCycle.Closed,
+            StartDate = startDate,
+            CloseDate = closeDate,
+            StatusId = closeDate is null ? StatusIds.CultivationCycle.Open : StatusIds.CultivationCycle.Closed,
         };
         await factory.UseDbAsync(db => db.CultivationCycles.Add(cycle));
         return cycle;

@@ -47,7 +47,7 @@ public class RaftLaneTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
     }
 
     [Fact]
-    public async Task List_counts_lanes_in_use_and_the_view_of_today_shows_status_only()
+    public async Task List_counts_lanes_in_use_and_the_view_of_today_shows_status_and_state()
     {
         var owner = (await factory.OwnerAsync()).Client;
         var zone = await owner.CreateZoneAsync();
@@ -61,7 +61,7 @@ public class RaftLaneTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         var today = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/lanes/today");
         Assert.Equal((raft.Id(), raft.Text("code"), Today.ToString("yyyy-MM-dd")), (today.GetProperty("raftId").GetGuid(), today.Text("raftCode"), today.Text("date")));
         Assert.Equal(["In Use", "In Use", "Removed"], today.GetProperty("lanes").EnumerateArray().Select(l => l.Text("status")));
-        Assert.All(today.GetProperty("lanes").EnumerateArray(), l => Assert.False(l.TryGetProperty("state", out _)));
+        Assert.All(today.GetProperty("lanes").EnumerateArray(), l => Assert.Equal("NotSeeded", l.Text("state")));
     }
 
     // FARM-04.2.E1: nothing is saved, the cycle is named, and the same edit with the old number goes through.
@@ -71,14 +71,14 @@ public class RaftLaneTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         var owner = (await factory.OwnerAsync()).Client;
         var body = NewRaftBody(lanes: 2);
         var raft = await owner.CreateRaftAsync((await owner.CreateZoneAsync()).Id(), body);
-        var cycle = await factory.AddCycleAsync(raft.Id(), DateTimeOffset.UtcNow.AddDays(-3));
+        var cycle = await factory.AddCycleAsync(raft.Id(), Today.AddDays(-3));
 
         foreach (var count in new[] { 1, 3 })
         {
             var blocked = await (await owner.PutAsJsonAsync($"/api/rafts/{raft.Id()}", body with { LaneCount = count, ConditionNotes = "Rope worn", RowVersion = raft.Text("rowVersion") }))
                 .ReadAsync(HttpStatusCode.Conflict);
             Assert.Equal(("MSG-GEN-06", cycle.Id), (blocked.Text("code"), blocked.GetProperty("cycleId").GetGuid()));
-            Assert.Contains("cultivation cycle opened", blocked.Text("detail"));
+            Assert.Contains("cultivation cycle started", blocked.Text("detail"));
         }
 
         var kept = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}");
@@ -98,7 +98,7 @@ public class RaftLaneTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         var owner = (await factory.OwnerAsync()).Client;
         var body = NewRaftBody(lanes: 2);
         var raft = await owner.CreateRaftAsync((await owner.CreateZoneAsync()).Id(), body);
-        await factory.AddCycleAsync(raft.Id(), DateTimeOffset.UtcNow.AddDays(-60), DateTimeOffset.UtcNow.AddDays(-30));
+        await factory.AddCycleAsync(raft.Id(), Today.AddDays(-60), Today.AddDays(-30));
 
         Assert.Equal([1], (await owner.EditRaftAsync(raft.Id(), body with { LaneCount = 1, RowVersion = raft.Text("rowVersion") })).LaneNumbers(InUse));
     }

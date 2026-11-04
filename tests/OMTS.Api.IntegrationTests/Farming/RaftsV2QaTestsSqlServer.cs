@@ -243,7 +243,7 @@ public class RaftsV2QaTestsSqlServer
         var owner = host.Owner.Client;
         var body = NewRaftBody(lanes: 2);
         var raft = await owner.CreateRaftAsync((await owner.CreateZoneAsync()).Id(), body);
-        var cycle = new OMTS.Domain.Entities.Cultivation.CultivationCycle { RaftId = raft.Id(), OpenedAt = DateTimeOffset.UtcNow, StatusId = StatusIds.CultivationCycle.Open };
+        var cycle = new OMTS.Domain.Entities.Cultivation.CultivationCycle { RaftId = raft.Id(), StartDate = Today, StatusId = StatusIds.CultivationCycle.Open };
         await host.UseDbAsync(db => db.CultivationCycles.Add(cycle));
 
         var blocked = await (await owner.PutAsJsonAsync($"/api/rafts/{raft.Id()}", body with { LaneCount = 3, RowVersion = raft.Text("rowVersion") })).ReadAsync(HttpStatusCode.Conflict);

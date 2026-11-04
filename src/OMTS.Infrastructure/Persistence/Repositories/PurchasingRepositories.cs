@@ -78,9 +78,8 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
         return await query.OrderBy(i => i.Code).ToListAsync(cancellationToken);
     }
 
-    public async Task<bool> IsUsedAsync(Guid itemId, CancellationToken cancellationToken) =>
-        await db.PurchaseReceiptLines.AnyAsync(l => l.ItemId == itemId, cancellationToken)
-        || await db.CultivationCycles.AnyAsync(c => c.PlannedSeedTypeId == itemId, cancellationToken);
+    public Task<bool> IsUsedAsync(Guid itemId, CancellationToken cancellationToken) =>
+        db.PurchaseReceiptLines.AnyAsync(l => l.ItemId == itemId, cancellationToken);
 
     public async Task<IReadOnlySet<Guid>> UsedAmongAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken)
     {
@@ -89,10 +88,7 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
             return new HashSet<Guid>();
         }
 
-        var onReceipts = await db.PurchaseReceiptLines.Where(l => itemIds.Contains(l.ItemId)).Select(l => l.ItemId).Distinct().ToListAsync(cancellationToken);
-        var onCycles = await db.CultivationCycles.Where(c => c.PlannedSeedTypeId != null && itemIds.Contains(c.PlannedSeedTypeId.Value))
-            .Select(c => c.PlannedSeedTypeId!.Value).Distinct().ToListAsync(cancellationToken);
-        return onReceipts.Concat(onCycles).ToHashSet();
+        return (await db.PurchaseReceiptLines.Where(l => itemIds.Contains(l.ItemId)).Select(l => l.ItemId).Distinct().ToListAsync(cancellationToken)).ToHashSet();
     }
 
     public void Add(FarmingInputItem item) => db.FarmingInputItems.Add(item);

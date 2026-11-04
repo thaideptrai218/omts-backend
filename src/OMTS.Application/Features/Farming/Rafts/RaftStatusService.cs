@@ -3,15 +3,15 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Farming.Zones;
 using OMTS.Domain.Constants;
-using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
 
 namespace OMTS.Application.Features.Farming.Rafts;
 
 /// <summary>FARM-04.3 Discontinue and FARM-04.4 Resume, Cooperative Owner only (API filter). Lanes and photos are kept as they are.</summary>
-public sealed class RaftStatusService(IRaftRepository rafts, RaftViews views, StatusChangeService statusChanges, IUnitOfWork unitOfWork)
+public sealed class RaftStatusService(IRaftRepository rafts, ICultivationCycleQuery cycles, RaftViews views, StatusChangeService statusChanges, IUnitOfWork unitOfWork)
 {
     /// <summary>In Use → Discontinued, only without an open cultivation cycle.</summary>
     public async Task<Result<RaftView>> DiscontinueAsync(Guid raftId, ChangeStatusRequest request, CancellationToken cancellationToken)
@@ -28,7 +28,7 @@ public sealed class RaftStatusService(IRaftRepository rafts, RaftViews views, St
         }
 
         // FARM-04.3.E1: MSG-GEN-06 naming the open cycle (MSG61 before).
-        if (await rafts.GetOpenCycleAsync(raft.Id, cancellationToken) is { } openCycle)
+        if (await cycles.OpenCycleAsync(raft.Id, cancellationToken) is { } openCycle)
         {
             return OpenCycle(openCycle, MessageCodes.Legacy.Msg61);
         }
@@ -58,9 +58,9 @@ public sealed class RaftStatusService(IRaftRepository rafts, RaftViews views, St
     }
 
     /// <summary>MSG-GEN-06 naming the open cultivation cycle, with its <c>cycleId</c>.</summary>
-    internal static AppError OpenCycle(CultivationCycle cycle, string legacyCode = MessageCodes.Legacy.Msg11)
+    internal static AppError OpenCycle(CycleSpan cycle, string legacyCode = MessageCodes.Legacy.Msg11)
     {
-        var name = $"cultivation cycle opened {Common.BusinessClock.ToBusinessDate(cycle.OpenedAt):dd/MM/yyyy}";
+        var name = $"cultivation cycle started {cycle.StartDate:dd/MM/yyyy}";
         return AppError.Conflict(UserMessages.StillInUse(1, name) with { LegacyCode = legacyCode }, new Dictionary<string, object?> { ["cycleId"] = cycle.Id });
     }
 

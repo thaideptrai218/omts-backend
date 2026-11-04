@@ -117,7 +117,7 @@ public class PurchasingFlowTests(AuthApiFactory factory) : IClassFixture<AuthApi
         var seed = await CreateItemAsync(owner, "Seed");
         var receiptId = await CompletedReceiptAsync(owner, supplierId, zone.Id, seed, paidNow: 0);
         var lotId = await factory.QueryAsync(db => db.SeedReceiptLots.Where(l => l.PurchaseReceiptLine.ReceiptId == receiptId).Select(l => l.Id).SingleAsync());
-        var cycle = new CultivationCycle { RaftId = raft.Id, OpenedAt = DateTimeOffset.UtcNow };
+        var cycle = new CultivationCycle { RaftId = raft.Id, StartDate = DateOnly.Parse(Today()) };
         await factory.UseDbAsync(db =>
         {
             db.CultivationCycles.Add(cycle);

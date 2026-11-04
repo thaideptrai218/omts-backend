@@ -28,12 +28,18 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTimeOffset?>("ClosedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("ClosingSummary")
+                    b.Property<string>("Assessment")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateOnly?>("CloseDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset?>("CloseRemindedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<bool>("ClosedEarly")
+                        .HasColumnType("bit");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
@@ -41,11 +47,12 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTimeOffset>("OpenedAt")
-                        .HasColumnType("datetimeoffset");
+                    b.Property<DateOnly?>("ExpectedHarvestDate")
+                        .HasColumnType("date");
 
-                    b.Property<Guid?>("PlannedSeedTypeId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<decimal?>("ExpectedSeedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
 
                     b.Property<Guid>("RaftId")
                         .HasColumnType("uniqueidentifier");
@@ -56,15 +63,18 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
-                    b.Property<DateTimeOffset?>("SeedingCompletedAt")
-                        .HasColumnType("datetimeoffset");
+                    b.Property<DateOnly?>("SeedingCompletedOn")
+                        .HasColumnType("date");
 
-                    b.Property<string>("SeedingCompletionReason")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
 
                     b.Property<int>("StatusId")
                         .HasColumnType("int");
+
+                    b.Property<decimal?>("TargetYieldKg")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
@@ -74,14 +84,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PlannedSeedTypeId");
-
                     b.HasIndex("RaftId")
                         .IsUnique()
                         .HasDatabaseName("UX_CultivationCycles_RaftId_Open")
                         .HasFilter("[StatusId] = 601");
 
                     b.HasIndex("StatusId");
+
+                    b.HasIndex("RaftId", "StartDate");
 
                     b.ToTable("CultivationCycles");
                 });
@@ -2213,11 +2223,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Id = 9,
                             AllowedPerformers = "Cooperative Owner; Zone Manager",
                             FromStatusId = 601,
-                            GuardCondition = "The seeded portion has been fully harvested or written off (BR-21).",
+                            GuardCondition = "Every seeded lane is Harvested; any other close is an early close the Cooperative Owner approves first (BR-CYCLE-07).",
                             ReasonRequired = false,
                             ToStatusId = 602,
                             TriggerEvent = "Action",
-                            UseCases = "UC27"
+                            UseCases = "CYCLE-06"
                         },
                         new
                         {
@@ -2974,11 +2984,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationCycle", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Purchasing.FarmingInputItem", "PlannedSeedType")
-                        .WithMany()
-                        .HasForeignKey("PlannedSeedTypeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
                         .WithMany("CultivationCycles")
                         .HasForeignKey("RaftId")
@@ -2990,8 +2995,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.Navigation("PlannedSeedType");
 
                     b.Navigation("Raft");
 

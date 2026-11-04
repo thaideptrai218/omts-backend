@@ -179,7 +179,7 @@ public static class PurchasingTestKit
     public static async Task StockAsync(this AuthApiFactory factory, Guid raftId, Guid receiptLineId, decimal? quantity)
     {
         var lotId = await factory.QueryAsync(db => db.SeedReceiptLots.Where(l => l.PurchaseReceiptLineId == receiptLineId).Select(l => l.Id).SingleAsync());
-        var cycle = new CultivationCycle { RaftId = raftId, OpenedAt = DateTimeOffset.UtcNow };
+        var cycle = new CultivationCycle { RaftId = raftId, StartDate = Today };
         await factory.UseDbAsync(db =>
         {
             db.CultivationCycles.Add(cycle);
