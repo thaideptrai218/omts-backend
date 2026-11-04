@@ -118,7 +118,7 @@ public class DemoDataSeedQaTests
         Assert.Equal(DeploymentBootstrapper.Success, demo.ExitCode);
         Assert.Contains(demo.Messages, m => m.Contains("already initialized"));
         // Every step had work to do, the Owner's login included.
-        Assert.Equal(11, demo.Messages.Count(m => m.StartsWith("Demo ")));
+        Assert.Equal(12, demo.Messages.Count(m => m.StartsWith("Demo ")));
         Assert.All(demo.Messages.Where(m => m.StartsWith("Demo ")), m => Assert.EndsWith("created.", m));
         Assert.Equal(1, demoCounts["Cooperatives"]);
         Assert.Equal(3, demoCounts["FarmingZones"]);
@@ -136,6 +136,11 @@ public class DemoDataSeedQaTests
         Assert.Equal(HttpStatusCode.OK, demoLogin.Status);
         Assert.False(demoLogin.Body.GetProperty("mustChangePassword").GetBoolean());
         Assert.Equal(HttpStatusCode.Unauthorized, (await LoginAsync(client, "owner", OwnerTemporaryPassword)).Status);
+
+        // DEBT-01: the fictional receiving bank account, through the real service and the fake of Development.
+        client.DefaultRequestHeaders.Authorization = new("Bearer", demoLogin.Body.GetProperty("accessToken").GetString());
+        var receiving = await client.GetFromJsonAsync<JsonElement>("/api/cooperative/receiving-bank-account");
+        Assert.Equal("DEMO00000001", receiving.GetProperty("account").GetProperty("accountNumber").GetString());
     }
 
     // ACS-04 through the API, then a rerun: the Owner, and the staff account that had to change its password at first login.

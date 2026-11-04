@@ -21,7 +21,7 @@ public class CooperativeProfileTests
     {
         using var api = new AuthApiFactory();
         var cooperative = await api.EnsureCooperativeAsync();
-        await api.UpdateAsync<Cooperative>(cooperative.Id, c => c.BankAccount = new BankAccountInfo { BankName = "VCB", AccountNumber = "0011223344", AccountHolderName = "HTX" });
+        await api.UpdateAsync<Cooperative>(cooperative.Id, c => c.BankAccount = new ReceivingBankAccount { BankBin = "970436", BankName = "VCB", AccountNumber = "0011223344", AccountHolderName = "HTX" });
         var owner = await OwnerAsync(api);
 
         var before = await owner.GetFromJsonAsync<JsonElement>("/api/cooperative/profile");
