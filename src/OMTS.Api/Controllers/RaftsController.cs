@@ -14,19 +14,19 @@ namespace OMTS.Api.Controllers;
 /// </summary>
 [ApiController]
 [Authorize]
-public sealed class RaftsController(RaftService rafts, RaftPhotoService photos, RaftStatusService statuses) : ControllerBase
+public sealed class RaftsController(RaftReadService reads, RaftService rafts, RaftPhotoService photos, RaftStatusService statuses) : ControllerBase
 {
     [HttpGet("api/zones/{zoneId:guid}/rafts")]
     [ProducesResponseType<IReadOnlyList<RaftListItem>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> List(Guid zoneId, int? statusId, CancellationToken cancellationToken) =>
-        (await rafts.ListAsync(zoneId, statusId, cancellationToken)).ToActionResult(Ok);
+        (await reads.ListAsync(zoneId, statusId, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>The proposed code of a new raft of the zone ({zone code}-B01, -B02…; GBR-03); the Owner may type another one.</summary>
     [HttpGet("api/zones/{zoneId:guid}/rafts/next-code")]
     [RequireCooperativeOwner]
     [ProducesResponseType<RaftCodeProposal>(StatusCodes.Status200OK)]
     public async Task<IActionResult> NextCode(Guid zoneId, CancellationToken cancellationToken) =>
-        (await rafts.ProposeCodeAsync(zoneId, cancellationToken)).ToActionResult(Ok);
+        (await reads.ProposeCodeAsync(zoneId, cancellationToken)).ToActionResult(Ok);
 
     [HttpPost("api/zones/{zoneId:guid}/rafts")]
     [RequireCooperativeOwner]
@@ -37,13 +37,13 @@ public sealed class RaftsController(RaftService rafts, RaftPhotoService photos, 
     [HttpGet("api/rafts/{raftId:guid}")]
     [ProducesResponseType<RaftView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Get(Guid raftId, CancellationToken cancellationToken) =>
-        (await rafts.GetAsync(raftId, cancellationToken)).ToActionResult(Ok);
+        (await reads.GetAsync(raftId, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>The lanes of the raft today with their status In Use or Removed; CYCLE adds the derived lane state.</summary>
     [HttpGet("api/rafts/{raftId:guid}/lanes/today")]
     [ProducesResponseType<RaftLanesToday>(StatusCodes.Status200OK)]
     public async Task<IActionResult> LanesToday(Guid raftId, CancellationToken cancellationToken) =>
-        (await rafts.LanesTodayAsync(raftId, cancellationToken)).ToActionResult(Ok);
+        (await reads.LanesTodayAsync(raftId, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>A Discontinued raft answers MSG-GEN-09; a new number of lanes answers MSG-GEN-06 while a cycle is open.</summary>
     [HttpPut("api/rafts/{raftId:guid}")]

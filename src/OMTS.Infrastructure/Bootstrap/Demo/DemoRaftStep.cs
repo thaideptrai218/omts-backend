@@ -57,14 +57,14 @@ internal sealed class DemoRaftStep : IDemoSeedStep
         DemoSeedContext context, RaftService service, decimal? latitude, decimal? longitude, RaftView raft, int number, CancellationToken cancellationToken)
     {
         var photos = context.Get<RaftPhotoService>();
+        var current = raft;
         for (var photo = 1; photo <= 3 - number; photo++)
         {
-            DemoSeedContext.Ensure(await photos.AddAsync(raft.Id, DemoFiles.RaftPhoto(photo), cancellationToken), $"photo {photo} of raft {raft.Code}");
+            current = DemoSeedContext.Ensure(await photos.AddAsync(raft.Id, DemoFiles.RaftPhoto(photo), cancellationToken), $"photo {photo} of raft {raft.Code}").Raft;
         }
 
         if (number == 1)
         {
-            var current = DemoSeedContext.Ensure(await service.GetAsync(raft.Id, cancellationToken), $"reading raft {raft.Code}");
             var fewerLanes = Request(latitude, longitude, raft.Code, number) with { LaneCount = raft.LaneCount - 1, RowVersion = current.RowVersion };
             DemoSeedContext.Ensure(await service.UpdateAsync(raft.Id, fewerLanes, cancellationToken), $"removing a lane of raft {raft.Code}");
         }

@@ -83,6 +83,7 @@ public static class DependencyInjection
         services.AddScoped<ZoneLicenseReminderService>();
         services.AddScoped<CertificationReminderService>();
         services.AddScoped<RaftService>();
+        services.AddScoped<RaftReadService>();
         services.AddScoped<RaftViews>();
         services.AddScoped<RaftPhotoService>();
         services.AddScoped<RaftStatusService>();
