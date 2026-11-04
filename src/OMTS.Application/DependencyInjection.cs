@@ -101,6 +101,7 @@ public static class DependencyInjection
         services.AddScoped<WaterMeterPhotoStore>();
         services.AddScoped<WaterAlertService>();
         services.AddScoped<WaterCorrectionNotifier>();
+        services.AddScoped<WaterCorrectionPreconditions>();
         services.AddScoped<WaterMeasurementViewBuilder>();
         services.AddScoped<WaterMeasurementRecordingService>();
         services.AddScoped<WaterMeasurementCorrectionService>();
