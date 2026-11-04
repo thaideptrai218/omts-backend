@@ -105,6 +105,24 @@ public static class UserMessages
             ["values_outside"] = valuesOutside,
         },
     };
+
+    /// <summary>MSG-WATER-04 (BR-WATER-05): an earlier water alert was withdrawn after a correction or a void.</summary>
+    /// <param name="measuredAt">The time of the alert being withdrawn, shown in Vietnam time.</param>
+    /// <param name="correctedOrVoided">"corrected" or "voided".</param>
+    public static UserMessage WaterAlertWithdrawn(string zoneName, DateTimeOffset measuredAt, string userName, string correctedOrVoided, string reason) => new(
+        Water04,
+        $"The water alert of zone {zoneName} (measured on {BusinessClock.Format(measuredAt)}) was withdrawn: {userName} {correctedOrVoided} the measurement. Reason: {reason}.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["zone_name"] = zoneName,
+            ["measurement_time"] = measuredAt.ToOffset(BusinessClock.UtcOffset),
+            ["user_name"] = userName,
+            ["corrected_or_voided"] = correctedOrVoided,
+            ["reason"] = reason,
+        },
+    };
+
     /// <summary>MSG-WATER-05: the minimum of an indicator is not less than its maximum.</summary>
     /// <param name="indicator">e.g. "pH", or "pH and salinity" when both are wrong.</param>
     public static UserMessage MinimumNotLessThanMaximum(string indicator) => new(

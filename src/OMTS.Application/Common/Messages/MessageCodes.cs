@@ -22,6 +22,7 @@ public static class MessageCodes
     public const string Water01 = "MSG-WATER-01";
     public const string Water02 = "MSG-WATER-02";
     public const string Water03 = "MSG-WATER-03";
+    public const string Water04 = "MSG-WATER-04";
     public const string Water05 = "MSG-WATER-05";
     public const string Water06 = "MSG-WATER-06";
 
@@ -55,7 +56,7 @@ public static class MessageCodes
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-22, the
     /// related record of a notification no longer exists (ACCOUNT-08 is new in PR 0.5).
     /// </summary>
-    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal) { Account22, Water02 };
+    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal) { Account22, Water02, Water04 };
 
     /// <summary>
     /// Codes of the old list. Most are only sent as <c>legacyCode</c> next to the new code, for one release.

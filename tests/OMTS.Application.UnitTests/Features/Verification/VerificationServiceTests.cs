@@ -279,6 +279,10 @@ public partial class VerificationServiceTests
 
         public Task ReloadAsync(object entity, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
+        public void DiscardChanges()
+        {
+        }
+
         public void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion)
         {
         }

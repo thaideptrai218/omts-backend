@@ -13,6 +13,10 @@ public sealed class ZoneAccessGuard(ICurrentUser currentUser, PermissionService 
     public async Task<bool> AllowsAsync(string function, PermissionAction action, Guid zoneId, CancellationToken cancellationToken) =>
         await AccessAsync(cancellationToken) is { } access && access.Allows(function, action, PermissionScope.ZoneScoped, zoneId);
 
+    /// <summary>Whether the caller is a Cooperative Owner, for rules that limit other roles to their own records.</summary>
+    public async Task<bool> IsCooperativeOwnerAsync(CancellationToken cancellationToken) =>
+        await AccessAsync(cancellationToken) is { IsCooperativeOwner: true };
+
     /// <summary>Zones a list may return for the caller.</summary>
     public async Task<PermittedZones> PermittedZonesAsync(string function, PermissionAction action, CancellationToken cancellationToken) =>
         (await AccessAsync(cancellationToken))?.PermittedZonesFor(function, action) ?? PermittedZones.None;

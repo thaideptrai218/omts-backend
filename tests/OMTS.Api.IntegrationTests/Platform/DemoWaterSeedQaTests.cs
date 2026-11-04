@@ -235,6 +235,8 @@ public class DemoWaterSeedQaTests
 
         public Task ReloadAsync(object entity, CancellationToken cancellationToken = default) => _inner.ReloadAsync(entity, cancellationToken);
 
+        public void DiscardChanges() => _inner.DiscardChanges();
+
         public void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion) => _inner.ExpectRowVersion(entity, rowVersion);
 
         public void MarkChanged(AuditableEntity entity) => _inner.MarkChanged(entity);

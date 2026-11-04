@@ -27,10 +27,17 @@ internal sealed class UnitOfWork(OmtsDbContext db) : IUnitOfWork
             // 2601/2627: duplicate key in a unique index or constraint.
             throw new DuplicateRecordException(exception);
         }
+        catch (DbUpdateException exception) when (exception.InnerException is SqlException { Number: 1205 })
+        {
+            // 1205: this save was the deadlock victim and changed nothing. Parallel saves met, as in a row version conflict.
+            throw new ConcurrencyConflictException(exception);
+        }
     }
 
     public Task ReloadAsync(object entity, CancellationToken cancellationToken = default) =>
         db.Entry(entity).ReloadAsync(cancellationToken);
+
+    public void DiscardChanges() => db.ChangeTracker.Clear();
 
     public void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion) =>
         db.Entry(entity).Property(e => e.RowVersion).OriginalValue = rowVersion;
