@@ -204,6 +204,25 @@ public sealed class VerificationService(
         return request;
     }
 
+    /// <summary>
+    /// A change or removal of the phone number or email cancels the earlier codes and tokens (BR-ACCOUNT-09): every request
+    /// of the account on that channel, so a code or token on the old contact, or on a number entered before the change, no
+    /// longer works. They answer like any cancelled code, MSG-ACCOUNT-16, which does not say why. The caller's save stores this
+    /// together with the change, so a parallel entry on one of them makes that save conflict rather than slip through.
+    /// </summary>
+    public async Task CancelForChangedContactAsync(Guid accountId, VerificationChannel channel, CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        foreach (var request in await codes.ListUsableOfAccountAsync(accountId, channel, now, cancellationToken))
+        {
+            // The token that proves the new contact is consumed in this same save: it is used, not cancelled.
+            if (request.TokenConsumedAt is null)
+            {
+                request.CancelledAt = now;
+            }
+        }
+    }
+
     public static AppError ServiceDown(VerificationChannel channel) => VerificationErrors.ServiceDown(channel);
 
     /// <summary>

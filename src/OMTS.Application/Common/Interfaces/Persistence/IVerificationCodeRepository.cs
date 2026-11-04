@@ -33,4 +33,7 @@ public interface IVerificationCodeRepository
     /// </summary>
     Task<IReadOnlyList<VerificationCode>> GetRecentAsync(
         VerificationPurpose purpose, Guid? accountId, string target, DateTimeOffset since, CancellationToken cancellationToken);
+
+    /// <summary>Requests of the account on one channel whose code or token can still be used.</summary>
+    Task<IReadOnlyList<VerificationCode>> ListUsableOfAccountAsync(Guid accountId, VerificationChannel channel, DateTimeOffset now, CancellationToken cancellationToken);
 }

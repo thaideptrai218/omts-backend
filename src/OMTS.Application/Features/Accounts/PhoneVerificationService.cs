@@ -82,6 +82,11 @@ public sealed class PhoneVerificationService(
         }
 
         var before = new { account.PhoneNumber, account.PhoneVerifiedAt };
+        if (account.PhoneNumber != phone)
+        {
+            await verification.CancelForChangedContactAsync(account.Id, VerificationChannel.Sms, cancellationToken);
+        }
+
         account.PhoneNumber = phone;
         account.PhoneVerifiedAt = timeProvider.GetUtcNow();
         if (account.SubjectType == SubjectType.Trader)

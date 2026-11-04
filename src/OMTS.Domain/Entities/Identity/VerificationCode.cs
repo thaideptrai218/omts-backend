@@ -43,7 +43,7 @@ public class VerificationCode : Entity
     /// <summary>When the code was entered correctly; it can never be used again.</summary>
     public DateTimeOffset? ConsumedAt { get; set; }
 
-    /// <summary>A newer request for the same purpose (other target or delivery method) replaced this one.</summary>
+    /// <summary>A newer request replaced this one, or the phone number or email of the account changed; its code and token stop working.</summary>
     public DateTimeOffset? CancelledAt { get; set; }
 
     public string? TokenHash { get; set; }

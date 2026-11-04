@@ -261,61 +261,125 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
         Assert.Equal(HttpStatusCode.Created, corrected.StatusCode);
     }
 
-    // QA-H2 (BR-ACCOUNT-07, BR-ACCOUNT-09, ACCOUNT-03 step 7): a code or token of a recovery survives the change of the number it
-    // was sent to. The Owner replaces the number of a staff member, say because the phone was stolen, and the old number still sets the password.
+    // BR-ACCOUNT-09, ACCOUNT-03 step 7: a change of the number cancels a recovery code sent to the old one, say because the phone
+    // was stolen. It gives no token, and answers as any cancelled code does, without saying why.
     [Fact]
-    public async Task A_recovery_on_a_number_stops_when_the_owner_changes_that_number()
+    public async Task A_change_of_the_number_cancels_the_recovery_code_sent_to_the_old_number()
     {
         var owner = await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Pw)).Username, Pw);
-        var staff = await factory.AddAccountAsync(NewCode(), Pw, SubjectType.Staff);
-        await factory.GrantAsync(staff, StaffRole.Accountant, null);
+        var staff = await AddStaffAsync();
         var thief = factory.CreateClient();
-        var started = await thief.PostAsJsonAsync("/api/auth/recovery", new { identifier = staff.PhoneNumber });
-        var requestId = (await started.BodyAsync()).GetProperty("requestId").GetGuid();
+        var requestId = await StartRecoveryAsync(thief, staff.PhoneNumber!);
         var code = factory.LastSmsCode(staff.PhoneNumber!);
 
-        var rowVersion = (await owner.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/accounts/{staff.Id}")).GetProperty("rowVersion").GetString();
-        var edited = await owner.PutAsJsonAsync($"/api/accounts/{staff.Id}", new { displayName = "A", username = staff.Username, phoneNumber = NewPhone(), rowVersion });
-        Assert.Equal(HttpStatusCode.OK, edited.StatusCode);
+        await EditStaffAsync(owner, staff, NewPhone());
 
-        var entered = await thief.EnterAsync(requestId, code);
-        if (entered.IsSuccessStatusCode)
-        {
-            var thiefPassword = NewPassword();
-            var token = (await entered.BodyAsync()).GetProperty("verificationToken").GetString();
-            var reset = await thief.PostAsJsonAsync("/api/auth/recovery/reset", new { verificationToken = token, newPassword = thiefPassword, passwordConfirmation = thiefPassword });
-            Assert.Equal("MSG-ACCOUNT-16", await reset.ErrorCodeAsync());
-        }
-
-        var stored = await factory.QueryAsync(db => db.Accounts.AsNoTracking().SingleAsync(a => a.Id == staff.Id));
-        Assert.Equal(staff.PasswordHash, stored.PasswordHash);
+        Assert.Equal("MSG-ACCOUNT-16", await (await thief.EnterAsync(requestId, code)).ErrorCodeAsync());
+        Assert.Equal(staff.PasswordHash, (await StoredAsync(staff)).PasswordHash);
     }
 
-    // QA-L5 (BR-ACCOUNT-09: a change of the number cancels the earlier code): the token for the old number puts it back
-    // verified, in place of the number the Owner has just entered.
+    // BR-ACCOUNT-09: a token issued on the old number resets nothing after the change either.
     [Fact]
-    public async Task A_phone_step_on_a_number_stops_when_the_owner_changes_that_number()
+    public async Task A_change_of_the_number_cancels_a_recovery_token_of_the_old_number()
+    {
+        var owner = await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Pw)).Username, Pw);
+        var staff = await AddStaffAsync();
+        var thief = factory.CreateClient();
+        var token = await VerifyAsync(thief, await StartRecoveryAsync(thief, staff.PhoneNumber!), factory.LastSmsCode(staff.PhoneNumber!));
+
+        await EditStaffAsync(owner, staff, NewPhone());
+
+        Assert.Equal("MSG-ACCOUNT-16", await (await ResetAsync(thief, token)).ErrorCodeAsync());
+        Assert.Equal(staff.PasswordHash, (await StoredAsync(staff)).PasswordHash);
+    }
+
+    // BR-ACCOUNT-09: the same when the holder changes the number in ACCOUNT-05, and a token of the new number then still works once.
+    [Fact]
+    public async Task A_change_of_the_number_by_its_holder_cancels_the_recovery_of_the_old_number()
+    {
+        var holder = await factory.AddAccountAsync(NewCode(), Pw, SubjectType.Trader);
+        var oldPhone = holder.PhoneNumber!;
+        var client = await factory.LoginAsync(holder.Username, Pw);
+        var thief = factory.CreateClient();
+        var token = await VerifyAsync(thief, await StartRecoveryAsync(thief, oldPhone), factory.LastSmsCode(oldPhone));
+
+        var newPhone = NewPhone();
+        var changeId = await VerificationIdAsync(await client.PostAsJsonAsync("/api/me/contact-changes", new { channel = "Sms", target = newPhone, currentPassword = Pw }));
+        var changeToken = await VerifyAsync(client, changeId, factory.LastSmsCode(newPhone));
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/me/contact-changes/confirm", new { verificationToken = changeToken })).StatusCode);
+
+        Assert.Equal("MSG-ACCOUNT-16", await (await ResetAsync(thief, token)).ErrorCodeAsync());
+        Assert.Equal(newPhone, (await StoredAsync(holder)).PhoneNumber);
+    }
+
+    // BR-ACCOUNT-09: removing the email cancels a recovery token of that email; the phone number keeps working.
+    [Fact]
+    public async Task Removing_the_email_cancels_the_recovery_of_that_email_and_not_of_the_phone()
+    {
+        var owner = await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Pw)).Username, Pw);
+        var email = $"staff-{NewCode()}@example.com";
+        var staff = await AddStaffAsync(a => { a.Email = email; a.EmailVerifiedAt = DateTimeOffset.UtcNow; });
+        var anonymous = factory.CreateClient();
+        var emailRecovery = await StartRecoveryAsync(anonymous, email);
+        var emailToken = await VerifyAsync(anonymous, emailRecovery, factory.LastEmailCode(email));
+        await factory.AgeAsync(emailRecovery, TwoMinutes);
+        var phoneToken = await VerifyAsync(anonymous, await StartRecoveryAsync(anonymous, staff.PhoneNumber!), factory.LastSmsCode(staff.PhoneNumber!));
+
+        await EditStaffAsync(owner, staff, staff.PhoneNumber!);
+
+        Assert.Null((await StoredAsync(staff)).Email);
+        Assert.Equal("MSG-ACCOUNT-16", await (await ResetAsync(anonymous, emailToken)).ErrorCodeAsync());
+        Assert.Equal(HttpStatusCode.OK, (await ResetAsync(anonymous, phoneToken)).StatusCode);
+    }
+
+    // ACCOUNT-03 step 7: a token resets only the account that still has that verified contact, also when no change cancelled it.
+    [Fact]
+    public async Task A_recovery_token_resets_only_the_account_that_still_has_its_contact()
+    {
+        var staff = await AddStaffAsync();
+        var anonymous = factory.CreateClient();
+        var token = await VerifyAsync(anonymous, await StartRecoveryAsync(anonymous, staff.PhoneNumber!), factory.LastSmsCode(staff.PhoneNumber!));
+
+        await factory.UpdateAsync<Account>(staff.Id, a => a.PhoneNumber = NewPhone());
+
+        Assert.Equal("MSG-ACCOUNT-16", await (await ResetAsync(anonymous, token)).ErrorCodeAsync());
+        Assert.Equal(staff.PasswordHash, (await StoredAsync(staff)).PasswordHash);
+    }
+
+    // BR-ACCOUNT-09: a phone step on the old number does not put it back in place of the number the Owner has just entered.
+    [Fact]
+    public async Task A_change_of_the_number_cancels_the_phone_step_on_the_old_number()
     {
         var owner = await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Pw)).Username, Pw);
         var oldPhone = NewPhone();
-        var staff = await factory.AddAccountAsync(NewCode(), Pw, SubjectType.Staff, a => { a.PhoneNumber = oldPhone; a.PhoneVerifiedAt = null; });
-        await factory.GrantAsync(staff, StaffRole.Accountant, null);
+        var staff = await AddStaffAsync(a => { a.PhoneNumber = oldPhone; a.PhoneVerifiedAt = null; });
         var client = await factory.LoginAsync(staff.Username, Pw);
         var id = await VerificationIdAsync(await client.PostAsJsonAsync("/api/me/phone-verification", new { }));
         var code = factory.LastSmsCode(oldPhone);
 
-        var rowVersion = (await owner.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/accounts/{staff.Id}")).GetProperty("rowVersion").GetString();
         var newPhone = NewPhone();
-        Assert.Equal(HttpStatusCode.OK, (await owner.PutAsJsonAsync($"/api/accounts/{staff.Id}", new { displayName = "A", username = staff.Username, phoneNumber = newPhone, rowVersion })).StatusCode);
+        await EditStaffAsync(owner, staff, newPhone);
 
-        var entered = await client.EnterAsync(id, code);
-        if (entered.IsSuccessStatusCode)
-        {
-            var token = (await entered.BodyAsync()).GetProperty("verificationToken").GetString();
-            await client.PostAsJsonAsync("/api/me/phone-verification/confirm", new { verificationToken = token });
-        }
+        Assert.Equal("MSG-ACCOUNT-16", await (await client.EnterAsync(id, code)).ErrorCodeAsync());
+        Assert.Equal(newPhone, (await StoredAsync(staff)).PhoneNumber);
+    }
 
-        Assert.Equal(newPhone, (await factory.QueryAsync(db => db.Accounts.AsNoTracking().SingleAsync(a => a.Id == staff.Id))).PhoneNumber);
+    // BR-ACCOUNT-09: the same for a token, and for another number the staff member entered before the Owner's change.
+    [Fact]
+    public async Task A_change_of_the_number_cancels_a_phone_step_token_on_another_number()
+    {
+        var owner = await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Pw)).Username, Pw);
+        var staff = await AddStaffAsync(a => a.PhoneVerifiedAt = null);
+        var client = await factory.LoginAsync(staff.Username, Pw);
+        var entered = NewPhone();
+        var id = await VerificationIdAsync(await client.PostAsJsonAsync("/api/me/phone-verification", new { phoneNumber = entered }));
+        var token = await VerifyAsync(client, id, factory.LastSmsCode(entered));
+
+        var newPhone = NewPhone();
+        await EditStaffAsync(owner, staff, newPhone);
+
+        Assert.Equal("MSG-ACCOUNT-16", await (await client.PostAsJsonAsync("/api/me/phone-verification/confirm", new { verificationToken = token })).ErrorCodeAsync());
+        Assert.Equal(newPhone, (await StoredAsync(staff)).PhoneNumber);
     }
 
     // QA-M4 (BR-ACCOUNT-02, BR-ACCOUNT-09): \d takes any Unicode digit, so one number in other digits is a new "number".
@@ -431,6 +495,32 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
             (await atLimit.BodyAsync()).EnumerateObject().Select(p => p.Name));
         Assert.Equal(3, factory.Services.GetRequiredService<FakeSmsSender>().Inbox.List(real.PhoneNumber!).Count);
     }
+
+    private async Task<Account> AddStaffAsync(Action<Account>? configure = null)
+    {
+        var staff = await factory.AddAccountAsync(NewCode(), Pw, SubjectType.Staff, configure);
+        await factory.GrantAsync(staff, StaffRole.Accountant, null);
+        return staff;
+    }
+
+    private static async Task EditStaffAsync(HttpClient owner, Account staff, string phoneNumber)
+    {
+        var rowVersion = (await owner.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/accounts/{staff.Id}")).GetProperty("rowVersion").GetString();
+        var edited = await owner.PutAsJsonAsync($"/api/accounts/{staff.Id}", new { displayName = "A", username = staff.Username, phoneNumber, rowVersion });
+        Assert.Equal(HttpStatusCode.OK, edited.StatusCode);
+    }
+
+    private static async Task<Guid> StartRecoveryAsync(HttpClient client, string identifier) =>
+        (await (await client.PostAsJsonAsync("/api/auth/recovery", new { identifier })).BodyAsync()).GetProperty("requestId").GetGuid();
+
+    private static async Task<HttpResponseMessage> ResetAsync(HttpClient client, string token)
+    {
+        var newPassword = NewPassword();
+        return await client.PostAsJsonAsync("/api/auth/recovery/reset", new { verificationToken = token, newPassword, passwordConfirmation = newPassword });
+    }
+
+    private Task<Account> StoredAsync(Account account) =>
+        factory.QueryAsync(db => db.Accounts.AsNoTracking().SingleAsync(a => a.Id == account.Id));
 
     private sealed class MovableClock : TimeProvider
     {

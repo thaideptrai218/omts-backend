@@ -40,4 +40,11 @@ internal sealed class VerificationCodeRepository(OmtsDbContext db) : IVerificati
             .Where(c => accountId != null ? c.AccountId == accountId : c.AccountId == null && c.Target == target)
             .OrderByDescending(c => c.CreatedAt)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<VerificationCode>> ListUsableOfAccountAsync(
+        Guid accountId, VerificationChannel channel, DateTimeOffset now, CancellationToken cancellationToken) =>
+        await db.VerificationCodes
+            .Where(c => c.AccountId == accountId && c.Channel == channel && c.CancelledAt == null && c.TokenConsumedAt == null)
+            .Where(c => c.ExpiresAt > now || c.TokenExpiresAt > now)
+            .ToListAsync(cancellationToken);
 }

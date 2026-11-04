@@ -77,7 +77,7 @@ public sealed class PasswordRecoveryService(
         }
 
         var account = token.Value!.AccountId is { } id ? await accounts.GetByIdAsync(id, cancellationToken) : null;
-        if (account is null || account.StatusId != StatusIds.Account.Active)
+        if (account is null || account.StatusId != StatusIds.Account.Active || !IsVerifiedContact(account, token.Value))
         {
             return new AppError(ErrorKind.Validation, UserMessages.WrongVerificationCode);
         }
@@ -100,4 +100,12 @@ public sealed class PasswordRecoveryService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return Done.Value;
     }
+
+    /// <summary>
+    /// ACCOUNT-03 step 7: the token resets only the account that still has this verified contact. A change of the contact
+    /// has already cancelled the token; this also holds for a recovery that started while the change was being saved.
+    /// </summary>
+    private static bool IsVerifiedContact(Account account, VerificationCode token) => token.Channel == VerificationChannel.Sms
+        ? account.PhoneVerifiedAt is not null && account.PhoneNumber == token.Target
+        : account.EmailVerifiedAt is not null && account.Email == token.Target;
 }

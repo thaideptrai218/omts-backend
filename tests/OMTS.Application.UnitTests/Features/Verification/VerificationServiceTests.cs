@@ -436,5 +436,11 @@ public partial class VerificationServiceTests
                 .Where(c => c.Purpose == purpose && c.CreatedAt >= since && (accountId != null ? c.AccountId == accountId : c.AccountId == null && c.Target == target))
                 .OrderByDescending(c => c.CreatedAt)
                 .ToList());
+
+        public Task<IReadOnlyList<VerificationCode>> ListUsableOfAccountAsync(Guid accountId, VerificationChannel channel, DateTimeOffset now, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<VerificationCode>>(All
+                .Where(c => c.AccountId == accountId && c.Channel == channel && c.CancelledAt is null && c.TokenConsumedAt is null)
+                .Where(c => c.ExpiresAt > now || c.TokenExpiresAt > now)
+                .ToList());
     }
 }

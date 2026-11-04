@@ -10,6 +10,7 @@ using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Accounts;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.Verification;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
@@ -26,6 +27,7 @@ public sealed class StaffAccountService(
     ILoginSessionRepository sessions,
     IAccessGrantRepository grants,
     AccessGrantService grantService,
+    VerificationService verification,
     IPasswordHasher passwordHasher,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
@@ -229,12 +231,14 @@ public sealed class StaffAccountService(
             // A new number must be verified again by the holder (at next login).
             account.PhoneNumber = phone;
             account.PhoneVerifiedAt = null;
+            await verification.CancelForChangedContactAsync(account.Id, VerificationChannel.Sms, cancellationToken);
         }
 
         if (account.Email != email)
         {
             account.Email = email;
             account.EmailVerifiedAt = null;
+            await verification.CancelForChangedContactAsync(account.Id, VerificationChannel.Email, cancellationToken);
         }
 
         audit.Record(new AuditEntry("Account.Updated", nameof(Account))

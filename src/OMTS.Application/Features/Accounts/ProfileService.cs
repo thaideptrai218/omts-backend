@@ -162,6 +162,11 @@ public sealed class ProfileService(
         var previous = channel == VerificationChannel.Sms
             ? account.PhoneVerifiedAt is null ? null : account.PhoneNumber
             : account.EmailVerifiedAt is null ? null : account.Email;
+        if ((channel == VerificationChannel.Sms ? account.PhoneNumber : account.Email) != target)
+        {
+            await verification.CancelForChangedContactAsync(account.Id, channel, cancellationToken);
+        }
+
         object before;
         if (channel == VerificationChannel.Sms)
         {
