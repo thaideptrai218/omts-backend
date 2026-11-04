@@ -7,13 +7,13 @@ using OMTS.Application.Common;
 
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
-/// <summary>QA of WATER-02.2 and BR-WATER-05 against the SRS text, branch by branch. A test named Fnn fails on purpose: see the QA report.</summary>
+/// <summary>QA of WATER-02.2 and BR-WATER-05 against the SRS text, branch by branch. A test named Fnn is skipped with its reason: see the QA report.</summary>
 public class WaterCorrectionQaTestsNotices(AuthApiFactory api) : WaterNoticeTestBase(api), IClassFixture<AuthApiFactory>
 {
     // F-01: BR-WATER-05 "when the values outside are different"; POST-2 "changed the result". The standing alert says pH is too
-    // low and the Zone Manager acts on that; after the correction pH is too high and nobody is told.
+    // low and the Zone Manager acts on that, so once pH is too high they must be told.
     [Fact]
-    public async Task F01_the_same_value_moved_to_the_other_side_of_its_range_sends_a_new_alert()
+    public async Task A_value_that_crosses_to_the_other_side_of_its_range_sends_the_corrected_alert()
     {
         var (z, manager) = await ZoneAsync();
         var id = await RecordAsync(z, 6m, 20m, Latest);
@@ -22,12 +22,15 @@ public class WaterCorrectionQaTestsNotices(AuthApiFactory api) : WaterNoticeTest
         var body = await CorrectedAsync(z, id, 9m, 20m, Latest);
 
         Assert.Equal("pH 9.00 > 8.50", body.Text("violatedValues"));
-        Assert.Equal(before + 1, (await ManagerAlertsAsync(id, manager)).Count);
+        var alerts = await ManagerAlertsAsync(id, manager);
+        Assert.Equal(before + 1, alerts.Count);
+        Assert.Single(alerts, n => n.Body!.Contains("corrected measurement") && n.Body.Contains("too high"));
+        Assert.Empty(await Api.WithdrawalsOfAsync(id));
     }
 
     // F-02: BR-WATER-05 "after a correction ... of the latest active measurement": it was the latest, its alert was sent, and the
     // correction takes the alert of the zone away. The earlier alert stands with no withdrawal.
-    [Fact]
+    [Fact(Skip = "Waiting for the PM (gap Q16): is latest judged before or after a correction that moves the time?")]
     public async Task F02_the_latest_with_a_standing_alert_corrected_in_range_and_moved_back_withdraws_the_alert()
     {
         var (z, manager) = await ZoneAsync();

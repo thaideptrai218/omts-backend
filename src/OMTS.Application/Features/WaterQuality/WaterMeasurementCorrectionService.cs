@@ -92,7 +92,7 @@ public sealed class WaterMeasurementCorrectionService(
             return AppError.InvalidFields(invalid);
         }
 
-        var outsideBefore = WaterAlertService.Evaluate(measurement).ViolatedMetrics;
+        var outsideBefore = WaterAlertService.Evaluate(measurement).ValuesOutside;
         var measuredAtBefore = measurement.MeasuredAt;
         // A correction that moves the answer to the last overdue reminder before the zone's other measurements re-arms it.
         await overdue.BeforeCorrectionAsync(measurement, request.MeasuredAt!.Value, cancellationToken);

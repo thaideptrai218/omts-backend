@@ -32,9 +32,9 @@ public class WaterCorrectionNotifyMatrixTests(AuthApiFactory api) : WaterNoticeT
     }
 
     [Theory]
-    [InlineData(9.1, 9.3)] // Another reading of the same value outside.
-    [InlineData(6.0, 9.0)] // The same value, now on the other side of its range.
-    public async Task Latest_with_the_same_values_outside_sends_nothing_and_keeps_the_time_of_the_alert(double ph, double newPh)
+    [InlineData(9.1, 9.3)] // Another reading of the same value, still too high.
+    [InlineData(6.0, 6.2)] // Another reading of the same value, still too low.
+    public async Task Latest_with_the_same_values_outside_on_the_same_side_sends_nothing_and_keeps_the_time_of_the_alert(double ph, double newPh)
     {
         var (z, manager) = await ZoneAsync();
         var measurement = await z.RecordedAsync((decimal)ph, 20m, measuredAt: Latest);

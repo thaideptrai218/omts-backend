@@ -15,14 +15,14 @@ public sealed class WaterCorrectionNotifier(IWaterMeasurementRepository measurem
 
     /// <summary>Stores the new result of the corrected values; a correction never changes the thresholds (BR-WATER-04).</summary>
     /// <param name="measurement">With the corrected values, time and raft, tracked, with its zone.</param>
-    /// <param name="outsideBefore">The indicators outside before the correction.</param>
+    /// <param name="outsideBefore">The values outside before the correction.</param>
     /// <param name="measuredAtBefore">The time before the correction, which the earlier alert named.</param>
     public async Task AfterCorrectionAsync(
-        WaterMeasurement measurement, IReadOnlyCollection<string> outsideBefore, DateTimeOffset measuredAtBefore, string reason, Guid actorId, CancellationToken cancellationToken)
+        WaterMeasurement measurement, IReadOnlyCollection<WaterValueOutside> outsideBefore, DateTimeOffset measuredAtBefore, string reason, Guid actorId, CancellationToken cancellationToken)
     {
         var evaluation = WaterAlertService.Recheck(measurement);
         var latest = await measurements.ListLatestActiveAsync(measurement.ZoneId, 2, cancellationToken);
-        switch (WaterCorrectionNoticeRule.AfterCorrection(WaterCorrectionNoticeRule.IsLatest(measurement, latest), outsideBefore, evaluation.ViolatedMetrics))
+        switch (WaterCorrectionNoticeRule.AfterCorrection(WaterCorrectionNoticeRule.IsLatest(measurement, latest), outsideBefore, evaluation.ValuesOutside))
         {
             case WaterCorrectionNotice.CorrectedAlert:
                 await alerts.SendAlertAsync(measurement, evaluation, measurement.Zone.Name, measurement.Raft.Code, actorId, corrected: true, cancellationToken);

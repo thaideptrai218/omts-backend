@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.WaterQuality;
 using OMTS.Domain.Common;
 using OMTS.Domain.Entities.Cultivation;
@@ -10,23 +11,37 @@ public sealed class WaterCorrectionNoticeRuleTests
     private static readonly DateTimeOffset At = new(2026, 11, 1, 1, 0, 0, TimeSpan.Zero);
 
     [Theory]
-    [InlineData("pH", "pH,Salinity", WaterCorrectionNotice.CorrectedAlert)]
-    [InlineData("pH,Salinity", "pH", WaterCorrectionNotice.CorrectedAlert)]
-    [InlineData("pH", "Salinity", WaterCorrectionNotice.CorrectedAlert)]
-    [InlineData("", "Temperature", WaterCorrectionNotice.CorrectedAlert)]
-    [InlineData("pH,Temperature", "", WaterCorrectionNotice.AlertWithdrawn)]
-    [InlineData("pH,Salinity", "Salinity,pH", WaterCorrectionNotice.None)]
-    [InlineData("pH", "pH", WaterCorrectionNotice.None)]
+    [InlineData("PH:High", "PH:High,SALINITY:Low", WaterCorrectionNotice.CorrectedAlert)]
+    [InlineData("PH:High,SALINITY:Low", "PH:High", WaterCorrectionNotice.CorrectedAlert)]
+    [InlineData("PH:High", "SALINITY:High", WaterCorrectionNotice.CorrectedAlert)]
+    [InlineData("", "TEMPERATURE:High", WaterCorrectionNotice.CorrectedAlert)]
+    [InlineData("PH:Low", "PH:High", WaterCorrectionNotice.CorrectedAlert)]
+    [InlineData("PH:High", "PH:Low", WaterCorrectionNotice.CorrectedAlert)]
+    [InlineData("PH:High,SALINITY:Low", "PH:High,SALINITY:High", WaterCorrectionNotice.CorrectedAlert)]
+    [InlineData("PH:High,TEMPERATURE:Low", "", WaterCorrectionNotice.AlertWithdrawn)]
+    [InlineData("PH:High,SALINITY:Low", "SALINITY:Low,PH:High", WaterCorrectionNotice.None)]
+    [InlineData("PH:High", "PH:High", WaterCorrectionNotice.None)]
+    [InlineData("PH:Low", "PH:Low", WaterCorrectionNotice.None)]
     [InlineData("", "", WaterCorrectionNotice.None)]
-    public void A_correction_of_the_latest_follows_which_indicators_are_outside(string before, string after, WaterCorrectionNotice expected)
+    public void A_correction_of_the_latest_follows_which_indicators_are_outside_and_on_which_side(string before, string after, WaterCorrectionNotice expected)
     {
         Assert.Equal(expected, WaterCorrectionNoticeRule.AfterCorrection(true, Set(before), Set(after)));
     }
 
+    [Fact]
+    public void A_new_reading_on_the_same_side_sends_nothing()
+    {
+        var before = new WaterValueOutside(WaterValueOutside.Ph, 9.1m, null, WaterValueDirection.High, 6.5m, 8.5m);
+        var after = before with { Value = 9.3m };
+
+        Assert.Equal(WaterCorrectionNotice.None, WaterCorrectionNoticeRule.AfterCorrection(true, [before], [after]));
+    }
+
     [Theory]
-    [InlineData("pH", "pH,Salinity")]
-    [InlineData("pH", "")]
-    [InlineData("", "pH")]
+    [InlineData("PH:High", "PH:High,SALINITY:High")]
+    [InlineData("PH:Low", "PH:High")]
+    [InlineData("PH:High", "")]
+    [InlineData("", "PH:High")]
     public void A_correction_of_an_older_one_sends_nothing(string before, string after)
     {
         Assert.Equal(WaterCorrectionNotice.None, WaterCorrectionNoticeRule.AfterCorrection(false, Set(before), Set(after)));
@@ -73,7 +88,12 @@ public sealed class WaterCorrectionNoticeRuleTests
         Assert.False(WaterCorrectionNoticeRule.IsLatest(Measurement(At, At.AddSeconds(-1)), [other]));
     }
 
-    private static string[] Set(string names) => names.Split(',', StringSplitOptions.RemoveEmptyEntries);
+    /// <summary>Values outside written as "indicator:direction", separated by commas.</summary>
+    private static WaterValueOutside[] Set(string values) => values
+        .Split(',', StringSplitOptions.RemoveEmptyEntries)
+        .Select(value => value.Split(':'))
+        .Select(parts => new WaterValueOutside(parts[0], 1m, null, Enum.Parse<WaterValueDirection>(parts[1]), null, null))
+        .ToArray();
 
     private static WaterMeasurement Measurement(DateTimeOffset measuredAt, DateTimeOffset savedAt) =>
         new() { MeasuredAt = measuredAt, CreatedAt = savedAt };

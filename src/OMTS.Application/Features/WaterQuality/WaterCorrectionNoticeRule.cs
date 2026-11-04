@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Messages;
 using OMTS.Domain.Entities.Cultivation;
 
 namespace OMTS.Application.Features.WaterQuality;
@@ -16,15 +17,16 @@ public enum WaterCorrectionNotice
 
 /// <summary>
 /// The matrix of WATER-02.2 and BR-WATER-05. Something is sent only for the latest active measurement of the zone, and
-/// only when the change alters which of its indicators are outside its thresholds; a new reading of an indicator that
-/// stays outside, in either direction, sends nothing. A voided measurement counts as having no value outside. "Latest" is
-/// judged at step 6 for a correction, so with the corrected time, and before the void for a void.
+/// only when the change alters which of its indicators are outside its thresholds or on which side: a value that crosses
+/// to the other side of its range counts as different (pH 6.0 to 9.0, PH:Low against PH:High), and a new reading on the same
+/// side sends nothing (9.1 to 9.3). A voided measurement counts as having no value outside. "Latest" is judged at step 6
+/// for a correction, so with the corrected time, and before the void for a void.
 /// </summary>
 public static class WaterCorrectionNoticeRule
 {
-    public static WaterCorrectionNotice AfterCorrection(bool isLatest, IReadOnlyCollection<string> outsideBefore, IReadOnlyCollection<string> outsideAfter)
+    public static WaterCorrectionNotice AfterCorrection(bool isLatest, IReadOnlyCollection<WaterValueOutside> outsideBefore, IReadOnlyCollection<WaterValueOutside> outsideAfter)
     {
-        if (!isLatest || outsideBefore.ToHashSet(StringComparer.Ordinal).SetEquals(outsideAfter))
+        if (!isLatest || Sides(outsideBefore).SetEquals(Sides(outsideAfter)))
         {
             return WaterCorrectionNotice.None;
         }
@@ -52,4 +54,7 @@ public static class WaterCorrectionNoticeRule
         order = order != 0 ? order : measurement.CreatedAt.CompareTo(other.CreatedAt);
         return (order != 0 ? order : measurement.Id.CompareTo(other.Id)) > 0;
     }
+
+    private static HashSet<(string Indicator, WaterValueDirection Direction)> Sides(IEnumerable<WaterValueOutside> outside) =>
+        outside.Select(value => (value.Indicator, value.Direction)).ToHashSet();
 }

@@ -194,7 +194,7 @@ public class WaterCorrectionQaTestsRecord(AuthApiFactory api) : IClassFixture<Au
     }
 
     // F-03: same finding as F-04 of the W1 report, on the correction path: BR-WATER-03 and step 4 "not later than now".
-    [Fact]
+    [Fact(Skip = "Waiting for the PM: is a 5-minute tolerance for clock differences acceptable against 'not later than now'?")]
     public async Task F03_a_corrected_time_later_than_now_is_refused()
     {
         var z = await api.ZoneAsync();

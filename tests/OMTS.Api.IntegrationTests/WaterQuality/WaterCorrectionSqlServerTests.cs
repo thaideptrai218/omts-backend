@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.Notifications;
 using OMTS.Application.Features.WaterQuality;
 using OMTS.Application.Features.WaterQuality.Dtos;
@@ -146,8 +147,8 @@ public class WaterCorrectionSqlServerTests
         Assert.Contains(reason, withdrawn.MessageParams);
     }
 
-    private static IReadOnlyCollection<string> Outside(OMTS.Domain.Entities.Cultivation.WaterMeasurement stored, Values values) =>
-        WaterThresholdEvaluator.Evaluate(values.Ph, values.Salinity, values.Temperature, WaterThresholds.UsedBy(stored)).ViolatedMetrics;
+    private static IReadOnlyCollection<WaterValueOutside> Outside(OMTS.Domain.Entities.Cultivation.WaterMeasurement stored, Values values) =>
+        WaterThresholdEvaluator.Evaluate(values.Ph, values.Salinity, values.Temperature, WaterThresholds.UsedBy(stored)).ValuesOutside;
 
     /// <summary>Every step walked from the record as created: each one starts with the values the one before it ended with.</summary>
     private static async Task<List<Step>> ChainAsync(OMTS.Infrastructure.Persistence.OmtsDbContext db, Guid id, params string[] actions)
