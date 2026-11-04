@@ -3,9 +3,13 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Application.Common.Exceptions;
+using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
+using OMTS.Infrastructure.Persistence;
 using static OMTS.Api.IntegrationTests.Farming.FarmingTestKit;
 
 namespace OMTS.Api.IntegrationTests.Farming;
@@ -56,6 +60,55 @@ public class RaftsV2SqlServerTests
 
         var numbers = await host.QueryAsync(db => db.Lanes.Where(l => l.RaftId == raft.Id()).OrderBy(l => l.LaneNumber).Select(l => l.LaneNumber).ToListAsync());
         Assert.Equal(Enumerable.Range(1, numbers.Count), numbers);
+    }
+
+    // Parallel saves of one raft can deadlock on SQL Server (seen with parallel lane changes): the victim's save is rolled
+    // back, so it answers MSG06 like a lost row version check, not 500. Here the deadlock is forced: another connection holds
+    // the raft this save updates second, and then asks for the one it holds.
+    [SqlServerFact]
+    public async Task A_save_chosen_as_deadlock_victim_is_a_concurrency_conflict()
+    {
+        await using var host = await FarmingSqlServerHost.StartAsync();
+        var owner = host.Owner.Client;
+        var zoneId = (await owner.CreateZoneAsync()).Id();
+        var ids = new[] { (await owner.CreateRaftAsync(zoneId)).Id(), (await owner.CreateRaftAsync(zoneId)).Id() }.Order().ToList();
+        using var scope = host.Api.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
+        foreach (var raft in await db.Rafts.Where(r => ids.Contains(r.Id)).ToListAsync())
+        {
+            raft.ConditionNotes = "This save";
+        }
+
+        await using var other = new SqlConnection(db.Database.GetConnectionString());
+        await other.OpenAsync();
+        await using var transaction = (SqlTransaction)await other.BeginTransactionAsync();
+        // On its own (a SET inside a parameterized batch ends with that batch): the save, not this connection, is the victim.
+        await using (var priority = new SqlCommand("SET DEADLOCK_PRIORITY HIGH;", other, transaction))
+        {
+            await priority.ExecuteNonQueryAsync();
+        }
+
+        await UpdateAsync(ids[1]);
+        var saving = scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        await Task.Delay(TimeSpan.FromSeconds(1));
+        await UpdateAsync(ids[0]);
+        await transaction.RollbackAsync();
+
+        var conflict = await Assert.ThrowsAsync<ConcurrencyConflictException>(() => saving);
+        var cause = conflict.InnerException!;
+        while (cause.InnerException is not null)
+        {
+            cause = cause.InnerException;
+        }
+
+        Assert.Equal(1205, Assert.IsType<SqlException>(cause).Number);
+
+        async Task UpdateAsync(Guid raftId)
+        {
+            await using var command = new SqlCommand("UPDATE Rafts SET ConditionNotes = N'Other save' WHERE Id = @id;", other, transaction);
+            command.Parameters.AddWithValue("@id", raftId);
+            await command.ExecuteNonQueryAsync();
+        }
     }
 
     // Parallel uploads can never leave more than three photos, and no answer is anything but saved, conflict or refused.

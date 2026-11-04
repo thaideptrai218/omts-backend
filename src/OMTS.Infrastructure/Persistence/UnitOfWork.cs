@@ -27,6 +27,25 @@ internal sealed class UnitOfWork(OmtsDbContext db) : IUnitOfWork
             // 2601/2627: duplicate key in a unique index or constraint.
             throw new DuplicateRecordException(exception);
         }
+        catch (Exception exception) when (IsDeadlockVictim(exception))
+        {
+            // 1205: SQL Server rolled this save back to end a deadlock with a parallel save of the same records (seen on
+            // raft lanes and photos): nothing is saved and the client reloads, as after a lost row version check.
+            throw new ConcurrencyConflictException(exception);
+        }
+    }
+
+    private static bool IsDeadlockVictim(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is SqlException { Number: 1205 })
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public Task ReloadAsync(object entity, CancellationToken cancellationToken = default) =>
