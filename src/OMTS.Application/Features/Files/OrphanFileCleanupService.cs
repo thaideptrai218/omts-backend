@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Interfaces.Storage;
+using OMTS.Application.Features.Cultivation.CultivationLogs;
 
 namespace OMTS.Application.Features.Files;
 
@@ -14,6 +15,7 @@ public sealed class OrphanFileCleanupService(
     IFileStorage storage,
     IStoredFileReferenceQuery references,
     ICooperativeRepository cooperatives,
+    IAuditEventRepository auditEvents,
     ILogger<OrphanFileCleanupService> logger)
 {
     /// <summary>
@@ -28,8 +30,8 @@ public sealed class OrphanFileCleanupService(
 
     /// <summary>
     /// Categories whose files may all be unreferenced in a real database: the cover photo was removed, the last certification,
-    /// or the last cultivation log. While the database points to no file of the category, it counts as this environment's
-    /// when it holds the cooperative.
+    /// or the last cultivation log. While the database points to no file of the category, it is taken as this environment's
+    /// when it holds the cooperative, see <see cref="CleanAsync"/>.
     /// </summary>
     private static readonly IReadOnlySet<string> MayAllBeUnreferenced = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -41,7 +43,8 @@ public sealed class OrphanFileCleanupService(
     /// returns how many were deleted. Younger files are kept: their upload may still wait for the save pointing to it.
     /// Nothing is deleted (a warning is logged) when the database does not look like this storage's own: when it points
     /// to files of the category but none of them is stored, for raft photos and license files also when it points to none
-    /// at all, and for cover photos, certificate files and cultivation log photos when it holds no cooperative.
+    /// at all, for cover photos, certificate files and cultivation log photos when it holds no cooperative, and for
+    /// cultivation log photos also when it never held a log.
     /// </summary>
     public async Task<int> CleanAsync(string category, DateTimeOffset writtenBefore, CancellationToken cancellationToken)
     {
@@ -66,6 +69,16 @@ public sealed class OrphanFileCleanupService(
                 // Files of a cooperative but no cooperative: the database belongs to another environment, or is empty.
                 logger.LogWarning(
                     "Orphan file clean-up of {Category} skipped: the database holds no cooperative; check that this environment has a storage of its own.",
+                    category);
+                return 0;
+            }
+
+            // Every deployed database holds its cooperative from the bootstrap, so that says little about old log photos. The audit rows of a log
+            // outlive it: with none, this database never held a log and these photos are another environment's. After the last real removal they are still there.
+            if (category == FileCategories.CultivationLogPhotos && !await auditEvents.AnyOfRecordTypeAsync(CultivationLogAudit.RecordType, cancellationToken))
+            {
+                logger.LogWarning(
+                    "Orphan file clean-up of {Category} skipped: the database never held a cultivation log; check that this environment has a storage of its own.",
                     category);
                 return 0;
             }

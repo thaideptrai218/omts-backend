@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OMTS.Api.Common;
 using OMTS.Api.Filters;
-using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Cultivation.CultivationLogs;
 using OMTS.Application.Features.Files;
 
@@ -38,13 +37,9 @@ public sealed class CultivationLogsController(
     [ProducesResponseType<CultivationLogSaved>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Record(Guid cycleId, [FromForm] CultivationLogForm form, CancellationToken cancellationToken)
     {
-        if (OtherFilePart() is { } refused)
-        {
-            return refused;
-        }
-
         InvariantFormValues.TryDate(form.VisitDate, out var visitDate);
-        return (await logs.RecordAsync(cycleId, new RecordCultivationLogRequest(visitDate, form.Notes), await PhotosAsync(form, cancellationToken), cancellationToken))
+        var request = new RecordCultivationLogRequest(visitDate, form.Notes, OtherFilePart());
+        return (await logs.RecordAsync(cycleId, request, await PhotosAsync(form, cancellationToken), cancellationToken))
             .ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
     }
 
@@ -55,7 +50,7 @@ public sealed class CultivationLogsController(
 
     /// <summary>
     /// Corrects a log while the cycle is Open: the recording Zone Manager or the Cooperative Owner. Multipart: <c>visitDate</c>, <c>notes</c>, one
-    /// <c>keepPhotoKeys</c> field per photo to keep, one <c>photos</c> part per new photo, <c>reason</c> and <c>rowVersion</c>. Notifies nobody.
+    /// <c>keepPhotoKeys</c> field per photo to keep, one <c>photos</c> part per new photo and <c>reason</c>. No version: the last save wins (NFR-09). Notifies nobody.
     /// </summary>
     [HttpPut("api/cultivation-logs/{logId:guid}")]
     [RequestSizeLimit(MaxUploadBytes)]
@@ -64,13 +59,8 @@ public sealed class CultivationLogsController(
     [ProducesResponseType<CultivationLogSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Correct(Guid logId, [FromForm] CultivationLogForm form, CancellationToken cancellationToken)
     {
-        if (OtherFilePart() is { } refused)
-        {
-            return refused;
-        }
-
         InvariantFormValues.TryDate(form.VisitDate, out var visitDate);
-        var request = new CorrectCultivationLogRequest(visitDate, form.Notes, form.KeepPhotoKeys, form.Reason, form.RowVersion);
+        var request = new CorrectCultivationLogRequest(visitDate, form.Notes, form.KeepPhotoKeys, form.Reason, OtherFilePart());
         return (await corrections.CorrectAsync(logId, request, await PhotosAsync(form, cancellationToken), cancellationToken)).ToActionResult(Ok);
     }
 
@@ -80,11 +70,9 @@ public sealed class CultivationLogsController(
     public async Task<IActionResult> Remove(Guid logId, RemoveCultivationLogRequest request, CancellationToken cancellationToken) =>
         (await corrections.RemoveAsync(logId, request, cancellationToken)).ToActionResult(_ => NoContent());
 
-    /// <summary>A file sent under another name would be dropped without a word: refused, so no photo is lost.</summary>
-    private IActionResult? OtherFilePart() =>
-        Request.Form.Files.Any(f => !f.Name.Equals(nameof(CultivationLogForm.Photos), StringComparison.OrdinalIgnoreCase))
-            ? AppError.Invalid(PhotosField, "Send each photo in a part named photos.").ToProblem()
-            : null;
+    /// <summary>A file sent under another name would be dropped without a word. The service refuses it, after its access check (GFR-02), so no photo is lost.</summary>
+    private bool OtherFilePart() =>
+        Request.Form.Files.Any(f => !f.Name.Equals(nameof(CultivationLogForm.Photos), StringComparison.OrdinalIgnoreCase));
 
     private static async Task<IReadOnlyList<IncomingFile>> PhotosAsync(CultivationLogForm form, CancellationToken cancellationToken)
     {

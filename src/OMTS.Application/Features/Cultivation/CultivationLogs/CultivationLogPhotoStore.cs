@@ -34,4 +34,27 @@ public sealed class CultivationLogPhotoStore(IFileStorage storage, UploadedFileS
 
         return keys;
     }
+
+    /// <summary>
+    /// Runs what comes between the uploads and the save. A refusal or a failure there, or the client giving up, removes the uploads of
+    /// <paramref name="keys"/>: no row will point to them, so they need not wait for the orphan file clean-up.
+    /// </summary>
+    public async Task<Result<T>> PrepareSaveAsync<T>(IReadOnlyList<string> keys, Func<Task<Result<T>>> prepare)
+    {
+        try
+        {
+            var prepared = await prepare();
+            if (!prepared.IsSuccess)
+            {
+                await fileSaver.DiscardAsync(keys);
+            }
+
+            return prepared;
+        }
+        catch
+        {
+            await fileSaver.DiscardAsync(keys);
+            throw;
+        }
+    }
 }

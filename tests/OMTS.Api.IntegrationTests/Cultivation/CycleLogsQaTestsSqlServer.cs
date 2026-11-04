@@ -27,18 +27,26 @@ public class CycleLogsQaTestsSqlServer
     private static Task<List<string>> KeysInDatabaseAsync(FarmingSqlServerHost host) =>
         host.QueryAsync(db => db.CultivationLogPhotos.Select(p => p.FileKey).OrderBy(k => k).ToListAsync());
 
-    // FINDING M2 (BR-CYCLE-05 "does not limit the number of logs", NFR-09 "no version check"): a new log carries no version and edits nothing another user saved, yet it is
-    // refused because any other log of the cycle was saved during its upload. The cycle is read before the photos are stored, so the window is the whole upload. Fails on purpose: 409 MSG06.
-    [SqlServerFact]
-    public async Task M2_a_new_log_is_not_refused_because_another_log_of_the_cycle_was_saved_during_its_upload()
+    /// <summary>The API with a held upload, and the Owner logged in on it.</summary>
+    private static async Task<(WebApplicationFactory<Program> Api, HttpClient Client, UploadHold Hold)> WithHeldUploadsAsync(FarmingSqlServerHost host)
     {
-        await using var host = await FarmingSqlServerHost.StartAsync();
         var hold = new UploadHold();
-        await using var api = host.Api.WithWebHostBuilder(b => b.ConfigureTestServices(services =>
+        var api = host.Api.WithWebHostBuilder(b => b.ConfigureTestServices(services =>
             services.AddSingleton<IFileStorage>(provider => new HeldStorage(provider.GetRequiredService<LocalFileStorage>(), hold))));
         var client = api.CreateClient();
         var tokens = await AcsTestKit.LoginTokensAsync(client, host.Owner.Account.Username);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.GetProperty("accessToken").GetString());
+        return (api, client, hold);
+    }
+
+    // BR-CYCLE-05 "does not limit the number of logs", NFR-09 "no version check": a new log edits nothing another user saved. The cycle is read after the uploads,
+    // so another log saved during them refuses nothing, and only a save in the same moment can conflict.
+    [SqlServerFact]
+    public async Task A_new_log_is_saved_although_another_log_of_the_cycle_was_saved_during_its_upload()
+    {
+        await using var host = await FarmingSqlServerHost.StartAsync();
+        var (api, client, hold) = await WithHeldUploadsAsync(host);
+        await using var _ = api;
         var cycle = await client.StartCycleAsync((await client.CreateRaftAsync((await client.CreateZoneAsync()).Id())).Id());
         hold.Arm();
 
@@ -53,8 +61,40 @@ public class CycleLogsQaTestsSqlServer
         Assert.True(answer.StatusCode == HttpStatusCode.Created, $"{(int)answer.StatusCode}: {await answer.Content.ReadAsStringAsync()}");
     }
 
-    // FINDING M2, the same bump seen from the plan: nobody edited the plan, yet the form is stale. NFR-09 speaks of two users editing the same record. Fails on purpose: 409 MSG06.
+    // NFR-09, last save wins, over an upload that takes minutes: the correction builds on the row as it is after its uploads, on real row versions.
     [SqlServerFact]
+    public async Task A_correction_is_saved_although_the_log_was_corrected_during_its_upload()
+    {
+        await using var host = await FarmingSqlServerHost.StartAsync();
+        var (api, client, hold) = await WithHeldUploadsAsync(host);
+        await using var _ = api;
+        var cycle = await client.StartCycleAsync((await client.CreateRaftAsync((await client.CreateZoneAsync()).Id())).Id());
+        var log = await client.RecordLogAsync(cycle.Id(), new LogFields { Photos = [Jpeg, Png] });
+        var keys = log.PhotoKeys();
+        hold.Arm();
+
+        var slow = client.PutLogAsync(log.Id(), new LogFields { Notes = "slow connection", Reason = "a better photo", KeepPhotoKeys = [keys[0]], Photos = [Jpeg] });
+        await hold.Reached;
+        await (await client.PutLogAsync(log.Id(), new LogFields { Notes = "saved meanwhile", Reason = "wrong note", KeepPhotoKeys = keys, Photos = [] })).ReadAsync(HttpStatusCode.OK);
+        hold.Release();
+        await (await slow).ReadAsync(HttpStatusCode.OK);
+
+        var read = await client.GetLogAsync(log.Id());
+        Assert.Equal("slow connection", read.Text("notes"));
+        Assert.Equal([1, 2], read.PhotoSlots());
+        Assert.Contains(keys[0], read.PhotoKeys());
+        Assert.DoesNotContain(keys[1], read.PhotoKeys());
+        Assert.Equal(await KeysInDatabaseAsync(host), host.StoredKeys(Category));
+
+        // Each audit row starts where the one before it ended.
+        var audits = await host.QueryAsync(db => db.AuditEvents.Where(e => e.Action == "CultivationLog.Corrected" && e.RecordId == log.Id()).OrderBy(e => e.OccurredAt).ToListAsync());
+        Assert.Equal(2, audits.Count);
+        Assert.Contains("saved meanwhile", audits[0].After);
+        Assert.Contains("saved meanwhile", audits[1].Before);
+    }
+
+    // The same bump seen from the plan: nobody edited the plan, yet the form is stale. NFR-09 speaks of two users editing the same record. Fails while the PM has not answered: 409 MSG06.
+    [SqlServerFact(Skip = "Waiting for the PM: may recording a log make an open plan form stale? The cycle bump guards a parallel cancel or close.")]
     public async Task M2_a_plan_form_stays_valid_when_a_log_was_recorded_meanwhile()
     {
         await using var host = await FarmingSqlServerHost.StartAsync();
@@ -135,12 +175,12 @@ public class CycleLogsQaTestsSqlServer
             });
             Assert.Equal(DeploymentBootstrapper.Success, (await BootstrapAsync(api)).ExitCode);
 
-            var removed = await UseAsync(api, db => db.CultivationLogs.AsNoTracking().OrderBy(l => l.Id).Select(l => new { l.Id, l.RowVersion, l.RecordedByAccountId }).FirstAsync());
+            var removed = await UseAsync(api, db => db.CultivationLogs.AsNoTracking().OrderBy(l => l.Id).Select(l => new { l.Id, l.RecordedByAccountId }).FirstAsync());
             using (var scope = api.Services.CreateScope())
             using (scope.ServiceProvider.GetRequiredService<AmbientActor>().Use(removed.RecordedByAccountId))
             {
                 var answer = await scope.ServiceProvider.GetRequiredService<CultivationLogCorrectionService>()
-                    .RemoveAsync(removed.Id, new RemoveCultivationLogRequest("wrong raft", Convert.ToBase64String(removed.RowVersion)), CancellationToken.None);
+                    .RemoveAsync(removed.Id, new RemoveCultivationLogRequest("wrong raft"), CancellationToken.None);
                 Assert.True(answer.IsSuccess);
             }
 

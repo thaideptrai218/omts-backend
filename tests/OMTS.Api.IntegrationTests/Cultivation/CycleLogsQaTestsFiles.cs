@@ -11,6 +11,7 @@ using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Storage;
 using OMTS.Application.Features.Files;
 using OMTS.Application.Features.Notifications;
+using OMTS.Domain.Entities.Cultivation;
 using OMTS.Infrastructure.Jobs;
 using OMTS.Infrastructure.Storage;
 using static OMTS.Api.IntegrationTests.Farming.FarmingTestKit;
@@ -206,7 +207,6 @@ public class CycleLogsQaTestsFiles(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(["Photos"], await (await owner.PutLogAsync(log.Id(), edit with { Photos = [Png], PhotoField = "photo" })).InvalidFieldsAsync());
         Assert.Equal(["Photos"], await (await owner.PutLogAsync(log.Id(), edit with { KeepPhotoKeys = [], Photos = Enumerable.Repeat(Png, 11).ToList() })).InvalidFieldsAsync());
         Assert.Equal(["Photos"], await (await owner.PutLogAsync(log.Id(), edit with { Photos = [Sized(Png, 10 * 1024 * 1024 + 1)] })).InvalidFieldsAsync());
-        Assert.Equal(["RowVersion"], await (await owner.PutLogAsync(log.Id(), edit with { RowVersion = "not base64!" })).InvalidFieldsAsync());
     }
 
     // No request may end in a 500: nothing in these bodies comes from the server.
@@ -287,16 +287,39 @@ public class CycleLogsQaTestsFiles(AuthApiFactory factory) : IClassFixture<AuthA
     {
         using var api = new FileFaultApiFactory();
         var setup = await api.CycleAsync();
+        var log = await setup.Owner.Client.RecordLogAsync(setup.CycleId);
         api.Faults.UploadsBeforeFailure = 1;
         api.Faults.DeleteThrows = true;
 
         var answer = await (await setup.Owner.Client.PostLogAsync(setup.CycleId, new LogFields { Photos = [Jpeg, Png] })).ReadAsync(HttpStatusCode.BadGateway);
 
         Assert.Equal("MSG-GEN-03", answer.Text("code"));
-        Assert.Equal(0, await api.LogCountAsync(setup.CycleId));
-        Assert.Single(StoredKeys(api, Category));
+        Assert.Equal(1, await api.LogCountAsync(setup.CycleId));
+        Assert.Equal(2, StoredKeys(api, Category).Count);
         api.Faults.DeleteThrows = false;
         Assert.Equal(1, await RunJobAsync(api));
+        Assert.Equal(log.PhotoKeys().Order(), StoredKeys(api, Category)!);
+    }
+
+    // The guard against another environment's photos also holds back the leftovers of a failed first log: they wait for the first saved log, whose audit row lets the job run.
+    [Fact]
+    public async Task A_photo_left_by_a_failed_first_log_waits_for_the_first_saved_log()
+    {
+        using var api = new FileFaultApiFactory();
+        var setup = await api.CycleAsync();
+        api.Faults.UploadsBeforeFailure = 1;
+        api.Faults.DeleteThrows = true;
+        await (await setup.Owner.Client.PostLogAsync(setup.CycleId, new LogFields { Photos = [Jpeg, Png] })).ReadAsync(HttpStatusCode.BadGateway);
+        api.Faults.UploadsBeforeFailure = null;
+        api.Faults.DeleteThrows = false;
+
+        Assert.Equal(0, await RunJobAsync(api));
+        Assert.Single(StoredKeys(api, Category));
+
+        var log = await setup.Owner.Client.RecordLogAsync(setup.CycleId);
+
+        Assert.Equal(1, await RunJobAsync(api));
+        Assert.Equal(log.PhotoKeys().Order(), StoredKeys(api, Category)!);
     }
 
     [Fact]
@@ -350,10 +373,10 @@ public class CycleLogsQaTestsFiles(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(log.PhotoKeys().Order(), StoredKeys(api, Category)!);
     }
 
-    // FINDING M3 (the job's own promise: nothing is deleted when the database does not look like this storage's own). Every deployed database holds the cooperative
-    // from its bootstrap, so a new database on the storage of another environment sweeps every log photo older than the grace period. Fails on purpose: 1 file deleted.
+    // The job's own promise: nothing is deleted when the database does not look like this storage's own. Every deployed database holds the cooperative from its
+    // bootstrap, so that alone would let a new database on the storage of another environment sweep every log photo older than the grace period.
     [Fact]
-    public async Task M3_a_database_that_never_held_a_log_does_not_delete_log_photos_it_does_not_know()
+    public async Task A_database_that_never_held_a_log_does_not_delete_log_photos_it_does_not_know()
     {
         using var api = new AuthApiFactory();
         await api.EnsureCooperativeAsync();
@@ -363,12 +386,12 @@ public class CycleLogsQaTestsFiles(AuthApiFactory factory) : IClassFixture<AuthA
 
         Assert.Equal(0, deleted);
         Assert.Equal([photoOfAnotherEnvironment], StoredKeys(api, Category));
+        Assert.Contains(api.Logs.Lines, l => l.StartsWith("Warning:") && l.Contains(Category) && l.Contains("never held a cultivation log"));
     }
 
-    // FINDING L1 (UploadedFileSaver and GFR-01: a change that is not saved leaves no file behind). The notification is prepared between the uploads and the save,
-    // outside the saver's clean-up; a failure there, or the client giving up there, leaves the photos until the job. Fails on purpose: 2 files stay.
+    // UploadedFileSaver and GFR-01: a change that is not saved leaves no file behind, also when it fails between the uploads and the save.
     [Fact]
-    public async Task L1_a_failure_while_preparing_the_notification_leaves_no_uploaded_photo()
+    public async Task A_failure_between_the_uploads_and_the_save_leaves_no_uploaded_photo()
     {
         using var api = new CycleLogsQaFaultFactory();
         var setup = await api.CycleAsync();
@@ -379,5 +402,92 @@ public class CycleLogsQaTestsFiles(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(HttpStatusCode.InternalServerError, answer.StatusCode);
         Assert.Equal(0, await api.LogCountAsync(setup.CycleId));
         Assert.Empty(StoredKeys(api, Category));
+    }
+
+    /// <summary>Runs <paramref name="send"/> up to its first stored photo, lets <paramref name="meanwhile"/> happen and returns the answer.</summary>
+    private static async Task<HttpResponseMessage> WithHeldUploadAsync(CycleLogsQaFaultFactory api, Func<Task<HttpResponseMessage>> send, Func<Task> meanwhile)
+    {
+        api.Hold.Arm();
+        var sending = send();
+        await api.Hold.Reached;
+        await meanwhile();
+        api.Hold.Release();
+        return await sending;
+    }
+
+    // The cycle as it is after the uploads decides, not the one the request first saw: the guards still hold over a long upload, and its photos go.
+    [Theory]
+    [InlineData("closed", "MSG-GEN-09")]
+    [InlineData("cancelled", "NOT_FOUND")]
+    [InlineData("new start date", "MSG-GEN-01")]
+    public async Task A_cycle_that_changes_during_the_upload_of_a_log_refuses_it_and_no_photo_stays(string change, string code)
+    {
+        using var api = new CycleLogsQaFaultFactory();
+        var setup = await api.CycleAsync();
+
+        var answer = await WithHeldUploadAsync(
+            api,
+            () => setup.Owner.Client.PostLogAsync(setup.CycleId, new LogFields { VisitDate = Today.AddDays(-5), Photos = [Jpeg, Png] }),
+            async () =>
+            {
+                switch (change)
+                {
+                    case "closed":
+                        await api.CloseCycleAsync(setup.CycleId);
+                        break;
+                    case "cancelled":
+                        var version = await api.IssueRowVersionAsync<CultivationCycle>(setup.CycleId);
+                        await (await setup.Owner.Client.CancelCycleAsync(setup.CycleId, version)).ReadAsync(HttpStatusCode.NoContent);
+                        break;
+                    default:
+                        await api.UpdateAsync<CultivationCycle>(setup.CycleId, c => c.StartDate = Today);
+                        break;
+                }
+            });
+
+        Assert.Equal(code, await answer.ErrorCodeAsync());
+        Assert.Equal(0, await api.LogCountAsync(setup.CycleId));
+        Assert.Empty(StoredKeys(api, Category));
+        Assert.Equal(0, await api.QueryAsync(db => db.Notifications.CountAsync(n => n.Type == "CULTIVATION_LOG_RECORDED")));
+    }
+
+    [Fact]
+    public async Task A_log_removed_during_the_upload_of_its_correction_stays_removed_and_no_new_photo_stays()
+    {
+        using var api = new CycleLogsQaFaultFactory();
+        var setup = await api.CycleAsync();
+        var owner = setup.Owner.Client;
+        var log = await owner.RecordLogAsync(setup.CycleId);
+
+        var answer = await WithHeldUploadAsync(
+            api,
+            () => owner.PutLogAsync(log.Id(), new LogFields { Reason = "a better photo", KeepPhotoKeys = log.PhotoKeys(), Photos = [Png] }),
+            async () => await (await owner.RemoveLogAsync(log.Id(), "wrong raft", null)).ReadAsync(HttpStatusCode.NoContent));
+
+        Assert.Equal(HttpStatusCode.NotFound, answer.StatusCode);
+        Assert.Equal(0, await api.LogCountAsync(setup.CycleId));
+        Assert.Empty(StoredKeys(api, Category));
+    }
+
+    // The file of a photo removed meanwhile is gone, so that request cannot be honoured: nothing changes and the client reads the log again.
+    [Fact]
+    public async Task A_photo_to_keep_that_another_correction_removed_during_the_upload_refuses_the_correction()
+    {
+        using var api = new CycleLogsQaFaultFactory();
+        var setup = await api.CycleAsync();
+        var owner = setup.Owner.Client;
+        var log = await owner.RecordLogAsync(setup.CycleId, new LogFields { Photos = [Jpeg, Png] });
+        var keys = log.PhotoKeys();
+
+        var answer = await WithHeldUploadAsync(
+            api,
+            () => owner.PutLogAsync(log.Id(), new LogFields { Notes = "slow", Reason = "a better photo", KeepPhotoKeys = [keys[0]], Photos = [Png] }),
+            async () => await (await owner.PutLogAsync(log.Id(), new LogFields { Notes = "saved meanwhile", Reason = "wrong photo", KeepPhotoKeys = [keys[1]], Photos = [] })).ReadAsync(HttpStatusCode.OK));
+
+        Assert.Equal(["Photos"], await answer.InvalidFieldsAsync());
+        var read = await owner.GetLogAsync(log.Id());
+        Assert.Equal("saved meanwhile", read.Text("notes"));
+        Assert.Equal([keys[1]], read.PhotoKeys());
+        Assert.Equal([keys[1]], StoredKeys(api, Category));
     }
 }

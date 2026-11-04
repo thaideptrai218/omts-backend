@@ -6,4 +6,7 @@ namespace OMTS.Application.Common.Interfaces.Persistence;
 public interface IAuditEventRepository
 {
     void Add(AuditEvent auditEvent);
+
+    /// <summary>Whether this database ever audited a record of the type: the rows outlive the record.</summary>
+    Task<bool> AnyOfRecordTypeAsync(string recordType, CancellationToken cancellationToken);
 }

@@ -56,19 +56,23 @@ public class CultivationLogSqlServerTests
         Assert.NotEqual(started.Text("rowVersion"), (await CycleAsync(owner, started.Id())).Text("rowVersion"));
         Assert.Equal(8, Convert.FromBase64String(log.Text("rowVersion")).Length);
 
-        // No field of the log changes, only its photos: the version moves, so a tab open on the old photos fails.
+        // No field of the log changes, only its photos: the version moves, so the save of a parallel change is put after this one.
         var edit = new LogFields { Reason = "a better photo", RowVersion = log.Text("rowVersion"), KeepPhotoKeys = [log.PhotoKeys()[1]] };
         var cycleBefore = (await CycleAsync(owner, started.Id())).Text("rowVersion");
-        var saved = (await (await owner.PutLogAsync(log.Id(), edit)).ReadAsync(HttpStatusCode.OK)).GetProperty("log");
-        Assert.NotEqual(log.Text("rowVersion"), saved.Text("rowVersion"));
+        var firstSaved = (await (await owner.PutLogAsync(log.Id(), edit)).ReadAsync(HttpStatusCode.OK)).GetProperty("log");
+        Assert.NotEqual(log.Text("rowVersion"), firstSaved.Text("rowVersion"));
         Assert.NotEqual(cycleBefore, (await CycleAsync(owner, started.Id())).Text("rowVersion"));
+        Assert.Equal([1, 2], firstSaved.PhotoSlots());
+
+        // NFR-09: the version of a tab open on the old photos, a real one that is stale now, is ignored and the last save wins.
+        var saved = (await (await owner.PutLogAsync(log.Id(), edit)).ReadAsync(HttpStatusCode.OK)).GetProperty("log");
         Assert.Equal([1, 2], saved.PhotoSlots());
-        Assert.Equal("MSG06", await (await owner.PutLogAsync(log.Id(), edit)).ErrorCodeAsync());
+        Assert.DoesNotContain(firstSaved.PhotoKeys()[0], saved.PhotoKeys());
 
         // Nothing changes: no new version, of the log or the cycle.
         var unchanged = saved.Text("rowVersion");
         var cycleNow = (await CycleAsync(owner, started.Id())).Text("rowVersion");
-        var same = new LogFields { Reason = "no change", RowVersion = unchanged, KeepPhotoKeys = saved.PhotoKeys(), Photos = [] };
+        var same = new LogFields { Reason = "no change", KeepPhotoKeys = saved.PhotoKeys(), Photos = [] };
         Assert.Equal(unchanged, (await (await owner.PutLogAsync(log.Id(), same)).ReadAsync(HttpStatusCode.OK)).GetProperty("log").Text("rowVersion"));
         Assert.Equal(cycleNow, (await CycleAsync(owner, started.Id())).Text("rowVersion"));
 
@@ -77,7 +81,7 @@ public class CultivationLogSqlServerTests
         Assert.Equal([1], replaced.PhotoSlots());
         Assert.Equal(replaced.PhotoKeys(), host.StoredKeys(Category));
 
-        await (await owner.RemoveLogAsync(log.Id(), "wrong raft", replaced.Text("rowVersion"))).ReadAsync(HttpStatusCode.NoContent);
+        await (await owner.RemoveLogAsync(log.Id(), "wrong raft", null)).ReadAsync(HttpStatusCode.NoContent);
         Assert.Empty(await KeysInDatabaseAsync(host));
         Assert.Empty(host.StoredKeys(Category));
     }
@@ -151,8 +155,10 @@ public class CultivationLogSqlServerTests
         }
     }
 
+    // NFR-09: no version decides. Saves are put in one order by the row versions: a save in the same moment as another answers MSG06 with nothing saved. Never a 500,
+    // and the row holds what one request sent, with its own files.
     [SqlServerFact]
-    public async Task Parallel_corrections_of_one_log_let_one_win_and_every_stored_file_belongs_to_a_row()
+    public async Task Parallel_corrections_of_one_log_end_with_the_values_of_one_request_and_every_stored_file_belongs_to_the_row()
     {
         var (host, owner, raftId) = await StartAsync();
         await using var _ = host;
@@ -161,13 +167,47 @@ public class CultivationLogSqlServerTests
 
         var answers = await Task.WhenAll(Enumerable.Range(0, 5).Select(i => owner.PutLogAsync(log.Id(), new LogFields
         {
-            Notes = $"try {i}", Reason = "parallel", RowVersion = log.Text("rowVersion"), KeepPhotoKeys = [log.PhotoKeys()[0]], Photos = [Png, Jpeg],
+            Notes = $"try {i}", Reason = "parallel", KeepPhotoKeys = [log.PhotoKeys()[0]], Photos = [Png, Jpeg],
         })));
 
         await AssertAnsweredAsync(answers, HttpStatusCode.OK);
-        Assert.Equal(1, answers.Count(a => a.StatusCode == HttpStatusCode.OK));
+        var saved = new List<JsonElement>();
+        foreach (var answer in answers.Where(a => a.StatusCode == HttpStatusCode.OK))
+        {
+            saved.Add((await answer.ReadAsync(HttpStatusCode.OK)).GetProperty("log"));
+        }
+
+        Assert.NotEmpty(saved);
         var read = await owner.GetLogAsync(log.Id());
+        Assert.Contains(read.Text("notes"), saved.Select(s => s.Text("notes")));
         Assert.Equal([1, 2, 3], read.PhotoSlots());
+        Assert.Contains(log.PhotoKeys()[0], read.PhotoKeys());
+        Assert.Equal(await KeysInDatabaseAsync(host), host.StoredKeys(Category));
+        Assert.Equal(saved.Count, await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.Action == "CultivationLog.Corrected" && e.RecordId == log.Id())));
+    }
+
+    // A correction and a removal of one log: the log is gone or corrected, never half of each, and no file stays without a row.
+    [SqlServerFact]
+    public async Task A_correction_racing_a_removal_never_answers_500_and_leaves_one_consistent_result()
+    {
+        var (host, owner, _) = await StartAsync();
+        await using var _host = host;
+        var zoneId = (await owner.CreateZoneAsync()).Id();
+        for (var round = 0; round < 8; round++)
+        {
+            var cycle = await owner.StartCycleAsync((await owner.CreateRaftAsync(zoneId)).Id());
+            var log = await owner.RecordLogAsync(cycle.Id(), new LogFields { Photos = [Jpeg, Png] });
+
+            var answers = await Task.WhenAll(
+                owner.PutLogAsync(log.Id(), new LogFields { Notes = "corrected", Reason = "wrong note", KeepPhotoKeys = [log.PhotoKeys()[0]], Photos = [Jpeg] }),
+                owner.RemoveLogAsync(log.Id(), "wrong raft", null));
+
+            // A correction that starts after the removal finished finds no log: 404.
+            await AssertAnsweredAsync(answers, HttpStatusCode.OK, HttpStatusCode.NoContent, HttpStatusCode.NotFound);
+            var removed = answers[1].StatusCode == HttpStatusCode.NoContent;
+            Assert.Equal(removed ? 0 : 1, await host.QueryAsync(db => db.CultivationLogs.CountAsync(l => l.CycleId == cycle.Id())));
+        }
+
         Assert.Equal(await KeysInDatabaseAsync(host), host.StoredKeys(Category));
     }
 

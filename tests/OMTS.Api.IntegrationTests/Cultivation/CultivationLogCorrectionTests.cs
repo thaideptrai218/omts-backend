@@ -81,11 +81,7 @@ public class CultivationLogCorrectionTests(AuthApiFactory factory) : IClassFixtu
         Assert.Equal(["Visit date"], await (await owner.PutLogAsync(log.Id(), edit with { VisitDate = Today.AddDays(-11) })).InvalidFieldsAsync());
         Assert.Equal(["Visit date"], await (await owner.PutLogAsync(log.Id(), edit with { VisitDate = Today.AddDays(1) })).InvalidFieldsAsync());
         Assert.Equal(["Notes"], await (await owner.PutLogAsync(log.Id(), edit with { Notes = new string('x', 2001) })).InvalidFieldsAsync());
-        Assert.Equal(["RowVersion"], await (await owner.PutLogAsync(log.Id(), edit with { RowVersion = null })).InvalidFieldsAsync());
-        Assert.Equal("MSG06", await (await owner.PutLogAsync(log.Id(), edit with { RowVersion = StaleRowVersion })).ErrorCodeAsync());
         Assert.Equal(["Reason"], await (await owner.RemoveLogAsync(log.Id(), " ", edit.RowVersion)).InvalidFieldsAsync());
-        Assert.Equal(["RowVersion"], await (await owner.RemoveLogAsync(log.Id(), "wrong raft", null)).InvalidFieldsAsync());
-        Assert.Equal("MSG06", await (await owner.RemoveLogAsync(log.Id(), "wrong raft", StaleRowVersion)).ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.NotFound, (await owner.PutLogAsync(Guid.NewGuid(), edit)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await owner.RemoveLogAsync(Guid.NewGuid(), "wrong raft", edit.RowVersion)).StatusCode);
 

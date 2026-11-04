@@ -14,7 +14,7 @@ using static OMTS.Api.IntegrationTests.Farming.FarmingTestKit;
 
 namespace OMTS.Api.IntegrationTests.Cultivation;
 
-/// <summary>QA of PR C4: the own-record rule, pairs, read-only states, the notification and the dates. A test that fails on purpose names its finding.</summary>
+/// <summary>QA of PR C4: the own-record rule, pairs, read-only states, the notification, the dates, and what a change of a log needs.</summary>
 public class CycleLogsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
     private async Task<LogFields> EditOfAsync(JsonElement log) => new()
@@ -255,11 +255,11 @@ public class CycleLogsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
         Assert.Equal(["Visit date"], await (await setup.Owner.Client.PostLogAsync(setup.CycleId, new LogFields { VisitDate = localToday.AddDays(1) })).InvalidFieldsAsync());
     }
 
-    // FINDING M1 (NFR-09: "Cultivation logs and water measurements have no version check (CYCLE-04, WATER-02)"; the design asks for a rowVersion, and the MSG06 row still cites old UC26: PM to settle). Fails on purpose: both answer 400 RowVersion.
+    // NFR-09: "Cultivation logs and water measurements have no version check (CYCLE-04, WATER-02)".
     [Theory]
     [InlineData("correct")]
     [InlineData("remove")]
-    public async Task M1_a_log_change_needs_no_version_as_nfr_09_says(string action)
+    public async Task A_log_correction_or_removal_needs_no_version(string action)
     {
         var setup = await factory.CycleAsync();
         var log = await setup.Owner.Client.RecordLogAsync(setup.CycleId);
@@ -271,19 +271,43 @@ public class CycleLogsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
         Assert.True(answer.IsSuccessStatusCode, $"{(int)answer.StatusCode}: {await answer.Content.ReadAsStringAsync()}");
     }
 
-    // FINDING L2 (GFR-02, MSG-GEN-08 is the answer of a role that may not use the function). The controller's check of the part names runs before the service's access check,
-    // so a role with no log rights gets the upload's own 400; the same request on a route whose checks all sit in the service answers 403. Fails on purpose: 400 Photos.
+    // Whatever a stale screen or an old client sends is not read, and what was saved last stays.
+    [Theory]
+    [InlineData(AcsTestKit.StaleRowVersion)]
+    [InlineData("not base64!")]
+    [InlineData("")]
+    public async Task A_version_sent_with_a_log_change_is_ignored_and_the_last_save_wins(string version)
+    {
+        var setup = await factory.CycleAsync();
+        var owner = setup.Owner.Client;
+        var log = await owner.RecordLogAsync(setup.CycleId);
+        var edit = new LogFields { Reason = "wrong note", RowVersion = version, KeepPhotoKeys = log.PhotoKeys(), Photos = [] };
+
+        await (await owner.PutLogAsync(log.Id(), edit with { Notes = "first" })).ReadAsync(HttpStatusCode.OK);
+        await (await owner.PutLogAsync(log.Id(), edit with { Notes = "last" })).ReadAsync(HttpStatusCode.OK);
+
+        Assert.Equal("last", (await owner.GetLogAsync(log.Id())).Text("notes"));
+        await (await owner.RemoveLogAsync(log.Id(), "wrong raft", version)).ReadAsync(HttpStatusCode.NoContent);
+    }
+
+    // GFR-02, MSG-GEN-08 is the answer of a role that may not use the function: the service's access check comes before any check of the parts.
     [Theory]
     [InlineData(StaffRole.Accountant)]
     [InlineData(null)]
-    public async Task L2_a_role_without_log_rights_gets_msg_gen_08_whatever_it_uploads(StaffRole? role)
+    public async Task A_role_without_log_rights_gets_msg_gen_08_whatever_file_parts_it_sends(StaffRole? role)
     {
         var setup = await factory.CycleAsync();
+        var log = await setup.Owner.Client.RecordLogAsync(setup.CycleId);
         var client = role is { } staff ? (await factory.StaffAsync(null, staff)).Client : await factory.TraderAsync();
 
-        var answer = await client.PostLogAsync(setup.CycleId, new LogFields { PhotoField = "photo" });
-
-        Assert.True(answer.StatusCode == HttpStatusCode.Forbidden, $"{(int)answer.StatusCode}: {await answer.Content.ReadAsStringAsync()}");
+        foreach (var answer in new[]
+        {
+            await client.PostLogAsync(setup.CycleId, new LogFields { PhotoField = "photo" }),
+            await client.PutLogAsync(log.Id(), new LogFields { Reason = "not mine", PhotoField = "photo" }),
+        })
+        {
+            await AssertForbiddenAsync(answer);
+        }
     }
 
     // "notes left out is cleared": a change to null is a change, saved and audited, and only what changed is in the row.
