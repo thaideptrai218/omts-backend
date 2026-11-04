@@ -98,11 +98,13 @@ public class AccountRulesSqlServerTests
         await using var api = new SqlServerApiFactory(database);
         var client = api.CreateClient();
         var phone = NewPhone();
+        var seen = new List<int>();
 
         for (var round = 0; round < 6; round++)
         {
             var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone })));
             Assert.All(responses, r => Assert.NotEqual(HttpStatusCode.InternalServerError, r.StatusCode));
+            seen.AddRange(responses.Select(r => (int)r.StatusCode));
             await using var db = database.CreateContext();
             foreach (var request in await db.VerificationCodes.Where(c => c.Target == phone).ToListAsync())
             {
@@ -112,7 +114,30 @@ public class AccountRulesSqlServerTests
             await db.SaveChangesAsync();
         }
 
-        Assert.InRange(api.Services.GetRequiredService<FakeSmsSender>().Inbox.List(phone).Count, 1, VerificationCode.MaxCodesPerHour);
+        var sent = api.Services.GetRequiredService<FakeSmsSender>().Inbox.List(phone).Count;
+        Assert.True(sent is >= 1 and <= VerificationCode.MaxCodesPerHour, $"{sent} codes sent; answers {string.Join(",", seen)}");
+    }
+
+    // Simultaneous first requests of one number: one sends its code, and the others are told to wait for it. They used to see
+    // each other's saved rows, all refuse with "too many codes" and leave the user with no code at all.
+    [SqlServerFact]
+    public async Task Simultaneous_first_requests_of_a_number_send_exactly_one_code()
+    {
+        await using var database = SqlServerTestDatabase.Create();
+        await database.MigrateAsync();
+        await using var api = new SqlServerApiFactory(database);
+        var client = api.CreateClient();
+        var phone = NewPhone();
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone })));
+
+        Assert.Single(api.Services.GetRequiredService<FakeSmsSender>().Inbox.List(phone));
+        Assert.Single(responses, r => r.IsSuccessStatusCode);
+        foreach (var refused in responses.Where(r => !r.IsSuccessStatusCode))
+        {
+            Assert.Equal((HttpStatusCode)429, refused.StatusCode);
+            Assert.Equal(2, (await refused.BodyAsync()).GetProperty("sendsLeft").GetInt32());
+        }
     }
 
     [SqlServerFact]

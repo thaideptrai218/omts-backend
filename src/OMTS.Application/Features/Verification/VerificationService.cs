@@ -23,6 +23,7 @@ public sealed class VerificationService(
     ISmsSender smsSender,
     IEmailSender emailSender,
     IUnitOfWork unitOfWork,
+    VerificationStartGate startGate,
     TimeProvider timeProvider)
 {
     /// <summary>The hour of the limits on codes (BR-ACCOUNT-09) and of the guards around them.</summary>
@@ -38,9 +39,18 @@ public sealed class VerificationService(
     /// Limits: see <see cref="VerificationThrottle"/>. The request is
     /// saved before its code is sent, so parallel starts cannot all send: a start that finds another fresh
     /// request backs off with 429. When sending fails the request is removed again, so a failed send changes
-    /// nothing.
+    /// nothing. Starts of one purpose and contact take turns (<see cref="VerificationStartGate"/>), so one of them sends.
     /// </summary>
     public async Task<Result<VerificationStarted>> StartAsync(
+        VerificationPurpose purpose, VerificationChannel channel, string target, Guid? accountId, CancellationToken cancellationToken)
+    {
+        using (await startGate.EnterAsync($"{purpose}|{target}", cancellationToken))
+        {
+            return await StartInTurnAsync(purpose, channel, target, accountId, cancellationToken);
+        }
+    }
+
+    private async Task<Result<VerificationStarted>> StartInTurnAsync(
         VerificationPurpose purpose, VerificationChannel channel, string target, Guid? accountId, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();

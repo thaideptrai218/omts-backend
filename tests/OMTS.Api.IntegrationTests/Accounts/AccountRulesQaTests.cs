@@ -111,7 +111,9 @@ public class AccountRulesQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
         Assert.Equal("MSG-ACCOUNT-06", await paused.ErrorCodeAsync());
         var body = await paused.BodyAsync();
         Assert.InRange(body.GetProperty("retryAfterSeconds").GetInt32(), 1, 60);
-        Assert.EndsWith("after 1 minute.", body.GetProperty("detail").GetString());
+
+        // 60 seconds at the save: the request is seconds later on a busy machine, and then the text counts in seconds.
+        Assert.Matches(@"after (1 minute|\d+ seconds)\.$", body.GetProperty("detail").GetString());
     }
 
     // PM decision 03/11: the same on a wrong current check of the signed-in user.

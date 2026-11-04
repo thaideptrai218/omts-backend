@@ -29,6 +29,7 @@ public partial class VerificationServiceTests
         _sms,
         new NoEmail(),
         new NoSave(),
+        new VerificationStartGate(),
         _time);
 
     [Fact]

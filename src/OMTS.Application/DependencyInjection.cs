@@ -50,6 +50,7 @@ public static class DependencyInjection
 
         // ACS – personal accounts
         services.AddScoped<VerificationThrottle>();
+        services.AddSingleton<VerificationStartGate>();
         services.AddScoped<VerificationService>();
         services.AddScoped<TraderCustomerLinker>();
         services.AddScoped<UsernameGenerator>();
