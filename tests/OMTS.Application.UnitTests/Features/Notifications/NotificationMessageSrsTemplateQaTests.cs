@@ -49,9 +49,9 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
             """{"document_type":"SEA_AREA_ALLOCATION","document_number":"QĐ-7","zone_codes":["KV01"],"expiry_date":"2026-11-29"}"""),
         "water-03" => (
             "MSG-WATER-03", Water03,
-            UserMessages.WaterAlert(false, "Vùng A", null, MeasuredAt, [SalinityLow]),
-            "Water alert: zone Vùng A, raft –, measured on 06:30 20/10/2026. Salinity 12 ‰ is too low (allowed 15–30 ‰). Please check the water.",
-            """{"corrected":false,"zone_name":"Vùng A","raft_code":null,"measurement_time":"2026-10-20T06:30:00+07:00","values_outside":[{"indicator":"SALINITY","value":12,"unit":"‰","direction":"Low","min":15,"max":30}]}"""),
+            UserMessages.WaterAlert(false, "Vùng A", "BE-01", MeasuredAt, [SalinityLow]),
+            "Water alert: zone Vùng A, raft BE-01, measured on 06:30 20/10/2026. Salinity 12 ‰ is too low (allowed 15–30 ‰). Please check the water.",
+            """{"corrected":false,"zone_name":"Vùng A","raft_code":"BE-01","measurement_time":"2026-10-20T06:30:00+07:00","values_outside":[{"indicator":"SALINITY","value":12,"unit":"‰","direction":"Low","min":15,"max":30}]}"""),
         "water-03-corrected" => (
             "MSG-WATER-03", Water03,
             UserMessages.WaterAlert(true, "Vùng A", "BE-01", MeasuredAt, [PhHigh, SalinityLow]),

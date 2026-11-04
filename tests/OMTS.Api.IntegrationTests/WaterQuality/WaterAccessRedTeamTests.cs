@@ -13,7 +13,7 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
-/// ENV-01…ENV-04 roles and access (QA red team): Accountant and Trader never reach water data, thresholds are
+/// WATER-01…WATER-04 roles and access (QA red team): Accountant and Trader never reach water data, thresholds are
 /// set by the Cooperative Owner only, a record id never opens another zone, each action needs its own right,
 /// and a client operation id is scoped to one account and one zone.
 /// </summary>
@@ -37,8 +37,8 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
                 ("detail", () => client.GetAsync($"/api/water-measurements/{confirmed.Id()}")),
                 ("record", () => z.RecordAsync(7m, 20m, client: client)),
                 ("recognize", () => z.RecognizeAsync(client: client)),
-                ("correct", () => client.CorrectAsync(confirmed.Id(), 7.1m, 20m, 1)),
-                ("void", () => client.VoidAsync(confirmed.Id(), 1)),
+                ("correct", () => client.CorrectAsync(confirmed.Id(), 7.1m, 20m)),
+                ("void", () => client.VoidAsync(confirmed.Id())),
                 ("editing", () => client.PostAsync($"/api/water-measurements/{confirmed.Id()}/editing", null)),
                 ("thresholds list", () => client.GetAsync("/api/water-thresholds")),
                 ("zone thresholds", () => client.GetAsync($"/api/zones/{z.Zone.Id}/water-thresholds")),
@@ -56,7 +56,7 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
 
         var stored = await api.QueryAsync(db => db.WaterMeasurements.AsNoTracking().Where(m => m.ZoneId == z.Zone.Id).ToListAsync());
         var single = Assert.Single(stored);
-        Assert.Equal(StatusIds.WaterMeasurement.Confirmed, single.StatusId);
+        Assert.Equal(StatusIds.WaterMeasurement.Active, single.StatusId);
         var zone = await api.QueryAsync(db => db.FarmingZones.AsNoTracking().SingleAsync(x => x.Id == z.Zone.Id));
         Assert.Equal((6.5m, 8.5m), (zone.PhMin!.Value, zone.PhMax!.Value));
     }
@@ -86,17 +86,15 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
     }
 
     [Fact]
-    public async Task Manager_of_zone_A_cannot_recognize_void_or_stop_editing_a_record_of_zone_B_by_id()
+    public async Task Manager_of_zone_A_cannot_void_or_stop_editing_a_record_of_zone_B_by_id()
     {
         var zoneB = await api.ZoneAsync();
-        var draftId = (await (await zoneB.RecognizeAsync("ocr-fail")).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("measurement").Id();
         var confirmed = await zoneB.RecordedAsync(7m, 20m);
         var (managerOfA, _) = await api.StaffAsync((await api.ZoneAsync()).Zone);
 
         var responses = new[]
         {
-            await managerOfA.PostAsync($"/api/water-measurements/{draftId}/recognize", null),
-            await managerOfA.VoidAsync(draftId, 1),
+            await managerOfA.VoidAsync(confirmed.Id()),
             await managerOfA.DeleteAsync($"/api/water-measurements/{confirmed.Id()}/editing"),
             await managerOfA.GetAsync($"/api/water-measurements/{confirmed.Id()}"),
         };
@@ -105,29 +103,26 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
         {
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
             Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
-            Assert.DoesNotContain(draftId.ToString(), await response.Content.ReadAsStringAsync());
+            Assert.DoesNotContain(confirmed.Id().ToString(), await response.Content.ReadAsStringAsync());
         }
 
-        var draft = await api.QueryAsync(db => db.WaterMeasurements.AsNoTracking().SingleAsync(m => m.Id == draftId));
-        Assert.Equal(StatusIds.WaterMeasurement.Draft, draft.StatusId);
-        Assert.Null(draft.OcrPh);
-        Assert.Null(draft.VoidReason);
+        var stored = await api.QueryAsync(db => db.WaterMeasurements.AsNoTracking().SingleAsync(m => m.Id == confirmed.Id()));
+        Assert.Equal(StatusIds.WaterMeasurement.Active, stored.StatusId);
+        Assert.Null(stored.VoidReason);
     }
 
     [Fact]
-    public async Task A_pair_of_a_role_without_water_rights_in_the_zone_acts_on_no_draft()
+    public async Task A_pair_of_a_role_without_water_rights_in_the_zone_acts_on_no_measurement()
     {
         var z = await api.ZoneAsync();
-        var draft = await z.RecordedAsync(7m, 20m, confirm: false);
+        var saved = await z.RecordedAsync(7m, 20m);
         // WATER-01…03 are No for the Accountant (§I.4.4), whatever zone its pair names.
         var (accountant, _) = await api.StaffAsync(z.Zone, StaffRole.Accountant);
 
         var responses = new[]
         {
-            await accountant.PostAsJsonAsync($"/api/water-measurements/{draft.Id()}/confirm", new { }),
-            await accountant.VoidAsync(draft.Id(), 1),
-            await accountant.PostAsync($"/api/water-measurements/{draft.Id()}/editing", null),
-            await accountant.PostAsync($"/api/water-measurements/{draft.Id()}/recognize", null),
+            await accountant.VoidAsync(saved.Id()),
+            await accountant.PostAsync($"/api/water-measurements/{saved.Id()}/editing", null),
         };
 
         foreach (var response in responses)
@@ -136,8 +131,8 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
             Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
         }
 
-        Assert.Equal(StatusIds.WaterMeasurement.Draft,
-            await api.QueryAsync(db => db.WaterMeasurements.Where(m => m.Id == draft.Id()).Select(m => m.StatusId).SingleAsync()));
+        Assert.Equal(StatusIds.WaterMeasurement.Active,
+            await api.QueryAsync(db => db.WaterMeasurements.Where(m => m.Id == saved.Id()).Select(m => m.StatusId).SingleAsync()));
     }
 
     [Fact]
@@ -203,10 +198,12 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
         var otherZone = await zoneA.Owner.PostAsJsonAsync(zoneB.Base, new
         {
             clientOperationId = operationId,
+            raftId = zoneB.Raft.Id,
             measuredAt = DateTimeOffset.UtcNow.AddMinutes(-10),
             ph = 7m,
             salinity = 20m,
-            confirm = true,
+            temperature = 25m,
+            photoKey = await zoneA.Owner.PhotoKeyAsync(zoneB.Zone.Id),
         });
 
         Assert.Equal(HttpStatusCode.Created, byOwner.StatusCode);

@@ -3,7 +3,7 @@ using OMTS.Application.Features.WaterQuality.Dtos;
 
 namespace OMTS.Application.UnitTests.Features.WaterQuality;
 
-/// <summary>Field rules of ENV-01/ENV-02 (values, time, reason) and ENV-04 (threshold pairs, MSG-WATER-05).</summary>
+/// <summary>Field rules of WATER-01/WATER-02 (values, time, reason) and WATER-04 (threshold pairs, MSG-WATER-05).</summary>
 public class WaterInputRulesTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 23, 3, 0, 0, TimeSpan.Zero);
@@ -20,11 +20,21 @@ public class WaterInputRulesTests
 
     [Theory]
     [InlineData(0, true)]
-    [InlineData(100, true)]
-    [InlineData(100.01, false)]
+    [InlineData(50, true)]
+    [InlineData(50.01, false)]
     [InlineData(-1, false)]
-    public void Salinity_is_0_to_100(double value, bool valid) =>
+    public void Salinity_is_0_to_50(double value, bool valid) =>
         Assert.Equal(valid, WaterValueRules.IsValidSalinity((decimal)value));
+
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(45, true)]
+    [InlineData(28.5, true)]
+    [InlineData(45.01, false)]
+    [InlineData(-0.01, false)]
+    [InlineData(28.555, false)]
+    public void Temperature_is_0_to_45_with_two_decimals(double value, bool valid) =>
+        Assert.Equal(valid, WaterValueRules.IsValidTemperature((decimal)value));
 
     [Fact]
     public void Measured_at_may_be_up_to_five_minutes_ahead_of_the_server()
@@ -34,11 +44,11 @@ public class WaterInputRulesTests
     }
 
     [Fact]
-    public void Required_values_are_named_when_missing_and_optional_ones_only_when_invalid()
+    public void Every_value_is_required_and_the_missing_or_invalid_ones_are_named()
     {
-        Assert.Equal(["pH", "Salinity", "Measured at"], WaterValueRules.InvalidFields(null, null, null, Now, required: true));
-        Assert.Empty(WaterValueRules.InvalidFields(null, null, null, Now, required: false));
-        Assert.Equal(["Salinity"], WaterValueRules.InvalidFields(7m, 101m, Now, Now, required: false));
+        Assert.Equal(["pH", "Salinity", "Temperature", "Measured at"], WaterValueRules.InvalidFields(null, null, null, null, Now));
+        Assert.Equal(["Salinity", "Temperature"], WaterValueRules.InvalidFields(7m, 51m, 46m, Now, Now));
+        Assert.Empty(WaterValueRules.InvalidFields(7m, 50m, 45m, Now, Now));
     }
 
     [Theory]
@@ -59,29 +69,42 @@ public class WaterInputRulesTests
     public void Thresholds_pairs_are_set_or_cleared_together()
     {
         var cleared = WaterThresholdRules.Validate(new SetWaterThresholdsRequest(null, null, null, null));
-        var halfPair = WaterThresholdRules.Validate(new SetWaterThresholdsRequest(6.5m, null, null, 30m));
+        var halfPair = WaterThresholdRules.Validate(new SetWaterThresholdsRequest(6.5m, null, null, 30m, null, 35m));
 
         Assert.True(cleared.IsSuccess);
         Assert.Equal("MSG-GEN-01", halfPair.Error!.Message.Code);
-        Assert.Equal(new[] { "pH maximum", "Salinity minimum" }, (IEnumerable<string>)halfPair.Error.Details!["fields"]!);
+        Assert.Equal(new[] { "pH maximum", "Salinity minimum", "Temperature minimum" }, (IEnumerable<string>)halfPair.Error.Details!["fields"]!);
     }
 
     [Fact]
-    public void Thresholds_out_of_range_are_invalid_before_the_order_check()
+    public void Thresholds_keep_the_temperature_pair()
     {
-        var result = WaterThresholdRules.Validate(new SetWaterThresholdsRequest(9m, 15m, 50m, 10m));
+        var result = WaterThresholdRules.Validate(new SetWaterThresholdsRequest(6.5m, 8.5m, 15m, 30m, 10m, 35m));
 
-        Assert.Equal("MSG-GEN-01", result.Error!.Message.Code);
-        Assert.Equal("pH maximum", result.Error.Details!["field"]);
+        Assert.Equal(new WaterThresholds(6.5m, 8.5m, 15m, 30m, 10m, 35m), result.Value);
     }
 
     [Theory]
-    [InlineData(8.5, 8.5, 10, 20, "pH minimum", "pH")]
-    [InlineData(6.5, 8.5, 20, 10, "Salinity minimum", "salinity")]
-    [InlineData(8.5, 6.5, 20, 10, "pH minimum", "pH and salinity")]
-    public void Minimum_not_less_than_maximum_is_MSG_WATER_05(double phMin, double phMax, double salMin, double salMax, string field, string indicator)
+    [InlineData(9, 15, 40, 10, 5, 6, "pH maximum")]
+    [InlineData(9, 10, 40, 51, 5, 6, "Salinity maximum")]
+    [InlineData(9, 10, 40, 45, 5, 46, "Temperature maximum")]
+    public void Thresholds_out_of_range_are_invalid_before_the_order_check(double phMin, double phMax, double salMin, double salMax, double tempMin, double tempMax, string field)
     {
-        var result = WaterThresholdRules.Validate(new SetWaterThresholdsRequest((decimal)phMin, (decimal)phMax, (decimal)salMin, (decimal)salMax));
+        var result = WaterThresholdRules.Validate(new SetWaterThresholdsRequest((decimal)phMin, (decimal)phMax, (decimal)salMin, (decimal)salMax, (decimal)tempMin, (decimal)tempMax));
+
+        Assert.Equal("MSG-GEN-01", result.Error!.Message.Code);
+        Assert.Equal(field, result.Error.Details!["field"]);
+    }
+
+    [Theory]
+    [InlineData(8.5, 8.5, 10, 20, 10, 35, "pH minimum", "pH")]
+    [InlineData(6.5, 8.5, 20, 10, 10, 35, "Salinity minimum", "salinity")]
+    [InlineData(6.5, 8.5, 10, 20, 35, 35, "Temperature minimum", "temperature")]
+    [InlineData(8.5, 6.5, 20, 10, 10, 35, "pH minimum", "pH and salinity")]
+    [InlineData(8.5, 6.5, 20, 10, 35, 10, "pH minimum", "pH, salinity and temperature")]
+    public void Minimum_not_less_than_maximum_is_MSG_WATER_05(double phMin, double phMax, double salMin, double salMax, double tempMin, double tempMax, string field, string indicator)
+    {
+        var result = WaterThresholdRules.Validate(new SetWaterThresholdsRequest((decimal)phMin, (decimal)phMax, (decimal)salMin, (decimal)salMax, (decimal)tempMin, (decimal)tempMax));
 
         Assert.Equal("MSG-WATER-05", result.Error!.Message.Code);
         Assert.Equal("MSG28", result.Error.Message.LegacyCode);

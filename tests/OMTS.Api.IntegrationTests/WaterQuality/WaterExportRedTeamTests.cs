@@ -12,13 +12,14 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
-/// ENV-03 history, chart and Excel export limits (QA red team): one zone per file, text is never a formula,
-/// drafts never and corrected versions only as rows (never in the monthly summary), paging and day-range bounds.
+/// WATER-03 history, chart and Excel export limits (QA red team): one zone per file, text is never a formula, voided
+/// measurements never reach the export or the monthly summary, paging and day-range bounds.
 /// </summary>
 public class WaterExportRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApiFactory>
 {
-    private const int MeasurementPointColumn = 2;
+    private const int RaftColumn = 2;
     private const int PhColumn = 3;
+    private const int TemperatureColumn = 5;
     private const int MeasuredByColumn = 9;
     private const int SummaryPhMaximumColumn = 4;
     private const int SummaryPhCountColumn = 5;
@@ -27,15 +28,17 @@ public class WaterExportRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
     public async Task Export_of_a_zone_never_contains_another_zones_measurements()
     {
         var zoneA = await api.ZoneAsync();
-        var zoneB = zoneA with { Zone = await api.AddZoneAsync(NewCode()) };
-        await zoneA.RecordedAsync(7.1m, 20m);
+        var zoneB = await api.ZoneAsync();
+        await zoneA.RecordedAsync(7.1m, 20m, temperature: 26.5m);
         await zoneB.RecordedAsync(7.9m, 21m);
 
         var export = await zoneA.Owner.GetAsync($"{zoneA.Base}/export");
         using var workbook = await WorkbookAsync(export);
 
-        var phValues = workbook.Worksheet("Measurements").RowsUsed().Skip(1).Select(r => r.Cell(PhColumn).GetValue<decimal>()).ToList();
-        Assert.Equal([7.1m], phValues);
+        var rows = workbook.Worksheet("Measurements").RowsUsed().Skip(1).ToList();
+        Assert.Equal([7.1m], rows.Select(r => r.Cell(PhColumn).GetValue<decimal>()));
+        Assert.Equal([26.5m], rows.Select(r => r.Cell(TemperatureColumn).GetValue<decimal>()));
+        Assert.Equal([zoneA.Raft.Code], rows.Select(r => r.Cell(RaftColumn).GetString()));
         var summaryCount = workbook.Worksheet("Monthly summary").RowsUsed().Skip(1).Sum(r => r.Cell(SummaryPhCountColumn).GetValue<int>());
         Assert.Equal(1, summaryCount);
     }
@@ -44,9 +47,9 @@ public class WaterExportRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
     public async Task Text_starting_with_an_equals_sign_is_written_as_text_never_as_a_formula()
     {
         var z = await api.ZoneAsync();
-        const string point = "=HYPERLINK(\"http://evil.example\",\"Click\")";
+        const string raftCode = "=HYPERLINK(\"http://evil.example\",\"Click\")";
         const string name = "=1+2";
-        await api.UpdateAsync<FarmingZone>(z.Zone.Id, zone => zone.WaterMeasurementPoint = point);
+        await api.UpdateAsync<Raft>(z.Raft.Id, raft => raft.Code = raftCode);
         var manager = await StaffNamedAsync(z.Zone, name);
         await z.RecordedAsync(7.3m, 20m, client: manager);
 
@@ -54,7 +57,7 @@ public class WaterExportRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
         using var workbook = await WorkbookAsync(export);
 
         var row = workbook.Worksheet("Measurements").Row(2);
-        foreach (var (column, text) in new[] { (MeasurementPointColumn, point), (MeasuredByColumn, name) })
+        foreach (var (column, text) in new[] { (RaftColumn, raftCode), (MeasuredByColumn, name) })
         {
             var cell = row.Cell(column);
             Assert.False(cell.HasFormula, $"column {column} is a formula");
@@ -64,20 +67,21 @@ public class WaterExportRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
     }
 
     [Fact]
-    public async Task Drafts_are_never_exported_and_corrected_rows_never_reach_the_monthly_summary()
+    public async Task Voided_measurements_are_never_exported_and_a_correction_shows_its_new_values_in_the_summary()
     {
         var z = await api.ZoneAsync();
-        await z.RecordedAsync(13m, 22m, confirm: false);
+        var voided = await z.RecordedAsync(13m, 22m);
+        Assert.Equal(HttpStatusCode.OK, (await z.Owner.VoidAsync(voided.Id())).StatusCode);
         var original = await z.RecordedAsync(9.0m, 20m);
-        Assert.Equal(HttpStatusCode.Created, (await z.Owner.CorrectAsync(original.Id(), 7.2m, 20m, recordVersion: 1)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await z.Owner.CorrectAsync(original.Id(), 7.2m, 20m)).StatusCode);
 
-        using var drafts = await WorkbookAsync(await z.Owner.GetAsync($"{z.Base}/export?status=Draft"));
-        using var corrected = await WorkbookAsync(await z.Owner.GetAsync($"{z.Base}/export?status=Corrected"));
+        using var onlyVoided = await WorkbookAsync(await z.Owner.GetAsync($"{z.Base}/export?status=Voided"));
+        using var all = await WorkbookAsync(await z.Owner.GetAsync($"{z.Base}/export?status=All"));
 
-        Assert.Single(drafts.Worksheet("Measurements").RowsUsed());
-        var rows = corrected.Worksheet("Measurements").RowsUsed().Skip(1).ToList();
-        Assert.Equal([9.0m], rows.Select(r => r.Cell(PhColumn).GetValue<decimal>()));
-        var months = corrected.Worksheet("Monthly summary").RowsUsed().Skip(1).ToList();
+        Assert.Single(onlyVoided.Worksheet("Measurements").RowsUsed());
+        var rows = all.Worksheet("Measurements").RowsUsed().Skip(1).ToList();
+        Assert.Equal([7.2m], rows.Select(r => r.Cell(PhColumn).GetValue<decimal>()));
+        var months = all.Worksheet("Monthly summary").RowsUsed().Skip(1).ToList();
         Assert.Equal(1, months.Sum(r => r.Cell(SummaryPhCountColumn).GetValue<int>()));
         Assert.Equal(7.2m, months.Single(r => r.Cell(SummaryPhCountColumn).GetValue<int>() == 1).Cell(SummaryPhMaximumColumn).GetValue<decimal>());
     }

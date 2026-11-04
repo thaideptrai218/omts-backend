@@ -135,8 +135,8 @@ public class DemoDataSeedTests
         await AssertWaterDataAsync(db, today);
     }
 
-    // ENV (OMTS-214): thresholds and 30 days of readings per In Use zone, three outside the thresholds plus a mistyped
-    // salinity that was corrected (both versions kept), and one voided reading.
+    // WATER (OMTS-219): thresholds and 30 days of readings per In Use zone, at its rafts, each with a temperature and a photo:
+    // three outside the thresholds, a mistyped salinity corrected in place and one voided reading.
     private static async Task AssertWaterDataAsync(OmtsDbContext db, DateOnly today)
     {
         var zones = await db.FarmingZones.Where(z => z.StatusId == StatusIds.Usage.InUse).ToListAsync();
@@ -144,16 +144,22 @@ public class DemoDataSeedTests
         Assert.All(zones, z => Assert.Equal((7.5m, 8.5m, 18m, 32m), (z.PhMin!.Value, z.PhMax!.Value, z.SalinityMin!.Value, z.SalinityMax!.Value)));
 
         var water = await db.WaterMeasurements.AsNoTracking().ToListAsync();
-        Assert.Equal(61, water.Count);
-        Assert.Equal(59, water.Count(m => m.StatusId == StatusIds.WaterMeasurement.Confirmed));
-        Assert.Single(water, m => m.StatusId == StatusIds.WaterMeasurement.Superseded && m.ThresholdExceeded && m.Salinity == 2.6m);
-        Assert.Single(water, m => m.CorrectedFromMeasurementId is not null && m.StatusId == StatusIds.WaterMeasurement.Confirmed && !m.ThresholdExceeded);
+        Assert.Equal(60, water.Count);
+        Assert.Equal(59, water.Count(m => m.StatusId == StatusIds.WaterMeasurement.Active));
+        Assert.DoesNotContain(water, m => m.Salinity == 2.6m);
+        var correctedId = await db.AuditEvents.Where(e => e.Action == "WaterMeasurement.Corrected").Select(e => e.RecordId).SingleAsync();
+        Assert.Single(water, m => m.Id == correctedId && m.Salinity == 26.0m && m.StatusId == StatusIds.WaterMeasurement.Active && !m.ThresholdExceeded && m.AlertedAt is null);
         Assert.Single(water, m => m.StatusId == StatusIds.WaterMeasurement.Voided && m.VoidReason is { Length: > 0 });
-        Assert.Equal(3, water.Count(m => m.StatusId == StatusIds.WaterMeasurement.Confirmed && m.ThresholdExceeded));
-        Assert.All(water, m => Assert.Equal(7.5m, m.PhMinUsed));
+        Assert.Equal(3, water.Count(m => m.StatusId == StatusIds.WaterMeasurement.Active && m.ThresholdExceeded));
+        Assert.All(water, m => Assert.Equal((7.5m, 15m, 32m), (m.PhMinUsed!.Value, m.TemperatureMinUsed!.Value, m.TemperatureMaxUsed!.Value)));
+        Assert.All(water, m => Assert.InRange(m.Temperature, 15m, 32m));
+        Assert.Equal(60, water.Select(m => m.PhotoUrl).Distinct().Count());
+        var rafts = await db.Rafts.AsNoTracking().ToDictionaryAsync(r => r.Id);
+        Assert.All(water, m => Assert.Equal((m.ZoneId, StatusIds.Usage.InUse), (rafts[m.RaftId].ZoneId, rafts[m.RaftId].StatusId)));
+        Assert.All(water.GroupBy(m => m.ZoneId), zone => Assert.Equal(8, zone.Select(m => m.RaftId).Distinct().Count()));
         foreach (var zone in zones)
         {
-            var days = water.Where(m => m.ZoneId == zone.Id && m.CorrectedFromMeasurementId is null)
+            var days = water.Where(m => m.ZoneId == zone.Id)
                 .Select(m => BusinessClock.ToBusinessDate(m.MeasuredAt)).ToList();
             Assert.Equal(30, days.Distinct().Count());
             Assert.All(days, d => Assert.InRange(d, today.AddDays(-30), today.AddDays(-1)));
