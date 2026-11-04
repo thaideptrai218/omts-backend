@@ -23,4 +23,7 @@ public static class FileCategories
 
     /// <summary>FARM-01.1 certificate file, <c>CooperativeCertification.FileUrl</c>.</summary>
     public const string CooperativeCertifications = "cooperative-certifications";
+
+    /// <summary>CYCLE-04 photos of a cultivation log, <c>CultivationLogPhoto.FileKey</c>. Staff only, never public (BR-FARM-09).</summary>
+    public const string CultivationLogPhotos = "cultivation-log-photos";
 }

@@ -25,6 +25,9 @@ public static class RelatedRecordTypes
 
     public const string Account = "Account";
 
+    /// <summary>A cultivation log (CYCLE-04); it has no code of its own, so the code shown is its raft's.</summary>
+    public const string CultivationLog = "CultivationLog";
+
     public static readonly IReadOnlyDictionary<string, string> Names = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         [WaterMeasurement] = "Water measurement",
@@ -32,5 +35,6 @@ public static class RelatedRecordTypes
         [ZoneLicense] = "Zone license",
         [CooperativeCertification] = "Certification",
         [Account] = "Account",
+        [CultivationLog] = "Cultivation log",
     };
 }

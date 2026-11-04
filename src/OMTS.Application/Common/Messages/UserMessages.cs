@@ -124,6 +124,13 @@ public static class UserMessages
     public static UserMessage MinimumNotLessThanMaximum(string indicator) => new(
         Water05, $"The minimum of {indicator} must be less than the maximum. The thresholds were not saved. Please correct the values.", Legacy.Msg28);
 
+    /// <summary>MSG-CYCLE-04 (CYCLE-04): notification to the Cooperative Owner when a cultivation log is saved.</summary>
+    public static UserMessage CultivationLogRecorded(string raftCode, DateOnly visitDate) => new(
+        Cycle04, $"Raft {raftCode}: a cultivation log was recorded for the visit on {Date(visitDate)}. Please review it.")
+    {
+        Parameters = new Dictionary<string, object?> { ["raft_code"] = raftCode, ["visit_date"] = visitDate },
+    };
+
     /// <summary>MSG-WATER-06 (GFR-04): reminder to measure the water of a zone.</summary>
     /// <param name="lastDate">The business day of the latest measurement, or the start of the overdue period when there is none.</param>
     public static UserMessage WaterMeasurementOverdue(string zoneName, DateOnly lastDate) => new(

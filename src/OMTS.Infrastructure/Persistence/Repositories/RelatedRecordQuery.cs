@@ -14,6 +14,9 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
             case RelatedRecordTypes.WaterMeasurement:
                 var zoneIds = await db.WaterMeasurements.AsNoTracking().Where(m => m.Id == recordId).Select(m => m.ZoneId).ToListAsync(cancellationToken);
                 return zoneIds.Count == 0 ? null : new RelatedRecordLocation(zoneIds[0]);
+            case RelatedRecordTypes.CultivationLog:
+                var logZoneIds = await db.CultivationLogs.AsNoTracking().Where(l => l.Id == recordId).Select(l => l.Cycle.Raft.ZoneId).ToListAsync(cancellationToken);
+                return logZoneIds.Count == 0 ? null : new RelatedRecordLocation(logZoneIds[0]);
             case RelatedRecordTypes.FarmingZone:
                 return await db.FarmingZones.AnyAsync(z => z.Id == recordId, cancellationToken) ? new RelatedRecordLocation(recordId) : null;
             // Owner-only records: their zones are not checked.

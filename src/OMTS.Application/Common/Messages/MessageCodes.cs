@@ -19,6 +19,8 @@ public static class MessageCodes
     public const string Farm01 = "MSG-FARM-01";
     public const string Farm02 = "MSG-FARM-02";
 
+    public const string Cycle04 = "MSG-CYCLE-04";
+
     public const string Water01 = "MSG-WATER-01";
     public const string Water03 = "MSG-WATER-03";
     public const string Water05 = "MSG-WATER-05";
@@ -52,9 +54,10 @@ public static class MessageCodes
 
     /// <summary>
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-22, the
-    /// related record of a notification no longer exists (ACCOUNT-08 is new in PR 0.5).
+    /// related record of a notification no longer exists (ACCOUNT-08 is new in PR 0.5), and MSG-CYCLE-04, a new
+    /// cultivation log to review (CYCLE-04 is new in PR C4).
     /// </summary>
-    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal) { Account22 };
+    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal) { Account22, Cycle04 };
 
     /// <summary>
     /// Codes of the old list. Most are only sent as <c>legacyCode</c> next to the new code, for one release.

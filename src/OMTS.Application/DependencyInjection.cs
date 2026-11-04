@@ -9,6 +9,7 @@ using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Cooperatives;
 using OMTS.Application.Features.Employees;
 using OMTS.Application.Features.Cultivation.Cycles;
+using OMTS.Application.Features.Cultivation.CultivationLogs;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Farming.Licenses;
@@ -93,6 +94,12 @@ public static class DependencyInjection
         // CYCLE – cultivation cycles and the lane states derived from their records
         services.AddScoped<LaneStateReader>();
         services.AddScoped<CultivationCycleViews>();
+        services.AddScoped<CycleWriteGuard>();
+        services.AddScoped<CultivationLogViews>();
+        services.AddScoped<CultivationLogPhotoStore>();
+        services.AddScoped<CultivationLogService>();
+        services.AddScoped<CultivationLogCorrectionService>();
+        services.AddScoped<CultivationLogReadService>();
         services.AddScoped<CultivationCycleService>();
         services.AddScoped<CultivationCycleReadService>();
         services.AddScoped<CultivationProgressService>();

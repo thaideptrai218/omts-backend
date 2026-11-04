@@ -10,15 +10,16 @@ public sealed class AmbientActor
 {
     public Guid? AccountId { get; private set; }
 
-    /// <summary>Acts as <paramref name="accountId"/> until the returned handle is disposed.</summary>
+    /// <summary>Acts as <paramref name="accountId"/> until the returned handle is disposed, then as before.</summary>
     public IDisposable Use(Guid accountId)
     {
+        var previous = AccountId;
         AccountId = accountId;
-        return new Reset(this);
+        return new Reset(this, previous);
     }
 
-    private sealed class Reset(AmbientActor actor) : IDisposable
+    private sealed class Reset(AmbientActor actor, Guid? previous) : IDisposable
     {
-        public void Dispose() => actor.AccountId = null;
+        public void Dispose() => actor.AccountId = previous;
     }
 }

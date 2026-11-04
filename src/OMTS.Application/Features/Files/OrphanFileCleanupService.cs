@@ -17,28 +17,31 @@ public sealed class OrphanFileCleanupService(
     ILogger<OrphanFileCleanupService> logger)
 {
     /// <summary>
-    /// Raft photos, license files, cooperative cover photos and certificate files: each belongs to one column, so "no
-    /// record points to it" is certain.
+    /// Raft photos, license files, cooperative cover photos, certificate files and cultivation log photos: each belongs to
+    /// one column, so "no record points to it" is certain.
     /// </summary>
     public static readonly IReadOnlyList<string> Categories =
     [
         FileCategories.RaftPhotos, FileCategories.ZoneLicenses, FileCategories.CooperativeCoverPhotos, FileCategories.CooperativeCertifications,
+        FileCategories.CultivationLogPhotos,
     ];
 
     /// <summary>
-    /// Categories of the cooperative whose files may all be unreferenced in a real database: the cover photo was removed,
-    /// or the last certification. While the database points to no file of the category, it counts as this environment's
+    /// Categories whose files may all be unreferenced in a real database: the cover photo was removed, the last certification,
+    /// or the last cultivation log. While the database points to no file of the category, it counts as this environment's
     /// when it holds the cooperative.
     /// </summary>
-    private static readonly IReadOnlySet<string> CooperativeCategories =
-        new HashSet<string>(StringComparer.Ordinal) { FileCategories.CooperativeCoverPhotos, FileCategories.CooperativeCertifications };
+    private static readonly IReadOnlySet<string> MayAllBeUnreferenced = new HashSet<string>(StringComparer.Ordinal)
+    {
+        FileCategories.CooperativeCoverPhotos, FileCategories.CooperativeCertifications, FileCategories.CultivationLogPhotos,
+    };
 
     /// <summary>
     /// Deletes the category's files written before <paramref name="writtenBefore"/> that no record points to, and
     /// returns how many were deleted. Younger files are kept: their upload may still wait for the save pointing to it.
     /// Nothing is deleted (a warning is logged) when the database does not look like this storage's own: when it points
     /// to files of the category but none of them is stored, for raft photos and license files also when it points to none
-    /// at all, and for the cooperative's cover photos and certificate files when it holds no cooperative.
+    /// at all, and for cover photos, certificate files and cultivation log photos when it holds no cooperative.
     /// </summary>
     public async Task<int> CleanAsync(string category, DateTimeOffset writtenBefore, CancellationToken cancellationToken)
     {
@@ -56,11 +59,11 @@ public sealed class OrphanFileCleanupService(
 
         // Read after the listing: a record saved in between points to a file younger than the grace period.
         var referenced = await references.ReferencedKeysAsync(category, cancellationToken);
-        if (CooperativeCategories.Contains(category) && referenced.Count == 0)
+        if (MayAllBeUnreferenced.Contains(category) && referenced.Count == 0)
         {
             if (!await cooperatives.ExistsAsync(cancellationToken))
             {
-                // Cooperative files but no cooperative: the database belongs to another environment, or is empty.
+                // Files of a cooperative but no cooperative: the database belongs to another environment, or is empty.
                 logger.LogWarning(
                     "Orphan file clean-up of {Category} skipped: the database holds no cooperative; check that this environment has a storage of its own.",
                     category);

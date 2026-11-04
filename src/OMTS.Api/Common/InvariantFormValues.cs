@@ -62,6 +62,24 @@ internal static class InvariantFormValues
         return string.IsNullOrWhiteSpace(value) || bool.TryParse(value.Trim(), out result);
     }
 
+    /// <summary>A date as in a JSON body, <c>yyyy-MM-dd</c>.</summary>
+    public static bool TryDate(string? value, out DateOnly? result)
+    {
+        result = null;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        if (!DateOnly.TryParseExact(value.Trim(), "yyyy'-'MM'-'dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+        {
+            return false;
+        }
+
+        result = parsed;
+        return true;
+    }
+
     public static bool TryDateTimeOffset(string? value, out DateTimeOffset? result)
     {
         result = null;
