@@ -44,7 +44,7 @@ public sealed class WaterMeasurementQueryService(
         // The page is capped so (page - 1) * pageSize cannot overflow into a negative OFFSET.
         var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
         var (items, total) = await measurements.SearchAsync(zoneId, period.FromInstant, period.ToExclusive, statusIds, page, pageSize, cancellationToken);
-        var empty = total == 0 ? UserMessages.NoDataForFilters(query.Status is { Count: > 0 } ? "zone, period and status" : "zone and period") : null;
+        var empty = total == 0 ? UserMessages.NoDataForFilters(WaterMeasurementStatuses.NamesStatus(query.Status) ? "zone, period and status" : "zone and period") : null;
         return new WaterHistoryPage(await views.ListItemsAsync(items, cancellationToken), page, pageSize, total, period.From, period.To, empty?.Text, empty?.Code);
     }
 

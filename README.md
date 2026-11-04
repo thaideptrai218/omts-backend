@@ -243,7 +243,8 @@ calendar month after that date it gets MSG-WATER-06, sent to the Zone Managers o
 none, and sent again a month after the last reminder while no new measurement moves the date. A void moves the date back;
 the repeat still counts from the last reminder. Like the zone license reminder (07:00), a host started after the run time
 runs it once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A second run
-on the same day sends nothing.
+on the same day sends nothing. Each zone is saved on its own: a zone saved during the run, or one with nobody to notify,
+is simply checked again the next day, and the other zones are not affected.
 
 A replaced raft photo or license file is removed right after the save, and the upload of a failed save right away.
 `OrphanFileCleanupJob` runs every day at 03:00 (Asia/Ho_Chi_Minh) and deletes what such a removal left behind: raft

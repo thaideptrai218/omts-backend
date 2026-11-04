@@ -24,11 +24,9 @@ public static class WaterMeasurementStatuses
     /// Status ids of a filter given as repeated and/or comma-separated names (Active, Voided, All). Empty means both
     /// (WATER-03 step 3: a voided measurement stays in the history); an unknown name gives null.
     /// </summary>
-    public static IReadOnlyList<int>? ParseFilter(IEnumerable<string>? values)
+    public static IReadOnlyList<int>? ParseFilter(IEnumerable<string?>? values)
     {
-        var names = (values ?? [])
-            .SelectMany(v => v.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            .ToList();
+        var names = NamesIn(values);
         if (names.Count == 0)
         {
             return ByName["All"];
@@ -47,6 +45,14 @@ public static class WaterMeasurementStatuses
 
         return ids.Order().ToList();
     }
+
+    /// <summary>Whether the filter names a status: <c>status=</c> and <c>status=,</c> name none, so MSG-GEN-10 does not mention one.</summary>
+    public static bool NamesStatus(IEnumerable<string?>? values) => NamesIn(values).Count > 0;
+
+    // The model binder gives "status=" as one null element.
+    private static List<string> NamesIn(IEnumerable<string?>? values) => (values ?? [])
+        .SelectMany(v => (v ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        .ToList();
 
     /// <summary>409 MSG-GEN-09 for a change the record's status does not allow.</summary>
     public static AppError CannotChange(IStatusCatalog statusCatalog, int currentStatusId) =>

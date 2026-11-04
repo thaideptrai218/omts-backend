@@ -1,9 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common;
 using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.WaterQuality;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
@@ -214,21 +216,46 @@ public class WaterHistoryQaTestsReminder
         Assert.Equal(account.Id, (await api.RemindersOfAsync(managed.Zone)).Single().RecipientAccountId);
     }
 
-    // Finding L-1: GFR-04 reads the reminders "already sent from the notifications". The zone marker is set even when nobody
-    // was notified, here no Zone Manager and the only Owner locked: nothing was sent, yet the zone waits a whole month.
+    // GFR-04 reads the reminders "already sent from the notifications": the zone marker is set only when someone was notified.
+    // Here no Zone Manager and the only Owner locked: nothing was sent, so the next day checks the zone again.
     [Fact]
-    public async Task QaL1_a_run_that_notified_nobody_does_not_hold_back_the_next_days_reminder()
+    public async Task A_run_that_notified_nobody_does_not_count_and_does_not_hold_back_the_next_days_reminder()
     {
         await using var api = new WaterApiFactory();
         var z = await api.ZoneAsync();
         await z.OpenCycleAsync(D("2026-01-10"));
         await api.UpdateAsync<Account>(z.OwnerAccount.Id, a => a.StatusId = StatusIds.Account.Locked);
 
-        await api.RemindOnAsync(D("2026-03-01"));
+        Assert.Equal(0, await api.RemindOnAsync(D("2026-03-01")));
         Assert.Empty(await api.RemindersOfAsync(z.Zone));
         await api.UpdateAsync<Account>(z.OwnerAccount.Id, a => a.StatusId = StatusIds.Account.Active);
 
         Assert.Equal(1, await api.RemindOnAsync(D("2026-03-02")));
+        Assert.Equal(0, await api.RemindOnAsync(D("2026-03-03")));
+        Assert.Single(await api.RemindersOfAsync(z.Zone));
+    }
+
+    // Each zone is read again in its own unit of work: what changed since the list of candidates counts.
+    [Fact]
+    public async Task A_zone_that_changed_after_the_candidates_were_read_is_checked_again_and_gets_nothing()
+    {
+        await using var api = new WaterApiFactory();
+        var measured = await api.ZoneAsync();
+        var discontinued = await api.ZoneAsync();
+        await measured.OpenCycleAsync(D("2026-01-10"));
+        await discontinued.OpenCycleAsync(D("2026-01-10"));
+        using var scope = api.Services.CreateScope();
+        var reminder = scope.ServiceProvider.GetRequiredService<WaterMeasurementOverdueReminder>();
+        var today = D("2026-03-01");
+        Assert.Equal(2, (await reminder.CandidateZoneIdsAsync(today, default)).Count);
+
+        await measured.AddMeasurementAsync(today);
+        await api.UpdateAsync<FarmingZone>(discontinued.Zone.Id, zone => zone.StatusId = StatusIds.Usage.Discontinued);
+
+        Assert.False(await reminder.RemindAsync(measured.Zone.Id, today, default));
+        Assert.False(await reminder.RemindAsync(discontinued.Zone.Id, today, default));
+        Assert.Empty(await api.RemindersOfAsync(measured.Zone));
+        Assert.Empty(await api.RemindersOfAsync(discontinued.Zone));
     }
 
     private static Task AddAtAsync(WaterZone z, DateTimeOffset measuredAt) =>

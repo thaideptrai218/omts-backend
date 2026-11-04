@@ -22,6 +22,20 @@ public class WaterMeasurementStatusesTests
         Assert.Null(WaterMeasurementStatuses.ParseFilter(["Draft"]));
     }
 
+    [Fact]
+    public void An_empty_filter_names_no_status_and_is_no_filter()
+    {
+        foreach (var empty in new string?[]?[] { null, [], [null], [""], [","], [" , "], ["", ","] })
+        {
+            Assert.False(WaterMeasurementStatuses.NamesStatus(empty));
+            Assert.Equal([S.Active, S.Voided], WaterMeasurementStatuses.ParseFilter(empty));
+        }
+
+        Assert.True(WaterMeasurementStatuses.NamesStatus([null, "Voided"]));
+        Assert.Equal([S.Voided], WaterMeasurementStatuses.ParseFilter([null, "Voided"]));
+        Assert.True(WaterMeasurementStatuses.NamesStatus(["All"]));
+    }
+
     [Theory]
     [InlineData(S.Active, false, WaterAlertState.None)]
     [InlineData(S.Active, true, WaterAlertState.Active)]

@@ -102,7 +102,8 @@ public static class DependencyInjection
 
         // Overdue water measurement reminder (formerly JOB-05)
         services.AddOptions<WaterMeasurementOverdueOptions>().Bind(configuration.GetSection(WaterMeasurementOverdueOptions.SectionName));
-        services.AddHostedService<WaterMeasurementOverdueJob>();
+        services.AddSingleton<WaterMeasurementOverdueJob>();
+        services.AddHostedService<WaterMeasurementOverdueHostedService>();
 
         // Raft photo and license files no record points to (cooperative logos are never touched)
         services.AddOptions<OrphanFileCleanupOptions>()

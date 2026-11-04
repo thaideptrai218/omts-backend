@@ -4,11 +4,11 @@ using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common;
 using OMTS.Application.Features.Notifications;
-using OMTS.Application.Features.WaterQuality;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Platform;
+using OMTS.Infrastructure.Jobs;
 
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
@@ -48,11 +48,8 @@ public static class WaterOverdueTestKit
         }));
 
     /// <summary>One run of the job on <paramref name="today"/>; how many zones it reminded.</summary>
-    public static async Task<int> RemindOnAsync(this WebApplicationFactory<Program> api, DateOnly today)
-    {
-        using var scope = api.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<WaterMeasurementOverdueReminder>().RunOnceAsync(today, CancellationToken.None);
-    }
+    public static Task<int> RemindOnAsync(this WebApplicationFactory<Program> api, DateOnly today) =>
+        api.Services.GetRequiredService<WaterMeasurementOverdueJob>().RunOnceAsync(today);
 
     public static Task<List<Notification>> RemindersOfAsync(this AuthApiFactory api, FarmingZone zone) =>
         api.QueryAsync(db => db.Notifications.AsNoTracking()
