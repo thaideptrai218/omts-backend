@@ -16,7 +16,7 @@ public class CultivationLogAccessAndCycleTests(AuthApiFactory factory) : IClassF
         () => client.GetAsync($"/api/cultivation-cycles/{cycleId}/cultivation-logs"),
         () => client.PostLogAsync(cycleId),
         () => client.GetAsync($"/api/cultivation-logs/{logId}"),
-        () => client.PutLogAsync(logId, new LogFields { Reason = "no access", RowVersion = "AAAAAAAAAAE=" }),
+        () => client.PutLogAsync(logId, new LogFields { Reason = "no access", RowVersion = AcsTestKit.StaleRowVersion }),
         () => client.RemoveLogAsync(logId, "no access", ""),
     ];
 
