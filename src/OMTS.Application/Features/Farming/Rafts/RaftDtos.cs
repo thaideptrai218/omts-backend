@@ -1,15 +1,10 @@
-using System.Text.Json;
 using OMTS.Application.Features.Employees;
-using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Farming.Rafts;
 
-/// <summary>One lane of the layout: lanes are numbered 1…N; positions are metres from marker A.</summary>
-public sealed record LaneInput(int LaneNumber, decimal? Length, string? MarkerA, string? MarkerB);
-
 /// <summary>
-/// FARM-04 create/edit body. <see cref="LayoutDrawing"/> is the web layout editor's JSON (≤ 50 KB), stored
-/// as-is; <see cref="RowVersion"/> is required on edit only.
+/// FARM-04 create/edit body. The map pin (<see cref="Latitude"/>, <see cref="Longitude"/>) is optional, both or none;
+/// <see cref="LaneCount"/> is the number of lanes In Use; <see cref="RowVersion"/> is required on edit only.
 /// </summary>
 public sealed record SaveRaftRequest(
     string? Code,
@@ -18,17 +13,26 @@ public sealed record SaveRaftRequest(
     string? Location,
     string? Size,
     string? ConditionNotes,
-    IReadOnlyList<LaneInput>? Lanes,
-    JsonElement? LayoutDrawing = null,
+    int? LaneCount,
     string? RowVersion = null);
 
-public sealed record LaneView(Guid Id, int LaneNumber, decimal? Length, string? MarkerA, string? MarkerB);
+/// <summary>The proposed code of a new raft of the zone (GBR-03).</summary>
+/// <param name="Code">e.g. KV01-B03: the highest number in use in the zone (discontinued rafts included) plus one.</param>
+public sealed record RaftCodeProposal(string Code);
 
-public sealed record LayoutVersionView(int VersionNumber, int LaneCount, DateOnly ValidFrom, DateOnly? ValidTo);
+/// <summary>A lane with its status In Use or Removed; a Removed lane keeps its number and records (BR-FARM-04).</summary>
+public sealed record LaneView(Guid Id, int LaneNumber, int StatusId, string Status);
 
+/// <param name="Url">Signed read link; never store it.</param>
+public sealed record RaftPhotoView(Guid Id, int SortOrder, string Url);
+
+/// <param name="LaneCount">The number of lanes In Use.</param>
 public sealed record RaftListItem(
     Guid Id, Guid ZoneId, string Code, decimal? Latitude, decimal? Longitude, string? Size, int LaneCount, int StatusId, string Status);
 
+/// <param name="Photos">At most three, in slot order.</param>
+/// <param name="LaneCount">The number of lanes In Use.</param>
+/// <param name="Lanes">Every lane of the raft in number order, the Removed ones included.</param>
 /// <param name="MaterialCost">Total of the purchase receipts linked to the raft (INP-03); null until purchase receipts exist, never 0 for unknown.</param>
 public sealed record RaftView(
     Guid Id,
@@ -39,33 +43,21 @@ public sealed record RaftView(
     string? Location,
     string? Size,
     string? ConditionNotes,
-    string? PhotoUrl,
+    IReadOnlyList<RaftPhotoView> Photos,
     int StatusId,
     string Status,
-    int LayoutVersion,
+    int LaneCount,
     IReadOnlyList<LaneView> Lanes,
-    JsonElement? LayoutDrawing,
-    IReadOnlyList<LayoutVersionView> LayoutVersions,
     decimal? MaterialCost,
     string RowVersion);
 
-/// <summary>A recorded segment behind a portion of the raft map; no kg is inferred from it.</summary>
-public sealed record SegmentSourceView(
-    Guid Id,
-    LaneSegmentType Type,
-    decimal From,
-    decimal To,
-    DateOnly Date,
-    string? RecordedBy,
-    string? ConfirmedBy,
-    Guid? SeedingEventId,
-    string? SeedLotCode,
-    string? WriteOffReason);
+/// <summary>Answer of a raft create, edit or photo change (FARM-04.0 step 6), in the shape of the zone saves.</summary>
+/// <param name="Message">MSG-GEN-05, e.g. "Raft saved.".</param>
+/// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
+public sealed record RaftSaved(RaftView Raft, string Message, string MessageCode);
 
-public sealed record PortionView(decimal From, decimal To, PortionCondition Condition, IReadOnlyList<SegmentSourceView> Segments);
-
-public sealed record LaneConditionView(
-    int LaneNumber, decimal Length, LaneSummary Summary, IReadOnlyList<PortionView> Portions, IReadOnlyList<SegmentSourceView> PlannedHarvests);
-
-/// <param name="CycleId">The cycle the view is built from; null when the raft had no cycle on that date.</param>
-public sealed record RaftConditionView(Guid RaftId, string RaftCode, DateOnly Date, Guid? CycleId, int LayoutVersion, IReadOnlyList<LaneConditionView> Lanes);
+/// <summary>
+/// FARM-04.1 lanes of a raft today. Until CYCLE adds the derived state (BR-FARM-03) a lane shows only its status,
+/// In Use or Removed.
+/// </summary>
+public sealed record RaftLanesToday(Guid RaftId, string RaftCode, DateOnly Date, IReadOnlyList<LaneView> Lanes);

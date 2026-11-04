@@ -15,7 +15,7 @@ internal sealed class StoredFileReferenceQuery(OmtsDbContext db) : IStoredFileRe
 
     private IQueryable<string> KeysOf(string category) => category switch
     {
-        FileCategories.RaftPhotos => db.Rafts.Where(r => r.PhotoUrl != null).Select(r => r.PhotoUrl!),
+        FileCategories.RaftPhotos => db.RaftPhotos.Select(p => p.FileKey),
         FileCategories.ZoneLicenses => db.ZoneComplianceDocuments.Where(d => d.EvidenceFileUrl != null).Select(d => d.EvidenceFileUrl!),
         FileCategories.CooperativeCoverPhotos => db.Cooperatives.Where(c => c.CoverPhotoUrl != null).Select(c => c.CoverPhotoUrl!),
         FileCategories.CooperativeCertifications => db.CooperativeCertifications.Where(c => c.FileUrl != null).Select(c => c.FileUrl!),

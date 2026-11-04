@@ -6,7 +6,7 @@ namespace OMTS.Application.Features.Files;
 /// </summary>
 public static class FileCategories
 {
-    /// <summary>FARM-04 raft photo, <c>Raft.PhotoUrl</c>.</summary>
+    /// <summary>FARM-04 raft photos, <c>RaftPhoto.FileKey</c>.</summary>
     public const string RaftPhotos = "raft-photos";
 
     /// <summary>FARM-03 license document, <c>ZoneComplianceDocument.EvidenceFileUrl</c>.</summary>

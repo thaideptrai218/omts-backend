@@ -2,7 +2,7 @@ using OMTS.Domain.Common;
 
 namespace OMTS.Domain.Entities.Cultivation;
 
-/// <summary>E17 – One seeding session of a cycle; the seeded lane portions are its LaneSegments.</summary>
+/// <summary>E17 – One seeding session of a cycle. Read only for the quantity seeded per seed lot, until CYCLE replaces it with SeedingRecord.</summary>
 public class SeedingEvent : AuditableEntity
 {
     public Guid CycleId { get; set; }
@@ -22,6 +22,4 @@ public class SeedingEvent : AuditableEntity
 
     /// <summary>Required when the seed differs from the cycle's planned seed type.</summary>
     public string? PlanDeviationReason { get; set; }
-
-    public ICollection<LaneSegment> SeededSegments { get; set; } = [];
 }

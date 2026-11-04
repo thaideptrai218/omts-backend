@@ -60,6 +60,13 @@ public static class StatusIds
         public const int Cancelled = 1802;
     }
 
+    /// <summary>LANE (BR-FARM-04): a lane taken off the end of a raft is Removed, never deleted, and may return to In Use.</summary>
+    public static class Lane
+    {
+        public const int InUse = 1901;
+        public const int Removed = 1902;
+    }
+
     public static class MessageDelivery
     {
         public const int Sending = 1601;

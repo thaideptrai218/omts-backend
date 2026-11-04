@@ -10,7 +10,5 @@ internal sealed class LaneConfiguration : IEntityTypeConfiguration<Lane>
     {
         builder.HasOne(x => x.Raft).WithMany(r => r.Lanes).HasForeignKey(x => x.RaftId);
         builder.HasIndex(x => new { x.RaftId, x.LaneNumber }).IsUnique();
-        builder.Property(x => x.Length).HasPrecision(10, 2);
-        builder.Property(x => x.MeasurementMarkers).HasMaxLength(Lengths.Address);
     }
 }

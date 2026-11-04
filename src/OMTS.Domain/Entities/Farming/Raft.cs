@@ -12,6 +12,9 @@ namespace OMTS.Domain.Entities.Farming;
 /// </summary>
 public class Raft : AuditableEntity, IHasStatus
 {
+    /// <summary>The most photos a raft may hold (FARM-04).</summary>
+    public const int MaxPhotos = 3;
+
     public Guid ZoneId { get; set; }
     public FarmingZone Zone { get; set; } = null!;
 
@@ -21,19 +24,18 @@ public class Raft : AuditableEntity, IHasStatus
     /// <summary>Free-text location description.</summary>
     public string? Location { get; set; }
 
-    /// <summary>Point picked on the map (WGS84); shown on maps and the traceability page via Google Maps.</summary>
+    /// <summary>Optional point picked on the map (WGS84); shown on maps and the traceability page via Google Maps.</summary>
     public decimal? Latitude { get; set; }
     public decimal? Longitude { get; set; }
 
     public string? Size { get; set; }
-    public string? PhotoUrl { get; set; }
     public string? ConditionNotes { get; set; }
 
     public int StatusId { get; set; } = StatusIds.Usage.InUse;
     public Status Status { get; set; } = null!;
 
     public ICollection<Lane> Lanes { get; set; } = [];
-    public ICollection<RaftLayoutVersion> LayoutVersions { get; set; } = [];
+    public ICollection<RaftPhoto> Photos { get; set; } = [];
     public ICollection<CultivationCycle> CultivationCycles { get; set; } = [];
     /// <summary>Purchase receipts of raft materials; their total is the raft material cost (FARM-04, INP-03).</summary>
     public ICollection<PurchaseReceipt> PurchaseReceipts { get; set; } = [];

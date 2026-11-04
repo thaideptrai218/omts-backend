@@ -6,10 +6,7 @@ using OMTS.Domain.Entities.Platform;
 
 namespace OMTS.Domain.Entities.Cultivation;
 
-/// <summary>
-/// E16 – One farming round on a raft. Closes only when every seeded lane segment has been harvested
-/// or written off (BR-21).
-/// </summary>
+/// <summary>E16 – One farming round on a raft; an Open cycle blocks lane changes and discontinuing the raft (FARM-04).</summary>
 public class CultivationCycle : AuditableEntity, IHasStatus
 {
     public Guid RaftId { get; set; }
@@ -30,6 +27,4 @@ public class CultivationCycle : AuditableEntity, IHasStatus
     public Status Status { get; set; } = null!;
 
     public ICollection<SeedingEvent> SeedingEvents { get; set; } = [];
-    public ICollection<LaneSegment> LaneSegments { get; set; } = [];
-    public ICollection<CultivationLogEntry> LogEntries { get; set; } = [];
 }

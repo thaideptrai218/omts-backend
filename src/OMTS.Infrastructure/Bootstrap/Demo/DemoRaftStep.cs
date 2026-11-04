@@ -1,5 +1,5 @@
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Application.Features.Farming.Zones;
 using OMTS.Domain.Constants;
@@ -7,9 +7,10 @@ using OMTS.Domain.Constants;
 namespace OMTS.Infrastructure.Bootstrap.Demo;
 
 /// <summary>
-/// FARM-04: ten rafts in each In Use demo zone (codes B1-01…B1-10 and B2-01…B2-10), each with three to
-/// five lanes and a layout drawing. The last two of every zone are discontinued afterwards, as the Owner
-/// would, so lists show both statuses. Matched by zone and raft code.
+/// FARM-04: ten rafts in each In Use demo zone (codes B1-01…B1-10 and B2-01…B2-10), each with three to five lanes. The first
+/// raft of a zone also has two photos and a Removed lane, the second one photo, and the third no map pin. The last two of
+/// every zone are discontinued afterwards, as the Owner would, so lists show both statuses. Matched by zone and raft code;
+/// a raft that exists is left as it is.
 /// </summary>
 internal sealed class DemoRaftStep : IDemoSeedStep
 {
@@ -34,15 +35,16 @@ internal sealed class DemoRaftStep : IDemoSeedStep
                 var raft = await context.Db.Rafts.FirstOrDefaultAsync(r => r.ZoneId == zone.Id && r.Code == code, cancellationToken);
                 if (raft is null)
                 {
-                    var view = DemoSeedContext.Ensure(await service.CreateAsync(zone.Id, Request(zone.Latitude, zone.Longitude, code, number), cancellationToken), $"raft {code}");
-                    raft = await context.Db.Rafts.FirstAsync(r => r.Id == view.Id, cancellationToken);
+                    var saved = DemoSeedContext.Ensure(await service.CreateAsync(zone.Id, Request(zone.Latitude, zone.Longitude, code, number), cancellationToken), $"raft {code}");
+                    await AddExtrasAsync(context, service, zone.Latitude, zone.Longitude, saved.Raft, number, cancellationToken);
+                    raft = await context.Db.Rafts.FirstAsync(r => r.Id == saved.Raft.Id, cancellationToken);
                     created++;
                 }
 
                 if (number > RaftsPerZone - DiscontinuedPerZone && raft.StatusId == StatusIds.Usage.InUse)
                 {
                     DemoSeedContext.Ensure(
-                        await service.DiscontinueAsync(raft.Id, new ChangeStatusRequest("Bè cũ, đã tháo dỡ", Convert.ToBase64String(raft.RowVersion)), cancellationToken),
+                        await context.Get<RaftStatusService>().DiscontinueAsync(raft.Id, new ChangeStatusRequest("Bè cũ, đã tháo dỡ", RowVersionGuard.Encode(raft.RowVersion)), cancellationToken),
                         $"discontinuing raft {code}");
                 }
             }
@@ -51,23 +53,29 @@ internal sealed class DemoRaftStep : IDemoSeedStep
         return created;
     }
 
+    private static async Task AddExtrasAsync(
+        DemoSeedContext context, RaftService service, decimal? latitude, decimal? longitude, RaftView raft, int number, CancellationToken cancellationToken)
+    {
+        var photos = context.Get<RaftPhotoService>();
+        for (var photo = 1; photo <= 3 - number; photo++)
+        {
+            DemoSeedContext.Ensure(await photos.AddAsync(raft.Id, DemoFiles.RaftPhoto(photo), cancellationToken), $"photo {photo} of raft {raft.Code}");
+        }
+
+        if (number == 1)
+        {
+            var current = DemoSeedContext.Ensure(await service.GetAsync(raft.Id, cancellationToken), $"reading raft {raft.Code}");
+            var fewerLanes = Request(latitude, longitude, raft.Code, number) with { LaneCount = raft.LaneCount - 1, RowVersion = current.RowVersion };
+            DemoSeedContext.Ensure(await service.UpdateAsync(raft.Id, fewerLanes, cancellationToken), $"removing a lane of raft {raft.Code}");
+        }
+    }
+
     private static SaveRaftRequest Request(decimal? zoneLatitude, decimal? zoneLongitude, string code, int number)
     {
-        // Rafts sit in two rows next to the zone's centre marker, about 25 m apart.
-        var latitude = (zoneLatitude ?? 21m) + ((number - 1) % 5) * 0.00022m;
-        var longitude = (zoneLongitude ?? 107m) + ((number - 1) / 5) * 0.00025m;
-        var laneCount = 3 + number % 3;
-        var lanes = Enumerable.Range(1, laneCount)
-            .Select(lane => new LaneInput(lane, 20m + lane * 2m, "Đầu A", "Đầu B"))
-            .ToList();
-        var drawing = JsonSerializer.SerializeToElement(new
-        {
-            width = 10,
-            height = 24,
-            lanes = lanes.Select(l => new { number = l.LaneNumber, x = (l.LaneNumber - 1) * 2, y = 0, length = l.Length }),
-        });
+        // Rafts sit in two rows next to the zone's centre marker, about 25 m apart; the third has no pin yet.
+        var latitude = number == 3 ? (decimal?)null : (zoneLatitude ?? 21m) + ((number - 1) % 5) * 0.00022m;
+        var longitude = number == 3 ? (decimal?)null : (zoneLongitude ?? 107m) + ((number - 1) / 5) * 0.00025m;
         return new SaveRaftRequest(
-            code, latitude, longitude, "Vịnh Vân Đồn, Quảng Ninh", "10 m x 24 m", "Bè gỗ, phao nhựa HDPE, tình trạng tốt",
-            lanes, drawing);
+            code, latitude, longitude, "Vịnh Vân Đồn, Quảng Ninh", "10 m x 24 m", "Bè gỗ, phao nhựa HDPE, tình trạng tốt", 3 + number % 3);
     }
 }
