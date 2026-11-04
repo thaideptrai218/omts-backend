@@ -29,6 +29,7 @@ public class WaterSqlServerTests
         var zone = await SeedZoneAsync(database);
         await using var api = new SqlServerApiFactory(database);
         var owner = await api.AddAccountAsync("water-owner", Password);
+        var otherOwner = await api.AddAccountAsync("water-owner-other", Password);
         var client = await LoginAsync(api, owner.Username);
         var body = new { clientOperationId = Guid.NewGuid(), measuredAt = DateTimeOffset.UtcNow.AddMinutes(-5), ph = 9.2m, salinity = 20m, confirm = true };
 
@@ -46,7 +47,9 @@ public class WaterSqlServerTests
         Assert.Single(ids);
         await using var db = database.CreateContext();
         Assert.Equal(1, await db.WaterMeasurements.CountAsync());
-        Assert.Equal(1, await db.Notifications.CountAsync(n => n.RecipientAccountId == owner.Id && n.Type == "WATER_ALERT"));
+        // The recording Owner is not alerted about their own measurement (PM decision OMTS-216); the other Owner is, once.
+        Assert.Equal(0, await db.Notifications.CountAsync(n => n.RecipientAccountId == owner.Id && n.Type == "WATER_ALERT"));
+        Assert.Equal(1, await db.Notifications.CountAsync(n => n.RecipientAccountId == otherOwner.Id && n.Type == "WATER_ALERT"));
     }
 
     [SqlServerFact]

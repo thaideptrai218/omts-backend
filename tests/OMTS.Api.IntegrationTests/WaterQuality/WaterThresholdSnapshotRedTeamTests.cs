@@ -18,7 +18,8 @@ public class WaterThresholdSnapshotRedTeamTests(AuthApiFactory api) : IClassFixt
     public async Task Draft_is_evaluated_with_the_thresholds_current_at_its_confirmation_not_at_its_creation()
     {
         var z = await api.ZoneAsync();
-        var raisedLater = await z.RecordedAsync(8.8m, 20m, confirm: false);
+        var (_, manager) = await api.StaffAsync(z.Zone);
+        var raisedLater =await z.RecordedAsync(8.8m, 20m, confirm: false);
         var loweredLater = await z.RecordedAsync(8.4m, 20m, confirm: false);
 
         await SetPhAsync(z, 6.5m, 9.0m);
@@ -31,7 +32,7 @@ public class WaterThresholdSnapshotRedTeamTests(AuthApiFactory api) : IClassFixt
         Assert.Empty(await api.AlertsOfAsync(raisedLater.Id()));
         Assert.Equal("Active", underNarrower.Text("alertState"));
         Assert.Equal("pH 8.40 > 8.00", underNarrower.Text("violatedValues"));
-        Assert.Single(await api.AlertsOfAsync(loweredLater.Id()), n => n.RecipientAccountId == z.OwnerAccount.Id);
+        Assert.Single(await api.AlertsOfAsync(loweredLater.Id()), n => n.RecipientAccountId == manager.Id);
     }
 
     [Fact]
@@ -125,6 +126,7 @@ public class WaterThresholdSnapshotRedTeamTests(AuthApiFactory api) : IClassFixt
     public async Task Correction_of_a_correction_keeps_the_thresholds_of_the_first_confirmation()
     {
         var z = await api.ZoneAsync();
+        var (_, manager) = await api.StaffAsync(z.Zone);
         var v1 = await z.RecordedAsync(8.0m, 20m);
         await SetPhAsync(z, 6.5m, 9.5m);
         var v2 = await (await z.Owner.CorrectAsync(v1.Id(), 8.4m, 20m, recordVersion: 1)).Content.ReadFromJsonAsync<JsonElement>();
@@ -140,7 +142,7 @@ public class WaterThresholdSnapshotRedTeamTests(AuthApiFactory api) : IClassFixt
         Assert.Equal("Active", v3.Text("alertState"));
         Assert.Equal("pH 8.60 > 8.50", v3.Text("violatedValues"));
         Assert.Equal(8.5m, v3.GetProperty("thresholdsUsed").GetProperty("phMax").GetDecimal());
-        Assert.Single(await api.AlertsOfAsync(v3.Id()), n => n.RecipientAccountId == z.OwnerAccount.Id);
+        Assert.Single(await api.AlertsOfAsync(v3.Id()), n => n.RecipientAccountId == manager.Id);
     }
 
     private static async Task SetPhAsync(WaterZone z, decimal min, decimal max)

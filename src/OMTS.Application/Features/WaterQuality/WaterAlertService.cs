@@ -15,9 +15,11 @@ namespace OMTS.Application.Features.WaterQuality;
 /// Confirmation step shared by ENV-01 (confirm, create confirmed) and ENV-02 (correction version): stores the
 /// threshold set used (BR-07), evaluates the values and, on a violation, raises the alert with mandatory
 /// WATER_ALERT notifications (MSG-WATER-03) to every active Cooperative Owner and the zone's staff holding View on
-/// WATER_MEASUREMENTS. Notification rows join the caller's unit of work; push is sent after its commit.
+/// WATER_MEASUREMENTS, except the Owner who confirmed it (the two callers always pass the confirming account; null
+/// would mean no actor and removes nobody). Notification rows join the caller's unit of work; push is sent after its commit.
 /// </summary>
-public sealed class WaterAlertService(IZoneRecipientQuery recipients, INotificationDispatcher notifications, TimeProvider timeProvider)
+public sealed class WaterAlertService(
+    IZoneRecipientQuery recipients, OwnerActorRecipientFilter ownerActorFilter, INotificationDispatcher notifications, TimeProvider timeProvider)
 {
     public const string AlertTitle = "Water quality alert";
 
@@ -46,7 +48,9 @@ public sealed class WaterAlertService(IZoneRecipientQuery recipients, INotificat
             return;
         }
 
-        var accountIds = await recipients.GetRecipientsAsync(zone.Id, PermissionFunctions.WaterMeasurements, PermissionAction.View, cancellationToken);
+        var allRecipients = await recipients.GetRecipientsAsync(zone.Id, PermissionFunctions.WaterMeasurements, PermissionAction.View, cancellationToken);
+        // The Owner is not told of their own measurement or correction (PM decision OMTS-216); the zone's staff still are.
+        var accountIds = await ownerActorFilter.WithoutOwnerActorAsync(allRecipients, confirmedBy, cancellationToken);
         // Measurements have no raft yet (the raft of a measurement comes with the WATER ticket).
         var message = UserMessages.WaterAlert(
             corrected: measurement.CorrectedFromMeasurementId is not null, zone.Name, raftCode: null, measurement.MeasuredAt, evaluation.ValuesOutside);

@@ -55,8 +55,10 @@ public class DemoWaterSeedQaTests
             var notified = await db.Notifications.AsNoTracking()
                 .Where(n => n.Type == NotificationTypes.WaterAlert && n.RelatedRecordId == measurement.Id)
                 .Select(n => n.RecipientAccountId).ToListAsync();
-            Assert.Contains(ownerId, notified);
-            Assert.Equal(expected.Order(), notified.Order());
+            // The demo records as the Owner, who is not told of their own action; the zone's staff are.
+            Assert.DoesNotContain(ownerId, notified);
+            Assert.NotEmpty(notified);
+            Assert.Equal(expected.Where(id => id != ownerId).Order(), notified.Order());
         }
 
         // Only alerts: no reminder, no other water notification.

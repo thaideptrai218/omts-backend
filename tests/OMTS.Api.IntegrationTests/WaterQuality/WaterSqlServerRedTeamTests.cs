@@ -43,7 +43,8 @@ public class WaterSqlServerRedTeamTests
         await using var db = database.CreateContext();
         Assert.Equal(StatusIds.WaterMeasurement.Confirmed, await db.WaterMeasurements.Where(m => m.Id == id).Select(m => m.StatusId).SingleAsync());
         var alerts = await db.Notifications.Where(n => n.Type == "WATER_ALERT" && n.RelatedRecordId == id).ToListAsync();
-        Assert.Single(alerts, n => n.RecipientAccountId == owner.Id);
+        // The confirming Owner is not alerted about their own action (PM decision OMTS-216); the other Owner is.
+        Assert.DoesNotContain(alerts, n => n.RecipientAccountId == owner.Id);
         Assert.Single(alerts, n => n.RecipientAccountId == secondOwner.Id);
         Assert.Equal(1, await db.AuditEvents.CountAsync(e => e.RecordId == id && e.Action == "WaterMeasurement.Confirmed"));
     }

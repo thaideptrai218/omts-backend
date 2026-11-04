@@ -32,6 +32,8 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
     public async Task A_water_alert_and_its_correction_store_msg_water_03_with_every_placeholder()
     {
         var z = await factory.ZoneAsync();
+        // The Owner records here, so the alerts reach the zone's manager (the Owner is not told of their own action).
+        var (manager, _) = await factory.StaffAsync(z.Zone);
         var measuredAt = Minute(DateTimeOffset.UtcNow.AddMinutes(-30));
         var time = BusinessClock.Format(measuredAt);
         var first = (await z.RecordedAsync(9.1m, 20m, measuredAt: measuredAt)).GetProperty("id").GetGuid();
@@ -39,7 +41,7 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
         Assert.True(corrected.StatusCode == HttpStatusCode.Created, await corrected.Content.ReadAsStringAsync());
         var second = (await corrected.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
 
-        var items = (await z.Owner.NotificationPageAsync()).Items();
+        var items = (await manager.NotificationPageAsync()).Items();
         var alert = items.Single(i => i.GetProperty("relatedRecordId").GetGuid() == first);
         var correction = items.Single(i => i.GetProperty("relatedRecordId").GetGuid() == second);
 
@@ -50,13 +52,13 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
         Assert.StartsWith($"Water alert (corrected measurement): zone {z.Zone.Name}, raft –, measured on {time}.", correction.GetProperty("body").GetString());
 
         // The first alert still opens: its measurement exists, now as an earlier version (shown with its current status).
-        var open = await z.Owner.OpenNotificationAsync(alert.GetProperty("id").GetGuid());
+        var open = await manager.OpenNotificationAsync(alert.GetProperty("id").GetGuid());
         Assert.Equal(HttpStatusCode.OK, open.StatusCode);
         Assert.Equal(z.Zone.Id, (await open.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("zoneId").GetGuid());
 
         // ACCOUNT-08.0.E1: a removed measurement has no code to name.
         await factory.UseDbAsync(db => db.WaterMeasurements.Remove(db.WaterMeasurements.Single(m => m.Id == second)));
-        var removed = await z.Owner.OpenNotificationAsync(correction.GetProperty("id").GetGuid());
+        var removed = await manager.OpenNotificationAsync(correction.GetProperty("id").GetGuid());
         Assert.Equal(HttpStatusCode.NotFound, removed.StatusCode);
         var problem = await removed.ProblemAsync();
         Assert.Equal(("MSG-ACCOUNT-22", "Water measurement no longer exists."), (problem.GetProperty("code").GetString(), problem.GetProperty("detail").GetString()));

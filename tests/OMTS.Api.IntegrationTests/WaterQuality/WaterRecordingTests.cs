@@ -162,7 +162,8 @@ public class WaterRecordingTests(AuthApiFactory api) : IClassFixture<AuthApiFact
         Assert.Equal(1, await api.QueryAsync(db => db.WaterMeasurements.CountAsync(m => m.ZoneId == z.Zone.Id)));
 
         var alerts = await api.AlertsOfAsync(body.Id());
-        Assert.Single(alerts, n => n.RecipientAccountId == z.OwnerAccount.Id);
+        // The Owner recorded it: not told of their own action (PM decision OMTS-216); the zone's manager still is.
+        Assert.DoesNotContain(alerts, n => n.RecipientAccountId == z.OwnerAccount.Id);
         Assert.Single(alerts, n => n.RecipientAccountId == manager.Id);
         Assert.DoesNotContain(alerts, n => n.RecipientAccountId == otherZoneManager.Id);
         Assert.All(alerts, n => Assert.True(n.IsMandatory));
@@ -177,12 +178,52 @@ public class WaterRecordingTests(AuthApiFactory api) : IClassFixture<AuthApiFact
         Assert.Single(pushed, m => m.Text.Contains("pH 9.1 is too high (allowed 6.5–8.5)."));
     }
 
+    // PM decision OMTS-216 (03/11): the Owner is not told of their own measurement; Zone Managers of the zone always are.
+    [Fact]
+    public async Task Owner_confirming_an_out_of_range_reading_gets_no_alert_but_the_zone_manager_does()
+    {
+        var z = await api.ZoneAsync();
+        var (_, manager) = await api.StaffAsync(z.Zone);
+        var draft = await z.RecordedAsync(9.1m, 20m, confirm: false);
+
+        var confirmed = await z.Owner.PostAsJsonAsync($"/api/water-measurements/{draft.Id()}/confirm", new { });
+        var direct = await z.RecordedAsync(9.2m, 20m);
+
+        Assert.Equal(HttpStatusCode.OK, confirmed.StatusCode);
+        foreach (var id in new[] { draft.Id(), direct.Id() })
+        {
+            var alerts = await api.AlertsOfAsync(id);
+            Assert.DoesNotContain(alerts, n => n.RecipientAccountId == z.OwnerAccount.Id);
+            Assert.Single(alerts, n => n.RecipientAccountId == manager.Id);
+        }
+    }
+
+    [Fact]
+    public async Task Zone_manager_confirming_an_out_of_range_reading_alerts_the_owner_and_that_manager()
+    {
+        var z = await api.ZoneAsync();
+        var (managerClient, manager) = await api.StaffAsync(z.Zone);
+        var draft = await z.RecordedAsync(9.1m, 20m, confirm: false, client: managerClient);
+
+        var confirmed = await managerClient.PostAsJsonAsync($"/api/water-measurements/{draft.Id()}/confirm", new { });
+        var direct = await z.RecordedAsync(9.2m, 20m, client: managerClient);
+
+        Assert.Equal(HttpStatusCode.OK, confirmed.StatusCode);
+        foreach (var id in new[] { draft.Id(), direct.Id() })
+        {
+            var alerts = await api.AlertsOfAsync(id);
+            Assert.Single(alerts, n => n.RecipientAccountId == z.OwnerAccount.Id);
+            Assert.Single(alerts, n => n.RecipientAccountId == manager.Id);
+        }
+    }
+
     [Fact]
     public async Task Both_indicators_out_of_range_are_named_in_one_alert()
     {
         var z = await api.ZoneAsync();
+        var (manager, _) = await api.StaffAsync(z.Zone);
 
-        var body = await z.RecordedAsync(5.9m, 31.2m);
+        var body = await z.RecordedAsync(5.9m, 31.2m, client: manager);
 
         Assert.Equal("pH 5.90 < 6.50; Salinity 31.20 > 30.00", body.Text("violatedValues"));
         Assert.Single(await api.AlertsOfAsync(body.Id()), n => n.RecipientAccountId == z.OwnerAccount.Id
