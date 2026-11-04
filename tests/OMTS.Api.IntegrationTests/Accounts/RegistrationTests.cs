@@ -13,10 +13,10 @@ namespace OMTS.Api.IntegrationTests.Accounts;
 public class RegistrationTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
     [Theory]
-    [InlineData(0, false)]
-    [InlineData(1, false)]
-    [InlineData(2, true)]
-    public async Task Phone_registration_links_exactly_one_offline_profile(int offlineProfiles, bool hidden)
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task Phone_registration_links_exactly_one_offline_profile(int offlineProfiles)
     {
         var cooperative = await factory.EnsureCooperativeAsync();
         var phone = NewPhone();
@@ -27,7 +27,7 @@ public class RegistrationTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
 
         var registered = await RegisterAsync("Sms", phone);
 
-        Assert.Equal(hidden, registered.GetProperty("oldDocumentsHidden").GetBoolean());
+        Assert.Equal(offlineProfiles == 1, registered.GetProperty("linkedExistingCustomer").GetBoolean());
         var accountId = registered.GetProperty("accountId").GetGuid();
         var linked = await factory.QueryAsync(db => db.Customers.SingleAsync(c => c.AccountId == accountId));
         Assert.Equal(offlineProfiles == 1, linked.Id == offline.FirstOrDefault()?.Id);
@@ -46,7 +46,7 @@ public class RegistrationTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var registered = await RegisterAsync("Email", email);
         var tokens = await LoginTokensAsync(factory.CreateClient(), email.ToUpperInvariant());
 
-        Assert.False(registered.GetProperty("oldDocumentsHidden").GetBoolean());
+        Assert.False(registered.GetProperty("linkedExistingCustomer").GetBoolean());
         Assert.True(tokens.GetProperty("phoneVerificationRequired").GetBoolean());
         Assert.Equal("Trader", tokens.GetProperty("subjectType").GetString());
     }

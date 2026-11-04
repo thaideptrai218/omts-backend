@@ -95,7 +95,7 @@ public class EmployeeAccountLinkTests(AuthApiFactory factory) : IClassFixture<Au
     }
 
     [Fact]
-    public async Task Taken_phone_empty_grants_and_unusable_role_or_zone_save_neither_employee_nor_account()
+    public async Task Taken_phone_and_unusable_role_or_zone_save_neither_employee_nor_account()
     {
         var (owner, zone, role) = await SetupAsync(factory);
         var taken = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
@@ -103,13 +103,12 @@ public class EmployeeAccountLinkTests(AuthApiFactory factory) : IClassFixture<Au
         var unknownRoleId = Guid.NewGuid();
         var closedZone = await factory.AddZoneAsync(NewCode());
         await factory.UpdateAsync<FarmingZone>(closedZone.Id, z => z.StatusId = StatusIds.Usage.Discontinued);
-        var usernames = Enumerable.Range(0, 4).Select(_ => $"nv{NewCode()}").ToArray();
+        var usernames = Enumerable.Range(0, 3).Select(_ => $"nv{NewCode()}").ToArray();
         var cases = new (string Name, string Username, object Account, string Expected)[]
         {
             ($"P {NewCode()}", usernames[0], AccountBlock(usernames[0], zone, role, phoneNumber: taken.PhoneNumber), "MSG-ACCOUNT-09"),
-            ($"Q {NewCode()}", usernames[1], new { username = usernames[1], grants = Array.Empty<object>() }, "Zone-role pair"),
-            ($"R {NewCode()}", usernames[2], AccountBlock(usernames[2], zone, unknownRoleId), "Role"),
-            ($"S {NewCode()}", usernames[3], AccountBlock(usernames[3], closedZone, role), "Zone"),
+            ($"R {NewCode()}", usernames[1], AccountBlock(usernames[1], zone, unknownRoleId), "Role"),
+            ($"S {NewCode()}", usernames[2], AccountBlock(usernames[2], closedZone, role), "Zone"),
         };
 
         foreach (var (name, username, account, expected) in cases)

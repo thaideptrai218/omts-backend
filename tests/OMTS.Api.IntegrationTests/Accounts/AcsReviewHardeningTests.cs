@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
 using OMTS.Infrastructure.Messaging.Fakes;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
@@ -100,23 +101,31 @@ public class AcsReviewHardeningTests(AuthApiFactory factory) : IClassFixture<Aut
         Assert.Equal("MSG06", await stale.ErrorCodeAsync());
     }
 
-    // Many accounts cannot flood one number: sends to a target are capped across accounts and purposes.
+    // One number cannot be flooded through several purposes: sends to a target are capped over all of them, even when this
+    // purpose still has codes left under BR-ACCOUNT-09.
     [Fact]
-    public async Task Sends_to_one_number_are_capped_across_accounts()
+    public async Task Sends_to_one_number_are_capped_across_purposes()
     {
         var victim = NewPhone();
-        var answers = new List<HttpResponseMessage>();
-        for (var i = 0; i <= Application.Features.Verification.VerificationThrottle.MaxSendsPerTargetPerWindow; i++)
+        var sentAt = DateTimeOffset.UtcNow.AddMinutes(-10);
+        await factory.UseDbAsync(db => db.VerificationCodes.Add(new VerificationCode
         {
-            var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
-            var client = await factory.LoginAsync(trader.Username);
-            answers.Add(await client.PostAsJsonAsync("/api/me/contact-changes", new { channel = "Sms", target = victim, currentPassword = Password }));
-        }
+            Purpose = VerificationPurpose.AccountRecovery,
+            Channel = VerificationChannel.Sms,
+            Target = victim,
+            CodeHash = NewCode(),
+            CreatedAt = sentAt,
+            LastSentAt = sentAt,
+            ExpiresAt = sentAt,
+            SendCount = Application.Features.Verification.VerificationThrottle.MaxSendsPerTargetPerWindow,
+        }));
+        var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
+        var client = await factory.LoginAsync(trader.Username);
 
-        Assert.All(answers[..^1], a => Assert.Equal(HttpStatusCode.Created, a.StatusCode));
-        Assert.Equal(HttpStatusCode.TooManyRequests, answers[^1].StatusCode);
-        Assert.Equal(Application.Features.Verification.VerificationThrottle.MaxSendsPerTargetPerWindow,
-            factory.Services.GetRequiredService<FakeSmsSender>().Inbox.List(victim).Count);
+        var refused = await client.PostAsJsonAsync("/api/me/contact-changes", new { channel = "Sms", target = victim, currentPassword = Password });
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
+        Assert.Empty(factory.Services.GetRequiredService<FakeSmsSender>().Inbox.List(victim));
     }
 
     [Fact]

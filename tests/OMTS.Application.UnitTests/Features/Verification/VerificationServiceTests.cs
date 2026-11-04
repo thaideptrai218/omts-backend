@@ -67,12 +67,12 @@ public partial class VerificationServiceTests
     }
 
     [Fact]
-    public async Task Resend_needs_60_seconds_and_stops_after_3_sends()
+    public async Task Resend_needs_60_seconds_and_stops_after_3_codes_with_the_real_wait()
     {
         var started = await StartAsync();
 
         _time.Advance(TimeSpan.FromSeconds(59));
-        Assert.Equal(ErrorKind.TooManyRequests, (await Service.ResendAsync(started, AccountId, default)).Error?.Kind);
+        Assert.Equal(1, AssertTooManyCodes(await Service.ResendAsync(started, AccountId, default)));
 
         _time.Advance(TimeSpan.FromSeconds(1));
         var second = await Service.ResendAsync(started, AccountId, default);
@@ -81,10 +81,106 @@ public partial class VerificationServiceTests
         _time.Advance(TimeSpan.FromSeconds(60));
         Assert.Equal(0, (await Service.ResendAsync(started, AccountId, default)).Value?.SendsLeft);
 
+        // Two minutes after the first code: it leaves the hour 58 minutes from now (not "start again").
         _time.Advance(TimeSpan.FromSeconds(60));
         var fourth = await Service.ResendAsync(started, AccountId, default);
-        Assert.Equal(ErrorKind.TooManyRequests, fourth.Error?.Kind);
+        Assert.Equal(3600 - 180, AssertTooManyCodes(fourth));
+        Assert.Equal(0, fourth.Error?.Details?["sendsLeft"]);
+        Assert.Equal("You have asked for too many codes. Please try again after 57 minutes.", fourth.Error?.Message.Text);
         Assert.Equal(3, _sms.Sent);
+    }
+
+    // BR-ACCOUNT-09 counts codes, not requests: new requests and resends draw on the same 3 codes per hour.
+    [Fact]
+    public async Task New_requests_and_resends_share_the_3_codes_of_the_hour()
+    {
+        var first = await StartAsync();
+        _time.Advance(TimeSpan.FromSeconds(60));
+        await Service.ResendAsync(first, AccountId, default);
+        _time.Advance(TimeSpan.FromSeconds(60));
+        var second = await StartAsync();
+        _time.Advance(TimeSpan.FromSeconds(60));
+
+        var fresh = await Service.StartAsync(VerificationPurpose.VerifyPhone, VerificationChannel.Sms, Phone, AccountId, default);
+        var resent = await Service.ResendAsync(second, AccountId, default);
+
+        Assert.Equal(3600 - 180, AssertTooManyCodes(fresh));
+        Assert.Equal(3600 - 180, AssertTooManyCodes(resent));
+        Assert.Equal(3, _sms.Sent);
+    }
+
+    // The hour rolls: each code leaves it on its own, so a resend of the same request works again once the wait is over.
+    [Fact]
+    public async Task The_retry_time_is_exact_and_the_same_request_can_be_resent_after_it()
+    {
+        var started = await StartAsync();
+        _time.Advance(TimeSpan.FromMinutes(30));
+        await Service.ResendAsync(started, AccountId, default);
+        _time.Advance(TimeSpan.FromMinutes(29));
+        await Service.ResendAsync(started, AccountId, default);
+        _time.Advance(TimeSpan.FromSeconds(30));
+
+        var wait = AssertTooManyCodes(await Service.ResendAsync(started, AccountId, default));
+        Assert.Equal(30, wait);
+
+        _time.Advance(TimeSpan.FromSeconds(wait - 1));
+        Assert.Equal(1, AssertTooManyCodes(await Service.ResendAsync(started, AccountId, default)));
+
+        _time.Advance(TimeSpan.FromSeconds(1));
+        var again = await Service.ResendAsync(started, AccountId, default);
+        Assert.True(again.IsSuccess, again.Error?.Message.Text);
+        Assert.Equal(0, again.Value!.SendsLeft);
+        Assert.Equal(4, _sms.Sent);
+        Assert.True((await Service.VerifyAsync(started, _sms.LastCode, AccountId, default)).IsSuccess);
+    }
+
+    // "One purpose and one phone number or email": whoever asks. Another purpose or target has its own codes.
+    [Fact]
+    public async Task The_limits_hold_across_accounts_and_not_across_purposes_or_targets()
+    {
+        await Service.StartAsync(VerificationPurpose.ChangePhone, VerificationChannel.Sms, Phone, Guid.NewGuid(), default);
+
+        var otherAccount = await Service.StartAsync(VerificationPurpose.ChangePhone, VerificationChannel.Sms, Phone, Guid.NewGuid(), default);
+        var otherPurpose = await Service.StartAsync(VerificationPurpose.VerifyPhone, VerificationChannel.Sms, Phone, Guid.NewGuid(), default);
+        var otherTarget = await Service.StartAsync(VerificationPurpose.ChangePhone, VerificationChannel.Sms, "0987654321", Guid.NewGuid(), default);
+
+        Assert.Equal(60, AssertTooManyCodes(otherAccount));
+        Assert.True(otherPurpose.IsSuccess);
+        Assert.True(otherTarget.IsSuccess);
+
+        for (var i = 0; i < 2; i++)
+        {
+            _time.Advance(TimeSpan.FromSeconds(60));
+            Assert.True((await Service.StartAsync(VerificationPurpose.ChangePhone, VerificationChannel.Sms, Phone, Guid.NewGuid(), default)).IsSuccess);
+        }
+
+        _time.Advance(TimeSpan.FromSeconds(60));
+        Assert.Equal(3600 - 180, AssertTooManyCodes(await Service.StartAsync(VerificationPurpose.ChangePhone, VerificationChannel.Sms, Phone, Guid.NewGuid(), default)));
+    }
+
+    // A failed send changes nothing, so it does not use up a code.
+    [Fact]
+    public async Task A_code_that_could_not_be_sent_does_not_count()
+    {
+        _sms.Fail = true;
+        for (var i = 0; i < 3; i++)
+        {
+            await Service.StartAsync(VerificationPurpose.VerifyPhone, VerificationChannel.Sms, Phone, AccountId, default);
+            _time.Advance(TimeSpan.FromSeconds(60));
+        }
+
+        _sms.Fail = false;
+        var started = await Service.StartAsync(VerificationPurpose.VerifyPhone, VerificationChannel.Sms, Phone, AccountId, default);
+        Assert.Equal(2, started.Value?.SendsLeft);
+
+        // A resend that fails keeps the earlier code working, and does not use up a code either.
+        _time.Advance(TimeSpan.FromSeconds(60));
+        var working = _sms.LastCode;
+        _sms.Fail = true;
+        Assert.Equal(ErrorKind.ServiceUnavailable, (await Service.ResendAsync(started.Value!.VerificationId, AccountId, default)).Error?.Kind);
+        _sms.Fail = false;
+        Assert.Equal(1, (await Service.ResendAsync(started.Value!.VerificationId, AccountId, default)).Value?.SendsLeft);
+        Assert.NotNull(working);
     }
 
     [Fact]
@@ -176,41 +272,43 @@ public partial class VerificationServiceTests
         Assert.Equal(ErrorKind.TooManyRequests, otherChannel.Error?.Kind);
     }
 
+    // A guard beyond BR-ACCOUNT-09: an account that tries number after number stops at 5 new requests per hour.
     [Fact]
-    public async Task At_most_5_requests_per_hour_for_one_subject()
+    public async Task At_most_5_requests_per_hour_for_one_subject_over_its_targets()
     {
         for (var i = 0; i < VerificationService.MaxRequestsPerWindow; i++)
         {
-            await StartAsync(VerificationPurpose.AccountRecovery);
+            var started = await Service.StartAsync(VerificationPurpose.ChangePhone, VerificationChannel.Sms, $"091234560{i}", AccountId, default);
+            Assert.True(started.IsSuccess);
             _time.Advance(TimeSpan.FromSeconds(61));
         }
 
-        var sixth = await Service.StartAsync(VerificationPurpose.AccountRecovery, VerificationChannel.Sms, Phone, AccountId, default);
-        Assert.Equal(ErrorKind.TooManyRequests, sixth.Error?.Kind);
+        var sixth = await Service.StartAsync(VerificationPurpose.ChangePhone, VerificationChannel.Sms, "0912345609", AccountId, default);
+        Assert.Equal(3600 - 5 * 61, AssertTooManyCodes(sixth));
 
         _time.Advance(VerificationService.BudgetWindow);
-        Assert.True((await Service.StartAsync(VerificationPurpose.AccountRecovery, VerificationChannel.Sms, Phone, AccountId, default)).IsSuccess);
+        Assert.True((await Service.StartAsync(VerificationPurpose.ChangePhone, VerificationChannel.Sms, "0912345609", AccountId, default)).IsSuccess);
     }
 
-    // New requests do not give new guesses: 10 wrong codes per hour over all requests, then MSG-ACCOUNT-18 (423) with
-    // the wait until the oldest request with a wrong code leaves the hour.
+    // The 5th wrong entry cancels one code and nothing more: the next code of the 3 of the hour works as usual.
     [Fact]
-    public async Task Wrong_codes_are_capped_across_requests()
+    public async Task A_code_cancelled_by_wrong_entries_leaves_the_next_code_working()
     {
         for (var request = 0; request < 2; request++)
         {
-            var id = await StartAsync(VerificationPurpose.AccountRecovery);
-            for (var i = 0; i < 5; i++)
+            var cancelled = await StartAsync();
+            for (var i = 0; i < 4; i++)
             {
-                await Service.VerifyAsync(id, "000000", null, default);
+                AssertWrongCode(await Service.VerifyAsync(cancelled, "000000", AccountId, default));
             }
 
-            _time.Advance(TimeSpan.FromSeconds(61));
+            AssertCancelled(await Service.VerifyAsync(cancelled, "000000", AccountId, default));
+            _time.Advance(TimeSpan.FromSeconds(60));
         }
 
-        var start = await Service.StartAsync(VerificationPurpose.AccountRecovery, VerificationChannel.Sms, Phone, AccountId, default);
-        Assert.Equal((ErrorKind.Locked, "MSG-ACCOUNT-18", "MSG69"), (start.Error?.Kind, start.Error?.Message.Code, start.Error?.Message.LegacyCode));
-        Assert.Equal(3600 - 122, start.Error?.Details?["retryAfterSeconds"]);
+        var third = await StartAsync();
+        AssertWrongCode(await Service.VerifyAsync(third, "000000", AccountId, default));
+        Assert.True((await Service.VerifyAsync(third, _sms.LastCode, AccountId, default)).IsSuccess);
     }
 
     [Fact]
@@ -230,6 +328,14 @@ public partial class VerificationServiceTests
     }
 
     private static void AssertWrongCode<T>(Result<T> result) => Assert.Equal("MSG-ACCOUNT-16", result.Error?.Message.Code);
+
+    /// <summary>MSG-ACCOUNT-18 (429); returns the wait in seconds, {retry_time} of the text.</summary>
+    private static int AssertTooManyCodes<T>(Result<T> result)
+    {
+        Assert.Equal((ErrorKind.TooManyRequests, "MSG-ACCOUNT-18", "TOO_MANY_REQUESTS"), (result.Error?.Kind, result.Error?.Message.Code, result.Error?.Message.LegacyCode));
+        Assert.StartsWith("You have asked for too many codes. Please try again after ", result.Error?.Message.Text);
+        return (int)result.Error!.Details!["retryAfterSeconds"]!;
+    }
 
     private static void AssertCancelled<T>(Result<T> result) =>
         Assert.Equal((ErrorKind.Validation, "MSG-ACCOUNT-17", "MSG16"), (result.Error?.Kind, result.Error?.Message.Code, result.Error?.Message.LegacyCode));
@@ -309,6 +415,14 @@ public partial class VerificationServiceTests
 
         public Task<int> CountSmsSendsAsync(DateTimeOffset since, CancellationToken cancellationToken) =>
             Task.FromResult(All.Where(c => c.Channel == VerificationChannel.Sms && c.LastSentAt >= since).Sum(c => c.SendCount));
+
+        public Task<IReadOnlyList<DateTimeOffset>> GetSendTimesAsync(VerificationPurpose purpose, string target, DateTimeOffset since, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<DateTimeOffset>>(All
+                .Where(c => c.Purpose == purpose && c.Target == target)
+                .SelectMany(c => c.SendTimes)
+                .Where(sent => sent > since)
+                .Order()
+                .ToList());
 
         public Task<VerificationCode?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult(All.FirstOrDefault(c => c.Id == id));

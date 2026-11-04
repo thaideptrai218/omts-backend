@@ -84,13 +84,16 @@ public class BootstrapTests
 
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         Assert.True(tokens.GetProperty("mustChangePassword").GetBoolean());
+        Assert.True(tokens.GetProperty("phoneVerificationRequired").GetBoolean());
         Assert.Equal(HttpStatusCode.Forbidden, blocked.StatusCode);
 
-        // Once the password is changed (ACS-04), the Owner holds every catalog function everywhere.
+        // Once the phone is verified (ACCOUNT-02.1) and the password changed (ACCOUNT-04), the Owner holds every catalog
+        // function everywhere.
         using (var scope = api.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
             var owner = await db.Accounts.SingleAsync(a => a.Username == "owner");
+            owner.PhoneVerifiedAt = DateTimeOffset.UtcNow;
             owner.MustChangePassword = false;
             await db.SaveChangesAsync();
         }
