@@ -12,7 +12,7 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(OmtsDbContext))]
-    [Migration("20261104100407_RaftsV2")]
+    [Migration("20261104103030_RaftsV2")]
     partial class RaftsV2
     {
         /// <inheritdoc />
@@ -2069,7 +2069,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
-                            Id = 1901,
+                            Id = 2001,
                             Code = "IN_USE",
                             DisplayName = "In Use",
                             Group = "LANE",
@@ -2080,7 +2080,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
-                            Id = 1902,
+                            Id = 2002,
                             Code = "REMOVED",
                             DisplayName = "Removed",
                             Group = "LANE",
@@ -2334,23 +2334,23 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
-                            Id = 74,
+                            Id = 76,
                             AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 1901,
+                            FromStatusId = 2001,
                             GuardCondition = "The raft has no open cycle; the last lanes are removed first (BR-FARM-04).",
                             ReasonRequired = false,
-                            ToStatusId = 1902,
+                            ToStatusId = 2002,
                             TriggerEvent = "Action",
                             UseCases = "FARM-04"
                         },
                         new
                         {
-                            Id = 75,
+                            Id = 77,
                             AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 1902,
+                            FromStatusId = 2002,
                             GuardCondition = "The raft has no open cycle; Removed lanes return in number order before new numbers (BR-FARM-04).",
                             ReasonRequired = false,
-                            ToStatusId = 1901,
+                            ToStatusId = 2001,
                             TriggerEvent = "Action",
                             UseCases = "FARM-04"
                         });

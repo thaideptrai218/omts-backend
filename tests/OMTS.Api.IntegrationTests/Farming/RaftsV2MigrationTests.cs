@@ -72,7 +72,7 @@ public class RaftsV2MigrationTests
         Assert.Equal(1, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM Rafts WHERE PhotoUrl IS NULL"));
         Assert.Equal(2, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM Lanes"));
         Assert.Equal(0, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.tables WHERE name = 'RaftPhotos'"));
-        Assert.Equal(0, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM Statuses WHERE Id IN (1901, 1902)"));
+        Assert.Equal(0, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM Statuses WHERE Id IN (2001, 2002)"));
         Assert.Equal(0, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.columns WHERE object_id = OBJECT_ID('Lanes') AND name = 'StatusId'"));
         Assert.Equal(2, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.columns WHERE object_id = OBJECT_ID('Lanes') AND name IN ('Length', 'MeasurementMarkers')"));
         Assert.Empty(DroppedTables.Except(await TablesAsync(db)));

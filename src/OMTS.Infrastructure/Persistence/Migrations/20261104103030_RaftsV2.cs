@@ -41,7 +41,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 table: "Lanes",
                 type: "int",
                 nullable: false,
-                defaultValue: 1901);
+                defaultValue: 2001);
 
             migrationBuilder.CreateTable(
                 name: "RaftPhotos",
@@ -83,8 +83,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 columns: new[] { "Id", "Code", "DisplayColor", "DisplayName", "Group", "IsFinal", "IsInitial", "Meaning", "SortOrder" },
                 values: new object[,]
                 {
-                    { 1901, "IN_USE", null, "In Use", "LANE", false, true, "Seeded and harvested.", 1 },
-                    { 1902, "REMOVED", null, "Removed", "LANE", false, false, "Removed at the end of the raft; keeps its number and records.", 2 }
+                    { 2001, "IN_USE", null, "In Use", "LANE", false, true, "Seeded and harvested.", 1 },
+                    { 2002, "REMOVED", null, "Removed", "LANE", false, false, "Removed at the end of the raft; keeps its number and records.", 2 }
                 });
 
             migrationBuilder.InsertData(
@@ -92,8 +92,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 columns: new[] { "Id", "AllowedPerformers", "FromStatusId", "GuardCondition", "ReasonRequired", "ToStatusId", "TriggerEvent", "UseCases" },
                 values: new object[,]
                 {
-                    { 74, "Cooperative Owner", 1901, "The raft has no open cycle; the last lanes are removed first (BR-FARM-04).", false, 1902, "Action", "FARM-04" },
-                    { 75, "Cooperative Owner", 1902, "The raft has no open cycle; Removed lanes return in number order before new numbers (BR-FARM-04).", false, 1901, "Action", "FARM-04" }
+                    { 76, "Cooperative Owner", 2001, "The raft has no open cycle; the last lanes are removed first (BR-FARM-04).", false, 2002, "Action", "FARM-04" },
+                    { 77, "Cooperative Owner", 2002, "The raft has no open cycle; Removed lanes return in number order before new numbers (BR-FARM-04).", false, 2001, "Action", "FARM-04" }
                 });
 
             migrationBuilder.CreateIndex(
@@ -133,7 +133,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             migrationBuilder.Sql("""
                 UPDATE r SET PhotoUrl = (SELECT TOP (1) p.FileKey FROM RaftPhotos p WHERE p.RaftId = r.Id ORDER BY p.SortOrder)
                 FROM Rafts r;
-                DELETE FROM Lanes WHERE StatusId = 1902;
+                DELETE FROM Lanes WHERE StatusId = 2002;
                 """);
 
             migrationBuilder.DropTable(
@@ -146,22 +146,22 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             migrationBuilder.DeleteData(
                 table: "StatusTransitions",
                 keyColumn: "Id",
-                keyValue: 74);
+                keyValue: 76);
 
             migrationBuilder.DeleteData(
                 table: "StatusTransitions",
                 keyColumn: "Id",
-                keyValue: 75);
+                keyValue: 77);
 
             migrationBuilder.DeleteData(
                 table: "Statuses",
                 keyColumn: "Id",
-                keyValue: 1901);
+                keyValue: 2001);
 
             migrationBuilder.DeleteData(
                 table: "Statuses",
                 keyColumn: "Id",
-                keyValue: 1902);
+                keyValue: 2002);
 
             migrationBuilder.DropColumn(
                 name: "StatusId",
