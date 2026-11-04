@@ -147,12 +147,10 @@ public sealed class ReceivingBankAccountAcceptanceTests
 
     // Format characters and Unicode line separators never reach the service, the question or the database.
     [Theory]
-    [InlineData("HTX\u2028TRUNG NAM", "HTX TRUNG NAM")]
-    [InlineData("HTX\u2029TRUNG NAM", "HTX TRUNG NAM")]
-    [InlineData("HTX\u200B TRUNG NAM", "HTX TRUNG NAM")]
-    [InlineData("HTX \u202EMAN GNURT", "HTX MAN GNURT")]
-    [InlineData("\uFEFFHTX\u00AD TRUNG\u2060 NAM\u200D", "HTX TRUNG NAM")]
-    public async Task What_shows_nothing_is_removed_before_the_service_the_question_and_the_database(string entered, string clean)
+    [InlineData("HTX  TRUNG NAM", "HTX TRUNG NAM")]
+    [InlineData("HTX\u00A0TRUNG NAM", "HTX TRUNG NAM")]
+    [InlineData("ho\u0300a", "H\u00D2A")]
+    public async Task Spacing_and_accents_are_cleaned_before_the_service_the_question_and_the_database(string entered, string clean)
     {
         ReceivingAccountToAccept? asked = null;
         var service = new ScriptedPaymentService((account, _) =>

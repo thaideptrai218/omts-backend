@@ -39,17 +39,20 @@ public static partial class ReceivingBankAccountRules
             invalid.Add(AccountNumberField);
         }
 
-        // A control character inside the name stays a refusal, as the form promises. What shows nothing is removed and the
-        // Unicode line and paragraph separators become a space, before the service, the question or the database sees it.
+        // A bank detail is refused rather than changed unseen: a control, format or line-break character inside the name is
+        // MSG-GEN-01. A direction mark, for one, shows the MSG-DEBT-01 question in another order than the name sent to the service.
         var entered = request.AccountHolderName?.Trim() ?? string.Empty;
         var holder = DisplayNames.Normalize(entered);
-        if (holder.Length > MaxAccountHolderName || entered.Any(char.IsControl) || HasNothingToRead(holder))
+        if (holder.Length > MaxAccountHolderName || entered.EnumerateRunes().Any(HidesWhatIsRead) || HasNothingToRead(holder))
         {
             invalid.Add(AccountHolderField);
         }
 
         return (new ReceivingAccountToAccept(bank?.Bin ?? string.Empty, bank?.ShortName ?? string.Empty, number, holder.ToUpperInvariant()), invalid);
     }
+
+    private static bool HidesWhatIsRead(Rune rune) => Rune.GetUnicodeCategory(rune)
+        is UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator;
 
     // Empty, or only marks with no letter to sit on: the name is missing (BR-DEBT-01). An emoji does count as something to read.
     private static bool HasNothingToRead(string name) => name.EnumerateRunes().All(rune =>
