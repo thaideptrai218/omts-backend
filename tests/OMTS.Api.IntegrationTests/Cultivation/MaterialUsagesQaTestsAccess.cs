@@ -230,7 +230,7 @@ public class MaterialUsagesQaTestsAccess(AuthApiFactory factory) : IClassFixture
         var item = await factory.ItemAsync();
         var manager = await factory.ManagerAsync(setup.ZoneId);
 
-        var listed = await manager.Client.GetFromJsonAsync<JsonElement>($"/api/farming-input-items?group=RaftMaterial&statusId={StatusIds.Usage.InUse}");
+        var listed = await manager.Client.GetFromJsonAsync<JsonElement>($"/api/farming-input-items?group=Material&statusId={StatusIds.Usage.InUse}");
         var one = await manager.Client.GetFromJsonAsync<JsonElement>($"/api/farming-input-items/{item}");
         foreach (var view in listed.EnumerateArray().Append(one))
         {

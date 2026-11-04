@@ -246,14 +246,97 @@ public static class UserMessages
 
     // ---- MSG-PURCHASE ----
 
+    /// <summary>MSG-PURCHASE-01 (BR-PURCHASE-05): notification to the Owner when a purchase receipt is completed.</summary>
+    /// <param name="totalAmount">The total of the receipt in whole VND: the sum of its rounded lines (BR-PURCHASE-02).</param>
+    public static UserMessage ReceiptCompleted(string userName, string receiptCode, string supplierName, int lineCount, decimal totalAmount) => new(
+        Purchase01, $"{userName} completed purchase receipt {receiptCode} from {supplierName}: {lineCount} lines, {Vnd(totalAmount)} VND.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["user_name"] = userName,
+            ["receipt_code"] = receiptCode,
+            ["supplier_name"] = supplierName,
+            ["line_count"] = lineCount,
+            ["total_amount"] = totalAmount,
+        },
+    };
+
+    /// <summary>MSG-PURCHASE-02 (PURCHASE-02 step 4): a Zone Manager confirms that the Owner approved the return in person; a confirmation.</summary>
+    public static UserMessage ReturnOwnerApproval(decimal returnAmount, string supplierName) => new(
+        Purchase02, $"Has the Cooperative Owner approved this return of {Vnd(returnAmount)} VND to {supplierName} in person?");
+
     /// <summary>MSG-PURCHASE-03 (PURCHASE-02.0.E1): a quantity to return is not greater than 0 or above what is left.</summary>
-    /// <param name="legacyCode">MSG59 (not greater than 0) or MSG45 (above the limit).</param>
-    public static UserMessage ReturnQuantityOutsideLimit(string itemName, string maxQuantity, string unit, string limitExplanation, string legacyCode) => new(
-        Purchase03, $"{itemName}: enter a quantity greater than 0 and at most {maxQuantity} {unit}. {limitExplanation}".TrimEnd(), legacyCode);
+    public static UserMessage ReturnQuantityOutsideLimit(string itemName, string maxQuantity, string unit, string limitExplanation) => new(
+        Purchase03, $"{itemName}: enter a quantity greater than 0 and at most {maxQuantity} {unit}. {limitExplanation}".TrimEnd(), Legacy.Msg59);
+
+    /// <summary>MSG-PURCHASE-04 (BR-PURCHASE-05): notification to the Owner of a payment, money paid back or a cancelled payment; always pushed.</summary>
+    /// <param name="transaction">The English {transaction_text}: what was recorded, up to the code ("the cancellation of payment"), from which the text is built.</param>
+    /// <param name="transactionKind">The atomic parameter clients word it from: Payment, PaidBack, PaymentCancelled or PaidBackCancelled.</param>
+    /// <param name="preposition">"to" or "by" the supplier.</param>
+    /// <param name="debtAmount">The supplier debt after it; below zero when paid in advance.</param>
+    public static UserMessage SupplierTransaction(
+        string userName, string transaction, string transactionKind, string paymentCode, decimal amount, string preposition, string supplierName, decimal debtAmount)
+    {
+        var debtText = debtAmount < 0
+            ? $"The cooperative has now paid {supplierName} {Vnd(-debtAmount)} VND in advance."
+            : $"The cooperative now owes {supplierName} {Vnd(debtAmount)} VND.";
+        return new UserMessage(Purchase04, $"{userName} recorded {transaction} {paymentCode} of {Vnd(amount)} VND {preposition} {supplierName}. {debtText}")
+        {
+            Parameters = new Dictionary<string, object?>
+            {
+                ["user_name"] = userName,
+                ["transaction_kind"] = transactionKind,
+                ["payment_code"] = paymentCode,
+                ["amount"] = amount,
+                ["supplier_name"] = supplierName,
+                ["debt_amount"] = debtAmount,
+            },
+        };
+    }
+
+    /// <summary>MSG-PURCHASE-05 (PURCHASE-05.1): the payment is larger than the debt, or the debt is zero or below; a confirmation.</summary>
+    /// <param name="debtAmount">What the cooperative owes, 0 when it has already paid in advance (the exact debt goes in the details of the answer).</param>
+    /// <param name="advanceAmount">What it will have paid in advance after this payment (positive).</param>
+    public static UserMessage PaymentAboveDebt(string supplierName, decimal debtAmount, decimal advanceAmount) => new(
+        Purchase05,
+        $"The cooperative owes {supplierName} {Vnd(debtAmount)} VND. After this payment, it will have paid {Vnd(advanceAmount)} VND in advance. Do you want to save the payment?");
+
+    /// <summary>MSG-PURCHASE-06 (PURCHASE-05.4): a payment that is not cancelled has the same bank reference; a confirmation.</summary>
+    public static UserMessage BankReferenceAlreadyRecorded(string paymentCode, decimal amount, DateOnly paymentDate, string bankReference) => new(
+        Purchase06,
+        $"Payment {paymentCode} of {Vnd(amount)} VND on {Date(paymentDate)} already has bank reference {bankReference}. Do you want to save this payment as well?");
+
+    /// <summary>MSG-PURCHASE-07 (PURCHASE-06 step 2): cancelling the receipt would bring the supplier debt below zero.</summary>
+    /// <param name="advanceAmount">What the cooperative will then have paid in advance (a positive amount).</param>
+    public static UserMessage PaidInAdvanceAfterCancel(string supplierName, decimal advanceAmount) => new(
+        Purchase07,
+        $"After this cancellation, the cooperative will have paid {supplierName} {Vnd(advanceAmount)} VND in advance. The payments already recorded are not cancelled.")
+    {
+        Parameters = new Dictionary<string, object?> { ["supplier_name"] = supplierName, ["advance_amount"] = advanceAmount },
+    };
+
+    /// <summary>MSG-PURCHASE-08 (PURCHASE-06 step 7): notification to the Accountant and the Owner of a debt below zero after a cancellation.</summary>
+    public static UserMessage ReceiptCancelledPaidInAdvance(string userName, string receiptCode, string supplierName, decimal advanceAmount) => new(
+        Purchase08,
+        $"{userName} cancelled purchase receipt {receiptCode} from {supplierName}. The cooperative has now paid {supplierName} {Vnd(advanceAmount)} VND in advance.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["user_name"] = userName,
+            ["receipt_code"] = receiptCode,
+            ["supplier_name"] = supplierName,
+            ["advance_amount"] = advanceAmount,
+        },
+    };
 
     /// <summary>MSG-PURCHASE-09 (PURCHASE-06.0.E1): a seed lot was seeded or the receipt has a purchase return.</summary>
     public static UserMessage ReceiptCannotBeCancelled(string receiptCode, string cause) => new(
         Purchase09, $"Receipt {receiptCode} cannot be cancelled: {cause}. The Cooperative Owner can correct it instead.", Legacy.Msg61);
+
+    /// <summary>MSG-PURCHASE-10 (PURCHASE-06.2.E1): a corrected quantity is below the quantity seeded plus the quantity returned.</summary>
+    public static UserMessage QuantityBelowUsed(string itemName, decimal minQuantity, string unit, decimal seededQuantity, decimal returnedQuantity) => new(
+        Purchase10,
+        $"{itemName}: the quantity cannot be less than {Quantity(minQuantity)} {unit} ({Quantity(seededQuantity)} seeded, {Quantity(returnedQuantity)} returned).");
 
     // ---- MSG-LABOR ----
 
@@ -284,10 +367,6 @@ public static class UserMessages
     public static UserMessage AccountAlreadyLinked(string employeeName) => new(
         Legacy.Msg24, $"This account is already linked to the employee profile {employeeName}.");
 
-    public static readonly UserMessage NotThousands = new(Legacy.Msg41, "The amount must be a multiple of 1,000 VND.");
-
-    public static UserMessage ExceedsLimit(string field, string limit) => new(Legacy.Msg45, $"{field} exceeds the allowed limit ({limit}).");
-
     public static readonly UserMessage OldDocumentsHidden = new(
         Legacy.Msg57, "Old documents are temporarily hidden until identity verification is complete.");
 
@@ -314,6 +393,12 @@ public static class UserMessages
 
     /// <summary>A date as shown in messages, e.g. "29/11/2026".</summary>
     private static string Date(DateOnly date) => date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+
+    /// <summary>A VND amount as shown in messages, e.g. "1,250,500" (never rounded, BR-PURCHASE-02).</summary>
+    private static string Vnd(decimal amount) => amount.ToString("#,0.###", CultureInfo.InvariantCulture);
+
+    /// <summary>A quantity as shown in messages, e.g. "12.5" (at most 3 decimals).</summary>
+    private static string Quantity(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 
     // {document} of MSG-FARM-01/02: "the license number with its zone".
     private static string LicenseDocument(string? documentTypeName, string documentNumber, string zoneCode) =>

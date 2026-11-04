@@ -47,17 +47,31 @@ public static class MessageCodes
     public const string Account21 = "MSG-ACCOUNT-21";
     public const string Account22 = "MSG-ACCOUNT-22";
 
+    public const string Purchase01 = "MSG-PURCHASE-01";
+    public const string Purchase02 = "MSG-PURCHASE-02";
     public const string Purchase03 = "MSG-PURCHASE-03";
+    public const string Purchase04 = "MSG-PURCHASE-04";
+    public const string Purchase05 = "MSG-PURCHASE-05";
+    public const string Purchase06 = "MSG-PURCHASE-06";
+    public const string Purchase07 = "MSG-PURCHASE-07";
+    public const string Purchase08 = "MSG-PURCHASE-08";
     public const string Purchase09 = "MSG-PURCHASE-09";
+    public const string Purchase10 = "MSG-PURCHASE-10";
 
     public const string Labor03 = "MSG-LABOR-03";
 
     /// <summary>
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-22, the
-    /// related record of a notification no longer exists (ACCOUNT-08 is new in PR 0.5), and MSG-CYCLE-04, a new
-    /// cultivation log to review (CYCLE-04 is new in PR C4).
+    /// related record of a notification no longer exists (ACCOUNT-08 is new in PR 0.5); MSG-CYCLE-04, a new cultivation log
+    /// to review (CYCLE-04 is new in PR C4); MSG-PURCHASE-01/07/08, the purchase receipt notifications and the advance
+    /// warning, and MSG-PURCHASE-10, the Owner's correction (OMTS-218 P2); MSG-PURCHASE-04/05/06, the transaction
+    /// notification and the two payment confirmations (OMTS-218 P3); MSG-PURCHASE-02, the confirmation of the Owner's
+    /// approval of a return (OMTS-218 P4).
     /// </summary>
-    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal) { Account22, Cycle04 };
+    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Account22, Cycle04, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10,
+    };
 
     /// <summary>
     /// Codes of the old list. Most are only sent as <c>legacyCode</c> next to the new code, for one release.
@@ -90,8 +104,6 @@ public static class MessageCodes
         public const string Msg26 = "MSG26";
         public const string Msg27 = "MSG27";
         public const string Msg28 = "MSG28";
-        public const string Msg41 = "MSG41";
-        public const string Msg45 = "MSG45";
         public const string Msg57 = "MSG57";
         public const string Msg58 = "MSG58";
         public const string Msg59 = "MSG59";
@@ -116,8 +128,6 @@ public static class MessageCodes
         /// <item>MSG06: edit conflict (NFR-09, still cited by Part IV).</item>
         /// <item>MSG19: session expired.</item>
         /// <item>MSG24: the account is already linked to another employee (LABOR).</item>
-        /// <item>MSG41: multiple of 1,000 VND (BR-PURCHASE-02 drops the rule in the PURCHASE PR).</item>
-        /// <item>MSG45: receipt discount, paid-now and refund limits (fields not in the SRS; PURCHASE PR).</item>
         /// <item>MSG57: old documents hidden after a phone verification (PR 0.4, BR-ACCOUNT-04).</item>
         /// <item>MSG58: someone else is editing the record (NFR-13, still cited by Part IV).</item>
         /// <item>NOT_FOUND, TOO_MANY_REQUESTS (per-IP limit), UNEXPECTED_ERROR, PASSWORD_CHANGE_REQUIRED: technical codes.</item>
@@ -125,7 +135,7 @@ public static class MessageCodes
         /// </summary>
         public static readonly IReadOnlySet<string> KeptAsCode = new HashSet<string>(StringComparer.Ordinal)
         {
-            Msg05, Msg06, Msg19, Msg24, Msg41, Msg45, Msg57, Msg58,
+            Msg05, Msg06, Msg19, Msg24, Msg57, Msg58,
             NotFound, TooManyRequests, UnexpectedError, PasswordChangeRequired,
         };
     }

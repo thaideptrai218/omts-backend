@@ -55,6 +55,7 @@ public static class DependencyInjection
             options.UseSqlServer(connectionString);
         });
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IDocumentNumberAllocator, DocumentNumberAllocator>();
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<ILoginSessionRepository, LoginSessionRepository>();
         services.AddScoped<IAccessGrantRepository, AccessGrantRepository>();
@@ -81,6 +82,7 @@ public static class DependencyInjection
         services.AddScoped<IFarmingInputItemRepository, FarmingInputItemRepository>();
         services.AddScoped<IPurchaseReceiptRepository, PurchaseReceiptRepository>();
         services.AddScoped<ISupplierPaymentRepository, SupplierPaymentRepository>();
+        services.AddScoped<ISupplierDebtQuery, SupplierDebtQuery>();
         services.AddScoped<IWaterMeasurementRepository, WaterMeasurementRepository>();
         services.AddSingleton<IStatusCatalog, StatusCatalog>();
 

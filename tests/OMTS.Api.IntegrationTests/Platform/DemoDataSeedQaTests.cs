@@ -49,7 +49,6 @@ public class DemoDataSeedQaTests
         ("FarmingInputItems", db => db.FarmingInputItems.CountAsync()),
         ("PurchaseReceipts", db => db.PurchaseReceipts.CountAsync()),
         ("PurchaseReceiptLines", db => db.PurchaseReceiptLines.CountAsync()),
-        ("SeedReceiptLots", db => db.SeedReceiptLots.CountAsync()),
         ("SupplierPayments", db => db.SupplierPayments.CountAsync()),
         ("PurchaseReturns", db => db.PurchaseReturns.CountAsync()),
         ("WaterMeasurements", db => db.WaterMeasurements.CountAsync()),

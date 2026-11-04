@@ -21,15 +21,10 @@ internal sealed class ZoneRecipientQuery(OmtsDbContext db) : IZoneRecipientQuery
         var anyZone = PermissionFunctions.IsCooperativeWide(functionCode);
 
         var owners = await GetCooperativeOwnersAsync(cancellationToken);
-
         List<Guid> staff = roleCodes.Count == 0
             ? []
-            : await db.AccessGrants.AsNoTracking()
-                .EffectiveOfFixedRoles()
-                .Where(g => roleCodes.Contains(g.Role.Code)
-                    && (anyZone || g.ZoneId == null || g.ZoneId == zoneId)
-                    && g.Account.SubjectType == SubjectType.Staff
-                    && g.Account.StatusId == StatusIds.Account.Active)
+            : await ActiveStaffPairs(roleCodes)
+                .Where(g => anyZone || g.ZoneId == null || g.ZoneId == zoneId)
                 .Select(g => g.AccountId)
                 .ToListAsync(cancellationToken);
 
@@ -41,4 +36,19 @@ internal sealed class ZoneRecipientQuery(OmtsDbContext db) : IZoneRecipientQuery
             .Where(a => a.SubjectType == SubjectType.CooperativeOwner && a.StatusId == StatusIds.Account.Active)
             .Select(a => a.Id)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Guid>> GetOwnersAndRolesAsync(IReadOnlyCollection<StaffRole> staffRoles, CancellationToken cancellationToken)
+    {
+        var roleCodes = staffRoles.Select(r => FixedRoles.Of(r).Code).ToList();
+        var owners = await GetCooperativeOwnersAsync(cancellationToken);
+        List<Guid> staff = roleCodes.Count == 0 ? [] : await ActiveStaffPairs(roleCodes).Select(g => g.AccountId).ToListAsync(cancellationToken);
+        return owners.Concat(staff).Distinct().ToList();
+    }
+
+    private IQueryable<Domain.Entities.Identity.AccessGrant> ActiveStaffPairs(IReadOnlyCollection<string> roleCodes) =>
+        db.AccessGrants.AsNoTracking()
+            .EffectiveOfFixedRoles()
+            .Where(g => roleCodes.Contains(g.Role.Code)
+                && g.Account.SubjectType == SubjectType.Staff
+                && g.Account.StatusId == StatusIds.Account.Active);
 }

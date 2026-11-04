@@ -41,7 +41,6 @@ public class DemoDataSeedTests
         ("FarmingInputItems", db => db.FarmingInputItems.CountAsync()),
         ("PurchaseReceipts", db => db.PurchaseReceipts.CountAsync()),
         ("PurchaseReceiptLines", db => db.PurchaseReceiptLines.CountAsync()),
-        ("SeedReceiptLots", db => db.SeedReceiptLots.CountAsync()),
         ("SupplierPayments", db => db.SupplierPayments.CountAsync()),
         ("PurchaseReturns", db => db.PurchaseReturns.CountAsync()),
         ("WaterMeasurements", db => db.WaterMeasurements.CountAsync()),
@@ -155,9 +154,25 @@ public class DemoDataSeedTests
         Assert.Equal(20, statuses.Sum(s => s.Count));
         Assert.Equal(2, statuses.Single(s => s.Key == StatusIds.PurchaseReceipt.Draft).Count);
         Assert.Equal(2, statuses.Single(s => s.Key == StatusIds.PurchaseReceipt.Cancelled).Count);
-        Assert.Equal(1, await db.PurchaseReturns.CountAsync());
-        Assert.True(await db.SupplierPayments.AnyAsync(p => p.StatusId == StatusIds.SupplierPayment.Recorded));
-        Assert.True(await db.PurchaseReceipts.AnyAsync(r => r.DiscountAmount > 0));
+        // One return stands and one was cancelled by the Owner (PURCHASE-02.1), both with TH codes.
+        Assert.Equal(1, await db.PurchaseReturns.CountAsync(r => r.StatusId == StatusIds.PurchaseReturn.Recorded));
+        Assert.Equal(1, await db.PurchaseReturns.CountAsync(r => r.StatusId == StatusIds.PurchaseReturn.Cancelled && r.CancelReason != null));
+        Assert.True(await db.PurchaseReturns.AllAsync(r => r.Code.StartsWith("TH")));
+        // TT codes; payments are not linked to receipts; a supplier paid back and a payment was cancelled (PURCHASE-05.2/05.3).
+        Assert.True(await db.SupplierPayments.AnyAsync(p => p.StatusId == StatusIds.SupplierPayment.Recorded && p.Kind == SupplierPaymentKind.Payment));
+        Assert.True(await db.SupplierPayments.AnyAsync(p => p.StatusId == StatusIds.SupplierPayment.Recorded && p.Kind == SupplierPaymentKind.PaidBack));
+        Assert.Equal(1, await db.SupplierPayments.CountAsync(p => p.StatusId == StatusIds.SupplierPayment.Cancelled));
+        Assert.True(await db.SupplierPayments.AllAsync(p => p.Code.StartsWith("TT")));
+        // Each transaction told the Owner (MSG-PURCHASE-04), the cancellation apart from its payment.
+        var payments = await db.SupplierPayments.CountAsync();
+        Assert.Equal(payments + 1, await db.Notifications.CountAsync(n => n.Type == NotificationTypes.SupplierTransaction));
+        // PN codes; Material lines name their raft, seed lines may; one amount keeps its dongs (BR-PURCHASE-02).
+        Assert.True(await db.PurchaseReceipts.AllAsync(r => r.Code.StartsWith("PN")));
+        Assert.True(await db.PurchaseReceiptLines.AnyAsync(l => l.RaftId != null && l.Item!.Group == InputItemGroup.Seed));
+        Assert.True(await db.PurchaseReceiptLines.Where(l => l.Item!.Group == InputItemGroup.Material && l.Receipt.StatusId != StatusIds.PurchaseReceipt.Draft).AllAsync(l => l.RaftId != null));
+        Assert.True(await db.PurchaseReceiptLines.AnyAsync(l => l.LineAmount % 1000 != 0));
+        // The Owner was told of each completed receipt (MSG-PURCHASE-01), cancelled ones included.
+        Assert.Equal(18, await db.Notifications.Where(n => n.Type == NotificationTypes.PurchaseReceiptCompleted).Select(n => n.RelatedRecordId).Distinct().CountAsync());
 
         // Dates are relative to today in UTC+7, whenever the seed runs.
         var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime);

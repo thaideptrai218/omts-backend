@@ -28,6 +28,12 @@ public static class RelatedRecordTypes
     /// <summary>A cultivation log (CYCLE-04); it has no code of its own, so the code shown is its raft's.</summary>
     public const string CultivationLog = "CultivationLog";
 
+    /// <summary>A purchase receipt (PURCHASE-01, PURCHASE-06); it has no zone.</summary>
+    public const string PurchaseReceipt = "PurchaseReceipt";
+
+    /// <summary>A supplier payment or money paid back (PURCHASE-05); it has no zone and is never removed, only cancelled.</summary>
+    public const string SupplierPayment = "SupplierPayment";
+
     public static readonly IReadOnlyDictionary<string, string> Names = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         [WaterMeasurement] = "Water measurement",
@@ -36,5 +42,7 @@ public static class RelatedRecordTypes
         [CooperativeCertification] = "Certification",
         [Account] = "Account",
         [CultivationLog] = "Cultivation log",
+        [PurchaseReceipt] = "Purchase receipt",
+        [SupplierPayment] = "Supplier payment",
     };
 }

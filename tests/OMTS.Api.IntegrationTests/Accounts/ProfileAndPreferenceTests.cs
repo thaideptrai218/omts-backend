@@ -109,15 +109,20 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         var accountantTypes = await TypesAsync(await factory.LoginAsync(accountant.Username, PreferencePassword));
         var traderTypes = await TypesAsync(await factory.LoginAsync(trader.Username, PreferencePassword));
 
-        Assert.Equal(["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "ZONE_LICENSE_EXPIRY", "COOPERATIVE_CERTIFICATION_EXPIRY", "CULTIVATION_LOG_RECORDED"], ownerTypes.Keys);
+        Assert.Equal(
+            ["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "ZONE_LICENSE_EXPIRY", "COOPERATIVE_CERTIFICATION_EXPIRY", "CULTIVATION_LOG_RECORDED", "PURCHASE_RECEIPT_COMPLETED", "PURCHASE_RECEIPT_CANCELLED_ADVANCE", "SUPPLIER_TRANSACTION"],
+            ownerTypes.Keys);
         Assert.Equal((false, true), ownerTypes["CULTIVATION_LOG_RECORDED"]);
         Assert.Equal(["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE"], managerTypes.Keys);
-        Assert.Empty(accountantTypes);
+        Assert.Equal(["PURCHASE_RECEIPT_CANCELLED_ADVANCE"], accountantTypes.Keys);
         Assert.Empty(traderTypes);
         Assert.Equal((true, true), ownerTypes["WATER_ALERT"]);
         Assert.Equal((true, true), ownerTypes["ZONE_LICENSE_EXPIRY"]);
         Assert.Equal((true, true), ownerTypes["COOPERATIVE_CERTIFICATION_EXPIRY"]);
         Assert.Equal((false, true), ownerTypes["WATER_MEASUREMENT_OVERDUE"]);
+        Assert.Equal((false, true), ownerTypes["PURCHASE_RECEIPT_COMPLETED"]);
+        // BR-PURCHASE-05: the transaction of the Accountant is always pushed.
+        Assert.Equal((true, true), ownerTypes["SUPPLIER_TRANSACTION"]);
     }
 
     [Fact]

@@ -13,7 +13,7 @@ namespace OMTS.Domain.Entities.Cultivation;
 public class MaterialUsage : AuditableEntity
 {
     /// <summary>The group an item must be in to be used here (BR-CYCLE-03): the one name in this feature for the catalogue group of materials.</summary>
-    public const InputItemGroup ItemGroup = InputItemGroup.RaftMaterial;
+    public const InputItemGroup ItemGroup = InputItemGroup.Material;
 
     public const int MaxRepairReasonLength = 500;
 

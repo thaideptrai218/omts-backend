@@ -117,14 +117,20 @@ public static class DependencyInjection
         services.AddScoped<ZoneAccessGuard>();
         services.AddScoped<SupplierService>();
         services.AddScoped<FarmingInputItemService>();
+        services.AddScoped<PurchaseReceiptAccess>();
         services.AddScoped<PurchaseReceiptValidator>();
         services.AddScoped<PurchaseReceiptViews>();
+        services.AddScoped<PurchaseReceiptNotifications>();
         services.AddScoped<PurchaseReceiptService>();
         services.AddScoped<PurchaseReceiptCancellationService>();
+        services.AddScoped<PurchaseReceiptCorrectionService>();
+        services.AddScoped<PurchaseReceiptCopyService>();
         services.AddScoped<PurchaseReturnService>();
         services.AddScoped<PurchaseReceiptQueryService>();
         services.AddScoped<SupplierPaymentService>();
+        services.AddScoped<SupplierPaymentNotifications>();
         services.AddScoped<SupplierDebtService>();
+        services.AddScoped<SupplierDebtExportService>();
 
         // ENV-01…ENV-04 water quality monitoring and the overdue measurement reminder
         services.AddSingleton<EditingPresenceTracker>();

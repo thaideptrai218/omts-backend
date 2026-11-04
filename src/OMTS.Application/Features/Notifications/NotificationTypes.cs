@@ -36,6 +36,15 @@ public static class NotificationTypes
     /// <summary>MSG-CYCLE-04, a new cultivation log to review, to the Cooperative Owner (CYCLE-04); not on a correction.</summary>
     public const string CultivationLogRecorded = "CULTIVATION_LOG_RECORDED";
 
+    /// <summary>MSG-PURCHASE-01, the new purchase receipt, to the Owner when a receipt is completed (BR-PURCHASE-05); push can be turned off.</summary>
+    public const string PurchaseReceiptCompleted = "PURCHASE_RECEIPT_COMPLETED";
+
+    /// <summary>MSG-PURCHASE-08, a receipt cancellation after which the supplier debt is below zero, to the Accountant and the Owner (BR-PURCHASE-05).</summary>
+    public const string PurchaseReceiptCancelledPaidInAdvance = "PURCHASE_RECEIPT_CANCELLED_ADVANCE";
+
+    /// <summary>MSG-PURCHASE-04, a supplier payment, money paid back or a cancelled payment, to the Owner (BR-PURCHASE-05); mandatory.</summary>
+    public const string SupplierTransaction = "SUPPLIER_TRANSACTION";
+
     public static readonly IReadOnlyList<NotificationTypeDefinition> All =
     [
         new(WaterAlert, "Water alert", AlwaysPush, [CooperativeOwner, ZoneManager],
@@ -51,6 +60,13 @@ public static class NotificationTypes
         new(StaffAccountLockReminder, "Reminder to lock a staff account", NeverPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         new(CultivationLogRecorded, "New cultivation log", Default, [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.CultivationLogs, PermissionAction.View)),
+        // Purchase receipts have no zone: opening one follows the role only (BR-FARM-08). Only the transaction of the
+        // Accountant (MSG-PURCHASE-04, PURCHASE-05) is mandatory in FE-08 (BR-ACCOUNT-11).
+        new(PurchaseReceiptCompleted, "New purchase receipt", Default, [CooperativeOwner],
+            NotificationOpenAccess.InZone(PermissionFunctions.PurchaseReceipts, PermissionAction.View)),
+        new(PurchaseReceiptCancelledPaidInAdvance, "Supplier paid in advance after a receipt cancellation", Default, [CooperativeOwner, Accountant],
+            NotificationOpenAccess.InZone(PermissionFunctions.PurchaseReceipts, PermissionAction.View)),
+        new(SupplierTransaction, "Supplier payment transaction", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
     ];
 
     private static readonly Dictionary<string, NotificationTypeDefinition> ByCode = All.ToDictionary(t => t.Code, StringComparer.Ordinal);

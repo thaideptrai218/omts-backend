@@ -18,13 +18,6 @@ internal static class ConfigurationHelpers
         }
     }
 
-    /// <summary>Money columns hold VND as multiples of 1,000 (BR-13, NFR-06).</summary>
-    public static void HasThousandVndCheck<T>(this EntityTypeBuilder<T> builder, string column)
-        where T : class
-    {
-        builder.ToTable(t => t.HasCheckConstraint($"CK_{typeof(T).Name}_{column}_Thousands", $"[{column}] % 1000 = 0"));
-    }
-
     /// <summary>Latitude/Longitude columns hold a valid WGS84 point, both set or both empty.</summary>
     public static void HasCoordinateChecks<T>(this EntityTypeBuilder<T> builder)
         where T : class
