@@ -130,7 +130,7 @@ public class WaterCorrectionTests(AuthApiFactory api) : IClassFixture<AuthApiFac
     }
 
     [Fact]
-    public async Task Voided_measurement_leaves_nothing_current_in_history_chart_and_export()
+    public async Task Voided_measurement_stays_in_the_history_and_the_export_with_its_reason_and_leaves_the_chart()
     {
         var z = await api.ZoneAsync();
         var saved = await z.RecordedAsync(9.1m, 20m);
@@ -143,9 +143,9 @@ public class WaterCorrectionTests(AuthApiFactory api) : IClassFixture<AuthApiFac
         using var workbook = new ClosedXML.Excel.XLWorkbook(await export.Content.ReadAsStreamAsync());
 
         Assert.Equal(HttpStatusCode.OK, voided.StatusCode);
-        Assert.Equal(0, history.GetProperty("total").GetInt32());
-        Assert.All(chart.GetProperty("periods").EnumerateArray(), p => Assert.True(p.GetProperty("missing").GetBoolean()));
-        Assert.Single(workbook.Worksheet("Measurements").RowsUsed());
+        Assert.Equal("Đo nhầm cọc", history.GetProperty("items").EnumerateArray().Single().Text("voidReason"));
+        Assert.Equal(0, chart.GetProperty("points").GetArrayLength());
+        Assert.Equal("Đo nhầm cọc", workbook.Worksheet("Measurements").Row(2).Cell(7).GetString());
     }
 
     [Fact]

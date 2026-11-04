@@ -21,8 +21,8 @@ public static class WaterMeasurementStatuses
     };
 
     /// <summary>
-    /// Status ids of a filter given as repeated and/or comma-separated names (Active, Voided, All). Empty means Active
-    /// only (interim: OMTS-219 W3 makes the default both, WATER-03 step 3); an unknown name gives null.
+    /// Status ids of a filter given as repeated and/or comma-separated names (Active, Voided, All). Empty means both
+    /// (WATER-03 step 3: a voided measurement stays in the history); an unknown name gives null.
     /// </summary>
     public static IReadOnlyList<int>? ParseFilter(IEnumerable<string>? values)
     {
@@ -31,7 +31,7 @@ public static class WaterMeasurementStatuses
             .ToList();
         if (names.Count == 0)
         {
-            return [S.Active];
+            return ByName["All"];
         }
 
         var ids = new HashSet<int>();

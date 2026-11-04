@@ -8,9 +8,12 @@ namespace OMTS.Application.UnitTests.Features.WaterQuality;
 public class WaterMeasurementStatusesTests
 {
     [Fact]
-    public void Filter_defaults_to_active_and_accepts_repeated_or_comma_separated_names()
+    public void Filter_defaults_to_both_and_accepts_repeated_or_comma_separated_names()
     {
-        Assert.Equal([S.Active], WaterMeasurementStatuses.ParseFilter(null));
+        Assert.Equal([S.Active, S.Voided], WaterMeasurementStatuses.ParseFilter(null));
+        Assert.Equal([S.Active, S.Voided], WaterMeasurementStatuses.ParseFilter([]));
+        Assert.Equal([S.Active], WaterMeasurementStatuses.ParseFilter(["Active"]));
+        Assert.Equal([S.Voided], WaterMeasurementStatuses.ParseFilter(["Voided"]));
         Assert.Equal([S.Active, S.Voided], WaterMeasurementStatuses.ParseFilter(["active", " Voided "]));
         Assert.Equal([S.Active, S.Voided], WaterMeasurementStatuses.ParseFilter(["Active,Voided"]));
         Assert.Equal([S.Active, S.Voided], WaterMeasurementStatuses.ParseFilter(["All"]));

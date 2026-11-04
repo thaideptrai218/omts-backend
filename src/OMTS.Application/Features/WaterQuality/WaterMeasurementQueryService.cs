@@ -4,7 +4,6 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Interfaces.Reports;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
-using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.WaterQuality.Dtos;
@@ -13,15 +12,14 @@ using S = OMTS.Domain.Constants.StatusIds.WaterMeasurement;
 
 namespace OMTS.Application.Features.WaterQuality;
 
-/// <summary>Filters of the WATER-03 history list and export: local dates (default last 3 months) and statuses (default Active).</summary>
+/// <summary>Filters of the WATER-03 history list and export: local dates (default last 3 months) and statuses (default Active and Voided).</summary>
 public sealed record WaterHistoryQuery(string? From, string? To, IReadOnlyList<string>? Status, int Page = 1, int PageSize = 20);
 
 public sealed record ExportFile(string FileName, string ContentType, byte[] Content);
 
 /// <summary>
-/// WATER-03 – water history, detail, chart and Excel export of a zone. Charts and exports use only Active values.
-/// Interim until OMTS-219 W3: the list shows Voided only when asked, the export leaves it out, the chart has no
-/// temperature and the empty list has no MSG-GEN-10.
+/// WATER-03 – water history, detail, chart and Excel export of a zone. The list and the export hold the voided
+/// measurements with their reason; the chart uses only the active ones (BR-WATER-06).
 /// </summary>
 public sealed class WaterMeasurementQueryService(
     IWaterMeasurementRepository measurements,
@@ -32,14 +30,9 @@ public sealed class WaterMeasurementQueryService(
     ILogger<WaterMeasurementQueryService> logger)
 {
     public const int MaxPageSize = 100;
-    public const int MaxChartYears = 10;
     public const string StatusField = "Status";
-    public const string GroupByField = "Group by";
 
-    // Exports never contain voided records, whatever the status filter asks (interim until OMTS-219 W3).
-    private static readonly int[] ExportableStatuses = [S.Active];
-
-    public async Task<Result<Paged<WaterMeasurementListItem>>> SearchAsync(Guid zoneId, WaterHistoryQuery query, CancellationToken cancellationToken)
+    public async Task<Result<WaterHistoryPage>> SearchAsync(Guid zoneId, WaterHistoryQuery query, CancellationToken cancellationToken)
     {
         var filter = await FilterAsync(zoneId, query, cancellationToken);
         if (!filter.IsSuccess)
@@ -51,7 +44,8 @@ public sealed class WaterMeasurementQueryService(
         // The page is capped so (page - 1) * pageSize cannot overflow into a negative OFFSET.
         var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
         var (items, total) = await measurements.SearchAsync(zoneId, period.FromInstant, period.ToExclusive, statusIds, page, pageSize, cancellationToken);
-        return new Paged<WaterMeasurementListItem>(await views.ListItemsAsync(items, cancellationToken), page, pageSize, total);
+        var empty = total == 0 ? UserMessages.NoDataForFilters(query.Status is { Count: > 0 } ? "zone, period and status" : "zone and period") : null;
+        return new WaterHistoryPage(await views.ListItemsAsync(items, cancellationToken), page, pageSize, total, period.From, period.To, empty?.Text, empty?.Code);
     }
 
     public async Task<Result<WaterMeasurementDetail>> GetAsync(Guid id, CancellationToken cancellationToken)
@@ -67,50 +61,23 @@ public sealed class WaterMeasurementQueryService(
             : AppError.Forbidden;
     }
 
-    /// <summary>Default range: the last 12 months (whole months when grouped by month); by day at most 366 days.</summary>
-    public async Task<Result<WaterChart>> ChartAsync(Guid zoneId, string? from, string? to, string? groupBy, CancellationToken cancellationToken)
+    /// <summary>The active measurements of the period as raw points, for pH, salinity and temperature; the period defaults as in the list.</summary>
+    public async Task<Result<WaterChart>> ChartAsync(Guid zoneId, string? from, string? to, CancellationToken cancellationToken)
     {
-        var zone = await measurements.GetZoneAsync(zoneId, track: false, cancellationToken);
-        if (zone is null)
+        var scope = await ZoneAndPeriodAsync(zoneId, from, to, cancellationToken);
+        if (!scope.IsSuccess)
         {
-            return AppError.NotFound;
+            return scope.Error!;
         }
 
-        WaterChartGrouping grouping;
-        if (string.IsNullOrWhiteSpace(groupBy))
-        {
-            grouping = WaterChartGrouping.Month;
-        }
-        else if (!Enum.TryParse(groupBy.Trim(), ignoreCase: true, out grouping) || !Enum.IsDefined(grouping))
-        {
-            return AppError.Invalid(GroupByField, "Use month or day.");
-        }
-
-        var period = WaterPeriod.Parse(from, to, timeProvider.Today(), end => grouping == WaterChartGrouping.Month
-            ? new DateOnly(end.Year, end.Month, 1).AddMonths(-11)
-            : end.AddMonths(-12).AddDays(1));
-        if (!period.IsSuccess)
-        {
-            return period.Error!;
-        }
-
-        if (grouping == WaterChartGrouping.Day && period.Value!.Days > WaterChartBuilder.MaxDays)
-        {
-            return AppError.Invalid(GroupByField, $"Grouping by day covers at most {WaterChartBuilder.MaxDays} days.");
-        }
-
-        if (grouping == WaterChartGrouping.Month && period.Value!.From.AddYears(MaxChartYears) < period.Value.To)
-        {
-            return AppError.Invalid(GroupByField, $"Grouping by month covers at most {MaxChartYears} years.");
-        }
-
-        var samples = await ActiveSamplesAsync(zoneId, period.Value!, cancellationToken);
+        var (zone, period) = scope.Value;
+        var active = await measurements.ListAsync(zoneId, period.FromInstant, period.ToExclusive, [S.Active], cancellationToken);
         return new WaterChart(
-            zoneId, period.Value!.From, period.Value.To, grouping, WaterThresholds.Of(zone),
-            WaterChartBuilder.Build(samples, period.Value, grouping));
+            zoneId, period.From, period.To, WaterThresholds.Of(zone),
+            active.Select(m => new WaterChartPoint(m.Id, m.MeasuredAt, m.Ph, m.Salinity, m.Temperature)).ToList());
     }
 
-    /// <summary>The Active history rows and the monthly summary as .xlsx.</summary>
+    /// <summary>The measurements of the list, in its order, as .xlsx (WATER-03.3).</summary>
     public async Task<Result<ExportFile>> ExportAsync(Guid zoneId, WaterHistoryQuery query, CancellationToken cancellationToken)
     {
         var filter = await FilterAsync(zoneId, query, cancellationToken);
@@ -120,12 +87,8 @@ public sealed class WaterMeasurementQueryService(
         }
 
         var (zone, period, statusIds) = filter.Value!;
-        var exported = statusIds.Intersect(ExportableStatuses).ToList();
-        var rows = exported.Count == 0
-            ? []
-            : await measurements.ListAsync(zoneId, period.FromInstant, period.ToExclusive, exported, cancellationToken);
-        var months = WaterChartBuilder.Build(await ActiveSamplesAsync(zoneId, period, cancellationToken), period, WaterChartGrouping.Month);
-        var sheets = WaterMeasurementExport.Sheets(await views.ListItemsAsync(rows, cancellationToken), months);
+        var oldestFirst = await measurements.ListAsync(zoneId, period.FromInstant, period.ToExclusive, statusIds, cancellationToken);
+        var sheets = WaterMeasurementExport.Sheets(await views.ListItemsAsync(oldestFirst.Reverse().ToList(), cancellationToken));
 
         try
         {
@@ -141,16 +104,10 @@ public sealed class WaterMeasurementQueryService(
     private async Task<Result<(FarmingZone Zone, WaterPeriod Period, IReadOnlyList<int> StatusIds)>> FilterAsync(
         Guid zoneId, WaterHistoryQuery query, CancellationToken cancellationToken)
     {
-        var zone = await measurements.GetZoneAsync(zoneId, track: false, cancellationToken);
-        if (zone is null)
+        var scope = await ZoneAndPeriodAsync(zoneId, query.From, query.To, cancellationToken);
+        if (!scope.IsSuccess)
         {
-            return AppError.NotFound;
-        }
-
-        var period = WaterPeriod.Parse(query.From, query.To, timeProvider.Today(), end => end.AddMonths(-3));
-        if (!period.IsSuccess)
-        {
-            return period.Error!;
+            return scope.Error!;
         }
 
         var statusIds = WaterMeasurementStatuses.ParseFilter(query.Status);
@@ -159,11 +116,19 @@ public sealed class WaterMeasurementQueryService(
             return AppError.Invalid(StatusField, "Use Active, Voided or All.");
         }
 
-        return (zone, period.Value!, statusIds);
+        return (scope.Value.Zone, scope.Value.Period, statusIds);
     }
 
-    private async Task<IReadOnlyList<WaterSample>> ActiveSamplesAsync(Guid zoneId, WaterPeriod period, CancellationToken cancellationToken) =>
-        (await measurements.ListAsync(zoneId, period.FromInstant, period.ToExclusive, [S.Active], cancellationToken))
-            .Select(m => new WaterSample(m.MeasuredAt, m.Ph, m.Salinity))
-            .ToList();
+    private async Task<Result<(FarmingZone Zone, WaterPeriod Period)>> ZoneAndPeriodAsync(
+        Guid zoneId, string? from, string? to, CancellationToken cancellationToken)
+    {
+        var zone = await measurements.GetZoneAsync(zoneId, track: false, cancellationToken);
+        if (zone is null)
+        {
+            return AppError.NotFound;
+        }
+
+        var period = WaterPeriod.Parse(from, to, timeProvider.Today(), end => end.AddMonths(-3));
+        return period.IsSuccess ? (zone, period.Value!) : period.Error!;
+    }
 }
