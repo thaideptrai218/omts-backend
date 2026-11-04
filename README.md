@@ -78,7 +78,8 @@ bootstrap temporary password. To get every demo login back, reset the environmen
 The demo data also holds the cooperative profile, the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued),
 license documents (valid, expiring within 30 days, expired), about 10 rafts with lanes per zone, 8 employees (one Left),
 5 suppliers, 15 farming input items and 20 purchase receipts of the last 3 months with payments, discounts and a return,
-4 products (one Discontinued) and 7 customer profiles (2 linked to the trader accounts, 2 the same buyer ready to merge).
+4 products (one Discontinued), 7 customer profiles (2 linked to the trader accounts, 2 the same buyer ready to merge) and
+4 purchase requests of `thuonglai1`, one in each state (Awaiting response, Accepted for fewer kg with pay later, Declined, Cancelled).
 `DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰) and one water measurement a day for the
 30 days before the seed day: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
 26.0 ‰) and one voided reading. The mistyped 2.6 ‰ alerted before its correction, so the inboxes hold four sets of water
@@ -207,7 +208,9 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   open the record (e.g. a revoked zone–role pair), 404 MSG-ACCOUNT-22 when the record was removed. A push carries the
   notification id.
 - The same table keeps SMS and Zalo OA sendings to traders (`channel`, phone, delivery status Sending / Sent / Not
-  sent, provider message id or error code); they are never in a list. No sender uses them yet (SALE-06, TRACE-04).
+  sent, provider message id or error code); they are never in a list. The response to a purchase request (SALE-03) uses
+  them through `ITraderMessageSender`, whose only route is SMS (`Sms:Provider`, Fake or None) until the Zalo OA templates
+  are approved; SALE-06 and TRACE-04 follow.
 
 ### Database (EF Core code-first)
 

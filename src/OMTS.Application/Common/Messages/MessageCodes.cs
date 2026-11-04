@@ -15,6 +15,7 @@ public static class MessageCodes
     public const string Gen08 = "MSG-GEN-08";
     public const string Gen09 = "MSG-GEN-09";
     public const string Gen10 = "MSG-GEN-10";
+    public const string Gen11 = "MSG-GEN-11";
 
     public const string Farm01 = "MSG-FARM-01";
     public const string Farm02 = "MSG-FARM-02";
@@ -52,6 +53,9 @@ public static class MessageCodes
 
     public const string Labor03 = "MSG-LABOR-03";
 
+    public const string Sale01 = "MSG-SALE-01";
+    public const string Sale02 = "MSG-SALE-02";
+    public const string Sale03 = "MSG-SALE-03";
     public const string Sale04 = "MSG-SALE-04";
     public const string Sale05 = "MSG-SALE-05";
 
@@ -59,9 +63,12 @@ public static class MessageCodes
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-01, the
     /// account is linked to the existing customer profile; MSG-ACCOUNT-22, the related record of a notification no longer
     /// exists (ACCOUNT-08 is new in PR 0.5); MSG-SALE-04 and MSG-SALE-05, the merge of customer profiles (SALE-04 is new
-    /// in PR S1).
+    /// in PR S1); MSG-GEN-11, MSG-SALE-01, MSG-SALE-02 and MSG-SALE-03, the purchase requests (new in PR S4).
     /// </summary>
-    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal) { Account01, Account22, Sale04, Sale05 };
+    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Account01, Account22, Gen11, Sale01, Sale02, Sale03, Sale04, Sale05,
+    };
 
     /// <summary>
     /// Codes of the old list. Most are only sent as <c>legacyCode</c> next to the new code, for one release.

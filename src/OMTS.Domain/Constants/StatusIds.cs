@@ -72,4 +72,13 @@ public static class StatusIds
         public const int Sent = 1602;
         public const int NotSent = 1603;
     }
+
+    /// <summary>SALE-01 to SALE-03; Fulfilled is worked out from the invoices, not stored (BR-SALE-01).</summary>
+    public static class PurchaseRequest
+    {
+        public const int AwaitingResponse = 3201;
+        public const int Accepted = 3202;
+        public const int Declined = 3203;
+        public const int Cancelled = 3204;
+    }
 }

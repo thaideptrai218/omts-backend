@@ -242,6 +242,74 @@ public static class UserMessages
 
     // ---- MSG-SALE ----
 
+    /// <summary>MSG-GEN-11 (SALE-10.0.E1): a list the user does not filter has nothing to show yet.</summary>
+    public static readonly UserMessage NothingToShowYet = new(Gen11, "There is nothing to show yet.");
+
+    /// <summary>MSG-SALE-01 (BR-SALE-03): a new purchase request, to the Cooperative Owner; a mandatory type.</summary>
+    public static UserMessage PurchaseRequestNew(string customerName, decimal requestedKg, string productName, DateOnly pickupDate, string? note) => new(
+        Sale01,
+        $"{customerName} asks to buy about {Kg(requestedKg)} kg of {productName}, pickup on {Date(pickupDate)}. {(note is null ? "" : note + " ")}Please ask the Zone Manager to check the oysters, then respond.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["customer_name"] = customerName,
+            ["requested_kg"] = KgValue(requestedKg),
+            ["product_name"] = productName,
+            ["pickup_date"] = pickupDate,
+            ["note"] = note,
+        },
+    };
+
+    /// <summary>MSG-SALE-02 (BR-SALE-03): a trader cancelled a purchase request, to the Cooperative Owner.</summary>
+    /// <param name="requestDate">The business day the request was sent.</param>
+    public static UserMessage PurchaseRequestCancelled(string customerName, DateOnly requestDate, decimal requestedKg, string productName, string? reason) => new(
+        Sale02,
+        $"{customerName} cancelled the purchase request of {Date(requestDate)} for about {Kg(requestedKg)} kg of {productName}.{(reason is null ? "" : " " + reason)}")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["customer_name"] = customerName,
+            ["request_date"] = requestDate,
+            ["requested_kg"] = KgValue(requestedKg),
+            ["product_name"] = productName,
+            ["reason"] = reason,
+        },
+    };
+
+    /// <summary>MSG-SALE-03 (BR-SALE-03): the response "accepted", to the trader account and the phone number of the profile.</summary>
+    public static UserMessage PurchaseRequestAccepted(
+        string cooperativeShortName, decimal requestedKg, string productName, decimal acceptedKg, DateOnly pickupDate, bool payLater, string? note) => new(
+        Sale03,
+        $"{cooperativeShortName}: your request for {Kg(requestedKg)} kg of {productName} is accepted for {Kg(acceptedKg)} kg, pickup on {Date(pickupDate)}{(payLater ? "; you may pay later" : "")}.{(note is null ? "" : " " + note)}")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["cooperative_short_name"] = cooperativeShortName,
+            ["requested_kg"] = KgValue(requestedKg),
+            ["product_name"] = productName,
+            ["accepted"] = true,
+            ["accepted_kg"] = KgValue(acceptedKg),
+            ["pickup_date"] = pickupDate,
+            ["pay_later"] = payLater,
+            ["note"] = note,
+        },
+    };
+
+    /// <summary>MSG-SALE-03 (BR-SALE-03): the response "declined", with the note that gives the reason.</summary>
+    public static UserMessage PurchaseRequestDeclined(string cooperativeShortName, decimal requestedKg, string productName, string note) => new(
+        Sale03,
+        $"{cooperativeShortName}: your request for {Kg(requestedKg)} kg of {productName} is declined. {note}")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["cooperative_short_name"] = cooperativeShortName,
+            ["requested_kg"] = KgValue(requestedKg),
+            ["product_name"] = productName,
+            ["accepted"] = false,
+            ["note"] = note,
+        },
+    };
+
     /// <summary>MSG-SALE-04 (SALE-04.3): a Zone Manager merges two profiles after confirming that the Owner agreed.</summary>
     /// <param name="mergedDebt">The amount as shown, e.g. "1,000,000".</param>
     public static UserMessage CustomerMergeNeedsOwnerAgreement(
@@ -303,6 +371,12 @@ public static class UserMessages
 
     /// <summary>A date as shown in messages, e.g. "29/11/2026".</summary>
     private static string Date(DateOnly date) => date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+
+    /// <summary>A weight as shown in messages, with no trailing zeros, e.g. "1500.5".</summary>
+    private static string Kg(decimal kg) => kg.ToString("0.###", CultureInfo.InvariantCulture);
+
+    // The stored parameter reads the same whether the value came from a request or from a decimal(18,3) column.
+    private static decimal KgValue(decimal kg) => decimal.Parse(Kg(kg), CultureInfo.InvariantCulture);
 
     // {document} of MSG-FARM-01/02: "the license number with its zone".
     private static string LicenseDocument(string documentTypeName, string documentNumber, IReadOnlyList<string> zoneCodes) =>

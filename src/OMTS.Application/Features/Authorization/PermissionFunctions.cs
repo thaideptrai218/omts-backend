@@ -60,7 +60,7 @@ public static class PermissionFunctions
         new(PurchaseReceipts, "Purchase receipts, returns and cancellations (PURCHASE-01, PURCHASE-02, PURCHASE-03, PURCHASE-06)", false, [View, Create, Edit, Delete, Export]),
         new(SupplierPayments, "Supplier payments and supplier debts (PURCHASE-04, PURCHASE-05)", true, [View, Create, Export]),
         new(Customers, "Customers (SALE-04)", true, [View, Create, Edit]),
-        new(PurchaseRequests, "Purchase requests (SALE-03; responding is Owner-only)", false, [View, Edit]),
+        new(PurchaseRequests, "Purchase requests (SALE-03; responding is Owner-only)", true, [View, Edit]),
         new(SalesInvoices, "Sales invoices (SALE-05, SALE-06, SALE-09; correcting and cancelling, SALE-07 and SALE-08, are Owner-only)", false, [View, Create, Edit, Delete, Export]),
         new(QualityClaims, "Quality claims (CLAIM-02; responding is Owner-only)", false, [View, Edit]),
         new(SalesReturns, "Sales returns (CLAIM-03; cancelling one is Owner-only)", false, [View, Create, Delete]),

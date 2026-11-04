@@ -49,6 +49,7 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     // Products and customers
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<PurchaseRequest> PurchaseRequests => Set<PurchaseRequest>();
 
     // Labor: what ending an employment still checks (LAB-01)
     public DbSet<Contractor> Contractors => Set<Contractor>();

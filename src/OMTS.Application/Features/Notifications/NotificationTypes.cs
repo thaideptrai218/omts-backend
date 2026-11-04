@@ -26,6 +26,15 @@ public static class NotificationTypes
     /// <summary>MSG-LABOR-02, the reminder to lock a staff account after an end of employment: kept, never pushed (BR-LABOR-04).</summary>
     public const string StaffAccountLockReminder = "STAFF_ACCOUNT_LOCK_REMINDER";
 
+    /// <summary>MSG-SALE-01, a new purchase request, to the Owner (BR-SALE-03); mandatory (BR-ACCOUNT-11).</summary>
+    public const string PurchaseRequestNew = "PURCHASE_REQUEST_NEW";
+
+    /// <summary>MSG-SALE-02, a trader cancelled a purchase request, to the Owner (BR-SALE-03).</summary>
+    public const string PurchaseRequestCancelled = "PURCHASE_REQUEST_CANCELLED";
+
+    /// <summary>MSG-SALE-03, the response to a purchase request, to the trader account (BR-SALE-03).</summary>
+    public const string PurchaseRequestResponse = "PURCHASE_REQUEST_RESPONSE";
+
     public static readonly IReadOnlyList<NotificationTypeDefinition> All =
     [
         new(WaterAlert, "Water alert", AlwaysPush, [CooperativeOwner, ZoneManager],
@@ -38,6 +47,11 @@ public static class NotificationTypes
             NotificationOpenAccess.InZone(PermissionFunctions.WaterMeasurements, PermissionAction.Create)),
         new(ZoneLicenseExpiry, "Zone license expiry reminder", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         new(StaffAccountLockReminder, "Reminder to lock a staff account", NeverPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        // Opens Respond to purchase request (SALE-03.2).
+        new(PurchaseRequestNew, "New purchase request", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new(PurchaseRequestCancelled, "Purchase request cancelled", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        // Opens Track purchases (SALE-10.2), for the trader the request belongs to now.
+        new(PurchaseRequestResponse, "Response to a purchase request", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
     ];
 
     private static readonly Dictionary<string, NotificationTypeDefinition> ByCode = All.ToDictionary(t => t.Code, StringComparer.Ordinal);

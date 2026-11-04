@@ -21,6 +21,7 @@ public static class RelatedRecordTypes
     public const string ZoneLicense = "ZoneComplianceDocument";
 
     public const string Account = "Account";
+    public const string PurchaseRequest = "PurchaseRequest";
 
     public static readonly IReadOnlyDictionary<string, string> Names = new Dictionary<string, string>(StringComparer.Ordinal)
     {
@@ -28,5 +29,6 @@ public static class RelatedRecordTypes
         [FarmingZone] = "Farming zone",
         [ZoneLicense] = "Zone license",
         [Account] = "Account",
+        [PurchaseRequest] = "Purchase request",
     };
 }
