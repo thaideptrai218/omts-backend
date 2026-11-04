@@ -20,9 +20,9 @@ public class FixedRolesScopeQaTests
 
     /// <summary>
     /// Function, true when its records have no zone (BR-FARM-08: suppliers, customers, payroll, pay rates, customer and
-    /// supplier payments and debts). Deliberately zone-scoped for now: purchase receipts (they still carry a zone, PURCHASE
-    /// ticket), purchase requests and quality claims (accepted default), employees (the cooperative-wide employee list
-    /// comes with the LABOR ticket; the endpoints are Owner-only today).
+    /// supplier payments and debts, and purchase requests: PM 03/11, Zone Managers see all of them). Deliberately zone-scoped
+    /// for now: purchase receipts (they still carry a zone, PURCHASE ticket), quality claims (accepted default), employees
+    /// (the cooperative-wide employee list comes with the LABOR ticket; the endpoints are Owner-only today).
     /// </summary>
     public static readonly TheoryData<string, bool> RecordsWithNoZone = new()
     {
@@ -41,7 +41,7 @@ public class FixedRolesScopeQaTests
         { LotTracing, false },
         { Provenance, false },
         { PurchaseReceipts, false },
-        { PurchaseRequests, false },
+        { PurchaseRequests, true },
         { SalesInvoices, false },
         { QualityClaims, false },
         { SalesReturns, false },
