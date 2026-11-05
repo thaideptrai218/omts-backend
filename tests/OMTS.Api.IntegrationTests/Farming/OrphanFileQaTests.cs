@@ -42,7 +42,7 @@ public class OrphanFileQaTests
         Assert.Equal(0, deleted);
     }
 
-    // Only raft-photos/ and zone-licenses/ are scanned; similar names are other categories.
+    // Only raft-photos/, zone-licenses/ and water-meter-photos/ are scanned; similar names are other categories.
     [Fact]
     public async Task Old_unreferenced_files_of_every_other_category_are_never_touched()
     {
@@ -55,7 +55,7 @@ public class OrphanFileQaTests
         var others = new List<string>();
         foreach (var category in new[]
                  {
-                     "cooperative-logos", "water-meter-photos", "supplier-certificates", "purchase-invoices", "raft-photos-old", "zone-licenses-archive",
+                     "cooperative-logos", "water-meter-photos-old", "supplier-certificates", "purchase-invoices", "raft-photos-old", "zone-licenses-archive",
                  })
         {
             others.Add(await StoreAsync(storage, category, Png));

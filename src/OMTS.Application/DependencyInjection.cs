@@ -120,6 +120,7 @@ public static class DependencyInjection
         // ENV-01…ENV-04 water quality monitoring and the overdue measurement reminder
         services.AddSingleton<EditingPresenceTracker>();
         services.AddScoped<WaterMeterRecognizer>();
+        services.AddScoped<WaterMeterPhotoStore>();
         services.AddScoped<WaterAlertService>();
         services.AddScoped<WaterMeasurementViewBuilder>();
         services.AddScoped<WaterMeasurementRecordingService>();

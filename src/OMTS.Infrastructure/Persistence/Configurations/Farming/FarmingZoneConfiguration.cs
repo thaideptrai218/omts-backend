@@ -16,11 +16,12 @@ internal sealed class FarmingZoneConfiguration : IEntityTypeConfiguration<Farmin
         builder.Property(x => x.Longitude).HasPrecision(9, 6);
         builder.HasCoordinateChecks();
         builder.Property(x => x.Area).HasPrecision(18, 4);
-        builder.Property(x => x.WaterMeasurementPoint).HasMaxLength(Lengths.Name);
         builder.Property(x => x.PhMin).HasPrecision(4, 2);
         builder.Property(x => x.PhMax).HasPrecision(4, 2);
         builder.Property(x => x.SalinityMin).HasPrecision(5, 2);
         builder.Property(x => x.SalinityMax).HasPrecision(5, 2);
+        builder.Property(x => x.TemperatureMin).HasPrecision(4, 2);
+        builder.Property(x => x.TemperatureMax).HasPrecision(4, 2);
 
         builder.HasOne(x => x.Cooperative).WithMany(c => c.FarmingZones).HasForeignKey(x => x.CooperativeId);
     }
