@@ -58,7 +58,8 @@ on every `docker compose up` and creates nothing twice.
 | Health | `http://localhost:8080/health/db` (database), `http://localhost:8080/health/ready` (deployment complete) |
 | SQL Server (this PC only) | `localhost,1433`, user `sa`, password `MSSQL_SA_PASSWORD` from `.env` |
 
-**Demo logins.** Every account below uses the password `Demo@1234`. It exists only in this local demo data.
+**Demo logins.** Every account below uses the password `Demo@1234`. It exists only in this local demo data; a shared
+server uses a secret of its own (see [Demo on a shared server](#demo-on-a-shared-server)).
 
 | Username | Role | Zone | What happens at login |
 |---|---|---|---|
@@ -272,8 +273,9 @@ created by a one-time command run on the server by the deployment operator (not 
    Owner with this first password. It must be changed at first login and does not expire. At that login the Owner first
    verifies the phone number by SMS (BR-ACCOUNT-03), so `Sms:Provider` must work before the handover. Running it again creates nothing that already exists ("already initialized", exit code 0); the roles are found by
    code. Missing secrets give exit code 1 and the
-   names of the missing keys. `--demo` also seeds the demo data of "Run with Docker" (Development only; refused
-   in any other environment).
+   names of the missing keys. Outside Development a database where any account holds the local demo password is refused
+   (exit code 1, nothing written). `--demo` also seeds the demo data of "Run with Docker" (in Development, or in Staging as
+   described in [Demo on a shared server](#demo-on-a-shared-server); refused in Production and any other environment).
    Upgrading a database from before the fixed roles (migration `FixedRoles`): the rows named "Zone Manager" and
    "Accountant" get the codes, other roles get a placeholder code (they are not listed, and their pairs give no
    permission, login or zone any more), and the validity dates of the pairs are dropped, so expired and future pairs and
@@ -310,6 +312,76 @@ created by a one-time command run on the server by the deployment operator (not 
 | Zone license reminder (FARM-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
 | Overdue water measurement reminder (ENV-01, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
 | Orphan file clean-up: raft photos, license files, cover photos, certificate files (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
+
+## Demo on a shared server
+
+A server several people reach runs in **Staging**. **Never use `docker-compose.yml` as the shared server:** it runs in
+Development and binds `0.0.0.0:8080`, so anyone on that network can read every verification code in the anonymous dev
+inbox, open Swagger and log in with the password printed in this README.
+
+`seed --bootstrap --demo` is decided before anything is written (`DemoSeedGate`), so run it first, on the empty database,
+not after a plain `seed --bootstrap`:
+
+| Environment | Demo data | Password of the demo accounts |
+|---|---|---|
+| Development | always | `Demo@1234`, as in "Run with Docker"; the two keys below are ignored |
+| Staging | only with `Demo:AllowOutsideDevelopment=true` | the secret `Demo:Password` |
+| Production, any other name | never, whatever the configuration says | – |
+
+`Demo:Password` comes from the secret store of that server, never from a file in the repository. `appsettings.Staging.json`
+and `appsettings.Production.json` are ignored by git and left out of the image for this reason; a settings file put beside
+the program by hand is still read. The password is refused when it is empty, starts or ends with whitespace, is the
+well-known password in any letter case, or breaks the password rule (8 to 128 characters with a letter and a digit). A
+refusal gives exit code 1 and names the key, never the value.
+
+To set up the server:
+1. Set `ASPNETCORE_ENVIRONMENT=Staging` (and not a different `DOTNET_ENVIRONMENT`: when both are set and differ, the seed
+   and the API refuse to start), the secrets of "Deployment" step 1 for an **empty** database, one storage folder or
+   container of its own, `Demo__AllowOutsideDevelopment=true` and `Demo__Password`. Use fake data in `Bootstrap:*`.
+2. Run `dotnet OMTS.Api.dll seed --bootstrap --demo`, start the API and check `GET /health/ready`.
+3. Give the password to the testers privately. The nine logins of "Run with Docker" all use it, the Owner included, and
+   land in the same branches. Put the server behind HTTPS: the image itself listens on plain HTTP.
+
+**Which database.** The demo only runs on a database with no accounts, or on one it seeded itself: the first run writes a
+`Demo.Seeded` audit row. Any other database with accounts, such as a copy of real data, one behind the migrations or a
+mistaken connection string, is refused: exit code 1, nothing written, no migration applied. **Never run the demo seed on a
+copy of real data: start from an empty database.** Refused too, by the demo seed and also by a plain `seed --bootstrap`
+in any environment but Development: a database where any account holds `Demo@1234` (first seeded in Development, or
+restored from such a copy). The message names the accounts, never a password. Starting the API does not check this, so a
+copy restored onto the server and started without a seed still answers to the printed password.
+
+**Reruns.** A rerun on the demo's own database adds only what is missing. It never touches the Owner's password, forced
+change or verified phone, so `seed --reset-owner-password` stays as it was left, and the seed never changes a password it
+has already set. So:
+- A new `Demo:Password` changes no account: to change it, start again from an empty database.
+- After a run that crashed half way, rerun with the same secret, or start from an empty database. A rerun with a rotated
+  secret exits 0 and can leave two passwords: the accounts seeded before the crash stay on the old one.
+- A tester who sets any account's password to `Demo@1234` makes the next seed refuse the whole server. The password rule
+  does not forbid that value, and the printed password then logs in to that account: start again from an empty database.
+
+**What stays off.** The dev inbox (`/api/dev/sms`, `/email`, `/push`) and Swagger answer 404 outside Development; no
+setting opens them.
+
+**SMS, email, push, OCR.** No real SMS or push provider exists yet, so a code cannot reach anyone on this server:
+- The seeded accounts need no SMS: their phones are stored as verified. The exception is `nhanvien.chuaxacthuc`, which
+  logs in with `phoneVerificationRequired = true`, gets MSG-ACCOUNT-04 on its business calls and cannot complete the step.
+- Also out of reach: trader registration, password recovery by SMS, and the first login of any staff account created on
+  the server (it must verify its phone). The Owner can still reset a staff password, and the forced password change of
+  `nhanvien.doimk` works.
+- Leave `Sms:Provider` and `Push:Provider` at `None` and `Ocr:Provider` unset. A code request then answers 503
+  MSG-ACCOUNT-13, so nobody waits for a message that will never come.
+- `Fake` is not refused for SMS, email or push: the host only logs a warning, the client is told the code was sent, and
+  nobody can read it because the inbox answers 404. `Ocr:Provider=Fake` stops the host.
+- `Email:Provider` defaults to `Smtp`. Without `Email:Smtp:Host` the host starts with no warning and each send fails
+  (503). The demo accounts have no email address, so the demo does not need it.
+- When a real SMS provider arrives, do not point it at this data as it is: the demo phone numbers (`0900 000 0xx`) are
+  made up and may belong to someone.
+
+**No real bank account or payment-service key.** This is a rule for the deployer, not a check: the code has no payment
+service, so there is no key to configure, store or refuse. The seed reads only `Bootstrap:*` and `Demo:*`; the bank
+numbers of its employees are placeholders in `DemoEmployeePlans`, and it stores no cooperative bank account. Never enter
+a real bank account on this server, in an employee record or anywhere else. Whoever adds a payment provider also adds
+the refusal to `DemoSeedGate`.
 
 ## Design documents
 
