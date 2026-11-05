@@ -8,7 +8,7 @@ using OMTS.Application.Features.Authorization;
 namespace OMTS.Api.Filters;
 
 /// <summary>
-/// Owner-only use cases (accounts, grants, roles, cooperative profile, employees, zones…): checks the
+/// Owner-only use cases (accounts, grants, roles, cooperative profile, zones…): checks the
 /// account's subject type, never role permissions, so a custom role can never open them. Others get
 /// 403 MSG-GEN-08; no token gives 401.
 /// </summary>

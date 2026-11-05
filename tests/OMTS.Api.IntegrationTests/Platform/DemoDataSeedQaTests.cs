@@ -124,7 +124,7 @@ public class DemoDataSeedQaTests
         Assert.Equal(1, demoCounts["Cooperatives"]);
         Assert.Equal(3, demoCounts["FarmingZones"]);
         Assert.Equal(20, demoCounts["Rafts"]);
-        Assert.Equal(8, demoCounts["Employees"]);
+        Assert.Equal(9, demoCounts["Employees"]);
         Assert.Equal(20, demoCounts["PurchaseReceipts"]);
 
         Assert.Equal(DeploymentBootstrapper.Success, again.ExitCode);
@@ -306,7 +306,7 @@ public class DemoDataSeedQaTests
         var payments = await db.SupplierPayments.Select(p => new { p.Id, p.PaymentDate, p.StatusId }).ToListAsync();
         var returns = await db.PurchaseReturns.Select(r => new { r.Id, r.ReturnDate }).ToListAsync();
         var grants = await db.AccessGrants.Select(g => new { g.Id, g.StatusId, g.RevokedAt }).ToListAsync();
-        var employees = await db.Employees.Select(e => new { e.Id, e.StatusId, e.EmploymentEndDate }).ToListAsync();
+        var employees = await db.Employees.Select(e => new { e.Id, e.StatusId, e.LastWorkingDay }).ToListAsync();
         var water = await db.WaterMeasurements.Select(m => new { m.Id, m.MeasuredAt, m.StatusId, m.CreatedAt }).ToListAsync();
 
         return licenses.Select(x => $"license {x}")

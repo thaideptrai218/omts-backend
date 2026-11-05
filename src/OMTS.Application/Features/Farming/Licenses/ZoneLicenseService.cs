@@ -9,6 +9,7 @@ using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Employees;
 using OMTS.Application.Features.Files;
+using OMTS.Application.Features.Notifications;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
 
@@ -32,7 +33,8 @@ public sealed class ZoneLicenseService(
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
 {
-    private const string RecordType = "ZoneLicense";
+    // The same record type as the license notifications.
+    private const string RecordType = RelatedRecordTypes.ZoneLicense;
 
     /// <summary>The licenses of the zone with their state as of <paramref name="asOf"/> (default today), newest first.</summary>
     public async Task<Result<ZoneLicenseOverviewView>> ListForZoneAsync(Guid zoneId, DateOnly? asOf, CancellationToken cancellationToken)
