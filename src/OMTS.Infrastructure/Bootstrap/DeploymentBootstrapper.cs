@@ -40,11 +40,23 @@ public sealed class DeploymentBootstrapper(
         var messages = new List<string>();
         var settings = BootstrapSettings.From(configuration);
 
-        // The demo data gives well-known passwords to the Owner and staff accounts: Development only, with no
-        // switch that opens it anywhere else.
-        if (seedDemoData && !environment.IsDevelopment())
+        // The demo data gives one shared password to the Owner, staff and traders. Decided before anything is written.
+        var demoPassword = string.Empty;
+        if (seedDemoData)
         {
-            return new BootstrapOutcome(Failure, ["Demo data is refused outside Development."]);
+            var (password, refusal) = DemoSeedGate.Check(environment, configuration);
+            if (refusal is not null)
+            {
+                return new BootstrapOutcome(Failure, [refusal]);
+            }
+
+            demoPassword = password!;
+        }
+
+        var (databaseRefusal, demoMarkNeeded) = await DemoSeedGate.CheckDatabaseAsync(environment, db, passwordHasher, seedDemoData, cancellationToken);
+        if (databaseRefusal is not null)
+        {
+            return new BootstrapOutcome(Failure, [databaseRefusal]);
         }
 
         if (db.Database.IsRelational())
@@ -81,8 +93,15 @@ public sealed class DeploymentBootstrapper(
             cooperative = CreateCooperativeAndOwner(settings);
             messages.Add($"Cooperative created with Cooperative Owner '{settings.OwnerUsername}'. " +
                 (seedDemoData
-                    ? "Demo mode: the Owner gets the fixed demo password instead."
+                    ? "Demo mode: the Owner gets the demo password instead."
                     : "The first password must be changed at first login and does not expire."));
+
+            // Saved with the cooperative and its Owner, before the first demo step: a database with these accounts and
+            // without the mark cannot come from a crash of this run.
+            if (demoMarkNeeded)
+            {
+                audit.Record(new AuditEntry(DemoSeedGate.DemoSeededAction, nameof(Cooperative)) { RecordId = cooperative.Id });
+            }
         }
         else
         {
@@ -94,8 +113,9 @@ public sealed class DeploymentBootstrapper(
         if (seedDemoData)
         {
             // After the save above: the demo steps act as the Owner, which must exist in the database. The
-            // lines never contain a password.
-            messages.AddRange(await DemoDataSeeder.SeedAsync(services, settings.OwnerUsername, cooperative.Id, cancellationToken));
+            // lines never contain a password. In Staging the Owner's login is set only by the run that wrote the mark.
+            var ownerLoginMayBeSet = environment.IsDevelopment() || demoMarkNeeded;
+            messages.AddRange(await DemoDataSeeder.SeedAsync(services, settings.OwnerUsername, cooperative.Id, demoPassword, ownerLoginMayBeSet, cancellationToken));
         }
 
         return new BootstrapOutcome(Success, messages);
