@@ -23,7 +23,7 @@ public class NotificationSmsShorteningOrderTests
         NotificationTypes.WaterAlert, UserMessages.WaterAlert(corrected, zone, raft, MeasuredAt, values));
 
     private static string Soon(string number, IReadOnlyList<string> zones) => Render(
-        NotificationTypes.ZoneLicenseExpiry, UserMessages.LicenseExpiringSoon("AQUACULTURE_LICENSE", "Marine aquaculture license", number, zones, Expiry, 30));
+        NotificationTypes.ZoneLicenseExpiry, UserMessages.LicenseExpiringSoon("AQUACULTURE_LICENSE", "Marine aquaculture license", number, string.Join(", ", zones), Expiry, 30));
 
     private static string Render(string type, UserMessage message)
     {
@@ -113,7 +113,7 @@ public class NotificationSmsShorteningOrderTests
     {
         var text = Render(
             NotificationTypes.ZoneLicenseExpiry,
-            UserMessages.LicenseExpired("AQUACULTURE_LICENSE", "Marine aquaculture license", new string('9', 100), Zones(40), Expiry));
+            UserMessages.LicenseExpired("AQUACULTURE_LICENSE", "Marine aquaculture license", new string('9', 100), string.Join(", ", Zones(40)), Expiry));
 
         Assert.Contains("expired on 29/11/2026.", text);
         Assert.True(text.Length <= NotificationSmsText.MaxLength, text);

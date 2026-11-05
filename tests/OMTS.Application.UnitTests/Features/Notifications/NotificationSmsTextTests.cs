@@ -21,6 +21,7 @@ public class NotificationSmsTextTests
     private static readonly string[] TypesSendingTheMessageText =
     [
         NotificationTypes.WaterAlert, NotificationTypes.WaterAlertWithdrawn, NotificationTypes.ZoneLicenseExpiry,
+        NotificationTypes.CooperativeCertificationExpiry,
     ];
 
     private static readonly NotificationTypeDefinition MoneyType = new(
@@ -105,7 +106,7 @@ public class NotificationSmsTextTests
     [Fact]
     public void A_license_reminder_reads_as_its_message()
     {
-        var message = UserMessages.LicenseExpiringSoon("AQUACULTURE_LICENSE", "Marine aquaculture license", "GP-01", ["KV01"], new DateOnly(2026, 11, 29), 30);
+        var message = UserMessages.LicenseExpiringSoon("AQUACULTURE_LICENSE", "Marine aquaculture license", "GP-01", "KV01", new DateOnly(2026, 11, 29), 30);
         var text = Render(NotificationTypes.Find(NotificationTypes.ZoneLicenseExpiry)!, new NotificationContent(NotificationTypes.ZoneLicenseExpiry, "Title", message));
 
         Assert.Equal("Marine aquaculture license GP-01 (KV01) expires on 29/11/2026, in 30 days. Please renew it and record the new one.", text);

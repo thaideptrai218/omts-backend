@@ -47,7 +47,8 @@ public static class NotificationTypes
             NotificationOpenAccess.InZone(PermissionFunctions.WaterMeasurements, PermissionAction.Create)),
         new(ZoneLicenseExpiry, "Zone license expiry reminder", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
             NotificationSmsRule.MessageTextTo(CooperativeOwner)),
-        new(CooperativeCertificationExpiry, "Cooperative certification expiry reminder", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new(CooperativeCertificationExpiry, "Cooperative certification expiry reminder", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
+            NotificationSmsRule.MessageTextTo(CooperativeOwner)),
         new(StaffAccountLockReminder, "Reminder to lock a staff account", NeverPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
     ];
 

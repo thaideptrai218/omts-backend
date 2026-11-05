@@ -355,5 +355,5 @@ public class MandatorySmsTextQaTests
         new NotificationContent(
             NotificationTypes.ZoneLicenseExpiry,
             "Title",
-            UserMessages.LicenseExpiringSoon("AQUACULTURE_LICENSE", "Marine aquaculture license", number, zoneCodes, new DateOnly(2026, 11, 29), 30)));
+            UserMessages.LicenseExpiringSoon("AQUACULTURE_LICENSE", "Marine aquaculture license", number, string.Join(", ", zoneCodes), new DateOnly(2026, 11, 29), 30)));
 }

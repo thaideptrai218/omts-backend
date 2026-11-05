@@ -112,7 +112,7 @@ public class MandatorySmsQaSqlServerTests
             seed.ZoneComplianceDocuments.Add(new ZoneComplianceDocument
             {
                 DocumentType = "AQUACULTURE_LICENSE", DocumentNumber = "GP-RACE", EffectiveDate = today.AddDays(-300), ExpiryDate = today.AddDays(10),
-                ZoneScopes = [new DocumentZoneScope { ZoneId = zone.Id }],
+                ZoneId = zone.Id,
             });
             await seed.SaveChangesAsync();
         }
