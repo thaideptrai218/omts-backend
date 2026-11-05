@@ -37,7 +37,9 @@ public sealed partial record EmployeeInput(
             invalid.Add("Phone number");
         }
 
-        if (adding ? request.EmployeeType is null : request.EmployeeType is null && request.EmployeeTypeFrom is not null)
+        // Not defined: the JSON setting of the API also reads any number as an enum value (BR-LABOR-01: Seasonal worker or Staff).
+        if ((adding ? request.EmployeeType is null : request.EmployeeType is null && request.EmployeeTypeFrom is not null)
+            || (request.EmployeeType is { } type && !Enum.IsDefined(type)))
         {
             invalid.Add("Employee type");
         }

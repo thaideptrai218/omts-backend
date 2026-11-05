@@ -1,5 +1,6 @@
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Common.Validation;
 using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
@@ -13,13 +14,25 @@ public sealed class EmployeeQueryService(
     EmployeeCallerAccess callers,
     EmployeeViewBuilder views)
 {
+    private const int MaxPageSize = 100;
+
+    /// <summary>The longest name the column holds: a longer text can match no name or number, and need not reach the database.</summary>
+    private const int MaxSearchLength = 200;
+
     public async Task<Paged<EmployeeListItem>> SearchAsync(
         string? search, int? statusId, Guid? zoneId, int page, int pageSize, CancellationToken cancellationToken)
     {
-        (page, pageSize) = (Math.Max(1, page), Math.Clamp(pageSize, 1, 100));
+        // The upper bound keeps (page - 1) * pageSize inside int.
+        (page, pageSize) = (Math.Clamp(page, 1, int.MaxValue / MaxPageSize), Math.Clamp(pageSize, 1, MaxPageSize));
+        var text = search?.Trim();
+        if (text?.Length > MaxSearchLength)
+        {
+            return new Paged<EmployeeListItem>([], page, pageSize, 0);
+        }
+
         var caller = await callers.GetAsync(cancellationToken);
         var firstZones = caller.Zones.AllZones ? null : caller.Zones.ZoneIds.ToList();
-        var (items, total) = await employees.SearchAsync(search, statusId, zoneId, firstZones, page, pageSize, cancellationToken);
+        var (items, total) = await employees.SearchAsync(text, PhoneNumbers.Normalize(text), statusId, zoneId, firstZones, page, pageSize, cancellationToken);
         return new Paged<EmployeeListItem>(items.Select(e => views.ListItem(e, caller)).ToList(), page, pageSize, total);
     }
 

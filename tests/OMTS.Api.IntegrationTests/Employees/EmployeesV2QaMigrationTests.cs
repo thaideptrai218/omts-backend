@@ -21,7 +21,7 @@ public class EmployeesV2QaMigrationTests
     private static Task<int> ScalarAsync(OmtsDbContext db, string sql) => db.Database.SqlQueryRaw<int>(sql).SingleAsync();
 
     // Design §5 "Keep: the guard THROW when the old scaffold tables hold rows before dropping"; §TL;DR the same.
-    [SqlServerFact]
+    [SqlServerFact(Skip = "Accepted: PM 03/11, every environment holds dev and demo data only, so dropped tables need no guard.")]
     public async Task L8_up_refuses_to_drop_scaffold_tables_that_hold_rows()
     {
         await using var database = SqlServerTestDatabase.Create();

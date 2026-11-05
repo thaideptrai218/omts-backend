@@ -29,15 +29,15 @@ internal sealed class EmployeeRepository(OmtsDbContext db) : IEmployeeRepository
             .ToDictionaryAsync(e => e.AccountId!.Value, e => (Guid?)e.Id, cancellationToken);
 
     public async Task<(IReadOnlyList<Employee> Items, int Total)> SearchAsync(
-        string? search, int? statusId, Guid? zoneId, IReadOnlyCollection<Guid>? firstZoneIds, int page, int pageSize, CancellationToken cancellationToken)
+        string? search, string? phoneNumber, int? statusId, Guid? zoneId, IReadOnlyCollection<Guid>? firstZoneIds, int page, int pageSize, CancellationToken cancellationToken)
     {
         var query = db.Employees.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(search))
         {
             var text = search.Trim();
-            // Phones are stored as 0xxxxxxxxx: a search typed as +84… or 84… matches them too.
-            var phone = text.StartsWith("+84", StringComparison.Ordinal) ? $"0{text[3..]}" : text;
-            query = query.Where(e => e.FullName.Contains(text) || (e.PhoneNumber != null && (e.PhoneNumber.Contains(text) || e.PhoneNumber.Contains(phone))));
+            query = phoneNumber is null
+                ? query.Where(e => e.FullName.Contains(text) || (e.PhoneNumber != null && e.PhoneNumber.Contains(text)))
+                : query.Where(e => e.FullName.Contains(text) || (e.PhoneNumber != null && (e.PhoneNumber.Contains(text) || e.PhoneNumber == phoneNumber)));
         }
 
         if (statusId is not null)

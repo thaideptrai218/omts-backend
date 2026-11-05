@@ -122,6 +122,9 @@ public sealed class EmployeeService(
             return checkedInput.Error!;
         }
 
+        // The profile and its rows are read by separate queries, so a parallel save can land between them: an old version with
+        // the new rows would make this same save look like no change and answer 200. The version is read last, so it tells.
+        await unitOfWork.ReloadAsync(employee, cancellationToken);
         if (await rowVersions.CheckAsync(employee, request.RowVersion, cancellationToken) is { } conflict)
         {
             return conflict;
@@ -130,6 +133,7 @@ public sealed class EmployeeService(
         var input = checkedInput.Value!;
         var zoneIds = EmployeeProfileChanges.ZonesAfterEdit(employee, input.WorkingZoneIds, caller);
         var before = EmployeeProfileChanges.Snapshot(employee, employee.WorkingZones.Select(w => w.ZoneId).ToList(), employee.JobTypes.Select(j => j.JobTypeId).ToList());
+        var accountNumberBefore = employee.BankAccount?.AccountNumber;
         EmployeeProfileChanges.ApplyFields(employee, input);
         var zonesChanged = EmployeeProfileChanges.SyncZones(employees, employee, zoneIds);
         var jobTypesChanged = EmployeeProfileChanges.SyncJobTypes(employees, employee, input.JobTypeIds);
@@ -142,7 +146,7 @@ public sealed class EmployeeService(
         }
 
         // LABOR-03 and LABOR-06 (L3): a changed phone number logs the employee out of the employee app (BR-LABOR-02), here.
-        var (changedBefore, changedAfter) = AuditDiff.Changed(before, EmployeeProfileChanges.Snapshot(employee, zoneIds, input.JobTypeIds));
+        var (changedBefore, changedAfter) = AuditDiff.Changed(before, EmployeeProfileChanges.Snapshot(employee, zoneIds, input.JobTypeIds, accountNumberBefore));
         if (changedAfter is not null)
         {
             audit.Record(new AuditEntry("Employee.Updated", nameof(Employee)) { RecordId = employee.Id, Before = changedBefore, After = changedAfter });
@@ -158,7 +162,9 @@ public sealed class EmployeeService(
 
     /// <summary>
     /// Saves; a parallel save of the same phone number passes the pre-check, so the unique index refuses the second one,
-    /// which then gets the same MSG-LABOR-03 as the pre-check. Other duplicates are left to the exception handler.
+    /// which then gets the same MSG-LABOR-03 as the pre-check. On an edit, any other duplicate is a type period, working zone
+    /// or job type row that a parallel save of this employee just added: its insert meets the index before the version check,
+    /// so it answers what that check would, MSG06. Other duplicates are left to the exception handler.
     /// </summary>
     private async Task<AppError?> SaveAsync(EmployeeInput input, Guid? employeeId, CancellationToken cancellationToken)
     {
@@ -172,6 +178,11 @@ public sealed class EmployeeService(
             if (await validator.PhoneRefusalAsync(input.PhoneNumber, employeeId, cancellationToken) is { } taken)
             {
                 return taken;
+            }
+
+            if (employeeId is not null)
+            {
+                return AppError.Conflict(UserMessages.ConcurrentUpdateByAnotherUser);
             }
 
             throw;

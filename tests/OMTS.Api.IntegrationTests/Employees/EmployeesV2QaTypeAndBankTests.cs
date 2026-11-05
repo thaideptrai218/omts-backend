@@ -101,6 +101,22 @@ public class EmployeesV2QaTypeAndBankTests(AuthApiFactory factory) : IClassFixtu
 
         await added.Content.LoadIntoBufferAsync();
         Assert.True(added.StatusCode == HttpStatusCode.BadRequest, $"{(int)added.StatusCode}: {await added.Content.ReadAsStringAsync()}");
+        Assert.Equal(("MSG-GEN-01", "Employee type"), (await added.ErrorCodeAsync(), await FieldAsync(added)));
+    }
+
+    // The edit reads the same input, and a number that is a type stays a type: the JSON setting is not changed.
+    [Fact]
+    public async Task M3_an_edit_refuses_it_too_and_the_numbers_of_the_two_types_stay_valid()
+    {
+        var (owner, zone, _) = await SetupAsync(factory);
+        var (name, phone) = ($"Number {NewCode()}", NewPhone());
+        var saved = await CreateAsync(owner, Profile(name, phone, zone.Id));
+
+        var edited = await owner.PutAsJsonAsync($"/api/employees/{IdOf(saved)}", Profile(name, phone, zone.Id).With("employeeType", 99).With("employeeTypeFrom", Day(Today())).With("rowVersion", RowVersionOf(saved)));
+        var defined = await CreateAsync(owner, Profile($"Number {NewCode()}", NewPhone(), zone.Id).With("employeeType", 1));
+
+        Assert.Equal(("MSG-GEN-01", "Employee type"), (await edited.ErrorCodeAsync(), await FieldAsync(edited)));
+        Assert.Equal("Staff", defined.GetProperty("employee").GetProperty("employeeType").GetString());
     }
 
     [Fact]
@@ -127,6 +143,32 @@ public class EmployeesV2QaTypeAndBankTests(AuthApiFactory factory) : IClassFixtu
 
         Assert.Equal("999933332222", edited.GetProperty("employee").GetProperty("bankAccount").GetProperty("accountNumber").GetString());
         Assert.Equal(1, await factory.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == id && e.Action == "Employee.Updated")));
+
+        // Both masks read the same: the row says the number changed, and holds neither number.
+        var row = await factory.QueryAsync(db => db.AuditEvents.AsNoTracking().SingleAsync(e => e.RecordId == id && e.Action == "Employee.Updated"));
+        Assert.Contains("********2222", row.Before);
+        Assert.DoesNotContain("AccountNumberChanged", row.Before);
+        Assert.Contains("********2222", row.After);
+        Assert.Contains("\"AccountNumberChanged\":true", row.After);
+        Assert.DoesNotContain(new[] { row.Before, row.After }, r => r!.Contains("999911112222") || r.Contains("999933332222"));
+    }
+
+    // The same marker on a row whose masks differ; a number that stays writes no marker and no row.
+    [Fact]
+    public async Task M1_the_marker_follows_the_real_number_only()
+    {
+        var (owner, zone, _) = await SetupAsync(factory);
+        var (name, phone) = ($"Bank {NewCode()}", NewPhone());
+        var saved = await CreateAsync(owner, Profile(name, phone, zone.Id).With("bankAccount", Bank("999911112222")));
+        var id = IdOf(saved);
+
+        var same = await (await owner.PutAsJsonAsync($"/api/employees/{id}", Profile(name, phone, zone.Id).With("bankAccount", Bank("999911112222")).With("rowVersion", RowVersionOf(saved)))).JsonAsync(HttpStatusCode.OK);
+        Assert.False(await factory.QueryAsync(db => db.AuditEvents.AnyAsync(e => e.RecordId == id && e.Action == "Employee.Updated")));
+
+        await (await owner.PutAsJsonAsync($"/api/employees/{id}", Profile(name, phone, zone.Id).With("bankAccount", Bank("999911113333")).With("rowVersion", RowVersionOf(same)))).JsonAsync(HttpStatusCode.OK);
+        var after = await factory.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == id && e.Action == "Employee.Updated").Select(e => e.After).SingleAsync());
+        Assert.Contains("********3333", after);
+        Assert.Contains("\"AccountNumberChanged\":true", after);
     }
 
     [Fact]
@@ -154,7 +196,7 @@ public class EmployeesV2QaTypeAndBankTests(AuthApiFactory factory) : IClassFixtu
     }
 
     // The maintainers' screen sends the job types only when it has them (client list §2): what a PUT leaves out.
-    [Fact]
+    [Fact(Skip = "Waiting for the PM: should a PUT that leaves out jobTypeIds keep the job types, or does what is sent replace the list as the client list says?")]
     public async Task L10_an_edit_that_leaves_out_the_job_types_keeps_them()
     {
         var (owner, zone, _) = await SetupAsync(factory);

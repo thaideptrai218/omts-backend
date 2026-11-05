@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
@@ -19,7 +20,7 @@ public sealed class EmployeeWorkingZoneService(
     AuditLogService audit,
     IUnitOfWork unitOfWork)
 {
-    /// <summary>A zone the employee already has changes nothing. The save moves the row version of the employee, so it meets a parallel end of employment.</summary>
+    /// <summary>A zone the employee already has changes nothing; added by a parallel save, it answers MSG06. The save moves the row version of the employee, so it meets a parallel end of employment.</summary>
     public async Task<Result<EmployeeSaved>> AddAsync(Guid id, AddWorkingZoneRequest request, CancellationToken cancellationToken)
     {
         if (request.ZoneId is not { } zoneId)
@@ -54,7 +55,15 @@ public sealed class EmployeeWorkingZoneService(
             employees.AddWorkingZone(new EmployeeWorkingZone { EmployeeId = employee.Id, ZoneId = zoneId });
             unitOfWork.MarkChanged(employee);
             audit.Record(new AuditEntry("Employee.WorkingZoneAdded", nameof(Employee)) { RecordId = employee.Id, ZoneId = zoneId, After = new { ZoneId = zoneId } });
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+            catch (DuplicateRecordException)
+            {
+                // A parallel save added this zone: the insert meets the key of EmployeeWorkingZones before the version check.
+                return AppError.Conflict(UserMessages.ConcurrentUpdateByAnotherUser);
+            }
         }
 
         var saved = UserMessages.Saved("Employee profile");

@@ -19,8 +19,10 @@ public interface IEmployeeRepository
     /// Employees by name or phone (contains), optional status and working zone, with their rows loaded. Those with a working
     /// zone among <paramref name="firstZoneIds"/> come first, then by name.
     /// </summary>
+    /// <param name="search">The text as typed.</param>
+    /// <param name="phoneNumber">The text read as a whole phone number in its stored form, if it is one: it also finds that number.</param>
     Task<(IReadOnlyList<Employee> Items, int Total)> SearchAsync(
-        string? search, int? statusId, Guid? zoneId, IReadOnlyCollection<Guid>? firstZoneIds, int page, int pageSize, CancellationToken cancellationToken);
+        string? search, string? phoneNumber, int? statusId, Guid? zoneId, IReadOnlyCollection<Guid>? firstZoneIds, int page, int pageSize, CancellationToken cancellationToken);
 
     /// <summary>The Employed employee who has this number (at most one, BR-LABOR-01), other than <paramref name="exceptEmployeeId"/>.</summary>
     Task<Employee?> FindEmployedWithPhoneAsync(string phoneNumber, Guid? exceptEmployeeId, CancellationToken cancellationToken);

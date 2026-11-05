@@ -11,7 +11,8 @@ public interface IEmployeeWorkRecords
 
     /// <summary>
     /// Adds to the unit of work the removal of the work assignments of the employee after <paramref name="day"/>, without
-    /// saving (LABOR-01.3 step 4); their attendance and pay records stay.
+    /// saving (LABOR-01.3 step 4); their attendance and pay records stay. Called at the end action and again by the daily
+    /// job (<c>EmploymentEndService</c>), as an employee ended today can still be assigned until then: L4 must cover both.
     /// </summary>
     Task RemoveAssignmentsAfterAsync(Guid employeeId, DateOnly day, CancellationToken cancellationToken);
 }

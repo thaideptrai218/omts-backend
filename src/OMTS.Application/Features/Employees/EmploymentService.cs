@@ -38,12 +38,6 @@ public sealed class EmploymentService(
     /// </summary>
     public async Task<Result<EmploymentChanged>> EndEmploymentAsync(Guid id, EndEmploymentRequest request, CancellationToken cancellationToken)
     {
-        var today = timeProvider.Today();
-        if (request.LastWorkingDay is not { } lastDay || lastDay > today)
-        {
-            return AppError.Invalid("Last working day");
-        }
-
         var employee = await employees.GetForEditAsync(id, cancellationToken);
         if (employee is null)
         {
@@ -54,6 +48,12 @@ public sealed class EmploymentService(
         if (!caller.Maintains(employee))
         {
             return AppError.Forbidden;
+        }
+
+        var today = timeProvider.Today();
+        if (request.LastWorkingDay is not { } lastDay || lastDay > today)
+        {
+            return AppError.Invalid("Last working day");
         }
 
         if (await rowVersions.CheckAsync(employee, request.RowVersion, cancellationToken) is { } stale)
@@ -85,7 +85,13 @@ public sealed class EmploymentService(
             // LABOR-03 and LABOR-06 (L3): Left logs the employee out and unlinks the device (BR-LABOR-02), here and in EmploymentEndService.
         }
 
-        await RemindToLockStaffAccountAsync(employee, lastDay, cancellationToken);
+        // One reminder for one end of employment (LABOR-01.3 step 5): moving the day sends no second one, and a notification
+        // keeps the content it was sent with (BR-ACCOUNT-12). A resume clears the day, so a later end reminds again.
+        if (previous is null)
+        {
+            await RemindToLockStaffAccountAsync(employee, lastDay, cancellationToken);
+        }
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return new EmploymentChanged(await queries.ViewAsync(employee, caller, cancellationToken));
     }
@@ -93,11 +99,6 @@ public sealed class EmploymentService(
     /// <summary>Left → Employed from today, without a new approval, when no Employed employee has the phone number (LABOR-01.4.E1).</summary>
     public async Task<Result<EmploymentChanged>> ResumeAsync(Guid id, ResumeEmployeeRequest request, CancellationToken cancellationToken)
     {
-        if (!EmployeeInput.TryPhone(request.PhoneNumber, out var phone))
-        {
-            return AppError.Invalid("Phone number");
-        }
-
         var employee = await employees.GetForEditAsync(id, cancellationToken);
         if (employee is null)
         {
@@ -108,6 +109,11 @@ public sealed class EmploymentService(
         if (!caller.Maintains(employee))
         {
             return AppError.Forbidden;
+        }
+
+        if (!EmployeeInput.TryPhone(request.PhoneNumber, out var phone))
+        {
+            return AppError.Invalid("Phone number");
         }
 
         if (await rowVersions.CheckAsync(employee, request.RowVersion, cancellationToken) is { } stale)

@@ -5,7 +5,7 @@ namespace OMTS.Infrastructure.Persistence.Repositories;
 /// <summary>
 /// There are no attendance or work assignment rows yet: the old tables are gone and their replacements come later. LABOR-04
 /// (L5) reads its Attendance table in <see cref="LastAttendanceDayAsync"/>, and LABOR-02 (L4) removes its WorkAssignment rows in
-/// <see cref="RemoveAssignmentsAfterAsync"/>.
+/// <see cref="RemoveAssignmentsAfterAsync"/>, which both the end action and the daily job call.
 /// </summary>
 internal sealed class EmployeeWorkRecords : IEmployeeWorkRecords
 {

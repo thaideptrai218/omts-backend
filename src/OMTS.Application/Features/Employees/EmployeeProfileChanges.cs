@@ -74,14 +74,31 @@ internal static class EmployeeProfileChanges
     }
 
     /// <summary>The audit snapshot; the bank number is masked, as everywhere in the audit log.</summary>
-    public static object Snapshot(Employee e, IReadOnlyCollection<Guid> zoneIds, IReadOnlyCollection<Guid> jobTypeIds) => new
+    /// <param name="accountNumberBefore">On the snapshot after an edit: the real number before it, see <see cref="BankSnapshot"/>.</param>
+    public static object Snapshot(Employee e, IReadOnlyCollection<Guid> zoneIds, IReadOnlyCollection<Guid> jobTypeIds, string? accountNumberBefore = null) => new
     {
         e.FullName, e.PhoneNumber, e.Birthday, e.Address, e.Area, e.Ward, e.OtherInformation, e.Notes, e.AccountId,
         WorkingZoneIds = zoneIds.Order().ToList(),
         JobTypeIds = jobTypeIds.Order().ToList(),
         TypeHistory = e.TypePeriods.OrderBy(p => p.EffectiveFrom).Select(p => new { p.Type, p.EffectiveFrom }).ToList(),
-        BankAccount = e.BankAccount is { } bank
-            ? new { bank.BankName, AccountNumber = EmployeeInput.MaskAccountNumber(bank.AccountNumber), bank.AccountHolderName }
-            : null,
+        BankAccount = BankSnapshot(e.BankAccount, accountNumberBefore),
     };
+
+    /// <summary>
+    /// Two numbers with the same last four digits read the same masked. The real numbers are compared here, and a changed one
+    /// is marked <c>AccountNumberChanged: true</c> on the row's After, so the diff keeps the field and a reader can tell
+    /// (GBR-02). Nothing else derived from the number is written: a hash of 6 to 20 digits could be reversed.
+    /// </summary>
+    private static object? BankSnapshot(BankAccountInfo? bank, string? accountNumberBefore)
+    {
+        if (bank is null)
+        {
+            return null;
+        }
+
+        var masked = EmployeeInput.MaskAccountNumber(bank.AccountNumber);
+        return accountNumberBefore is not null && accountNumberBefore != bank.AccountNumber
+            ? new { bank.BankName, AccountNumber = masked, bank.AccountHolderName, AccountNumberChanged = true }
+            : new { bank.BankName, AccountNumber = masked, bank.AccountHolderName };
+    }
 }

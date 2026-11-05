@@ -7,9 +7,10 @@ namespace OMTS.Application.Features.Employees;
 
 /// <summary>
 /// An employee is Left from the day after the last working day (BR-LABOR-01): the daily job flips those whose last working day
-/// has passed. An automatic action, so the audit row has no person (GBR-02).
+/// has passed, and removes the work assignments after that day through <see cref="IEmployeeWorkRecords"/>. An automatic
+/// action, so the audit row has no person (GBR-02).
 /// </summary>
-public sealed class EmploymentEndService(IEmployeeRepository employees, AuditLogService audit, IUnitOfWork unitOfWork)
+public sealed class EmploymentEndService(IEmployeeRepository employees, IEmployeeWorkRecords workRecords, AuditLogService audit, IUnitOfWork unitOfWork)
 {
     public Task<IReadOnlyList<Guid>> DueIdsAsync(DateOnly today, CancellationToken cancellationToken) =>
         employees.ListEmployedWithLastWorkingDayBeforeAsync(today, cancellationToken);
@@ -22,6 +23,9 @@ public sealed class EmploymentEndService(IEmployeeRepository employees, AuditLog
             return false;
         }
 
+        // LABOR-02 (L4): an employee ended today stays Employed until now and can be assigned meanwhile, so this is the last
+        // moment to remove those assignments. L4 fills the port; it needs no change here.
+        await workRecords.RemoveAssignmentsAfterAsync(employee.Id, lastDay, cancellationToken);
         employee.StatusId = StatusIds.Employee.Left;
         audit.RecordStatusChange(nameof(Employee), employee.Id, null, StatusIds.Employee.Working, StatusIds.Employee.Left, $"Last working day {lastDay:yyyy-MM-dd}");
         // LABOR-03 and LABOR-06 (L3): Left logs the employee out and unlinks the device (BR-LABOR-02), here.

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Features.Employees;
 
 namespace OMTS.Infrastructure.Jobs;
@@ -19,7 +20,8 @@ public sealed class EmploymentEndOptions : IDailyJobOptions
 
 /// <summary>
 /// BR-LABOR-01: an employee is Left from the day after the last working day. Each employee runs in its own scope and unit of
-/// work, so one failing employee is logged and tried again on the next run while the others continue.
+/// work, so one failing employee is logged and tried again on the next run while the others continue. A save that loses to an
+/// edit of that employee is tried once more at once: waiting for the next run would cost a day.
 /// </summary>
 public sealed class EmploymentEndJob(IServiceScopeFactory scopes, ILogger<EmploymentEndJob> logger)
 {
@@ -37,8 +39,7 @@ public sealed class EmploymentEndJob(IServiceScopeFactory scopes, ILogger<Employ
         {
             try
             {
-                using var scope = scopes.CreateScope();
-                if (await scope.ServiceProvider.GetRequiredService<EmploymentEndService>().EndAsync(employeeId, today, cancellationToken))
+                if (await EndWithOneRetryAsync(employeeId, today, cancellationToken))
                 {
                     ended++;
                 }
@@ -50,6 +51,24 @@ public sealed class EmploymentEndJob(IServiceScopeFactory scopes, ILogger<Employ
         }
 
         return ended;
+    }
+
+    private async Task<bool> EndWithOneRetryAsync(Guid employeeId, DateOnly today, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await EndInOwnScopeAsync(employeeId, today, cancellationToken);
+        }
+        catch (ConcurrencyConflictException)
+        {
+            return await EndInOwnScopeAsync(employeeId, today, cancellationToken);
+        }
+    }
+
+    private async Task<bool> EndInOwnScopeAsync(Guid employeeId, DateOnly today, CancellationToken cancellationToken)
+    {
+        using var scope = scopes.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<EmploymentEndService>().EndAsync(employeeId, today, cancellationToken);
     }
 }
 

@@ -83,6 +83,11 @@ public class EmployeesV2QaRaceSqlServerTests
         await NoServerErrorAsync(responses);
         Assert.Single(responses, r => r.StatusCode == HttpStatusCode.OK);
         Assert.Equal(1, await QueryAsync(api, db => db.Employees.CountAsync(e => e.PhoneNumber == phone)));
+        // A real clash of the number stays MSG-LABOR-03; only a row of the same employee answers MSG06.
+        foreach (var loser in responses.Where(r => r.StatusCode != HttpStatusCode.OK))
+        {
+            Assert.Equal("MSG-LABOR-03", await loser.ErrorCodeAsync());
+        }
     }
 
     // A swap needs a free number in between: two parallel edits to each other's number must not both pass.
@@ -246,6 +251,7 @@ public class EmployeesV2QaRaceSqlServerTests
 
         Assert.True(edit.Done);
         Assert.Equal(StatusIds.Employee.Left, await QueryAsync(api, db => db.Employees.Where(e => e.Id == id).Select(e => e.StatusId).SingleAsync()));
+        Assert.Equal(1, await QueryAsync(api, db => db.AuditEvents.CountAsync(e => e.RecordId == id && e.Action == "Employee.StatusChanged")));
     }
 
     /// <summary>Another session saves the employee once, between the read of the job and its save.</summary>
