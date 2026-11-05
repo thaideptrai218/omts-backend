@@ -115,7 +115,7 @@ public class CooperativeReviewFixTests
     }
 
     [Fact]
-    public async Task Status_actions_from_a_stale_screen_are_msg06_and_a_future_end_date_is_msg01()
+    public async Task Status_actions_from_a_stale_screen_are_msg06_and_a_future_last_working_day_is_msg01()
     {
         using var api = new AuthApiFactory();
         var (owner, zone, _) = await SetupAsync(api);
@@ -123,18 +123,18 @@ public class CooperativeReviewFixTests
         var id = IdOf(saved);
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
 
-        var future = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = today.AddDays(2).ToString("yyyy-MM-dd") });
-        var stale = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = today.ToString("yyyy-MM-dd"), rowVersion = "AAAAAAAAB9E=" });
-        var ended = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = today.ToString("yyyy-MM-dd"), rowVersion = RowVersionOf(saved) });
+        var future = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { lastWorkingDay = today.AddDays(2).ToString("yyyy-MM-dd"), rowVersion = RowVersionOf(saved) });
+        var stale = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { lastWorkingDay = today.ToString("yyyy-MM-dd"), rowVersion = "AAAAAAAAB9E=" });
+        var ended = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { lastWorkingDay = today.AddDays(-1).ToString("yyyy-MM-dd"), rowVersion = RowVersionOf(saved) });
         // The in-memory provider issues no new row versions: a version the server never issued stands for a stale screen.
-        var staleReinstate = await owner.PostAsJsonAsync($"/api/employees/{id}/reinstate", new { rowVersion = "AAAAAAAAB9E=" });
-        var reinstated = await owner.PostAsync($"/api/employees/{id}/reinstate", null);
+        var staleResume = await owner.PostAsJsonAsync($"/api/employees/{id}/resume", new { rowVersion = "AAAAAAAAB9E=" });
+        var resumed = await owner.PostAsJsonAsync($"/api/employees/{id}/resume", new { rowVersion = RowVersionOf(saved) });
 
-        Assert.Equal("End date", await FieldAsync(future));
+        Assert.Equal("Last working day", await FieldAsync(future));
         Assert.Equal("MSG06", await stale.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.OK, ended.StatusCode);
-        Assert.Equal("MSG06", await staleReinstate.ErrorCodeAsync());
-        Assert.Equal(HttpStatusCode.OK, reinstated.StatusCode);
+        Assert.Equal("MSG06", await staleResume.ErrorCodeAsync());
+        Assert.Equal(HttpStatusCode.OK, resumed.StatusCode);
     }
 
     private static Task<HttpResponseMessage> UploadAsync(HttpClient owner, byte[] content)

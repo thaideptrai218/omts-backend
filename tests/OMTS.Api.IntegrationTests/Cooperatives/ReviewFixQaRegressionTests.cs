@@ -11,7 +11,7 @@ public class ReviewFixQaRegressionTests
 {
     // The in-memory provider gives every row an empty version, so "" matches it: this repro needs SQL Server.
     [SqlServerFact]
-    public async Task Empty_row_version_on_reinstate_is_MSG01_not_a_stale_screen()
+    public async Task Empty_row_version_on_resume_is_MSG01_not_a_stale_screen()
     {
         await using var database = SqlServerTestDatabase.Create();
         await using var api = await StartAsync(database);
@@ -19,7 +19,7 @@ public class ReviewFixQaRegressionTests
         var zone = await AddZoneAsync(api, cooperative.Id);
         var id = IdOf(await CreateAsync(owner, Profile($"NV {NewCode()}", NewPhone(), zone.Id)));
 
-        var response = await owner.PostAsJsonAsync($"/api/employees/{id}/reinstate", new { rowVersion = "" });
+        var response = await owner.PostAsJsonAsync($"/api/employees/{id}/resume", new { rowVersion = "" });
 
         Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
     }
@@ -34,7 +34,7 @@ public class ReviewFixQaRegressionTests
         var id = IdOf(await CreateAsync(owner, Profile($"NV {NewCode()}", NewPhone(), zone.Id)));
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)).ToString("yyyy-MM-dd");
 
-        var response = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = today, rowVersion = "" });
+        var response = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { lastWorkingDay = today, rowVersion = "" });
 
         Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
     }

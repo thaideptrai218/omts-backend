@@ -29,8 +29,8 @@ public interface IAccountRepository
     Task<(IReadOnlyList<Account> Items, int Total)> SearchStaffAsync(
         string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken);
 
-    /// <summary>Staff accounts not linked to any employee profile (LAB-01 account picker), ordered by display name.</summary>
-    Task<IReadOnlyList<Account>> ListLinkableStaffAsync(CancellationToken cancellationToken);
+    /// <summary>The Active Cooperative Owner accounts, for a notification that has no zone (BR-LABOR-04).</summary>
+    Task<IReadOnlyList<Guid>> ListActiveOwnerIdsAsync(CancellationToken cancellationToken);
 
     void Add(Account account);
 }

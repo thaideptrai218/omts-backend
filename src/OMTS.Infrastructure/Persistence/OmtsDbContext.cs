@@ -50,11 +50,10 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Customer> Customers => Set<Customer>();
 
-    // Labor: what ending an employment still checks (LAB-01)
-    public DbSet<Contractor> Contractors => Set<Contractor>();
-    public DbSet<SeasonalWorker> SeasonalWorkers => Set<SeasonalWorker>();
-    public DbSet<WorkAssignment> WorkAssignments => Set<WorkAssignment>();
-    public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
+    // Labor (LABOR-01; the attendance and work assignment tables come with LABOR-04 and LABOR-02)
+    public DbSet<EmployeeTypePeriod> EmployeeTypePeriods => Set<EmployeeTypePeriod>();
+    public DbSet<JobType> JobTypes => Set<JobType>();
+    public DbSet<EmployeeJobType> EmployeeJobTypes => Set<EmployeeJobType>();
 
     // System
     public DbSet<Notification> Notifications => Set<Notification>();

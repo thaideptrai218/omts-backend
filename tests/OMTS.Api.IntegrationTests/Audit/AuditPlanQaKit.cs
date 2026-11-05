@@ -65,7 +65,15 @@ internal static class AuditPlanQaKit
             await db.SaveChangesAsync();
         }
 
-        var employees = Enumerable.Range(0, 13).Select(_ => Guid.NewGuid()).ToArray();
+        // Real rows: ActorEmployeeId is a foreign key.
+        var cooperative = new Cooperative { FullName = "Plan" };
+        var employees = Enumerable.Range(0, 13).Select(_ => new Employee { Cooperative = cooperative, FullName = "Plan" }).ToList();
+        await using (var db = database.CreateContext())
+        {
+            db.Employees.AddRange(employees);
+            await db.SaveChangesAsync();
+        }
+
         var zones = Enumerable.Range(0, 20).Select(_ => Guid.NewGuid()).ToArray();
         var table = new DataTable();
         foreach (var (column, type) in new (string, Type)[]
@@ -84,7 +92,7 @@ internal static class AuditPlanQaKit
             table.Rows.Add(
                 Guid.NewGuid(),
                 i % 10 == 0 ? DBNull.Value : accounts[i % 40].Id,
-                i % 7 == 0 ? employees[i % 13] : DBNull.Value,
+                i % 7 == 0 ? employees[i % 13].Id : DBNull.Value,
                 $"Action{i % 50:D2}.Done",
                 i % 1000 == 999 ? "RareType" : $"Type{i % 12:D2}",
                 Guid.NewGuid(),
@@ -110,7 +118,7 @@ internal static class AuditPlanQaKit
             await statistics.ExecuteNonQueryAsync();
         }
 
-        return (accounts.Select(a => a.Id).ToArray(), employees, zones);
+        return (accounts.Select(a => a.Id).ToArray(), employees.Select(e => e.Id).ToArray(), zones);
     }
 
     /// <summary>

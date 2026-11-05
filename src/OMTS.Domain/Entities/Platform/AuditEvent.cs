@@ -15,10 +15,11 @@ public class AuditEvent : Entity
     public Account? ActorAccount { get; set; }
 
     /// <summary>
-    /// The employee who acted in the employee app (GBR-02). No foreign key yet: the employee app arrives with LABOR.
-    /// The system is the actor when neither this nor <see cref="ActorAccountId"/> is set.
+    /// The employee who acted in the employee app (GBR-02). The system is the actor when neither this nor
+    /// <see cref="ActorAccountId"/> is set.
     /// </summary>
     public Guid? ActorEmployeeId { get; set; }
+    public Employee? ActorEmployee { get; set; }
 
     public string Action { get; set; } = string.Empty;
 

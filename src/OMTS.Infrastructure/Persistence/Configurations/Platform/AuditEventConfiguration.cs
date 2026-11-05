@@ -9,6 +9,7 @@ internal sealed class AuditEventConfiguration : IEntityTypeConfiguration<AuditEv
     public void Configure(EntityTypeBuilder<AuditEvent> builder)
     {
         builder.HasOne(x => x.ActorAccount).WithMany().HasForeignKey(x => x.ActorAccountId);
+        builder.HasOne(x => x.ActorEmployee).WithMany().HasForeignKey(x => x.ActorEmployeeId);
         builder.Property(x => x.Action).HasMaxLength(Lengths.ShortText);
         builder.Property(x => x.RecordType).HasMaxLength(Lengths.ShortText);
         builder.Property(x => x.RecordCode).HasMaxLength(Lengths.ShortText);

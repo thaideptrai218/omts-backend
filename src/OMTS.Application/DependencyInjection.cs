@@ -69,9 +69,16 @@ public static class DependencyInjection
         services.AddScoped<StaffAccountService>();
         services.AddScoped<RoleService>();
 
-        // FARM-01 cooperative profile, LAB-01 employees
+        // FARM-01 cooperative profile, LABOR-01 employees
         services.AddScoped<CooperativeProfileService>();
+        services.AddScoped<EmployeeCallerAccess>();
+        services.AddScoped<EmployeeViewBuilder>();
+        services.AddScoped<EmployeeProfileValidator>();
+        services.AddScoped<EmployeeQueryService>();
         services.AddScoped<EmployeeService>();
+        services.AddScoped<EmployeeWorkingZoneService>();
+        services.AddScoped<EmploymentService>();
+        services.AddScoped<EmploymentEndService>();
 
         // FARM-02 zones, FARM-03 zone licenses, FARM-04 rafts
         services.AddScoped<FarmingLookupAccess>();
