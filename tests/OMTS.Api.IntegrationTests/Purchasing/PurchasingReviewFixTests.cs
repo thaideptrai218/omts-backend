@@ -180,7 +180,10 @@ public class PurchasingReviewFixTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal(1, page.GetProperty("page").GetProperty("items").GetArrayLength());
         // Payable 100k + 200k + 300k, paid 50k + 100k + 150k: the totals cover all three receipts, not just the page.
         Assert.Equal((3, 600_000m, 300_000m), (page.GetProperty("totals").GetProperty("completedCount").GetInt32(), page.GetProperty("totals").Money("payable"), page.GetProperty("totals").Money("outstanding")));
-        Assert.Equal(300_000m, supplier.Money("debt"));
+        // The supplier detail carries no debt (PURCHASE-04 is not a Zone Manager function); the debt endpoint has it.
+        Assert.False(supplier.TryGetProperty("debt", out _));
+        var debt = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}/debt");
+        Assert.Equal(300_000m, debt.GetProperty("totals").Money("outstanding"));
         Assert.Equal(3, supplier.GetProperty("receipts").GetArrayLength());
     }
 }
