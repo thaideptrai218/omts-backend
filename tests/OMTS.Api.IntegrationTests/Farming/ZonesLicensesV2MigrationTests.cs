@@ -14,7 +14,7 @@ namespace OMTS.Api.IntegrationTests.Farming;
 /// </summary>
 public class ZonesLicensesV2MigrationTests
 {
-    private const string MigrationBefore = "20261104072358_CooperativeProfileV2";
+    private const string MigrationBefore = "20261104174337_SalesCatalogueV2";
 
     [SqlServerFact]
     public async Task Up_keeps_one_zone_per_license_and_down_restores_one_scope_row_each()

@@ -16,7 +16,7 @@ namespace OMTS.Api.IntegrationTests.Farming;
 /// </summary>
 public class ZonesLicensesMigrationQaTests
 {
-    private const string MigrationBefore = "20261104072358_CooperativeProfileV2";
+    private const string MigrationBefore = "20261104174337_SalesCatalogueV2";
 
     [SqlServerFact]
     public async Task Up_down_and_up_again_keep_the_license_data_and_the_lowest_code_ignores_case()
