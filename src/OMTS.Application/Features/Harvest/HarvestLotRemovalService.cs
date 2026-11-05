@@ -52,9 +52,9 @@ public sealed class HarvestLotRemovalService(
         }
 
         var (_, facts) = await edits.FactsAsync(lot, cancellationToken);
-        if (facts.EveryHarvestedNow() && !facts.EveryHarvestedWithoutLot())
+        if (facts.RemovalTakesALaneOutOfHarvested())
         {
-            // The lanes are no longer all Harvested, so finishing them again is a new last lane (BR-CYCLE-07).
+            // The lanes are no longer all Harvested, so the earlier reminder is no longer true and marking the last one again is a new last lane (BR-CYCLE-07).
             lot.Cycle.CloseRemindedAt = null;
         }
 

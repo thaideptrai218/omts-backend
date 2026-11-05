@@ -98,6 +98,27 @@ public class HarvestLotCorrectionReminderTests(AuthApiFactory factory) : IClassF
         Assert.NotNull(await MarkerAsync(raft.CycleId));
     }
 
+    // A lane taken back re-arms it also with a lane seeded later still Growing: the second reminder goes once, at the real last lane, and no act tells anyone twice.
+    [Fact]
+    public async Task A_lane_taken_back_with_a_later_lane_growing_reminds_once_more_only_at_the_real_last_lane()
+    {
+        var raft = await factory.SeededRaftAsync(1);
+        var owner = raft.Owner.Client;
+        var manager = await factory.ManagerAsync(raft.ZoneId);
+        var lot = await manager.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1).FinishedLanes(1));
+        await owner.RecordSeedingAsync(raft.CycleId, raft.Lot.Session([2]));
+
+        await factory.CorrectLotAsync(manager.Client, lot.Id(), HarvestFields.OfLanes(1));
+        Assert.Null(await MarkerAsync(raft.CycleId));
+        await factory.CorrectLotAsync(manager.Client, lot.Id(), HarvestFields.OfLanes(1).FinishedLanes(1));
+        Assert.Equal(1, await RemindersAsync(raft.CycleId, manager.Account.Id));
+
+        await manager.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(2).FinishedLanes(2));
+        await factory.CorrectLotAsync(manager.Client, lot.Id(), HarvestFields.OfLanes(1).FinishedLanes(1) with { Cages = "9" });
+
+        Assert.Equal(2, await RemindersAsync(raft.CycleId, manager.Account.Id));
+    }
+
     // An Owner is not told of their own action (OMTS-216); the answer still says the cycle can be closed.
     [Fact]
     public async Task An_owner_who_corrects_the_last_lane_is_not_reminded_but_the_managers_are()

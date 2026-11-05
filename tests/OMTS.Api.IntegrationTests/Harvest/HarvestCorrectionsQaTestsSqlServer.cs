@@ -589,7 +589,7 @@ public class HarvestCorrectionsQaTestsSqlServer(ITestOutputHelper output)
     }
 
     // A database EF Core creates, and Azure SQL, read versions of the rows. One made by hand, or restored from one, has locking reads: the same parallel work there, where a read can be
-    // the deadlock victim outside the save, which UnitOfWork alone maps to 409. It depends on timing, so a run may pass; see the report for how often it fails.
+    // the deadlock victim outside the save, which the API's exception handler maps to 409. It depends on timing, so a run may pass; see the report for how often it failed before that.
     [SqlServerFact]
     public async Task L2_everything_on_one_cycle_in_parallel_never_answers_500_with_locking_reads_too()
     {

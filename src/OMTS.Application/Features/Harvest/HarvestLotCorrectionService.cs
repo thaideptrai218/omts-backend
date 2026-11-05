@@ -69,7 +69,10 @@ public sealed class HarvestLotCorrectionService(
         return new HarvestLotSaved(await views.ViewAsync(done.Lot, done.Raft, cancellationToken), done.EveryHarvested, RowVersionGuard.Encode(done.Lot.Cycle.RowVersion), saved.Text, saved.Code);
     }
 
-    /// <summary>The whole check against the rows as they are now, in the order of the record: access, the state of the cycle, the fields, then the version.</summary>
+    /// <summary>
+    /// The whole check against the rows as they are now: access, the state of the cycle, a version that is not the current one, the fields, then a version missing or unreadable.
+    /// A form read before another save is told so first (NFR-09): its kept keys and lanes were never judged against that save, so they are not its mistake.
+    /// </summary>
     private async Task<Result<Checked>> CheckAsync(
         Guid lotId, CorrectHarvestLotRequest request, HashSet<string> keep, IReadOnlyList<IncomingFile> newPhotos, CancellationToken cancellationToken)
     {
@@ -82,6 +85,12 @@ public sealed class HarvestLotCorrectionService(
         if (await edits.RefusalAsync(lot, cancellationToken) is { } refused)
         {
             return refused;
+        }
+
+        var version = await rowVersions.CheckAsync(lot, request.RowVersion, cancellationToken);
+        if (version is { Kind: ErrorKind.Conflict })
+        {
+            return version;
         }
 
         var (raft, facts) = await edits.FactsAsync(lot, cancellationToken);
@@ -97,9 +106,9 @@ public sealed class HarvestLotCorrectionService(
             return invalid;
         }
 
-        if (await rowVersions.CheckAsync(lot, request.RowVersion, cancellationToken) is { } conflict)
+        if (version is not null)
         {
-            return conflict;
+            return version;
         }
 
         return new Checked(lot, raft, read!, facts, kept, files);
@@ -117,10 +126,11 @@ public sealed class HarvestLotCorrectionService(
         var (lot, raft, fields, facts, kept, _) = current.Value!;
         var everyBefore = facts.EveryHarvestedNow();
         var everyAfter = facts.EveryHarvestedWith(fields);
+        var takesALaneBack = facts.CorrectionTakesALaneOutOfHarvested(fields);
         var before = HarvestLotAudit.Snapshot(lot);
         (lot.CageCount, lot.EstimatedKg) = (fields.CageCount, fields.EstimatedKg);
-        ApplyLanes(lot, fields);
-        var removedKeys = ApplyPhotos(lot, kept, newKeys);
+        HarvestLotCorrectionRows.ApplyLanes(lots, lot, fields);
+        var removedKeys = HarvestLotCorrectionRows.ApplyPhotos(lots, lot, kept, newKeys);
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, HarvestLotAudit.Snapshot(lot));
         if (changedAfter is null)
         {
@@ -131,70 +141,27 @@ public sealed class HarvestLotCorrectionService(
         unitOfWork.MarkChanged(lot);
         unitOfWork.MarkChanged(lot.Cycle);
         audit.Record(HarvestLotAudit.Entry(HarvestLotAudit.Corrected, lot, raft.ZoneId) with { Before = changedBefore, After = HarvestLotAudit.WithAffectedPublishedLot(changedAfter, lot), Reason = request.Reason!.Trim() });
-        await RemindAsync(lot, raft, everyBefore, everyAfter, cancellationToken);
+        await RemindAsync(lot, raft, takesALaneBack, !everyBefore && everyAfter, cancellationToken);
         return new Applied(lot, raft, removedKeys, true, everyAfter);
     }
 
     /// <summary>
-    /// HARVEST-01.2 at step 8 of a correction: the last seeded lane marked Harvested reminds, once while the lanes stay so. A correction that takes a lane out of Harvested re-arms it, as
-    /// the earlier reminder is no longer true and BR-CYCLE-07 reminds when the last lane is marked. MSG-HARVEST-01 is not sent again, but this one is another notice.
+    /// HARVEST-01.2 at step 8 of a correction: the last seeded lane marked Harvested reminds, once while the lanes stay so. A correction that takes a lane out of Harvested re-arms it, also with a lane
+    /// seeded later still Growing, as the earlier reminder is no longer true and BR-CYCLE-07 reminds when the last lane is marked. One act either re-arms or reminds, never both, so nobody is told twice for it.
+    /// MSG-HARVEST-01 is not sent again, but this one is another notice.
     /// </summary>
-    private async Task RemindAsync(HarvestLot lot, Raft raft, bool everyBefore, bool everyAfter, CancellationToken cancellationToken)
+    private async Task RemindAsync(HarvestLot lot, Raft raft, bool takesALaneBack, bool marksTheLastLane, CancellationToken cancellationToken)
     {
-        if (everyBefore && !everyAfter)
+        if (takesALaneBack)
         {
             lot.Cycle.CloseRemindedAt = null;
         }
-        else if (!everyBefore && everyAfter && lot.Cycle.CloseRemindedAt is null)
+        else if (marksTheLastLane && lot.Cycle.CloseRemindedAt is null)
         {
             lot.Cycle.CloseRemindedAt = timeProvider.GetUtcNow();
             var recorder = currentUser.AccountId ?? throw new InvalidOperationException("A correction needs an authenticated caller.");
             await notifier.CloseReminderAsync(lot.Cycle, raft, recorder, cancellationToken);
         }
-    }
-
-    private void ApplyLanes(HarvestLot lot, HarvestLotFields fields)
-    {
-        var wanted = fields.Lanes.ToDictionary(l => l.Id);
-        foreach (var lane in lot.Lanes.Where(l => !wanted.ContainsKey(l.LaneId)).ToList())
-        {
-            lot.Lanes.Remove(lane);
-            lots.RemoveLane(lane);
-        }
-
-        foreach (var lane in lot.Lanes)
-        {
-            lane.IsFinished = fields.FinishedLaneIds.Contains(lane.LaneId);
-        }
-
-        foreach (var lane in fields.Lanes.Where(l => lot.Lanes.All(existing => existing.LaneId != l.Id)))
-        {
-            var added = new HarvestLotLane { LotId = lot.Id, LaneId = lane.Id, Lane = lane, IsFinished = fields.FinishedLaneIds.Contains(lane.Id) };
-            lot.Lanes.Add(added);
-            lots.AddLane(added);
-        }
-    }
-
-    /// <summary>Removes the photos not kept and adds the new ones in the free slots; kept photos stay in their slots. Returns the keys of the removed ones.</summary>
-    private List<string> ApplyPhotos(HarvestLot lot, List<HarvestLotPhoto> kept, IReadOnlyList<string> newKeys)
-    {
-        var removed = lot.Photos.Except(kept).ToList();
-        foreach (var photo in removed)
-        {
-            lot.Photos.Remove(photo);
-            lots.RemovePhoto(photo);
-        }
-
-        using var freeSlots = Enumerable.Range(1, HarvestLot.MaxPhotos).Where(slot => kept.All(p => p.SortOrder != slot)).GetEnumerator();
-        foreach (var key in newKeys)
-        {
-            freeSlots.MoveNext();
-            var photo = new HarvestLotPhoto { LotId = lot.Id, SortOrder = freeSlots.Current, FileKey = key };
-            lot.Photos.Add(photo);
-            lots.AddPhoto(photo);
-        }
-
-        return removed.Select(p => p.FileKey).ToList();
     }
 
     private async Task SaveAsync(IReadOnlyList<string> uploadedKeys, List<string> removedKeys, CancellationToken cancellationToken)

@@ -22,6 +22,19 @@ public class HarvestCorrectionsQaTestsFiles
 
     private static Task<int> RunJobAsync(AuthApiFactory api) => api.Services.GetRequiredService<OrphanFileCleanupJob>().RunOnceAsync(DateTimeOffset.UtcNow.AddDays(2));
 
+    /// <summary>The in-memory provider moves no version on a save, so this stands in for what SQL Server does there. HarvestLotStaleFormSqlServerTests runs the same forms on real versions.</summary>
+    private static async Task<string> VersionMovedByTheSaveAsync(AuthApiFactory api, Guid lotId, string read)
+    {
+        string moved;
+        do
+        {
+            moved = await api.LotVersionAsync(lotId);
+        }
+        while (moved == read);
+
+        return moved;
+    }
+
     // NFR-09, its acceptance as it reads: two devices open the same record and save one after the other; the second save is blocked with MSG06, and the client list gives that answer for
     // "another save of the lot since this form was read". Device 1 took a photo out; device 2 still keeps it, as a form read before does.
     [Fact]
@@ -35,7 +48,7 @@ public class HarvestCorrectionsQaTestsFiles
         var versionOfBothForms = await api.LotVersionAsync(lot.Id());
 
         await (await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(new HarvestFields { Lanes = ["1"] }, "Wrong photo", versionOfBothForms, [keys[0]]))).ReadAsync(HttpStatusCode.OK);
-        var current = await api.IssueRowVersionAsync<OMTS.Domain.Entities.Harvest.HarvestLot>(lot.Id());
+        var current = await VersionMovedByTheSaveAsync(api, lot.Id(), versionOfBothForms);
 
         var second = await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(new HarvestFields { Lanes = ["1"], Cages = "9" }, "Counted again", versionOfBothForms, keys));
 
@@ -54,11 +67,13 @@ public class HarvestCorrectionsQaTestsFiles
         var versionOfBothForms = await api.LotVersionAsync(lot.Id());
 
         await (await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(HarvestFields.OfLanes(2), "Wrong lane", versionOfBothForms))).ReadAsync(HttpStatusCode.OK);
+        var current = await VersionMovedByTheSaveAsync(api, lot.Id(), versionOfBothForms);
         await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1).FinishedLanes(1));
 
         var second = await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(HarvestFields.OfLanes(1, 2).FinishedLanes(1) with { Cages = "9" }, "Counted again", versionOfBothForms));
 
-        Assert.Equal("MSG06", (await second.ReadAsync(HttpStatusCode.Conflict)).Text("code"));
+        var answer = await second.ReadAsync(HttpStatusCode.Conflict);
+        Assert.Equal(("MSG06", current), (answer.Text("code"), answer.Text("currentRowVersion")));
     }
 
     // The same, with the photo taken out while this request uploads, by a real correction: the comment of the branch's test says this answers MSG06 first.
@@ -76,10 +91,11 @@ public class HarvestCorrectionsQaTestsFiles
         var pending = owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(new HarvestFields { Lanes = ["1"], Photos = [Jpeg] }, "One more", version, keys));
         await api.Hold.Reached;
         await (await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(new HarvestFields { Lanes = ["1"] }, "Wrong photo", version, [keys[0]]))).ReadAsync(HttpStatusCode.OK);
+        var current = await VersionMovedByTheSaveAsync(api, lot.Id(), version);
         api.Hold.Release();
 
         var answer = await (await pending).ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal("MSG06", answer.Text("code"));
+        Assert.Equal(("MSG06", current), (answer.Text("code"), answer.Text("currentRowVersion")));
         Assert.Equal([keys[0]], StoredKeys(api, Category));
     }
 

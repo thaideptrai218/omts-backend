@@ -252,7 +252,7 @@ public class HarvestLotCorrectionPhotoTests
         var keys = lot.PhotoKeysOfLot();
 
         var pending = await HeldAsync(api, owner, lot.Id(), new HarvestFields(), keep: keys);
-        // Another save takes the photo and leaves the version the held one read; a real correction would also move it, which answers MSG06 first.
+        // Only the photo row goes, with the version the held request read still current: so it is judged on the key. A real correction also moves the version, and that answers MSG06 (HarvestCorrectionsQaTestsFiles, M1).
         await api.UseDbAsync(db => db.HarvestLotPhotos.RemoveRange(db.HarvestLotPhotos.Where(p => p.LotId == lot.Id())));
         api.Hold.Release();
 

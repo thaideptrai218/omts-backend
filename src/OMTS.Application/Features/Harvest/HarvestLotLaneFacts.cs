@@ -49,18 +49,31 @@ internal sealed class HarvestLotLaneFacts(
     /// <summary>Every seeded lane shows Harvested with the lot as saved (BR-CYCLE-07).</summary>
     public bool EveryHarvestedNow() => EveryHarvested(facts);
 
-    /// <summary>The same once the lot is removed.</summary>
-    public bool EveryHarvestedWithoutLot() => EveryHarvested(others);
-
     /// <summary>The same with the corrected lanes of the lot.</summary>
-    public bool EveryHarvestedWith(HarvestLotFields fields) => EveryHarvested(
-        [.. others, .. fields.Lanes.Select(l => new LotLaneFact(lot.Id, l.Id, lot.HarvestDate, lot.HarvestedAt, fields.FinishedLaneIds.Contains(l.Id)))]);
+    public bool EveryHarvestedWith(HarvestLotFields fields) => EveryHarvested(Corrected(fields));
+
+    /// <summary>The removal takes a lane out of Harvested, whatever the other lanes show: a lane seeded later may be Growing (client list, section 4).</summary>
+    public bool RemovalTakesALaneOutOfHarvested() => TakesALaneOutOfHarvested(others);
+
+    /// <summary>The same for the corrected lanes of the lot.</summary>
+    public bool CorrectionTakesALaneOutOfHarvested(HarvestLotFields fields) => TakesALaneOutOfHarvested(Corrected(fields));
+
+    private List<LotLaneFact> Corrected(HarvestLotFields fields) =>
+        [.. others, .. fields.Lanes.Select(l => new LotLaneFact(lot.Id, l.Id, lot.HarvestDate, lot.HarvestedAt, fields.FinishedLaneIds.Contains(l.Id)))];
 
     private bool EveryHarvested(IReadOnlyCollection<LotLaneFact> lots)
     {
         var states = States(lots);
-        return LaneStateRules.EverySeededLaneHarvested(raft.Lanes.Where(l => l.StatusId == StatusIds.Lane.InUse).Select(l => states[l.Id]));
+        return LaneStateRules.EverySeededLaneHarvested(LanesInUse().Select(l => states[l.Id]));
     }
+
+    private bool TakesALaneOutOfHarvested(IReadOnlyCollection<LotLaneFact> lots)
+    {
+        var (now, then) = (States(facts), States(lots));
+        return LanesInUse().Any(l => now[l.Id] == LaneState.Harvested && then[l.Id] != LaneState.Harvested);
+    }
+
+    private IEnumerable<Lane> LanesInUse() => raft.Lanes.Where(l => l.StatusId == StatusIds.Lane.InUse);
 
     private IReadOnlyDictionary<Guid, LaneState> States(IReadOnlyCollection<LotLaneFact> lots) => LaneStateRules.StatesOn(
         today, cycle, raft.Lanes.Select(l => l.Id), seedings, lots.Select(f => new LaneHarvest(cycle.Id, f.LaneId, f.Date, f.IsFinished)).ToList());
