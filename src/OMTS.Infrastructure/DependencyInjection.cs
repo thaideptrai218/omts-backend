@@ -66,6 +66,8 @@ public static class DependencyInjection
         services.AddScoped<IMandatorySmsRecipientQuery, MandatorySmsRecipientQuery>();
         services.AddScoped<IVerificationCodeRepository, VerificationCodeRepository>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<ICustomerReferences, CustomerReferences>();
+        services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<ICooperativeRepository, CooperativeRepository>();
         services.AddScoped<IPushDeviceRepository, PushDeviceRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
