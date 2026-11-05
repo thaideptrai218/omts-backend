@@ -82,7 +82,7 @@ public sealed class DeploymentBootstrapper(
             messages.Add($"Cooperative created with Cooperative Owner '{settings.OwnerUsername}'. " +
                 (seedDemoData
                     ? "Demo mode: the Owner gets the fixed demo password instead."
-                    : "The temporary password expires in 24 hours and must be changed at first login."));
+                    : "The first password must be changed at first login and does not expire."));
         }
         else
         {

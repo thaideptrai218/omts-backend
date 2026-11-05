@@ -1044,7 +1044,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Email")
                         .IsUnique()
-                        .HasFilter("[Email] IS NOT NULL AND [EmailVerifiedAt] IS NOT NULL");
+                        .HasFilter("[Email] IS NOT NULL");
 
                     b.HasIndex("PhoneNumber")
                         .IsUnique()
@@ -1508,6 +1508,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("SendCount")
                         .HasColumnType("int");
+
+                    b.Property<string>("SendTimes")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Target")
                         .IsRequired()

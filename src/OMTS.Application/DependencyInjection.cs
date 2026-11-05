@@ -33,7 +33,7 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddMemoryCache();
 
-        services.AddSingleton(_ => new UnknownLoginCounter());
+        services.AddSingleton(provider => new UnknownLoginCounter(timeProvider: provider.GetRequiredService<TimeProvider>()));
         services.AddScoped<AuthService>();
 
         services.AddSingleton<PermissionCache>();
@@ -50,6 +50,7 @@ public static class DependencyInjection
 
         // ACS – personal accounts
         services.AddScoped<VerificationThrottle>();
+        services.AddSingleton<VerificationStartGate>();
         services.AddScoped<VerificationService>();
         services.AddScoped<TraderCustomerLinker>();
         services.AddScoped<UsernameGenerator>();

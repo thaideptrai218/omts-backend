@@ -24,6 +24,9 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
     private const string TraderPassword = "Trader2026";
     private static readonly TimeSpan TwoMinutes = TimeSpan.FromMinutes(2);
 
+    // Generated per run, so no password-like literal is committed (secret scanners).
+    private static readonly string StaffNewPassword = NewPassword();
+
     // A resend or verify on a recovery id must answer exactly like one on an id that was never issued.
     [Fact]
     public async Task Recovery_resend_and_verify_answer_the_same_for_real_and_random_ids()
@@ -111,24 +114,22 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
         Assert.Equal(VerificationService.MaxRequestsPerWindow, sms + mail);
     }
 
-    // Starting a new request cancels the open one, so failures count across requests: 4 wrong on the first, 5 on the
-    // second (which locks), 1 on the third. Ten failures in the hour: no new code is sent, and a right code on the
-    // open third request is refused with MSG69.
+    // The 4th recovery code of the hour is not sent, with the same 202 answer (BR-ACCOUNT-07); recovery ids keep
+    // answering MSG-ACCOUNT-16 after any number of wrong entries, like an id that was never issued, and a right code on
+    // the open third request still works: 15 guesses per hour at most, and no sign that the account exists.
     [Fact]
-    public async Task Ten_wrong_entries_across_requests_refuse_the_right_code_with_msg_account_17()
+    public async Task Recovery_stops_at_3_codes_per_hour_and_wrong_entries_never_tell_a_real_id_from_a_random_one()
     {
         var (owner, _) = await OwnerWithPhoneAndEmailAsync();
         var anonymous = factory.CreateClient();
         var phone = owner.PhoneNumber!;
 
         var first = await RecoveryRequestIdAsync(anonymous, phone);
-        var firstCode = factory.LastSmsCode(phone);
-        await WrongEntriesAsync(anonymous, first, firstCode, 4);
+        await WrongEntriesAsync(anonymous, first, factory.LastSmsCode(phone), VerificationCode.MaxFailedAttempts);
         await AgeRequestsOfAsync(owner.Id);
 
         var second = await RecoveryRequestIdAsync(anonymous, phone);
-        var secondCode = factory.LastSmsCode(phone);
-        await WrongEntriesAsync(anonymous, second, secondCode, VerificationCode.MaxFailedAttempts);
+        await WrongEntriesAsync(anonymous, second, factory.LastSmsCode(phone), VerificationCode.MaxFailedAttempts);
         await AgeRequestsOfAsync(owner.Id);
 
         var third = await RecoveryRequestIdAsync(anonymous, phone);
@@ -141,9 +142,7 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
         Assert.Equal(HttpStatusCode.Accepted, fourth.StatusCode);
         Assert.Equal(sent, factory.Services.GetRequiredService<FakeSmsSender>().Inbox.List(phone).Count);
 
-        var right = await anonymous.PostAsJsonAsync($"/api/verifications/{third}/verify", new { code = thirdCode });
-        Assert.Equal("MSG-ACCOUNT-17", await right.ErrorCodeAsync());
-        Assert.False((await right.Content.ReadFromJsonAsync<JsonElement>()).TryGetProperty("verificationToken", out _));
+        Assert.NotEmpty(await VerifyAsync(anonymous, third, thirdCode));
     }
 
     private static async Task WrongEntriesAsync(HttpClient anonymous, Guid verificationId, string code, int count)
@@ -197,14 +196,20 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
             grants = new[] { new { zoneId = zone.Id, role = FixedRoles.ZoneManagerCode } },
         });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-        var temporaryPassword = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("temporaryPassword").GetString()!;
+        var createdBody = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var temporaryPassword = createdBody.GetProperty("temporaryPassword").GetString()!;
 
         // Password changes (ACS-04): a wrong current password, the staff's first change, and the owner's change.
         var staff = await factory.CreateClient().PostAsJsonAsync("/api/auth/login", new { identifier = username, password = temporaryPassword });
         var staffTokens = (await staff.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("accessToken").GetString();
         var staffClient = factory.CreateClient();
         staffClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", staffTokens);
-        var staffChanged = await staffClient.PostAsJsonAsync("/api/me/password", new { currentPassword = temporaryPassword, newPassword = "Staff2026x", passwordConfirmation = "Staff2026x" });
+        // ACCOUNT-02: the phone number first, then the temporary password.
+        var staffPhone = createdBody.GetProperty("account").GetProperty("phoneNumber").GetString()!;
+        var phoneId = await VerificationIdAsync(await staffClient.PostAsJsonAsync("/api/me/phone-verification", new { }));
+        var phoneToken = await VerifiedTokenAsync(staffClient, phoneId, factory.LastSmsCode(staffPhone), tokens);
+        Assert.Equal(HttpStatusCode.OK, (await staffClient.PostAsJsonAsync("/api/me/phone-verification/confirm", new { verificationToken = phoneToken })).StatusCode);
+        var staffChanged = await staffClient.PostAsJsonAsync("/api/me/password", new { newPassword = StaffNewPassword, passwordConfirmation = StaffNewPassword });
         var wrongCurrent = await ownerClient.PostAsJsonAsync("/api/me/password", new { currentPassword = "Wrong123", newPassword = "Owner2026x", passwordConfirmation = "Owner2026x" });
         var ownerChanged = await ownerClient.PostAsJsonAsync("/api/me/password", new { currentPassword = "Reset2026x", newPassword = "Owner2026y", passwordConfirmation = "Owner2026y" });
         Assert.Equal(HttpStatusCode.OK, staffChanged.StatusCode);
@@ -220,7 +225,7 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
             ("password", TraderPassword, false),
             ("password", "Reset2026x", false),
             ("password", "Reset2027x", false),
-            ("password", "Staff2026x", false),
+            ("password", StaffNewPassword, false),
             ("password", "Owner2026x", false),
             ("password", "Owner2026y", false),
             ("password", "Wrong123", false),
@@ -290,11 +295,7 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
         var ids = await factory.QueryAsync(db => db.VerificationCodes.Where(c => c.AccountId == accountId).Select(c => c.Id).ToListAsync());
         foreach (var id in ids)
         {
-            await factory.UpdateAsync<VerificationCode>(id, c =>
-            {
-                c.CreatedAt -= TwoMinutes;
-                c.LastSentAt -= TwoMinutes;
-            });
+            await factory.UpdateAsync<VerificationCode>(id, c => c.AgeBy(TwoMinutes));
         }
     }
 

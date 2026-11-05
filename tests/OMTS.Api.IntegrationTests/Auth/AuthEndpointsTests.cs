@@ -121,11 +121,11 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal("MSG-ACCOUNT-07", await ErrorCodeAsync(await PostLoginAsync(client, "staff1", Password)));
     }
 
-    // UC02 – 2d.
+    // ACCOUNT-02.0.E4: a staff account; the first password of the Owner does not expire (PM decision 03/11).
     [Fact]
     public async Task Temporary_password_older_than_24_hours_is_refused()
     {
-        await factory.AddAccountAsync("temp1", Password, configure: a =>
+        await AddStaffWithPairAsync("temp1", a =>
         {
             a.MustChangePassword = true;
             a.TemporaryPasswordIssuedAt = DateTimeOffset.UtcNow.AddHours(-25);
@@ -155,7 +155,7 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     [Fact]
     public async Task Login_errors_carry_the_srs_message_text()
     {
-        await factory.AddAccountAsync("temp3", Password, configure: a =>
+        await AddStaffWithPairAsync("temp3", a =>
         {
             a.MustChangePassword = true;
             a.TemporaryPasswordIssuedAt = DateTimeOffset.UtcNow.AddHours(-25);
@@ -230,7 +230,7 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     [Fact]
     public async Task Refresh_is_refused_once_the_temporary_password_has_expired()
     {
-        var account = await factory.AddAccountAsync("temp4", Password, configure: a =>
+        var account = await AddStaffWithPairAsync("temp4", a =>
         {
             a.MustChangePassword = true;
             a.TemporaryPasswordIssuedAt = DateTimeOffset.UtcNow.AddHours(-23);
@@ -261,6 +261,13 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, me.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, refresh.StatusCode);
+    }
+
+    private async Task<Domain.Entities.Identity.Account> AddStaffWithPairAsync(string username, Action<Domain.Entities.Identity.Account> configure)
+    {
+        var staff = await factory.AddAccountAsync(username, Password, SubjectType.Staff, configure);
+        await factory.GrantAsync(staff, StaffRole.ZoneManager, null);
+        return staff;
     }
 
     private static Task<HttpResponseMessage> PostLoginAsync(HttpClient client, string identifier, string password) =>

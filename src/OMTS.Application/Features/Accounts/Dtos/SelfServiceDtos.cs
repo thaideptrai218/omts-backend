@@ -10,10 +10,10 @@ public sealed record RegisterTraderRequest(
     string PasswordConfirmation,
     string VerificationToken);
 
-/// <param name="OldDocumentsHidden">Several offline profiles share the number; the Owner links them later.</param>
-/// <param name="Notice">MSG-ACCOUNT-02 when <paramref name="OldDocumentsHidden"/>.</param>
+/// <param name="LinkedExistingCustomer">The account was linked to the one customer profile with this phone number (BR-ACCOUNT-04).</param>
+/// <param name="Notice">MSG-ACCOUNT-01 when <paramref name="LinkedExistingCustomer"/>, otherwise MSG-ACCOUNT-02.</param>
 /// <param name="NoticeCode">The code of <paramref name="Notice"/>.</param>
-public sealed record TraderRegistered(Guid AccountId, string Username, bool OldDocumentsHidden, string? Notice, string? NoticeCode);
+public sealed record TraderRegistered(Guid AccountId, string Username, bool LinkedExistingCustomer, string Notice, string NoticeCode);
 
 public sealed record StartRecoveryRequest(string Identifier);
 
@@ -23,7 +23,7 @@ public sealed record RecoveryStarted(Guid RequestId, string Message, string Mess
 public sealed record ResetPasswordRequest(string VerificationToken, string NewPassword, string PasswordConfirmation);
 
 /// <param name="CurrentPassword">Proof by the current password…</param>
-/// <param name="VerificationToken">…or by an email code with purpose ChangePassword.</param>
+/// <param name="VerificationToken">…or by an email code with purpose ChangePassword. Neither is needed for the forced change after a temporary password (ACCOUNT-04.1).</param>
 public sealed record ChangePasswordRequest(
     string? CurrentPassword,
     string? VerificationToken,
@@ -32,15 +32,14 @@ public sealed record ChangePasswordRequest(
     ClientType ClientType = ClientType.Web,
     string? DeviceName = null);
 
-/// <param name="PhoneNumber">Required for traders; staff may omit it to confirm the number the Owner entered.</param>
+/// <param name="PhoneNumber">Required for traders; staff and the Owner may omit it to confirm the number on the account.</param>
 public sealed record StartPhoneVerificationRequest(string? PhoneNumber);
 
 public sealed record ConfirmContactRequest(string VerificationToken);
 
-/// <param name="OldDocumentsHidden">Trader only: several offline profiles share the number (MSG57).</param>
-/// <param name="Notice">MSG57 when <paramref name="OldDocumentsHidden"/>; otherwise MSG-GEN-05 after a contact change.</param>
+/// <param name="Notice">MSG-GEN-05 after a contact change; null after the phone step of the login.</param>
 /// <param name="NoticeCode">The code of <paramref name="Notice"/>.</param>
-public sealed record ContactConfirmed(string Contact, bool OldDocumentsHidden, string? Notice, string? NoticeCode);
+public sealed record ContactConfirmed(string Contact, string? Notice, string? NoticeCode);
 
 public sealed record UpdateProfileRequest(string DisplayName, string? RowVersion, string? Username = null);
 
