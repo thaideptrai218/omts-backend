@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using OMTS.Api.IntegrationTests.Infrastructure;
-using OMTS.Domain.Entities.Identity;
 using OMTS.Infrastructure.Persistence;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
@@ -29,10 +28,9 @@ public class EmployeesV2MigrationTests
         var previous = all[all.IndexOf(own) - 1];
         await migrator.MigrateAsync(previous);
 
-        var row = new Cooperative { FullName = "HTX" };
-        db.Cooperatives.Add(row);
-        await db.SaveChangesAsync();
-        var cooperative = row.Id;
+        // By SQL: later migrations add columns of the model that this one does not have yet.
+        var cooperative = Guid.NewGuid();
+        await ExecuteAsync(db, $"INSERT INTO Cooperatives (Id, FullName, StatusId, CreatedAt) VALUES ('{cooperative}', N'HTX', 201, SYSDATETIMEOFFSET())");
         var phone = NewPhone();
         await InsertEmployeeAsync(db, cooperative, "Một", phone, 401, "2026-01-01");
         await InsertEmployeeAsync(db, cooperative, "Hai", phone, 401, "2026-02-01");
