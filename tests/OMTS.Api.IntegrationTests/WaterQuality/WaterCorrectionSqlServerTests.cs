@@ -21,6 +21,7 @@ namespace OMTS.Api.IntegrationTests.WaterQuality;
 /// for it and nothing answers 500, and the outcome is as if they ran one after the other: the row holds one request's
 /// values with their result, and the audit rows form one chain.
 /// </summary>
+[Collection(WaterRaceTestCollection.Name)]
 public class WaterCorrectionSqlServerTests
 {
     private static readonly DateTimeOffset FirstBodyTime = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeSeconds());

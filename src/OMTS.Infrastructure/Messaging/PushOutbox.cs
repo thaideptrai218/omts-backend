@@ -13,7 +13,16 @@ internal sealed class PushOutbox : IPushOutbox, IMandatorySmsOutbox
 
     public void Enqueue(PushMessage message) => _pending.Add(message);
 
-    public void Enqueue(MandatorySmsMessage message) => _pendingSms.Add(message);
+    /// <summary>Mandatory SMS are dropped instead of queued: the demo seed, when its sender could reach a real phone.</summary>
+    public bool DropsMandatorySms { get; set; }
+
+    public void Enqueue(MandatorySmsMessage message)
+    {
+        if (!DropsMandatorySms)
+        {
+            _pendingSms.Add(message);
+        }
+    }
 
     public IReadOnlyList<PushMessage> TakeAll()
     {

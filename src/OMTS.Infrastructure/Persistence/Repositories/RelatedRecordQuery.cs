@@ -33,6 +33,12 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
 
     public Task<RelatedRecordLocation?> FindAsync(string recordType, Guid recordId, CancellationToken cancellationToken)
     {
+        // No zone (PM 03/11): the Owner opens it, and the trader of its customer profile.
+        if (recordType == RelatedRecordTypes.PurchaseRequest)
+        {
+            return FindPurchaseRequestAsync(recordId, cancellationToken);
+        }
+
         var entity = Aliases.TryGetValue(recordType, out var alias)
             ? db.Model.FindEntityType(alias)
             : db.Model.GetEntityTypes().FirstOrDefault(t =>
@@ -47,6 +53,12 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
             ? FindInZoneMethod.MakeGenericMethod(entity.ClrType, zoneType)
             : FindMethod.MakeGenericMethod(entity.ClrType);
         return (Task<RelatedRecordLocation?>)method.Invoke(this, [recordId, cancellationToken])!;
+    }
+
+    private async Task<RelatedRecordLocation?> FindPurchaseRequestAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var traders = await db.PurchaseRequests.AsNoTracking().Where(r => r.Id == id).Select(r => r.Customer.AccountId).ToListAsync(cancellationToken);
+        return traders.Count == 0 ? null : new RelatedRecordLocation(null, traders[0]);
     }
 
     private async Task<RelatedRecordLocation?> FindRecordAsync<T>(Guid id, CancellationToken cancellationToken) where T : Entity =>

@@ -18,11 +18,13 @@ public sealed record NotificationTypeDefinition(
 /// <summary>
 /// The right needed to open the related record of a notification: <see cref="Action"/> on <see cref="Function"/> in
 /// the zone of the record, or the Cooperative Owner only when <see cref="Function"/> is null (Owner-only use cases
-/// such as FARM-03 and ACCOUNT-09).
+/// such as FARM-03 and ACCOUNT-09). With <see cref="OwnTraderRecord"/>, the trader the record belongs to (§I.4.4 †).
 /// </summary>
-public sealed record NotificationOpenAccess(string? Function, PermissionAction Action)
+public sealed record NotificationOpenAccess(string? Function, PermissionAction Action, bool OwnTraderRecord = false)
 {
     public static readonly NotificationOpenAccess OwnerOnly = new(null, PermissionAction.View);
+
+    public static readonly NotificationOpenAccess TraderOfTheRecord = new(null, PermissionAction.View, OwnTraderRecord: true);
 
     public static NotificationOpenAccess InZone(string function, PermissionAction action) => new(function, action);
 }
