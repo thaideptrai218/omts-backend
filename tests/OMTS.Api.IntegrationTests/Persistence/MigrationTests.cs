@@ -28,7 +28,7 @@ public class MigrationTests
     // Still read by live endpoints (raft lanes in use, end of employment) or replaced by later tickets.
     private static readonly string[] KeptTables =
     [
-        "CultivationCycles", "SeedingEvents", "SeedReceiptLots", "LaneSegments", "CultivationLogEntries",
+        "CultivationCycles", "SeedingEvents", "LaneSegments", "CultivationLogEntries",
         "Products", "Customers", "Contractors", "SeasonalWorkers", "WorkAssignments", "AttendanceRecords",
     ];
 

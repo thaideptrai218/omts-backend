@@ -17,6 +17,7 @@ using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
 using OMTS.Application.Features.Purchasing.Suppliers;
+using OMTS.Application.Features.ReceivingBankAccounts;
 using OMTS.Application.Features.Sales.Customers;
 using OMTS.Application.Features.Sales.Products;
 using OMTS.Application.Features.Verification;
@@ -46,6 +47,7 @@ public static class DependencyInjection
         services.AddScoped<AuditLogService>();
         services.AddScoped<StatusChangeService>();
         services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
+        services.AddScoped<MandatorySmsQueue>();
         services.AddScoped<OwnerActorRecipientFilter>();
         services.AddScoped<NotificationInboxService>();
         services.AddScoped<RowVersionGuard>();
@@ -78,11 +80,17 @@ public static class DependencyInjection
         services.AddScoped<CooperativeCertificationService>();
         services.AddScoped<EmployeeService>();
 
+        // DEBT-01 receiving bank account
+        services.AddScoped<ReceivingAccountAcceptance>();
+        services.AddScoped<ReceivingBankAccountService>();
+
         // FARM-02 zones, FARM-03 zone licenses, FARM-04 rafts
         services.AddScoped<FarmingLookupAccess>();
         services.AddScoped<FarmingZoneService>();
         services.AddScoped<ZoneLicenseService>();
+        // GFR-03 expiry reminders of zone licenses and cooperative certifications
         services.AddScoped<ZoneLicenseReminderService>();
+        services.AddScoped<CertificationReminderService>();
         services.AddScoped<RaftService>();
         services.AddScoped<RaftConditionService>();
         services.AddScoped<UploadedFileSaver>();
@@ -96,10 +104,14 @@ public static class DependencyInjection
         services.AddScoped<ProductReadService>();
         services.AddScoped<CustomerService>();
         services.AddScoped<CustomerMergeService>();
+        services.AddScoped<PurchaseReceiptAccess>();
         services.AddScoped<PurchaseReceiptValidator>();
         services.AddScoped<PurchaseReceiptViews>();
+        services.AddScoped<PurchaseReceiptNotifications>();
         services.AddScoped<PurchaseReceiptService>();
         services.AddScoped<PurchaseReceiptCancellationService>();
+        services.AddScoped<PurchaseReceiptCorrectionService>();
+        services.AddScoped<PurchaseReceiptCopyService>();
         services.AddScoped<PurchaseReturnService>();
         services.AddScoped<PurchaseReceiptQueryService>();
         services.AddScoped<SupplierPaymentService>();

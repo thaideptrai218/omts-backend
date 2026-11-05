@@ -39,7 +39,6 @@ public class DemoDataSeedTests
         ("FarmingInputItems", db => db.FarmingInputItems.CountAsync()),
         ("PurchaseReceipts", db => db.PurchaseReceipts.CountAsync()),
         ("PurchaseReceiptLines", db => db.PurchaseReceiptLines.CountAsync()),
-        ("SeedReceiptLots", db => db.SeedReceiptLots.CountAsync()),
         ("SupplierPayments", db => db.SupplierPayments.CountAsync()),
         ("PurchaseReturns", db => db.PurchaseReturns.CountAsync()),
         ("WaterMeasurements", db => db.WaterMeasurements.CountAsync()),
@@ -118,14 +117,21 @@ public class DemoDataSeedTests
         Assert.All(
             new[] { cooperative.TaxCode, cooperative.SocialLink, cooperative.IntroductionVi, cooperative.IntroductionEn, cooperative.LogoUrl, cooperative.CoverPhotoUrl },
             value => Assert.False(string.IsNullOrEmpty(value)));
-        var certification = await db.CooperativeCertifications.AsNoTracking().SingleAsync();
-        Assert.Equal(cooperative.Id, certification.CooperativeId);
-        Assert.NotNull(certification.FileUrl);
-        Assert.True(certification.ExpiryDate > DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)).AddDays(30));
+        // Two certifications with their files: one Valid and one Expiring soon (GFR-03 reminds it).
+        var certifications = await db.CooperativeCertifications.AsNoTracking().OrderBy(c => c.ExpiryDate).ToListAsync();
+        Assert.Equal(2, certifications.Count);
+        Assert.All(certifications, c => Assert.Equal(cooperative.Id, c.CooperativeId));
+        Assert.All(certifications, c => Assert.NotNull(c.FileUrl));
+        var businessToday = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+        Assert.InRange(certifications[0].ExpiryDate!.Value, businessToday, businessToday.AddDays(30));
+        Assert.True(certifications[1].ExpiryDate > businessToday.AddDays(30));
 
         Assert.Equal(3, await db.FarmingZones.CountAsync());
         Assert.Equal(1, await db.FarmingZones.CountAsync(z => z.StatusId == StatusIds.Usage.Discontinued));
-        Assert.Equal(6, await db.ZoneComplianceDocuments.CountAsync());
+        // One zone per license: DEMO-01 an expired license replaced by one expiring soon, DEMO-02 a valid one and an older expired one.
+        Assert.Equal(4, await db.ZoneComplianceDocuments.CountAsync());
+        Assert.Equal(1, await db.ZoneComplianceDocuments.CountAsync(d => d.ReplacesDocumentId != null));
+        Assert.Equal(2, await db.ZoneComplianceDocuments.Select(d => d.ZoneId).Distinct().CountAsync());
         Assert.Equal(20, await db.Rafts.CountAsync());
         Assert.Equal(8, await db.Employees.CountAsync());
         Assert.Equal(1, await db.Employees.CountAsync(e => e.StatusId == StatusIds.Employee.Left));
@@ -146,7 +152,13 @@ public class DemoDataSeedTests
         Assert.Equal(2, statuses.Single(s => s.Key == StatusIds.PurchaseReceipt.Cancelled).Count);
         Assert.Equal(1, await db.PurchaseReturns.CountAsync());
         Assert.True(await db.SupplierPayments.AnyAsync(p => p.StatusId == StatusIds.SupplierPayment.Recorded));
-        Assert.True(await db.PurchaseReceipts.AnyAsync(r => r.DiscountAmount > 0));
+        // PN codes; Material lines name their raft, seed lines may; one amount keeps its dongs (BR-PURCHASE-02).
+        Assert.True(await db.PurchaseReceipts.AllAsync(r => r.Code.StartsWith("PN")));
+        Assert.True(await db.PurchaseReceiptLines.AnyAsync(l => l.RaftId != null && l.Item!.Group == InputItemGroup.Seed));
+        Assert.True(await db.PurchaseReceiptLines.Where(l => l.Item!.Group == InputItemGroup.Material && l.Receipt.StatusId != StatusIds.PurchaseReceipt.Draft).AllAsync(l => l.RaftId != null));
+        Assert.True(await db.PurchaseReceiptLines.AnyAsync(l => l.LineAmount % 1000 != 0));
+        // The Owner was told of each completed receipt (MSG-PURCHASE-01), cancelled ones included.
+        Assert.Equal(18, await db.Notifications.Where(n => n.Type == NotificationTypes.PurchaseReceiptCompleted).Select(n => n.RelatedRecordId).Distinct().CountAsync());
 
         // Dates are relative to today in UTC+7, whenever the seed runs.
         var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime);

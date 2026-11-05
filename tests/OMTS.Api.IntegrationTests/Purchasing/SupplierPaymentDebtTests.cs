@@ -17,7 +17,7 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
     public async Task Bad_amount_method_date_receipt_or_supplier_return_MSG01_and_non_thousands_MSG41()
     {
         var world = await factory.WorldAsync();
-        var receipt = await world.CompletedAsync(0, 0, new LineBody(world.Other, 10, 100_000));
+        var receipt = await world.CompletedAsync(new LineBody(world.Other, 10, 100_000));
         var valid = new PaymentBody { SupplierId = world.SupplierId, ReceiptId = receipt.Id(), Amount = 100_000 };
 
         foreach (var (body, field) in new (PaymentBody, string)[]
@@ -46,7 +46,7 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
     public async Task A_payment_never_exceeds_the_receipt_outstanding_and_only_completed_receipts_of_the_supplier_are_paid()
     {
         var world = await factory.WorldAsync();
-        var receipt = await world.CompletedAsync(0, 400_000, new LineBody(world.Other, 10, 100_000));
+        var receipt = await world.PaidAsync(400_000, new LineBody(world.Other, 10, 100_000));
         var exact = await (await world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = receipt.Id(), Amount = 600_000, ReferenceCode = "FT-123" }))
             .ReadAsync(HttpStatusCode.Created);
         Assert.Equal(("FT-123", "Recorded", receipt.GetProperty("code").GetString()), (exact.GetProperty("referenceCode").GetString(), exact.GetProperty("status").GetString(), exact.GetProperty("receiptCode").GetString()));
@@ -56,8 +56,8 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal(0, problem.Money("limit"));
 
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 100_000)));
-        var cancelled = await world.CompletedAsync(0, 0, new LineBody(world.Other, 1, 100_000));
-        await (await world.Owner.CancelAsync(cancelled.Id(), "Wrong", null)).ReadAsync(HttpStatusCode.OK);
+        var cancelled = await world.CompletedAsync(new LineBody(world.Other, 1, 100_000));
+        await (await world.Owner.CancelAsync(cancelled.Id(), "Wrong")).ReadAsync(HttpStatusCode.OK);
         foreach (var id in new[] { draft.Id(), cancelled.Id() })
         {
             await (await world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = id, Amount = 1000 })).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
@@ -68,14 +68,14 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal("Receipt", await foreign.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
 
         var audit = await factory.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.RecordId == exact.Id()));
-        Assert.Equal(("SupplierPayment.Recorded", world.Zone.Id), (audit.Action, audit.ZoneId));
+        Assert.Equal(("SupplierPayment.Recorded", (Guid?)null), (audit.Action, audit.ZoneId));
     }
 
     [Fact]
     public async Task A_repeated_deduplication_key_returns_the_first_payment_even_with_other_values_and_creates_nothing()
     {
         var world = await factory.WorldAsync();
-        var receipt = await world.CompletedAsync(0, 0, new LineBody(world.Other, 10, 100_000));
+        var receipt = await world.CompletedAsync(new LineBody(world.Other, 10, 100_000));
         var key = $"pay-{Guid.NewGuid():N}";
         var first = await (await world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = receipt.Id(), Amount = 200_000, DeduplicationKey = key }))
             .ReadAsync(HttpStatusCode.Created);
@@ -97,12 +97,12 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
     public async Task A_detached_payment_is_allocated_once_to_a_completed_receipt_of_the_same_supplier_within_its_outstanding()
     {
         var world = await factory.WorldAsync();
-        var cancelled = await world.CompletedAsync(0, 300_000, new LineBody(world.Other, 10, 100_000));
-        await (await world.Owner.CancelAsync(cancelled.Id(), "Entered twice", false)).ReadAsync(HttpStatusCode.OK);
+        var cancelled = await world.PaidAsync(300_000, new LineBody(world.Other, 10, 100_000));
+        await (await world.Owner.CancelAsync(cancelled.Id(), "Entered twice")).ReadAsync(HttpStatusCode.OK);
         var paymentId = await factory.QueryAsync(db => db.SupplierPayments.Where(p => p.SupplierId == world.SupplierId).Select(p => p.Id).SingleAsync());
 
-        var small = await world.CompletedAsync(0, 0, new LineBody(world.Other, 2, 100_000));
-        var big = await world.CompletedAsync(0, 0, new LineBody(world.Other, 5, 100_000));
+        var small = await world.CompletedAsync(new LineBody(world.Other, 2, 100_000));
+        var big = await world.CompletedAsync(new LineBody(world.Other, 5, 100_000));
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 5, 100_000)));
         var otherSupplier = await world.Owner.CreateSupplierAsync();
         var foreign = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 5, 100_000)) with { SupplierId = otherSupplier, Complete = true });
@@ -120,34 +120,22 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
 
         var allocated = await (await Allocate(big.Id())).ReadAsync(HttpStatusCode.OK);
         Assert.Equal((big.Id(), big.GetProperty("code").GetString()), (allocated.GetProperty("receiptId").GetGuid(), allocated.GetProperty("receiptCode").GetString()));
-        Assert.Equal(200_000, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{big.Id()}")).Money("outstanding"));
         Assert.Equal(400_000, await DebtAsync(world));
         await (await Allocate(small.Id())).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
 
         var audit = await factory.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.RecordId == paymentId && e.Action == "SupplierPayment.Allocated"));
-        Assert.Equal(world.Zone.Id, audit.ZoneId);
+        Assert.Null(audit.ZoneId);
         Assert.Contains(big.Id().ToString(), audit.After);
         await (await world.Owner.PostAsJsonAsync($"/api/supplier-payments/{Guid.NewGuid()}/allocate", new { receiptId = big.Id() })).ReadAsync(HttpStatusCode.NotFound);
     }
 
-    [Fact]
-    public async Task A_cancelled_payment_cannot_be_allocated()
-    {
-        var world = await factory.WorldAsync();
-        var receipt = await world.CompletedAsync(0, 100_000, new LineBody(world.Other, 1, 100_000));
-        await (await world.Owner.CancelAsync(receipt.Id(), "Wrong", true)).ReadAsync(HttpStatusCode.OK);
-        var paymentId = await factory.QueryAsync(db => db.SupplierPayments.Where(p => p.SupplierId == world.SupplierId).Select(p => p.Id).SingleAsync());
-        var target = await world.CompletedAsync(0, 0, new LineBody(world.Other, 1, 100_000));
-        await (await world.Owner.PostAsJsonAsync($"/api/supplier-payments/{paymentId}/allocate", new { receiptId = target.Id() })).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
-    }
-
-    // Done when: supplier debt equals the formula in every INP-04/05 scenario.
+    // Done when: supplier debt equals the formula in every scenario: payments are kept by a cancellation (BR-PURCHASE-09).
     [Fact]
     public async Task Supplier_debt_follows_payments_returns_cancellations_and_allocations()
     {
         var world = await factory.WorldAsync();
-        var a = await world.CompletedAsync(0, 200_000, new LineBody(world.Other, 10, 100_000));      // payable 1,000,000, outstanding 800,000
-        var b = await world.CompletedAsync(100_000, 0, new LineBody(world.Seed, 100, 10_000));      // payable 900,000, outstanding 900,000
+        var a = await world.PaidAsync(200_000, new LineBody(world.Other, 10, 100_000));      // total 1,000,000, outstanding 800,000
+        var b = await world.CompletedAsync(new LineBody(world.Seed, 100, 9_000));            // total 900,000, outstanding 900,000
         await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 5, 100_000)));    // a Draft never counts
         Assert.Equal(1_700_000, await DebtAsync(world));
 
@@ -163,21 +151,16 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
             .ReadAsync(HttpStatusCode.Created);
         Assert.Equal(1_310_000, await DebtAsync(world));
 
-        // D fully paid now, cancelled keeping the payment: the 400,000 becomes unallocated and lowers the debt.
-        var d = await world.CompletedAsync(0, 400_000, new LineBody(world.Other, 1, 400_000));
+        // D fully paid, cancelled: the payment is kept (never cancelled with a receipt), so it lowers the debt.
+        var d = await world.PaidAsync(400_000, new LineBody(world.Other, 1, 400_000));
         Assert.Equal(1_310_000, await DebtAsync(world));
-        await (await world.Owner.CancelAsync(d.Id(), "Duplicate", false)).ReadAsync(HttpStatusCode.OK);
+        await (await world.Owner.CancelAsync(d.Id(), "Duplicate")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(910_000, await DebtAsync(world));
 
         // Allocating it to B moves it from unallocated to paid: the debt does not change.
         var detached = await factory.QueryAsync(db => db.SupplierPayments.Where(p => p.SupplierId == world.SupplierId && p.ReceiptId == null).Select(p => p.Id).SingleAsync());
         await (await world.Owner.PostAsJsonAsync($"/api/supplier-payments/{detached}/allocate", new { receiptId = b.Id() })).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(910_000, await DebtAsync(world));
-
-        // E cancelled with its payment cancelled leaves no trace in the debt.
-        var e = await world.CompletedAsync(0, 100_000, new LineBody(world.Other, 3, 100_000));
-        Assert.Equal(1_110_000, await DebtAsync(world));
-        await (await world.Owner.CancelAsync(e.Id(), "Wrong supplier", true)).ReadAsync(HttpStatusCode.OK);
 
         var detail = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}/debt");
         var totals = detail.GetProperty("totals");
@@ -196,8 +179,8 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
     public async Task A_supplier_with_only_an_unallocated_payment_is_in_the_debt_list_with_a_negative_debt()
     {
         var world = await factory.WorldAsync();
-        var receipt = await world.CompletedAsync(0, 250_000, new LineBody(world.Other, 1, 250_000));
-        await (await world.Owner.CancelAsync(receipt.Id(), "Wrong", false)).ReadAsync(HttpStatusCode.OK);
+        var receipt = await world.PaidAsync(250_000, new LineBody(world.Other, 1, 250_000));
+        await (await world.Owner.CancelAsync(receipt.Id(), "Wrong")).ReadAsync(HttpStatusCode.OK);
 
         var list = await world.Owner.GetFromJsonAsync<JsonElement>("/api/suppliers/debts");
         var row = list.EnumerateArray().Single(r => r.GetProperty("supplierId").GetGuid() == world.SupplierId);
@@ -206,12 +189,11 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
     }
 
     [Fact]
-    public async Task Payment_history_filters_by_supplier_receipt_zone_method_status_and_dates_with_paging_and_total()
+    public async Task Payment_history_filters_by_supplier_receipt_method_status_and_dates_with_paging_and_total()
     {
         var world = await factory.WorldAsync();
-        var a = await world.CompletedAsync(0, 100_000, new LineBody(world.Other, 10, 100_000));
-        var (otherZone, _) = await factory.ZoneWithRaftAsync();
-        var b = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 10, 100_000)) with { ZoneId = otherZone.Id, Complete = true });
+        var a = await world.PaidAsync(100_000, new LineBody(world.Other, 10, 100_000));
+        var b = await world.CompletedAsync(new LineBody(world.Other, 10, 100_000));
         await (await world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = a.Id(), Amount = 200_000, PaymentDate = Today.AddDays(-3) })).ReadAsync(HttpStatusCode.Created);
         await (await world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = b.Id(), Amount = 300_000, Method = "Other" })).ReadAsync(HttpStatusCode.Created);
 
@@ -220,7 +202,7 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
 
         Assert.Equal((3, 600_000m), Summary(await Search("")));
         Assert.Equal((2, 300_000m), Summary(await Search($"receiptId={a.Id()}")));
-        Assert.Equal((1, 300_000m), Summary(await Search($"zoneId={otherZone.Id}")));
+        Assert.Equal((1, 300_000m), Summary(await Search($"receiptId={b.Id()}")));
         Assert.Equal((1, 300_000m), Summary(await Search("method=Other")));
         Assert.Equal((1, 200_000m), Summary(await Search($"from={Today.AddDays(-4):yyyy-MM-dd}&to={Today.AddDays(-2):yyyy-MM-dd}")));
         Assert.Equal((3, 600_000m), Summary(await Search($"statusId={StatusIds.SupplierPayment.Recorded}")));
@@ -235,7 +217,7 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
     public async Task Supplier_payments_follow_the_accountant_role_in_any_zone_and_the_accountant_only_reads_receipts()
     {
         var world = await factory.WorldAsync();
-        var receipt = await world.CompletedAsync(0, 0, new LineBody(world.Seed, 10, 100_000));
+        var receipt = await world.CompletedAsync(new LineBody(world.Seed, 10, 100_000));
         var body = new PaymentBody { SupplierId = world.SupplierId, ReceiptId = receipt.Id(), Amount = 100_000 };
         var (otherZone, _) = await factory.ZoneWithRaftAsync();
 
@@ -258,16 +240,16 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
         await (await accountant.GetAsync("/api/suppliers/debts")).ReadAsync(HttpStatusCode.OK);
         await (await accountant.GetAsync($"/api/purchase-receipts/{receipt.Id()}")).ReadAsync(HttpStatusCode.OK);
         await (await accountant.GetAsync("/api/purchase-receipts")).ReadAsync(HttpStatusCode.OK);
-        // View only (§I.4.4 PURCHASE-03 R): no export.
-        Assert.Equal(HttpStatusCode.Forbidden, (await accountant.GetAsync("/api/purchase-receipts/export")).StatusCode);
+        // §I.4.4 PURCHASE-03 R, which includes exporting to a file.
+        Assert.Equal(HttpStatusCode.OK, (await accountant.GetAsync("/api/purchase-receipts/export")).StatusCode);
         await (await accountant.GetAsync("/api/farming-input-items")).ReadAsync(HttpStatusCode.OK);
 
         // Read-only on PURCHASE-01…03 and PURCHASE-06.
         await (await accountant.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 1000)))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        await (await accountant.CancelAsync(receipt.Id(), "x", true)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await accountant.CancelAsync(receipt.Id(), "x")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await accountant.PostReturnAsync(receipt.Id(), new ReturnBody { DebtReductionAmount = 100_000, Lines = [new ReturnLineBody(receipt.LineOf(world.Seed), 1)] }))
             .ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        await (await accountant.PostAsync($"/api/purchase-receipts/{receipt.Id()}/copy", null)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await accountant.GetAsync($"/api/purchase-receipts/{receipt.Id()}/copy")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
     }
 
     private async Task<decimal> DebtAsync(PurchasingWorld world) =>

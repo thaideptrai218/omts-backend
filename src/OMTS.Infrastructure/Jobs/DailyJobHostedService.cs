@@ -5,11 +5,12 @@ using OMTS.Application.Common;
 namespace OMTS.Infrastructure.Jobs;
 
 /// <summary>
-/// Runs a job once a day at <see cref="IDailyJobOptions.RunAt"/> business local time (UTC+7), shared by the zone
-/// license reminder and the overdue water measurement reminder. With <see cref="IDailyJobOptions.CatchUpOnStart"/> a
-/// host started after today's run time runs it once at start. A failed run is logged and the next one is tomorrow;
-/// the jobs send each notice once per period, so a catch-up or a missed day never sends anything twice. Stopping the
-/// host ends the job without an error, even when the run that was in progress fails.
+/// Runs a job once a day at <see cref="IDailyJobOptions.RunAt"/> business local time (UTC+7), shared by every daily job:
+/// the expiry reminder (zone licenses and certifications), the overdue water measurement reminder and the orphan file
+/// clean-up. With <see cref="IDailyJobOptions.CatchUpOnStart"/> a host started after today's run time runs it once at
+/// start; with <see cref="IDailyJobOptions.Enabled"/> false it never runs. A failed run is logged and the next one is
+/// tomorrow; the jobs are idempotent, so a catch-up or a missed day never sends anything twice. Stopping the host ends
+/// the job without an error, even when the run that was in progress fails.
 /// </summary>
 internal abstract class DailyJobHostedService(IDailyJobOptions options, TimeProvider timeProvider, ILogger logger) : BackgroundService
 {
@@ -18,11 +19,19 @@ internal abstract class DailyJobHostedService(IDailyJobOptions options, TimeProv
 
     protected ILogger Logger => logger;
 
+    /// <summary>The clock the schedule runs on (a test clock in tests).</summary>
+    protected TimeProvider Clock => timeProvider;
+
     /// <summary>One run for the business date <paramref name="today"/>.</summary>
     protected abstract Task RunOnceAsync(DateOnly today, CancellationToken cancellationToken);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!options.Enabled)
+        {
+            return;
+        }
+
         var catchUp = options.CatchUpOnStart && IsPastRunTime(timeProvider.GetUtcNow(), options.RunAt);
         while (!stoppingToken.IsCancellationRequested)
         {
