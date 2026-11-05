@@ -1,26 +1,13 @@
+using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
-using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
-/// <summary>A recorded lane segment with the names and codes the raft condition view shows.</summary>
-public sealed record LaneSegmentDetail(
-    Guid Id,
-    Guid LaneId,
-    LaneSegmentType Type,
-    decimal From,
-    decimal To,
-    DateOnly Date,
-    string? RecordedBy,
-    string? ConfirmedBy,
-    Guid? SeedingEventId,
-    string? SeedLotCode,
-    string? WriteOffReason);
-
 public interface IRaftRepository
 {
-    /// <summary>Raft with its zone, lanes and layout versions, tracked for editing.</summary>
+    /// <summary>Raft with its zone, lanes and photos, tracked for editing.</summary>
     Task<Raft?> GetForEditAsync(Guid raftId, CancellationToken cancellationToken);
 
     /// <summary>The rafts with these ids and their zones, untracked (rafts named on purchase receipt lines).</summary>
@@ -29,29 +16,23 @@ public interface IRaftRepository
     /// <summary>Another raft of the zone with this code (ignoring case).</summary>
     Task<Raft?> FindByCodeAsync(Guid zoneId, string code, Guid? exceptRaftId, CancellationToken cancellationToken);
 
-    /// <summary>Rafts of a zone, optional status, ordered by code.</summary>
+    /// <summary>Codes of every raft of the zone, Discontinued ones included (their codes stay reserved, GBR-03).</summary>
+    Task<IReadOnlyList<string>> CodesOfZoneAsync(Guid zoneId, CancellationToken cancellationToken);
+
+    /// <summary>Rafts of a zone with their lanes, optional status, ordered by code.</summary>
     Task<IReadOnlyList<Raft>> ListByZoneAsync(Guid zoneId, int? statusId, CancellationToken cancellationToken);
+
+    /// <summary>Id, code and zone code of the rafts of these zones, Discontinued ones included, by zone code and code.</summary>
+    Task<IReadOnlyList<RaftLookupItem>> ListForLookupAsync(PermittedZones permitted, CancellationToken cancellationToken);
 
     Task<CultivationCycle?> GetOpenCycleAsync(Guid raftId, CancellationToken cancellationToken);
 
-    /// <summary>The given cycle of the raft, or the cycle that was open on the date.</summary>
-    Task<CultivationCycle?> FindCycleAsync(Guid raftId, Guid? cycleId, DateOnly date, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Lane numbers among <paramref name="laneIds"/> that records point to: a segment in any cycle or a
-    /// cultivation log entry (both keep their lane, so such a lane cannot be removed).
-    /// </summary>
-    Task<IReadOnlyList<int>> LanesInUseAsync(IReadOnlyCollection<Guid> laneIds, CancellationToken cancellationToken);
-
-    /// <summary>Segments of a cycle dated up to <paramref name="date"/>.</summary>
-    Task<IReadOnlyList<LaneSegmentDetail>> SegmentsAsync(Guid cycleId, DateOnly date, CancellationToken cancellationToken);
-
     void Add(Raft raft);
 
+    /// <summary>A new lane of a raft being edited. Lanes are never deleted (BR-FARM-04).</summary>
     void AddLane(Lane lane);
 
-    /// <summary>Lanes without segments only (checked by the caller).</summary>
-    void RemoveLane(Lane lane);
+    void AddPhoto(RaftPhoto photo);
 
-    void AddLayoutVersion(RaftLayoutVersion version);
+    void RemovePhoto(RaftPhoto photo);
 }

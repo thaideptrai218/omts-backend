@@ -1,6 +1,4 @@
 using OMTS.Application.Features.Farming.Licenses;
-using OMTS.Application.Features.Farming.Rafts;
-using OMTS.Domain.Enums;
 
 namespace OMTS.Application.UnitTests.Features.Farming;
 
@@ -39,51 +37,4 @@ public class FarmingRulesTests
         Assert.Equal(LicenseState.Replaced, LicenseStateRules.StateOn(new LicenseFacts(Today.AddYears(-1), Today.AddDays(5), Today), Today));
         Assert.Equal(LicenseState.ExpiringSoon, LicenseStateRules.StateOn(new LicenseFacts(Today.AddYears(-1), Today.AddDays(5), Today), Today.AddDays(-1)));
     }
-
-    // FARM-04 done criterion: seeded 0–40, harvested 0–10, written off 30–40 on a 50 m lane.
-    [Fact]
-    public void Lane_portions_follow_seeding_harvest_and_write_off()
-    {
-        var seeded = Segment(LaneSegmentType.Seeded, 0, 40);
-        var harvested = Segment(LaneSegmentType.Harvested, 0, 10);
-        var writtenOff = Segment(LaneSegmentType.WrittenOff, 30, 40);
-
-        var portions = LaneConditionRules.Portions(50, [seeded, harvested, writtenOff]);
-
-        Assert.Equal(
-            [(0m, 10m, PortionCondition.Harvested), (10m, 30m, PortionCondition.Growing), (30m, 40m, PortionCondition.WrittenOff), (40m, 50m, PortionCondition.NotSeeded)],
-            portions.Select(p => (p.From, p.To, p.Condition)));
-        Assert.Equal(new[] { seeded.Id, harvested.Id }.Order(), portions[0].SegmentIds.Order());
-        Assert.Equal(LaneSummary.PartiallyHarvested, LaneConditionRules.Summarize(portions));
-    }
-
-    [Fact]
-    public void Planned_harvest_is_no_condition_and_overlapping_seedings_merge()
-    {
-        var portions = LaneConditionRules.Portions(20, [
-            Segment(LaneSegmentType.Seeded, 0, 12),
-            Segment(LaneSegmentType.Seeded, 8, 20),
-            Segment(LaneSegmentType.PlannedHarvest, 0, 20),
-        ]);
-
-        Assert.All(portions, p => Assert.Equal(PortionCondition.Growing, p.Condition));
-        Assert.Equal(0m, portions[0].From);
-        Assert.Equal(20m, portions[^1].To);
-        Assert.Equal(LaneSummary.Growing, LaneConditionRules.Summarize(portions));
-    }
-
-    [Fact]
-    public void Lane_without_segments_is_one_not_seeded_portion_and_a_finished_lane_is_fully_harvested()
-    {
-        var empty = LaneConditionRules.Portions(30, []);
-        var finished = LaneConditionRules.Portions(30, [
-            Segment(LaneSegmentType.Seeded, 0, 30), Segment(LaneSegmentType.Harvested, 0, 20), Segment(LaneSegmentType.WrittenOff, 20, 30),
-        ]);
-
-        Assert.Equal([(0m, 30m, PortionCondition.NotSeeded)], empty.Select(p => (p.From, p.To, p.Condition)));
-        Assert.Equal(LaneSummary.NotSeeded, LaneConditionRules.Summarize(empty));
-        Assert.Equal(LaneSummary.FullyHarvested, LaneConditionRules.Summarize(finished));
-    }
-
-    private static SegmentFact Segment(LaneSegmentType type, decimal from, decimal to) => new(Guid.NewGuid(), type, from, to, Today);
 }

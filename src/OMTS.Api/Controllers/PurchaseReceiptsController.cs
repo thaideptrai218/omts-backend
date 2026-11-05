@@ -4,6 +4,7 @@ using OMTS.Api.Common;
 using OMTS.Api.Filters;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Application.Features.Purchasing.Receipts;
 
 namespace OMTS.Api.Controllers;
@@ -38,6 +39,13 @@ public sealed class PurchaseReceiptsController(
     [ProducesResponseType<RaftMaterialCostResult>(StatusCodes.Status200OK)]
     public async Task<IActionResult> RaftMaterialCosts([FromQuery] PurchaseReceiptQuery query, CancellationToken cancellationToken) =>
         (await queries.RaftMaterialCostsAsync(query, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>Picker of the raft filter: id, code and zone code of every raft, Discontinued ones included.</summary>
+    [HttpGet(Receipts + "/raft-lookup")]
+    [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.View, PermissionScope.NoZone)]
+    [ProducesResponseType<IReadOnlyList<RaftLookupItem>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> RaftLookup(CancellationToken cancellationToken) =>
+        Ok(await queries.RaftLookupAsync(cancellationToken));
 
     [HttpGet(Receipts + "/export")]
     [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Export, PermissionScope.NoZone)]

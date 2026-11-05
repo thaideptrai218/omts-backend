@@ -71,10 +71,11 @@ public sealed class FarmingZoneService(
     public async Task<IReadOnlyList<MapZone>> MapAsync(bool includeDiscontinued, CancellationToken cancellationToken)
     {
         var visible = await lookupAccess.VisibleZonesAsync(cancellationToken);
+        var raftZones = await lookupAccess.VisibleRaftZonesAsync(cancellationToken);
         var found = await zones.ListForMapAsync(includeDiscontinued, visible, cancellationToken);
         return found.Select(z => new MapZone(
             z.Id, z.Code, z.Name, z.Latitude, z.Longitude, z.StatusId, statusCatalog.DisplayNameOf(z.StatusId),
-            z.Rafts.OrderBy(r => r.Code).Select(r => new MapRaft(r.Id, r.Code, r.Latitude, r.Longitude)).ToList())).ToList();
+            raftZones.Allows(z.Id) ? z.Rafts.OrderBy(r => r.Code).Select(r => new MapRaft(r.Id, r.Code, r.Latitude, r.Longitude)).ToList() : [])).ToList();
     }
 
     /// <summary>The proposed code of a new zone (KV01, KV02…; GBR-03); the Owner may replace it.</summary>
@@ -276,9 +277,9 @@ public sealed class FarmingZoneService(
         var code = check.Required(request.Code, "Code", SequentialCodes.ZoneCodeMaxLength);
         var name = check.Required(request.Name, "Name", 200);
         var location = check.Required(request.Location, "Location", 500);
-        check.Coordinates(request.Latitude, request.Longitude, required: true);
+        var (latitude, longitude) = check.Coordinates(request.Latitude, request.Longitude, required: true);
         check.Check(request.Area is > 0 and < 100_000_000_000_000m, "Area");
-        values = new ZoneValues(code, name, location, request.Latitude, request.Longitude, request.Area);
+        values = new ZoneValues(code, name, location, latitude, longitude, request.Area);
         return check;
     }
 
