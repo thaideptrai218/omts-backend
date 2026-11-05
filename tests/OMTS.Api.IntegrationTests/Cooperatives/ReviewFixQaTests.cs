@@ -161,9 +161,9 @@ public class ReviewFixQaTests
         Assert.Equal(0, await api.QueryAsync(db => db.AuditEvents.CountAsync(e => e.Action == "Account.OwnerRightsRefused")));
     }
 
-    // On SQL Server a real edit changes the row version: the version read before it is then stale for end and reinstate.
+    // On SQL Server a real edit changes the row version: the version read before it is then stale for end and resume.
     [SqlServerFact]
-    public async Task A_real_edit_makes_the_old_row_version_stale_for_end_and_reinstate()
+    public async Task A_real_edit_makes_the_old_row_version_stale_for_end_and_resume()
     {
         await using var database = SqlServerTestDatabase.Create();
         await using var api = await StartAsync(database);
@@ -174,7 +174,7 @@ public class ReviewFixQaTests
         var saved = await CreateAsync(owner, Profile(name, phone, zone.Id));
         var id = IdOf(saved);
         var oldVersion = RowVersionOf(saved);
-        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)).ToString("yyyy-MM-dd");
+        var today = Today().AddDays(-1).ToString("yyyy-MM-dd");
 
         var edited = await owner.PutAsJsonAsync($"/api/employees/{id}", Profile(name, phone, zone.Id, b =>
         {
@@ -182,17 +182,17 @@ public class ReviewFixQaTests
             b["rowVersion"] = oldVersion;
         }));
         var newVersion = RowVersionOf(await edited.Content.ReadFromJsonAsync<JsonElement>());
-        var staleEnd = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = today, rowVersion = oldVersion });
-        var ended = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = today, rowVersion = newVersion });
-        var staleReinstate = await owner.PostAsJsonAsync($"/api/employees/{id}/reinstate", new { rowVersion = oldVersion });
-        var reinstated = await owner.PostAsync($"/api/employees/{id}/reinstate", null);
+        var staleEnd = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { lastWorkingDay = today, rowVersion = oldVersion });
+        var ended = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { lastWorkingDay = today, rowVersion = newVersion });
+        var staleResume = await owner.PostAsJsonAsync($"/api/employees/{id}/resume", new { rowVersion = oldVersion });
+        var resumed = await owner.PostAsJsonAsync($"/api/employees/{id}/resume", new { rowVersion = await CurrentVersionAsync(owner, id) });
 
         Assert.Equal(HttpStatusCode.OK, edited.StatusCode);
         Assert.NotEqual(oldVersion, newVersion);
         Assert.Equal("MSG06", await staleEnd.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.OK, ended.StatusCode);
-        Assert.Equal("MSG06", await staleReinstate.ErrorCodeAsync());
-        Assert.Equal(HttpStatusCode.OK, reinstated.StatusCode);
+        Assert.Equal("MSG06", await staleResume.ErrorCodeAsync());
+        Assert.Equal(HttpStatusCode.OK, resumed.StatusCode);
     }
 
     // Blob storage (production provider) behind the same URLs: replaced and removed logos keep their URLs.

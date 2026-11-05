@@ -110,6 +110,7 @@ public class AuditSearchSqlServerQaTests
         await migrator.MigrateAsync(auditSearch);
         var account = new Account { Username = NewCode(), DisplayName = "Owner", SubjectType = SubjectType.CooperativeOwner };
         db.Accounts.Add(account);
+        // AuditSearch has no foreign key on the employee yet (EmployeesV2 adds it), and its Down drops the column with this value.
         db.AuditEvents.AddRange(
             new AuditEvent { Action = "A.Done", RecordType = "A", OccurredAt = DateTimeOffset.UtcNow, ActorAccountId = account.Id },
             new AuditEvent { Action = "A.Done", RecordType = "A", OccurredAt = DateTimeOffset.UtcNow, ActorEmployeeId = Guid.NewGuid() },

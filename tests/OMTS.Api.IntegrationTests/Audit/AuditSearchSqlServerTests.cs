@@ -60,8 +60,7 @@ public class AuditSearchSqlServerTests
         Assert.Equal(ExpectedIndexes.OrderBy(i => i.Key), indexes.OrderBy(i => i.Key));
         Assert.Equal(("uniqueidentifier", true), (columns["ActorEmployeeId"].Type, columns["ActorEmployeeId"].Nullable));
         Assert.False(columns.ContainsKey("ViewScope"));
-        // The employee has no foreign key yet (LABOR adds it).
-        Assert.Equal(["ActorAccountId"], foreignKeys);
+        Assert.Equal(["ActorAccountId", "ActorEmployeeId"], foreignKeys.Order());
     }
 
     [SqlServerFact]
