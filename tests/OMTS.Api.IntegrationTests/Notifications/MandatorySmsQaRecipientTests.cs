@@ -105,26 +105,25 @@ public class MandatorySmsQaRecipientTests(AuthApiFactory api) : IClassFixture<Au
         Assert.Single(api.SmsTo(secondOwner));
         Assert.Single(api.SmsTo(manager));
 
-        var corrected = await z.Owner.CorrectAsync(recorded.Id(), 9.5m, 20m);
+        var corrected = await z.Owner.CorrectAsync(recorded.Id(), 6.0m, 20m);
         Assert.Equal(HttpStatusCode.OK, corrected.StatusCode);
 
         Assert.Empty(api.SmsTo(z.OwnerAccount));
         Assert.Equal(2, api.SmsTo(secondOwner).Count);
     }
 
-    // BR-WATER-05 tells the same people "only when the result changes". feature/OMTS-219-water-correction brings that rule; until
-    // it merges, each correction that stays outside is one more SMS. Observation, not of this branch.
+    // BR-WATER-05 tells the same people "only when the result changes", so a new reading on the same side is no second SMS.
     [Fact]
-    public async Task Observation_a_correction_with_the_same_values_sends_a_second_sms_on_this_branch()
+    public async Task A_correction_that_stays_on_the_same_side_sends_no_second_sms()
     {
         var z = await api.ZoneAsync();
         var manager = await ManagerAsync(z.Zone);
         var id = (await z.RecordedAsync(9.1m, 20m)).Id();
 
-        var corrected = await z.Owner.CorrectAsync(id, 9.1m, 20m);
+        var corrected = await z.Owner.CorrectAsync(id, 9.5m, 20m);
 
         Assert.Equal(HttpStatusCode.OK, corrected.StatusCode);
-        Assert.Equal(2, api.SmsTo(manager).Count);
+        Assert.Single(api.SmsTo(manager));
     }
 
     // ACCOUNT-07, BR-ACCOUNT-11: a mandatory type cannot be turned off, so a stray stored choice must not turn the SMS off either.

@@ -78,6 +78,8 @@ internal sealed class MomentUnitOfWork(IUnitOfWork inner, RaceMoments moments) :
 
     public Task ReloadAsync(object entity, CancellationToken cancellationToken = default) => inner.ReloadAsync(entity, cancellationToken);
 
+    public void DiscardChanges() => inner.DiscardChanges();
+
     public void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion) => inner.ExpectRowVersion(entity, rowVersion);
 
     public void MarkChanged(AuditableEntity entity) => inner.MarkChanged(entity);
@@ -135,7 +137,7 @@ internal static class LaborSettingsQaKit
         api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IUnitOfWork>();
-            services.AddScoped<IUnitOfWork>(provider => new MomentUnitOfWork(new UnitOfWork(provider.GetRequiredService<OmtsDbContext>()), moments));
+            services.AddScoped<IUnitOfWork>(provider => new MomentUnitOfWork(new UnitOfWork(provider.GetRequiredService<OmtsDbContext>(), provider.GetRequiredService<OMTS.Infrastructure.Messaging.PushOutbox>()), moments));
             services.RemoveAll<IAttendanceSettingsRepository>();
             services.AddScoped<IAttendanceSettingsRepository>(provider => new MomentAttendanceSettings(new AttendanceSettingsRepository(provider.GetRequiredService<OmtsDbContext>()), moments));
         }));

@@ -7,7 +7,9 @@ namespace OMTS.Infrastructure.Persistence.Interceptors;
 
 /// <summary>
 /// Sends the queued push messages and mandatory SMS once the save has committed. A failure is logged and never rolls
-/// back the business change; a failed or cancelled save drops the queue so nothing unsaved is announced.
+/// back the business change; a failed or cancelled save drops the queue so nothing unsaved is announced. A row version
+/// conflict is not a failed save for EF Core: the queue stays with the rows the tracker still holds, so a retry by reload
+/// announces what it commits, and <see cref="OMTS.Application.Common.Interfaces.Persistence.IUnitOfWork.DiscardChanges"/> drops both.
 /// </summary>
 internal sealed class PushOutboxInterceptor(
     PushOutbox outbox, IPushSender pushSender, MandatorySmsDelivery mandatorySms, ILogger<PushOutboxInterceptor> logger)

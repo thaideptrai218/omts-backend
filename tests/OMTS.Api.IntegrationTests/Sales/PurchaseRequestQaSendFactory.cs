@@ -33,6 +33,8 @@ internal sealed class QaGatedUnitOfWork(IUnitOfWork inner, QaSaveGate gate) : IU
 
     public Task ReloadAsync(object entity, CancellationToken cancellationToken = default) => inner.ReloadAsync(entity, cancellationToken);
 
+    public void DiscardChanges() => inner.DiscardChanges();
+
     public void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion) => inner.ExpectRowVersion(entity, rowVersion);
 
     public void MarkChanged(AuditableEntity entity) => inner.MarkChanged(entity);
