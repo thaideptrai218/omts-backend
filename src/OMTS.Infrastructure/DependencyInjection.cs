@@ -74,6 +74,8 @@ public static class DependencyInjection
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<ICustomerReferences, CustomerReferences>();
         services.AddScoped<IProductRepository, ProductRepository>();
+        services.AddScoped<IPurchaseRequestRepository, PurchaseRequestRepository>();
+        services.AddScoped<ICooperativeOwnerQuery, CooperativeOwnerQuery>();
         services.AddScoped<ICooperativeRepository, CooperativeRepository>();
         services.AddScoped<IPushDeviceRepository, PushDeviceRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
@@ -173,6 +175,7 @@ public static class DependencyInjection
             SmsOptions.NoneProvider => ActivatorUtilities.CreateInstance<UnconfiguredSmsSender>(provider),
             var other => throw UnknownProvider(SmsOptions.SectionName, other),
         });
+        services.AddSingleton<ITraderMessageSender, SmsTraderMessageSender>();
         services.AddSingleton<IPushSender>(provider => provider.GetRequiredService<IOptions<PushOptions>>().Value.Provider switch
         {
             PushOptions.FakeProvider => provider.GetRequiredService<FakePushSender>(),

@@ -26,16 +26,43 @@ internal static class NotificationSmsLayouts
     private const int LicenseTypeMinimum = 12;
     private const int LicenseNumberMinimum = 20;
     private const int CertificationNameMinimum = 12;
+    private const int NoteMinimum = 12;
+    private const int CustomerMinimum = 12;
+    private const int ProductMinimum = 12;
 
     private const string CheckTheWater = " Please check the water.";
     private const string RenewIt = " Please renew it and record the new one.";
+    private const string AskTheZoneManager = " Please ask the Zone Manager to check the oysters, then respond.";
 
     public static NotificationSmsLayout? Of(UserMessage message) => (message.Code, message.Parameters) switch
     {
         (MessageCodes.Water03, { } parameters) => WaterAlert(parameters),
         (MessageCodes.Farm01 or MessageCodes.Farm02, { } parameters) => License(parameters) ?? Certification(parameters),
+        (MessageCodes.Sale01, { } parameters) => PurchaseRequestNew(parameters),
         _ => null,
     };
+
+    // The note gives way first, then the customer, then the product; the kg and the pickup date are no free text and stay.
+    private static NotificationSmsLayout? PurchaseRequestNew(IReadOnlyDictionary<string, object?> parameters)
+    {
+        if (parameters.GetValueOrDefault("customer_name") is not string customer
+            || parameters.GetValueOrDefault("requested_kg") is not decimal kg
+            || parameters.GetValueOrDefault("product_name") is not string product
+            || parameters.GetValueOrDefault("pickup_date") is not DateOnly pickup)
+        {
+            return null;
+        }
+
+        var note = parameters.GetValueOrDefault("note") as string;
+
+        string Full(IReadOnlyList<string> free) => UserMessages.PurchaseRequestNew(free[^2], kg, free[^1], pickup, note is null ? null : free[0]).Text;
+
+        return new NotificationSmsLayout(
+            note is null
+                ? [new SmsFreeText(customer, CustomerMinimum), new SmsFreeText(product, ProductMinimum)]
+                : [new SmsFreeText(note, NoteMinimum), new SmsFreeText(customer, CustomerMinimum), new SmsFreeText(product, ProductMinimum)],
+            [Full, free => WithoutEnding(Full(free), AskTheZoneManager)]);
+    }
 
     private static NotificationSmsLayout? WaterAlert(IReadOnlyDictionary<string, object?> parameters)
     {

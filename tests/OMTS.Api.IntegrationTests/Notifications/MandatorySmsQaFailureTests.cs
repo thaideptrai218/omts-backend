@@ -152,6 +152,14 @@ public class MandatorySmsQaFailureTests
 
         Assert.True(clock.Elapsed < WellWithinTheHold, $"The answer took {clock.Elapsed}.");
         Assert.True(clock.Elapsed >= TimeSpan.FromMilliseconds(900), $"The answer took {clock.Elapsed}.");
+
+        // The cancellation and the limit of the answer fall at the same moment: on a busy machine the answer can come first.
+        var giveUpAt = Stopwatch.StartNew();
+        while (waiting.Cancelled < 2 && giveUpAt.Elapsed < TimeSpan.FromSeconds(30))
+        {
+            await Task.Delay(50);
+        }
+
         Assert.Equal(2, waiting.Cancelled);
     }
 

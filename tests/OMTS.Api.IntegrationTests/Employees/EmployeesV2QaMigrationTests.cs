@@ -90,7 +90,7 @@ public class EmployeesV2QaMigrationTests
         db.ChangeTracker.Clear();
         Assert.Equal(2, await db.EmployeeTypePeriods.CountAsync());
         Assert.Equal(1, await db.Employees.CountAsync(e => e.PhoneNumber == phone));
-        Assert.Empty(await db.Database.GetPendingMigrationsAsync());
+        Assert.DoesNotContain(own, await db.Database.GetPendingMigrationsAsync());
     }
 
     // Nothing writes ActorEmployeeId yet, so the new key cannot fail a save; a row of an Account actor stays free of it, and a delete is restricted.

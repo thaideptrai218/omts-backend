@@ -13,9 +13,10 @@ namespace OMTS.Application.Features.Notifications;
 /// built from its own fields, which read as they are.
 /// <para>
 /// A text over the limit gives way in one order (<see cref="NotificationSmsLayouts"/>), and the values, the allowed
-/// ranges, the time and the expiry date never do: (1) the free text down to its short minimum, zone name or zone list
-/// first, then raft code or license type name, then license number; (2) the closing sentence; (3) the shorter wording of
-/// the water alert; (4) the free text below its minimum, in the same order. A text without a layout is cut at the end.
+/// ranges, the time, the expiry date, and the kg and pickup date of a new purchase request never do: (1) the free text
+/// down to its short minimum, zone name or zone list first, then raft code or license type name, then license number, or
+/// for a purchase request note, then customer, then product; (2) the closing sentence; (3) the shorter wording of the
+/// water alert; (4) the free text below its minimum, in the same order. A text without a layout is cut at the end.
 /// </para>
 /// </summary>
 public static partial class NotificationSmsText
