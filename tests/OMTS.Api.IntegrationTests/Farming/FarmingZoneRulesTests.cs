@@ -23,10 +23,10 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         var zonesBefore = await factory.QueryAsync(db => db.FarmingZones.CountAsync());
 
         var response = await owner.Client.PostAsJsonAsync("/api/zones", new ZoneBody(
-            "  ", null, new string('x', 501), 10m, null, 0m, new string('w', 201)));
+            "  ", null, new string('x', 501), 10m, null, 0m));
 
         var fields = await response.InvalidFieldsAsync();
-        Assert.Equal(["Code", "Name", "Location", "Longitude", "Area", "Water measurement point"], fields);
+        Assert.Equal(["Code", "Name", "Location", "Longitude", "Area"], fields);
         Assert.Equal(zonesBefore, await factory.QueryAsync(db => db.FarmingZones.CountAsync()));
 
         // Coordinates are required on create and out-of-range values are refused.
@@ -38,7 +38,7 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
 
         // The longest allowed values and the coordinate bounds are accepted.
         var longest = await owner.Client.CreateZoneAsync(new ZoneBody(
-            NewCode() + new string('C', 40), new string('n', 200), new string('l', 500), -90m, 180m, 0.0001m, new string('w', 200)));
+            NewCode() + new string('C', 40), new string('n', 200), new string('l', 500), -90m, 180m, 0.0001m));
         Assert.Equal(50, longest.Text("code").Length);
         Assert.Equal(zonesBefore + 1, await factory.QueryAsync(db => db.FarmingZones.CountAsync()));
     }
@@ -63,8 +63,8 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(first.Id(), editProblem.GetProperty("existingZoneId").GetGuid());
 
         // Keeping its own code (in another case) is not a duplicate.
-        var sameZone = await owner.Client.PutAsJsonAsync($"/api/zones/{first.Id()}", NewZoneBody(code.ToLowerInvariant()) with { RowVersion = first.Text("rowVersion") });
-        Assert.Equal(code.ToLowerInvariant(), (await sameZone.ReadAsync(HttpStatusCode.OK)).Text("code"));
+        var sameZone = await owner.Client.EditZoneAsync(first.Id(), NewZoneBody(code.ToLowerInvariant()) with { RowVersion = first.Text("rowVersion") });
+        Assert.Equal(code.ToLowerInvariant(), sameZone.Text("code"));
     }
 
     [Fact]
@@ -154,15 +154,15 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
 
         await (await owner.Client.PutAsJsonAsync($"/api/zones/{zone.Id()}", body with { Name = "Renamed zone", RowVersion = zone.Text("rowVersion") }))
             .ReadAsync(HttpStatusCode.OK);
-        // Location, coordinates and the measurement point stay editable (old measurements keep their own point).
-        var moved = await (await owner.Client.PutAsJsonAsync($"/api/zones/{zone.Id()}", body with
+        // Location and coordinates stay editable.
+        var moved = await owner.Client.EditZoneAsync(zone.Id(), body with
         {
-            Name = "Renamed zone", Location = "Cai Rong", Latitude = 21.1m, Longitude = 107.4m, WaterMeasurementPoint = "Buoy 7", RowVersion = zone.Text("rowVersion"),
-        })).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal("Buoy 7", moved.Text("waterMeasurementPoint"));
+            Name = "Renamed zone", Location = "Cai Rong", Latitude = 21.1m, Longitude = 107.4m, RowVersion = zone.Text("rowVersion"),
+        });
+        Assert.False(moved.TryGetProperty("waterMeasurementPoint", out _));
         await (await owner.Client.PutAsJsonAsync($"/api/zones/{zone.Id()}", body with
         {
-            Name = "Renamed zone", Location = "Cai Rong", Latitude = 21.1m, Longitude = 107.4m, WaterMeasurementPoint = "Buoy 7", RowVersion = moved.Text("rowVersion"),
+            Name = "Renamed zone", Location = "Cai Rong", Latitude = 21.1m, Longitude = 107.4m, RowVersion = moved.Text("rowVersion"),
         })).ReadAsync(HttpStatusCode.OK);
 
         var updates = await factory.QueryAsync(db => db.AuditEvents
@@ -171,9 +171,8 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse($$"""{"Name":"{{body.Name}}"}"""), JsonNode.Parse(updates[0].Before!)));
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""{"Name":"Renamed zone"}"""), JsonNode.Parse(updates[0].After!)));
         Assert.Equal(
-            ["Latitude", "Location", "Longitude", "WaterMeasurementPoint"],
+            ["Latitude", "Location", "Longitude"],
             JsonNode.Parse(updates[1].After!)!.AsObject().Select(p => p.Key).Order());
-        Assert.Equal("Buoy 3", JsonNode.Parse(updates[1].Before!)!["WaterMeasurementPoint"]!.GetValue<string>());
     }
 
     [Fact]
@@ -216,29 +215,36 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(100, capped.GetProperty("pageSize").GetInt32());
     }
 
+    // The badge is the state today of the zone's newest license that is not Replaced.
     [Fact]
-    public async Task License_badge_shows_the_worst_state_today_to_the_owner_only()
+    public async Task License_badge_shows_the_state_of_the_newest_license_today_to_the_owner_only()
     {
         var owner = await factory.OwnerAsync();
         var prefix = $"B{NewCode()[..6]}";
-        var missing = await owner.Client.CreateZoneAsync(NewZoneBody($"{prefix}-1"));
+        var none = await owner.Client.CreateZoneAsync(NewZoneBody($"{prefix}-1"));
         var expired = await owner.Client.CreateZoneAsync(NewZoneBody($"{prefix}-2"));
         var expiring = await owner.Client.CreateZoneAsync(NewZoneBody($"{prefix}-3"));
         var fine = await owner.Client.CreateZoneAsync(NewZoneBody($"{prefix}-4"));
+        var renewed = await owner.Client.CreateZoneAsync(NewZoneBody($"{prefix}-5"));
 
-        await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneIds = [expired.Id(), expiring.Id(), fine.Id()], DocumentType = "SEA_AREA_ALLOCATION", EffectiveDate = Today.AddYears(-1) });
-        await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneIds = [expired.Id()], EffectiveDate = Today.AddDays(-400), ExpiryDate = Today.AddDays(-1) });
-        await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneIds = [expiring.Id()], EffectiveDate = Today.AddDays(-400), ExpiryDate = Today.AddDays(30) });
-        await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneIds = [fine.Id()], EffectiveDate = Today.AddDays(-400), ExpiryDate = Today.AddDays(31) });
+        await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = expired.Id(), EffectiveDate = Today.AddDays(-400), ExpiryDate = Today.AddDays(-1) });
+        await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = expiring.Id(), EffectiveDate = Today.AddDays(-400), ExpiryDate = Today.AddDays(30) });
+        await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = fine.Id(), EffectiveDate = Today.AddDays(-400), ExpiryDate = Today.AddDays(31) });
+        // An older expired license next to a newer valid one, and an expiring license replaced by a valid one.
+        await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = fine.Id(), EffectiveDate = Today.AddDays(-900), ExpiryDate = Today.AddDays(-500) });
+        var old = await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = renewed.Id(), EffectiveDate = Today.AddDays(-400), ExpiryDate = Today.AddDays(3) });
+        await (await owner.Client.PostAsync($"/api/zone-licenses/{old.Id()}/replace", new LicenseFields { EffectiveDate = Today.AddDays(4) }.ToForm()))
+            .ReadAsync(HttpStatusCode.Created);
 
         var rows = (await owner.Client.GetFromJsonAsync<JsonElement>($"/api/zones?search={prefix}")).GetProperty("items").EnumerateArray().ToList();
-        Assert.Equal(["Missing", "Expired", "ExpiringSoon", null], rows.Select(r => r.GetProperty("licenseState").GetString()));
+        Assert.Equal([null, "Expired", "ExpiringSoon", null, null], rows.Select(r => r.GetProperty("licenseState").GetString()));
+        Assert.Equal(JsonValueKind.Null, (await owner.Client.GetFromJsonAsync<JsonElement>($"/api/zones/{none.Id()}")).GetProperty("licenseState").ValueKind);
         Assert.Equal("Expired", (await owner.Client.GetFromJsonAsync<JsonElement>($"/api/zones/{expired.Id()}")).GetProperty("licenseState").GetString());
 
         // Licenses are Owner-only: staff, even at All zones, never see the badge.
         var staff = await factory.StaffAsync(null);
         var staffRows = (await staff.Client.GetFromJsonAsync<JsonElement>($"/api/zones?search={prefix}")).GetProperty("items").EnumerateArray().ToList();
-        Assert.Equal(4, staffRows.Count);
+        Assert.Equal(5, staffRows.Count);
         Assert.All(staffRows, r => Assert.Equal(JsonValueKind.Null, r.GetProperty("licenseState").ValueKind));
         Assert.Equal(JsonValueKind.Null, (await staff.Client.GetFromJsonAsync<JsonElement>($"/api/zones/{expired.Id()}")).GetProperty("licenseState").ValueKind);
     }

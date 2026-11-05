@@ -20,6 +20,7 @@ public static class MessageCodes
     public const string Farm02 = "MSG-FARM-02";
 
     public const string Water01 = "MSG-WATER-01";
+    public const string Water02 = "MSG-WATER-02";
     public const string Water03 = "MSG-WATER-03";
     public const string Water05 = "MSG-WATER-05";
     public const string Water06 = "MSG-WATER-06";
@@ -47,24 +48,35 @@ public static class MessageCodes
     public const string Account22 = "MSG-ACCOUNT-22";
     public const string Account23 = "MSG-ACCOUNT-23";
 
+    public const string Purchase01 = "MSG-PURCHASE-01";
     public const string Purchase03 = "MSG-PURCHASE-03";
+    public const string Purchase07 = "MSG-PURCHASE-07";
+    public const string Purchase08 = "MSG-PURCHASE-08";
     public const string Purchase09 = "MSG-PURCHASE-09";
+    public const string Purchase10 = "MSG-PURCHASE-10";
 
     public const string Labor01 = "MSG-LABOR-01";
     public const string Labor02 = "MSG-LABOR-02";
     public const string Labor03 = "MSG-LABOR-03";
 
+    public const string Debt01 = "MSG-DEBT-01";
+    public const string Debt02 = "MSG-DEBT-02";
     public const string Sale04 = "MSG-SALE-04";
     public const string Sale05 = "MSG-SALE-05";
 
     /// <summary>
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-01, the
     /// account is linked to the existing customer profile; MSG-ACCOUNT-22, the record of a notification or of an audit
-    /// event no longer exists (ACCOUNT-08 and ACCOUNT-10 are new in OMTS-216); MSG-LABOR-01 and MSG-LABOR-02, the approval
-    /// of a new employee and the reminder to lock a staff account (OMTS-227); MSG-SALE-04 and MSG-SALE-05, the merge of
-    /// customer profiles (SALE-04 is new).
+    /// event no longer exists (ACCOUNT-08 and ACCOUNT-10 are new in OMTS-216); MSG-PURCHASE-01/07/08, the purchase receipt
+    /// notifications and the advance warning, and MSG-PURCHASE-10, the Owner's correction (OMTS-218 P2); MSG-LABOR-01 and
+    /// MSG-LABOR-02, the approval of a new employee and the reminder to lock a staff account (OMTS-227); MSG-SALE-04 and
+    /// MSG-SALE-05, the merge of customer profiles (SALE-04 is new); MSG-DEBT-01 and MSG-DEBT-02, the receiving bank
+    /// account (DEBT-01).
     /// </summary>
-    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal) { Account01, Account22, Labor01, Labor02, Sale04, Sale05 };
+    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Account01, Account22, Purchase01, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Sale04, Sale05, Debt01, Debt02, Water02,
+    };
 
     /// <summary>
     /// Codes of the old list. Most are only sent as <c>legacyCode</c> next to the new code, for one release.

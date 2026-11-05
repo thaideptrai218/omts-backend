@@ -6,15 +6,17 @@ using OMTS.Api.IntegrationTests.Infrastructure;
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
-/// ENV-01/02 "missing or invalid value → 400 MSG01" for values the JSON binder cannot read (QA red team): a
-/// device sending a malformed id or a number as text must get the same MSG01 problem as any other invalid value.
+/// WATER-01/02 "missing or invalid value → 400 MSG-GEN-01" for values the JSON binder cannot read (QA red team): a
+/// client sending a malformed id or a number as text must get the same problem as any other invalid value.
 /// </summary>
 public class WaterMalformedInputTests(AuthApiFactory api) : IClassFixture<AuthApiFactory>
 {
     [Theory]
-    [InlineData("{\"clientOperationId\":\"not-a-guid\",\"ph\":7.1,\"salinity\":20,\"confirm\":true}")]
-    [InlineData("{\"clientOperationId\":\"7d5f2a8e-58a4-4e0b-9a51-2f0f6c1d9b11\",\"ph\":\"seven\",\"salinity\":20,\"confirm\":true}")]
-    [InlineData("{\"clientOperationId\":\"7d5f2a8e-58a4-4e0b-9a51-2f0f6c1d9b12\",\"ph\":7.1,\"salinity\":20,\"measuredAt\":\"yesterday\",\"confirm\":true}")]
+    [InlineData("{\"clientOperationId\":\"not-a-guid\",\"ph\":7.1,\"salinity\":20,\"temperature\":25}")]
+    [InlineData("{\"raftId\":\"not-a-guid\",\"ph\":7.1,\"salinity\":20,\"temperature\":25}")]
+    [InlineData("{\"ph\":\"seven\",\"salinity\":20,\"temperature\":25}")]
+    [InlineData("{\"ph\":7.1,\"salinity\":20,\"temperature\":\"warm\"}")]
+    [InlineData("{\"ph\":7.1,\"salinity\":20,\"temperature\":25,\"measuredAt\":\"yesterday\"}")]
     public async Task Unreadable_json_values_are_MSG01_and_nothing_is_saved(string json)
     {
         var z = await api.ZoneAsync();

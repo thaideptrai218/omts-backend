@@ -51,12 +51,13 @@ public interface IFarmingInputItemRepository
     void Add(FarmingInputItem item);
 }
 
-/// <summary>INP-07 filters; null means "any". Zones are limited to <see cref="Zones"/> as well.</summary>
+/// <summary>
+/// PURCHASE-03 filters; null means "any". Receipts have no zone, so no zone limit (BR-FARM-08). The item group, item and
+/// raft filters are line filters: a receipt matches when one of its lines does, and only those lines count in the totals.
+/// </summary>
 public sealed record PurchaseReceiptFilter(
-    PermittedZones Zones,
     InputItemGroup? ItemGroup = null,
     Guid? ItemId = null,
-    Guid? ZoneId = null,
     Guid? RaftId = null,
     Guid? SupplierId = null,
     int? StatusId = null,
@@ -66,27 +67,34 @@ public sealed record PurchaseReceiptFilter(
 
 public interface IPurchaseReceiptRepository
 {
-    /// <summary>Receipt with supplier, zone, raft, lines (items, seed lots), returns (lines) and payments, tracked.</summary>
+    /// <summary>Receipt with supplier, lines (items, rafts and their zones), returns (lines) and payments, tracked.</summary>
     Task<PurchaseReceipt?> GetForEditAsync(Guid receiptId, CancellationToken cancellationToken);
-
-    /// <summary>Codes already used that start with <paramref name="prefix"/> (daily code sequence).</summary>
-    Task<int> CountCodesAsync(string prefix, CancellationToken cancellationToken);
 
     /// <summary>Return codes already used that start with <paramref name="prefix"/>.</summary>
     Task<int> CountReturnCodesAsync(string prefix, CancellationToken cancellationToken);
 
-    /// <summary>Per seed line: stocked quantity, and whether a seeding without a quantity uses the lot (counts as fully stocked).</summary>
-    Task<IReadOnlyDictionary<Guid, (decimal Stocked, bool UnknownQuantity)>> StockedAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken);
-
-    /// <summary>Matching receipts with lines, returns and payments, newest first, untracked (raft material cost only: it needs the lines).</summary>
-    Task<IReadOnlyList<PurchaseReceipt>> SearchAsync(PurchaseReceiptFilter filter, CancellationToken cancellationToken);
+    /// <summary>
+    /// Per seed lot (receipt line): the quantity seeded from it, and whether a seeding session without a quantity uses it
+    /// (counted as fully seeded). Reads the old seeding events until CYCLE-02 replaces them (GBR-04).
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, (decimal Seeded, bool UnknownQuantity)>> SeededAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken);
 
     /// <summary>One page (1-based) of matching receipts with figures computed in SQL, newest first, and the totals of all matches.</summary>
-    Task<(IReadOnlyList<ReceiptFigureRow> Items, ReceiptFigureTotals Totals)> PageFiguresAsync(
+    Task<(IReadOnlyList<ReceiptFigureRow> Items, ReceiptListTotals Totals)> PageFiguresAsync(
         PurchaseReceiptFilter filter, int page, int pageSize, CancellationToken cancellationToken);
 
     /// <summary>Matching receipts with figures computed in SQL, newest first, at most <paramref name="take"/> when set.</summary>
     Task<IReadOnlyList<ReceiptFigureRow>> ListFiguresAsync(PurchaseReceiptFilter filter, int? take, CancellationToken cancellationToken);
+
+    /// <summary>The totals of every matching receipt (PURCHASE-03 step 3).</summary>
+    Task<ReceiptListTotals> TotalsAsync(PurchaseReceiptFilter filter, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Material lines that name a raft, of Completed receipts received in the period, and the returns of such lines dated in
+    /// the period (BR-FARM-05). The raft, item and supplier filters apply; the group is always Material.
+    /// </summary>
+    Task<(IReadOnlyList<RaftCostLineRow> Lines, IReadOnlyList<RaftCostReturnRow> Returns)> RaftMaterialCostRowsAsync(
+        PurchaseReceiptFilter filter, CancellationToken cancellationToken);
 
     /// <summary>Completed receipts of one supplier with figures, oldest first.</summary>
     Task<IReadOnlyList<ReceiptFigureRow>> CompletedFiguresOfSupplierAsync(Guid supplierId, CancellationToken cancellationToken);
@@ -96,13 +104,14 @@ public interface IPurchaseReceiptRepository
 
     void Add(PurchaseReceipt receipt);
 
+    /// <summary>Deletes a Draft; its lines are removed with <see cref="RemoveLine"/> first (foreign keys never cascade).</summary>
+    void Remove(PurchaseReceipt receipt);
+
     void AddReturn(PurchaseReturn purchaseReturn);
 
     /// <summary>New rows under a tracked receipt are added explicitly: their keys are already set, so EF would
     /// otherwise treat them as existing rows.</summary>
     void AddLine(PurchaseReceiptLine line);
-
-    void AddSeedLot(Domain.Entities.Cultivation.SeedReceiptLot lot);
 
     /// <summary>Deletes a line of a Draft (foreign keys never cascade).</summary>
     void RemoveLine(PurchaseReceiptLine line);
@@ -117,9 +126,9 @@ public interface ISupplierPaymentRepository
 
     Task<SupplierPayment?> FindByDeduplicationKeyAsync(string key, CancellationToken cancellationToken);
 
-    /// <summary>Payments by supplier, receipt, zone (of the receipt), method, status and date range, newest first.</summary>
+    /// <summary>Payments by supplier, receipt, method, status and date range, newest first (receipts have no zone).</summary>
     Task<(IReadOnlyList<SupplierPayment> Items, int Total, decimal TotalAmount)> SearchAsync(
-        Guid? supplierId, Guid? receiptId, Guid? zoneId, PaymentMethod? method, int? statusId, DateOnly? from, DateOnly? to,
+        Guid? supplierId, Guid? receiptId, PaymentMethod? method, int? statusId, DateOnly? from, DateOnly? to,
         int page, int pageSize, CancellationToken cancellationToken);
 
     /// <summary>Recorded payments not allocated to any receipt, per supplier.</summary>

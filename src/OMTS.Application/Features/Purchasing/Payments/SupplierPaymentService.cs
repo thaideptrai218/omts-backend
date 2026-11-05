@@ -107,7 +107,7 @@ public sealed class SupplierPaymentService(
         unitOfWork.MarkChanged(receipt);
         audit.Record(new AuditEntry("SupplierPayment.Recorded", nameof(SupplierPayment))
         {
-            RecordId = payment.Id, RecordCode = receipt.Code, ZoneId = receipt.ZoneId,
+            RecordId = payment.Id, RecordCode = receipt.Code,
             After = new { payment.Amount, payment.Method, payment.PaymentDate, payment.ReferenceCode, ReceiptId = receipt.Id },
         });
         try
@@ -160,18 +160,18 @@ public sealed class SupplierPaymentService(
         unitOfWork.MarkChanged(receipt);
         audit.Record(new AuditEntry("SupplierPayment.Allocated", nameof(SupplierPayment))
         {
-            RecordId = payment.Id, RecordCode = receipt.Code, ZoneId = receipt.ZoneId, Before = new { ReceiptId = (Guid?)null }, After = new { ReceiptId = receipt.Id },
+            RecordId = payment.Id, RecordCode = receipt.Code, Before = new { ReceiptId = (Guid?)null }, After = new { ReceiptId = receipt.Id },
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return await ViewAsync(payment, cancellationToken);
     }
 
     public async Task<SupplierPaymentPage> SearchAsync(
-        Guid? supplierId, Guid? receiptId, Guid? zoneId, PaymentMethod? method, int? statusId, DateOnly? from, DateOnly? to,
+        Guid? supplierId, Guid? receiptId, PaymentMethod? method, int? statusId, DateOnly? from, DateOnly? to,
         int page, int pageSize, CancellationToken cancellationToken)
     {
         (page, pageSize) = (Math.Max(page, 1), Math.Clamp(pageSize, 1, 100));
-        var (items, total, amount) = await payments.SearchAsync(supplierId, receiptId, zoneId, method, statusId, from, to, page, pageSize, cancellationToken);
+        var (items, total, amount) = await payments.SearchAsync(supplierId, receiptId, method, statusId, from, to, page, pageSize, cancellationToken);
         return new SupplierPaymentPage(new Paged<SupplierPaymentView>(items.Select(View).ToList(), page, pageSize, total), amount);
     }
 

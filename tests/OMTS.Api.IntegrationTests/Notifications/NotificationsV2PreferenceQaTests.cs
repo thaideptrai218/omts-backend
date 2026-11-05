@@ -32,6 +32,7 @@ public class NotificationsV2PreferenceQaTests(AuthApiFactory factory) : IClassFi
         var attempts = new[]
         {
             (manager, "ZONE_LICENSE_EXPIRY"),
+            (manager, "COOPERATIVE_CERTIFICATION_EXPIRY"),
             (manager, "STAFF_ACCOUNT_LOCK_REMINDER"),
             (accountant, "WATER_MEASUREMENT_OVERDUE"),
             (accountant, "WATER_ALERT"),
@@ -113,12 +114,13 @@ public class NotificationsV2PreferenceQaTests(AuthApiFactory factory) : IClassFi
         await factory.GrantAsync(staff, StaffRole.Accountant, null);
         var client = await factory.LoginAsync(staff.Username, TestPassword);
         Assert.Equal(HttpStatusCode.OK, (await client.SavePushAsync(("WATER_MEASUREMENT_OVERDUE", false))).StatusCode);
-        Assert.Equal(["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE"], (await client.OfferedTypesAsync()).Keys);
+        Assert.Equal(["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "PURCHASE_RECEIPT_CANCELLED_ADVANCE"], (await client.OfferedTypesAsync()).Keys);
 
         var revoked = await ownerClient.PostAsJsonAsync($"/api/accounts/{staff.Id}/grants/{pair.Id}/revoke", new { reason = "Moved to the office" });
 
         Assert.Equal(HttpStatusCode.OK, revoked.StatusCode);
-        Assert.Empty(await client.OfferedTypesAsync());
+        // Only the Accountant pair is left: its purchasing type stays.
+        Assert.Equal(["PURCHASE_RECEIPT_CANCELLED_ADVANCE"], (await client.OfferedTypesAsync()).Keys);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.SavePushAsync(("WATER_MEASUREMENT_OVERDUE", true))).StatusCode);
         Assert.Contains(await StoredPreferencesAsync(staff.Id), p => p is { Type: "WATER_MEASUREMENT_OVERDUE", Push: false });
     }

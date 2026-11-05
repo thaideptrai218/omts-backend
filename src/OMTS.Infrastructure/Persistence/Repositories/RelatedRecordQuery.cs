@@ -11,9 +11,9 @@ namespace OMTS.Infrastructure.Persistence.Repositories;
 /// The record of a notification or an audit event. Record types are entity names (or an alias below), so the records of
 /// every module resolve without a list to keep up to date; a type no entity has any more cannot be opened, as a removed
 /// record. The zone is the record itself for a farming zone, else its <c>ZoneId</c> when the entity has one, else none
-/// (records with no single zone, e.g. accounts and zone licenses, which are Owner-only). A zone held only by a parent
-/// record (e.g. a lane, through its raft) is not followed: a zone-checked notification type on such a record needs a
-/// parent mapping here first.
+/// (records with no single zone, e.g. accounts). A zone license holds a zone, but it is Owner-only and its zone is not
+/// checked, so it resolves with none too. A zone held only by a parent record (e.g. a lane, through its raft) is not
+/// followed: a zone-checked notification type on such a record needs a parent mapping here first.
 /// </summary>
 internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
 {
@@ -42,7 +42,7 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
             return Task.FromResult<RelatedRecordLocation?>(null);
         }
 
-        var zoneType = entity.FindProperty(ZoneProperty)?.ClrType;
+        var zoneType = recordType == RelatedRecordTypes.ZoneLicense ? null : entity.FindProperty(ZoneProperty)?.ClrType;
         var method = zoneType == typeof(Guid) || zoneType == typeof(Guid?)
             ? FindInZoneMethod.MakeGenericMethod(entity.ClrType, zoneType)
             : FindMethod.MakeGenericMethod(entity.ClrType);

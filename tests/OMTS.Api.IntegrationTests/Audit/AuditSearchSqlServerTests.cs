@@ -88,7 +88,7 @@ public class AuditSearchSqlServerTests
             var cooperative = new Cooperative { FullName = "HTX Trung Nam" };
             var zone = new FarmingZone { Code = $"{tag}Z", Name = "Vùng A", Cooperative = cooperative };
             var employee = new Employee { FullName = "Phạm Văn Công", Cooperative = cooperative };
-            var license = new ZoneComplianceDocument { DocumentType = "AQUACULTURE_LICENSE", DocumentNumber = $"{tag}L" };
+            var license = new ZoneComplianceDocument { Zone = zone, DocumentType = "AQUACULTURE_LICENSE", DocumentNumber = $"{tag}L" };
             db.AddRange(zone, employee, license);
             await db.SaveChangesAsync();
             (zoneId, employeeId, licenseId) = (zone.Id, employee.Id, license.Id);
@@ -148,7 +148,7 @@ public class AuditSearchSqlServerTests
     [SqlServerFact]
     public async Task The_migration_names_the_zone_licenses_of_stored_notifications_as_the_audit_log_does()
     {
-        const string beforeAuditSearch = "20261104174337_SalesCatalogueV2";
+        const string beforeAuditSearch = "20261105075725_PurchaseReceiptsV2";
         await using var database = SqlServerTestDatabase.Create();
         await using var db = database.CreateContext();
         var migrator = db.GetService<IMigrator>();

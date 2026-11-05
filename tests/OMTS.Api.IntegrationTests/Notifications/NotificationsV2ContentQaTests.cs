@@ -36,28 +36,29 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
         var (manager, _) = await factory.StaffAsync(z.Zone);
         var measuredAt = Minute(DateTimeOffset.UtcNow.AddMinutes(-30));
         var time = BusinessClock.Format(measuredAt);
-        var first = (await z.RecordedAsync(9.1m, 20m, measuredAt: measuredAt)).GetProperty("id").GetGuid();
-        var corrected = await z.Owner.CorrectAsync(first, 9.4m, 31m, recordVersion: 1, measuredAt: measuredAt);
-        Assert.True(corrected.StatusCode == HttpStatusCode.Created, await corrected.Content.ReadAsStringAsync());
-        var second = (await corrected.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var id = (await z.RecordedAsync(9.1m, 20m, measuredAt: measuredAt)).GetProperty("id").GetGuid();
+        var corrected = await z.Owner.CorrectAsync(id, 9.4m, 31m, measuredAt: measuredAt);
+        Assert.True(corrected.StatusCode == HttpStatusCode.OK, await corrected.Content.ReadAsStringAsync());
 
-        var items = (await manager.NotificationPageAsync()).Items();
-        var alert = items.Single(i => i.GetProperty("relatedRecordId").GetGuid() == first);
-        var correction = items.Single(i => i.GetProperty("relatedRecordId").GetGuid() == second);
+        // Newest first: the correction changed the same record, both notifications point to it.
+        var items = (await manager.NotificationPageAsync()).Items().Where(i => i.GetProperty("relatedRecordId").GetGuid() == id).ToList();
+        Assert.Equal(2, items.Count);
+        var correction = items.Single(i => i.GetProperty("messageParams").GetProperty("corrected").GetBoolean());
+        var alert = items.Single(i => !i.GetProperty("messageParams").GetProperty("corrected").GetBoolean());
 
         AssertAlert(alert, false, [("PH", 9.1m, null, "High", 6.5m, 8.5m)]);
-        Assert.Equal($"Water alert: zone {z.Zone.Name}, raft –, measured on {time}. pH 9.1 is too high (allowed 6.5–8.5). Please check the water.", alert.GetProperty("body").GetString());
+        Assert.Equal($"Water alert: zone {z.Zone.Name}, raft {z.Raft.Code}, measured on {time}. pH 9.1 is too high (allowed 6.5–8.5). Please check the water.", alert.GetProperty("body").GetString());
         AssertAlert(correction, true, [("PH", 9.4m, null, "High", 6.5m, 8.5m), ("SALINITY", 31m, "‰", "High", 15m, 30m)]);
         Assert.EndsWith(". pH 9.4 is too high (allowed 6.5–8.5); Salinity 31 ‰ is too high (allowed 15–30 ‰). Please check the water.", correction.GetProperty("body").GetString());
-        Assert.StartsWith($"Water alert (corrected measurement): zone {z.Zone.Name}, raft –, measured on {time}.", correction.GetProperty("body").GetString());
+        Assert.StartsWith($"Water alert (corrected measurement): zone {z.Zone.Name}, raft {z.Raft.Code}, measured on {time}.", correction.GetProperty("body").GetString());
 
-        // The first alert still opens: its measurement exists, now as an earlier version (shown with its current status).
+        // The first alert still opens: its measurement exists (shown with its current values).
         var open = await manager.OpenNotificationAsync(alert.GetProperty("id").GetGuid());
         Assert.Equal(HttpStatusCode.OK, open.StatusCode);
         Assert.Equal(z.Zone.Id, (await open.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("zoneId").GetGuid());
 
         // ACCOUNT-08.0.E1: a removed measurement has no code to name.
-        await factory.UseDbAsync(db => db.WaterMeasurements.Remove(db.WaterMeasurements.Single(m => m.Id == second)));
+        await factory.UseDbAsync(db => db.WaterMeasurements.Remove(db.WaterMeasurements.Single(m => m.Id == id)));
         var removed = await manager.OpenNotificationAsync(correction.GetProperty("id").GetGuid());
         Assert.Equal(HttpStatusCode.NotFound, removed.StatusCode);
         var problem = await removed.ProblemAsync();
@@ -69,7 +70,7 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
             Assert.Equal(("WaterMeasurement", JsonValueKind.Null), (item.GetProperty("relatedRecordType").GetString(), item.GetProperty("relatedRecordCode").ValueKind));
             var parameters = item.GetProperty("messageParams");
             Assert.Equal(["corrected", "measurement_time", "raft_code", "values_outside", "zone_name"], parameters.EnumerateObject().Select(p => p.Name).Order());
-            Assert.Equal((corrected, z.Zone.Name, JsonValueKind.Null), (parameters.GetProperty("corrected").GetBoolean(), parameters.GetProperty("zone_name").GetString(), parameters.GetProperty("raft_code").ValueKind));
+            Assert.Equal((corrected, z.Zone.Name, z.Raft.Code), (parameters.GetProperty("corrected").GetBoolean(), parameters.GetProperty("zone_name").GetString(), parameters.GetProperty("raft_code").GetString()));
             var measured = parameters.GetProperty("measurement_time").GetDateTimeOffset();
             Assert.Equal((measuredAt, BusinessClock.UtcOffset), (measured, measured.Offset));
             Assert.Equal(valuesOutside, parameters.GetProperty("values_outside").EnumerateArray().Select(v => (
@@ -89,7 +90,7 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
         var zoneId = (await FarmingKit.CreateZoneAsync(owner.Client)).GetProperty("id").GetGuid();
         var zone = await FarmingKit.ZoneEntityAsync(factory, zoneId);
         var today = FarmingKit.Today;
-        var license = await FarmingKit.CreateLicenseAsync(owner.Client, new LicenseFields { ZoneIds = [zoneId], EffectiveDate = today.AddDays(-300), ExpiryDate = today.AddDays(30) });
+        var license = await FarmingKit.CreateLicenseAsync(owner.Client, new LicenseFields { ZoneId = zoneId, EffectiveDate = today.AddDays(-300), ExpiryDate = today.AddDays(30) });
         var (licenseId, number) = (license.GetProperty("id").GetGuid(), license.GetProperty("documentNumber").GetString()!);
         var job = factory.Services.GetRequiredService<ZoneLicenseReminderJob>();
         var document = $"Marine aquaculture license {number} ({zone.Code})";
@@ -122,7 +123,7 @@ public class NotificationsV2ContentQaTests(AuthApiFactory factory) : IClassFixtu
         await factory.GrantAsync(manager, StaffRole.ZoneManager, zone);
         var managerClient = await factory.LoginAsync(manager.Username, TestPassword);
         await factory.NotifyAsync([manager.Id], new NotificationContent(
-            NotificationTypes.ZoneLicenseExpiry, "Zone license expired", UserMessages.LicenseExpired("AQUACULTURE_LICENSE", "Marine aquaculture license", number, [zone.Code], today.AddDays(30)),
+            NotificationTypes.ZoneLicenseExpiry, "Zone license expired", UserMessages.LicenseExpired("AQUACULTURE_LICENSE", "Marine aquaculture license", number, zone.Code, today.AddDays(30)),
             new RelatedRecord(RelatedRecordTypes.ZoneLicense, licenseId, number)));
         var managerOpen = await managerClient.OpenNotificationAsync((await managerClient.NotificationPageAsync()).NotificationIds().Single());
         Assert.Equal((HttpStatusCode.Forbidden, "MSG-GEN-08"), (managerOpen.StatusCode, await managerOpen.ErrorCodeAsync()));

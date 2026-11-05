@@ -81,9 +81,8 @@ public sealed partial record EmployeeInput(
         return phone is not null || string.IsNullOrWhiteSpace(input);
     }
 
-    /// <summary>"0123456789" → "******6789": bank numbers appear masked in the audit log.</summary>
-    public static string MaskAccountNumber(string number) =>
-        number.Length <= 4 ? number : new string('*', number.Length - 4) + number[^4..];
+    /// <summary>"999900000001" → "********0001": bank numbers appear masked in the audit log.</summary>
+    public static string MaskAccountNumber(string number) => Common.Masking.AccountNumber(number);
 
     private static string? Optional(string? value, int max, string field, List<string> invalid)
     {

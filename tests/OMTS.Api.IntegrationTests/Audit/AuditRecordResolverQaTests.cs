@@ -29,11 +29,11 @@ public class AuditRecordResolverQaTests(AuthApiFactory factory) : IClassFixture<
         var role = await factory.RoleAsync(StaffRole.ZoneManager);
         var raft = new Raft { ZoneId = zone.Id, Code = $"{zone.Code}-B01" };
         var measurement = new WaterMeasurement { ZoneId = zone.Id, MeasuredAt = DateTimeOffset.UtcNow };
-        var license = new ZoneComplianceDocument { DocumentType = "AQUACULTURE_LICENSE", DocumentNumber = NewCode() };
+        var license = new ZoneComplianceDocument { ZoneId = zone.Id, DocumentType = "AQUACULTURE_LICENSE", DocumentNumber = NewCode() };
         var employee = new Employee { CooperativeId = cooperative.Id, FullName = "Lê Thị Hoa" };
         var supplier = new Supplier { Name = "NCC", PhoneNumber = NewPhone() };
         var item = new FarmingInputItem { Code = NewCode(), Name = "Phao", Unit = "cái" };
-        var receipt = new PurchaseReceipt { Code = NewCode(), SupplierId = supplier.Id, ZoneId = zone.Id };
+        var receipt = new PurchaseReceipt { Code = NewCode(), SupplierId = supplier.Id };
         var purchaseReturn = new PurchaseReturn { Code = NewCode(), ReceiptId = receipt.Id, Reason = "Hỏng" };
         var payment = new SupplierPayment { SupplierId = supplier.Id, Amount = 1 };
         var device = new PushDevice { AccountId = account.Id, Token = NewCode(), Platform = "android" };
@@ -44,7 +44,6 @@ public class AuditRecordResolverQaTests(AuthApiFactory factory) : IClassFixture<
             (RelatedRecordTypes.FarmingZone, zone.Id, zone.Id),
             (nameof(Raft), raft.Id, zone.Id),
             (RelatedRecordTypes.WaterMeasurement, measurement.Id, zone.Id),
-            (nameof(PurchaseReceipt), receipt.Id, zone.Id),
             (nameof(AccessGrant), zoneGrant.Id, zone.Id),
             // Records with no single zone: Owner-only, or checked by role only (BR-FARM-08).
             (nameof(AccessGrant), allZonesGrant.Id, null),
@@ -55,6 +54,7 @@ public class AuditRecordResolverQaTests(AuthApiFactory factory) : IClassFixture<
             (nameof(Role), role.Id, null),
             (nameof(Supplier), supplier.Id, null),
             (nameof(FarmingInputItem), item.Id, null),
+            (RelatedRecordTypes.PurchaseReceipt, receipt.Id, null),
             (nameof(PurchaseReturn), purchaseReturn.Id, null),
             (nameof(SupplierPayment), payment.Id, null),
             (nameof(PushDevice), device.Id, null),
@@ -90,6 +90,7 @@ public class AuditRecordResolverQaTests(AuthApiFactory factory) : IClassFixture<
     [InlineData("FarmingZone", "Farming zone")]
     [InlineData("Account", "Account")]
     [InlineData("PurchaseReceipt", "Purchase receipt")]
+    [InlineData("CooperativeCertification", "Certification")]
     public void The_object_name_of_a_record_type_is_its_words(string type, string name) =>
         Assert.Equal(name, RelatedRecordTypes.ObjectName(type));
 

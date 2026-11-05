@@ -47,7 +47,6 @@ public class DemoDataSeedQaTests
         ("FarmingInputItems", db => db.FarmingInputItems.CountAsync()),
         ("PurchaseReceipts", db => db.PurchaseReceipts.CountAsync()),
         ("PurchaseReceiptLines", db => db.PurchaseReceiptLines.CountAsync()),
-        ("SeedReceiptLots", db => db.SeedReceiptLots.CountAsync()),
         ("SupplierPayments", db => db.SupplierPayments.CountAsync()),
         ("PurchaseReturns", db => db.PurchaseReturns.CountAsync()),
         ("WaterMeasurements", db => db.WaterMeasurements.CountAsync()),
@@ -120,7 +119,7 @@ public class DemoDataSeedQaTests
         Assert.Equal(DeploymentBootstrapper.Success, demo.ExitCode);
         Assert.Contains(demo.Messages, m => m.Contains("already initialized"));
         // Every step had work to do, the Owner's login included.
-        Assert.Equal(13, demo.Messages.Count(m => m.StartsWith("Demo ")));
+        Assert.Equal(14, demo.Messages.Count(m => m.StartsWith("Demo ")));
         Assert.All(demo.Messages.Where(m => m.StartsWith("Demo ")), m => Assert.EndsWith("created.", m));
         Assert.Equal(1, demoCounts["Cooperatives"]);
         Assert.Equal(3, demoCounts["FarmingZones"]);
@@ -138,6 +137,11 @@ public class DemoDataSeedQaTests
         Assert.Equal(HttpStatusCode.OK, demoLogin.Status);
         Assert.False(demoLogin.Body.GetProperty("mustChangePassword").GetBoolean());
         Assert.Equal(HttpStatusCode.Unauthorized, (await LoginAsync(client, "owner", OwnerTemporaryPassword)).Status);
+
+        // DEBT-01: the fictional receiving bank account, through the real service and the fake of Development.
+        client.DefaultRequestHeaders.Authorization = new("Bearer", demoLogin.Body.GetProperty("accessToken").GetString());
+        var receiving = await client.GetFromJsonAsync<JsonElement>("/api/cooperative/receiving-bank-account");
+        Assert.Equal("DEMO00000001", receiving.GetProperty("account").GetProperty("accountNumber").GetString());
     }
 
     // ACS-04 through the API, then a rerun: the Owner, and the staff account that had to change its password at first login.
@@ -303,7 +307,7 @@ public class DemoDataSeedQaTests
         var returns = await db.PurchaseReturns.Select(r => new { r.Id, r.ReturnDate }).ToListAsync();
         var grants = await db.AccessGrants.Select(g => new { g.Id, g.StatusId, g.RevokedAt }).ToListAsync();
         var employees = await db.Employees.Select(e => new { e.Id, e.StatusId, e.LastWorkingDay }).ToListAsync();
-        var water = await db.WaterMeasurements.Select(m => new { m.Id, m.MeasuredAt, m.StatusId, m.ConfirmedAt }).ToListAsync();
+        var water = await db.WaterMeasurements.Select(m => new { m.Id, m.MeasuredAt, m.StatusId, m.CreatedAt }).ToListAsync();
 
         return licenses.Select(x => $"license {x}")
             .Concat(receipts.Select(x => $"receipt {x}"))

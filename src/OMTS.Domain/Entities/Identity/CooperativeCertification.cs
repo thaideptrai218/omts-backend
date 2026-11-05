@@ -7,7 +7,7 @@ namespace OMTS.Domain.Entities.Identity;
 /// or Expired is worked out from the expiry date (BR-FARM-06), never stored. Removing one deletes the row; the audit
 /// log keeps its values (GBR-02).
 /// </summary>
-public class CooperativeCertification : AuditableEntity
+public class CooperativeCertification : AuditableEntity, IHasExpiryReminderMarkers
 {
     public Guid CooperativeId { get; set; }
     public Cooperative Cooperative { get; set; } = null!;
@@ -21,4 +21,10 @@ public class CooperativeCertification : AuditableEntity
 
     /// <summary>Storage key of the certificate file (image or PDF).</summary>
     public string? FileUrl { get; set; }
+
+    /// <summary>When the Expiring soon reminder was sent (GFR-03); cleared when the expiry date changes.</summary>
+    public DateTimeOffset? ExpiringReminderSentAt { get; set; }
+
+    /// <summary>When the Expired reminder was sent (GFR-03); cleared when the expiry date changes.</summary>
+    public DateTimeOffset? ExpiredReminderSentAt { get; set; }
 }

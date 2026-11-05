@@ -50,44 +50,88 @@ public static class UserMessages
 
     // ---- MSG-FARM ----
 
-    /// <summary>MSG-FARM-01 (GFR-03): notification to the Owner when a license becomes Expiring soon.</summary>
-    /// <param name="documentType">License type code (stored), e.g. AQUACULTURE_LICENSE.</param>
-    /// <param name="documentTypeName">Its English name, for the text.</param>
-    /// <param name="zoneCodes">Codes of the zones the license covers.</param>
+    /// <summary>MSG-FARM-01 (GFR-03): notification to the Owner when a zone license becomes Expiring soon.</summary>
+    /// <param name="documentType">Optional license type code (stored), e.g. AQUACULTURE_LICENSE.</param>
+    /// <param name="documentTypeName">Its English name, for the text ("Zone license" when there is no type).</param>
+    /// <param name="zoneCode">Code of the zone of the license.</param>
     public static UserMessage LicenseExpiringSoon(
-        string documentType, string documentTypeName, string documentNumber, IReadOnlyList<string> zoneCodes, DateOnly expiryDate, int days) => new(
+        string? documentType, string? documentTypeName, string documentNumber, string zoneCode, DateOnly expiryDate, int days) => new(
         Farm01,
-        $"{LicenseDocument(documentTypeName, documentNumber, zoneCodes)} expires on {Date(expiryDate)}, in {days} days. Please renew it and record the new one.",
+        $"{LicenseDocument(documentTypeName, documentNumber, zoneCode)} expires on {Date(expiryDate)}, in {days} days. Please renew it and record the new one.",
         Legacy.Msg25)
     {
-        Parameters = LicenseParameters(documentType, documentNumber, zoneCodes, expiryDate, days),
+        Parameters = LicenseParameters(documentType, documentNumber, zoneCode, expiryDate, days),
     };
 
-    /// <summary>MSG-FARM-02 (GFR-03): notification to the Owner when a license becomes Expired.</summary>
+    /// <summary>MSG-FARM-02 (GFR-03): notification to the Owner when a zone license becomes Expired.</summary>
     public static UserMessage LicenseExpired(
-        string documentType, string documentTypeName, string documentNumber, IReadOnlyList<string> zoneCodes, DateOnly expiryDate) => new(
+        string? documentType, string? documentTypeName, string documentNumber, string zoneCode, DateOnly expiryDate) => new(
         Farm02,
-        $"{LicenseDocument(documentTypeName, documentNumber, zoneCodes)} expired on {Date(expiryDate)}. Please renew it and record the new one.",
+        $"{LicenseDocument(documentTypeName, documentNumber, zoneCode)} expired on {Date(expiryDate)}. Please renew it and record the new one.",
         Legacy.Msg25)
     {
-        Parameters = LicenseParameters(documentType, documentNumber, zoneCodes, expiryDate, days: null),
+        Parameters = LicenseParameters(documentType, documentNumber, zoneCode, expiryDate, days: null),
     };
+
+    /// <summary>MSG-FARM-01 (GFR-03): notification to the Owner when a cooperative certification becomes Expiring soon.</summary>
+    /// <param name="number">The certification number; null when it has none.</param>
+    public static UserMessage CertificationExpiringSoon(string name, string? number, DateOnly expiryDate, int days) => new(
+        Farm01,
+        $"{CertificationDocument(name, number)} expires on {Date(expiryDate)}, in {days} days. Please renew it and record the new one.",
+        Legacy.Msg25)
+    {
+        Parameters = CertificationParameters(name, number, expiryDate, days),
+    };
+
+    /// <summary>MSG-FARM-02 (GFR-03): notification to the Owner when a cooperative certification becomes Expired.</summary>
+    public static UserMessage CertificationExpired(string name, string? number, DateOnly expiryDate) => new(
+        Farm02,
+        $"{CertificationDocument(name, number)} expired on {Date(expiryDate)}. Please renew it and record the new one.",
+        Legacy.Msg25)
+    {
+        Parameters = CertificationParameters(name, number, expiryDate, days: null),
+    };
+    // ---- MSG-DEBT ----
+
+    /// <summary>MSG-DEBT-01 (DEBT-01 step 5): asks to use the account, after the Payment Notification Service accepted it.</summary>
+    /// <param name="oldCodesText">{old_codes_text}: empty, or <see cref="OldVietQrCodesText"/>.</param>
+    public static UserMessage UseReceivingBankAccount(string oldCodesText, string accountNumber, string bankName, string accountHolder) => new(
+        Debt01, $"{oldCodesText}Use account {accountNumber} at {bankName} ({accountHolder}) for the VietQR codes of the sales invoices?");
+
+    /// <summary>
+    /// {old_codes_text} of MSG-DEBT-01 when an account was already set (BR-DEBT-01). The SRS gives the placeholder but no
+    /// wording; this is the rule of BR-DEBT-01 in a sentence.
+    /// </summary>
+    public static string OldVietQrCodesText(int count) => count == 1
+        ? "1 unpaid invoice has a VietQR code already sent for the old account. A transfer made with it is not recorded automatically. "
+        : $"{count} unpaid invoices have VietQR codes already sent for the old account. A transfer made with them is not recorded automatically. ";
+
+    /// <summary>MSG-DEBT-02 (DEBT-01.0.E2): the Payment Notification Service does not accept the account or does not answer.</summary>
+    public static UserMessage ReceivingBankAccountNotAccepted(string accountNumber, string bankName) => new(
+        Debt02,
+        $"The payment notification service did not accept account {accountNumber} at {bankName}. The receiving bank account has not been changed. Please check the account, or try again later.");
+
     // ---- MSG-WATER ----
 
-    /// <summary>MSG-WATER-01 (WATER-01.2): the OCR Service read nothing, or did not answer.</summary>
+    /// <summary>MSG-WATER-01 (WATER-01.2): the OCR Service could not read one or more values, or did not answer.</summary>
     /// <param name="indicatorList">The values not read, e.g. "pH and salinity".</param>
     public static UserMessage OcrValuesNotRead(string indicatorList) => new(
         Water01, $"OMTS could not read {indicatorList} from the photo. Please look at the meter and type in the missing values.", Legacy.Msg04);
 
+    /// <summary>MSG-WATER-02 (WATER-01 step 8): before saving, a value is outside the water thresholds of the zone.</summary>
+    /// <param name="valuesOutside">Each value outside with its allowed range.</param>
+    public static UserMessage WaterValuesOutsideBeforeSave(IReadOnlyList<WaterValueOutside> valuesOutside) => new(
+        Water02, $"{string.Join("; ", valuesOutside.Select(v => v.Describe()))}. Please check the meter again before you save.");
+
     /// <summary>MSG-WATER-03 (BR-WATER-05): the water alert notification.</summary>
     /// <param name="corrected">The alert of a corrected measurement: "(corrected measurement)" in the text.</param>
-    /// <param name="raftCode">Null while measurements have no raft ("–" in the text).</param>
+    /// <param name="raftCode">The raft where the water was measured.</param>
     /// <param name="measuredAt">Shown in Vietnam time.</param>
     /// <param name="valuesOutside">Each value outside with its allowed range.</param>
     public static UserMessage WaterAlert(
-        bool corrected, string zoneName, string? raftCode, DateTimeOffset measuredAt, IReadOnlyList<WaterValueOutside> valuesOutside) => new(
+        bool corrected, string zoneName, string raftCode, DateTimeOffset measuredAt, IReadOnlyList<WaterValueOutside> valuesOutside) => new(
         Water03,
-        $"Water alert{(corrected ? " (corrected measurement)" : "")}: zone {zoneName}, raft {raftCode ?? "–"}, measured on {BusinessClock.Format(measuredAt)}. "
+        $"Water alert{(corrected ? " (corrected measurement)" : "")}: zone {zoneName}, raft {raftCode}, measured on {BusinessClock.Format(measuredAt)}. "
             + $"{string.Join("; ", valuesOutside.Select(v => v.Describe()))}. Please check the water.",
         Legacy.Msg27)
     {
@@ -223,14 +267,57 @@ public static class UserMessages
 
     // ---- MSG-PURCHASE ----
 
+    /// <summary>MSG-PURCHASE-01 (BR-PURCHASE-05): notification to the Owner when a purchase receipt is completed.</summary>
+    /// <param name="totalAmount">The total of the receipt in whole VND: the sum of its rounded lines (BR-PURCHASE-02).</param>
+    public static UserMessage ReceiptCompleted(string userName, string receiptCode, string supplierName, int lineCount, decimal totalAmount) => new(
+        Purchase01, $"{userName} completed purchase receipt {receiptCode} from {supplierName}: {lineCount} lines, {Vnd(totalAmount)} VND.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["user_name"] = userName,
+            ["receipt_code"] = receiptCode,
+            ["supplier_name"] = supplierName,
+            ["line_count"] = lineCount,
+            ["total_amount"] = totalAmount,
+        },
+    };
+
     /// <summary>MSG-PURCHASE-03 (PURCHASE-02.0.E1): a quantity to return is not greater than 0 or above what is left.</summary>
     /// <param name="legacyCode">MSG59 (not greater than 0) or MSG45 (above the limit).</param>
     public static UserMessage ReturnQuantityOutsideLimit(string itemName, string maxQuantity, string unit, string limitExplanation, string legacyCode) => new(
         Purchase03, $"{itemName}: enter a quantity greater than 0 and at most {maxQuantity} {unit}. {limitExplanation}".TrimEnd(), legacyCode);
 
+    /// <summary>MSG-PURCHASE-07 (PURCHASE-06 step 2): cancelling the receipt would bring the supplier debt below zero.</summary>
+    /// <param name="advanceAmount">What the cooperative will then have paid in advance (a positive amount).</param>
+    public static UserMessage PaidInAdvanceAfterCancel(string supplierName, decimal advanceAmount) => new(
+        Purchase07,
+        $"After this cancellation, the cooperative will have paid {supplierName} {Vnd(advanceAmount)} VND in advance. The payments already recorded are not cancelled.")
+    {
+        Parameters = new Dictionary<string, object?> { ["supplier_name"] = supplierName, ["advance_amount"] = advanceAmount },
+    };
+
+    /// <summary>MSG-PURCHASE-08 (PURCHASE-06 step 7): notification to the Accountant and the Owner of a debt below zero after a cancellation.</summary>
+    public static UserMessage ReceiptCancelledPaidInAdvance(string userName, string receiptCode, string supplierName, decimal advanceAmount) => new(
+        Purchase08,
+        $"{userName} cancelled purchase receipt {receiptCode} from {supplierName}. The cooperative has now paid {supplierName} {Vnd(advanceAmount)} VND in advance.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["user_name"] = userName,
+            ["receipt_code"] = receiptCode,
+            ["supplier_name"] = supplierName,
+            ["advance_amount"] = advanceAmount,
+        },
+    };
+
     /// <summary>MSG-PURCHASE-09 (PURCHASE-06.0.E1): a seed lot was seeded or the receipt has a purchase return.</summary>
     public static UserMessage ReceiptCannotBeCancelled(string receiptCode, string cause) => new(
         Purchase09, $"Receipt {receiptCode} cannot be cancelled: {cause}. The Cooperative Owner can correct it instead.", Legacy.Msg61);
+
+    /// <summary>MSG-PURCHASE-10 (PURCHASE-06.2.E1): a corrected quantity is below the quantity seeded plus the quantity returned.</summary>
+    public static UserMessage QuantityBelowUsed(string itemName, decimal minQuantity, string unit, decimal seededQuantity, decimal returnedQuantity) => new(
+        Purchase10,
+        $"{itemName}: the quantity cannot be less than {Quantity(minQuantity)} {unit} ({Quantity(seededQuantity)} seeded, {Quantity(returnedQuantity)} returned).");
 
     // ---- MSG-LABOR ----
 
@@ -316,20 +403,39 @@ public static class UserMessages
     /// <summary>A date as shown in messages, e.g. "29/11/2026".</summary>
     private static string Date(DateOnly date) => date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
 
-    // {document} of MSG-FARM-01/02: "the license number with its zone".
-    private static string LicenseDocument(string documentTypeName, string documentNumber, IReadOnlyList<string> zoneCodes) =>
-        $"{documentTypeName} {documentNumber} ({string.Join(", ", zoneCodes)})";
+    /// <summary>A VND amount as shown in messages, e.g. "1,250,500" (never rounded, BR-PURCHASE-02).</summary>
+    private static string Vnd(decimal amount) => amount.ToString("#,0.###", CultureInfo.InvariantCulture);
 
+    /// <summary>A quantity as shown in messages, e.g. "12.5" (at most 3 decimals).</summary>
+    private static string Quantity(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+
+    // {document} of MSG-FARM-01/02: "the license number with its zone".
+    private static string LicenseDocument(string? documentTypeName, string documentNumber, string zoneCode) =>
+        $"{documentTypeName ?? "Zone license"} {documentNumber} ({zoneCode})";
+
+    // {document} of MSG-FARM-01/02: "the certification name and number".
+    private static string CertificationDocument(string name, string? number) => number is null ? name : $"{name} ({number})";
+
+    // zone_codes stays a list (one zone since PR 0.8), as the clients of PR 0.5 read it.
     private static Dictionary<string, object?> LicenseParameters(
-        string documentType, string documentNumber, IReadOnlyList<string> zoneCodes, DateOnly expiryDate, int? days)
+        string? documentType, string documentNumber, string zoneCode, DateOnly expiryDate, int? days) => WithDays(new Dictionary<string, object?>
     {
-        var parameters = new Dictionary<string, object?>
+        ["document_type"] = documentType,
+        ["document_number"] = documentNumber,
+        ["zone_codes"] = new[] { zoneCode },
+        ["expiry_date"] = expiryDate,
+    }, days);
+
+    private static Dictionary<string, object?> CertificationParameters(string name, string? number, DateOnly expiryDate, int? days) =>
+        WithDays(new Dictionary<string, object?>
         {
-            ["document_type"] = documentType,
-            ["document_number"] = documentNumber,
-            ["zone_codes"] = zoneCodes,
+            ["certification_name"] = name,
+            ["certification_number"] = number,
             ["expiry_date"] = expiryDate,
-        };
+        }, days);
+
+    private static Dictionary<string, object?> WithDays(Dictionary<string, object?> parameters, int? days)
+    {
         if (days is { } value)
         {
             parameters["days"] = value;

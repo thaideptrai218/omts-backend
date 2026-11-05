@@ -4,20 +4,19 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using OMTS.Api.IntegrationTests.Infrastructure;
-using OMTS.Domain.Constants;
 
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
-/// ENV-01 – the fake OCR invents readings, so it is opt-in (Development and test settings only). A host with
-/// the provider unset or unknown reads nothing: the draft is kept with MSG04 and the user enters the values.
+/// WATER-01 – the fake OCR invents readings, so it is opt-in (Development and test settings only). A host with the
+/// provider unset or unknown reads nothing: the photo is kept with MSG-WATER-01 and the user enters the values.
 /// </summary>
 public class WaterOcrNotConfiguredTests
 {
     [Theory]
     [InlineData("")]
     [InlineData("Azure")]
-    public async Task Without_the_fake_provider_a_photo_gives_no_values_a_Failed_status_and_a_saved_draft(string provider)
+    public async Task Without_the_fake_provider_a_photo_gives_no_values_a_Failed_status_and_a_key_to_record_with(string provider)
     {
         await using var api = new WaterApiFactory(new Dictionary<string, string> { ["Ocr:Provider"] = provider });
         var z = await api.ZoneAsync();
@@ -30,24 +29,13 @@ public class WaterOcrNotConfiguredTests
         var ocr = body.GetProperty("ocr");
         Assert.Equal("Failed", ocr.Text("status"));
         Assert.Equal("MSG-WATER-01", ocr.GetProperty("warning").Text("code"));
-        foreach (var field in new[] { "ph", "salinity", "measuredAt" })
+        foreach (var field in new[] { "ph", "salinity", "temperature", "measuredAt" })
         {
             Assert.Equal(JsonValueKind.Null, ocr.GetProperty(field).ValueKind);
         }
 
-        var draft = body.GetProperty("measurement");
-        Assert.Equal("Draft", draft.Text("status"));
-        Assert.Equal(JsonValueKind.Null, draft.GetProperty("ph").ValueKind);
-        Assert.Equal(JsonValueKind.Null, draft.GetProperty("salinity").ValueKind);
-        Assert.Equal("Manual", draft.Text("inputSource"));
-        var stored = await api.QueryAsync(db => db.WaterMeasurements.AsNoTracking().SingleAsync(m => m.Id == draft.Id()));
-        Assert.Equal(StatusIds.WaterMeasurement.Draft, stored.StatusId);
-        Assert.Null(stored.OcrPh);
-        Assert.NotNull(stored.PhotoUrl);
-
-        var confirm = await z.Owner.PostAsJsonAsync($"/api/water-measurements/{stored.Id}/confirm", new { });
-        Assert.Equal(HttpStatusCode.BadRequest, confirm.StatusCode);
-        Assert.Equal("MSG-GEN-01", await confirm.ErrorCodeAsync());
+        Assert.Equal(0, await api.QueryAsync(db => db.WaterMeasurements.CountAsync()));
+        Assert.Equal(HttpStatusCode.Created, (await z.RecordAsync(7.2m, 20m, photoKey: body.Text("photoKey"))).StatusCode);
     }
 
     [Fact]
@@ -56,9 +44,10 @@ public class WaterOcrNotConfiguredTests
         await using var api = new WaterApiFactory(new Dictionary<string, string> { ["Ocr:Provider"] = "Fake" });
         var z = await api.ZoneAsync();
 
-        var body = await (await z.RecognizeAsync("ph7.2_sal20")).Content.ReadFromJsonAsync<JsonElement>();
+        var body = await (await z.RecognizeAsync("ph7.2_sal20_tmp31.5")).Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(7.2m, body.GetProperty("ocr").GetProperty("ph").GetProperty("value").GetDecimal());
+        Assert.Equal(31.5m, body.GetProperty("ocr").GetProperty("temperature").GetProperty("value").GetDecimal());
     }
 
     [Fact]

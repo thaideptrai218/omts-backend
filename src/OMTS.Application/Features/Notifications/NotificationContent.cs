@@ -24,12 +24,23 @@ public static partial class RelatedRecordTypes
     /// <summary>A zone license (FARM-03), stored in the entity ZoneComplianceDocument.</summary>
     public const string ZoneLicense = "ZoneLicense";
 
+    /// <summary>A certification of the cooperative (FARM-01.1).</summary>
+    public const string CooperativeCertification = "CooperativeCertification";
+
     public const string Account = "Account";
 
-    /// <summary>"FarmingZone" → "Farming zone", "ZoneLicense" → "Zone license": the {object_name} of MSG-ACCOUNT-22.</summary>
-    public static string ObjectName(string recordType) => string.Join(' ', PascalWords().Split(recordType)
-        .Where(w => w.Length > 0)
-        .Select((w, i) => i == 0 ? w : w.ToLowerInvariant()));
+    /// <summary>A purchase receipt (PURCHASE-01, PURCHASE-06); it has no zone.</summary>
+    public const string PurchaseReceipt = "PurchaseReceipt";
+
+    /// <summary>
+    /// "FarmingZone" → "Farming zone", "ZoneLicense" → "Zone license": the {object_name} of MSG-ACCOUNT-22. A certification
+    /// of the cooperative reads "Certification", not the words of its entity.
+    /// </summary>
+    public static string ObjectName(string recordType) => recordType == CooperativeCertification
+        ? "Certification"
+        : string.Join(' ', PascalWords().Split(recordType)
+            .Where(w => w.Length > 0)
+            .Select((w, i) => i == 0 ? w : w.ToLowerInvariant()));
 
     [GeneratedRegex("(?<=[a-z0-9])(?=[A-Z])")]
     private static partial Regex PascalWords();

@@ -18,6 +18,7 @@ public class NotificationDispatcherTests
     private readonly FakeNotificationRepository _notifications = new();
     private readonly FakePushOutbox _outbox = new();
     private readonly FakePushDeviceRepository _devices = new();
+    private readonly MandatorySmsQueueFakes _sms = new();
 
     [Fact]
     public async Task A_normal_type_is_kept_for_everyone_and_pushed_unless_push_is_turned_off()
@@ -73,7 +74,7 @@ public class NotificationDispatcherTests
         var zoneId = Guid.NewGuid();
         _notifications.Preferences[account] = [];
 
-        await new NotificationDispatcher(_notifications, _devices, _outbox, new FixedTimeProvider(Now)).NotifyAsync(
+        await new NotificationDispatcher(_notifications, _devices, _outbox, _sms.Queue, new FixedTimeProvider(Now)).NotifyAsync(
             [account],
             new NotificationContent(
                 NotificationTypes.WaterMeasurementOverdue,
@@ -144,7 +145,7 @@ public class NotificationDispatcherTests
     }
 
     private Task NotifyAsync(IReadOnlyCollection<Guid> recipients, string type) =>
-        new NotificationDispatcher(_notifications, _devices, _outbox, new FixedTimeProvider(Now))
+        new NotificationDispatcher(_notifications, _devices, _outbox, _sms.Queue, new FixedTimeProvider(Now))
             .NotifyAsync(recipients, new NotificationContent(type, "Title", new UserMessage("MSG-WATER-06", "Body")), CancellationToken.None);
 
     private static PushDevice Device(Guid accountId, string token) => new() { AccountId = accountId, Token = token, PermissionGranted = true };

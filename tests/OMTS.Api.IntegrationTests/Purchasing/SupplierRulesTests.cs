@@ -98,7 +98,7 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     public async Task Discontinue_is_never_blocked_and_keeps_receipts_but_blocks_new_completions()
     {
         var world = await factory.WorldAsync();
-        var completed = await world.CompletedAsync(0, 0, new LineBody(world.Other, 1, 100_000));
+        var completed = await world.CompletedAsync(new LineBody(world.Other, 1, 100_000));
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 100_000)));
 
         await (await world.Owner.PostAsync($"/api/suppliers/{world.SupplierId}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
@@ -143,13 +143,13 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     }
 
     [Fact]
-    public async Task Detail_returns_the_receipt_history_of_visible_zones_and_no_debt()
+    public async Task Detail_returns_the_whole_receipt_history_to_every_receipt_viewer_and_no_debt()
     {
         var world = await factory.WorldAsync();
-        var first = await world.CompletedAsync(0, 200_000, new LineBody(world.Other, 10, 100_000));
+        var first = await world.PaidAsync(200_000, new LineBody(world.Other, 10, 100_000));
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 50_000)));
         var (otherZone, _) = await factory.ZoneWithRaftAsync();
-        var elsewhere = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 3, 100_000)) with { ZoneId = otherZone.Id, Complete = true });
+        var elsewhere = await (await factory.ZoneManagerAsync(otherZone)).CreateReceiptAsync(world.Body(new LineBody(world.Other, 3, 100_000)) with { Complete = true });
 
         var view = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}");
         // The supplier debt is PURCHASE-04, which the Zone Manager does not hold (§I.4.4): not on the supplier detail.
@@ -157,11 +157,10 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var history = view.GetProperty("receipts").EnumerateArray().Select(r => r.Id()).ToHashSet();
         Assert.Equal(new HashSet<Guid> { first.Id(), draft.Id(), elsewhere.Id() }, history);
 
-        // A Zone Manager of the first zone sees that zone's receipts only.
+        // Receipts have no zone (BR-FARM-08): a Zone Manager of another zone sees them all.
         var manager = await factory.ZoneManagerAsync(world.Zone);
         var managerView = await manager.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}");
-        Assert.DoesNotContain(managerView.GetProperty("receipts").EnumerateArray(), r => r.Id() == elsewhere.Id());
-        Assert.Contains(managerView.GetProperty("receipts").EnumerateArray(), r => r.Id() == first.Id());
+        Assert.Equal(history, managerView.GetProperty("receipts").EnumerateArray().Select(r => r.Id()).ToHashSet());
     }
 
     [Fact]
