@@ -7,7 +7,9 @@ namespace OMTS.Infrastructure.Persistence.Interceptors;
 
 /// <summary>
 /// Sends the queued push messages and mandatory SMS once the save has committed. A failure is logged and never rolls
-/// back the business change; a failed or cancelled save drops the queue so nothing unsaved is announced.
+/// back the business change; a failed or cancelled save drops the queue so nothing unsaved is announced. A row version
+/// conflict is not a failed save for EF Core: the queue stays with the rows the tracker still holds, so a retry by reload
+/// announces what it commits, and <see cref="OMTS.Application.Common.Interfaces.Persistence.IUnitOfWork.DiscardChanges"/> drops both.
 /// </summary>
 internal sealed class PushOutboxInterceptor(
     PushOutbox outbox, IPushSender pushSender, MandatorySmsDelivery mandatorySms, ILogger<PushOutboxInterceptor> logger)
@@ -32,21 +34,6 @@ internal sealed class PushOutboxInterceptor(
     {
         await SendPendingAsync();
         return result;
-    }
-
-    // A row version conflict does not count as a failed save for EF Core: it only comes through here. A use case that
-    // retries after one would otherwise announce the attempt that was lost.
-    public override InterceptionResult ThrowingConcurrencyException(ConcurrencyExceptionEventData eventData, InterceptionResult result)
-    {
-        outbox.Discard();
-        return result;
-    }
-
-    public override ValueTask<InterceptionResult> ThrowingConcurrencyExceptionAsync(
-        ConcurrencyExceptionEventData eventData, InterceptionResult result, CancellationToken cancellationToken = default)
-    {
-        outbox.Discard();
-        return ValueTask.FromResult(result);
     }
 
     public override void SaveChangesFailed(DbContextErrorEventData eventData) => outbox.Discard();
