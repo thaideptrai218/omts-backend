@@ -31,9 +31,6 @@ public class PurchaseReceipt : AuditableEntity, IHasStatus
     public Status Status { get; set; } = null!;
     public ICollection<PurchaseReceiptLine> Lines { get; set; } = [];
     public ICollection<PurchaseReturn> Returns { get; set; } = [];
-
-    /// <summary>Payments still allocated to the receipt; they stop being tied to receipts with PURCHASE-05 (BR-PURCHASE-04).</summary>
-    public ICollection<SupplierPayment> Payments { get; set; } = [];
 }
 
 /// <summary>

@@ -1783,7 +1783,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Group = "SUPPLIER_PAYMENT",
                             IsFinal = false,
                             IsInitial = true,
-                            Meaning = "Money paid to the supplier; reduces supplier debt.",
+                            Meaning = "Counts in the supplier debt; cannot be edited.",
                             SortOrder = 1
                         },
                         new
@@ -2502,9 +2502,21 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasPrecision(18)
                         .HasColumnType("decimal(18,0)");
 
+                    b.Property<string>("BankReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("CancelReason")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
@@ -2516,27 +2528,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("EvidenceUrls")
+                    b.Property<string>("Kind")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("Method")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<DateOnly>("PaymentDate")
                         .HasColumnType("date");
 
-                    b.Property<Guid?>("ReceiptId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<Guid>("RecordedByAccountId")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("ReferenceCode")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -2558,11 +2568,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("BankReference");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
                     b.HasIndex("DeduplicationKey")
                         .IsUnique()
                         .HasFilter("[DeduplicationKey] IS NOT NULL");
-
-                    b.HasIndex("ReceiptId");
 
                     b.HasIndex("RecordedByAccountId");
 
@@ -2570,10 +2583,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("SupplierId", "PaymentDate");
 
-                    b.ToTable("SupplierPayments", t =>
-                        {
-                            t.HasCheckConstraint("CK_SupplierPayment_Amount_Thousands", "[Amount] % 1000 = 0");
-                        });
+                    b.ToTable("SupplierPayments");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.Customer", b =>
@@ -3430,11 +3440,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.SupplierPayment", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Purchasing.PurchaseReceipt", "Receipt")
-                        .WithMany("Payments")
-                        .HasForeignKey("ReceiptId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("RecordedByAccountId")
@@ -3452,8 +3457,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("SupplierId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.Navigation("Receipt");
 
                     b.Navigation("Status");
 
@@ -3592,8 +3595,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.PurchaseReceipt", b =>
                 {
                     b.Navigation("Lines");
-
-                    b.Navigation("Payments");
 
                     b.Navigation("Returns");
                 });

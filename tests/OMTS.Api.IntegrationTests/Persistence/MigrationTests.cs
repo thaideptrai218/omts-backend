@@ -34,7 +34,7 @@ public class MigrationTests
     ];
 
     private const string MigrationBeforeCleanup = "20261025175348_AddPushDeviceLoginSession";
-    private const string MigrationBeforeRaftsV2 = "20261105122524_PurchaseRequests";
+    private const string MigrationBeforeRaftsV2 = "20261105140242_SupplierPaymentsV2";
 
     // OMTS-208 done criteria: a fresh database built from the migrations has the status catalog, keeps the
     // schema rules (no cascade delete) and the API starts on it.

@@ -81,8 +81,9 @@ expiring within 30 days), a fictional receiving bank account (`DEMO00000001`; sk
 an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid license and an older expired one), about 10 rafts with lanes per zone, 9 employees (one Left, one without a phone number),
 5 suppliers, 15 farming input items (codes VT001–VT015, every seed item counted in `con`) and 20 purchase receipts of the last 3 months
 (16 Completed, 2 Cancelled, 2 Draft): Material lines and two seed receipts name the raft they were bought for, one line has a
-fractional quantity (its amount is not a whole thousand), with payments and a return. The Owner's list holds a MSG-PURCHASE-01
-notification for each completed receipt.
+fractional quantity (its amount is not a whole thousand), with a return. Payments to the suppliers (`TT` codes, not linked to
+receipts), one amount of money paid back and one payment cancelled feed the supplier debts (`GET /api/supplier-debts`). The Owner's
+list holds a MSG-PURCHASE-01 notification for each completed receipt and a MSG-PURCHASE-04 for each transaction.
 The demo data also holds 4 products (one Discontinued), 7 customer profiles (2 linked to the trader accounts, 2 the same buyer ready to merge) and
 4 purchase requests of `thuonglai1`, one in each state (Awaiting response, Accepted for fewer kg with pay later, Declined, Cancelled).
 An answer sends an SMS, so with an SMS sender other than Fake or None the requests stay unanswered and the seed output says so;
@@ -96,8 +97,9 @@ sets of water alerts (the demo records as the Owner, who is not told of their ow
 
 Dates are set relative to the day of the first seed and are not moved afterwards:
 - After a few weeks the "expiring" license and certification have expired. `docker compose down -v` gives fresh dates.
-- Receipt codes follow one sequence in the order they were seeded (`PN000001`…`PN000020`), not the receipt date; return
-  codes carry the seed date (`PRT-<seed date>-nnn`).
+- Receipt codes follow one sequence in the order they were seeded (`PN000001`…`PN000020`), not the receipt date, and so do
+  payment codes (`TT000001`…); return codes carry the seed date (`PRT-<seed date>-nnn`).
+- The debt age and the current-month statement of a supplier move with the calendar; pass `from`/`to` to the statement.
 - The last water measurement is from the day before the seed: a month later without new ones, the zones are overdue and
   get the 06:00 reminder (MSG-WATER-06).
 - The receipt list shows the current month by default (PURCHASE-03): pass `from`/`to` to see the older demo receipts.
@@ -213,6 +215,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (LABOR-01.3) | never: list only | Owner |
 | `PURCHASE_RECEIPT_COMPLETED` | MSG-PURCHASE-01, when a receipt is completed (never for a draft), also when the Owner completed it | unless turned off | Owner |
 | `PURCHASE_RECEIPT_CANCELLED_ADVANCE` | MSG-PURCHASE-08, when a cancelled receipt leaves the supplier debt below zero | unless turned off | Owner, Accountant |
+| `SUPPLIER_TRANSACTION` | MSG-PURCHASE-04, for a supplier payment, money paid back or a cancelled one, also when the Owner did it | always (mandatory) | Owner |
 
 - Preferences (ACCOUNT-07): `GET`/`PUT /api/me/notification-preferences` list the types of the roles the account
   holds with `push` on or off (`items: [{ type, push }]`). Mandatory types are shown as always pushed and cannot be
@@ -231,6 +234,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   | MSG-FARM-01 / MSG-FARM-02 (`ZONE_LICENSE_EXPIRY`) | `document_type` (license type code, null when none), `document_number`, `zone_codes` (list holding the license's one zone), `expiry_date`, `days` (MSG-FARM-01 only) |
   | MSG-FARM-01 / MSG-FARM-02 (`COOPERATIVE_CERTIFICATION_EXPIRY`) | `certification_name`, `certification_number` (null when none), `expiry_date`, `days` (MSG-FARM-01 only) |
   | MSG-PURCHASE-01 | `user_name`, `receipt_code`, `supplier_name`, `line_count`, `total_amount` (whole VND: the sum of the lines, each rounded half up to the dong) |
+  | MSG-PURCHASE-04 | `user_name`, `transaction_kind` (`Payment`, `PaidBack`, `PaymentCancelled`, `PaidBackCancelled`), `payment_code`, `amount`, `supplier_name`, `debt_amount` (the debt after it; below zero: paid in advance) |
   | MSG-PURCHASE-08 | `user_name`, `receipt_code`, `supplier_name`, `advance_amount` (VND paid in advance, positive) |
 - `GET /api/me/notifications/{id}/open` checks the access again (GFR-02): 403 MSG-GEN-08 when the user may no longer
   open the record (e.g. a revoked zone–role pair), 404 MSG-ACCOUNT-22 when the record was removed. A push carries the
@@ -365,6 +369,10 @@ created by a one-time command run on the server by the deployment operator (not 
    (`PR-yyyyMMdd-nnn`) stay and new receipts take `PN000123` codes from the `DocumentSequences` counter, which starts after
    the highest PN code and never gives a number twice. Down is lossy. Demo databases are not converted further:
    reset them (`docker compose down -v`).
+   Upgrading a database from before the supplier payments of SRS 27/10 (migration `SupplierPaymentsV2`): payments are no
+   longer linked to receipts and lose their evidence files; the rows get kind `Payment` and `TT000123` codes in payment order,
+   and the `DocumentSequences` counter starts after them. Refunds stay on the returns until the returns PR. Down is lossy (money
+   paid back is dropped, amounts are rounded to thousands). Demo databases are not converted further: reset them.
    An Owner who cannot log in (for example after losing the first password) is recovered with
    `dotnet OMTS.Api.dll seed --reset-owner-password`. It sets `Bootstrap:Owner:TemporaryPassword` (from configuration, never
    from the command line, so it never lands in shell history) as a new password that must be changed at first login and

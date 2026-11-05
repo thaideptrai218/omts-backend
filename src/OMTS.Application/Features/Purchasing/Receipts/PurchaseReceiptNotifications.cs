@@ -45,14 +45,5 @@ public sealed class PurchaseReceiptNotifications(
 
     private static RelatedRecord Related(PurchaseReceipt receipt) => new(RelatedRecordTypes.PurchaseReceipt, receipt.Id, receipt.Code);
 
-    private async Task<string> ActorNameAsync(CancellationToken cancellationToken)
-    {
-        if (currentUser.AccountId is not { } accountId)
-        {
-            return "The system";
-        }
-
-        var names = await accounts.GetDisplayNamesAsync([accountId], cancellationToken);
-        return names.GetValueOrDefault(accountId) ?? "A user";
-    }
+    private Task<string> ActorNameAsync(CancellationToken cancellationToken) => PurchasingActorName.OfAsync(currentUser, accounts, cancellationToken);
 }

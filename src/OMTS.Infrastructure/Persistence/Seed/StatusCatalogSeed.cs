@@ -47,7 +47,7 @@ internal static class StatusCatalogSeed
         NewStatus(S.PurchaseReceipt.Completed, G.PurchaseReceipt, "COMPLETED", "Completed", "Cannot be changed; counts in the supplier debt and raft material costs; each Seed line is a seed lot."),
         NewStatus(S.PurchaseReceipt.Cancelled, G.PurchaseReceipt, "CANCELLED", "Cancelled", "Kept with its reason; counts nowhere; its Seed lines are no longer seed lots.", final: true),
 
-        NewStatus(S.SupplierPayment.Recorded, G.SupplierPayment, "RECORDED", "Recorded", "Money paid to the supplier; reduces supplier debt.", initial: true),
+        NewStatus(S.SupplierPayment.Recorded, G.SupplierPayment, "RECORDED", "Recorded", "Counts in the supplier debt; cannot be edited.", initial: true),
         NewStatus(S.SupplierPayment.Cancelled, G.SupplierPayment, "CANCELLED", "Cancelled", "Recorded by mistake; no longer counts in the supplier debt.", final: true),
 
         NewStatus(S.Lane.InUse, G.Lane, "IN_USE", "In Use", "Seeded and harvested.", initial: true),

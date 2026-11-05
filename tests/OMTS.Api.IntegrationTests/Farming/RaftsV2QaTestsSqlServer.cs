@@ -18,7 +18,7 @@ namespace OMTS.Api.IntegrationTests.Farming;
 /// <summary>Independent QA of FARM-04 on SQL Server: parallel saves with real row versions, and more of the migration.</summary>
 public class RaftsV2QaTestsSqlServer
 {
-    private const string MigrationBefore = "20261105122524_PurchaseRequests";
+    private const string MigrationBefore = "20261105140242_SupplierPaymentsV2";
 
     private static async Task<string> Show(HttpResponseMessage[] answers)
     {

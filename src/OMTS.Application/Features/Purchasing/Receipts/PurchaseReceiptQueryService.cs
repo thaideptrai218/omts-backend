@@ -62,9 +62,6 @@ public sealed class PurchaseReceiptQueryService(
     IStatusCatalog statusCatalog,
     TimeProvider timeProvider)
 {
-    /// <summary>Longest list, export and cost period, so one request never reads the whole history.</summary>
-    public const int MaxPeriodYears = 5;
-
     public async Task<Result<PurchaseReceiptSearchResult>> SearchAsync(PurchaseReceiptQuery query, CancellationToken cancellationToken)
     {
         var filter = await FilterAsync(query, cancellationToken);
@@ -165,10 +162,7 @@ public sealed class PurchaseReceiptQueryService(
         }
     }
 
-    /// <summary>
-    /// The period defaults to the current month (PURCHASE-03 step 1): a missing start is the first day of the month of the end,
-    /// a missing end the last day of the current month. At most five years; a start after the end is MSG-GEN-01.
-    /// </summary>
+    /// <summary>The filter with its period (<see cref="PurchasePeriod"/>, PURCHASE-03 step 1).</summary>
     private async Task<Result<PurchaseReceiptFilter>> FilterAsync(PurchaseReceiptQuery query, CancellationToken cancellationToken)
     {
         if (query.RaftId is { } raftId && (await rafts.GetByIdsAsync([raftId], cancellationToken)).Count == 0)
@@ -176,23 +170,15 @@ public sealed class PurchaseReceiptQueryService(
             return AppError.Invalid("Raft");
         }
 
-        var today = timeProvider.Today();
-        var from = query.From ?? FirstOfMonth(query.To ?? today);
-        var to = query.To ?? FirstOfMonth(today).AddMonths(1).AddDays(-1);
-        if (from > to)
+        var period = PurchasePeriod.Resolve(query.From, query.To, timeProvider.Today());
+        if (!period.IsSuccess)
         {
-            return AppError.Invalid("From date");
+            return period.Error!;
         }
 
-        if (to > from.AddYears(MaxPeriodYears))
-        {
-            return AppError.Invalid("To date", $"The period is at most {MaxPeriodYears} years.");
-        }
-
+        var (from, to) = period.Value;
         return new PurchaseReceiptFilter(query.ItemGroup, query.ItemId, query.RaftId, query.SupplierId, query.StatusId, from, to, query.Code);
     }
-
-    private static DateOnly FirstOfMonth(DateOnly day) => new(day.Year, day.Month, 1);
 
     private PurchaseReceiptRow Row(ReceiptFigureRow r) => new(
         r.Id, r.Code, r.ReceiptDate, new SupplierRef(r.SupplierId, r.SupplierName, r.SupplierPhone),

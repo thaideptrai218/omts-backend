@@ -7,13 +7,13 @@ internal enum DemoReceiptOutcome
     Draft,
     Completed,
 
-    /// <summary>Completed first, then cancelled with a reason (its payments are kept, BR-PURCHASE-09).</summary>
+    /// <summary>Completed first, then cancelled with a reason (payments are never cancelled with a receipt, BR-PURCHASE-09).</summary>
     Cancelled,
 }
 
 internal sealed record DemoReceiptLine(string Item, decimal Quantity, decimal UnitPrice, string? SupplierLotCode = null);
 
-/// <summary>A payment recorded on the receipt, <paramref name="DaysAgo"/> days before today (allocated until PURCHASE-05 unties them).</summary>
+/// <summary>A payment to the supplier of the receipt, <paramref name="DaysAgo"/> days before today; it is not linked to the receipt (BR-PURCHASE-04).</summary>
 internal sealed record DemoPayment(int DaysAgo, decimal Amount, PaymentMethod Method);
 
 /// <summary>A partial return (INP-05) of one line: refund plus debt reduction equal the returned value.</summary>

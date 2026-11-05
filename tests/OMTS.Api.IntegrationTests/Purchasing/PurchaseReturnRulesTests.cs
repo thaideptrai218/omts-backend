@@ -40,13 +40,13 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
         var first = await (await world.Owner.PostReturnAsync(receipt.Id(), Return(line, 50, 100_000, 350_000))).ReadAsync(HttpStatusCode.Created);
         Assert.Equal(450_000m, first.Money("returned"));
         Assert.Equal(20, first.LineViewOf(world.Seed).Money("returnable"));
-        Assert.Equal(250_000, await DebtAsync(world));
+        Assert.Equal(250_000, await world.DebtAsync());
 
         // 20 kg: 180,000 all refunded → the debt does not change.
         var second = await (await world.Owner.PostReturnAsync(receipt.Id(), Return(line, 20, 180_000, 0))).ReadAsync(HttpStatusCode.Created);
         Assert.Equal((630_000m, 0m), (second.Money("returned"), second.LineViewOf(world.Seed).Money("returnable")));
         Assert.Equal(70, second.LineViewOf(world.Seed).Money("returnedQuantity"));
-        Assert.Equal(250_000, await DebtAsync(world));
+        Assert.Equal(250_000, await world.DebtAsync());
 
         var over = await world.Owner.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000));
         var problem = await over.ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-03");
@@ -56,8 +56,27 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
             problem.GetProperty("detail").GetString());
         Assert.Equal(2, await factory.QueryAsync(db => db.PurchaseReturns.CountAsync(r => r.ReceiptId == receipt.Id())));
 
-        var debtRow = (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}/debt")).GetProperty("totals");
-        Assert.Equal((900_000m, 630_000m, 300_000m, 280_000m), (debtRow.Money("payable"), debtRow.Money("returned"), debtRow.Money("paid"), debtRow.Money("refunded")));
+        // The statement shows each return and the money it brought back: 900,000 − 300,000 − 450,000 + 100,000 − 180,000 + 180,000.
+        var statement = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/supplier-debts/{world.SupplierId}/statement");
+        Assert.Equal(
+            [("Receipt", 900_000m), ("Return", -450_000m), ("Return", -180_000m), ("ReturnRefund", 100_000m), ("ReturnRefund", 180_000m), ("Payment", -300_000m)],
+            statement.GetProperty("entries").EnumerateArray().Select(e => (e.GetProperty("kind").GetString(), e.Money("amount"))).ToList());
+        Assert.Equal(250_000m, statement.Money("closingDebt"));
+    }
+
+    // Payments keep their dongs now, so the supplier's limits may not be whole thousands while the split of a return must be.
+    [Fact]
+    public async Task A_return_in_whole_thousands_still_fits_a_supplier_whose_debt_and_payments_keep_their_dongs()
+    {
+        var world = await factory.WorldAsync();
+        var receipt = await world.PaidAsync(997, new LineBody(world.Other, 3, 499));
+        Assert.Equal(500m, await world.DebtAsync());
+
+        // 3 × 499 is 1,497, whose return value is 1,000: neither 500 of debt nor 997 held is a whole thousand on its own.
+        var returned = await (await world.Owner.PostReturnAsync(receipt.Id(), Return(receipt.LineOf(world.Other), 3, 0, 1_000))).ReadAsync(HttpStatusCode.Created);
+
+        Assert.Equal(1_000m, returned.Money("returned"));
+        Assert.Equal(-500m, await world.DebtAsync());
     }
 
     [Fact]
@@ -101,7 +120,7 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal(600_000m, returned.Money("returned"));
         Assert.All(returned.GetProperty("lines").EnumerateArray(), l => Assert.Equal(0m, l.Money("seeded")));
         Assert.Equal(0, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{world.Raft.Id}")).Money("materialCost"));
-        Assert.Equal(0, await DebtAsync(world));
+        Assert.Equal(0, await world.DebtAsync());
     }
 
     // Returning a line unit by unit adds up to the line, and the last unit can still be returned (the exact amounts of the
@@ -121,7 +140,7 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
         }
 
         Assert.Equal((3_000m, 0m), (last.Money("returned"), last.LineViewOf(world.Other).Money("returnable")));
-        Assert.Equal(0, await DebtAsync(world));
+        Assert.Equal(0, await world.DebtAsync());
     }
 
     [Fact]
@@ -157,7 +176,7 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
     {
         var world = await factory.WorldAsync();
         var receipt = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Seed, 100, 10_000)) with { ReceiptDate = Today.AddDays(-5), Complete = true });
-        await (await world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = receipt.Id(), Amount = 100_000 })).ReadAsync(HttpStatusCode.Created);
+        await world.PayAsync(100_000);
         var line = receipt.LineOf(world.Seed);
         var otherReceipt = await world.CompletedAsync(new LineBody(world.Other, 1, 1000));
         var valid = Return(line, 1, 0, 10_000);
@@ -250,7 +269,4 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
         await (await viewer.GetAsync($"/api/purchase-returns/{returnId}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(2, await factory.QueryAsync(db => db.PurchaseReturns.CountAsync(r => r.ReceiptId == receipt.Id())));
     }
-
-    private async Task<decimal> DebtAsync(PurchasingWorld world) =>
-        (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}/debt")).GetProperty("totals").Money("outstanding");
 }
