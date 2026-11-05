@@ -28,7 +28,7 @@ public class OrphanFileQaTests
         var zoneId = (await owner.Client.CreateZoneAsync()).Id();
         var raftId = (await owner.Client.CreateRaftAsync(zoneId)).Id();
         var licenseId = (await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zoneId, EffectiveDate = Today })).Id();
-        await factory.UpdateAsync<Raft>(raftId, r => r.PhotoUrl = ForeignKey(FileCategories.RaftPhotos, "jpg"));
+        await factory.UseDbAsync(db => db.RaftPhotos.Add(new RaftPhoto { RaftId = raftId, SortOrder = 1, FileKey = ForeignKey(FileCategories.RaftPhotos, "jpg") }));
         await factory.UpdateAsync<ZoneComplianceDocument>(licenseId, d => d.EvidenceFileUrl = ForeignKey(FileCategories.ZoneLicenses, "pdf"));
         var storage = factory.Services.GetRequiredService<IFileStorage>();
         await StoreAsync(storage, FileCategories.RaftPhotos, Png);
@@ -49,7 +49,7 @@ public class OrphanFileQaTests
         using var factory = new AuthApiFactory();
         var owner = await factory.OwnerAsync();
         var raftId = (await owner.Client.CreateRaftAsync((await owner.Client.CreateZoneAsync()).Id())).Id();
-        await (await UploadPhotoAsync(owner.Client, raftId)).ReadAsync(HttpStatusCode.OK);
+        await owner.Client.AddRaftPhotoAsync(raftId);
         var storage = factory.Services.GetRequiredService<IFileStorage>();
         var orphan = await StoreAsync(storage, FileCategories.RaftPhotos, Png);
         var others = new List<string>();
@@ -76,7 +76,7 @@ public class OrphanFileQaTests
         using var factory = new AuthApiFactory();
         var owner = await factory.OwnerAsync();
         var raftId = (await owner.Client.CreateRaftAsync((await owner.Client.CreateZoneAsync()).Id())).Id();
-        await (await UploadPhotoAsync(owner.Client, raftId)).ReadAsync(HttpStatusCode.OK);
+        await owner.Client.AddRaftPhotoAsync(raftId);
         var storage = factory.Services.GetRequiredService<IFileStorage>();
         var inside = await StoreAsync(storage, FileCategories.RaftPhotos, Png);
         var outside = await StoreAsync(storage, FileCategories.RaftPhotos, Png);
@@ -90,7 +90,7 @@ public class OrphanFileQaTests
         var left = AllKeys(factory);
         Assert.Contains(inside, left);
         Assert.DoesNotContain(outside, left);
-        Assert.Contains(await factory.QueryAsync(db => db.Rafts.Where(r => r.Id == raftId).Select(r => r.PhotoUrl!).SingleAsync()), left);
+        Assert.Contains(Assert.Single(await factory.RaftPhotoKeysAsync(raftId)), left);
     }
 
     [Fact]
@@ -104,8 +104,8 @@ public class OrphanFileQaTests
         Assert.Contains("GracePeriod must be at least 01:00:00", error.ToString());
     }
 
-    // The Azure provider end to end: the replaced blobs are deleted after the save, the clean-up deletes the orphan
-    // blob and keeps the blobs the raft and the license point to.
+    // The Azure provider end to end: the removed photo's and the replaced license's blobs are deleted after the save, the
+    // clean-up deletes the orphan blob and keeps the blobs the raft and the license point to.
     [AzuriteFact]
     public async Task On_blob_storage_replaced_files_are_removed_and_the_clean_up_keeps_the_referenced_blobs()
     {
@@ -114,9 +114,10 @@ public class OrphanFileQaTests
         var storage = factory.Services.GetRequiredService<IFileStorage>();
         var zoneId = (await owner.Client.CreateZoneAsync()).Id();
         var raftId = (await owner.Client.CreateRaftAsync(zoneId)).Id();
-        await (await UploadPhotoAsync(owner.Client, raftId)).ReadAsync(HttpStatusCode.OK);
-        await (await UploadPhotoAsync(owner.Client, raftId)).ReadAsync(HttpStatusCode.OK);
-        var photo = await factory.QueryAsync(db => db.Rafts.Where(r => r.Id == raftId).Select(r => r.PhotoUrl!).SingleAsync());
+        var firstPhoto = (await owner.Client.AddRaftPhotoAsync(raftId)).GetProperty("photos")[0].Id();
+        await owner.Client.AddRaftPhotoAsync(raftId);
+        await (await owner.Client.DeleteAsync($"/api/rafts/{raftId}/photos/{firstPhoto}")).ReadAsync(HttpStatusCode.OK);
+        var photo = Assert.Single(await factory.RaftPhotoKeysAsync(raftId));
         Assert.Equal([photo], await KeysAsync(storage, FileCategories.RaftPhotos));
 
         var fields = new LicenseFields { ZoneId = zoneId, EffectiveDate = Today };
@@ -135,7 +136,7 @@ public class OrphanFileQaTests
         Assert.Equal([licenseFile], await KeysAsync(storage, FileCategories.ZoneLicenses));
     }
 
-    // Parallel saves of one raft photo or one license: whatever answer each request gets, the file the saved record
+    // Parallel uploads to one raft or edits of one license: whatever answer each request gets, the file a saved record
     // points to is never deleted, and the clean-up then leaves exactly the referenced files.
     [SqlServerFact]
     public async Task Parallel_photo_uploads_and_license_edits_never_delete_the_file_the_saved_record_points_to()
@@ -144,20 +145,22 @@ public class OrphanFileQaTests
         var owner = host.Owner.Client;
         var zoneId = (await owner.CreateZoneAsync()).Id();
         var raftId = (await owner.CreateRaftAsync(zoneId)).Id();
-        await (await UploadPhotoAsync(owner, raftId)).ReadAsync(HttpStatusCode.OK);
-        string? photo = null;
+        await owner.AddRaftPhotoAsync(raftId);
+        List<string> photos = [];
         for (var round = 0; round < 3; round++)
         {
-            var answers = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => UploadPhotoAsync(owner, raftId)));
+            var answers = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => owner.UploadRaftPhotoAsync(raftId)));
             foreach (var answer in answers)
             {
-                Assert.True(answer.StatusCode is HttpStatusCode.OK or HttpStatusCode.Conflict, $"round {round}: {(int)answer.StatusCode} {await answer.Content.ReadAsStringAsync()}");
+                // Conflict: lost to a parallel upload; bad request: the raft already holds three photos.
+                Assert.True(answer.StatusCode is HttpStatusCode.OK or HttpStatusCode.Conflict or HttpStatusCode.BadRequest, $"round {round}: {(int)answer.StatusCode} {await answer.Content.ReadAsStringAsync()}");
             }
 
-            Assert.Contains(answers, a => a.StatusCode == HttpStatusCode.OK);
-            photo = await host.QueryAsync(db => db.Rafts.Where(r => r.Id == raftId).Select(r => r.PhotoUrl).SingleAsync());
-            Assert.Contains(photo, host.StoredKeys(FileCategories.RaftPhotos));
+            photos = await host.QueryAsync(db => db.RaftPhotos.Where(p => p.RaftId == raftId).Select(p => p.FileKey).ToListAsync());
+            Assert.All(photos, photo => Assert.Contains(photo, host.StoredKeys(FileCategories.RaftPhotos)));
         }
+
+        Assert.InRange(photos.Count, 2, Raft.MaxPhotos);
 
         var fields = new LicenseFields { ZoneId = zoneId, EffectiveDate = Today };
         var license = await owner.CreateLicenseAsync(fields);
@@ -174,15 +177,12 @@ public class OrphanFileQaTests
 
         await host.Api.Services.GetRequiredService<OrphanFileCleanupJob>().RunOnceAsync(DateTimeOffset.UtcNow.AddDays(2));
 
-        Assert.Equal([photo!], host.StoredKeys(FileCategories.RaftPhotos));
+        Assert.Equal(photos.Order(), host.StoredKeys(FileCategories.RaftPhotos).Order());
         Assert.Equal([licenseFile!], host.StoredKeys(FileCategories.ZoneLicenses));
     }
 
     /// <summary>A storage key of the right shape that this storage never held.</summary>
     private static string ForeignKey(string category, string extension) => $"{category}/2020/01/{Guid.NewGuid():N}.{extension}";
-
-    private static Task<HttpResponseMessage> UploadPhotoAsync(HttpClient owner, Guid raftId) =>
-        owner.PostAsync($"/api/rafts/{raftId}/photo", new MultipartFormDataContent { { FileContent(Png), "file", "raft.png" } });
 
     private static async Task<string> StoreAsync(IFileStorage storage, string category, byte[] content)
     {

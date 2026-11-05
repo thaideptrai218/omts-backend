@@ -21,7 +21,7 @@ public class OversizedUploadQaTests(KestrelApiFactory api) : IClassFixture<Kestr
     // Sent with Expect: 100-continue, so the bodies (up to 106 MB) are never built in memory nor sent.
     [Theory]
     [InlineData("api/zones/{0}/water-measurements/recognize", "photo", "Photo", 13)]
-    [InlineData("api/rafts/{0}/photo", "file", "Photo", 12)]
+    [InlineData("api/rafts/{0}/photos", "file", "Photo", 12)]
     [InlineData("api/zone-licenses/{0}/replace", "file", "File", 12)]
     [InlineData("api/suppliers/{0}/certificates", "files", "Certificate", 106)]
     public async Task Every_upload_endpoint_answers_400_MSG01_on_its_file_field(string path, string multipartName, string field, int megabytes)

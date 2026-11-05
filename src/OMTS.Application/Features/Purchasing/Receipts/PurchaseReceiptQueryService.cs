@@ -5,7 +5,9 @@ using OMTS.Application.Common.Interfaces.Reports;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.AccessManagement.Dtos;
+using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Employees;
+using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Purchasing.Receipts;
@@ -114,6 +116,15 @@ public sealed class PurchaseReceiptQueryService(
         var empty = rows.Count == 0 ? UserMessages.NoDataForFilters("period and filters") : null;
         return new RaftMaterialCostResult(filter.Value!.From!.Value, filter.Value.To!.Value, rows.Sum(r => r.MaterialCost), rows, empty?.Text, empty?.Code);
     }
+
+    /// <summary>
+    /// The raft filter of the list and of the material cost: every raft, Discontinued ones included because old receipts name
+    /// them. Receipts have no zone and follow the role only (BR-FARM-08), so whoever may view them may filter by any raft. It
+    /// is how an Accountant, who may not read rafts (§I.4.4 FARM-04 No), fills a filter of PURCHASE-03 (R), so it holds id and
+    /// codes only.
+    /// </summary>
+    public async Task<IReadOnlyList<RaftLookupItem>> RaftLookupAsync(CancellationToken cancellationToken) =>
+        await rafts.ListForLookupAsync(PermittedZones.Everywhere, cancellationToken);
 
     /// <summary>PURCHASE-03.2: the receipts and the totals shown, as an .xlsx file (Export: Zone Manager and Owner).</summary>
     public async Task<Result<ExportedFile>> ExportAsync(PurchaseReceiptQuery query, CancellationToken cancellationToken)

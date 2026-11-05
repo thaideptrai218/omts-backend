@@ -29,6 +29,10 @@ internal static class DemoFiles
         return ((byte)(0x1B + t * (0xE8 - 0x1B)), (byte)(0x4F + t * (0xD9 - 0x4F)), (byte)(0x72 + t * (0xB0 - 0x72)));
     });
 
+    /// <summary>A 240×80 PNG: sea above, lane lines below, standing in for a photo of a raft.</summary>
+    public static IncomingFile RaftPhoto(int number) => Png($"raft-demo-{number}.png", CoverWidth, CoverHeight, (x, y) =>
+        y > CoverHeight / 2 && (x + number * 7) % 24 < 3 ? ((byte)0x5D, (byte)0x4A, (byte)0x37) : ((byte)0x1B, (byte)(0x4F + y), (byte)0x72));
+
     /// <summary>A tiny PDF that passes the document check; the facts of the license or certification live in its record.</summary>
     public static IncomingFile LicenseDocument(string number)
     {

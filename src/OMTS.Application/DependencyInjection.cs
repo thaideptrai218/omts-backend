@@ -110,7 +110,10 @@ public static class DependencyInjection
         services.AddScoped<ZoneLicenseReminderService>();
         services.AddScoped<CertificationReminderService>();
         services.AddScoped<RaftService>();
-        services.AddScoped<RaftConditionService>();
+        services.AddScoped<RaftReadService>();
+        services.AddScoped<RaftViews>();
+        services.AddScoped<RaftPhotoService>();
+        services.AddScoped<RaftStatusService>();
         services.AddScoped<UploadedFileSaver>();
         services.AddScoped<OrphanFileCleanupService>();
 

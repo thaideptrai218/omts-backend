@@ -28,7 +28,7 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<FarmingZone> FarmingZones => Set<FarmingZone>();
     public DbSet<ZoneComplianceDocument> ZoneComplianceDocuments => Set<ZoneComplianceDocument>();
     public DbSet<Raft> Rafts => Set<Raft>();
-    public DbSet<RaftLayoutVersion> RaftLayoutVersions => Set<RaftLayoutVersion>();
+    public DbSet<RaftPhoto> RaftPhotos => Set<RaftPhoto>();
     public DbSet<Lane> Lanes => Set<Lane>();
 
     // Seed, cultivation and water measurements
@@ -41,8 +41,6 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
     public DbSet<CultivationCycle> CultivationCycles => Set<CultivationCycle>();
     public DbSet<SeedingEvent> SeedingEvents => Set<SeedingEvent>();
-    public DbSet<LaneSegment> LaneSegments => Set<LaneSegment>();
-    public DbSet<CultivationLogEntry> CultivationLogEntries => Set<CultivationLogEntry>();
     public DbSet<WaterMeasurement> WaterMeasurements => Set<WaterMeasurement>();
 
     // Products and customers
