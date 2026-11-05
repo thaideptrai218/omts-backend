@@ -27,11 +27,16 @@ internal static class CooperativeProfileRequests
         var body = new Dictionary<string, object?>
         {
             ["fullName"] = "Hợp tác xã Nuôi trồng thủy sản Trung Nam",
+            ["shortName"] = "HTX Trung Nam",
             ["taxCode"] = "0109876543",
+            ["yearEstablished"] = 2015,
             ["officeAddress"] = "Thôn 3, xã Đông Xá, Vân Đồn, Quảng Ninh",
             ["phoneNumber"] = "0912345678",
             ["email"] = "lienhe@htxtrungnam.vn",
             ["website"] = "https://htxtrungnam.vn",
+            ["socialLink"] = "https://www.facebook.com/htxtrungnam",
+            ["introductionVi"] = "Hợp tác xã nuôi hàu Thái Bình Dương tại Vân Đồn.",
+            ["introductionEn"] = "A cooperative farming Pacific oysters in Van Don.",
             ["legalRepresentative"] = "Nguyễn Văn Nam",
             ["businessLines"] = new[] { "Nuôi hàu", "Thương mại thủy sản" },
             ["rowVersion"] = rowVersion,

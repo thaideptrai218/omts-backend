@@ -75,9 +75,9 @@ on every `docker compose up` and creates nothing twice.
 A password you change stays changed: the seed never resets it. The Owner gets `Demo@1234` only while still on the
 bootstrap temporary password. To get every demo login back, reset the environment with `docker compose down -v`.
 
-The demo data also holds the cooperative profile, the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued),
+The demo data also holds the cooperative profile (with a logo, a cover photo and one Valid certification), the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued),
 license documents (valid, expiring within 30 days, expired), about 10 rafts with lanes per zone, 8 employees (one Left),
-5 suppliers, 15 farming input items and 20 purchase receipts of the last 3 months with payments, discounts and a return.
+5 suppliers, 15 farming input items (codes VT001–VT015, every seed item counted in `con`) and 20 purchase receipts of the last 3 months with payments, discounts and a return.
 `DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰) and one water measurement a day for the
 30 days before the seed day: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
 26.0 ‰) and one voided reading. The mistyped 2.6 ‰ alerted before its correction, so the inboxes hold four sets of water
@@ -252,16 +252,19 @@ with View on `WATER_MEASUREMENTS`). Like the zone license reminder (07:00), a ho
 once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A reminder already
 sent is never sent again.
 
-A replaced raft photo or license file is removed right after the save, and the upload of a failed save right away.
-`OrphanFileCleanupJob` runs every day at 03:00 (Asia/Ho_Chi_Minh) and deletes what such a removal left behind: raft
-photos (`raft-photos/`) and license files (`zone-licenses/`) that no raft or license points to and that were written more
-than the grace period (24 hours) ago. No other storage folder is scanned, so cooperative logos are kept for ever.
+A replaced raft photo, license file, cooperative cover photo or certificate file is removed right after the save (a removed
+certification or cover photo too), and the upload of a failed save right away. `OrphanFileCleanupJob` runs every day at
+03:00 (Asia/Ho_Chi_Minh) and deletes what such a removal left behind: raft photos (`raft-photos/`), license files
+(`zone-licenses/`), cover photos (`cooperative-covers/`) and certificate files (`cooperative-certifications/`) that no
+record points to and that were written more than the grace period (24 hours) ago. No other storage folder is scanned, so
+cooperative logos are kept for ever.
 
 **Every environment must use its own storage container (`Storage:AzureBlob:Container`) or folder
 (`Storage:Local:RootPath`); never share one between environments.** The job deletes the files its own database does not
-point to, so on a shared storage it would delete the files of the other environment. As a safeguard only, a folder in
-which not one stored file (old or new) is referenced by the database is skipped: nothing is deleted there and a warning
-is logged.
+point to, so on a shared storage it would delete the files of the other environment. As a safeguard only, a raft photo or
+license folder in which not one stored file (old or new) is referenced by the database is skipped: nothing is deleted
+there and a warning is logged. Cover photos and certificate files may all be unreferenced in a real database (cover
+removed, last certification removed), so their folders are skipped only when the database holds no cooperative.
 
 ## Deployment
 
@@ -274,7 +277,7 @@ created by a one-time command run on the server by the deployment operator (not 
    `Bootstrap:Owner:PhoneNumber`, `Bootstrap:Owner:Email` (optional), `Bootstrap:Owner:TemporaryPassword`.
 2. Run `dotnet OMTS.Api.dll seed --bootstrap` at handover time: it applies migrations, checks the status catalog, creates
    the rows of the two fixed roles (Zone Manager `ZONE_MANAGER`, Accountant `ACCOUNTANT`; their permissions are the
-   static §I.4.4 matrix, never stored) and, if no cooperative exists, the cooperative (Preliminary) and the
+   static §I.4.4 matrix, never stored) and, if no cooperative exists, the cooperative (full name only) and the
    Owner with this first password. It must be changed at first login and does not expire. At that login the Owner first
    verifies the phone number by SMS (BR-ACCOUNT-03), so `Sms:Provider` must work before the handover. Running it again creates nothing that already exists ("already initialized", exit code 0); the roles are found by
    code. Missing secrets give exit code 1 and the
@@ -286,6 +289,9 @@ created by a one-time command run on the server by the deployment operator (not 
    pairs of discontinued roles become Effective again; of two Effective copies of one pair only the newest stays. Down is
    lossy (no stored permissions, every role In Use). Demo and test databases are not converted further: reset them
    (`docker compose down -v`).
+   Upgrading a database from before the purchasing catalogue of SRS 27/10 (migration `PurchaseCatalogueV2`): the item
+   group `RaftMaterial` becomes `Material`, the supplier's free-text "other contacts" become its address, and the
+   migration stops when two farming input items have the same name (rename one first, or reset a demo database).
    An Owner who cannot log in (for example after losing the first password) is recovered with
    `dotnet OMTS.Api.dll seed --reset-owner-password`. It sets `Bootstrap:Owner:TemporaryPassword` (from configuration, never
    from the command line, so it never lands in shell history) as a new password that must be changed at first login and
@@ -312,7 +318,7 @@ created by a one-time command run on the server by the deployment operator (not 
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG-ACCOUNT-13 and a critical log entry is written (BR-ACCOUNT-09: one purpose and one number or address get at most 3 codes per hour, at least 60 seconds apart; over all purposes one number or address gets at most 10) | `Verification:DailySmsLimit` (default 500) |
 | Zone license reminder (FARM-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
 | Overdue water measurement reminder (ENV-01, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
-| Orphan raft photo and license file clean-up (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
+| Orphan file clean-up: raft photos, license files, cover photos, certificate files (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
 
 ## Design documents
 
