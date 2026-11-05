@@ -16,7 +16,7 @@ namespace OMTS.Api.IntegrationTests.Cooperatives;
 
 /// <summary>
 /// QA-1 review of OMTS-199 fix commit 7c927b9: per-file logo URLs (path and category rules, WebP, removed logos,
-/// Azurite), LAB-01 Owner-rights rule through the ACS refusal, and the stale-screen checks of end and reinstate.
+/// Azurite), LAB-01 Owner-rights rule through the ACS refusal, and the stale-screen checks of end and resume.
 /// </summary>
 public class ReviewFixQaTests
 {
