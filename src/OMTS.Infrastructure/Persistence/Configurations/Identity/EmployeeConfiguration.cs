@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
 
 namespace OMTS.Infrastructure.Persistence.Configurations.Identity;
@@ -10,8 +11,12 @@ internal sealed class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
     {
         builder.Property(x => x.FullName).HasMaxLength(Lengths.Name);
         builder.Property(x => x.PhoneNumber).HasMaxLength(Lengths.Phone);
-        // One profile per person (LAB-01): parallel saves of the same person cannot both pass the pre-check.
-        builder.HasIndex(x => new { x.FullName, x.PhoneNumber }).IsUnique().HasFilter("[PhoneNumber] IS NOT NULL");
+        // No other Employed employee has the number (BR-LABOR-01): parallel saves cannot both pass the pre-check. Left
+        // employees keep theirs, and any number of them may share it.
+        builder.HasIndex(x => x.PhoneNumber)
+            .IsUnique()
+            .HasDatabaseName("UX_Employees_PhoneNumber_Employed")
+            .HasFilter($"[PhoneNumber] IS NOT NULL AND [StatusId] = {StatusIds.Employee.Working}");
         builder.Property(x => x.Address).HasMaxLength(Lengths.Address);
         builder.Property(x => x.Area).HasMaxLength(Lengths.Name);
         builder.Property(x => x.Ward).HasMaxLength(Lengths.Name);

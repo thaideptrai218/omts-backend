@@ -17,7 +17,7 @@ namespace OMTS.Api.IntegrationTests.Sales;
 /// <summary>The migration PurchaseRequests Up, Down, Up on SQL Server, and the demo step and its reruns.</summary>
 public class PurchaseRequestMigrationAndDemoTests
 {
-    private const string MigrationBefore = "20261105075725_PurchaseReceiptsV2";
+    private const string MigrationBefore = "20261105093736_EmployeesV2";
 
     [SqlServerFact]
     public async Task Up_down_up_keeps_the_rest_of_the_database_and_leaves_no_pending_migration()

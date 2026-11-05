@@ -25,11 +25,11 @@ public class MigrationTests
         "PayRuleVersions", "PayLines", "LaborSettlements", "LaborPayments",
     ];
 
-    // Still read by live endpoints (raft lanes in use, end of employment) or replaced by later tickets.
+    // Still read by live endpoints (raft lanes in use) or replaced by later tickets. The labor tables kept here went with EmployeesV2.
     private static readonly string[] KeptTables =
     [
         "CultivationCycles", "SeedingEvents", "LaneSegments", "CultivationLogEntries",
-        "Products", "Customers", "Contractors", "SeasonalWorkers", "WorkAssignments", "AttendanceRecords",
+        "Products", "Customers",
     ];
 
     private const string MigrationBeforeCleanup = "20261025175348_AddPushDeviceLoginSession";

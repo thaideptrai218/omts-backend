@@ -27,7 +27,7 @@ namespace OMTS.Api.IntegrationTests.Sales;
 /// <summary>QA of OMTS-223 on a real SQL Server: the status catalog, the migration and the deadlock handling of UnitOfWork.</summary>
 public class PurchaseRequestQaCatalogAndMigrationSqlServerTests
 {
-    private const string MigrationBefore = "20261105075725_PurchaseReceiptsV2";
+    private const string MigrationBefore = "20261105093736_EmployeesV2";
 
     // UnitOfWork.cs came with this PR as in PR #22, and this branch has no test of it: a real SQL Server deadlock (1205) is a conflict for the loser, never a 500.
     [SqlServerFact]

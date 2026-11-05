@@ -78,7 +78,7 @@ bootstrap temporary password. To get every demo login back, reset the environmen
 
 The demo data also holds the cooperative profile (with a logo, a cover photo and two certifications: one Valid, one
 expiring within 30 days), a fictional receiving bank account (`DEMO00000001`; skipped with a message when `Payments:Provider` does not accept it, as `None` does not), the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued), zone licenses (`DEMO-01`:
-an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid license and an older expired one), about 10 rafts with lanes per zone, 8 employees (one Left),
+an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid license and an older expired one), about 10 rafts with lanes per zone, 9 employees (one Left, one without a phone number),
 5 suppliers, 15 farming input items (codes VT001–VT015, every seed item counted in `con`) and 20 purchase receipts of the last 3 months
 (16 Completed, 2 Cancelled, 2 Draft): Material lines and two seed receipts name the raft they were bought for, one line has a
 fractional quantity (its amount is not a whole thousand), with payments and a return. The Owner's list holds a MSG-PURCHASE-01
@@ -210,7 +210,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | `WATER_MEASUREMENT_OVERDUE` | MSG-WATER-06 | unless turned off | Owner, Zone Manager |
 | `ZONE_LICENSE_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
 | `COOPERATIVE_CERTIFICATION_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
-| `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (not sent yet: LABOR PR) | never: list only | Owner |
+| `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (LABOR-01.3) | never: list only | Owner |
 | `PURCHASE_RECEIPT_COMPLETED` | MSG-PURCHASE-01, when a receipt is completed (never for a draft), also when the Owner completed it | unless turned off | Owner |
 | `PURCHASE_RECEIPT_CANCELLED_ADVANCE` | MSG-PURCHASE-08, when a cancelled receipt leaves the supplier debt below zero | unless turned off | Owner, Accountant |
 
@@ -250,6 +250,24 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   a short minimum (zone name or list, raft code or license type name, license number; note, customer, product), then the
   closing sentence, then the longer wording of the water alert, then the free text below its minimum. Logs hold the type
   and the account id only, never what a provider answered.
+
+### Audit log
+
+Every create, edit and status change writes one `AuditEvent` in the same save as the change (GBR-02, NFR-02): who acted
+(an account, an employee of the employee app, or the system when neither is set), when, the action
+(`FarmingZone.Updated`, `Account.StatusChanged`…), the record (type, id, code), the zone, the reason and the values
+before and after. Fields that may hold a password, a code or a token are removed when the row is written and again
+when it is shown. Events are never edited or deleted and no job cleans them up (kept at least 5 years).
+
+Only the Cooperative Owner searches it (ACCOUNT-10, BR-ACCOUNT-13); every other caller gets 403 MSG-GEN-08:
+- `GET /api/audit-events`: newest first, paged (`page`, `pageSize` up to 100). `from`/`to` are Vietnam dates, both
+  included: the last 30 days by default, at most 5 years, else MSG-GEN-01. Filters: one person (`actorAccountId`,
+  `actorEmployeeId` or `system=true`), `action` and `recordType` (exact values), `recordCode` (codes starting with it),
+  `zoneId`. No match: 200 with an empty page and MSG-GEN-10 in `message`.
+- `GET /api/audit-events/facets`: the actions, record types and people to offer in the filters.
+- `GET /api/audit-events/{id}`: the event with `before` and `after` (JSON).
+- `GET /api/audit-events/{id}/record`: the record of the event as it is now, or 404 MSG-ACCOUNT-22 when it no longer
+  exists (its events stay in the log).
 
 ### Database (EF Core code-first)
 
@@ -374,6 +392,7 @@ created by a one-time command run on the server by the deployment operator (not 
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG-ACCOUNT-13 and a critical log entry is written (BR-ACCOUNT-09: one purpose and one number or address get at most 3 codes per hour, at least 60 seconds apart; over all purposes one number or address gets at most 10) | `Verification:DailySmsLimit` (default 500) |
 | Expiry reminder of zone licenses and certifications (GFR-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
 | Overdue water measurement reminder (ENV-01, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
+| Employment end: an employee is Left from the day after the last working day (LABOR-01, daily, business time zone UTC+7) | `Jobs:EmploymentEnd:RunAt` (default `00:01`), `Jobs:EmploymentEnd:CatchUpOnStart` (default `true`) |
 | Orphan file clean-up: raft photos, license files, cover photos, certificate files, meter photos (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
 
 ## Demo on a shared server

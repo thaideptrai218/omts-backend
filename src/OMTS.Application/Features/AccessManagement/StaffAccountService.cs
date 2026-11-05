@@ -61,7 +61,7 @@ public sealed class StaffAccountService(
         if (request.EmployeeId is { } employeeId)
         {
             employee = await employees.GetByIdAsync(employeeId, cancellationToken);
-            if (employee is null || employee.AccountId is not null)
+            if (employee is null || employee.AccountId is not null || employee.StatusId != StatusIds.Employee.Working)
             {
                 return AppError.Invalid("Employee");
             }

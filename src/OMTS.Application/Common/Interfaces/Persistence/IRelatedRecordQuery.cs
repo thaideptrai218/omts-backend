@@ -5,10 +5,12 @@ namespace OMTS.Application.Common.Interfaces.Persistence;
 /// <param name="TraderAccountId">The trader account a record of a customer profile belongs to now (§I.4.4 †).</param>
 public sealed record RelatedRecordLocation(Guid? ZoneId, Guid? TraderAccountId = null);
 
-/// <summary>Finds the related record of a notification (ACCOUNT-08 step 5), whatever its status.</summary>
+/// <summary>
+/// Finds the record a notification (ACCOUNT-08 step 5) or an audit event (ACCOUNT-10.1) points to, whatever its status.
+/// </summary>
 public interface IRelatedRecordQuery
 {
     /// <summary>The record, or null when it no longer exists or its type is unknown (MSG-ACCOUNT-22).</summary>
-    /// <param name="recordType">A type of <c>RelatedRecordTypes</c>.</param>
+    /// <param name="recordType">An entity name, or a type of <c>RelatedRecordTypes</c>.</param>
     Task<RelatedRecordLocation?> FindAsync(string recordType, Guid recordId, CancellationToken cancellationToken);
 }

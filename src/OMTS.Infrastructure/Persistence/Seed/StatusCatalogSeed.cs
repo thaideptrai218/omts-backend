@@ -67,8 +67,8 @@ internal static class StatusCatalogSeed
         NewTransition(4, S.Account.Active, S.Account.Locked, "ACS-09", OwnerForStaffAdminForTraders, Action, "Lock the account.", true),
         NewTransition(5, S.Account.Locked, S.Account.Active, "ACS-09", OwnerForStaffAdminForTraders, Action, "Unlock after verification; trader accounts are unlocked only by the System Administrator.", true),
 
-        NewTransition(6, S.Employee.Working, S.Employee.Left, "UC10", Owner, Action, "The employee leaves.", false),
-        NewTransition(7, S.Employee.Left, S.Employee.Working, "UC10", Owner, Action, "The employee returns to work.", false),
+        NewTransition(6, S.Employee.Working, S.Employee.Left, "LABOR-01", $"{OwnerOrZoneManager}; {SystemActor}", Action, "The last working day has passed: at once for an earlier day, by the system on the next day for today (BR-LABOR-01).", false),
+        NewTransition(7, S.Employee.Left, S.Employee.Working, "LABOR-01", OwnerOrZoneManager, Action, "No Employed employee has the phone number; needs no new approval (BR-LABOR-01).", false),
 
         NewTransition(8, S.AccessGrant.Effective, S.AccessGrant.Revoked, "UC11", Owner, Action, "Revoke the zone–role pair; Cooperative Owner only.", true),
 
