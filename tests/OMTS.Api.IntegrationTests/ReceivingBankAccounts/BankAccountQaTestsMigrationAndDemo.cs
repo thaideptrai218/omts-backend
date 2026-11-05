@@ -34,12 +34,14 @@ public sealed class BankAccountQaTestsMigrationAndDemo
         await using var db = database.CreateContext();
         var migrator = db.GetService<IMigrator>();
         var previous = PreviousMigration(db);
+        // This migration alone: a later one changes the employees (EmployeesV2).
+        var own = db.Database.GetMigrations().Single(m => m.EndsWith("_ReceivingBankAccount", StringComparison.Ordinal));
 
         await migrator.MigrateAsync(previous);
         var cooperatives = await ColumnsAsync(database, "Cooperatives");
         var employees = await ColumnsAsync(database, "Employees");
 
-        await db.Database.MigrateAsync();
+        await migrator.MigrateAsync(own);
         var added = (await ColumnsAsync(database, "Cooperatives")).Except(cooperatives).Order().ToList();
 
         Assert.Equal(["BankAccount_AcceptedAt datetimeoffset -1 YES", "BankAccount_BankBin nvarchar 6 YES"], added);

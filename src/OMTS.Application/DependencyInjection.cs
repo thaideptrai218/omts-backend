@@ -45,6 +45,7 @@ public static class DependencyInjection
 
         services.AddScoped<AmbientActor>();
         services.AddScoped<AuditLogService>();
+        services.AddScoped<AuditEventSearchService>();
         services.AddScoped<StatusChangeService>();
         services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
         services.AddScoped<MandatorySmsQueue>();
@@ -73,12 +74,19 @@ public static class DependencyInjection
         services.AddScoped<StaffAccountService>();
         services.AddScoped<RoleService>();
 
-        // FARM-01 cooperative profile, LAB-01 employees
+        // FARM-01 cooperative profile, LABOR-01 employees
         services.AddScoped<CooperativeProfileViews>();
         services.AddScoped<CooperativeProfileService>();
         services.AddScoped<CooperativeCoverPhotoService>();
         services.AddScoped<CooperativeCertificationService>();
+        services.AddScoped<EmployeeCallerAccess>();
+        services.AddScoped<EmployeeViewBuilder>();
+        services.AddScoped<EmployeeProfileValidator>();
+        services.AddScoped<EmployeeQueryService>();
         services.AddScoped<EmployeeService>();
+        services.AddScoped<EmployeeWorkingZoneService>();
+        services.AddScoped<EmploymentService>();
+        services.AddScoped<EmploymentEndService>();
 
         // DEBT-01 receiving bank account
         services.AddScoped<ReceivingAccountAcceptance>();

@@ -56,6 +56,8 @@ public static class MessageCodes
     public const string Purchase09 = "MSG-PURCHASE-09";
     public const string Purchase10 = "MSG-PURCHASE-10";
 
+    public const string Labor01 = "MSG-LABOR-01";
+    public const string Labor02 = "MSG-LABOR-02";
     public const string Labor03 = "MSG-LABOR-03";
 
     public const string Debt01 = "MSG-DEBT-01";
@@ -65,14 +67,16 @@ public static class MessageCodes
 
     /// <summary>
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-01, the
-    /// account is linked to the existing customer profile; MSG-ACCOUNT-22, the related record of a notification no longer
-    /// exists (ACCOUNT-08 is new in PR 0.5); MSG-PURCHASE-01/07/08, the purchase receipt notifications and the advance
-    /// warning, and MSG-PURCHASE-10, the Owner's correction (OMTS-218 P2); MSG-SALE-04 and MSG-SALE-05, the merge of
-    /// customer profiles (SALE-04 is new); MSG-DEBT-01 and MSG-DEBT-02, the receiving bank account (DEBT-01).
+    /// account is linked to the existing customer profile; MSG-ACCOUNT-22, the record of a notification or of an audit
+    /// event no longer exists (ACCOUNT-08 and ACCOUNT-10 are new in OMTS-216); MSG-PURCHASE-01/07/08, the purchase receipt
+    /// notifications and the advance warning, and MSG-PURCHASE-10, the Owner's correction (OMTS-218 P2); MSG-LABOR-01 and
+    /// MSG-LABOR-02, the approval of a new employee and the reminder to lock a staff account (OMTS-227); MSG-SALE-04 and
+    /// MSG-SALE-05, the merge of customer profiles (SALE-04 is new); MSG-DEBT-01 and MSG-DEBT-02, the receiving bank
+    /// account (DEBT-01).
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
-        Account01, Account22, Purchase01, Purchase07, Purchase08, Purchase10, Sale04, Sale05, Debt01, Debt02, Water02, Water04,
+        Account01, Account22, Purchase01, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Sale04, Sale05, Debt01, Debt02, Water02, Water04,
     };
 
     /// <summary>
@@ -101,7 +105,6 @@ public static class MessageCodes
         public const string Msg19 = "MSG19";
         public const string Msg20 = "MSG20";
         public const string Msg22 = "MSG22";
-        public const string Msg24 = "MSG24";
         public const string Msg25 = "MSG25";
         public const string Msg26 = "MSG26";
         public const string Msg27 = "MSG27";
@@ -131,7 +134,6 @@ public static class MessageCodes
         /// <item>MSG05: an export file could not be generated, or a stored file could not be read (not an upload).</item>
         /// <item>MSG06: edit conflict (NFR-09, still cited by Part IV).</item>
         /// <item>MSG19: session expired.</item>
-        /// <item>MSG24: the account is already linked to another employee (LABOR).</item>
         /// <item>MSG41: multiple of 1,000 VND (BR-PURCHASE-02 drops the rule in the PURCHASE PR).</item>
         /// <item>MSG45: receipt discount, paid-now and refund limits (fields not in the SRS; PURCHASE PR).</item>
         /// <item>MSG58: someone else is editing the record (NFR-13, still cited by Part IV).</item>
@@ -140,7 +142,7 @@ public static class MessageCodes
         /// </summary>
         public static readonly IReadOnlySet<string> KeptAsCode = new HashSet<string>(StringComparer.Ordinal)
         {
-            Msg05, Msg06, Msg19, Msg24, Msg41, Msg45, Msg58,
+            Msg05, Msg06, Msg19, Msg41, Msg45, Msg58,
             NotFound, TooManyRequests, UnexpectedError, PasswordChangeRequired,
         };
     }

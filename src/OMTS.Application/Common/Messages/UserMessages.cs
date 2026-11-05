@@ -277,9 +277,9 @@ public static class UserMessages
         "Your preferences are saved. This device does not allow notifications from OMTS. To get them on this device, please turn them on in the device settings. You can still see all notifications in the notification list.",
         Legacy.Msg22);
 
-    /// <summary>MSG-ACCOUNT-22 (ACCOUNT-08.0.E1): the related record of a notification no longer exists.</summary>
+    /// <summary>MSG-ACCOUNT-22 (ACCOUNT-08.0.E1, ACCOUNT-10.1.E1): the record of a notification or of an audit event no longer exists.</summary>
     /// <param name="objectName">e.g. "Zone license"; the first letter is capitalized.</param>
-    /// <param name="recordCode">The code the notification shows for the record; may be empty.</param>
+    /// <param name="recordCode">The code the notification or the event shows for the record; may be empty.</param>
     public static UserMessage RecordNoLongerExists(string objectName, string recordCode) => new(
         Account22, $"{string.Join(' ', new[] { Capitalized(objectName), recordCode }.Where(p => p.Length > 0))} no longer exists.");
 
@@ -339,6 +339,21 @@ public static class UserMessages
 
     // ---- MSG-LABOR ----
 
+    /// <summary>MSG-LABOR-01 (LABOR-01 step 5): asked of a Zone Manager adding an employee; a request without the answer is refused.</summary>
+    public static UserMessage OwnerApprovalNeeded(string employeeName) => new(
+        Labor01, $"Has the Cooperative Owner approved, in person, adding {employeeName} as a new employee?")
+    {
+        Parameters = new Dictionary<string, object?> { ["employee_name"] = employeeName },
+    };
+
+    /// <summary>MSG-LABOR-02 (LABOR-01.3 step 5): reminder to the Owner when a staff account has the phone number of an employee who left.</summary>
+    public static UserMessage LockStaffAccountReminder(string employeeName, DateOnly lastWorkingDay, string username) => new(
+        Labor02,
+        $"{employeeName} no longer works for the cooperative after {Date(lastWorkingDay)}. Staff account {username} has the same phone number: lock it in User accounts if it is no longer needed.")
+    {
+        Parameters = new Dictionary<string, object?> { ["employee_name"] = employeeName, ["last_working_day"] = lastWorkingDay, ["username"] = username },
+    };
+
     /// <summary>MSG-LABOR-03: the phone number belongs to another employee.</summary>
     public static UserMessage PhoneBelongsToEmployee(string employeeName) => new(
         Labor03,
@@ -377,9 +392,6 @@ public static class UserMessages
         "The data was just updated by another user. Your changes have not been saved; please review the new version and then save again or cancel.");
 
     public static readonly UserMessage SessionExpired = new(Legacy.Msg19, "Your login session has expired. Please log in again.");
-
-    public static UserMessage AccountAlreadyLinked(string employeeName) => new(
-        Legacy.Msg24, $"This account is already linked to the employee profile {employeeName}.");
 
     public static readonly UserMessage NotThousands = new(Legacy.Msg41, "The amount must be a multiple of 1,000 VND.");
 
