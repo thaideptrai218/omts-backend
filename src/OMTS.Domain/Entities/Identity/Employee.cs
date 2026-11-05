@@ -1,19 +1,25 @@
 using OMTS.Domain.Common;
 using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Labor;
 using OMTS.Domain.Entities.Platform;
 
 namespace OMTS.Domain.Entities.Identity;
 
-/// <summary>E03 – Personnel profile for work assignment, attendance and pay; separate from the login account.</summary>
+/// <summary>E03 – Personnel profile for work assignment, attendance and pay; separate from the login account (BR-LABOR-01).</summary>
 public class Employee : AuditableEntity, IHasStatus
 {
     public Guid CooperativeId { get; set; }
     public Cooperative Cooperative { get; set; } = null!;
 
     public string FullName { get; set; } = string.Empty;
+
+    /// <summary>Optional, needed only for the employee app; when entered, no other Employed employee has it.</summary>
     public string? PhoneNumber { get; set; }
 
-    /// <summary>At most one account; linking an account does not grant permissions by itself.</summary>
+    /// <summary>
+    /// The staff account created with this profile, a technical link (the SRS matches by phone number): at most one
+    /// account, and it grants no permission by itself.
+    /// </summary>
     public Guid? AccountId { get; set; }
     public Account? Account { get; set; }
 
@@ -27,12 +33,20 @@ public class Employee : AuditableEntity, IHasStatus
     public int StatusId { get; set; } = StatusIds.Employee.Working;
     public Status Status { get; set; } = null!;
 
-    /// <summary>Set when the employment ends (Employed → Left), cleared when the person returns (LAB-01).</summary>
-    public DateOnly? EmploymentEndDate { get; set; }
+    /// <summary>
+    /// Entered when the employment ends, not later than today; the employee is Left from the next day, and it is cleared
+    /// when the employment is resumed (BR-LABOR-01).
+    /// </summary>
+    public DateOnly? LastWorkingDay { get; set; }
 
     /// <summary>Where the wage is paid; all three fields or none.</summary>
     public BankAccountInfo? BankAccount { get; set; }
 
-    /// <summary>Zones the person usually works in (pickers of LAB-03/LAB-04); grants no permission.</summary>
+    /// <summary>Who maintains the employee (BR-LABOR-01) and whose pickers list them first; grants no permission.</summary>
     public ICollection<EmployeeWorkingZone> WorkingZones { get; set; } = [];
+
+    /// <summary>The employee type and every earlier one, each from its date.</summary>
+    public ICollection<EmployeeTypePeriod> TypePeriods { get; set; } = [];
+
+    public ICollection<EmployeeJobType> JobTypes { get; set; } = [];
 }

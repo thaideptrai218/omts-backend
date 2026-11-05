@@ -329,7 +329,7 @@ public class AccountRulesSqlServerTests
         public Task<(IReadOnlyList<Account> Items, int Total)> SearchStaffAsync(string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken) =>
             inner.SearchStaffAsync(search, statusId, page, pageSize, cancellationToken);
 
-        public Task<IReadOnlyList<Account>> ListLinkableStaffAsync(CancellationToken cancellationToken) => inner.ListLinkableStaffAsync(cancellationToken);
+        public Task<IReadOnlyList<Guid>> ListActiveOwnerIdsAsync(CancellationToken cancellationToken) => inner.ListActiveOwnerIdsAsync(cancellationToken);
 
         public void Add(Account account) => inner.Add(account);
     }

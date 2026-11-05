@@ -137,7 +137,12 @@ public class DemoDataSeedTests
         Assert.Equal(6, await db.RaftPhotos.CountAsync());
         Assert.Equal(2, await db.Lanes.CountAsync(l => l.StatusId == StatusIds.Lane.Removed));
         Assert.Equal(2, await db.Rafts.CountAsync(r => r.Latitude == null && r.Longitude == null));
-        Assert.Equal(8, await db.Employees.CountAsync());
+        Assert.Equal(9, await db.Employees.CountAsync());
+        // Everyone has a type (BR-LABOR-01): those with a login are Staff, the others seasonal workers; one has no phone number.
+        Assert.Equal(9, await db.EmployeeTypePeriods.Select(p => p.EmployeeId).Distinct().CountAsync());
+        Assert.Equal(3, await db.EmployeeTypePeriods.CountAsync(p => p.Type == OMTS.Domain.Enums.EmployeeType.SeasonalWorker));
+        Assert.Equal(1, await db.Employees.CountAsync(e => e.PhoneNumber == null));
+        Assert.True(await db.Employees.Where(e => e.BankAccount != null).AllAsync(e => e.BankAccount!.AccountNumber.StartsWith("9999")));
         Assert.Equal(1, await db.Employees.CountAsync(e => e.StatusId == StatusIds.Employee.Left));
         Assert.Equal(5, await db.Suppliers.CountAsync());
         Assert.Equal(15, await db.FarmingInputItems.CountAsync());
