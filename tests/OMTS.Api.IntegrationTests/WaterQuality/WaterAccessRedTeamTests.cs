@@ -39,7 +39,6 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
                 ("recognize", () => z.RecognizeAsync(client: client)),
                 ("correct", () => client.CorrectAsync(confirmed.Id(), 7.1m, 20m)),
                 ("void", () => client.VoidAsync(confirmed.Id())),
-                ("editing", () => client.PostAsync($"/api/water-measurements/{confirmed.Id()}/editing", null)),
                 ("thresholds list", () => client.GetAsync("/api/water-thresholds")),
                 ("zone thresholds", () => client.GetAsync($"/api/zones/{z.Zone.Id}/water-thresholds")),
                 ("set zone thresholds", () => client.PutAsJsonAsync($"/api/zones/{z.Zone.Id}/water-thresholds", new { phMin = 1m, phMax = 2m })),
@@ -86,7 +85,7 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
     }
 
     [Fact]
-    public async Task Manager_of_zone_A_cannot_void_or_stop_editing_a_record_of_zone_B_by_id()
+    public async Task Manager_of_zone_A_cannot_void_or_read_a_record_of_zone_B_by_id()
     {
         var zoneB = await api.ZoneAsync();
         var confirmed = await zoneB.RecordedAsync(7m, 20m);
@@ -95,7 +94,6 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
         var responses = new[]
         {
             await managerOfA.VoidAsync(confirmed.Id()),
-            await managerOfA.DeleteAsync($"/api/water-measurements/{confirmed.Id()}/editing"),
             await managerOfA.GetAsync($"/api/water-measurements/{confirmed.Id()}"),
         };
 
@@ -122,7 +120,7 @@ public class WaterAccessRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
         var responses = new[]
         {
             await accountant.VoidAsync(saved.Id()),
-            await accountant.PostAsync($"/api/water-measurements/{saved.Id()}/editing", null),
+            await accountant.CorrectAsync(saved.Id(), 7.1m, 20m, raftId: z.Raft.Id),
         };
 
         foreach (var response in responses)

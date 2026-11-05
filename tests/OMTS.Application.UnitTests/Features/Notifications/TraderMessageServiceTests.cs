@@ -115,6 +115,8 @@ public class TraderMessageServiceTests
             return SaveFails ? throw new InvalidOperationException("database down") : Task.FromResult(1);
         }
 
+        public void DiscardChanges() => throw new NotSupportedException();
+
         public Task<IReadOnlyDictionary<Guid, IReadOnlyList<NotificationPreference>>> GetPreferencesAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public Task<(IReadOnlyList<Notification> Items, int Total)> ListAsync(Guid recipientAccountId, bool unreadOnly, int page, int pageSize, CancellationToken cancellationToken) => throw new NotSupportedException();

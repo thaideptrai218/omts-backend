@@ -105,7 +105,7 @@ internal sealed class DemoWaterMeasurementStep : IDemoSeedStep
             && typo.Salinity == correction.TypedSalinity)
         {
             DemoSeedContext.Ensure(
-                await corrections.CorrectAsync(typo.Id, new CorrectWaterMeasurementRequest(typo.MeasuredAt, typo.Ph, correction.Salinity, typo.Temperature, correction.Reason), cancellationToken),
+                await corrections.CorrectAsync(typo.Id, new CorrectWaterMeasurementRequest(typo.RaftId, typo.MeasuredAt, typo.Ph, correction.Salinity, typo.Temperature, correction.Reason), cancellationToken),
                 $"correcting the water measurement of {zoneCode}");
         }
 
@@ -124,9 +124,9 @@ internal sealed class DemoWaterMeasurementStep : IDemoSeedStep
         var operationId = DemoWaterPlans.OperationId(zoneCode, daysAgo);
         return context.Db.WaterMeasurements.AsNoTracking()
             .Where(m => m.ZoneId == zoneId && m.ClientOperationId == operationId && m.StatusId == StatusIds.WaterMeasurement.Active)
-            .Select(m => new StoredReading(m.Id, m.MeasuredAt, m.Ph, m.Salinity, m.Temperature))
+            .Select(m => new StoredReading(m.Id, m.RaftId, m.MeasuredAt, m.Ph, m.Salinity, m.Temperature))
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    private sealed record StoredReading(Guid Id, DateTimeOffset MeasuredAt, decimal Ph, decimal Salinity, decimal Temperature);
+    private sealed record StoredReading(Guid Id, Guid RaftId, DateTimeOffset MeasuredAt, decimal Ph, decimal Salinity, decimal Temperature);
 }

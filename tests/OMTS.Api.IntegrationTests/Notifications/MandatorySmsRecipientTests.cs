@@ -61,7 +61,8 @@ public class MandatorySmsRecipientTests(AuthApiFactory api) : IClassFixture<Auth
         var (_, manager) = await api.StaffAsync(z.Zone);
         var id = (await z.RecordedAsync(9.1m, 20m)).Id();
 
-        var corrected = await z.Owner.CorrectAsync(id, 9.5m, 20m);
+        // To the other side of the range: BR-WATER-05 sends only when the result changes.
+        var corrected = await z.Owner.CorrectAsync(id, 6.0m, 20m);
 
         Assert.Equal(HttpStatusCode.OK, corrected.StatusCode);
         var messages = api.SmsTo(manager);

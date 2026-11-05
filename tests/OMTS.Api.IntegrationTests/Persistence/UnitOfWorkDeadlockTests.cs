@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Domain.Constants;
+using OMTS.Infrastructure.Messaging;
 using OMTS.Infrastructure.Persistence;
 
 namespace OMTS.Api.IntegrationTests.Persistence;
@@ -28,7 +29,7 @@ public class UnitOfWorkDeadlockTests
         await victim.Database.ExecuteSqlAsync($"UPDATE Statuses SET Meaning = Meaning WHERE Id = {second}");
 
         // Waits for the row the other transaction holds, then the other transaction waits for this one's row.
-        var save = new UnitOfWork(victim).SaveChangesAsync();
+        var save = new UnitOfWork(victim, new PushOutbox()).SaveChangesAsync();
         await Task.Delay(TimeSpan.FromSeconds(1));
         await other.Database.ExecuteSqlAsync($"UPDATE Statuses SET Meaning = Meaning WHERE Id = {second}");
 

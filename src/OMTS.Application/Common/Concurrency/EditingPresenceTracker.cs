@@ -7,6 +7,7 @@ public sealed record RecordEditor(Guid AccountId, string Name, DateTimeOffset St
 /// "Someone is editing" indicator without locking (NFR-13, MSG58). Kept in memory: an entry lives until it
 /// is stopped (save or cancel) or until <see cref="Expiry"/> passes without a heartbeat (lost signal).
 /// Saving still checks the version (NFR-09). Single-instance only; a scaled-out API would need a shared store.
+/// No record uses it since WATER-02 dropped the notice: NFR-13 exempts water and cultivation logs, the other forms are to be settled (CX-UC-07).
 /// </summary>
 public sealed class EditingPresenceTracker(TimeProvider timeProvider)
 {
