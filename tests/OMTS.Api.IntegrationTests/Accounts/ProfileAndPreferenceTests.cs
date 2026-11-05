@@ -22,7 +22,7 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
 
         var username = await client.PutAsJsonAsync("/api/me/profile", new { displayName = "New name", rowVersion, username = "hacker" });
         var empty = await client.PutAsJsonAsync("/api/me/profile", new { displayName = " ", rowVersion });
-        var stale = await client.PutAsJsonAsync("/api/me/profile", new { displayName = "New name", rowVersion = "AAAAAAAAB9E=" });
+        var stale = await client.PutAsJsonAsync("/api/me/profile", new { displayName = "New name", rowVersion = StaleRowVersion });
         var saved = await client.PutAsJsonAsync("/api/me/profile", new { displayName = "Chủ nhiệm Nguyễn", rowVersion });
 
         Assert.Equal("MSG-GEN-01", await username.ErrorCodeAsync());
