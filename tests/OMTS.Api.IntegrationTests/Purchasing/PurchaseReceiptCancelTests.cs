@@ -63,7 +63,7 @@ public class PurchaseReceiptCancelTests(AuthApiFactory factory) : IClassFixture<
         Assert.Equal(("Cancelled", "Wrong supplier"), (cancelled.GetProperty("status").GetString(), cancelled.GetProperty("cancelReason").GetString()));
         Assert.Null(cancelled.SeedLotCodeOf(world.Seed));
         Assert.Equal(0m, await MaterialCostAsync(world));
-        Assert.Equal(0m, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}/debt")).GetProperty("totals").Money("outstanding"));
+        Assert.Equal(0m, await world.DebtAsync());
         var audit = await factory.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.RecordId == receipt.Id() && e.Action == "PurchaseReceipt.Cancelled"));
         Assert.Equal("Wrong supplier", audit.Reason);
         await (await author.CancelAsync(receipt.Id(), "Again")).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
@@ -108,7 +108,7 @@ public class PurchaseReceiptCancelTests(AuthApiFactory factory) : IClassFixture<
         var manager = await factory.ZoneManagerAsync(world.Zone);
         var accountant = await factory.AccountantAsync();
         var paid = await manager.CreateReceiptAsync(world.Body(new LineBody(world.Other, 5, 100_000)) with { Complete = true });
-        await (await world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = paid.Id(), Amount = 300_000 })).ReadAsync(HttpStatusCode.Created);
+        await world.PayAsync(300_000);
         var unpaid = await manager.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 100_000)) with { Complete = true });
 
         // Debt 200,000 + 100,000. Cancelling the unpaid receipt keeps it above zero: no warning, no notification.
@@ -127,8 +127,8 @@ public class PurchaseReceiptCancelTests(AuthApiFactory factory) : IClassFixture<
         await (await manager.CancelAsync(paid.Id(), "Wrong supplier")).ReadAsync(HttpStatusCode.OK);
 
         var payment = await factory.QueryAsync(db => db.SupplierPayments.SingleAsync(p => p.SupplierId == world.SupplierId));
-        Assert.Equal((StatusIds.SupplierPayment.Recorded, (Guid?)null), (payment.StatusId, payment.ReceiptId));
-        Assert.Equal(-300_000m, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}/debt")).GetProperty("totals").Money("outstanding"));
+        Assert.Equal(StatusIds.SupplierPayment.Recorded, payment.StatusId);
+        Assert.Equal(-300_000m, await world.DebtAsync());
 
         var code = paid.GetProperty("code").GetString();
         foreach (var recipient in new[] { accountant, world.Owner })

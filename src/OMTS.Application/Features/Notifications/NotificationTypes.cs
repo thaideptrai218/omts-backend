@@ -48,6 +48,9 @@ public static class NotificationTypes
     /// <summary>MSG-PURCHASE-08, a receipt cancellation after which the supplier debt is below zero, to the Accountant and the Owner (BR-PURCHASE-05).</summary>
     public const string PurchaseReceiptCancelledPaidInAdvance = "PURCHASE_RECEIPT_CANCELLED_ADVANCE";
 
+    /// <summary>MSG-PURCHASE-04, a supplier payment, money paid back or a cancelled payment, to the Owner (BR-PURCHASE-05); mandatory.</summary>
+    public const string SupplierTransaction = "SUPPLIER_TRANSACTION";
+
     public static readonly IReadOnlyList<NotificationTypeDefinition> All =
     [
         new(WaterAlert, "Water alert", AlwaysPush, [CooperativeOwner, ZoneManager],
@@ -77,6 +80,8 @@ public static class NotificationTypes
             NotificationOpenAccess.InZone(PermissionFunctions.PurchaseReceipts, PermissionAction.View)),
         new(PurchaseReceiptCancelledPaidInAdvance, "Supplier paid in advance after a receipt cancellation", Default, [CooperativeOwner, Accountant],
             NotificationOpenAccess.InZone(PermissionFunctions.PurchaseReceipts, PermissionAction.View)),
+        new(SupplierTransaction, "Supplier payment transaction", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
+            NotificationSmsRule.MoneyToOwner("amount")),
     ];
 
     private static readonly Dictionary<string, NotificationTypeDefinition> ByCode = All.ToDictionary(t => t.Code, StringComparer.Ordinal);

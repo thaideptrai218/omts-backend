@@ -1,16 +1,10 @@
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
-/// <summary>
-/// One receipt with its money figures summed in the database (lines, returns, payments), so lists and totals never load
-/// the receipt graph. Same rules as PurchaseMoney.Of: outstanding = total − returned − (paid − refunded).
-/// </summary>
+/// <summary>One receipt with its money figures summed in the database, so lists and totals never load the receipt graph.</summary>
 /// <param name="LinesTotal">Σ of the lines that match the line filters of the list (item group, item, raft); the total without them.</param>
 public sealed record ReceiptFigureRow(
     Guid Id, string Code, DateOnly ReceiptDate, Guid SupplierId, string SupplierName, string SupplierPhone, int StatusId,
-    Guid RecordedByAccountId, decimal Total, decimal LinesTotal, decimal Returned, decimal Paid, decimal Refunded)
-{
-    public decimal Outstanding => Total - Returned - (Paid - Refunded);
-}
+    Guid RecordedByAccountId, decimal Total, decimal LinesTotal);
 
 /// <summary>
 /// PURCHASE-03 step 3: <see cref="Count"/> is every matching receipt; the money counts Completed receipts only (BR-PURCHASE-03),
@@ -22,12 +16,6 @@ public sealed record ReceiptListTotals(int Count, int CompletedCount, decimal Re
     public decimal NetTotal => ReceiptsTotal - ReturnsTotal;
 
     public static ReceiptListTotals Empty { get; } = new(0, 0, 0, 0, null);
-}
-
-/// <summary>Σ of the Completed receipts of one supplier, aggregated in the database.</summary>
-public sealed record SupplierDebtFigures(Guid SupplierId, string SupplierName, decimal Total, decimal Returned, decimal Paid, decimal Refunded)
-{
-    public decimal Outstanding => Total - Returned - (Paid - Refunded);
 }
 
 /// <summary>A Material line of a Completed receipt that names a raft (BR-FARM-05), received in the period asked for.</summary>

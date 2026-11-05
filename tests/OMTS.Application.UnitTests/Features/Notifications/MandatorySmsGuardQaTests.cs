@@ -82,10 +82,10 @@ public class MandatorySmsGuardQaTests
     }
 
     [Fact]
-    public void The_mandatory_types_are_the_three_of_the_change_list_the_certification_expiry_and_the_new_purchase_request()
+    public void The_mandatory_types_are_the_three_of_the_change_list_the_certification_expiry_the_new_purchase_request_and_the_supplier_transaction()
     {
         Assert.Equal(
-            [NotificationTypes.WaterAlert, NotificationTypes.WaterAlertWithdrawn, NotificationTypes.ZoneLicenseExpiry, NotificationTypes.CooperativeCertificationExpiry, NotificationTypes.PurchaseRequestNew],
+            [NotificationTypes.WaterAlert, NotificationTypes.WaterAlertWithdrawn, NotificationTypes.ZoneLicenseExpiry, NotificationTypes.CooperativeCertificationExpiry, NotificationTypes.PurchaseRequestNew, NotificationTypes.SupplierTransaction],
             NotificationTypes.All.Where(t => t.IsMandatory).Select(t => t.Code));
     }
 

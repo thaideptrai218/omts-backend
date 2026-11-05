@@ -15,8 +15,8 @@ namespace OMTS.Application.Features.Purchasing.Receipts;
 /// <summary>
 /// PURCHASE-06 – remove a Draft (PURCHASE-06.1) or cancel a Completed receipt with a reason, by the person who recorded it
 /// or the Owner (BR-PURCHASE-09). A receipt whose seed lot was seeded, or that has a purchase return, cannot be cancelled
-/// (MSG-PURCHASE-09). Payments are never cancelled with it: those still allocated to it are kept as money the supplier
-/// holds, so the debt may go below zero (MSG-PURCHASE-07 before, MSG-PURCHASE-08 after).
+/// (MSG-PURCHASE-09). Payments are not linked to receipts and are never cancelled with one, so the debt may go below zero
+/// (MSG-PURCHASE-07 before, MSG-PURCHASE-08 after).
 /// </summary>
 public sealed class PurchaseReceiptCancellationService(
     IPurchaseReceiptRepository receipts,
@@ -110,17 +110,6 @@ public sealed class PurchaseReceiptCancellationService(
         receipt!.StatusId = StatusIds.PurchaseReceipt.Cancelled;
         receipt.CancelledAt = timeProvider.GetUtcNow();
         receipt.CancelReason = reason;
-        foreach (var payment in receipt.Payments.Where(p => p.StatusId == StatusIds.SupplierPayment.Recorded).ToList())
-        {
-            // BR-PURCHASE-09: never cancelled; it stays money the supplier holds until the payments are untied from receipts.
-            receipt.Payments.Remove(payment);
-            payment.ReceiptId = null;
-            audit.Record(new AuditEntry("SupplierPayment.Detached", nameof(SupplierPayment))
-            {
-                RecordId = payment.Id, Before = new { ReceiptId = receipt.Id }, After = new { ReceiptId = (Guid?)null }, Reason = reason,
-            });
-        }
-
         audit.Record(new AuditEntry("PurchaseReceipt.Cancelled", RecordType)
         {
             RecordId = receipt.Id,
@@ -183,7 +172,7 @@ public sealed class PurchaseReceiptCancellationService(
     }
 
     /// <summary>
-    /// The supplier debt now and after the cancellation: the receipt leaves the debt, and the payments allocated to it stay
+    /// The supplier debt now and after the cancellation: the receipt leaves the debt, and the payments, not linked to it, stay
     /// recorded, so they still lower it (BR-PURCHASE-04, BR-PURCHASE-09).
     /// </summary>
     private async Task<(decimal Before, decimal After)> DebtsAsync(PurchaseReceipt receipt, CancellationToken cancellationToken)
@@ -191,8 +180,7 @@ public sealed class PurchaseReceiptCancellationService(
         // Every return blocks a cancel today. When P4 lets a receipt with only Cancelled returns be cancelled, this formula
         // must count the returns that are not cancelled only.
         var before = await debts.DebtAsync(receipt.SupplierId, cancellationToken);
-        var figures = PurchaseMoney.Of(receipt);
-        return (before, before - (figures.NetTotal - figures.Refunded));
+        return (before, before - PurchaseMoney.Of(receipt).DebtShare);
     }
 
     private AppError WrongStatus(PurchaseReceipt receipt) =>

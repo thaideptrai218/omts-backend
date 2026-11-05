@@ -231,8 +231,8 @@ public class FixedRolesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         await (await client.CancelAsync(receiptC, "Wrong supplier")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
 
         // No zone: suppliers by the Zone Manager role, supplier payments and debts by the Accountant role, in every zone.
-        await (await client.GetAsync($"/api/suppliers/{b.SupplierId}/debt")).ReadAsync(HttpStatusCode.OK);
-        await (await client.PostPaymentAsync(new PaymentBody { SupplierId = b.SupplierId, ReceiptId = receiptB, Amount = 1_000 })).ReadAsync(HttpStatusCode.Created);
+        await (await client.GetAsync($"/api/supplier-debts/{b.SupplierId}")).ReadAsync(HttpStatusCode.OK);
+        await (await client.PostPaymentAsync(new PaymentBody { SupplierId = b.SupplierId, Amount = 1_000, ConfirmAdvance = true })).ReadAsync(HttpStatusCode.Created);
         await client.CreateSupplierAsync();
     }
 

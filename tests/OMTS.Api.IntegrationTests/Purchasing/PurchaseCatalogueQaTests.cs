@@ -170,7 +170,7 @@ public class PurchaseCatalogueQaTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal([world.SupplierId], discontinued.GetProperty("items").EnumerateArray().Select(s => s.Id()));
 
         // POST-2 of PURCHASE-07, BR-PURCHASE-06: the Accountant can still record a payment to it.
-        var paid = await accountant.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = receipt.Id(), Amount = 50_000, Method = "Cash" });
+        var paid = await accountant.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, Amount = 50_000, ConfirmAdvance = true });
         await paid.ReadAsync(HttpStatusCode.Created);
     }
 

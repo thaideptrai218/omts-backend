@@ -70,12 +70,16 @@ internal sealed class SupplierPaymentConfiguration : IEntityTypeConfiguration<Su
 {
     public void Configure(EntityTypeBuilder<SupplierPayment> builder)
     {
+        builder.Property(x => x.Code).HasMaxLength(Lengths.Code);
+        builder.HasIndex(x => x.Code).IsUnique();
         builder.HasOne(x => x.Supplier).WithMany().HasForeignKey(x => x.SupplierId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(x => x.Receipt).WithMany(r => r.Payments).HasForeignKey(x => x.ReceiptId).OnDelete(DeleteBehavior.Restrict);
         builder.ReferencesAccount(nameof(SupplierPayment.RecordedByAccountId));
+        // Whole VND, without the old thousand rule: BR-PURCHASE-08 only asks for an amount above zero.
         builder.Property(x => x.Amount).HasPrecision(18, 0);
-        builder.HasThousandVndCheck(nameof(SupplierPayment.Amount));
-        builder.Property(x => x.ReferenceCode).HasMaxLength(Lengths.ShortText);
+        builder.Property(x => x.BankReference).HasMaxLength(Lengths.ShortText);
+        // Not unique: the Accountant may confirm a second payment with the same reference (MSG-PURCHASE-06).
+        builder.HasIndex(x => x.BankReference);
+        builder.Property(x => x.Note).HasMaxLength(Lengths.Reason);
         builder.Property(x => x.DeduplicationKey).HasMaxLength(Lengths.ShortText);
         builder.HasIndex(x => x.DeduplicationKey).IsUnique();
         builder.Property(x => x.CancelReason).HasMaxLength(Lengths.Reason);

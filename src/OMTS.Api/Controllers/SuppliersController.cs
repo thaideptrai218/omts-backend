@@ -6,7 +6,6 @@ using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Files;
-using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Suppliers;
 using OMTS.Domain.Enums;
 
@@ -15,12 +14,12 @@ namespace OMTS.Api.Controllers;
 /// <summary>
 /// PURCHASE-07 – the cooperative-wide supplier list. Suppliers have no zone, so they follow the role only (BR-FARM-08): a
 /// pair of a role holding SUPPLIERS in any zone opens every supplier (Zone Manager: maintain; Accountant: view). Supplier
-/// debt is PURCHASE-04 (SUPPLIER_PAYMENTS).
+/// debt is PURCHASE-04: <see cref="SupplierDebtsController"/>.
 /// </summary>
 [ApiController]
 [Route("api/suppliers")]
 [Authorize]
-public sealed class SuppliersController(SupplierService suppliers, SupplierDebtService debts) : ControllerBase
+public sealed class SuppliersController(SupplierService suppliers) : ControllerBase
 {
     [HttpGet]
     [RequirePermission(PermissionFunctions.Suppliers, PermissionAction.View, PermissionScope.NoZone)]
@@ -75,18 +74,6 @@ public sealed class SuppliersController(SupplierService suppliers, SupplierDebtS
     [ProducesResponseType<SupplierView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> RemoveCertificate(Guid id, int index, CancellationToken cancellationToken) =>
         (await suppliers.RemoveCertificateAsync(id, index, cancellationToken)).ToActionResult(Ok);
-
-    /// <summary>Per supplier: payable, returned, paid, refunded, unallocated and outstanding (INP-06).</summary>
-    [HttpGet("debts")]
-    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.View, PermissionScope.NoZone)]
-    [ProducesResponseType<IReadOnlyList<SupplierDebtRow>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Debts(CancellationToken cancellationToken) => Ok(await debts.ListAsync(cancellationToken));
-
-    [HttpGet("{id:guid}/debt")]
-    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.View, PermissionScope.NoZone)]
-    [ProducesResponseType<SupplierDebtDetail>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Debt(Guid id, CancellationToken cancellationToken) =>
-        (await debts.GetAsync(id, cancellationToken)).ToActionResult(Ok);
 
     internal static async Task<IReadOnlyList<IncomingFile>> IncomingAsync(IFormFileCollection files, CancellationToken cancellationToken)
     {

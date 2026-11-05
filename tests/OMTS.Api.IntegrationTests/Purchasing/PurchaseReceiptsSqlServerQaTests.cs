@@ -87,7 +87,7 @@ public class PurchaseReceiptsSqlServerQaTests
     }
 
     [SqlServerFact]
-    public async Task Parallel_cancels_of_one_paid_receipt_cancel_it_once_detach_its_payment_once_and_notify_once()
+    public async Task Parallel_cancels_of_one_paid_receipt_cancel_it_once_keep_its_payment_and_notify_once()
     {
         await using var host = await FarmingHost.StartAsync();
         var world = await host.WorldAsync();
@@ -101,14 +101,13 @@ public class PurchaseReceiptsSqlServerQaTests
             Assert.Contains(await loser.CodeOrStatusAsync(), new[] { "409 MSG06", "409 MSG-GEN-09" });
         }
 
-        var actions = await host.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == receipt.Id() || e.Action == "SupplierPayment.Detached").Select(e => e.Action).ToListAsync());
-        Assert.Equal((1, 1), (actions.Count(a => a == "PurchaseReceipt.Cancelled"), actions.Count(a => a == "SupplierPayment.Detached")));
+        var actions = await host.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == receipt.Id()).Select(e => e.Action).ToListAsync());
+        Assert.Single(actions, a => a == "PurchaseReceipt.Cancelled");
         var recipients = await host.QueryAsync(db => db.Notifications.Where(n => n.RelatedRecordId == receipt.Id() && n.Type == NotificationTypes.PurchaseReceiptCancelledPaidInAdvance)
             .Select(n => n.RecipientAccountId).ToListAsync());
         Assert.Equal(recipients.Distinct().Count(), recipients.Count);
         Assert.Contains(host.Owner.Account.Id, recipients);
-        var debt = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}/debt");
-        Assert.Equal(-300_000m, debt.GetProperty("totals").Money("outstanding"));
+        Assert.Equal(-300_000m, await world.DebtAsync());
     }
 
     // GBR-04 code race: every create of a burst gets its own PN code from the document sequence.

@@ -38,14 +38,18 @@ public sealed record ReturnBody
     public IReadOnlyList<ReturnLineBody>? Lines { get; init; }
 }
 
+/// <summary>PURCHASE-05 request body: a cash payment dated today unless the test says otherwise.</summary>
 public sealed record PaymentBody
 {
     public Guid? SupplierId { get; init; }
-    public Guid? ReceiptId { get; init; }
+    public string? Kind { get; init; } = "Payment";
     public decimal? Amount { get; init; }
     public DateOnly? PaymentDate { get; init; } = PurchasingTestKit.Today;
-    public string? Method { get; init; } = "BankTransfer";
-    public string? ReferenceCode { get; init; }
+    public string? Method { get; init; } = "Cash";
+    public string? BankReference { get; init; }
+    public string? Note { get; init; }
+    public bool ConfirmAdvance { get; init; }
+    public bool ConfirmDuplicateBankReference { get; init; }
     public string? DeduplicationKey { get; init; }
 }
 
@@ -134,23 +138,33 @@ public static class PurchasingTestKit
     public static Task<JsonElement> CompletedAsync(this PurchasingWorld world, params LineBody[] lines) =>
         world.Owner.CreateReceiptAsync(world.Body(lines) with { Complete = true });
 
-    /// <summary>
-    /// A Completed receipt with a payment of <paramref name="paid"/> (whole thousands) allocated to it, as the old paid-now
-    /// amount did; payments stop being tied to receipts with PURCHASE-05. Returns the receipt as read after the payment.
-    /// </summary>
+    /// <summary>A Completed receipt, then a payment of <paramref name="paid"/> to its supplier (payments are not linked to receipts, BR-PURCHASE-04).</summary>
     public static async Task<JsonElement> PaidAsync(this PurchasingWorld world, decimal paid, params LineBody[] lines)
     {
         var receipt = await world.CompletedAsync(lines);
-        await (await world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = receipt.Id(), Amount = paid, Method = "Cash" }))
-            .ReadAsync(HttpStatusCode.Created);
+        await world.PayAsync(paid);
         return receipt;
     }
+
+    /// <summary>A payment to the world's supplier, recorded by the Owner, answering Yes to the advance warning.</summary>
+    public static async Task<JsonElement> PayAsync(this PurchasingWorld world, decimal amount, DateOnly? date = null, string kind = "Payment") =>
+        await (await world.Owner.PostPaymentAsync(new PaymentBody
+        {
+            SupplierId = world.SupplierId, Kind = kind, Amount = amount, PaymentDate = date ?? Today, ConfirmAdvance = true,
+        })).ReadAsync(HttpStatusCode.Created);
+
+    /// <summary>The supplier debt today, as PURCHASE-04 shows it.</summary>
+    public static async Task<decimal> DebtAsync(this PurchasingWorld world) =>
+        (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/supplier-debts/{world.SupplierId}")).Money("debtToday");
 
     public static Task<HttpResponseMessage> PostReturnAsync(this HttpClient client, Guid receiptId, ReturnBody body) =>
         client.PostAsJsonAsync($"/api/purchase-receipts/{receiptId}/returns", body);
 
     public static Task<HttpResponseMessage> PostPaymentAsync(this HttpClient client, PaymentBody body) =>
         client.PostAsJsonAsync("/api/supplier-payments", body);
+
+    public static Task<HttpResponseMessage> CancelPaymentAsync(this HttpClient client, Guid paymentId, string? reason, string? rowVersion = null) =>
+        client.PostAsJsonAsync($"/api/supplier-payments/{paymentId}/cancel", new { reason, rowVersion });
 
     public static Task<HttpResponseMessage> CancelAsync(this HttpClient client, Guid receiptId, string? reason) =>
         client.PostAsJsonAsync($"/api/purchase-receipts/{receiptId}/cancel", new { reason });

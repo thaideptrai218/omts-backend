@@ -305,6 +305,43 @@ public static class UserMessages
     public static UserMessage ReturnQuantityOutsideLimit(string itemName, string maxQuantity, string unit, string limitExplanation, string legacyCode) => new(
         Purchase03, $"{itemName}: enter a quantity greater than 0 and at most {maxQuantity} {unit}. {limitExplanation}".TrimEnd(), legacyCode);
 
+    /// <summary>MSG-PURCHASE-04 (BR-PURCHASE-05): notification to the Owner of a payment, money paid back or a cancelled payment; always pushed.</summary>
+    /// <param name="transaction">The English {transaction_text}: what was recorded, up to the code ("the cancellation of payment"), from which the text is built.</param>
+    /// <param name="transactionKind">The atomic parameter clients word it from: Payment, PaidBack, PaymentCancelled or PaidBackCancelled.</param>
+    /// <param name="preposition">"to" or "by" the supplier.</param>
+    /// <param name="debtAmount">The supplier debt after it; below zero when paid in advance.</param>
+    public static UserMessage SupplierTransaction(
+        string userName, string transaction, string transactionKind, string paymentCode, decimal amount, string preposition, string supplierName, decimal debtAmount)
+    {
+        var debtText = debtAmount < 0
+            ? $"The cooperative has now paid {supplierName} {Vnd(-debtAmount)} VND in advance."
+            : $"The cooperative now owes {supplierName} {Vnd(debtAmount)} VND.";
+        return new UserMessage(Purchase04, $"{userName} recorded {transaction} {paymentCode} of {Vnd(amount)} VND {preposition} {supplierName}. {debtText}")
+        {
+            Parameters = new Dictionary<string, object?>
+            {
+                ["user_name"] = userName,
+                ["transaction_kind"] = transactionKind,
+                ["payment_code"] = paymentCode,
+                ["amount"] = amount,
+                ["supplier_name"] = supplierName,
+                ["debt_amount"] = debtAmount,
+            },
+        };
+    }
+
+    /// <summary>MSG-PURCHASE-05 (PURCHASE-05.1): the payment is larger than the debt, or the debt is zero or below; a confirmation.</summary>
+    /// <param name="debtAmount">What the cooperative owes, 0 when it has already paid in advance (the exact debt goes in the details of the answer).</param>
+    /// <param name="advanceAmount">What it will have paid in advance after this payment (positive).</param>
+    public static UserMessage PaymentAboveDebt(string supplierName, decimal debtAmount, decimal advanceAmount) => new(
+        Purchase05,
+        $"The cooperative owes {supplierName} {Vnd(debtAmount)} VND. After this payment, it will have paid {Vnd(advanceAmount)} VND in advance. Do you want to save the payment?");
+
+    /// <summary>MSG-PURCHASE-06 (PURCHASE-05.4): a payment that is not cancelled has the same bank reference; a confirmation.</summary>
+    public static UserMessage BankReferenceAlreadyRecorded(string paymentCode, decimal amount, DateOnly paymentDate, string bankReference) => new(
+        Purchase06,
+        $"Payment {paymentCode} of {Vnd(amount)} VND on {Date(paymentDate)} already has bank reference {bankReference}. Do you want to save this payment as well?");
+
     /// <summary>MSG-PURCHASE-07 (PURCHASE-06 step 2): cancelling the receipt would bring the supplier debt below zero.</summary>
     /// <param name="advanceAmount">What the cooperative will then have paid in advance (a positive amount).</param>
     public static UserMessage PaidInAdvanceAfterCancel(string supplierName, decimal advanceAmount) => new(
