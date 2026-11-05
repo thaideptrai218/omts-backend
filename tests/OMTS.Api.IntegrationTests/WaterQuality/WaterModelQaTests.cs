@@ -227,8 +227,9 @@ public class WaterModelQaTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
     public async Task Every_water_route_follows_the_matrix_for_each_role()
     {
         var z = await api.ZoneAsync();
-        var id = (await z.RecordedAsync(7m, 20m)).Id();
         var (manager, _) = await api.StaffAsync(z.Zone);
+        // Recorded by the manager: WATER-02 limits a Zone Manager to their own measurements.
+        var id = (await z.RecordedAsync(7m, 20m, client: manager)).Id();
         var (otherManager, _) = await api.StaffAsync((await api.ZoneAsync()).Zone);
         var (accountant, _) = await api.StaffAsync(z.Zone, StaffRole.Accountant);
         var accountantAllPassword = NewPassword();
@@ -245,8 +246,6 @@ public class WaterModelQaTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
             ("export", false, c => c.GetAsync($"{z.Base}/export")),
             ("detail", false, c => c.GetAsync($"/api/water-measurements/{id}")),
             ("correct", false, c => c.CorrectAsync(id, 7.1m, 20m)),
-            ("start editing", false, c => c.PostAsync($"/api/water-measurements/{id}/editing", null)),
-            ("stop editing", false, c => c.DeleteAsync($"/api/water-measurements/{id}/editing")),
             ("zone thresholds", false, c => c.GetAsync($"/api/zones/{z.Zone.Id}/water-thresholds")),
             ("set zone thresholds", true, c => c.PutAsJsonAsync($"/api/zones/{z.Zone.Id}/water-thresholds", thresholds)),
             ("set all thresholds", true, c => c.PutAsJsonAsync("/api/water-thresholds", thresholds)),

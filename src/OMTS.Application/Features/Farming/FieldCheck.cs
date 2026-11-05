@@ -39,8 +39,12 @@ internal sealed class FieldCheck
         return trimmed;
     }
 
-    /// <summary>Latitude −90…90 and longitude −180…180, always both together; both required when <paramref name="required"/>.</summary>
-    public void Coordinates(decimal? latitude, decimal? longitude, bool required)
+    /// <summary>
+    /// Latitude −90…90 and longitude −180…180, always both together; both required when <paramref name="required"/>.
+    /// Returns them as the columns store them, so the answer, the comparison with the row and the audit log all see the
+    /// stored value (GBR-02: saving the same pin again changes nothing). The range is checked on the value as sent.
+    /// </summary>
+    public (decimal? Latitude, decimal? Longitude) Coordinates(decimal? latitude, decimal? longitude, bool required)
     {
         if (latitude is null && longitude is null)
         {
@@ -50,7 +54,7 @@ internal sealed class FieldCheck
                 Invalid.Add("Longitude");
             }
 
-            return;
+            return (null, null);
         }
 
         if (latitude is not (>= -90 and <= 90))
@@ -62,7 +66,13 @@ internal sealed class FieldCheck
         {
             Invalid.Add("Longitude");
         }
+
+        return (AsStored(latitude), AsStored(longitude));
     }
+
+    /// <summary>The Latitude and Longitude columns are decimal(9,6).</summary>
+    private static decimal? AsStored(decimal? coordinate) =>
+        coordinate is { } value ? Math.Round(value, 6, MidpointRounding.AwayFromZero) : null;
 
     public void Check(bool valid, string field)
     {

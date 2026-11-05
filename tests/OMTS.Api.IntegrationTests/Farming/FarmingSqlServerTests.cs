@@ -6,10 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Features.Notifications;
-using OMTS.Domain.Constants;
-using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
-using OMTS.Domain.Enums;
 using OMTS.Infrastructure.Jobs;
 using static OMTS.Api.IntegrationTests.Farming.FarmingTestKit;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
@@ -88,13 +85,12 @@ public class FarmingSqlServerTests
 
         var raftCode = NewCode() + string.Concat(Enumerable.Repeat("Bè", 20));
         var raft = await owner.CreateRaftAsync(zone.Id(), new RaftBody(
-            raftCode, 21.123456m, 107.654321m, new string('ị', 500), new string('ô', 100), new string('ừ', 2000),
-            [new LaneBody(1, 99_999_999.99m, new string('A', 50), new string('B', 50))]));
+            raftCode, 21.123456m, 107.654321m, new string('ị', 500), new string('ô', 100), new string('ừ', 2000), 200));
         var savedRaft = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}");
         Assert.Equal(raftCode, savedRaft.Text("code"));
         Assert.Equal(new string('ừ', 2000), savedRaft.Text("conditionNotes"));
         Assert.Equal(new string('ô', 100), savedRaft.Text("size"));
-        Assert.Equal(99_999_999.99m, savedRaft.GetProperty("lanes")[0].GetProperty("length").GetDecimal());
+        Assert.Equal(200, savedRaft.GetProperty("lanes").GetArrayLength());
 
         var number = new string('Q', 90) + NewCode();
         var license = await owner.CreateLicenseAsync(new LicenseFields
@@ -149,15 +145,15 @@ public class FarmingSqlServerTests
         Assert.Equal("First", (await owner.GetFromJsonAsync<JsonElement>($"/api/zone-licenses/{license.Id()}")).Text("holder"));
     }
 
-    // The staff zone filter, license overview, lane checks, condition view and reminder job run as SQL, not in memory.
+    // The staff zone filter, license overview and reminder job run as SQL, not in memory.
     [SqlServerFact]
-    public async Task Zone_scoped_reads_lane_checks_condition_view_and_reminder_run_on_sql_server()
+    public async Task Zone_scoped_reads_and_reminder_run_on_sql_server()
     {
         await using var host = await FarmingSqlServerHost.StartAsync();
         var owner = host.Owner.Client;
         var zoneA = await owner.CreateZoneAsync();
         var zoneB = await owner.CreateZoneAsync();
-        var raft = await owner.CreateRaftAsync(zoneA.Id(), NewRaftBody(lanes: 3));
+        await owner.CreateRaftAsync(zoneA.Id());
         await owner.CreateRaftAsync(zoneB.Id());
         var license = await owner.CreateLicenseAsync(new LicenseFields { ZoneId = zoneA.Id(), EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(30) });
         // Zone B: an older expired license next to a newer valid one (only the newest one counts for the badge; the older
@@ -177,24 +173,6 @@ public class FarmingSqlServerTests
         var overview = await owner.GetFromJsonAsync<JsonElement>($"/api/zones/{zoneA.Id()}/licenses?asOf={Today.AddDays(31):yyyy-MM-dd}");
         Assert.Contains(overview.GetProperty("licenses").EnumerateArray(), r => r.Text("state") == "Expired");
 
-        var cycle = new CultivationCycle { RaftId = raft.Id(), OpenedAt = DateTimeOffset.UtcNow.AddDays(-60), ClosedAt = DateTimeOffset.UtcNow.AddDays(-10), StatusId = StatusIds.CultivationCycle.Closed };
-        await host.UseDbAsync(db =>
-        {
-            db.CultivationCycles.Add(cycle);
-            db.LaneSegments.Add(Segment(cycle.Id, raft.LaneId(3), LaneSegmentType.Seeded, 0, 40, Today.AddDays(-50), host.Owner.Account.Id));
-            db.LaneSegments.Add(Segment(cycle.Id, raft.LaneId(3), LaneSegmentType.Harvested, 0, 15, Today.AddDays(-20), host.Owner.Account.Id));
-        });
-
-        var condition = await staff.Client.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/condition?date={Today.AddDays(-15):yyyy-MM-dd}");
-        Assert.Equal(cycle.Id, condition.GetProperty("cycleId").GetGuid());
-        var lane3 = condition.GetProperty("lanes")[2];
-        Assert.Equal("PartiallyHarvested", lane3.Text("summary"));
-        Assert.Equal(host.Owner.Account.DisplayName, lane3.GetProperty("portions")[0].GetProperty("segments")[0].Text("recordedBy"));
-
-        var blocked = await (await owner.PutAsJsonAsync($"/api/rafts/{raft.Id()}", NewRaftBody(raft.Text("code"), lanes: 2) with { RowVersion = raft.Text("rowVersion") }))
-            .ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal([3], blocked.GetProperty("laneNumbers").EnumerateArray().Select(n => n.GetInt32()));
-
         var job = host.Api.Services.GetRequiredService<ZoneLicenseReminderJob>();
         Assert.Equal(2, await job.RunOnceAsync(Today));
         Assert.Equal(0, await job.RunOnceAsync(Today));
@@ -207,11 +185,6 @@ public class FarmingSqlServerTests
         // The Cooperative Owner only (GFR-03): the Zone Manager of the zone is not told.
         Assert.Equal([host.Owner.Account.Id], recipients);
     }
-
-    private static LaneSegment Segment(Guid cycleId, Guid laneId, LaneSegmentType type, decimal from, decimal to, DateOnly date, Guid recordedBy) => new()
-    {
-        CycleId = cycleId, LaneId = laneId, SegmentType = type, FromPosition = from, ToPosition = to, SegmentDate = date, RecordedByAccountId = recordedBy,
-    };
 
     private static async Task AssertDuplicateAsync(FarmingSqlServerHost host, Action<OMTS.Infrastructure.Persistence.OmtsDbContext> change)
     {

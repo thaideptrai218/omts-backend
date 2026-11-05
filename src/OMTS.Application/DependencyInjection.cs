@@ -101,7 +101,10 @@ public static class DependencyInjection
         services.AddScoped<ZoneLicenseReminderService>();
         services.AddScoped<CertificationReminderService>();
         services.AddScoped<RaftService>();
-        services.AddScoped<RaftConditionService>();
+        services.AddScoped<RaftReadService>();
+        services.AddScoped<RaftViews>();
+        services.AddScoped<RaftPhotoService>();
+        services.AddScoped<RaftStatusService>();
         services.AddScoped<UploadedFileSaver>();
         services.AddScoped<OrphanFileCleanupService>();
 
@@ -140,6 +143,8 @@ public static class DependencyInjection
         services.AddScoped<WaterMeterRecognizer>();
         services.AddScoped<WaterMeterPhotoStore>();
         services.AddScoped<WaterAlertService>();
+        services.AddScoped<WaterCorrectionNotifier>();
+        services.AddScoped<WaterCorrectionPreconditions>();
         services.AddScoped<WaterMeasurementViewBuilder>();
         services.AddScoped<WaterMeasurementRecordingService>();
         services.AddScoped<WaterMeasurementCorrectionService>();

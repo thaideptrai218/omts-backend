@@ -53,6 +53,8 @@ internal static class StatusCatalogSeed
         NewStatus(S.PurchaseReturn.Recorded, G.PurchaseReturn, "RECORDED", "Recorded", "Lowers the supplier debt and the material cost of the raft; cannot be edited.", initial: true),
         NewStatus(S.PurchaseReturn.Cancelled, G.PurchaseReturn, "CANCELLED", "Cancelled", "Recorded by mistake; no longer counts.", final: true),
 
+        NewStatus(S.Lane.InUse, G.Lane, "IN_USE", "In Use", "Seeded and harvested.", initial: true),
+        NewStatus(S.Lane.Removed, G.Lane, "REMOVED", "Removed", "Removed at the end of the raft; keeps its number and records."),
         // STD-PURCHASE-REQUEST. Fulfilled is worked out from the invoices, so it has no row (BR-SALE-01).
         NewStatus(S.PurchaseRequest.AwaitingResponse, G.PurchaseRequest, "AWAITING_RESPONSE", "Awaiting response", "Sent by the trader; not answered yet.", initial: true),
         NewStatus(S.PurchaseRequest.Accepted, G.PurchaseRequest, "ACCEPTED", "Accepted", "Accepted by the Cooperative Owner, possibly for fewer kg; invoices may be linked to it."),
@@ -90,6 +92,8 @@ internal static class StatusCatalogSeed
         NewTransition(73, S.SupplierPayment.Recorded, S.SupplierPayment.Cancelled, "PURCHASE-05", "Accountant; Cooperative Owner", Action, "A payment recorded by mistake; payments are never cancelled with a purchase receipt.", true),
         NewTransition(74, S.PurchaseReturn.Recorded, S.PurchaseReturn.Cancelled, "PURCHASE-02", Owner, Action, "A return recorded by mistake; it no longer counts in the supplier debt, the material cost of a raft or the quantity returned.", true),
 
+        NewTransition(76, S.Lane.InUse, S.Lane.Removed, "FARM-04", Owner, Action, "The raft has no open cycle; the last lanes are removed first (BR-FARM-04).", false),
+        NewTransition(77, S.Lane.Removed, S.Lane.InUse, "FARM-04", Owner, Action, "The raft has no open cycle; Removed lanes return in number order before new numbers (BR-FARM-04).", false),
         NewTransition(180, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Accepted, "SALE-03", Owner, Action, "The accepted kg is above 0 and not more than the requested kg; the pickup date is not before today.", false),
         NewTransition(181, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Declined, "SALE-03", Owner, Action, "A note gives the reason.", true),
         NewTransition(182, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Cancelled, "SALE-02", Trader, Action, "The trader cancels; a reason is optional.", false),

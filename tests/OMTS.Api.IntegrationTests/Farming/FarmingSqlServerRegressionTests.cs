@@ -12,36 +12,11 @@ using static OMTS.Api.IntegrationTests.Farming.FarmingTestKit;
 namespace OMTS.Api.IntegrationTests.Farming;
 
 /// <summary>
-/// Regressions of product bugs found in the OMTS-210 QA review (fixed in this PR), on SQL Server:
-/// a lane layout change does not move the record's rowversion, markers in Vietnamese overflow their column, and SQL
-/// Server decimals are audited as changed when they are not. Also the GFR-03 reminder query of PR 0.8 on SQL Server.
+/// Regressions of product bugs found in the OMTS-210 QA review, on SQL Server: SQL Server decimals are audited as changed
+/// when they are not. Also the GFR-03 reminder query of PR 0.8 on SQL Server.
 /// </summary>
 public class FarmingSqlServerRegressionTests
 {
-    // FARM-04 "Stale rowVersion → 409 MSG06": only Lane/RaftLayoutVersion rows change, so the Raft rowversion stays
-    // the same and a second editor holding the old version silently replaces the first editor's layout.
-    [SqlServerFact]
-    public async Task Layout_change_with_a_stale_row_version_is_refused()
-    {
-        await using var host = await FarmingSqlServerHost.StartAsync();
-        var owner = host.Owner.Client;
-        var body = NewRaftBody(lanes: 3);
-        var raft = await owner.CreateRaftAsync((await owner.CreateZoneAsync()).Id(), body);
-
-        await (await owner.PutAsJsonAsync($"/api/rafts/{raft.Id()}", body with
-        {
-            Lanes = [new(1, 40, "A", "B"), new(2, 35, "A", "B"), new(3, 40, "A", "B")], RowVersion = raft.Text("rowVersion"),
-        })).ReadAsync(HttpStatusCode.OK);
-
-        var stale = await owner.PutAsJsonAsync($"/api/rafts/{raft.Id()}", body with
-        {
-            Lanes = [new(1, 40, "A", "B"), new(2, 40, "A", "B"), new(3, 40, "A", "B"), new(4, 40, "A", "B")], RowVersion = raft.Text("rowVersion"),
-        });
-
-        Assert.Equal("MSG06", await stale.ErrorCodeAsync());
-        Assert.Equal(2, (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}")).GetProperty("layoutVersion").GetInt32());
-    }
-
     // GFR-03 on SQL Server: the candidate query reads the zone status and the replacements as SQL; a discontinued zone is
     // skipped until it is resumed, and the replacement's record time (datetimeoffset) makes the old license Replaced today.
     [SqlServerFact]
@@ -73,21 +48,6 @@ public class FarmingSqlServerRegressionTests
 
         Task<List<Guid>> RemindedAsync() => host.QueryAsync(db => db.Notifications
             .Where(n => n.Type == NotificationTypes.ZoneLicenseExpiry).Select(n => n.RelatedRecordId!.Value).Distinct().ToListAsync());
-    }
-
-    // FARM-04 markers ≤ 50 characters each: the JSON stored in Lanes.MeasurementMarkers (nvarchar(500)) escapes every
-    // non-ASCII character as \uXXXX (6 characters), so two 50-character Vietnamese markers need 627 characters → 500.
-    [SqlServerFact]
-    public async Task Markers_of_50_vietnamese_characters_are_saved()
-    {
-        await using var host = await FarmingSqlServerHost.StartAsync();
-        var owner = host.Owner.Client;
-        var marker = new string('ố', 50);
-
-        var response = await owner.PostAsJsonAsync($"/api/zones/{(await owner.CreateZoneAsync()).Id()}/rafts", NewRaftBody() with { Lanes = [new(1, 40, marker, marker)] });
-
-        var raft = await response.ReadAsync(HttpStatusCode.Created);
-        Assert.Equal(marker, raft.GetProperty("lanes")[0].Text("markerA"));
     }
 
     // FARM-02/04 "Updated (only changed fields in before/after)": SQL Server returns decimal(9,6) as 21.050000 while the

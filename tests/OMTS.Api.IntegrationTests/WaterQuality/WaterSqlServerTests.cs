@@ -85,9 +85,9 @@ public class WaterSqlServerTests
         Assert.Equal(1, await db.WaterMeasurements.CountAsync());
     }
 
-    // Parallel corrections of one record change it one at a time: every answer is 200 or 409 MSG06, never 500 or a second row.
+    // No version check for water (NFR-09): parallel corrections of one record change it one at a time and all save.
     [SqlServerFact]
-    public async Task Parallel_corrections_of_one_record_keep_one_row_and_answer_saved_or_MSG06()
+    public async Task Parallel_corrections_of_one_record_keep_one_row_and_all_answer_saved()
     {
         await using var database = SqlServerTestDatabase.Create();
         var seeded = await WaterSqlServerKit.SeedAsync(database);
@@ -97,17 +97,11 @@ public class WaterSqlServerTests
 
         var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(i => client.CorrectAsync(id, 7.1m + (i / 10m), 20m)));
 
-        Assert.Contains(responses, r => r.StatusCode == HttpStatusCode.OK);
-        foreach (var refused in responses.Where(r => r.StatusCode != HttpStatusCode.OK))
-        {
-            Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
-            Assert.Equal("MSG06", await refused.ErrorCodeAsync());
-        }
-
+        Assert.All(responses, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
         await using var db = database.CreateContext();
         Assert.Equal(1, await db.WaterMeasurements.CountAsync());
         Assert.Equal(StatusIds.WaterMeasurement.Active, await db.WaterMeasurements.Where(m => m.Id == id).Select(m => m.StatusId).SingleAsync());
-        Assert.Equal(responses.Count(r => r.StatusCode == HttpStatusCode.OK), await db.AuditEvents.CountAsync(e => e.RecordId == id && e.Action == "WaterMeasurement.Corrected"));
+        Assert.Equal(responses.Length, await db.AuditEvents.CountAsync(e => e.RecordId == id && e.Action == "WaterMeasurement.Corrected"));
     }
 
     private static async Task<HttpClient> LoginAsync(SqlServerApiFactory api, string username)

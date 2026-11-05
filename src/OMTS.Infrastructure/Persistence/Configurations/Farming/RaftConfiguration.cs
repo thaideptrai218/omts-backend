@@ -15,7 +15,6 @@ internal sealed class RaftConfiguration : IEntityTypeConfiguration<Raft>
         builder.Property(x => x.Longitude).HasPrecision(9, 6);
         builder.HasCoordinateChecks();
         builder.Property(x => x.Size).HasMaxLength(Lengths.ShortText);
-        builder.Property(x => x.PhotoUrl).HasMaxLength(Lengths.Url);
         builder.Property(x => x.ConditionNotes).HasMaxLength(Lengths.LongText);
 
         builder.HasOne(x => x.Zone).WithMany(z => z.Rafts).HasForeignKey(x => x.ZoneId);

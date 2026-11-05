@@ -133,6 +133,10 @@ public class DemoDataSeedTests
         Assert.Equal(1, await db.ZoneComplianceDocuments.CountAsync(d => d.ReplacesDocumentId != null));
         Assert.Equal(2, await db.ZoneComplianceDocuments.Select(d => d.ZoneId).Distinct().CountAsync());
         Assert.Equal(20, await db.Rafts.CountAsync());
+        // First raft of each In Use zone: two photos and a Removed lane; second: one photo; third: no map pin (FARM-04).
+        Assert.Equal(6, await db.RaftPhotos.CountAsync());
+        Assert.Equal(2, await db.Lanes.CountAsync(l => l.StatusId == StatusIds.Lane.Removed));
+        Assert.Equal(2, await db.Rafts.CountAsync(r => r.Latitude == null && r.Longitude == null));
         Assert.Equal(9, await db.Employees.CountAsync());
         // Everyone has a type (BR-LABOR-01): those with a login are Staff, the others seasonal workers; one has no phone number.
         Assert.Equal(9, await db.EmployeeTypePeriods.Select(p => p.EmployeeId).Distinct().CountAsync());

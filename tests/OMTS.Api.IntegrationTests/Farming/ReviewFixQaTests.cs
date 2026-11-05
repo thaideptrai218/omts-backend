@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -21,7 +20,6 @@ using OMTS.Application.Features.Farming.Licenses;
 using OMTS.Application.Features.Notifications;
 using OMTS.Domain.Common;
 using OMTS.Domain.Constants;
-using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
@@ -32,129 +30,9 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
 namespace OMTS.Api.IntegrationTests.Farming;
 
-/// <summary>QA-1 checks of the OMTS-210 review fixes: drawing comparison, lanes in use, reminder, clock, paging.</summary>
+/// <summary>QA-1 checks of the OMTS-210 review fixes: reminder clock and paging.</summary>
 public class ReviewFixQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
-
-    // Stored drawing; the variants below are the same JSON value written differently.
-    private const string Stored = "{\"label\":\"Bè ố\",\"shapes\":[{\"kind\":\"rect\",\"x\":1,\"y\":2},{\"kind\":\"rect\",\"x\":3,\"y\":4}]}";
-
-    // Other key order, whitespace, \u escapes for the Vietnamese letters, and \u003c for a tag-like character.
-    private const string SameValueVariant =
-        "{ \"shapes\" : [ { \"y\" : 2, \"x\" : 1, \"kind\" : \"rect\" }, {\"y\":4,\"x\":3,\"kind\":\"rect\"} ],\n  \"label\" : \"B\\u00e8 \\u1ed1\" }";
-
-    /// <summary>Same drawing value in other key order, whitespace and escapes: no drawing change, no new layout version.</summary>
-    [Fact]
-    public async Task Same_drawing_value_written_differently_is_not_a_drawing_change()
-    {
-        var owner = (await factory.OwnerAsync()).Client;
-        var zone = await owner.CreateZoneAsync();
-        var code = NewCode();
-        var created = await (await owner.PostAsync($"/api/zones/{zone.Id()}/rafts", RawRaft(NewRaftBody(code), Stored))).ReadAsync(HttpStatusCode.Created);
-        var id = created.Id();
-
-        var same = await (await owner.PutAsync($"/api/rafts/{id}", RawRaft(NewRaftBody(code) with { RowVersion = created.Text("rowVersion") }, SameValueVariant)))
-            .ReadAsync(HttpStatusCode.OK);
-
-        Assert.Equal("Bè ố", same.GetProperty("layoutDrawing").GetProperty("label").GetString());
-        Assert.Equal(0, await DrawingChangesAsync(id));
-        Assert.Equal(1, await LayoutVersionsAsync(id));
-    }
-
-    /// <summary>Other escapes of HTML-sensitive and other ASCII characters are the same value too.</summary>
-    [Fact]
-    public async Task Same_drawing_with_html_characters_written_as_escapes_is_not_a_drawing_change()
-    {
-        var owner = (await factory.OwnerAsync()).Client;
-        var zone = await owner.CreateZoneAsync();
-        var code = NewCode();
-        var created = await (await owner.PostAsync($"/api/zones/{zone.Id()}/rafts",
-            RawRaft(NewRaftBody(code), "{\"note\":\"a < b & 'c' + d > e\"}"))).ReadAsync(HttpStatusCode.Created);
-
-        await (await owner.PutAsync($"/api/rafts/{created.Id()}", RawRaft(NewRaftBody(code) with { RowVersion = created.Text("rowVersion") },
-            "{\"note\":\"a \\u003C b \\u0026 \\u0027c\\u0027 \\u002B d \\u003E e\"}"))).ReadAsync(HttpStatusCode.OK);
-
-        Assert.Equal(0, await DrawingChangesAsync(created.Id()));
-    }
-
-    /// <summary>A notes-only edit with the variant drawing keeps the drawing and records only the notes change.</summary>
-    [Fact]
-    public async Task Notes_edit_with_variant_drawing_records_no_drawing_change()
-    {
-        var owner = (await factory.OwnerAsync()).Client;
-        var zone = await owner.CreateZoneAsync();
-        var code = NewCode();
-        var created = await (await owner.PostAsync($"/api/zones/{zone.Id()}/rafts", RawRaft(NewRaftBody(code), Stored))).ReadAsync(HttpStatusCode.Created);
-        var id = created.Id();
-
-        await (await owner.PutAsync($"/api/rafts/{id}", RawRaft(NewRaftBody(code) with
-        {
-            ConditionNotes = "Dây neo mới",
-            RowVersion = created.Text("rowVersion"),
-        }, SameValueVariant))).ReadAsync(HttpStatusCode.OK);
-
-        Assert.Equal(0, await DrawingChangesAsync(id));
-        Assert.Equal(1, await UpdatedCountAsync(id));
-        Assert.Equal(1, await LayoutVersionsAsync(id));
-    }
-
-    /// <summary>Real value changes inside a drawing (text, number, array order) each record one drawing change and one layout version.</summary>
-    [Fact]
-    public async Task Real_value_changes_inside_a_drawing_are_drawing_changes()
-    {
-        var owner = (await factory.OwnerAsync()).Client;
-        var zone = await owner.CreateZoneAsync();
-        var code = NewCode();
-        var created = await (await owner.PostAsync($"/api/zones/{zone.Id()}/rafts", RawRaft(NewRaftBody(code), Stored))).ReadAsync(HttpStatusCode.Created);
-        var id = created.Id();
-        var rowVersion = created.Text("rowVersion");
-
-        var variants = new[]
-        {
-            "{\"label\":\"Bè ồ\",\"shapes\":[{\"kind\":\"rect\",\"x\":1,\"y\":2},{\"kind\":\"rect\",\"x\":3,\"y\":4}]}",
-            "{\"label\":\"Bè ồ\",\"shapes\":[{\"kind\":\"rect\",\"x\":3,\"y\":4},{\"kind\":\"rect\",\"x\":1,\"y\":2}]}",
-            "{\"label\":\"Bè ồ\",\"shapes\":[{\"kind\":\"rect\",\"x\":3,\"y\":4},{\"kind\":\"rect\",\"x\":1,\"y\":2.5}]}",
-            "{\"label\":\"Bè ồ\",\"shapes\":[{\"kind\":\"rect\",\"x\":3,\"y\":4},{\"kind\":\"rect\",\"x\":1,\"y\":2.5}],\"extra\":null}",
-        };
-
-        var expectedChanges = 0;
-        foreach (var variant in variants)
-        {
-            var body = await (await owner.PutAsync($"/api/rafts/{id}", RawRaft(NewRaftBody(code) with { RowVersion = rowVersion }, variant)))
-                .ReadAsync(HttpStatusCode.OK);
-            rowVersion = body.Text("rowVersion");
-            expectedChanges++;
-            Assert.Equal(expectedChanges, await DrawingChangesAsync(id));
-            // A drawing-only change is written into the current layout version: no new version is created.
-            Assert.Equal(1, await LayoutVersionsAsync(id));
-        }
-    }
-
-    /// <summary>A lane kept only by a cultivation log entry is refused with MSG11 and the shrink changes nothing.</summary>
-    [Fact]
-    public async Task Refused_lane_removal_with_a_log_entry_changes_nothing()
-    {
-        var actor = await factory.OwnerAsync();
-        var zone = await actor.Client.CreateZoneAsync();
-        var raft = await actor.Client.CreateRaftAsync(zone.Id(), NewRaftBody(lanes: 5));
-        await factory.UseDbAsync(db => db.CultivationLogEntries.Add(new CultivationLogEntry
-        {
-            ZoneId = zone.Id(),
-            LaneId = raft.LaneId(5),
-            OccurredAt = DateTimeOffset.UtcNow,
-            EventType = "Observation",
-            RecordedByAccountId = actor.Account.Id,
-        }));
-
-        var shrink = await actor.Client.PutAsJsonAsync($"/api/rafts/{raft.Id()}", NewRaftBody(raft.Text("code"), lanes: 4) with { RowVersion = raft.Text("rowVersion") });
-
-        Assert.Equal(HttpStatusCode.Conflict, shrink.StatusCode);
-        Assert.Equal("MSG-GEN-06", await shrink.ErrorCodeAsync());
-        Assert.Equal(5, await factory.QueryAsync(db => db.Lanes.CountAsync(l => l.RaftId == raft.Id())));
-        Assert.Equal(1, await LayoutVersionsAsync(raft.Id()));
-    }
-
     /// <summary>Zone list paging: page 0 and negative pages become 1, pageSize is clamped to 1..100, huge pages are empty, not 500.</summary>
     [Fact]
     public async Task Zone_paging_clamps_page_and_page_size()
@@ -173,24 +51,6 @@ public class ReviewFixQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
         Assert.Empty((await huge.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("items").EnumerateArray());
     }
 
-    /// <summary>Business dates are UTC+7: a cycle opened at 00:30 local on a day is open that day and not the day before.</summary>
-    [Fact]
-    public async Task Cycle_open_on_a_business_date_follows_local_midnight()
-    {
-        var owner = (await factory.OwnerAsync()).Client;
-        var zone = await owner.CreateZoneAsync();
-        var raft = await owner.CreateRaftAsync(zone.Id(), NewRaftBody());
-        var day = Today.AddDays(-5);
-        var opened = new DateTimeOffset(day.ToDateTime(new TimeOnly(0, 30)), BusinessClock.UtcOffset);
-        var cycle = await factory.AddCycleAsync(raft.Id(), opened);
-
-        var onDay = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/condition?date={day:yyyy-MM-dd}");
-        var dayBefore = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.Id()}/condition?date={day.AddDays(-1):yyyy-MM-dd}");
-
-        Assert.Equal(cycle.Id, onDay.GetProperty("cycleId").GetGuid());
-        Assert.Equal(JsonValueKind.Null, dayBefore.GetProperty("cycleId").ValueKind);
-    }
-
     /// <summary>The reminder day runs at the business clock's 07:00 (UTC+7): 06:59 waits one minute, 07:00 waits a full day.</summary>
     [Theory]
     [InlineData("2026-10-22T23:59:00Z", 60)]
@@ -203,26 +63,6 @@ public class ReviewFixQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
 
         Assert.Equal((double)expectedSeconds, delay.TotalSeconds);
     }
-
-    private Task<int> DrawingChangesAsync(Guid raftId) =>
-        factory.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == raftId && e.Action == "Raft.LayoutDrawingChanged"));
-
-    private Task<int> LayoutVersionsAsync(Guid raftId) =>
-        factory.QueryAsync(db => db.RaftLayoutVersions.CountAsync(v => v.RaftId == raftId));
-
-    private Task<int> UpdatedCountAsync(Guid raftId) =>
-        factory.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == raftId && e.Action == "Raft.Updated"));
-
-    /// <summary>The raft body with its drawing written as the given raw JSON text (whitespace and escapes kept).</summary>
-    internal static StringContent RawRaft(RaftBody body, string drawingJson)
-    {
-        var json = JsonSerializer.Serialize(body with { LayoutDrawing = null }, Web);
-        const string placeholder = "\"layoutDrawing\":null";
-        Assert.Equal(1, CountOf(json, placeholder));
-        return new StringContent(json.Replace(placeholder, "\"layoutDrawing\":" + drawingJson), Encoding.UTF8, "application/json");
-    }
-
-    internal static int CountOf(string text, string part) => (text.Length - text.Replace(part, string.Empty).Length) / part.Length;
 }
 
 /// <summary>
@@ -231,11 +71,6 @@ public class ReviewFixQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
 /// </summary>
 public class ReviewFixQaSqlServerTests
 {
-    private const string Stored = "{\"label\":\"Bè ố\",\"shapes\":[{\"kind\":\"rect\",\"x\":1,\"y\":2},{\"kind\":\"rect\",\"x\":3,\"y\":4}]}";
-
-    private const string SameVariant =
-        "{ \"shapes\" : [ { \"y\" : 2, \"x\" : 1, \"kind\" : \"rect\" }, {\"y\":4,\"x\":3,\"kind\":\"rect\"} ],\n  \"label\" : \"B\\u00e8 \\u1ed1\" }";
-
     /// <summary>Raft create whose zone is discontinued between its read and its save is refused (MSG06) and leaves no raft.</summary>
     [SqlServerFact]
     public async Task Raft_create_racing_a_zone_discontinue_is_refused_and_leaves_no_raft()
@@ -298,31 +133,6 @@ public class ReviewFixQaSqlServerTests
         Assert.Equal((HttpStatusCode.Conflict, "MSG06"), (response.StatusCode, await response.ErrorCodeAsync()));
         Assert.Equal(StatusIds.Usage.Discontinued, await host.QueryAsync(async db => (await db.FarmingZones.SingleAsync(z => z.Id == zoneId)).StatusId));
         Assert.Equal(0, await host.QueryAsync(db => db.ZoneComplianceDocuments.CountAsync(d => d.DocumentNumber == number)));
-    }
-
-    /// <summary>On SQL Server (real row versions): the same drawing written differently keeps the row version; a notes-only edit bumps it once.</summary>
-    [SqlServerFact]
-    public async Task Same_drawing_keeps_the_row_version_and_a_notes_edit_bumps_it_once_on_sql_server()
-    {
-        await using var host = await ZoneRaceSqlHost.StartAsync();
-        var owner = host.Owner;
-        var zone = await owner.CreateZoneAsync();
-        var code = NewCode();
-        var created = await (await owner.PostAsync($"/api/zones/{zone.Id()}/rafts", ReviewFixQaTests.RawRaft(NewRaftBody(code), Stored))).ReadAsync(HttpStatusCode.Created);
-        var id = created.Id();
-
-        var same = await (await owner.PutAsync($"/api/rafts/{id}", ReviewFixQaTests.RawRaft(NewRaftBody(code) with { RowVersion = created.Text("rowVersion") }, SameVariant)))
-            .ReadAsync(HttpStatusCode.OK);
-        var notes = await (await owner.PutAsync($"/api/rafts/{id}", ReviewFixQaTests.RawRaft(NewRaftBody(code) with
-        {
-            ConditionNotes = "Dây neo mới",
-            RowVersion = same.Text("rowVersion"),
-        }, SameVariant))).ReadAsync(HttpStatusCode.OK);
-
-        Assert.Equal(created.Text("rowVersion"), same.Text("rowVersion"));
-        Assert.NotEqual(same.Text("rowVersion"), notes.Text("rowVersion"));
-        var drawingChanges = await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == id && e.Action == "Raft.LayoutDrawingChanged"));
-        Assert.Equal(0, drawingChanges);
     }
 
     /// <summary>Control for the two race tests: without a parallel discontinue the same raft create succeeds on SQL Server.</summary>
@@ -483,6 +293,8 @@ internal sealed class RacingUnitOfWork(OmtsDbContext db, ZoneRace race, Func<Gui
 
     public Task ReloadAsync(object entity, CancellationToken cancellationToken = default) =>
         db.Entry(entity).ReloadAsync(cancellationToken);
+
+    public void DiscardChanges() => db.ChangeTracker.Clear();
 
     public void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion) =>
         db.Entry(entity).Property(e => e.RowVersion).OriginalValue = rowVersion;

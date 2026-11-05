@@ -10,11 +10,12 @@ namespace OMTS.Application.UnitTests.Features.Notifications;
 /// </summary>
 public sealed partial class NotificationMessageSrsTemplateQaTests
 {
-    // SRS 27/10 Part V message table (07-v-requirement-appendix.md, rows MSG-FARM-01/02, MSG-WATER-03/06), copied as data.
+    // SRS 27/10 Part V message table (07-v-requirement-appendix.md, rows MSG-FARM-01/02, MSG-WATER-03/04/06), copied as data.
     private const string Farm01 = "{document} expires on {expiry_date}, in {days} days. Please renew it and record the new one.";
     private const string Farm02 = "{document} expired on {expiry_date}. Please renew it and record the new one.";
     private const string Water03 = "Water alert {correction_note}: zone {zone_name}, raft {raft_code}, measured on {measurement_time}. {values_outside}. Please check the water.";
-    private const string Water06 = "Zone {zone_name} has had no water measurement since {last_date}. Please measure the water and record the result in OMTS.";
+    private const string Water04 = "The water alert of zone {zone_name} (measured on {measurement_time}) was withdrawn: {user_name} {corrected_or_voided} the measurement. Reason: {reason}.";
+    private const string Water06 ="Zone {zone_name} has had no water measurement since {last_date}. Please measure the water and record the result in OMTS.";
 
     private static readonly DateTimeOffset MeasuredAt = new(2026, 10, 19, 23, 30, 0, TimeSpan.Zero);
     private static readonly WaterValueOutside SalinityLow = new(WaterValueOutside.Salinity, 12m, "‰", WaterValueDirection.Low, 15m, 30m);
@@ -22,7 +23,7 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
 
     public static TheoryData<string> Cases => new()
     {
-        "farm-01", "farm-02", "farm-01-no-type", "farm-01-certification", "farm-02-certification-no-number", "water-03", "water-03-corrected", "water-06",
+        "farm-01", "farm-02", "farm-01-no-type", "farm-01-certification", "farm-02-certification-no-number", "water-03", "water-03-corrected", "water-04-corrected", "water-04-voided", "water-06",
     };
 
     [Theory]
@@ -77,6 +78,16 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
             UserMessages.WaterAlert(true, "Vùng A", "BE-01", MeasuredAt, [PhHigh, SalinityLow]),
             "Water alert (corrected measurement): zone Vùng A, raft BE-01, measured on 06:30 20/10/2026. pH 9.1 is too high (allowed 7.5–8.5); Salinity 12 ‰ is too low (allowed 15–30 ‰). Please check the water.",
             """{"corrected":true,"zone_name":"Vùng A","raft_code":"BE-01","measurement_time":"2026-10-20T06:30:00+07:00","values_outside":[{"indicator":"PH","value":9.1,"unit":null,"direction":"High","min":7.5,"max":8.5},{"indicator":"SALINITY","value":12,"unit":"‰","direction":"Low","min":15,"max":30}]}"""),
+        "water-04-corrected" => (
+            "MSG-WATER-04", Water04,
+            UserMessages.WaterAlertWithdrawn("Vùng A", MeasuredAt, "Nguyễn Văn A", "corrected", "Đọc nhầm số"),
+            "The water alert of zone Vùng A (measured on 06:30 20/10/2026) was withdrawn: Nguyễn Văn A corrected the measurement. Reason: Đọc nhầm số.",
+            """{"zone_name":"Vùng A","measurement_time":"2026-10-20T06:30:00+07:00","user_name":"Nguyễn Văn A","corrected_or_voided":"corrected","reason":"Đọc nhầm số"}"""),
+        "water-04-voided" => (
+            "MSG-WATER-04", Water04,
+            UserMessages.WaterAlertWithdrawn("Vùng A", MeasuredAt, "Nguyễn Văn A", "voided", "Ghi nhầm vùng"),
+            "The water alert of zone Vùng A (measured on 06:30 20/10/2026) was withdrawn: Nguyễn Văn A voided the measurement. Reason: Ghi nhầm vùng.",
+            """{"zone_name":"Vùng A","measurement_time":"2026-10-20T06:30:00+07:00","user_name":"Nguyễn Văn A","corrected_or_voided":"voided","reason":"Ghi nhầm vùng"}"""),
         "water-06" => (
             "MSG-WATER-06", Water06,
             UserMessages.WaterMeasurementOverdue("Vùng A", new DateOnly(2026, 10, 1)),

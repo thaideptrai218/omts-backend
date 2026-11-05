@@ -274,7 +274,7 @@ public class EmployeesV2QaRaceSqlServerTests
 
     private sealed class EditBeforeSaveUnitOfWork(OmtsDbContext db, EditOnce edit) : IUnitOfWork
     {
-        private readonly UnitOfWork _inner = new(db);
+        private readonly UnitOfWork _inner = new(db, new OMTS.Infrastructure.Messaging.PushOutbox());
 
         public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
@@ -283,6 +283,8 @@ public class EmployeesV2QaRaceSqlServerTests
         }
 
         public Task ReloadAsync(object entity, CancellationToken cancellationToken = default) => _inner.ReloadAsync(entity, cancellationToken);
+
+        public void DiscardChanges() => _inner.DiscardChanges();
 
         public void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion) => _inner.ExpectRowVersion(entity, rowVersion);
 

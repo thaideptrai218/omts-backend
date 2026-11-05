@@ -61,6 +61,7 @@ public class WaterBusinessTimeTests(AuthApiFactory api) : IClassFixture<AuthApiF
 
         var corrected = await z.Owner.PostAsJsonAsync($"/api/water-measurements/{id}/corrections", new
         {
+            raftId = z.Raft.Id,
             measuredAt = $"{Yesterday:yyyy-MM-dd}T09:30:00",
             ph = 7.3m,
             salinity = 21m,

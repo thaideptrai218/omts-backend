@@ -119,7 +119,7 @@ public class FarmingMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         var owner = await api.OwnerAsync();
         var raft = await owner.Client.CreateRaftAsync((await owner.Client.CreateZoneAsync()).Id());
 
-        var failed = await (await owner.Client.PostAsync($"/api/rafts/{raft.Id()}/photo", new MultipartFormDataContent { { FileContent(Png), "file", "raft.png" } }))
+        var failed = await (await owner.Client.UploadRaftPhotoAsync(raft.Id()))
             .SrsProblemAsync(HttpStatusCode.BadGateway, "MSG-GEN-03", "MSG05");
 
         Assert.Equal("The file could not be uploaded. Your other entries are kept; please try again.", failed.Detail());

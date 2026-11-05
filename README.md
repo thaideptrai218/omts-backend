@@ -209,7 +209,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | Type | Content | Push | Roles |
 |---|---|---|---|
 | `WATER_ALERT` | MSG-WATER-03 | always (mandatory) | Owner, Zone Manager |
-| `WATER_ALERT_WITHDRAWN` | MSG-WATER-04 (not sent yet: WATER PR) | always (mandatory) | Owner, Zone Manager |
+| `WATER_ALERT_WITHDRAWN` | MSG-WATER-04 | always (mandatory) | Owner, Zone Manager |
 | `WATER_MEASUREMENT_OVERDUE` | MSG-WATER-06 | unless turned off | Owner, Zone Manager |
 | `ZONE_LICENSE_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
 | `COOPERATIVE_CERTIFICATION_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
