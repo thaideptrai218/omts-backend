@@ -99,11 +99,39 @@ public class PurchaseRequestQaNotificationTests(AuthApiFactory factory) : IClass
         }
     }
 
-    // The attribute is in Part I (Cooperative, I:287), FARM-01 and five SMS templates; the column came with OMTS-217, which this PR is not on.
-    [Fact(Skip = "Waiting for OMTS-217: ShortName is on #24. When they meet, send it as cooperative_short_name and assert the text.")]
-    public void L5_the_response_carries_the_short_name_of_the_cooperative_as_part_v_says()
+    // The attribute is in Part I (Cooperative, I:287), FARM-01 and five SMS templates. Without a saved profile the test above reads the full name.
+    [Fact]
+    public async Task L5_the_response_carries_the_short_name_of_the_cooperative_as_part_v_says()
     {
-        Assert.NotNull(typeof(Cooperative).GetProperty("ShortName"));
+        const string shortName = "HTX Vân Đồn QA";
+        var w = await WorldAsync();
+        var cooperative = await factory.EnsureCooperativeAsync();
+        var date = PurchaseRequestTestKit.Today.AddDays(3);
+        await factory.UpdateAsync<Cooperative>(cooperative.Id, c => c.ShortName = shortName);
+        try
+        {
+            var cases = new (Func<JsonElement, Task<HttpResponseMessage>> Answer, string Text)[]
+            {
+                (r => w.Owner.AcceptAsync(r, 250m, date, false), $"{shortName}: your request for 300 kg of {w.ProductName} is accepted for 250 kg, pickup on {Dmy(date)}."),
+                (r => w.Owner.DeclineAsync(r, "Chưa đủ cỡ"), $"{shortName}: your request for 300 kg of {w.ProductName} is declined. Chưa đủ cỡ"),
+            };
+            foreach (var (answer, text) in cases)
+            {
+                var request = await w.Trader.Client.PlaceAsync(w.ProductId, 300m);
+                (await answer(request)).EnsureSuccessStatusCode();
+
+                var rows = (await factory.NotificationRowsAsync(request.Id())).OfType(NotificationTypes.PurchaseRequestResponse).ToList();
+                var listRow = Assert.Single(rows.InList());
+                Assert.Equal(text, listRow.Body);
+                Assert.Equal(text, Assert.Single(rows.Sendings()).Body);
+                Assert.Equal(shortName, Parameters(listRow.MessageParams)["cooperative_short_name"].GetString());
+            }
+        }
+        finally
+        {
+            // The other tests of this class share the cooperative and read its full name.
+            await factory.UpdateAsync<Cooperative>(cooperative.Id, c => c.ShortName = null);
+        }
     }
 
     // BR-ACCOUNT-11: mandatory, so the Owner's choice does not stop it; the cancellation is not, so it does.

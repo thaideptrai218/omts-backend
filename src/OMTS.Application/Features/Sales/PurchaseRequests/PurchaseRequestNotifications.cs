@@ -58,9 +58,11 @@ public sealed class PurchaseRequestNotifications(
 
         var cooperative = await cooperatives.GetCurrentAsync(cancellationToken)
             ?? throw new InvalidOperationException("The cooperative has not been created yet (run the bootstrap command).");
-        await notifications.NotifyAsync([accountId], Content(request, cooperative.FullName, request.ResponseNote), cancellationToken);
+        // {cooperative_short_name}: empty until the Owner first saves the profile (FARM-01), when the full name stands in.
+        var cooperativeName = cooperative.ShortName ?? cooperative.FullName;
+        await notifications.NotifyAsync([accountId], Content(request, cooperativeName, request.ResponseNote), cancellationToken);
         return request.Customer.PhoneNumber is { } phone
-            ? traderMessages.Queue(accountId, phone, Content(request, cooperative.FullName, ForSms(request.ResponseNote)))
+            ? traderMessages.Queue(accountId, phone, Content(request, cooperativeName, ForSms(request.ResponseNote)))
             : null;
     }
 
