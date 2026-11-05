@@ -56,6 +56,8 @@ public static class MessageCodes
 
     public const string Labor03 = "MSG-LABOR-03";
 
+    public const string Debt01 = "MSG-DEBT-01";
+    public const string Debt02 = "MSG-DEBT-02";
     public const string Sale04 = "MSG-SALE-04";
     public const string Sale05 = "MSG-SALE-05";
 
@@ -64,11 +66,11 @@ public static class MessageCodes
     /// account is linked to the existing customer profile; MSG-ACCOUNT-22, the related record of a notification no longer
     /// exists (ACCOUNT-08 is new in PR 0.5); MSG-PURCHASE-01/07/08, the purchase receipt notifications and the advance
     /// warning, and MSG-PURCHASE-10, the Owner's correction (OMTS-218 P2); MSG-SALE-04 and MSG-SALE-05, the merge of
-    /// customer profiles (SALE-04 is new).
+    /// customer profiles (SALE-04 is new); MSG-DEBT-01 and MSG-DEBT-02, the receiving bank account (DEBT-01).
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
-        Account01, Account22, Purchase01, Purchase07, Purchase08, Purchase10, Sale04, Sale05,
+        Account01, Account22, Purchase01, Purchase07, Purchase08, Purchase10, Sale04, Sale05, Debt01, Debt02,
     };
 
     /// <summary>

@@ -12,7 +12,7 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(OmtsDbContext))]
-    [Migration("20261105070240_PurchaseReceiptsV2")]
+    [Migration("20261105075725_PurchaseReceiptsV2")]
     partial class PurchaseReceiptsV2
     {
         /// <inheritdoc />
@@ -3354,10 +3354,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.Cooperative", b =>
                 {
-                    b.OwnsOne("OMTS.Domain.Entities.Identity.BankAccountInfo", "BankAccount", b1 =>
+                    b.OwnsOne("OMTS.Domain.Entities.Identity.ReceivingBankAccount", "BankAccount", b1 =>
                         {
                             b1.Property<Guid>("CooperativeId")
                                 .HasColumnType("uniqueidentifier");
+
+                            b1.Property<DateTimeOffset>("AcceptedAt")
+                                .HasColumnType("datetimeoffset");
 
                             b1.Property<string>("AccountHolderName")
                                 .IsRequired()
@@ -3368,6 +3371,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                                 .IsRequired()
                                 .HasMaxLength(50)
                                 .HasColumnType("nvarchar(50)");
+
+                            b1.Property<string>("BankBin")
+                                .IsRequired()
+                                .HasMaxLength(6)
+                                .HasColumnType("nvarchar(6)");
 
                             b1.Property<string>("BankName")
                                 .IsRequired()
