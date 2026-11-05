@@ -17,6 +17,7 @@ using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
 using OMTS.Application.Features.Purchasing.Suppliers;
+using OMTS.Application.Features.ReceivingBankAccounts;
 using OMTS.Application.Features.Sales.Customers;
 using OMTS.Application.Features.Sales.Products;
 using OMTS.Application.Features.Verification;
@@ -78,6 +79,10 @@ public static class DependencyInjection
         services.AddScoped<CooperativeCoverPhotoService>();
         services.AddScoped<CooperativeCertificationService>();
         services.AddScoped<EmployeeService>();
+
+        // DEBT-01 receiving bank account
+        services.AddScoped<ReceivingAccountAcceptance>();
+        services.AddScoped<ReceivingBankAccountService>();
 
         // FARM-02 zones, FARM-03 zone licenses, FARM-04 rafts
         services.AddScoped<FarmingLookupAccess>();

@@ -29,6 +29,9 @@ internal sealed class DemoSeedContext(IServiceProvider services, OmtsDbContext d
     /// <summary>Today in UTC+7, the same day the application services use.</summary>
     public DateOnly Today { get; } = DateOnly.FromDateTime(now.ToOffset(TimeSpan.FromHours(7)).DateTime);
 
+    /// <summary>Set by a step that left out something optional: the command output says why instead of giving a count.</summary>
+    public string? SkipReason { get; set; }
+
     public T Get<T>() where T : notnull => services.GetRequiredService<T>();
 
     /// <summary>

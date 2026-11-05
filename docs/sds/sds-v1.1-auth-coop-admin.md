@@ -279,7 +279,7 @@ SQL Server, code-first EF Core migrations. Every business table derives from `Au
 | Roles | Name, Description, StatusId (In Use / Discontinued) | unique Name |
 | RolePermissions | RoleId, FunctionCode (catalog `PermissionFunctions`), CanView, CanCreate, CanEdit, CanDelete, OtherPermissions (Export, Publish), DataScope | RoleId |
 | AccessGrants | AccountId, RoleId, ZoneId (null = All zones), ScopeType, EffectiveFrom, EffectiveTo, GrantedByAccountId, RevokedAt, RevokedByAccountId, RevokeReason, StatusId | (AccountId, StatusId) |
-| Cooperatives | FullName, TaxCode, OfficeAddress, PhoneNumber, Email, Website, LegalRepresentative, BusinessLines (JSON), LogoUrl, BankAccount (owned), StatusId (Preliminary / Completed) | unique TaxCode |
+| Cooperatives | FullName, TaxCode, OfficeAddress, PhoneNumber, Email, Website, LegalRepresentative, BusinessLines (JSON), LogoUrl, BankAccount (owned `ReceivingBankAccount`, DEBT-01: BankBin, BankName, AccountNumber, AccountHolderName, AcceptedAt), StatusId (Preliminary / Completed) | unique TaxCode |
 | Employees | CooperativeId, FullName, PhoneNumber, AccountId?, Birthday, Address, Area, Ward, OtherInformation, Notes, EmploymentEndDate, BankAccount (owned), StatusId | unique (FullName, PhoneNumber); unique AccountId |
 | EmployeeWorkingZones | EmployeeId, ZoneId | primary key (EmployeeId, ZoneId) |
 | AuditEvents | ActorAccountId, Action, RecordType, RecordId, RecordCode, OccurredAt, Reason, Before (JSON), After (JSON), ZoneId | (RecordType, RecordId); OccurredAt; (ZoneId, OccurredAt) |
