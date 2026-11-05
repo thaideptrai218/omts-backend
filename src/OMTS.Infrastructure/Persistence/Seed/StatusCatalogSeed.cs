@@ -74,7 +74,7 @@ internal static class StatusCatalogSeed
 
         NewTransition(8, S.AccessGrant.Effective, S.AccessGrant.Revoked, "UC11", Owner, Action, "Revoke the zone–role pair; Cooperative Owner only.", true),
 
-        NewTransition(9, S.CultivationCycle.Open, S.CultivationCycle.Closed, "UC27", OwnerOrZoneManager, Action, "The seeded portion has been fully harvested or written off (BR-21).", false),
+        NewTransition(9, S.CultivationCycle.Open, S.CultivationCycle.Closed, "CYCLE-06", OwnerOrZoneManager, Action, "Every seeded lane is Harvested; any other close is an early close the Cooperative Owner approves first (BR-CYCLE-07).", false),
 
         // 10–11, 55–56 were the water transitions of the SRS 22/10 model (OMTS-219); their ids are not reused.
         // 12–52 were the transitions of the removed SRS 22/10 groups (OMTS-216); their ids are not reused.

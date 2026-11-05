@@ -141,7 +141,7 @@ public class PurchasingSqlServerTests
         var world = await host.WorldAsync();
         var receipt = await world.CompletedAsync(new LineBody(world.Seed, 100, 10_000));
         var line = receipt.LineOf(world.Seed);
-        var cycle = new Domain.Entities.Cultivation.CultivationCycle { RaftId = world.Raft.Id, OpenedAt = DateTimeOffset.UtcNow };
+        var cycle = new Domain.Entities.Cultivation.CultivationCycle { RaftId = world.Raft.Id, StartDate = Today };
         await host.UseDbAsync(db =>
         {
             db.CultivationCycles.Add(cycle);

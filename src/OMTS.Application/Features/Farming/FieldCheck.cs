@@ -74,6 +74,26 @@ internal sealed class FieldCheck
     private static decimal? AsStored(decimal? coordinate) =>
         coordinate is { } value ? Math.Round(value, 6, MidpointRounding.AwayFromZero) : null;
 
+    /// <summary>
+    /// An optional quantity above 0 for a decimal(18, <paramref name="scale"/>) column, returned as the column stores it, so
+    /// a value that rounds to 0 or does not fit is refused here and not by the database.
+    /// </summary>
+    public decimal? PositiveOptional(decimal? value, string field, int scale)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        var stored = Math.Round(value.Value, scale, MidpointRounding.AwayFromZero);
+        if (stored <= 0 || stored >= (decimal)Math.Pow(10, 18 - scale))
+        {
+            Invalid.Add(field);
+        }
+
+        return stored;
+    }
+
     public void Check(bool valid, string field)
     {
         if (!valid)

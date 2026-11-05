@@ -215,7 +215,7 @@ public static class PurchasingTestKit
     /// </summary>
     public static async Task SeedAsync(this AuthApiFactory factory, Guid raftId, Guid receiptLineId, decimal? quantity)
     {
-        var cycle = new CultivationCycle { RaftId = raftId, OpenedAt = DateTimeOffset.UtcNow };
+        var cycle = new CultivationCycle { RaftId = raftId, StartDate = Today };
         await factory.UseDbAsync(db =>
         {
             db.CultivationCycles.Add(cycle);

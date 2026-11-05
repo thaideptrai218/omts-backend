@@ -5,6 +5,8 @@ using OMTS.Application.Common.Interfaces.Storage;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
+using OMTS.Application.Features.Cultivation.Cycles;
+using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Employees;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
@@ -38,6 +40,12 @@ public sealed class RaftViews(IRaftMaterialCostQuery materialCosts, IFileStorage
     public IReadOnlyList<LaneView> Lanes(Raft raft) => raft.Lanes
         .OrderBy(l => l.LaneNumber)
         .Select(l => new LaneView(l.Id, l.LaneNumber, l.StatusId, statusCatalog.DisplayNameOf(l.StatusId)))
+        .ToList();
+
+    /// <summary>Every lane of the raft in number order with its state on a date (BR-FARM-03).</summary>
+    public IReadOnlyList<LaneDayView> LanesOn(Raft raft, IReadOnlyDictionary<Guid, LaneState> states) => raft.Lanes
+        .OrderBy(l => l.LaneNumber)
+        .Select(l => new LaneDayView(l.Id, l.LaneNumber, l.StatusId, statusCatalog.DisplayNameOf(l.StatusId), states[l.Id]))
         .ToList();
 
     /// <summary>The raft with MSG-GEN-05 "{what} saved." (FARM-04.0 step 6).</summary>

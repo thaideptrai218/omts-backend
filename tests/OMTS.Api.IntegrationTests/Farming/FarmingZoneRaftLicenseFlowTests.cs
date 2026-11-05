@@ -86,7 +86,7 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
         Assert.Equal(6, second.GetProperty("laneCount").GetInt32());
         Assert.Equal(6, second.GetProperty("lanes").GetArrayLength());
 
-        await factory.UseDbAsync(db => db.CultivationCycles.Add(new CultivationCycle { RaftId = raftId, OpenedAt = DateTimeOffset.UtcNow.AddDays(-1) }));
+        await factory.UseDbAsync(db => db.CultivationCycles.Add(new CultivationCycle { RaftId = raftId, StartDate = FarmingTestKit.Today.AddDays(-1) }));
         var blocked = await owner.PutAsJsonAsync($"/api/rafts/{raftId}", RaftBody(second.GetProperty("code").GetString()!, lanes: 4) with
         {
             RowVersion = second.GetProperty("rowVersion").GetString(),

@@ -60,7 +60,7 @@ public class PurchaseReceiptsSqlServerQaTests
         await using var host = await FarmingHost.StartAsync();
         var world = await host.WorldAsync();
         // One open cycle per raft: every round seeds into it.
-        var cycle = new CultivationCycle { RaftId = world.Raft.Id, OpenedAt = DateTimeOffset.UtcNow };
+        var cycle = new CultivationCycle { RaftId = world.Raft.Id, StartDate = Today };
         await host.UseDbAsync(db => db.CultivationCycles.Add(cycle));
 
         for (var round = 0; round < 4; round++)
