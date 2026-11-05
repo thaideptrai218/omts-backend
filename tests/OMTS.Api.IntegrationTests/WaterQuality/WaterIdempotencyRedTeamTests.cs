@@ -21,6 +21,7 @@ public class WaterIdempotencyRedTeamTests(AuthApiFactory api) : IClassFixture<Au
     public async Task Re_sent_draft_operation_after_its_confirmation_answers_the_confirmed_record_without_a_second_alert()
     {
         var z = await api.ZoneAsync();
+        var (_, manager) = await api.StaffAsync(z.Zone);
         var operationId = Guid.NewGuid();
         var draft = await z.RecordAsync(9.1m, 20m, confirm: false, clientOperationId: operationId);
         var draftId = (await draft.Content.ReadFromJsonAsync<JsonElement>()).Id();
@@ -43,7 +44,9 @@ public class WaterIdempotencyRedTeamTests(AuthApiFactory api) : IClassFixture<Au
             Assert.Equal("Active", body.Text("alertState"));
         }
 
-        Assert.Single(alertsAfterConfirm, n => n.RecipientAccountId == z.OwnerAccount.Id);
+        // The Owner confirmed it: only the zone's manager is alerted (PM decision OMTS-216).
+        Assert.Single(alertsAfterConfirm, n => n.RecipientAccountId == manager.Id);
+        Assert.DoesNotContain(alertsAfterConfirm, n => n.RecipientAccountId == z.OwnerAccount.Id);
         Assert.Equal(alertsAfterConfirm.Count, (await api.AlertsOfAsync(draftId)).Count);
         Assert.Equal(auditAfterConfirm, (await api.AuditOfAsync(draftId)).Count);
         Assert.Equal(1, await api.QueryAsync(db => db.WaterMeasurements.CountAsync(m => m.ZoneId == z.Zone.Id)));
@@ -93,15 +96,18 @@ public class WaterIdempotencyRedTeamTests(AuthApiFactory api) : IClassFixture<Au
     {
         await using var own = new WaterApiFactory(services: s => s.AddSingleton<IPushSender, DownPushSender>());
         var z = await own.ZoneAsync();
+        var (managerClient, manager) = await own.StaffAsync(z.Zone);
 
-        var response = await z.RecordAsync(9.3m, 20m);
+        var response = await z.RecordAsync(9.3m, 20m, client: managerClient);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Equal("Active", body.Text("alertState"));
         var stored = await own.QueryAsync(db => db.WaterMeasurements.AsNoTracking().SingleAsync(m => m.Id == body.Id()));
         Assert.Equal(StatusIds.WaterMeasurement.Confirmed, stored.StatusId);
-        Assert.Single(await own.AlertsOfAsync(body.Id()), n => n.RecipientAccountId == z.OwnerAccount.Id);
+        var alerts = await own.AlertsOfAsync(body.Id());
+        Assert.Single(alerts, n => n.RecipientAccountId == z.OwnerAccount.Id);
+        Assert.Single(alerts, n => n.RecipientAccountId == manager.Id);
         Assert.Contains(own.Logs.Lines, line => line.Contains("Push WATER_ALERT") && line.Contains("failed"));
     }
 

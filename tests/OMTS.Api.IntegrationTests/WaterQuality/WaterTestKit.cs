@@ -136,7 +136,7 @@ public static class WaterTestKit
     /// <summary>WATER_ALERT rows of one measurement.</summary>
     public static Task<List<Notification>> AlertsOfAsync(this AuthApiFactory api, Guid measurementId) =>
         api.QueryAsync(db => db.Notifications.AsNoTracking()
-            .Where(n => n.Type == NotificationTypes.WaterAlert && n.RelatedRecordCode == measurementId.ToString())
+            .Where(n => n.Type == NotificationTypes.WaterAlert && n.RelatedRecordId == measurementId)
             .ToListAsync());
 
     public static Task<List<AuditEvent>> AuditOfAsync(this AuthApiFactory api, Guid recordId) =>

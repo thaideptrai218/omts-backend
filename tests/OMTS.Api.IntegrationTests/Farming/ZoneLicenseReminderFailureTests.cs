@@ -29,12 +29,10 @@ public sealed class FailingNoticeApiFactory : AuthApiFactory
 
     private sealed class FailingForOneLicense(INotificationDispatcher inner) : INotificationDispatcher
     {
-        public Task NotifyAsync(
-            IReadOnlyCollection<Guid> recipientAccountIds, string type, string title, string? body, string? relatedRecordType,
-            string? relatedRecordCode, bool isMandatory, CancellationToken cancellationToken) =>
-            body?.Contains(Marker, StringComparison.Ordinal) == true
+        public Task NotifyAsync(IReadOnlyCollection<Guid> recipientAccountIds, NotificationContent content, CancellationToken cancellationToken) =>
+            content.Message.Text.Contains(Marker, StringComparison.Ordinal)
                 ? throw new InvalidOperationException("Notification store unavailable for this record.")
-                : inner.NotifyAsync(recipientAccountIds, type, title, body, relatedRecordType, relatedRecordCode, isMandatory, cancellationToken);
+                : inner.NotifyAsync(recipientAccountIds, content, cancellationToken);
     }
 }
 
@@ -64,9 +62,6 @@ public class ZoneLicenseReminderFailureTests(FailingNoticeApiFactory factory) : 
         Assert.Equal(2, factory.Logs.Lines.Count(l => l.Contains($"Zone license reminder failed for license {failing.Id()}", StringComparison.Ordinal)));
     }
 
-    private Task<List<OMTS.Domain.Entities.Platform.Notification>> NoticesAsync(Guid licenseId)
-    {
-        var code = licenseId.ToString();
-        return factory.QueryAsync(db => db.Notifications.Where(n => n.Type == NotificationTypes.ZoneLicenseExpiry && n.RelatedRecordCode == code).ToListAsync());
-    }
+    private Task<List<OMTS.Domain.Entities.Platform.Notification>> NoticesAsync(Guid licenseId) =>
+        factory.QueryAsync(db => db.Notifications.Where(n => n.Type == NotificationTypes.ZoneLicenseExpiry && n.RelatedRecordId == licenseId).ToListAsync());
 }

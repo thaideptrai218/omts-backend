@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Models;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
@@ -48,9 +49,9 @@ public class NotificationDispatchTests(AuthApiFactory factory) : IClassFixture<A
     public async Task Function_on_records_with_no_zone_counts_any_pair_of_a_role_holding_it()
     {
         var (zone, otherZone) = (await factory.AddZoneAsync(Code()), await factory.AddZoneAsync(Code()));
-        var accountantElsewhere = await factory.AddAccountAsync(Code(), "Secret123", SubjectType.Staff);
-        var accountantAllZones = await factory.AddAccountAsync(Code(), "Secret123", SubjectType.Staff);
-        var manager = await factory.AddAccountAsync(Code(), "Secret123", SubjectType.Staff);
+        var accountantElsewhere = await factory.AddAccountAsync(Code(), AcsTestKit.NewPassword(), SubjectType.Staff);
+        var accountantAllZones = await factory.AddAccountAsync(Code(), AcsTestKit.NewPassword(), SubjectType.Staff);
+        var manager = await factory.AddAccountAsync(Code(), AcsTestKit.NewPassword(), SubjectType.Staff);
         await factory.GrantAsync(accountantElsewhere, StaffRole.Accountant, otherZone);
         await factory.GrantAsync(accountantAllZones, StaffRole.Accountant, null);
         await factory.GrantAsync(manager, StaffRole.ZoneManager, null);
@@ -74,8 +75,13 @@ public class NotificationDispatchTests(AuthApiFactory factory) : IClassFixture<A
             .GetRecipientsAsync(zoneId, PermissionFunctions.WaterMeasurements, PermissionAction.View, CancellationToken.None);
 
         await services.GetRequiredService<INotificationDispatcher>().NotifyAsync(
-            recipients, NotificationTypes.WaterAlert, "Water alert", "pH exceeds the set threshold.", nameof(FarmingZone), zoneCode,
-            isMandatory: true, CancellationToken.None);
+            recipients,
+            new NotificationContent(
+                NotificationTypes.WaterAlert,
+                "Water alert",
+                UserMessages.WaterAlert(false, "Zone", null, DateTimeOffset.UtcNow, [new(WaterValueOutside.Ph, 9.1m, null, WaterValueDirection.High, 7.5m, 8.5m)]),
+                new RelatedRecord(RelatedRecordTypes.FarmingZone, zoneId, zoneCode)),
+            CancellationToken.None);
         await services.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
         return recipients;
     }
@@ -90,7 +96,7 @@ public class PushFailureTests(PushFailureTests.ThrowingPushApiFactory factory) :
     public async Task Push_failure_keeps_the_saved_notification_rows()
     {
         var zone = await factory.AddZoneAsync(NotificationDispatchTests.Code());
-        await factory.AddAccountAsync(NotificationDispatchTests.Code(), "Secret123");
+        await factory.AddAccountAsync(NotificationDispatchTests.Code(), AcsTestKit.NewPassword());
 
         var recipients = await NotificationDispatchTests.NotifyAsync(factory, zone.Id);
 
@@ -123,7 +129,7 @@ internal sealed record ZoneRecipientsSetup(
 {
     public static async Task<ZoneRecipientsSetup> CreateAsync(AuthApiFactory api, FarmingZone zoneA, FarmingZone zoneB)
     {
-        const string password = "Secret123";
+        var password = AcsTestKit.NewPassword();
 
         async Task<Guid> StaffAsync(
             FarmingZone? zone, Action<Domain.Entities.Identity.AccessGrant>? grant = null, bool locked = false, StaffRole role = StaffRole.ZoneManager)

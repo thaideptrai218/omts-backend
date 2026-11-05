@@ -12,4 +12,13 @@ namespace OMTS.Application.Common.Messages;
 public sealed record UserMessage(
     string Code,
     string Text,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? LegacyCode = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? LegacyCode = null)
+{
+    /// <summary>
+    /// For the messages a client shows later in its own language (notification contents): the values <see cref="Text"/>
+    /// is built from, by parameter name (e.g. <c>zone_name</c>), each an atomic value (text, number, boolean, date,
+    /// list), never an English phrase (<see cref="MessageParameterJson"/>). Null for the other messages.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyDictionary<string, object?>? Parameters { get; init; }
+}

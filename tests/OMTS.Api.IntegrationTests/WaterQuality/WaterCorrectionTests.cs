@@ -69,6 +69,7 @@ public class WaterCorrectionTests(AuthApiFactory api) : IClassFixture<AuthApiFac
     public async Task Correction_into_violation_raises_a_new_alert_against_the_thresholds_the_old_one_used()
     {
         var z = await api.ZoneAsync();
+        var (_, manager) = await api.StaffAsync(z.Zone);
         var original = await z.RecordedAsync(8.0m, 20m);
         // Today's thresholds are wider; the correction must still use pH max 8.5 stored with the original.
         await api.UpdateAsync<FarmingZone>(z.Zone.Id, zone => zone.PhMax = 9.5m);
@@ -78,7 +79,24 @@ public class WaterCorrectionTests(AuthApiFactory api) : IClassFixture<AuthApiFac
         Assert.Equal("Active", corrected.Text("alertState"));
         Assert.Equal("pH 9.00 > 8.50", corrected.Text("violatedValues"));
         Assert.Equal(8.5m, corrected.GetProperty("thresholdsUsed").GetProperty("phMax").GetDecimal());
-        Assert.Single(await api.AlertsOfAsync(corrected.Id()), n => n.RecipientAccountId == z.OwnerAccount.Id);
+        // The Owner made the correction: a correction follows the same rule as a confirmation (PM decision OMTS-216).
+        var alerts = await api.AlertsOfAsync(corrected.Id());
+        Assert.Single(alerts, n => n.RecipientAccountId == manager.Id);
+        Assert.DoesNotContain(alerts, n => n.RecipientAccountId == z.OwnerAccount.Id);
+    }
+
+    [Fact]
+    public async Task Zone_manager_correcting_into_violation_alerts_the_owner_and_that_manager()
+    {
+        var z = await api.ZoneAsync();
+        var (managerClient, manager) = await api.StaffAsync(z.Zone);
+        var original = await z.RecordedAsync(8.0m, 20m);
+
+        var corrected = await (await managerClient.CorrectAsync(original.Id(), 9.0m, 20m, recordVersion: 1)).Content.ReadFromJsonAsync<JsonElement>();
+
+        var alerts = await api.AlertsOfAsync(corrected.Id());
+        Assert.Single(alerts, n => n.RecipientAccountId == z.OwnerAccount.Id);
+        Assert.Single(alerts, n => n.RecipientAccountId == manager.Id);
     }
 
     [Fact]

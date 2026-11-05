@@ -44,6 +44,8 @@ public static class DependencyInjection
         services.AddScoped<AuditLogService>();
         services.AddScoped<StatusChangeService>();
         services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
+        services.AddScoped<OwnerActorRecipientFilter>();
+        services.AddScoped<NotificationInboxService>();
         services.AddScoped<RowVersionGuard>();
 
         // ACS – personal accounts

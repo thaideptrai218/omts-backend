@@ -79,8 +79,9 @@ public class MigrationTests
         Assert.Empty(LegacyTables.Intersect(tables));
         Assert.Empty(KeptTables.Except(tables));
         Assert.Empty(new[] { "OrderId", "HarvestEventId", "LotId" }.Intersect(await ColumnNamesAsync(db, "LaneSegments")));
-        Assert.False(await db.Statuses.AnyAsync(s => s.Id >= 801 && s.Id <= 1603));
-        Assert.False(await db.StatusTransitions.AnyAsync(t => t.Id >= 12 && t.Id <= 54));
+        // MESSAGE_DELIVERY (1601–1603, transitions 53–54) comes back with NotificationsV2: the SMS rows use it.
+        Assert.False(await db.Statuses.AnyAsync(s => s.Id >= 801 && s.Id <= 1600));
+        Assert.False(await db.StatusTransitions.AnyAsync(t => t.Id >= 12 && t.Id <= 52));
 
         await migrator.MigrateAsync(MigrationBeforeCleanup);
         Assert.Empty(LegacyTables.Except(await TableNamesAsync(db)));

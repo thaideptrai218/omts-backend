@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,7 +19,7 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
 {
     private ZoneLicenseReminderJob Job => factory.Services.GetRequiredService<ZoneLicenseReminderJob>();
 
-    // Done when: one MSG25 per recipient after two runs on the same day, one more once expired, none for a replaced license.
+    // Done when: one MSG-FARM-01 per recipient after two runs on the same day, one MSG-FARM-02 once expired, none for a replaced license.
     [Fact]
     public async Task Expiring_license_notifies_each_recipient_once_and_once_more_after_expiry()
     {
@@ -50,12 +51,16 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
         var first = await NoticesAsync(license.Id());
         Assert.Equal(expected, first.Select(n => n.RecipientAccountId).Order());
         Assert.DoesNotContain(first, n => new[] { accountant.Id, otherZone.Id, revoked.Id, locked.Id }.Contains(n.RecipientAccountId));
-        var zoneName = zoneA.Name;
+        var zoneCode = zoneA.Code;
         Assert.All(first, n =>
         {
-            Assert.Equal($"Document Marine aquaculture license {license.Text("documentNumber")} of zone {zoneName} expires in 30 days or has expired.", n.Body);
-            Assert.Equal("ZoneComplianceDocument", n.RelatedRecordType);
-            Assert.False(n.IsMandatory);
+            Assert.Equal(
+                $"Marine aquaculture license {license.Text("documentNumber")} ({zoneCode}) expires on {Date(Today.AddDays(30))}, in 30 days. Please renew it and record the new one.",
+                n.Body);
+            Assert.Equal("MSG-FARM-01", n.MessageCode);
+            Assert.Equal(("ZoneComplianceDocument", license.Text("documentNumber")), (n.RelatedRecordType, n.RelatedRecordCode));
+            // A mandatory type (BR-ACCOUNT-11).
+            Assert.True(n.IsMandatory);
         });
         Assert.Empty(await NoticesAsync(notDueYet.Id()));
         Assert.Empty(await NoticesAsync(noExpiry.Id()));
@@ -68,7 +73,8 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
         var all = await NoticesAsync(license.Id());
         Assert.All(all.GroupBy(n => n.RecipientAccountId), g => Assert.Equal(2, g.Count()));
         Assert.Equal(expected.Count * 2, all.Count);
-        Assert.Contains(all, n => n.Body!.EndsWith("expires in 0 days or has expired.", StringComparison.Ordinal));
+        Assert.Equal(expected.Count, all.Count(n => n.MessageCode == "MSG-FARM-02"
+            && n.Body!.EndsWith($"expired on {Date(Today.AddDays(30))}. Please renew it and record the new one.", StringComparison.Ordinal)));
         Assert.Empty(await NoticesAsync(replaced.Id()));
     }
 
@@ -91,9 +97,9 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
         var notices = await NoticesAsync(license.Id());
         Assert.Subset(notices.Select(n => n.RecipientAccountId).ToHashSet(), (await ActiveOwnersAsync()).ToHashSet());
         Assert.All(notices.GroupBy(n => n.RecipientAccountId), g => Assert.Single(g));
-        var zones = string.Join(", ", new[] { zoneA.Name, zoneB.Name }.Order());
+        var zones = string.Join(", ", new[] { zoneA.Code, zoneB.Code }.Order(StringComparer.Ordinal));
         Assert.All(notices, n => Assert.Equal(
-            $"Document Sea area allocation decision {license.Text("documentNumber")} of zone {zones} expires in 0 days or has expired.", n.Body));
+            $"Sea area allocation decision {license.Text("documentNumber")} ({zones}) expired on {Date(Today.AddDays(-5))}. Please renew it and record the new one.", n.Body));
         var saved = await factory.QueryAsync(db => db.ZoneComplianceDocuments.SingleAsync(d => d.Id == license.Id()));
         Assert.NotNull(saved.ExpiredReminderSentAt);
         Assert.NotNull(saved.ExpiringReminderSentAt);
@@ -124,16 +130,14 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
         var notices = await NoticesAsync(license.Id());
         Assert.All(notices.GroupBy(n => n.RecipientAccountId), g => Assert.Equal(2, g.Count()));
         Assert.Equal(recipients.Count * 2, notices.Count);
-        Assert.Contains(notices, n => n.Body!.Contains("expires in 20 days", StringComparison.Ordinal));
+        Assert.Contains(notices, n => n.Body!.Contains($"expires on {Date(Today.AddDays(20))}, in 20 days.", StringComparison.Ordinal));
     }
 
     private Task<List<Guid>> ActiveOwnersAsync() => factory.QueryAsync(db => db.Accounts
         .Where(a => a.SubjectType == SubjectType.CooperativeOwner && a.StatusId == StatusIds.Account.Active).Select(a => a.Id).ToListAsync());
 
-    private Task<List<Notification>> NoticesAsync(Guid licenseId)
-    {
-        var code = licenseId.ToString();
-        return factory.QueryAsync(db => db.Notifications
-            .Where(n => n.Type == NotificationTypes.ZoneLicenseExpiry && n.RelatedRecordCode == code).ToListAsync());
-    }
+    private Task<List<Notification>> NoticesAsync(Guid licenseId) => factory.QueryAsync(db => db.Notifications
+        .Where(n => n.Type == NotificationTypes.ZoneLicenseExpiry && n.RelatedRecordId == licenseId).ToListAsync());
+
+    private static string Date(DateOnly date) => date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
 }
