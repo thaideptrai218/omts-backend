@@ -177,7 +177,7 @@ public class NotificationSmsTextTests
     private static NotificationContent WaterAlert(string zone, WaterValueOutside first, WaterValueOutside? second = null, bool corrected = false) => new(
         NotificationTypes.WaterAlert,
         "Water alert",
-        UserMessages.WaterAlert(corrected, zone, null, MeasuredAt, second is null ? [first] : [first, second]));
+        UserMessages.WaterAlert(corrected, zone, "-", MeasuredAt, second is null ? [first] : [first, second]));
 
     private static WaterValueOutside WaterValue(string indicator, decimal value) => indicator == WaterValueOutside.Ph
         ? new WaterValueOutside(indicator, value, null, WaterValueDirection.High, 6.5m, 8.5m)

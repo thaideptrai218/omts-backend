@@ -11,10 +11,11 @@ using OMTS.Application.Features.WaterQuality;
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
-/// OMTS-214: corrections and voids (ENV-02) re-arm the overdue reminder per zone and measured day. A correction that
-/// keeps a valid measurement on the same (or an earlier) day never sends a second reminder for a lapse already
-/// reminded; one that moves the zone's measurement to another day, or a void of the measurement that answered the
-/// reminder, lets it fire again for the period that results. Each test has its own database (the job scans every zone).
+/// Interim until OMTS-219 W3 replaces the rule with GFR-04: corrections and voids (WATER-02) re-arm the overdue reminder
+/// per zone and measured day. A correction that keeps a valid measurement on the same (or an earlier) day never sends a
+/// second reminder for a lapse already reminded; one that moves the zone's measurement to another day, or a void of the
+/// measurement that answered the reminder, lets it fire again for the period that results. Each test has its own database
+/// (the job scans every zone).
 /// </summary>
 public class WaterOverdueRearmTests
 {
@@ -46,6 +47,23 @@ public class WaterOverdueRearmTests
 
         await CorrectAsync(z, reminded.Id(), DateTimeOffset.UtcNow.AddDays(-41));
         await RunAsync(api, Today.AddDays(1));
+
+        Assert.Equal(1, await RemindersAsync(api, z));
+    }
+
+    // 08-20 reminded → corrected to 08-10 → corrected to 08-15: both days were already overdue when the reminder went out.
+    [Fact]
+    public async Task Correcting_again_to_a_day_still_before_the_reminded_one_sends_no_second_reminder()
+    {
+        await using var api = new WaterApiFactory();
+        var z = await api.ZoneAsync();
+        var reminded = await z.RecordedAsync(7m, 20m, measuredAt: DateTimeOffset.UtcNow.AddDays(-40));
+        await RunAsync(api, Today);
+
+        await CorrectAsync(z, reminded.Id(), DateTimeOffset.UtcNow.AddDays(-50));
+        await RunAsync(api, Today.AddDays(1));
+        await CorrectAsync(z, reminded.Id(), DateTimeOffset.UtcNow.AddDays(-45));
+        await RunAsync(api, Today.AddDays(2));
 
         Assert.Equal(1, await RemindersAsync(api, z));
     }
@@ -85,6 +103,24 @@ public class WaterOverdueRearmTests
         Assert.Equal(2, await RemindersAsync(api, z));
     }
 
+    // The "answer" was an old paper reading typed with today's date: really taken 45 days ago, before the reminded one.
+    [Fact]
+    public async Task Correcting_the_answer_to_a_day_before_the_reminded_measurement_re_arms_like_a_void()
+    {
+        await using var api = new WaterApiFactory();
+        var z = await api.ZoneAsync();
+        await z.RecordedAsync(7m, 20m, measuredAt: DateTimeOffset.UtcNow.AddDays(-40));
+        await RunAsync(api, Today);
+        var answer = await z.RecordedAsync(7.1m, 20m);
+        await RunAsync(api, Today.AddDays(1));
+        Assert.Equal(1, await RemindersAsync(api, z));
+
+        await CorrectAsync(z, answer.Id(), DateTimeOffset.UtcNow.AddDays(-45));
+        await RunAsync(api, Today.AddDays(1));
+
+        Assert.Equal(2, await RemindersAsync(api, z));
+    }
+
     [Fact]
     public async Task Void_of_the_measurement_that_answered_the_reminder_re_arms_it()
     {
@@ -95,7 +131,7 @@ public class WaterOverdueRearmTests
         var answer = await z.RecordedAsync(7.1m, 20m);
         await RunAsync(api, Today.AddDays(1));
 
-        Assert.Equal(HttpStatusCode.OK, (await z.Owner.VoidAsync(answer.Id(), 1)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await z.Owner.VoidAsync(answer.Id())).StatusCode);
         Assert.Null(await MarkerAsync(api, z));
         await RunAsync(api, Today.AddDays(1));
         await RunAsync(api, Today.AddDays(2));
@@ -109,14 +145,14 @@ public class WaterOverdueRearmTests
         await using var api = new WaterApiFactory();
         var z = await api.ZoneAsync();
         var reminded = await z.RecordedAsync(7m, 20m, measuredAt: DateTimeOffset.UtcNow.AddDays(-40));
-        // Synced after the reminder but older than the zone's latest measurement: it never started the period.
+        // Saved after the reminder but older than the zone's latest measurement: it never started the period.
         await RunAsync(api, Today);
-        var olderLateSync = await z.RecordedAsync(7m, 20m, measuredAt: DateTimeOffset.UtcNow.AddDays(-45));
+        var olderLateEntry = await z.RecordedAsync(7m, 20m, measuredAt: DateTimeOffset.UtcNow.AddDays(-45));
         var marker = await MarkerAsync(api, z);
 
-        Assert.Equal(HttpStatusCode.OK, (await z.Owner.VoidAsync(olderLateSync.Id(), 1)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await z.Owner.VoidAsync(olderLateEntry.Id())).StatusCode);
         Assert.Equal(marker, await MarkerAsync(api, z));
-        Assert.Equal(HttpStatusCode.OK, (await z.Owner.VoidAsync(reminded.Id(), 1)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await z.Owner.VoidAsync(reminded.Id())).StatusCode);
         Assert.Equal(marker, await MarkerAsync(api, z));
         await RunAsync(api, Today.AddDays(1));
 
@@ -124,10 +160,55 @@ public class WaterOverdueRearmTests
         Assert.Equal(1, await RemindersAsync(api, z));
     }
 
+    // A newer measurement saved after the reminder starts a new period even when it is itself overdue; an older one does not.
+    [Fact]
+    public async Task Late_entered_newer_measurement_reminds_again_and_a_late_entered_older_one_does_not()
+    {
+        await using var api = new WaterApiFactory();
+        var z = await api.ZoneAsync();
+        await z.RecordedAsync(7m, 20m, measuredAt: DateTimeOffset.UtcNow.AddDays(-45));
+        await RunAsync(api, Today);
+
+        await z.RecordedAsync(7m, 20m, measuredAt: DateTimeOffset.UtcNow.AddDays(-40));
+        await RunAsync(api, Today.AddDays(1));
+        Assert.Equal(2, await RemindersAsync(api, z));
+
+        await z.RecordedAsync(7m, 20m, measuredAt: DateTimeOffset.UtcNow.AddDays(-50));
+        await RunAsync(api, Today.AddDays(2));
+        Assert.Equal(2, await RemindersAsync(api, z));
+    }
+
+    // After a re-arming void, a fresh measurement before the next run answers it: nothing is sent; two runs on the same day send one reminder.
+    [Fact]
+    public async Task Re_armed_zone_is_reminded_once_per_day_and_not_at_all_when_measured_again_in_time()
+    {
+        await using var api = new WaterApiFactory();
+        var answered = await api.ZoneAsync();
+        var overdue = await api.ZoneAsync();
+        foreach (var z in new[] { answered, overdue })
+        {
+            await z.RecordedAsync(7m, 20m, measuredAt: DateTimeOffset.UtcNow.AddDays(-40));
+        }
+
+        await RunAsync(api, Today);
+        foreach (var z in new[] { answered, overdue })
+        {
+            var answer = await z.RecordedAsync(7.1m, 20m);
+            Assert.Equal(HttpStatusCode.OK, (await z.Owner.VoidAsync(answer.Id())).StatusCode);
+        }
+
+        await answered.RecordedAsync(7.2m, 20m);
+        await RunAsync(api, Today.AddDays(1));
+        await RunAsync(api, Today.AddDays(1));
+
+        Assert.Equal(1, await RemindersAsync(api, answered));
+        Assert.Equal(2, await RemindersAsync(api, overdue));
+    }
+
     private static async Task<JsonElement> CorrectAsync(WaterZone z, Guid id, DateTimeOffset measuredAt)
     {
-        var response = await z.Owner.CorrectAsync(id, 7.4m, 21m, recordVersion: 1, measuredAt: measuredAt);
-        Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        var response = await z.Owner.CorrectAsync(id, 7.4m, 21m, measuredAt: measuredAt);
+        Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 

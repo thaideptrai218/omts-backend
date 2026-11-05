@@ -23,4 +23,7 @@ public static class FileCategories
 
     /// <summary>FARM-01.1 certificate file, <c>CooperativeCertification.FileUrl</c>.</summary>
     public const string CooperativeCertifications = "cooperative-certifications";
+
+    /// <summary>WATER-01 meter photo, <c>WaterMeasurement.PhotoUrl</c>; each account uploads under a folder of its own.</summary>
+    public const string WaterMeterPhotos = "water-meter-photos";
 }

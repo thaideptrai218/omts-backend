@@ -84,10 +84,12 @@ an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid l
 fractional quantity (its amount is not a whole thousand), with payments and a return. The Owner's list holds a MSG-PURCHASE-01
 notification for each completed receipt.
 The demo data also holds 4 products (one Discontinued) and 7 customer profiles (2 linked to the trader accounts, 2 the same buyer ready to merge).
-`DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰) and one water measurement a day for the
-30 days before the seed day: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
-26.0 ‰) and one voided reading. The mistyped 2.6 ‰ alerted before its correction, so the inboxes hold four sets of water
-alerts. Phone numbers are fake (`0900 000 0xx`).
+`DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰, temperature 15–32 °C) and one water
+measurement a day for the 30 days before the seed day, going round the rafts In Use of the zone, each with its temperature
+and a placeholder meter photo: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
+26.0 ‰) and one voided reading. The mistyped 2.6 ‰ alerted before its correction, so the Zone Managers' inboxes hold four
+sets of water alerts (the demo records as the Owner, who is not told of their own action). Phone numbers are fake
+(`0900 000 0xx`).
 
 Dates are set relative to the day of the first seed and are not moved afterwards:
 - After a few weeks the "expiring" license and certification have expired. `docker compose down -v` gives fresh dates.
@@ -265,9 +267,9 @@ lists the tokens a real provider would deliver to: those registered (`POST /api/
 logged in. These endpoints answer 404 outside
 Development; they are anonymous, so never expose a Development environment publicly. Local storage writes under `src/OMTS.Api/App_Data/files` (git-ignored); for Azurite set
 `Storage:Provider=AzureBlob` and `Storage:AzureBlob:ConnectionString=UseDevelopmentStorage=true`.
-The OCR Service of the water meter photos (ENV-01) is only faked until its provider ticket: the fake answers with
-`Ocr:Fake` (default pH 7.8, salinity 25.5), unless the photo bytes contain a marker such as `ph9.1_sal20`, `conf0.6`,
-`at2026-10-20T08:00`, `ocr-fail` or `ocr-timeout` (used by the tests).
+The OCR Service of the water meter photos (WATER-01) is only faked until its provider ticket: the fake answers with
+`Ocr:Fake` (default pH 7.8, salinity 25.5, temperature 28.5), unless the photo bytes contain a marker such as
+`ph9.1_sal20_tmp28.5`, `conf0.6`, `at2026-10-20T08:00`, `ocr-fail` or `ocr-timeout` (used by the tests).
 The Payment Notification Service (API-12) has no provider yet, so there is only an interface (`IPaymentNotificationService`)
 and a fake that works in Development: it accepts every receiving bank account except the numbers of
 `Payments:Fake:RejectAccounts` (default `REJECT000001`) and `Payments:Fake:TimeoutAccounts` (default `TIMEOUT00001`, never answers).
@@ -277,7 +279,8 @@ and a fake that works in Development: it accepts every receiving bank account ex
 Every daily job runs on one base (`DailyJobHostedService`): a run time in business time (UTC+7), an optional catch-up run
 when the host starts after it, and a failed run logged without stopping the next day's.
 
-`WaterMeasurementOverdueJob` runs every day at 06:00 (Asia/Ho_Chi_Minh): each In Use zone without a Confirmed water
+
+`WaterMeasurementOverdueJob` runs every day at 06:00 (Asia/Ho_Chi_Minh): each In Use zone without an Active water
 measurement for more than one calendar month gets one MSG-WATER-06 reminder per overdue period (Owners and the zone's staff
 with View on `WATER_MEASUREMENTS`). Like the expiry reminder (07:00), a host started after the run time runs it
 once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A reminder already
@@ -294,9 +297,9 @@ notices.
 A replaced raft photo, license file, cooperative cover photo or certificate file is removed right after the save (a removed
 certification or cover photo too), and the upload of a failed save right away. `OrphanFileCleanupJob` runs every day at
 03:00 (Asia/Ho_Chi_Minh), with no catch-up at start unless `CatchUpOnStart` is set, and deletes what such a removal left behind: raft photos (`raft-photos/`), license files
-(`zone-licenses/`), cover photos (`cooperative-covers/`) and certificate files (`cooperative-certifications/`) that no
-record points to and that were written more than the grace period (24 hours) ago. No other storage folder is scanned, so
-cooperative logos are kept for ever.
+(`zone-licenses/`), cover photos (`cooperative-covers/`), certificate files (`cooperative-certifications/`) and water meter
+photos (`water-meter-photos/`, a recognition that was never saved as a measurement) that no record points to and that were
+written more than the grace period (24 hours) ago. No other storage folder is scanned, so cooperative logos are kept for ever.
 
 **Every environment must use its own storage container (`Storage:AzureBlob:Container`) or folder
 (`Storage:Local:RootPath`); never share one between environments.** The job deletes the files its own database does not
@@ -365,7 +368,7 @@ created by a one-time command run on the server by the deployment operator (not 
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG-ACCOUNT-13 and a critical log entry is written (BR-ACCOUNT-09: one purpose and one number or address get at most 3 codes per hour, at least 60 seconds apart; over all purposes one number or address gets at most 10) | `Verification:DailySmsLimit` (default 500) |
 | Expiry reminder of zone licenses and certifications (GFR-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
 | Overdue water measurement reminder (ENV-01, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
-| Orphan file clean-up: raft photos, license files, cover photos, certificate files (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `CatchUpOnStart` (default `false`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
+| Orphan file clean-up: raft photos, license files, cover photos, certificate files, meter photos (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
 
 ## Demo on a shared server
 

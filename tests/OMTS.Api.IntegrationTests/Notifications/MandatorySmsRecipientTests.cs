@@ -61,9 +61,9 @@ public class MandatorySmsRecipientTests(AuthApiFactory api) : IClassFixture<Auth
         var (_, manager) = await api.StaffAsync(z.Zone);
         var id = (await z.RecordedAsync(9.1m, 20m)).Id();
 
-        var corrected = await z.Owner.CorrectAsync(id, 9.5m, 20m, recordVersion: 1);
+        var corrected = await z.Owner.CorrectAsync(id, 9.5m, 20m);
 
-        Assert.Equal(HttpStatusCode.Created, corrected.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, corrected.StatusCode);
         var messages = api.SmsTo(manager);
         Assert.Equal(2, messages.Count);
         Assert.StartsWith("Water alert (corrected measurement): zone", messages[0].Text);

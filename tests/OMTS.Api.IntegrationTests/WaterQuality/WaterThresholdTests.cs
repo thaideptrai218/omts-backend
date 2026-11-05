@@ -9,29 +9,33 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
-/// <summary>ENV-04 – thresholds per zone, Owner only; old alerts keep the thresholds they used.</summary>
+/// <summary>WATER-04 – thresholds of pH, salinity and temperature per zone, Owner only; saved measurements keep their copy.</summary>
 public class WaterThresholdTests(AuthApiFactory api) : IClassFixture<AuthApiFactory>
 {
     [Fact]
-    public async Task Past_alert_keeps_the_old_maximum_and_a_new_confirmation_uses_the_new_one()
+    public async Task Past_alert_keeps_the_old_maximum_and_a_new_measurement_uses_the_new_one()
     {
         var z = await api.ZoneAsync();
         var pastAlert = await z.RecordedAsync(8.8m, 20m);
 
-        var saved = await z.Owner.PutAsJsonAsync($"/api/zones/{z.Zone.Id}/water-thresholds", new { phMin = 6.5m, phMax = 9.0m, salinityMin = 15m, salinityMax = 30m });
+        var saved = await z.Owner.PutAsJsonAsync($"/api/zones/{z.Zone.Id}/water-thresholds", new { phMin = 6.5m, phMax = 9.0m, salinityMin = 15m, salinityMax = 30m, temperatureMin = 12m, temperatureMax = 33m });
         var newMeasurement = await z.RecordedAsync(8.8m, 20m);
 
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
-        Assert.Equal(9.0m, (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("thresholds").GetProperty("phMax").GetDecimal());
+        var thresholds = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("thresholds");
+        Assert.Equal((9.0m, 12m, 33m), (thresholds.GetProperty("phMax").GetDecimal(), thresholds.GetProperty("temperatureMin").GetDecimal(), thresholds.GetProperty("temperatureMax").GetDecimal()));
         var past = await z.Owner.GetFromJsonAsync<JsonElement>($"/api/water-measurements/{pastAlert.Id()}");
         Assert.Equal(8.5m, past.GetProperty("thresholdsUsed").GetProperty("phMax").GetDecimal());
+        Assert.Equal(35m, past.GetProperty("thresholdsUsed").GetProperty("temperatureMax").GetDecimal());
         Assert.Equal("Active", past.Text("alertState"));
         Assert.Equal("None", newMeasurement.Text("alertState"));
+        Assert.Equal(33m, newMeasurement.GetProperty("thresholdsUsed").GetProperty("temperatureMax").GetDecimal());
         Assert.Empty(await api.AlertsOfAsync(newMeasurement.Id()));
 
         var audit = Assert.Single(await api.AuditOfAsync(z.Zone.Id), e => e.Action == "WaterThreshold.Updated");
         Assert.Contains("\"PhMax\":8.5", audit.Before);
         Assert.Contains("\"PhMax\":9.0", audit.After);
+        Assert.Contains("\"TemperatureMax\":33", audit.After);
         Assert.Equal(z.Zone.Id, audit.ZoneId);
     }
 
@@ -53,15 +57,19 @@ public class WaterThresholdTests(AuthApiFactory api) : IClassFixture<AuthApiFact
     }
 
     [Theory]
-    [InlineData(6.5, null, 15.0, 30.0, "pH maximum")]
-    [InlineData(6.5, 14.5, 15.0, 30.0, "pH maximum")]
-    [InlineData(6.5, 8.5, -1.0, 30.0, "Salinity minimum")]
-    [InlineData(6.5, 8.5, 15.0, 100.5, "Salinity maximum")]
-    public async Task Value_out_of_range_or_half_a_pair_is_MSG01(double? phMin, double? phMax, double? salMin, double? salMax, string field)
+    [InlineData(6.5, null, 15.0, 30.0, 10.0, 35.0, "pH maximum")]
+    [InlineData(6.5, 14.5, 15.0, 30.0, 10.0, 35.0, "pH maximum")]
+    [InlineData(6.5, 8.5, -1.0, 30.0, 10.0, 35.0, "Salinity minimum")]
+    [InlineData(6.5, 8.5, 15.0, 50.5, 10.0, 35.0, "Salinity maximum")]
+    [InlineData(6.5, 8.5, 15.0, 30.0, -1.0, 35.0, "Temperature minimum")]
+    [InlineData(6.5, 8.5, 15.0, 30.0, 10.0, 45.5, "Temperature maximum")]
+    [InlineData(6.5, 8.5, 15.0, 30.0, 10.0, null, "Temperature maximum")]
+    [InlineData(6.5, 8.5, 15.0, 30.0, null, 35.0, "Temperature minimum")]
+    public async Task Value_out_of_range_or_half_a_pair_is_MSG01(double? phMin, double? phMax, double? salMin, double? salMax, double? tempMin, double? tempMax, string field)
     {
         var z = await api.ZoneAsync();
 
-        var response = await z.Owner.PutAsJsonAsync($"/api/zones/{z.Zone.Id}/water-thresholds", new { phMin, phMax, salinityMin = salMin, salinityMax = salMax });
+        var response = await z.Owner.PutAsJsonAsync($"/api/zones/{z.Zone.Id}/water-thresholds", new { phMin, phMax, salinityMin = salMin, salinityMax = salMax, temperatureMin = tempMin, temperatureMax = tempMax });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
@@ -69,7 +77,7 @@ public class WaterThresholdTests(AuthApiFactory api) : IClassFixture<AuthApiFact
     }
 
     [Fact]
-    public async Task Pairs_can_be_cleared_together()
+    public async Task Pairs_can_be_cleared_together_and_an_omitted_pair_is_cleared()
     {
         var z = await api.ZoneAsync();
 
@@ -78,6 +86,7 @@ public class WaterThresholdTests(AuthApiFactory api) : IClassFixture<AuthApiFact
         var thresholds = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("thresholds");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(JsonValueKind.Null, thresholds.GetProperty("salinityMin").ValueKind);
+        Assert.Equal(JsonValueKind.Null, thresholds.GetProperty("temperatureMax").ValueKind);
         Assert.Equal(6.0m, thresholds.GetProperty("phMin").GetDecimal());
     }
 
@@ -90,16 +99,37 @@ public class WaterThresholdTests(AuthApiFactory api) : IClassFixture<AuthApiFact
         var discontinued = await own.ZoneAsync();
         await own.UpdateAsync<FarmingZone>(discontinued.Zone.Id, z => z.StatusId = StatusIds.Usage.Discontinued);
 
-        var response = await a.Owner.PutAsJsonAsync("/api/water-thresholds", new { phMin = 7m, phMax = 8m, salinityMin = 18m, salinityMax = 28m });
+        var response = await a.Owner.PutAsJsonAsync("/api/water-thresholds", new { phMin = 7m, phMax = 8m, salinityMin = 18m, salinityMax = 28m, temperatureMin = 11m, temperatureMax = 31m });
         var list = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(2, list.GetArrayLength());
         var zones = await own.QueryAsync(db => db.FarmingZones.AsNoTracking().ToListAsync());
-        Assert.All(zones.Where(z => z.Id != discontinued.Zone.Id), z => Assert.Equal((7m, 8m, 18m, 28m), (z.PhMin!.Value, z.PhMax!.Value, z.SalinityMin!.Value, z.SalinityMax!.Value)));
+        Assert.All(zones.Where(z => z.Id != discontinued.Zone.Id), z => Assert.Equal((7m, 8m, 18m, 28m, 11m, 31m), (z.PhMin!.Value, z.PhMax!.Value, z.SalinityMin!.Value, z.SalinityMax!.Value, z.TemperatureMin!.Value, z.TemperatureMax!.Value)));
         Assert.Equal(8.5m, zones.Single(z => z.Id == discontinued.Zone.Id).PhMax);
         var audited = await own.QueryAsync(db => db.AuditEvents.Where(e => e.Action == "WaterThreshold.Updated").Select(e => e.RecordId).ToListAsync());
         Assert.Equal(new[] { a.Zone.Id, b.Zone.Id }.Order(), audited.Select(id => id!.Value).Order());
+    }
+
+    // WATER-04 step 1 and GBR-01: the list has the zones In Use; a Discontinued zone is read-only.
+    [Fact]
+    public async Task A_discontinued_zone_is_left_out_of_the_list_and_cannot_be_set_but_can_still_be_read()
+    {
+        await using var own = new WaterApiFactory();
+        var z = await own.ZoneAsync();
+        var kept = await own.ZoneAsync();
+        await own.UpdateAsync<FarmingZone>(z.Zone.Id, zone => zone.StatusId = StatusIds.Usage.Discontinued);
+
+        var list = await z.Owner.GetFromJsonAsync<JsonElement>("/api/water-thresholds");
+        var set = await z.Owner.PutAsJsonAsync($"/api/zones/{z.Zone.Id}/water-thresholds", new { phMin = 6m, phMax = 9m });
+        var read = await z.Owner.GetAsync($"/api/zones/{z.Zone.Id}/water-thresholds");
+
+        Assert.Equal([kept.Zone.Id], list.EnumerateArray().Select(t => t.GetProperty("zoneId").GetGuid()));
+        Assert.Equal(HttpStatusCode.Conflict, set.StatusCode);
+        Assert.Equal("MSG-GEN-09", await set.ErrorCodeAsync());
+        Assert.Equal("Farming zone is Discontinued and cannot be used for this action.", (await set.Content.ReadFromJsonAsync<JsonElement>()).Text("detail"));
+        Assert.Equal(HttpStatusCode.OK, read.StatusCode);
+        Assert.Equal(8.5m, (await own.QueryAsync(db => db.FarmingZones.AsNoTracking().SingleAsync(x => x.Id == z.Zone.Id))).PhMax);
     }
 
     [Fact]

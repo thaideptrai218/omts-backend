@@ -296,8 +296,11 @@ public class MandatorySmsQaFailureTests
         var (managerClient, manager) = await api.StaffAsync(z.Zone);
         using var abort = new CancellationTokenSource();
 
+        var photoKey = await managerClient.PhotoKeyAsync(z.Zone.Id);
         var answer = managerClient.PostAsJsonAsync(
-            z.Base, new { clientOperationId = Guid.NewGuid(), measuredAt = DateTimeOffset.UtcNow.AddMinutes(-5), ph = 9.2m, salinity = 20m, confirm = true }, abort.Token);
+            z.Base,
+            new { clientOperationId = Guid.NewGuid(), raftId = z.Raft.Id, measuredAt = DateTimeOffset.UtcNow.AddMinutes(-5), ph = 9.2m, salinity = 20m, temperature = 25m, photoKey },
+            abort.Token);
         await gated.Reached.WaitAsync(TimeSpan.FromSeconds(30));
         abort.Cancel();
         await Task.Delay(200);

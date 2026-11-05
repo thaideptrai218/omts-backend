@@ -2,7 +2,7 @@ using OMTS.Application.Features.WaterQuality;
 
 namespace OMTS.Application.UnitTests.Features.WaterQuality;
 
-/// <summary>Overdue reminder (formerly JOB-05): more than one calendar month, one reminder per overdue period.</summary>
+/// <summary>Overdue reminder, the interim rule until OMTS-219 W3 applies GFR-04: more than one calendar month, one reminder per overdue period.</summary>
 public class WaterOverdueRuleTests
 {
     private static readonly TimeSpan Local = TimeSpan.FromHours(7);
@@ -42,5 +42,18 @@ public class WaterOverdueRuleTests
         Assert.True(WaterOverdueRule.NeedsReminder(measured, null, Today));
         Assert.False(WaterOverdueRule.NeedsReminder(measured, remindedInThisPeriod, Today));
         Assert.True(WaterOverdueRule.NeedsReminder(measured, remindedInAnEarlierPeriod, Today));
+    }
+
+    // The zone was reminded on 01/10; a measurement of 20/09 saved after that reminder is the answer to it, so its own lapse is reminded again.
+    [Fact]
+    public void A_measurement_saved_after_the_reminder_starts_a_new_period_even_when_measured_before_it()
+    {
+        var reminded = new DateTimeOffset(2026, 10, 1, 6, 0, 0, Local);
+        var measured = new DateTimeOffset(2026, 9, 20, 8, 0, 0, Local);
+        var savedAfter = reminded.AddDays(2);
+
+        Assert.False(WaterOverdueRule.NeedsReminder(measured, reminded, new DateOnly(2026, 10, 20), savedAfter));
+        Assert.True(WaterOverdueRule.NeedsReminder(measured, reminded, Today, savedAfter));
+        Assert.False(WaterOverdueRule.NeedsReminder(measured.AddDays(-30), reminded, Today, reminded.AddDays(-1)));
     }
 }
