@@ -18,6 +18,8 @@ using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
 using OMTS.Application.Features.Purchasing.Suppliers;
 using OMTS.Application.Features.ReceivingBankAccounts;
+using OMTS.Application.Features.Sales.Customers;
+using OMTS.Application.Features.Sales.Products;
 using OMTS.Application.Features.Verification;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
@@ -71,7 +73,10 @@ public static class DependencyInjection
         services.AddScoped<RoleService>();
 
         // FARM-01 cooperative profile, LAB-01 employees
+        services.AddScoped<CooperativeProfileViews>();
         services.AddScoped<CooperativeProfileService>();
+        services.AddScoped<CooperativeCoverPhotoService>();
+        services.AddScoped<CooperativeCertificationService>();
         services.AddScoped<EmployeeService>();
 
         // DEBT-01 receiving bank account
@@ -92,6 +97,10 @@ public static class DependencyInjection
         services.AddScoped<ZoneAccessGuard>();
         services.AddScoped<SupplierService>();
         services.AddScoped<FarmingInputItemService>();
+        services.AddScoped<ProductService>();
+        services.AddScoped<ProductReadService>();
+        services.AddScoped<CustomerService>();
+        services.AddScoped<CustomerMergeService>();
         services.AddScoped<PurchaseReceiptValidator>();
         services.AddScoped<PurchaseReceiptViews>();
         services.AddScoped<PurchaseReceiptService>();

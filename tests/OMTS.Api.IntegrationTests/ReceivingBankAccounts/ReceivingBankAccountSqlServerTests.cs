@@ -135,8 +135,8 @@ public sealed class ReceivingBankAccountSqlServerTests
 
         await migrator.MigrateAsync(previous);
         await db.Database.ExecuteSqlAsync($"""
-            INSERT INTO Cooperatives (Id, FullName, StatusId, CreatedAt, BankAccount_BankName, BankAccount_AccountNumber, BankAccount_AccountHolderName)
-            VALUES (NEWID(), N'HTX', {StatusIds.Cooperative.Draft}, SYSDATETIMEOFFSET(), N'BIDV', N'TEST00000001', N'HTX')
+            INSERT INTO Cooperatives (Id, FullName, CreatedAt, BankAccount_BankName, BankAccount_AccountNumber, BankAccount_AccountHolderName)
+            VALUES (NEWID(), N'HTX', SYSDATETIMEOFFSET(), N'BIDV', N'TEST00000001', N'HTX')
             """);
         await db.Database.MigrateAsync();
 

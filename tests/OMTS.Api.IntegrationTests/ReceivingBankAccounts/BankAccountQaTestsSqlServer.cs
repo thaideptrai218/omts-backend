@@ -76,8 +76,8 @@ public sealed class BankAccountQaTestsSqlServer : IDisposable
         Assert.Equal((Bidv, "BIDV", SecondNumber, "HTX KHAC"), (after.BankAccount!.BankBin, after.BankAccount.BankName, after.BankAccount.AccountNumber, after.BankAccount.AccountHolderName));
         Assert.True(after.BankAccount.AcceptedAt > before.BankAccount!.AcceptedAt);
         Assert.Equal(
-            (before.FullName, before.TaxCode, before.OfficeAddress, before.PhoneNumber, before.Email, before.Website, before.LegalRepresentative, before.BusinessLines, before.LogoUrl, before.StatusId),
-            (after.FullName, after.TaxCode, after.OfficeAddress, after.PhoneNumber, after.Email, after.Website, after.LegalRepresentative, after.BusinessLines, after.LogoUrl, after.StatusId));
+            (before.FullName, before.TaxCode, before.OfficeAddress, before.PhoneNumber, before.Email, before.Website, before.LegalRepresentative, before.BusinessLines, before.LogoUrl),
+            (after.FullName, after.TaxCode, after.OfficeAddress, after.PhoneNumber, after.Email, after.Website, after.LegalRepresentative, after.BusinessLines, after.LogoUrl));
     }
 
     [SqlServerFact]

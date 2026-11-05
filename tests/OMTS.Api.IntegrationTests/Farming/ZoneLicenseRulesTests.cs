@@ -121,7 +121,7 @@ public class ZoneLicenseRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.NotNull(reminded.ExpiringReminderSentAt);
         var oldFile = reminded.EvidenceFileUrl!;
 
-        Assert.Equal("MSG06", await (await owner.Client.PutAsync($"/api/zone-licenses/{license.Id()}", (fields with { RowVersion = "AAAAAAAAB9E=" }).ToForm())).ErrorCodeAsync());
+        Assert.Equal("MSG06", await (await owner.Client.PutAsync($"/api/zone-licenses/{license.Id()}", (fields with { RowVersion = StaleRowVersion }).ToForm())).ErrorCodeAsync());
         Assert.Equal(["Expiry date"], await (await owner.Client.PutAsync($"/api/zone-licenses/{license.Id()}", (fields with { ExpiryDate = Today.AddDays(-301), RowVersion = license.Text("rowVersion") }).ToForm())).InvalidFieldsAsync());
         Assert.Equal(HttpStatusCode.NotFound, (await owner.Client.PutAsync($"/api/zone-licenses/{Guid.NewGuid()}", (fields with { RowVersion = "" }).ToForm())).StatusCode);
 

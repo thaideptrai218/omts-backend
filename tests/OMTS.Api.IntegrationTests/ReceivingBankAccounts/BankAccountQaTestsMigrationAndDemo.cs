@@ -22,7 +22,7 @@ using static OMTS.Api.IntegrationTests.ReceivingBankAccounts.ReceivingBankAccoun
 
 namespace OMTS.Api.IntegrationTests.ReceivingBankAccounts;
 
-/// <summary>QA of migration 20261104184513 (Up, Down, Up with its hand-written SQL) and of the demo step on a real SQL Server.</summary>
+/// <summary>QA of the ReceivingBankAccount migration (Up, Down, Up with its hand-written SQL) and of the demo step on a real SQL Server.</summary>
 public sealed class BankAccountQaTestsMigrationAndDemo
 {
     private const string Demo = "DEMO00000001";
@@ -88,7 +88,7 @@ public sealed class BankAccountQaTestsMigrationAndDemo
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync(PreviousMigration(db));
         await db.Database.ExecuteSqlRawAsync(
-            $"INSERT INTO Cooperatives (Id, FullName, StatusId, CreatedAt, BankAccount_AccountNumber) VALUES (NEWID(), N'HTX', {StatusIds.Cooperative.Draft}, SYSDATETIMEOFFSET(), N'TESTPARTIAL1')");
+            "INSERT INTO Cooperatives (Id, FullName, CreatedAt, BankAccount_AccountNumber) VALUES (NEWID(), N'HTX', SYSDATETIMEOFFSET(), N'TESTPARTIAL1')");
 
         await db.Database.MigrateAsync();
 

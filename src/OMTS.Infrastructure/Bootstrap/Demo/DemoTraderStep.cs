@@ -28,7 +28,7 @@ internal sealed class DemoTraderStep : IDemoSeedStep
 
     public async Task<int> RunAsync(DemoSeedContext context, CancellationToken cancellationToken)
     {
-        var hash = context.Get<IPasswordHasher>().Hash(DemoSeedContext.Password);
+        var hash = context.Get<IPasswordHasher>().Hash(context.Password);
         var linker = context.Get<TraderCustomerLinker>();
         var audit = context.Get<AuditLogService>();
         var created = 0;

@@ -211,8 +211,8 @@ public class RaftRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         var raft = await owner.Client.CreateRaftAsync(zone.Id());
 
         // Stale versions (never issued, as InMemory has no rowversion) are refused for edits and transitions.
-        Assert.Equal("MSG06", await (await owner.Client.PutAsJsonAsync($"/api/rafts/{raft.Id()}", NewRaftBody(raft.Text("code")) with { RowVersion = "AAAAAAAAB9E=" })).ErrorCodeAsync());
-        Assert.Equal("MSG06", await (await owner.Client.PostAsJsonAsync($"/api/rafts/{raft.Id()}/discontinue", new { rowVersion = "AAAAAAAAB9E=" })).ErrorCodeAsync());
+        Assert.Equal("MSG06", await (await owner.Client.PutAsJsonAsync($"/api/rafts/{raft.Id()}", NewRaftBody(raft.Text("code")) with { RowVersion = StaleRowVersion })).ErrorCodeAsync());
+        Assert.Equal("MSG06", await (await owner.Client.PostAsJsonAsync($"/api/rafts/{raft.Id()}/discontinue", new { rowVersion = StaleRowVersion })).ErrorCodeAsync());
 
         var discontinued = await (await owner.Client.PostAsJsonAsync($"/api/rafts/{raft.Id()}/discontinue", new { reason = "Storm damage", rowVersion = raft.Text("rowVersion") }))
             .ReadAsync(HttpStatusCode.OK);
