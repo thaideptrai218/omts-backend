@@ -59,12 +59,21 @@ public sealed class EmployeeProfileValidator(IEmployeeRepository employees, IFar
 
     /// <summary>
     /// LABOR-01.1.E1: a new type takes effect after every pay period that is sent or finalized (MSG-LABOR-04). Only on an edit:
-    /// the first type of a new employee changes no day, as the days before it have that same type and no attendance.
+    /// the first type of a new employee changes no day, as the days before it have that same type and no attendance. A new
+    /// earliest type, or another type on the first date, moves the days before it too (the first-row rule).
     /// </summary>
-    private async Task<AppError?> TypeDateRefusalAsync(Employee employee, EmployeeInput input, CancellationToken cancellationToken) =>
-        input is { Type: { } type, TypeFrom: { } from } && EmployeeProfileChanges.IsTypeChange(employee, type, from)
-            ? await payPeriods.CheckAsync(from, cancellationToken)
-            : null;
+    private async Task<AppError?> TypeDateRefusalAsync(Employee employee, EmployeeInput input, CancellationToken cancellationToken)
+    {
+        if (input is not { Type: { } type, TypeFrom: { } from } || !EmployeeProfileChanges.IsTypeChange(employee, type, from))
+        {
+            return null;
+        }
+
+        var first = employee.TypePeriods.Min(p => (DateOnly?)p.EffectiveFrom);
+        return from <= first
+            ? await payPeriods.CheckFirstTypeChangeAsync(from, first.Value, cancellationToken)
+            : await payPeriods.CheckAsync(from, cancellationToken);
+    }
 
     /// <summary>
     /// An edit keeps at least one working zone. A new type needs its date; the type in force sent back without a date changes

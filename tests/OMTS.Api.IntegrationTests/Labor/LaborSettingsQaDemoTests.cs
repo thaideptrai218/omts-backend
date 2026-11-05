@@ -20,14 +20,14 @@ namespace OMTS.Api.IntegrationTests.Labor;
 /// <summary>QA of OMTS-227, the demo data of the client list (section 8) and its reruns, on SQL Server with a moving clock.</summary>
 public class LaborSettingsQaDemoTests
 {
-    private sealed class MovedClock : TimeProvider
+    internal sealed class MovedClock : TimeProvider
     {
         public TimeSpan Shift { get; set; }
 
         public override DateTimeOffset GetUtcNow() => base.GetUtcNow() + Shift;
     }
 
-    private sealed class Host : IAsyncDisposable
+    internal sealed class Host : IAsyncDisposable
     {
         private readonly SqlServerTestDatabase _database = SqlServerTestDatabase.Create();
         private readonly string _storageRoot = Path.Combine(Path.GetTempPath(), $"omts-labor-demo-{Guid.NewGuid():N}");
@@ -78,7 +78,7 @@ public class LaborSettingsQaDemoTests
         }
     }
 
-    private static async Task<string> SnapshotAsync(Host host) => await host.QueryAsync(async db =>
+    internal static async Task<string> SnapshotAsync(Host host) => await host.QueryAsync(async db =>
     {
         var jobTypes = await db.JobTypes.OrderBy(j => j.Name).Select(j => new { j.Name, j.StatusId, j.UpdatedAt }).ToListAsync();
         var rates = await db.PayRates.OrderBy(r => r.EffectiveFrom).ThenBy(r => r.HourlyRate).Select(r => new { r.HourlyRate, r.EffectiveFrom, r.UpdatedAt }).ToListAsync();

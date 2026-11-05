@@ -25,6 +25,9 @@ public sealed class JobTypeService(
     AuditLogService audit,
     IUnitOfWork unitOfWork)
 {
+    /// <summary>The audit action of a new job type: its row keeps the name it was added under, whatever the name becomes.</summary>
+    public const string CreatedAction = "JobType.Created";
+
     /// <summary>The job type and its first rate in one save, In Use.</summary>
     public async Task<Result<JobTypeSaved>> AddAsync(AddJobTypeRequest request, CancellationToken cancellationToken)
     {
@@ -51,7 +54,7 @@ public sealed class JobTypeService(
         var jobType = new JobType { Name = name };
         jobType.Rates.Add(new PayRate { HourlyRate = rate, EffectiveFrom = from, EnteredByAccountId = enteredBy });
         jobTypes.Add(jobType);
-        audit.Record(new AuditEntry("JobType.Created", nameof(JobType))
+        audit.Record(new AuditEntry(CreatedAction, nameof(JobType))
         {
             RecordId = jobType.Id,
             RecordCode = jobType.Name,

@@ -4,6 +4,7 @@ using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Common.Validation;
 using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Domain.Entities.Labor;
 
@@ -18,8 +19,8 @@ public sealed class JobTypeQueryService(IJobTypeRepository jobTypes, IStatusCata
     {
         // The upper bound keeps (page - 1) * pageSize inside int.
         (page, pageSize) = (Math.Clamp(page, 1, int.MaxValue / MaxPageSize), Math.Clamp(pageSize, 1, MaxPageSize));
-        var text = search?.Trim();
-        if (text?.Length > JobTypeFields.MaxName)
+        var text = DisplayNames.Normalize(search);
+        if (text.Length > JobTypeFields.MaxName)
         {
             return new Paged<JobTypeView>([], page, pageSize, 0);
         }

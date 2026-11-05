@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Validation;
 using OMTS.Application.Features.Farming;
 
 namespace OMTS.Application.Features.Labor;
@@ -14,7 +15,11 @@ internal static class JobTypeFields
     /// </summary>
     public const decimal MaxHourlyRate = 999_999_999m;
 
-    public static string Name(FieldCheck check, string? name) => check.Required(name, "Name", MaxName);
+    /// <summary>
+    /// As a person reads it (BR-LABOR-12): what is stored and compared is this one spelling, so the unique index holds whatever
+    /// the keyboard typed. A name of only invisible characters comes out empty, so it counts as missing.
+    /// </summary>
+    public static string Name(FieldCheck check, string? name) => check.Required(DisplayNames.Normalize(name), "Name", MaxName);
 
     /// <summary>Whole VND, greater than 0 (BR-LABOR-12); 40000.0 is stored as 40000.</summary>
     public static decimal HourlyRate(FieldCheck check, decimal? rate)

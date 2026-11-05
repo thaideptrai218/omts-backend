@@ -58,6 +58,9 @@ public sealed class AttendanceSettingsService(
 
     public async Task<Result<AttendanceSettingsSaved>> SaveAsync(SaveAttendanceSettingsRequest request, CancellationToken cancellationToken)
     {
+        // The history before the cooperative: a save that lands between them shows as a stale version, MSG06. The other way round
+        // the version check passes first, and this save would then find that save's row, "change nothing" and hand back the old version.
+        var all = await versions.ListAsync(cancellationToken);
         if (await cooperatives.GetCurrentAsync(cancellationToken) is not { } cooperative)
         {
             return AppError.NotFound;
@@ -89,7 +92,6 @@ public sealed class AttendanceSettingsService(
             return locked;
         }
 
-        var all = await versions.ListAsync(cancellationToken);
         var sameDate = all.FirstOrDefault(v => v.EffectiveFrom == from);
         if (sameDate is not null && sameDate.BreakStart == breakStart && sameDate.BreakEnd == breakEnd && sameDate.RoundingUnit == request.RoundingUnit)
         {

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Concurrency;
+using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Labor;
@@ -13,9 +14,10 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 /// LABOR-11, LABOR-15: job types with rates, one with an earlier rate, one with a rate still to come and one discontinued, and
 /// two versions of the attendance settings; before the employees, whose profiles name the job types. The payroll settings stay
 /// as set up (start day 1, automatic payroll off). Two payroll headers, the month before last Finalized and last month Awaiting
-/// finalization, so that a date up to the end of last month answers MSG-LABOR-04: they have no lines until LABOR-12. Job types
-/// are matched by name; settings and payrolls are added only when there are none, and this order keeps the rates before the
-/// lock. Dates are relative to today, in whole months, so no month end moves them.
+/// finalization, so that a date up to the end of last month answers MSG-LABOR-04: they have no lines until LABOR-12. A job type
+/// is matched by its name and by the audit row of its adding, which a rename leaves as it is; settings and payrolls are added
+/// only when there are none, and this order keeps the rates before the lock. Dates are relative to today, in whole months, so
+/// no month end moves them.
 /// </summary>
 internal sealed class DemoLaborSettingsStep : IDemoSeedStep
 {
@@ -39,10 +41,29 @@ internal sealed class DemoLaborSettingsStep : IDemoSeedStep
         return created;
     }
 
+    /// <summary>
+    /// The demo job types a new profile may name: under whatever name they have now (a person may have renamed them), and only
+    /// those In Use, as the profile would be refused one a person discontinued (GBR-01).
+    /// </summary>
+    public static async Task<List<Guid>> JobTypesInUseAsync(DemoSeedContext context, string[] names, CancellationToken cancellationToken)
+    {
+        var added = await context.Db.AuditEvents
+            .Where(e => e.Action == JobTypeService.CreatedAction && e.RecordCode != null && names.Contains(e.RecordCode))
+            .Select(e => e.RecordId!.Value).ToListAsync(cancellationToken);
+        return await context.Db.JobTypes
+            .Where(j => j.StatusId == StatusIds.Usage.InUse && (names.Contains(j.Name) || added.Contains(j.Id)))
+            .Select(j => j.Id).ToListAsync(cancellationToken);
+    }
+
+    /// <summary>Whether an earlier run, or a person, has already added it. Then a rerun leaves it: its rename, rates and status are real use.</summary>
+    private static async Task<bool> AlreadyAddedAsync(DemoSeedContext context, string name, CancellationToken cancellationToken) =>
+        await context.Get<IJobTypeRepository>().FindByNameAsync(name, null, cancellationToken) is not null
+        || await context.Db.AuditEvents.AnyAsync(e => e.Action == JobTypeService.CreatedAction && e.RecordCode == name, cancellationToken);
+
     private static async Task<int> AddJobTypeAsync(
         DemoSeedContext context, string name, decimal rate, DateOnly from, (decimal Rate, DateOnly From)? second, CancellationToken cancellationToken)
     {
-        if (await context.Db.JobTypes.AnyAsync(j => j.Name == name, cancellationToken))
+        if (await AlreadyAddedAsync(context, name, cancellationToken))
         {
             return 0;
         }

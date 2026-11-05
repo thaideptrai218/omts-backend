@@ -255,7 +255,7 @@ public static class UserMessages
     /// <summary>MSG-LABOR-04 (BR-LABOR-13): a change is dated in a pay period whose payroll, or a later one, is Awaiting finalization or Finalized.</summary>
     /// <param name="period">The name of the payroll's period, e.g. "10/2026".</param>
     /// <param name="payrollStatus">The display name of its status.</param>
-    /// <param name="lockedUntil">The last day of the latest locked payroll: the change can be dated after it.</param>
+    /// <param name="lockedUntil">The change can be dated after it: the last day of the latest locked payroll, or the employee's first type date when that is later.</param>
     /// <param name="canBeSentBack">Every locked payroll in the way is Awaiting finalization, so the Owner can send it back (LABOR-13.1).</param>
     public static UserMessage PayrollLocksDate(string period, string payrollStatus, DateOnly date, DateOnly lockedUntil, bool canBeSentBack)
     {

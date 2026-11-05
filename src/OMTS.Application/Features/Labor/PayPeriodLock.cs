@@ -17,16 +17,27 @@ namespace OMTS.Application.Features.Labor;
 public sealed class PayPeriodLock(IPayrollRepository payrolls, IStatusCatalog statusCatalog, IUnitOfWork unitOfWork)
 {
     /// <summary>MSG-LABOR-04 when <paramref name="date"/> is on or before the last locked day; otherwise null.</summary>
-    public async Task<AppError?> CheckAsync(DateOnly date, CancellationToken cancellationToken)
+    public async Task<AppError?> CheckAsync(DateOnly date, CancellationToken cancellationToken) =>
+        RefuseOrTouch(await payrolls.ListEndingOnOrAfterAsync(date, cancellationToken), date, null);
+
+    /// <summary>
+    /// For a new type that becomes, or replaces, the first of an employee. A day before every row has the first row's type, so
+    /// the save moves every earlier day as well, and every payroll holds a moved day or ends on or after <paramref name="date"/>:
+    /// any locked one refuses. This is the conservative reading of BR-LABOR-13; the PM may relax it (design Q11).
+    /// </summary>
+    /// <param name="firstTypeDate">The date of the first row now: a date after it moves no earlier day.</param>
+    public async Task<AppError?> CheckFirstTypeChangeAsync(DateOnly date, DateOnly firstTypeDate, CancellationToken cancellationToken) =>
+        RefuseOrTouch(await payrolls.ListEndingOnOrAfterAsync(DateOnly.MinValue, cancellationToken), date, firstTypeDate);
+
+    private AppError? RefuseOrTouch(IReadOnlyList<Payroll> affected, DateOnly date, DateOnly? firstTypeDate)
     {
-        var fromDate = await payrolls.ListEndingOnOrAfterAsync(date, cancellationToken);
-        var locked = fromDate.Where(p => p.IsLocked).ToList();
+        var locked = affected.Where(p => p.IsLocked).ToList();
         if (locked.Count > 0)
         {
-            return Refusal(date, locked);
+            return Refusal(date, firstTypeDate, locked);
         }
 
-        foreach (var open in fromDate)
+        foreach (var open in affected)
         {
             unitOfWork.MarkChanged(open);
         }
@@ -34,17 +45,22 @@ public sealed class PayPeriodLock(IPayrollRepository payrolls, IStatusCatalog st
         return null;
     }
 
-    /// <summary>Names the latest locked payroll, as a date after it is what the user can enter; sending back helps only when none is Finalized.</summary>
-    private AppError Refusal(DateOnly date, IReadOnlyList<Payroll> locked)
+    /// <summary>
+    /// Names the latest locked payroll, as a date after it is what the user can enter; sending back helps only when none is
+    /// Finalized. A date outside the payroll means the change reaches its last day through the first-row rule, so that day is
+    /// the one named, and the date to choose is also after the first type's.
+    /// </summary>
+    private AppError Refusal(DateOnly date, DateOnly? firstTypeDate, IReadOnlyList<Payroll> locked)
     {
         var latest = locked.MaxBy(p => p.PeriodEnd)!;
+        var dateAfter = firstTypeDate > latest.PeriodEnd ? firstTypeDate.Value : latest.PeriodEnd;
         return AppError.Conflict(
             UserMessages.PayrollLocksDate(
                 PayPeriod.NameOf(latest.PeriodEnd),
                 statusCatalog.DisplayNameOf(latest.StatusId),
-                date,
-                latest.PeriodEnd,
+                date <= latest.PeriodEnd ? date : latest.PeriodEnd,
+                dateAfter,
                 canBeSentBack: locked.All(p => p.StatusId == StatusIds.Payroll.AwaitingFinalization)),
-            new Dictionary<string, object?> { ["lockedUntil"] = latest.PeriodEnd });
+            new Dictionary<string, object?> { ["lockedUntil"] = dateAfter });
     }
 }

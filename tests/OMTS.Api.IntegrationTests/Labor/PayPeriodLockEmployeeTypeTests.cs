@@ -24,7 +24,8 @@ public class PayPeriodLockEmployeeTypeTests
         var owner = await OwnerAsync(factory);
         var zone = await factory.AddZoneAsync(NewCode());
         var (name, phone) = ($"Loại {NewCode()}", NewPhone());
-        var saved = await EmployeeRequests.CreateAsync(owner, EmployeeRequests.Profile(name, phone, zone.Id));
+        // The first type dates from before the lock: with today's date, 01/11 would be a new earliest row, which moves the locked days (QA M2).
+        var saved = await EmployeeRequests.CreateAsync(owner, EmployeeRequests.Profile(name, phone, zone.Id, b => b["employeeTypeFrom"] = "2019-01-01"));
         var id = EmployeeRequests.IdOf(saved);
         await factory.AddAwaitingPayrollAsync(October, OctoberEnd);
         Dictionary<string, object?> Edit(string type, string from) => EmployeeRequests.Profile(name, phone, zone.Id, b =>

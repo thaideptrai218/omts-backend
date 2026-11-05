@@ -59,7 +59,10 @@ public sealed class PayRateService(
         var sameDate = jobType.Rates.FirstOrDefault(r => r.EffectiveFrom == from);
         if (sameDate?.HourlyRate == rate)
         {
-            return queries.Saved(jobType);
+            // Nothing to save, so nothing else checks the version. The job type and its rates came from one read, and a parallel
+            // save can land inside it, so the version is read again: this answer must not hand back an old one (NFR-09).
+            await unitOfWork.ReloadAsync(jobType, cancellationToken);
+            return await rowVersions.CheckAsync(jobType, request.RowVersion, cancellationToken) is { } moved ? moved : queries.Saved(jobType);
         }
 
         audit.Record(new AuditEntry("JobType.RateChanged", nameof(JobType))
