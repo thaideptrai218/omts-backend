@@ -67,7 +67,7 @@ public sealed record PurchaseReceiptFilter(
 
 public interface IPurchaseReceiptRepository
 {
-    /// <summary>Receipt with supplier, lines (items, rafts and their zones), returns (lines) and payments, tracked.</summary>
+    /// <summary>Receipt with supplier, lines (items, rafts and their zones) and returns (lines), tracked.</summary>
     Task<PurchaseReceipt?> GetForEditAsync(Guid receiptId, CancellationToken cancellationToken);
 
     /// <summary>Return codes already used that start with <paramref name="prefix"/>.</summary>
@@ -96,12 +96,6 @@ public interface IPurchaseReceiptRepository
     Task<(IReadOnlyList<RaftCostLineRow> Lines, IReadOnlyList<RaftCostReturnRow> Returns)> RaftMaterialCostRowsAsync(
         PurchaseReceiptFilter filter, CancellationToken cancellationToken);
 
-    /// <summary>Completed receipts of one supplier with figures, oldest first.</summary>
-    Task<IReadOnlyList<ReceiptFigureRow>> CompletedFiguresOfSupplierAsync(Guid supplierId, CancellationToken cancellationToken);
-
-    /// <summary>Per supplier (or all when null) the sums over its Completed receipts, computed in SQL.</summary>
-    Task<IReadOnlyList<SupplierDebtFigures>> SupplierDebtFiguresAsync(IReadOnlyCollection<Guid>? supplierIds, CancellationToken cancellationToken);
-
     void Add(PurchaseReceipt receipt);
 
     /// <summary>Deletes a Draft; its lines are removed with <see cref="RemoveLine"/> first (foreign keys never cascade).</summary>
@@ -122,17 +116,18 @@ public interface IPurchaseReceiptRepository
 
 public interface ISupplierPaymentRepository
 {
+    /// <summary>The payment with its supplier, tracked.</summary>
     Task<SupplierPayment?> GetForEditAsync(Guid paymentId, CancellationToken cancellationToken);
 
     Task<SupplierPayment?> FindByDeduplicationKeyAsync(string key, CancellationToken cancellationToken);
 
-    /// <summary>Payments by supplier, receipt, method, status and date range, newest first (receipts have no zone).</summary>
-    Task<(IReadOnlyList<SupplierPayment> Items, int Total, decimal TotalAmount)> SearchAsync(
-        Guid? supplierId, Guid? receiptId, PaymentMethod? method, int? statusId, DateOnly? from, DateOnly? to,
-        int page, int pageSize, CancellationToken cancellationToken);
+    /// <summary>The latest payment that is not cancelled with this bank reference, whatever its supplier (PURCHASE-05.4).</summary>
+    Task<SupplierPayment?> FindRecordedByBankReferenceAsync(string bankReference, CancellationToken cancellationToken);
 
-    /// <summary>Recorded payments not allocated to any receipt, per supplier.</summary>
-    Task<IReadOnlyDictionary<Guid, decimal>> UnallocatedAsync(IReadOnlyCollection<Guid>? supplierIds, CancellationToken cancellationToken);
+    /// <summary>Payments by supplier, kind, method, status and date range, newest first, with the Recorded sums per kind of all matches.</summary>
+    Task<(IReadOnlyList<SupplierPayment> Items, int Total, decimal TotalPaid, decimal TotalPaidBack)> SearchAsync(
+        Guid? supplierId, SupplierPaymentKind? kind, PaymentMethod? method, int? statusId, DateOnly? from, DateOnly? to,
+        int page, int pageSize, CancellationToken cancellationToken);
 
     void Add(SupplierPayment payment);
 }

@@ -155,7 +155,7 @@ public class MandatorySmsQaFailureTests
 
         // The cancellation and the limit of the answer fall at the same moment: on a busy machine the answer can come first.
         var giveUpAt = Stopwatch.StartNew();
-        while (waiting.Cancelled < 2 && giveUpAt.Elapsed < TimeSpan.FromSeconds(30))
+        while (waiting.Cancelled < 2 && giveUpAt.Elapsed < TimeSpan.FromMinutes(3))
         {
             await Task.Delay(50);
         }

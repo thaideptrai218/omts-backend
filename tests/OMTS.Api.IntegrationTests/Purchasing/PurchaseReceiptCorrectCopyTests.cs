@@ -51,7 +51,7 @@ public class PurchaseReceiptCorrectCopyTests(AuthApiFactory factory) : IClassFix
         Assert.Equal(436_000m, corrected.Money("total"));
         Assert.Equal(receipt.SeedLotCodeOf(world.Seed), corrected.SeedLotCodeOf(world.Seed));
         // The supplier debt follows the new amounts (BR-PURCHASE-04).
-        Assert.Equal(436_000m - 90_000m, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}/debt")).GetProperty("totals").Money("outstanding"));
+        Assert.Equal(436_000m - 90_000m, await world.DebtAsync());
         var audit = await factory.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.RecordId == receipt.Id() && e.Action == "PurchaseReceipt.Corrected"));
         Assert.Equal("Supplier invoice checked", audit.Reason);
         Assert.Contains("9000", audit.Before);

@@ -183,61 +183,9 @@ public class PurchasingSqlServerTests
         Assert.Equal(created * 300_000m, view.Money("returned"));
     }
 
-    // Payments can never exceed the outstanding of their receipt; a repeated key records one payment.
+    // A cancel never leaves a return on a cancelled receipt; payments are not linked to receipts, so a parallel payment is untouched.
     [SqlServerFact]
-    public async Task Parallel_payments_never_exceed_the_outstanding_and_a_repeated_key_records_one_payment()
-    {
-        await using var host = await FarmingHost.StartAsync();
-        var world = await host.WorldAsync();
-        var accountant = await host.StaffAsync(null, StaffRole.Accountant);
-        var receipt = await world.CompletedAsync(new LineBody(world.Other, 10, 100_000));
-
-        var responses = await InParallelAsync(6, _ => accountant.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = receipt.Id(), Amount = 400_000 }));
-
-        var created = responses.Count(r => r.StatusCode == HttpStatusCode.Created);
-        Assert.InRange(created, 1, 2);
-        await AssertLosersAsync(responses.Where(r => r.StatusCode != HttpStatusCode.Created), "409 MSG06", "400 MSG45");
-        var paid = await host.QueryAsync(db => db.SupplierPayments.Where(p => p.ReceiptId == receipt.Id() && p.StatusId == StatusIds.SupplierPayment.Recorded).SumAsync(p => p.Amount));
-        Assert.Equal(created * 400_000m, paid);
-
-        var other = await world.CompletedAsync(new LineBody(world.Other, 10, 100_000));
-        var key = $"retry-{Guid.NewGuid():N}";
-        var keyed = await InParallelAsync(5, _ => accountant.PostPaymentAsync(new PaymentBody
-        {
-            SupplierId = world.SupplierId, ReceiptId = other.Id(), Amount = 100_000, DeduplicationKey = key,
-        }));
-        var ids = new HashSet<Guid>();
-        foreach (var response in keyed)
-        {
-            ids.Add((await response.ReadAsync(HttpStatusCode.Created)).Id());
-        }
-
-        Assert.Single(ids);
-        Assert.Equal(1, await host.QueryAsync(db => db.SupplierPayments.CountAsync(p => p.DeduplicationKey == key)));
-    }
-
-    [SqlServerFact]
-    public async Task Parallel_allocations_of_one_payment_kept_by_a_cancellation_allocate_it_once()
-    {
-        await using var host = await FarmingHost.StartAsync();
-        var world = await host.WorldAsync();
-        var cancelled = await world.PaidAsync(200_000, new LineBody(world.Other, 2, 100_000));
-        await (await world.Owner.CancelAsync(cancelled.Id(), "Entered twice")).ReadAsync(HttpStatusCode.OK);
-        var paymentId = await host.QueryAsync(db => db.SupplierPayments.Where(p => p.SupplierId == world.SupplierId).Select(p => p.Id).SingleAsync());
-        var targets = new[] { await world.CompletedAsync(new LineBody(world.Other, 5, 100_000)), await world.CompletedAsync(new LineBody(world.Other, 5, 100_000)) };
-
-        var responses = await InParallelAsync(6, i => world.Owner.PostAsJsonAsync($"/api/supplier-payments/{paymentId}/allocate", new { receiptId = targets[i % 2].Id() }));
-
-        Assert.Single(responses, r => r.StatusCode == HttpStatusCode.OK);
-        await AssertLosersAsync(responses.Where(r => r.StatusCode != HttpStatusCode.OK), "409 MSG06", "409 MSG-GEN-09");
-        var allocatedTo = await host.QueryAsync(db => db.SupplierPayments.Where(p => p.Id == paymentId).Select(p => p.ReceiptId).SingleAsync());
-        Assert.Contains(allocatedTo!.Value, targets.Select(t => t.Id()));
-        Assert.Equal(800_000, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}/debt")).GetProperty("totals").Money("outstanding"));
-    }
-
-    // A cancel never leaves a return on a cancelled receipt, nor a recorded payment still allocated to it.
-    [SqlServerFact]
-    public async Task Parallel_cancel_and_return_or_payment_never_leave_a_return_or_an_allocated_payment_on_a_cancelled_receipt()
+    public async Task Parallel_cancel_and_return_never_leave_a_return_on_a_cancelled_receipt_and_a_parallel_payment_stays()
     {
         await using var host = await FarmingHost.StartAsync();
         var world = await host.WorldAsync();
@@ -247,16 +195,14 @@ public class PurchasingSqlServerTests
             var returnTask = world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { DebtReductionAmount = 10_000, Lines = [new ReturnLineBody(receipt.LineOf(world.Seed), 1)] });
             var cancelTask = world.Owner.CancelAsync(receipt.Id(), "Wrong");
             var paymentReceipt = await world.CompletedAsync(new LineBody(world.Other, 1, 100_000));
-            var paymentTask = world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = paymentReceipt.Id(), Amount = 100_000 });
+            var paymentTask = world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, Amount = 100_000, ConfirmAdvance = true });
             var paymentCancelTask = world.Owner.CancelAsync(paymentReceipt.Id(), "Wrong");
             await Task.WhenAll(returnTask, cancelTask, paymentTask, paymentCancelTask);
 
             var state = await host.QueryAsync(db => db.PurchaseReceipts.Where(r => r.Id == receipt.Id()).Select(r => new { r.StatusId, Returns = r.Returns.Count }).SingleAsync());
             Assert.False(state.StatusId == StatusIds.PurchaseReceipt.Cancelled && state.Returns > 0, $"round {round}: cancelled with a return");
-            var paid = await host.QueryAsync(db => db.PurchaseReceipts.Where(r => r.Id == paymentReceipt.Id())
-                .Select(r => new { r.StatusId, Allocated = r.Payments.Count(p => p.StatusId == StatusIds.SupplierPayment.Recorded) }).SingleAsync());
-            Assert.False(paid.StatusId == StatusIds.PurchaseReceipt.Cancelled && paid.Allocated > 0, $"round {round}: cancelled with an allocated payment");
-            foreach (var task in new[] { returnTask, cancelTask, paymentTask, paymentCancelTask })
+            Assert.Equal(HttpStatusCode.Created, (await paymentTask).StatusCode);
+            foreach (var task in new[] { returnTask, cancelTask, paymentCancelTask })
             {
                 Assert.NotEqual(HttpStatusCode.InternalServerError, (await task).StatusCode);
             }
@@ -305,12 +251,10 @@ public class PurchasingSqlServerTests
             RefundAmount = 100_000, RefundMethod = "Cash", Lines = [new ReturnLineBody(receipt.LineOf(world.Seed), 1)],
         })).ReadAsync(HttpStatusCode.Created);
         var returnId = returned.GetProperty("returns")[0].Id();
-        var paymentId = await host.QueryAsync(db => db.SupplierPayments.Where(p => p.ReceiptId == receipt.Id()).Select(p => p.Id).SingleAsync());
         var lineId = receipt.LineOf(world.Seed);
 
         foreach (var sql in new[]
         {
-            $"UPDATE SupplierPayments SET Amount = 100500 WHERE Id = '{paymentId}'",
             $"UPDATE PurchaseReturns SET RefundAmount = 98500, DebtReductionAmount = 500 WHERE Id = '{returnId}'",
             $"UPDATE PurchaseReturnLines SET ReturnValue = 99500 WHERE ReturnId = '{returnId}'",
         })
@@ -323,9 +267,14 @@ public class PurchasingSqlServerTests
         // BR-PURCHASE-02: line amounts keep their dongs; line numbers are unique on a receipt (the seed lot code).
         Assert.Equal(500m, await host.QueryAsync(db => db.PurchaseReceiptLines.Where(l => l.ReceiptId == receipt.Id() && l.LineNumber == 2).Select(l => l.LineAmount).SingleAsync()));
         await AssertDuplicateAsync(host, $"UPDATE PurchaseReceiptLines SET LineNumber = 2 WHERE Id = '{lineId}'");
-        var second = await (await world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = receipt.Id(), Amount = 1000 })).ReadAsync(HttpStatusCode.Created);
-        await (await world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = receipt.Id(), Amount = 1000, DeduplicationKey = "k-1" })).ReadAsync(HttpStatusCode.Created);
-        await AssertDuplicateAsync(host, $"UPDATE SupplierPayments SET DeduplicationKey = 'k-1' WHERE Id = '{second.Id()}'");
+        var second = await world.PayAsync(1000);
+        var key = $"k-{NewCode()}";
+        await (await world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, Amount = 1000, DeduplicationKey = key })).ReadAsync(HttpStatusCode.Created);
+        await AssertDuplicateAsync(host, $"UPDATE SupplierPayments SET DeduplicationKey = '{key}' WHERE Id = '{second.Id()}'");
+        // BR-PURCHASE-08: no thousand rule on a payment any more, and payment codes are unique.
+        await (await world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, Amount = 1_501 })).ReadAsync(HttpStatusCode.Created);
+        var firstCode = await host.QueryAsync(db => db.SupplierPayments.Where(p => p.Id != second.Id() && p.SupplierId == world.SupplierId).Select(p => p.Code).FirstAsync());
+        await AssertDuplicateAsync(host, $"UPDATE SupplierPayments SET Code = '{firstCode}' WHERE Id = '{second.Id()}'");
         var otherSupplier = await world.Owner.CreateSupplierAsync();
         var phone = await host.QueryAsync(db => db.Suppliers.Where(s => s.Id == world.SupplierId).Select(s => s.PhoneNumber).SingleAsync());
         await AssertDuplicateAsync(host, $"UPDATE Suppliers SET PhoneNumber = '{phone}' WHERE Id = '{otherSupplier}'");
@@ -410,11 +359,11 @@ public class PurchasingSqlServerTests
         Assert.Equal(90_000m, (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{world.Raft.Id}")).Money("materialCost"));
 
         // 1,100,500 − 10,000 returned − 200,000 paid.
-        var debts = await (await owner.GetAsync("/api/suppliers/debts")).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(890_500m, debts.EnumerateArray().Single(r => r.GetProperty("supplierId").GetGuid() == world.SupplierId).Money("outstanding"));
-        var payments = await (await owner.GetAsync($"/api/supplier-payments?supplierId={world.SupplierId}&method=Cash&statusId={StatusIds.SupplierPayment.Recorded}&{period}"))
+        var debts = await (await owner.GetAsync($"/api/supplier-debts?search={await host.QueryAsync(db => db.Suppliers.Where(s => s.Id == world.SupplierId).Select(s => s.PhoneNumber).SingleAsync())}")).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal(890_500m, Assert.Single(debts.GetProperty("page").GetProperty("items").EnumerateArray()).Money("debt"));
+        var payments = await (await owner.GetAsync($"/api/supplier-payments?supplierId={world.SupplierId}&kind=Payment&method=Cash&statusId={StatusIds.SupplierPayment.Recorded}&{period}"))
             .ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(200_000m, payments.Money("totalAmount"));
+        Assert.Equal(200_000m, payments.Money("totalPaid"));
         Assert.Equal(StatusIds.PurchaseReceipt.Draft, (await owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{draft.Id()}")).GetProperty("statusId").GetInt32());
         var preview = await (await owner.GetAsync($"/api/purchase-receipts/{receipt.Id()}/cancel-preview")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(("Returned", 890_500m), (preview.GetProperty("blocked").GetProperty("kind").GetString(), preview.Money("debtBefore")));

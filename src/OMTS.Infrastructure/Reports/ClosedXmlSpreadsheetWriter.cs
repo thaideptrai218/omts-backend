@@ -1,3 +1,4 @@
+using System.Globalization;
 using ClosedXML.Excel;
 using OMTS.Application.Common.Interfaces.Reports;
 
@@ -8,6 +9,12 @@ internal sealed class ClosedXmlSpreadsheetWriter : ISpreadsheetWriter
 {
     private const string DateTimeFormat = "dd/MM/yyyy HH:mm";
     private const double MaxColumnWidth = 60;
+
+    /// <summary>
+    /// The first date Excel shows right: it has none before 1900 and counts an extra 29 February that year. ClosedXML throws
+    /// before year 100, which would lose the whole file for one mistyped document, so anything earlier is written as text.
+    /// </summary>
+    private static readonly DateTime FirstExcelDate = new(1900, 3, 1);
 
     public byte[] Write(IReadOnlyList<SpreadsheetSheet> sheets)
     {
@@ -46,6 +53,9 @@ internal sealed class ClosedXmlSpreadsheetWriter : ISpreadsheetWriter
         switch (value)
         {
             case null:
+                break;
+            case DateTime dateTime when dateTime < FirstExcelDate:
+                cell.Value = dateTime.ToString(DateTimeFormat, CultureInfo.InvariantCulture);
                 break;
             case DateTime dateTime:
                 cell.Value = dateTime;

@@ -109,7 +109,6 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal("Supplier", await complete.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         var direct = await world.Owner.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 100_000)) with { Complete = true });
         Assert.Equal("Supplier", await direct.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-        Assert.Equal(0, await factory.QueryAsync(db => db.SupplierPayments.CountAsync(p => p.ReceiptId == draft.Id())));
 
         await (await world.Owner.PostAsync($"/api/suppliers/{world.SupplierId}/reactivate", null)).ReadAsync(HttpStatusCode.OK);
         await (await world.Owner.PostAsync($"/api/purchase-receipts/{draft.Id()}/complete", null)).ReadAsync(HttpStatusCode.OK);
@@ -186,8 +185,8 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
 
         // Supplier debt is PURCHASE-04: the Zone Manager role does not hold SUPPLIER_PAYMENTS.
         var manager = await factory.ZoneManagerAsync(zone);
-        await (await manager.GetAsync($"/api/suppliers/{supplierId}/debt")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        await (await manager.GetAsync("/api/suppliers/debts")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await manager.GetAsync($"/api/supplier-debts/{supplierId}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await manager.GetAsync("/api/supplier-debts")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
     }
 
     [Fact]

@@ -10,6 +10,7 @@ using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Enums;
@@ -41,6 +42,7 @@ public sealed record PurchaseReturnView(
 public sealed class PurchaseReturnService(
     IPurchaseReceiptRepository receipts,
     PurchaseReceiptViews views,
+    SupplierDebtService debts,
     ICurrentUser currentUser,
     IStatusCatalog statusCatalog,
     AuditLogService audit,
@@ -137,7 +139,7 @@ public sealed class PurchaseReturnService(
             returnLines[i].ReturnValue = fitted[i];
         }
 
-        if (AmountError(refund, debtReduction, returnLines.Sum(l => l.ReturnValue), figures) is { } amountError)
+        if (AmountError(refund, debtReduction, returnLines.Sum(l => l.ReturnValue), await debts.SumsAsync(receipt.SupplierId, cancellationToken)) is { } amountError)
         {
             return amountError;
         }
@@ -223,8 +225,11 @@ public sealed class PurchaseReturnService(
 
     private static string Quantity(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 
-    /// <summary>Refund + debt reduction = total return value; debt reduction ≤ outstanding; refund ≤ net paid.</summary>
-    private static AppError? AmountError(decimal refund, decimal debtReduction, decimal total, ReceiptFigures figures)
+    /// <summary>
+    /// Refund + debt reduction = total return value; debt reduction ≤ the supplier debt; refund ≤ what the supplier holds.
+    /// Payments are not linked to receipts any more, so the limits are the supplier's (until P4 drops the split).
+    /// </summary>
+    private static AppError? AmountError(decimal refund, decimal debtReduction, decimal total, SupplierDebtSums supplier)
     {
         foreach (var (amount, field) in new[] { (refund, "Refund amount"), (debtReduction, "Debt reduction amount") })
         {
@@ -234,11 +239,18 @@ public sealed class PurchaseReturnService(
             }
         }
 
+        var (debtLimit, refundLimit) = (ThousandsLimit(supplier.Debt), ThousandsLimit(supplier.Credit));
         return refund + debtReduction != total ? PurchaseReceiptValidator.ExceedsLimit("Refund amount + Debt reduction amount", total)
-            : debtReduction > figures.Outstanding ? PurchaseReceiptValidator.ExceedsLimit("Debt reduction amount", figures.Outstanding)
-            : refund > figures.NetPaid ? PurchaseReceiptValidator.ExceedsLimit("Refund amount", figures.NetPaid)
+            : debtReduction > debtLimit ? PurchaseReceiptValidator.ExceedsLimit("Debt reduction amount", debtLimit)
+            : refund > refundLimit ? PurchaseReceiptValidator.ExceedsLimit("Refund amount", refundLimit)
             : null;
     }
+
+    /// <summary>
+    /// A limit for amounts in whole thousands, now that debts and payments keep their dongs: up to the next thousand, so a
+    /// return worth 1,000 of a receipt of 1,497 with 997 paid still fits (500 of debt + 997 held can add up to 1,000).
+    /// </summary>
+    private static decimal ThousandsLimit(decimal limit) => Math.Max(0, Math.Ceiling(limit / PurchaseMoney.Thousand) * PurchaseMoney.Thousand);
 
     private async Task SaveWithCodeAsync(PurchaseReturn purchaseReturn, Domain.Entities.Platform.AuditEvent recorded, CancellationToken cancellationToken)
     {
