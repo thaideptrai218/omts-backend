@@ -148,11 +148,11 @@ public class AuditSearchSqlServerTests
     [SqlServerFact]
     public async Task The_migration_names_the_zone_licenses_of_stored_notifications_as_the_audit_log_does()
     {
-        const string notificationsV2 = "20261104072127_NotificationsV2";
+        const string beforeAuditSearch = "20261104174337_SalesCatalogueV2";
         await using var database = SqlServerTestDatabase.Create();
         await using var db = database.CreateContext();
         var migrator = db.GetService<IMigrator>();
-        await migrator.MigrateAsync(notificationsV2);
+        await migrator.MigrateAsync(beforeAuditSearch);
         var owner = new Account { Username = NewCode(), DisplayName = "Owner", SubjectType = SubjectType.CooperativeOwner };
         db.Notifications.AddRange(
             new Notification { RecipientAccount = owner, Type = "ZONE_LICENSE_EXPIRY", Title = "License", RelatedRecordType = "ZoneComplianceDocument", RelatedRecordId = Guid.NewGuid(), CreatedAt = DateTimeOffset.UtcNow },
@@ -162,7 +162,7 @@ public class AuditSearchSqlServerTests
         await migrator.MigrateAsync();
         Assert.Equal(["WaterMeasurement", "ZoneLicense"], await RelatedRecordTypesAsync(db));
 
-        await migrator.MigrateAsync(notificationsV2);
+        await migrator.MigrateAsync(beforeAuditSearch);
         Assert.Equal(["WaterMeasurement", "ZoneComplianceDocument"], await RelatedRecordTypesAsync(db));
     }
 

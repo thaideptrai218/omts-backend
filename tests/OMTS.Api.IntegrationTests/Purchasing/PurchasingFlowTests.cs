@@ -23,7 +23,7 @@ public class PurchasingFlowTests(AuthApiFactory factory) : IClassFixture<AuthApi
         var supplierId = await CreateSupplierAsync(owner);
         var seedA = await CreateItemAsync(owner, "Seed");
         var seedB = await CreateItemAsync(owner, "Seed");
-        var floats = await CreateItemAsync(owner, "RaftMaterial");
+        var floats = await CreateItemAsync(owner, "Material");
 
         // Subtotal 2 × 1,000,000 + 500,000 = 2,500,000; discount 100,000; paid now 400,000.
         var created = await owner.PostAsJsonAsync("/api/purchase-receipts", new
@@ -145,16 +145,16 @@ public class PurchasingFlowTests(AuthApiFactory factory) : IClassFixture<AuthApi
         var owner = await OwnerAsync();
         var (zone, _) = await ZoneWithRaftAsync();
         var code = NewCode();
-        var created = await owner.PostAsJsonAsync("/api/farming-input-items", new { code, name = "Float 40 L", group = "RaftMaterial", unit = "piece" });
+        var created = await owner.PostAsJsonAsync("/api/farming-input-items", new { code, name = "Float 40 L", group = "Material", unit = "piece" });
         var item = await created.Content.ReadFromJsonAsync<JsonElement>();
-        var duplicate = await owner.PostAsJsonAsync("/api/farming-input-items", new { code = code.ToUpperInvariant(), name = "Again", group = "RaftMaterial", unit = "piece" });
+        var duplicate = await owner.PostAsJsonAsync("/api/farming-input-items", new { code = code.ToUpperInvariant(), name = "Again", group = "Material", unit = "piece" });
         Assert.Equal("MSG-GEN-02", await duplicate.ErrorCodeAsync());
 
         var supplierId = await CreateSupplierAsync(owner);
         await CompletedReceiptAsync(owner, supplierId, zone.Id, item.GetProperty("id").GetGuid(), paidNow: 0, raftNeeded: true);
         var changeUnit = await owner.PutAsJsonAsync($"/api/farming-input-items/{item.GetProperty("id").GetGuid()}", new
         {
-            code, name = "Float 40 L", group = "RaftMaterial", unit = "kg", rowVersion = item.GetProperty("rowVersion").GetString(),
+            code, name = "Float 40 L", group = "Material", unit = "kg", rowVersion = item.GetProperty("rowVersion").GetString(),
         });
         Assert.Equal("MSG-GEN-01", await changeUnit.ErrorCodeAsync());
 
@@ -211,7 +211,8 @@ public class PurchasingFlowTests(AuthApiFactory factory) : IClassFixture<AuthApi
 
     private static async Task<Guid> CreateItemAsync(HttpClient owner, string group)
     {
-        var response = await owner.PostAsJsonAsync("/api/farming-input-items", new { code = NewCode(), name = $"{group} item", group, unit = "kg" });
+        var code = NewCode();
+        var response = await owner.PostAsJsonAsync("/api/farming-input-items", new { code, name = $"{group} item {code}", group, unit = "kg" });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }

@@ -8,6 +8,14 @@ using OMTS.Application;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Infrastructure;
 
+if (EnvironmentVariablesConflict.Refusal(
+        Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
+        Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")) is { } environmentConflict)
+{
+    Console.Error.WriteLine(environmentConflict);
+    return 1;
+}
+
 var builder = WebApplication.CreateBuilder(BootstrapCommand.HostArguments(args));
 
 builder.Services.AddApplication();

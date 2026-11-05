@@ -14,11 +14,12 @@ namespace OMTS.Api.IntegrationTests.Accounts;
 /// <summary>ACS-02 phone step, ACS-03 recovery and ACS-04 password change.</summary>
 public class PhoneAndPasswordTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
+    // BR-ACCOUNT-04: the link stays and the trader's own profile gets the number, whatever other profiles have it.
     [Theory]
-    [InlineData(0, false)]
-    [InlineData(1, false)]
-    [InlineData(3, true)]
-    public async Task Trader_phone_verification_merges_exactly_one_offline_profile(int offlineProfiles, bool hidden)
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(3)]
+    public async Task Trader_phone_verification_updates_the_own_profile_and_merges_nothing(int offlineProfiles)
     {
         var cooperative = await factory.EnsureCooperativeAsync();
         var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader, a => { a.PhoneNumber = null; a.PhoneVerifiedAt = null; });
@@ -36,9 +37,13 @@ public class PhoneAndPasswordTests(AuthApiFactory factory) : IClassFixture<AuthA
         var confirmed = await client.PostAsJsonAsync("/api/me/phone-verification/confirm", new { verificationToken = token });
 
         Assert.Equal(HttpStatusCode.OK, confirmed.StatusCode);
-        Assert.Equal(hidden, (await confirmed.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("oldDocumentsHidden").GetBoolean());
-        var merged = await factory.QueryAsync(db => db.Customers.CountAsync(c => c.MergedIntoCustomerId == own.Id));
-        Assert.Equal(offlineProfiles == 1 ? 1 : 0, merged);
+        var body = await confirmed.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(body.TryGetProperty("oldDocumentsHidden", out _));
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("noticeCode").ValueKind);
+        var stored = await factory.QueryAsync(db => db.Customers.AsNoTracking().Where(c => c.PhoneNumber == phone).ToListAsync());
+        Assert.Equal(offlineProfiles + 1, stored.Count);
+        Assert.All(stored, c => Assert.Null(c.MergedIntoCustomerId));
+        Assert.Equal(own.Id, stored.Single(c => c.AccountId == trader.Id).Id);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/me/permissions")).StatusCode);
     }
 
@@ -138,15 +143,17 @@ public class PhoneAndPasswordTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
     }
 
-    // ACS-02 2c: with a temporary password only the change is open; afterwards everything is.
+    // ACCOUNT-02.2, ACCOUNT-04.1: with a temporary password only the change is open and it asks for no current
+    // password; afterwards everything is.
     [Fact]
-    public async Task Forced_change_after_a_temporary_password_opens_the_other_functions()
+    public async Task Forced_change_after_a_temporary_password_needs_no_proof_and_opens_the_other_functions()
     {
         var owner = await factory.AddAccountAsync(NewCode(), Password, configure: a => { a.MustChangePassword = true; a.TemporaryPasswordIssuedAt = DateTimeOffset.UtcNow; });
         var client = await factory.LoginAsync(owner.Username);
         Assert.Equal("PASSWORD_CHANGE_REQUIRED", await (await client.GetAsync("/api/me/permissions")).ErrorCodeAsync());
 
-        var changed = await (await client.PostAsJsonAsync("/api/me/password", new { currentPassword = Password, newPassword = "NewPass2026", passwordConfirmation = "NewPass2026" }))
+        var newPassword = NewPassword();
+        var changed = await (await client.PostAsJsonAsync("/api/me/password", new { newPassword, passwordConfirmation = newPassword }))
             .Content.ReadFromJsonAsync<JsonElement>();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", changed.GetProperty("tokens").GetProperty("accessToken").GetString());
 

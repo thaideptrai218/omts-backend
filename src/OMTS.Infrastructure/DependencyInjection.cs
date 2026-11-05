@@ -66,6 +66,8 @@ public static class DependencyInjection
         services.AddScoped<IZoneRecipientQuery, ZoneRecipientQuery>();
         services.AddScoped<IVerificationCodeRepository, VerificationCodeRepository>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<ICustomerReferences, CustomerReferences>();
+        services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<ICooperativeRepository, CooperativeRepository>();
         services.AddScoped<IPushDeviceRepository, PushDeviceRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
@@ -110,7 +112,7 @@ public static class DependencyInjection
         services.AddSingleton<EmploymentEndJob>();
         services.AddHostedService<EmploymentEndHostedService>();
 
-        // Raft photo and license files no record points to (cooperative logos are never touched)
+        // Raft photos, license files, cover photos and certificate files no record points to (cooperative logos are never touched)
         services.AddOptions<OrphanFileCleanupOptions>()
             .Bind(configuration.GetSection(OrphanFileCleanupOptions.SectionName))
             .Validate(o => o.GracePeriod >= OrphanFileCleanupOptions.MinimumGracePeriod, $"{OrphanFileCleanupOptions.SectionName}:GracePeriod must be at least 01:00:00.")

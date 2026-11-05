@@ -115,7 +115,11 @@ public static class UserMessages
 
     // ---- MSG-ACCOUNT ----
 
-    /// <summary>MSG-ACCOUNT-02: the trader account got a new customer profile (several offline profiles share the number).</summary>
+    /// <summary>MSG-ACCOUNT-01: the trader account is linked to the existing customer profile (ACCOUNT-01 step 7).</summary>
+    public static readonly UserMessage RegisteredWithExistingCustomerProfile = new(
+        Account01, "Your account has been created. Please log in with your phone number or email and your password.");
+
+    /// <summary>MSG-ACCOUNT-02: the trader account got a new customer profile, as no profile or several matched (ACCOUNT-01.1).</summary>
     public static readonly UserMessage RegisteredWithNewCustomerProfile = new(
         Account02,
         "Your account has been created. Invoices from before today will appear in your account after the cooperative adds them. Please log in.",
@@ -137,10 +141,11 @@ public static class UserMessages
 
     /// <summary>
     /// MSG-ACCOUNT-06: login is paused for <see cref="Account.TemporaryLockDuration"/> after too many failed
-    /// attempts. The retry time is the length of the pause, the same for every identifier (BR-ACCOUNT-05).
+    /// attempts (BR-ACCOUNT-05).
     /// </summary>
-    public static readonly UserMessage TooManyLoginAttempts = new(
-        Account06, $"Too many failed login attempts. Please try again after {Duration(Account.TemporaryLockDuration)}.", Legacy.Msg69);
+    /// <param name="waitSeconds">What is left of the pause: {retry_time} in the text.</param>
+    public static UserMessage TooManyLoginAttempts(int waitSeconds) => new(
+        Account06, $"Too many failed login attempts. Please try again after {Duration(TimeSpan.FromSeconds(waitSeconds))}.", Legacy.Msg69);
 
     /// <summary>MSG-ACCOUNT-07: the account is Locked or has no effective zone–role pair.</summary>
     public static readonly UserMessage AccountUnusable = new(
@@ -186,15 +191,13 @@ public static class UserMessages
 
     /// <summary>MSG-ACCOUNT-17: a code was entered wrongly too many times and is cancelled.</summary>
     public static readonly UserMessage TooManyWrongCodes = new(
-        Account17, "You have entered a wrong code too many times. Please start again to get a new code.", Legacy.Msg69);
+        Account17, "You have entered a wrong code too many times. Please start again to get a new code.", Legacy.Msg16);
 
     /// <summary>MSG-ACCOUNT-18: too many codes were asked for (BR-ACCOUNT-09).</summary>
-    /// <param name="waitSeconds">0 when this request has no send left: a new request must be started.</param>
+    /// <param name="waitSeconds">The real wait until a new code can be sent: {retry_time} in the text.</param>
     public static UserMessage TooManyCodeRequests(int waitSeconds) => new(
         Account18,
-        waitSeconds > 0
-            ? $"You have asked for too many codes. Please try again after {Duration(TimeSpan.FromSeconds(waitSeconds))}."
-            : "You have asked for too many codes for this request. Please start again to get a new code.",
+        $"You have asked for too many codes. Please try again after {Duration(TimeSpan.FromSeconds(waitSeconds))}.",
         Legacy.TooManyRequests);
 
     /// <summary>MSG-ACCOUNT-19: a verification code has been sent to the partly hidden address.</summary>
@@ -252,6 +255,21 @@ public static class UserMessages
         $"This phone number belongs to {employeeName}. Each employee needs their own phone number for the employee app: enter another number, or leave it empty.",
         Legacy.Msg03);
 
+    // ---- MSG-SALE ----
+
+    /// <summary>MSG-SALE-04 (SALE-04.3): a Zone Manager merges two profiles after confirming that the Owner agreed.</summary>
+    /// <param name="mergedDebt">The amount as shown, e.g. "1,000,000".</param>
+    public static UserMessage CustomerMergeNeedsOwnerAgreement(
+        string mergedName, string mergedPhone, string mergedDebt, string keptName, string keptPhone, string keptDebt) => new(
+        Sale04,
+        $"Has the Cooperative Owner agreed to merge {mergedName} ({mergedPhone}, debt {mergedDebt} VND) into {keptName} ({keptPhone}, debt {keptDebt} VND)? The merge cannot be undone.");
+
+    /// <summary>MSG-SALE-05 (SALE-04.3.E1): the profile to merge has a trader account.</summary>
+    /// <param name="bothLinked">The kept profile has one too, so the two are not merged at all.</param>
+    public static UserMessage CustomerMergeRefused(string mergedName, string keptName, bool bothLinked) => new(
+        Sale05,
+        $"{mergedName} cannot be merged into {keptName}: {(bothLinked ? "both have a trader account" : $"keep {mergedName} instead, so that its trader account keeps its data")}.");
+
     // ---- Old codes still sent as the code (Legacy.KeptAsCode) ----
 
     /// <summary>MSG05: an export file could not be generated, or a stored file could not be read.</summary>
@@ -273,9 +291,6 @@ public static class UserMessages
     public static readonly UserMessage NotThousands = new(Legacy.Msg41, "The amount must be a multiple of 1,000 VND.");
 
     public static UserMessage ExceedsLimit(string field, string limit) => new(Legacy.Msg45, $"{field} exceeds the allowed limit ({limit}).");
-
-    public static readonly UserMessage OldDocumentsHidden = new(
-        Legacy.Msg57, "Old documents are temporarily hidden until identity verification is complete.");
 
     /// <summary>MSG58 (NFR-13).</summary>
     public static UserMessage SomeoneIsEditing(string userName, string time) => new(

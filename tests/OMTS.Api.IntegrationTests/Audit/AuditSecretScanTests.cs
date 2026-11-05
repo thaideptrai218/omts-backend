@@ -39,16 +39,11 @@ public class AuditSecretScanTests(AuthApiFactory factory) : IClassFixture<AuthAp
         var temporary = (await ReadAsync(await owner.PostAsync($"/api/accounts/{staffId}/reset-password", null))).GetProperty("temporaryPassword").GetString()!;
         secrets.Add(temporary);
 
-        // ACCOUNT-02 and ACCOUNT-04: log in with the temporary password and change it.
+        // ACCOUNT-02: log in with the temporary password.
         var staff = factory.CreateClient();
         var tokens = await LoginTokensAsync(staff, username, temporary);
         AddTokens(secrets, tokens);
         staff.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.GetProperty("accessToken").GetString());
-        var changedPassword = NewPassword();
-        secrets.Add(changedPassword);
-        var changed = await ReadAsync(await staff.PostAsJsonAsync("/api/me/password", new { currentPassword = temporary, newPassword = changedPassword, passwordConfirmation = changedPassword }));
-        AddTokens(secrets, changed.GetProperty("tokens"));
-        staff.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", changed.GetProperty("tokens").GetProperty("accessToken").GetString());
 
         // ACCOUNT-02.1: verify the phone number (SMS code, verification token).
         var verificationId = await VerificationIdAsync(await staff.PostAsJsonAsync("/api/me/phone-verification", new { }));
@@ -56,6 +51,13 @@ public class AuditSecretScanTests(AuthApiFactory factory) : IClassFixture<AuthAp
         var phoneToken = await VerifyAsync(staff, verificationId, factory.LastSmsCode(phone));
         secrets.Add(phoneToken);
         await ReadAsync(await staff.PostAsJsonAsync("/api/me/phone-verification/confirm", new { verificationToken = phoneToken }));
+
+        // ACCOUNT-02 and ACCOUNT-04: the temporary password is changed after the phone number.
+        var changedPassword = NewPassword();
+        secrets.Add(changedPassword);
+        var changed = await ReadAsync(await staff.PostAsJsonAsync("/api/me/password", new { currentPassword = temporary, newPassword = changedPassword, passwordConfirmation = changedPassword }));
+        AddTokens(secrets, changed.GetProperty("tokens"));
+        staff.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", changed.GetProperty("tokens").GetProperty("accessToken").GetString());
 
         // ACCOUNT-03: recover the password with an SMS code.
         var anonymous = factory.CreateClient();

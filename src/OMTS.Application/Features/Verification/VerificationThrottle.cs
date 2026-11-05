@@ -20,12 +20,16 @@ public sealed class VerificationLimitOptions
 }
 
 /// <summary>
-/// Limits of ACS-06 that hold across requests (NFR-01), checked before any code is sent:
+/// Limits of ACCOUNT-06, checked before any code is sent. The rule of BR-ACCOUNT-09:
 /// <list type="bullet">
-/// <item>per subject (the account, or the target before registration) and purpose: one send per 60 seconds,
-/// 5 requests and 10 wrong codes per hour, whatever the channel or target;</item>
-/// <item>per target across accounts and purposes: 10 sends per hour, so a number or an address cannot be
-/// flooded through many (e.g. email-only trader) accounts;</item>
+/// <item>one purpose and one phone number or email: at most 3 codes in any hour, at least 60 seconds apart, whoever
+/// asks and whichever request carries them.</item>
+/// </list>
+/// Guards against abuse that the rule does not cover (NFR-01); a normal user does not reach them:
+/// <list type="bullet">
+/// <item>per subject (the account, or the target before registration) and purpose: one new request per 60 seconds and
+/// 5 per hour, whatever the channel or target;</item>
+/// <item>per target across accounts and purposes: 10 sends per hour;</item>
 /// <item>system-wide: <see cref="VerificationLimitOptions.DailySmsLimit"/> SMS per 24 hours.</item>
 /// </list>
 /// </summary>
@@ -39,45 +43,85 @@ public sealed class VerificationThrottle(
 
     /// <summary>Null when a new request may be opened; <paramref name="recent"/> are the subject's requests of the last hour.</summary>
     public async Task<AppError?> CheckStartAsync(
-        IReadOnlyList<VerificationCode> recent, VerificationChannel channel, string target, DateTimeOffset now, CancellationToken cancellationToken)
+        IReadOnlyList<VerificationCode> recent, VerificationPurpose purpose, VerificationChannel channel, string target, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        if (recent.Sum(c => c.FailedAttempts) >= VerificationService.MaxFailedAttemptsPerWindow)
+        if (await CheckCodeLimitAsync(purpose, target, now, alreadySaved: 0, cancellationToken) is { } limited)
         {
-            var oldestFailure = recent.Where(c => c.FailedAttempts > 0).Min(c => c.CreatedAt);
-            return VerificationErrors.WrongCodeBudgetSpent(oldestFailure + VerificationService.BudgetWindow, now);
+            return limited;
         }
 
         if (recent.FirstOrDefault(c => now < c.NextResendAt) is { } latest)
         {
-            return VerificationErrors.WaitBeforeNewRequest(latest, now);
+            return VerificationErrors.WaitBeforeNextCode(latest.NextResendAt, now, await CodesLeftAsync(purpose, target, now, cancellationToken));
         }
 
         if (recent.Count >= VerificationService.MaxRequestsPerWindow)
         {
-            return VerificationErrors.OutOfRequests(recent[^1].CreatedAt + VerificationService.BudgetWindow, now);
+            return VerificationErrors.WaitBeforeNextCode(recent[^1].CreatedAt + VerificationService.BudgetWindow, now, await CodesLeftAsync(purpose, target, now, cancellationToken));
         }
 
-        return await CheckSendAsync(channel, target, now, cancellationToken);
+        return await CheckCountsAsync(purpose, channel, target, now, alreadySaved: 0, cancellationToken);
     }
 
-    /// <summary>Null when one more code may be sent to the target (first send or resend).</summary>
-    public Task<AppError?> CheckSendAsync(VerificationChannel channel, string target, DateTimeOffset now, CancellationToken cancellationToken) =>
-        CheckCountsAsync(channel, target, now, alreadySaved: 0, cancellationToken);
+    /// <summary>Null when one more code of this request may be sent.</summary>
+    public async Task<AppError?> CheckResendAsync(
+        VerificationPurpose purpose, VerificationChannel channel, string target, DateTimeOffset now, CancellationToken cancellationToken) =>
+        await CheckCodeLimitAsync(purpose, target, now, alreadySaved: 0, cancellationToken)
+            ?? await CheckCountsAsync(purpose, channel, target, now, alreadySaved: 0, cancellationToken);
 
     /// <summary>
     /// The same limits once this send is saved (counted among the sends): null when it still fits. Parallel
-    /// sends that all passed <see cref="CheckSendAsync"/> see each other here, and the ones over the limit
-    /// back off without sending.
+    /// sends that all passed the first check see each other here, and the ones over the limit back off without
+    /// sending.
     /// </summary>
-    public Task<AppError?> CheckSavedSendAsync(VerificationChannel channel, string target, DateTimeOffset now, CancellationToken cancellationToken) =>
-        CheckCountsAsync(channel, target, now, alreadySaved: 1, cancellationToken);
+    public async Task<AppError?> CheckSavedSendAsync(
+        VerificationPurpose purpose, VerificationChannel channel, string target, DateTimeOffset now, CancellationToken cancellationToken) =>
+        await CheckCodeLimitAsync(purpose, target, now, alreadySaved: 1, cancellationToken)
+            ?? await CheckCountsAsync(purpose, channel, target, now, alreadySaved: 1, cancellationToken);
+
+    /// <summary>Codes this purpose and target can still get in the current hour.</summary>
+    public async Task<int> CodesLeftAsync(VerificationPurpose purpose, string target, DateTimeOffset now, CancellationToken cancellationToken) =>
+        CodesLeft((await SendTimesAsync(purpose, target, now, cancellationToken)).Count);
+
+    /// <summary>BR-ACCOUNT-09: the wait until the code limit of the hour or the 60 seconds between two codes allows a new one.</summary>
+    /// <param name="alreadySaved">1 when the send being checked is already among the saved ones.</param>
+    private async Task<AppError?> CheckCodeLimitAsync(
+        VerificationPurpose purpose, string target, DateTimeOffset now, int alreadySaved, CancellationToken cancellationToken)
+    {
+        var earlier = (await SendTimesAsync(purpose, target, now, cancellationToken)).ToList();
+        if (alreadySaved == 1 && earlier.LastIndexOf(now) is >= 0 and var own)
+        {
+            earlier.RemoveAt(own);
+        }
+
+        var left = CodesLeft(earlier.Count);
+        if (left == 0)
+        {
+            // The hour counts from the oldest send that has to leave for a new code to fit.
+            var oldest = earlier[earlier.Count - VerificationCode.MaxCodesPerHour];
+            return VerificationErrors.WaitBeforeNextCode(oldest + VerificationService.BudgetWindow, now, left);
+        }
+
+        return earlier.Count > 0 && earlier[^1] + VerificationCode.ResendInterval > now
+            ? VerificationErrors.WaitBeforeNextCode(earlier[^1] + VerificationCode.ResendInterval, now, left)
+            : null;
+    }
+
+    private Task<IReadOnlyList<DateTimeOffset>> SendTimesAsync(VerificationPurpose purpose, string target, DateTimeOffset now, CancellationToken cancellationToken) =>
+        codes.GetSendTimesAsync(purpose, target, now - VerificationService.BudgetWindow, cancellationToken);
+
+    private static int CodesLeft(int sent) => Math.Max(0, VerificationCode.MaxCodesPerHour - sent);
 
     private async Task<AppError?> CheckCountsAsync(
-        VerificationChannel channel, string target, DateTimeOffset now, int alreadySaved, CancellationToken cancellationToken)
+        VerificationPurpose purpose, VerificationChannel channel, string target, DateTimeOffset now, int alreadySaved, CancellationToken cancellationToken)
     {
-        if (await codes.CountSendsToTargetAsync(target, now - VerificationService.BudgetWindow, cancellationToken) - alreadySaved >= MaxSendsPerTargetPerWindow)
+        // Newest last, so the send being checked is at the end: the hour counts from the oldest send that has to leave.
+        var sends = await codes.GetSendTimesToTargetAsync(target, now - VerificationService.BudgetWindow, cancellationToken);
+        if (sends.Count - alreadySaved >= MaxSendsPerTargetPerWindow)
         {
-            return VerificationErrors.OutOfRequests(now + VerificationService.BudgetWindow, now);
+            var oldest = sends[sends.Count - alreadySaved - MaxSendsPerTargetPerWindow];
+            var codesLeft = CodesLeft((await SendTimesAsync(purpose, target, now, cancellationToken)).Count - alreadySaved);
+            return VerificationErrors.WaitBeforeNextCode(oldest + VerificationService.BudgetWindow, now, codesLeft);
         }
 
         if (channel != VerificationChannel.Sms)

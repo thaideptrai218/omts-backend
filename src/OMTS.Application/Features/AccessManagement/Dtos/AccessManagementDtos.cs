@@ -24,6 +24,7 @@ public sealed record UpdateStaffAccountRequest(string DisplayName, string Userna
 
 public sealed record ReasonRequest(string? Reason);
 
+/// <param name="Pairs">The Effective zone–role pairs of the account (ACCOUNT-09 step 1); revoked ones are in FARM-05.</param>
 public sealed record StaffAccountView(
     Guid Id,
     string DisplayName,
@@ -35,10 +36,16 @@ public sealed record StaffAccountView(
     string Status,
     bool MustChangePassword,
     Guid? EmployeeId,
+    IReadOnlyList<StaffAccountPairView> Pairs,
     string RowVersion);
 
-/// <summary>Returned once, never stored in clear, never sent by SMS or email (ACS-09).</summary>
-public sealed record StaffAccountWithPassword(StaffAccountView Account, string TemporaryPassword, DateTimeOffset TemporaryPasswordExpiresAt);
+/// <summary>An Effective zone–role pair in the staff accounts list.</summary>
+/// <param name="Role">Code of the fixed role: ZONE_MANAGER or ACCOUNTANT.</param>
+public sealed record StaffAccountPairView(Guid Id, Guid? ZoneId, string? ZoneName, bool AllZones, string Role, string RoleName);
+
+/// <summary>Returned once, never stored in clear, never sent by SMS or email (ACCOUNT-09, BR-ACCOUNT-06).</summary>
+/// <param name="MessageCode">MSG-ACCOUNT-23, which clients fill in with the username, this password and its expiry.</param>
+public sealed record StaffAccountWithPassword(StaffAccountView Account, string TemporaryPassword, DateTimeOffset TemporaryPasswordExpiresAt, string MessageCode);
 
 public sealed record Paged<T>(IReadOnlyList<T> Items, int Page, int PageSize, int Total);
 

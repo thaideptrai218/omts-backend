@@ -8,7 +8,7 @@ using OMTS.Application.Features.Authorization.Dtos;
 
 namespace OMTS.Api.Controllers;
 
-/// <summary>ACS-09 staff accounts and FARM-05 zone–role grants; Cooperative Owner only.</summary>
+/// <summary>ACCOUNT-09 staff accounts and FARM-05 zone–role grants; Cooperative Owner only.</summary>
 [ApiController]
 [Route("api/accounts")]
 [Authorize]
@@ -25,7 +25,11 @@ public sealed class AccountsController(StaffAccountService staffAccounts, Access
     public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken) =>
         (await staffAccounts.GetAsync(id, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Creates a staff account with at least one zone–role row; the temporary password is returned once.</summary>
+    /// <summary>
+    /// Creates a staff account, with zone–role rows or without: until it has a pair it cannot log in (MSG-ACCOUNT-07). The
+    /// temporary password is returned once (MSG-ACCOUNT-23). A username, phone number or email of another account, verified
+    /// or not, answers MSG-ACCOUNT-09 naming the field.
+    /// </summary>
     [HttpPost]
     [ProducesResponseType<StaffAccountWithPassword>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Create(CreateStaffAccountRequest request, CancellationToken cancellationToken) =>
@@ -46,7 +50,7 @@ public sealed class AccountsController(StaffAccountService staffAccounts, Access
     public async Task<IActionResult> Unlock(Guid id, ReasonRequest request, CancellationToken cancellationToken) =>
         (await staffAccounts.UnlockAsync(id, request, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Issues a new temporary password (returned once, never sent) and ends every session.</summary>
+    /// <summary>Issues a new temporary password to an Active account (returned once, never sent; MSG-ACCOUNT-23) and ends every session.</summary>
     [HttpPost("{id:guid}/reset-password")]
     [ProducesResponseType<StaffAccountWithPassword>(StatusCodes.Status200OK)]
     public async Task<IActionResult> ResetPassword(Guid id, CancellationToken cancellationToken) =>
