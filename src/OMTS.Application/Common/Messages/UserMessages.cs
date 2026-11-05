@@ -240,6 +240,21 @@ public static class UserMessages
         $"This phone number belongs to {employeeName}. Each employee needs their own phone number for the employee app: enter another number, or leave it empty.",
         Legacy.Msg03);
 
+    // ---- MSG-SALE ----
+
+    /// <summary>MSG-SALE-04 (SALE-04.3): a Zone Manager merges two profiles after confirming that the Owner agreed.</summary>
+    /// <param name="mergedDebt">The amount as shown, e.g. "1,000,000".</param>
+    public static UserMessage CustomerMergeNeedsOwnerAgreement(
+        string mergedName, string mergedPhone, string mergedDebt, string keptName, string keptPhone, string keptDebt) => new(
+        Sale04,
+        $"Has the Cooperative Owner agreed to merge {mergedName} ({mergedPhone}, debt {mergedDebt} VND) into {keptName} ({keptPhone}, debt {keptDebt} VND)? The merge cannot be undone.");
+
+    /// <summary>MSG-SALE-05 (SALE-04.3.E1): the profile to merge has a trader account.</summary>
+    /// <param name="bothLinked">The kept profile has one too, so the two are not merged at all.</param>
+    public static UserMessage CustomerMergeRefused(string mergedName, string keptName, bool bothLinked) => new(
+        Sale05,
+        $"{mergedName} cannot be merged into {keptName}: {(bothLinked ? "both have a trader account" : $"keep {mergedName} instead, so that its trader account keeps its data")}.");
+
     // ---- Old codes still sent as the code (Legacy.KeptAsCode) ----
 
     /// <summary>MSG05: an export file could not be generated, or a stored file could not be read.</summary>
