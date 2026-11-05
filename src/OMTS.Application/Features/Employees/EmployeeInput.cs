@@ -1,13 +1,16 @@
 using System.Text.RegularExpressions;
 using OMTS.Application.Common.Validation;
 using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Employees;
 
-/// <summary>Validated, normalised employee profile fields (LAB-01 data rules).</summary>
+/// <summary>Validated, normalised employee profile fields (LABOR-01 step 4, BR-LABOR-01).</summary>
 public sealed partial record EmployeeInput(
     string FullName,
-    string PhoneNumber,
+    string? PhoneNumber,
+    EmployeeType? Type,
+    DateOnly? TypeFrom,
     DateOnly? Birthday,
     string? Address,
     string? Area,
@@ -15,10 +18,12 @@ public sealed partial record EmployeeInput(
     string? OtherInformation,
     string? Notes,
     IReadOnlyList<Guid> WorkingZoneIds,
+    IReadOnlyList<Guid> JobTypeIds,
     BankAccountInfo? BankAccount)
 {
     /// <summary>The normalised input, or the names of every invalid field.</summary>
-    public static (EmployeeInput? Input, List<string> Invalid) From(SaveEmployeeRequest request, DateOnly today)
+    /// <param name="adding">A new employee needs a type and a working zone; an edit may leave the type out, and its zones are checked with those it keeps.</param>
+    public static (EmployeeInput? Input, List<string> Invalid) From(SaveEmployeeRequest request, DateOnly today, bool adding)
     {
         var invalid = new List<string>();
         var fullName = request.FullName?.Trim() ?? string.Empty;
@@ -27,10 +32,14 @@ public sealed partial record EmployeeInput(
             invalid.Add("Full name");
         }
 
-        var phone = PhoneNumbers.Normalize(request.PhoneNumber);
-        if (phone is null)
+        if (!TryPhone(request.PhoneNumber, out var phone))
         {
             invalid.Add("Phone number");
+        }
+
+        if (adding ? request.EmployeeType is null : request.EmployeeType is null && request.EmployeeTypeFrom is not null)
+        {
+            invalid.Add("Employee type");
         }
 
         if (request.Birthday > today)
@@ -45,15 +54,29 @@ public sealed partial record EmployeeInput(
         var notes = Optional(request.Notes, 1000, "Notes", invalid);
 
         var zones = request.WorkingZoneIds ?? [];
-        if (zones.Distinct().Count() != zones.Count)
+        if (zones.Distinct().Count() != zones.Count || (adding && zones.Count == 0))
         {
             invalid.Add("Working zones");
         }
 
+        var jobTypes = request.JobTypeIds ?? [];
+        if (jobTypes.Distinct().Count() != jobTypes.Count)
+        {
+            invalid.Add("Job types");
+        }
+
         var bank = Bank(request.BankAccount, invalid);
+        var typeFrom = request.EmployeeTypeFrom ?? (adding ? today : null);
         return invalid.Count > 0
             ? (null, invalid)
-            : (new EmployeeInput(fullName, phone!, request.Birthday, address, area, ward, other, notes, zones, bank), invalid);
+            : (new EmployeeInput(fullName, phone, request.EmployeeType, typeFrom, request.Birthday, address, area, ward, other, notes, zones, jobTypes, bank), invalid);
+    }
+
+    /// <summary>A phone number is optional: empty gives none, anything else must be a valid number.</summary>
+    public static bool TryPhone(string? input, out string? phone)
+    {
+        phone = PhoneNumbers.Normalize(input);
+        return phone is not null || string.IsNullOrWhiteSpace(input);
     }
 
     /// <summary>"0123456789" → "******6789": bank numbers appear masked in the audit log.</summary>

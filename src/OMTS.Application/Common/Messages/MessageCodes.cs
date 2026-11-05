@@ -48,13 +48,16 @@ public static class MessageCodes
     public const string Purchase03 = "MSG-PURCHASE-03";
     public const string Purchase09 = "MSG-PURCHASE-09";
 
+    public const string Labor01 = "MSG-LABOR-01";
+    public const string Labor02 = "MSG-LABOR-02";
     public const string Labor03 = "MSG-LABOR-03";
 
     /// <summary>
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-22, the
-    /// record of a notification or of an audit event no longer exists (ACCOUNT-08 and ACCOUNT-10 are new in OMTS-216).
+    /// record of a notification or of an audit event no longer exists (ACCOUNT-08 and ACCOUNT-10 are new in OMTS-216);
+    /// MSG-LABOR-01 and MSG-LABOR-02, the approval of a new employee and the reminder to lock a staff account (OMTS-227).
     /// </summary>
-    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal) { Account22 };
+    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal) { Account22, Labor01, Labor02 };
 
     /// <summary>
     /// Codes of the old list. Most are only sent as <c>legacyCode</c> next to the new code, for one release.
@@ -82,7 +85,6 @@ public static class MessageCodes
         public const string Msg19 = "MSG19";
         public const string Msg20 = "MSG20";
         public const string Msg22 = "MSG22";
-        public const string Msg24 = "MSG24";
         public const string Msg25 = "MSG25";
         public const string Msg26 = "MSG26";
         public const string Msg27 = "MSG27";
@@ -112,7 +114,6 @@ public static class MessageCodes
         /// <item>MSG05: an export file could not be generated, or a stored file could not be read (not an upload).</item>
         /// <item>MSG06: edit conflict (NFR-09, still cited by Part IV).</item>
         /// <item>MSG19: session expired.</item>
-        /// <item>MSG24: the account is already linked to another employee (LABOR).</item>
         /// <item>MSG41: multiple of 1,000 VND (BR-PURCHASE-02 drops the rule in the PURCHASE PR).</item>
         /// <item>MSG45: receipt discount, paid-now and refund limits (fields not in the SRS; PURCHASE PR).</item>
         /// <item>MSG57: old documents hidden after a phone verification (PR 0.4, BR-ACCOUNT-04).</item>
@@ -122,7 +123,7 @@ public static class MessageCodes
         /// </summary>
         public static readonly IReadOnlySet<string> KeptAsCode = new HashSet<string>(StringComparer.Ordinal)
         {
-            Msg05, Msg06, Msg19, Msg24, Msg41, Msg45, Msg57, Msg58,
+            Msg05, Msg06, Msg19, Msg41, Msg45, Msg57, Msg58,
             NotFound, TooManyRequests, UnexpectedError, PasswordChangeRequired,
         };
     }

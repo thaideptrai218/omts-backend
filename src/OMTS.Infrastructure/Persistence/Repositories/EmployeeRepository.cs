@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Entities.Labor;
 
 namespace OMTS.Infrastructure.Persistence.Repositories;
 
@@ -12,7 +14,10 @@ internal sealed class EmployeeRepository(OmtsDbContext db) : IEmployeeRepository
     public Task<Employee?> GetForEditAsync(Guid id, CancellationToken cancellationToken) =>
         db.Employees
             .Include(e => e.WorkingZones).ThenInclude(w => w.Zone)
+            .Include(e => e.JobTypes).ThenInclude(j => j.JobType)
+            .Include(e => e.TypePeriods)
             .Include(e => e.Account)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 
     public Task<Employee?> GetByAccountIdAsync(Guid accountId, CancellationToken cancellationToken) =>
@@ -24,7 +29,7 @@ internal sealed class EmployeeRepository(OmtsDbContext db) : IEmployeeRepository
             .ToDictionaryAsync(e => e.AccountId!.Value, e => (Guid?)e.Id, cancellationToken);
 
     public async Task<(IReadOnlyList<Employee> Items, int Total)> SearchAsync(
-        string? search, int? statusId, Guid? zoneId, int page, int pageSize, CancellationToken cancellationToken)
+        string? search, int? statusId, Guid? zoneId, IReadOnlyCollection<Guid>? firstZoneIds, int page, int pageSize, CancellationToken cancellationToken)
     {
         var query = db.Employees.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(search))
@@ -46,30 +51,42 @@ internal sealed class EmployeeRepository(OmtsDbContext db) : IEmployeeRepository
         }
 
         var total = await query.CountAsync(cancellationToken);
-        var items = await query
-            .Include(e => e.WorkingZones).ThenInclude(w => w.Zone)
-            .Include(e => e.Account)
-            .OrderBy(e => e.FullName)
+        var ordered = firstZoneIds is null
+            ? query.OrderBy(e => e.FullName)
+            : query.OrderByDescending(e => e.WorkingZones.Any(w => firstZoneIds.Contains(w.ZoneId))).ThenBy(e => e.FullName);
+        var items = await ordered.ThenBy(e => e.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)
+            .Include(e => e.WorkingZones).ThenInclude(w => w.Zone)
+            .Include(e => e.JobTypes).ThenInclude(j => j.JobType)
+            .Include(e => e.TypePeriods)
+            .Include(e => e.Account)
+            .AsSplitQuery()
             .ToListAsync(cancellationToken);
         return (items, total);
     }
 
-    public Task<Employee?> FindSamePersonAsync(string fullName, string phoneNumber, Guid? exceptEmployeeId, CancellationToken cancellationToken)
-    {
-        var name = fullName.ToUpperInvariant();
-        return db.Employees.AsNoTracking().FirstOrDefaultAsync(
-            e => e.PhoneNumber == phoneNumber && e.FullName.ToUpper() == name && e.Id != exceptEmployeeId, cancellationToken);
-    }
+    public Task<Employee?> FindEmployedWithPhoneAsync(string phoneNumber, Guid? exceptEmployeeId, CancellationToken cancellationToken) =>
+        db.Employees.AsNoTracking().FirstOrDefaultAsync(
+            e => e.PhoneNumber == phoneNumber && e.StatusId == StatusIds.Employee.Working && e.Id != exceptEmployeeId, cancellationToken);
 
-    public async Task<LaborRecordsAfter> CountLaborRecordsAfterAsync(Guid employeeId, DateOnly day, CancellationToken cancellationToken) =>
-        new(
-            await db.AttendanceRecords.CountAsync(a => a.EmployeeId == employeeId && a.WorkDate > day, cancellationToken),
-            await db.WorkAssignments.CountAsync(w => w.EmployeeId == employeeId && w.WorkDate > day && w.CancelledAt == null, cancellationToken));
+    public async Task<IReadOnlyList<JobType>> GetJobTypesAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+        ids.Count == 0 ? [] : await db.JobTypes.AsNoTracking().Where(j => ids.Contains(j.Id)).ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Guid>> ListEmployedWithLastWorkingDayBeforeAsync(DateOnly day, CancellationToken cancellationToken) =>
+        await db.Employees.AsNoTracking()
+            .Where(e => e.StatusId == StatusIds.Employee.Working && e.LastWorkingDay < day)
+            .Select(e => e.Id)
+            .ToListAsync(cancellationToken);
 
     public void Add(Employee employee) => db.Employees.Add(employee);
 
     public void AddWorkingZone(EmployeeWorkingZone workingZone) => db.EmployeeWorkingZones.Add(workingZone);
 
     public void RemoveWorkingZone(EmployeeWorkingZone workingZone) => db.EmployeeWorkingZones.Remove(workingZone);
+
+    public void AddJobType(EmployeeJobType jobType) => db.EmployeeJobTypes.Add(jobType);
+
+    public void RemoveJobType(EmployeeJobType jobType) => db.EmployeeJobTypes.Remove(jobType);
+
+    public void AddTypePeriod(EmployeeTypePeriod period) => db.EmployeeTypePeriods.Add(period);
 }

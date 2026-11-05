@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Features.AccessManagement;
 using OMTS.Application.Features.AccessManagement.Dtos;
@@ -32,8 +33,9 @@ internal sealed class DemoStaffAndEmployeeStep : IDemoSeedStep
         var created = 0;
         foreach (var plan in DemoEmployeePlans.All)
         {
-            var phone = PhoneNumbers.Normalize(plan.Phone)!;
-            var employee = await context.Db.Employees.FirstOrDefaultAsync(e => e.PhoneNumber == phone, cancellationToken);
+            var phone = PhoneNumbers.Normalize(plan.Phone);
+            var employee = await context.Db.Employees.FirstOrDefaultAsync(
+                e => phone == null ? e.FullName == plan.FullName && e.PhoneNumber == null : e.PhoneNumber == phone, cancellationToken);
             if (employee is null)
             {
                 var saved = DemoSeedContext.Ensure(await service.CreateAsync(await RequestAsync(context, plan, cancellationToken), cancellationToken), $"employee {plan.FullName}");
@@ -54,7 +56,8 @@ internal sealed class DemoStaffAndEmployeeStep : IDemoSeedStep
             if (plan.LeftDaysAgo is { } daysAgo && employee.StatusId == StatusIds.Employee.Working)
             {
                 DemoSeedContext.Ensure(
-                    await service.EndEmploymentAsync(employee.Id, new EndEmploymentRequest(context.Today.AddDays(-daysAgo)), cancellationToken),
+                    await context.Get<EmploymentService>().EndEmploymentAsync(
+                        employee.Id, new EndEmploymentRequest(context.Today.AddDays(-daysAgo), RowVersionGuard.Encode(employee.RowVersion)), cancellationToken),
                     $"ending employment of {plan.FullName}");
             }
         }
@@ -90,14 +93,15 @@ internal sealed class DemoStaffAndEmployeeStep : IDemoSeedStep
                 ? null
                 : await context.Db.FarmingZones.Where(z => z.Code == plan.GrantZone).Select(z => z.Id).SingleAsync(cancellationToken);
             account = new NewEmployeeAccount(
-                plan.Username, null, null, null,
+                plan.Username, null,
                 [new GrantDraft(grantZoneId, Role: FixedRoles.Of(plan.Role).Code)]);
         }
 
         return new SaveEmployeeRequest(
             plan.FullName, plan.Phone, plan.Birthday, $"{plan.Ward}, Huyện Vân Đồn, Tỉnh Quảng Ninh", "Vân Đồn", plan.Ward,
             null, "Dữ liệu minh họa", zoneIds,
-            new EmployeeBankAccountInput(plan.BankName, plan.BankAccountNumber, plan.FullName), null, account);
+            new EmployeeBankAccountInput(plan.BankName, plan.BankAccountNumber, plan.FullName),
+            plan.Type, Account: account);
     }
 
     /// <summary>

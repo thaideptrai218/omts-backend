@@ -98,8 +98,9 @@ public sealed class StaffAccountService(
     }
 
     /// <summary>
-    /// Validates and adds a staff account with its zone–role grants (and the employee link) to the unit of
-    /// work without saving, so LAB-01 can save employee, account, grants and link together.
+    /// Validates and adds a staff account, with the zone–role grants that were sent if any (ACCOUNT-09 step 6, the pairs
+    /// can follow in FARM-05), and the employee link to the unit of work without saving, so LABOR-01 can save employee,
+    /// account, grants and link together.
     /// </summary>
     public async Task<Result<StaffAccountWithPassword>> AddStaffAccountAsync(
         CreateStaffAccountRequest request, Employee? employee, CancellationToken cancellationToken)
@@ -113,11 +114,6 @@ public sealed class StaffAccountService(
         if (!fields.IsSuccess)
         {
             return fields.Error!;
-        }
-
-        if (request.Grants is not { Count: > 0 })
-        {
-            return AppError.Invalid("Zone-role pair");
         }
 
         var (name, username, phone, email) = fields.Value!;
@@ -141,7 +137,7 @@ public sealed class StaffAccountService(
             employee.AccountId = account.Id;
         }
 
-        var granted = await grantService.AddGrantsAsync(account, request.Grants, cancellationToken);
+        var granted = await grantService.AddGrantsAsync(account, request.Grants ?? [], cancellationToken);
         if (!granted.IsSuccess)
         {
             return granted.Error!;

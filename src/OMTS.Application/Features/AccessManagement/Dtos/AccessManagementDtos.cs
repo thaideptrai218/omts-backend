@@ -9,6 +9,7 @@ namespace OMTS.Application.Features.AccessManagement.Dtos;
 /// </summary>
 public sealed record GrantDraft(Guid? ZoneId, Guid? RoleId = null, string? Role = null);
 
+/// <param name="Grants">Optional: the account can be created without a pair and receive them later in FARM-05; until then it cannot log in (MSG-ACCOUNT-07).</param>
 /// <param name="SubjectType">Only Staff accounts can be created; any other value is refused and audited.</param>
 public sealed record CreateStaffAccountRequest(
     string DisplayName,
@@ -16,7 +17,7 @@ public sealed record CreateStaffAccountRequest(
     string PhoneNumber,
     string? Email,
     Guid? EmployeeId,
-    IReadOnlyList<GrantDraft> Grants,
+    IReadOnlyList<GrantDraft>? Grants = null,
     SubjectType? SubjectType = null);
 
 public sealed record UpdateStaffAccountRequest(string DisplayName, string Username, string PhoneNumber, string? Email, string? RowVersion);
