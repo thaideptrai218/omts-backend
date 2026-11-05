@@ -21,17 +21,17 @@ public class FarmingZone : AuditableEntity, IHasStatus
     /// <summary>Area in hectares.</summary>
     public decimal? Area { get; set; }
 
-    public string? WaterMeasurementPoint { get; set; }
-
-    /// <summary>Current water thresholds entered by the Cooperative Owner (BR-07); changes go to AuditEvent.</summary>
+    /// <summary>Current water thresholds entered by the Cooperative Owner (BR-WATER-04); changes go to AuditEvent.</summary>
     public decimal? PhMin { get; set; }
     public decimal? PhMax { get; set; }
     public decimal? SalinityMin { get; set; }
     public decimal? SalinityMax { get; set; }
+    public decimal? TemperatureMin { get; set; }
+    public decimal? TemperatureMax { get; set; }
 
     /// <summary>
-    /// When the overdue water measurement reminder (MSG26) was last sent; one reminder per overdue period,
-    /// the period ending with a newer confirmed measurement.
+    /// When the overdue water measurement reminder (MSG-WATER-06) was last sent; one reminder per overdue period,
+    /// the period ending with a newer active measurement.
     /// </summary>
     public DateTimeOffset? WaterOverdueRemindedAt { get; set; }
 

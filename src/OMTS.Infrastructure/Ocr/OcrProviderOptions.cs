@@ -26,6 +26,7 @@ public sealed class FakeOcrOptions
 
     public decimal? Ph { get; set; } = 7.8m;
     public decimal? Salinity { get; set; } = 25.5m;
+    public decimal? Temperature { get; set; } = 28.5m;
     public DateTimeOffset? MeasuredAt { get; set; }
 
     /// <summary>Confidence of every field read.</summary>

@@ -378,6 +378,8 @@ internal sealed class ZoneRaceSqlHost : IAsyncDisposable
                 DisplayName = "Owner",
                 PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher>().Hash(Password),
                 SubjectType = SubjectType.CooperativeOwner,
+                PhoneNumber = NewPhone(),
+                PhoneVerifiedAt = DateTimeOffset.UtcNow,
                 StatusId = StatusIds.Account.Active,
             };
             db.Accounts.Add(owner);

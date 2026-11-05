@@ -13,14 +13,15 @@ using S = OMTS.Domain.Constants.StatusIds.WaterMeasurement;
 
 namespace OMTS.Application.Features.WaterQuality;
 
-/// <summary>Filters of the ENV-03 history list and export: local dates (default last 3 months) and statuses (default Confirmed).</summary>
+/// <summary>Filters of the WATER-03 history list and export: local dates (default last 3 months) and statuses (default Active).</summary>
 public sealed record WaterHistoryQuery(string? From, string? To, IReadOnlyList<string>? Status, int Page = 1, int PageSize = 20);
 
 public sealed record ExportFile(string FileName, string ContentType, byte[] Content);
 
 /// <summary>
-/// ENV-03 – water history, detail, chart and Excel export of a zone. Charts and exports use only Confirmed
-/// values: Drafts, corrected versions and voided records never count.
+/// WATER-03 – water history, detail, chart and Excel export of a zone. Charts and exports use only Active values.
+/// Interim until OMTS-219 W3: the list shows Voided only when asked, the export leaves it out, the chart has no
+/// temperature and the empty list has no MSG-GEN-10.
 /// </summary>
 public sealed class WaterMeasurementQueryService(
     IWaterMeasurementRepository measurements,
@@ -35,8 +36,8 @@ public sealed class WaterMeasurementQueryService(
     public const string StatusField = "Status";
     public const string GroupByField = "Group by";
 
-    // Exports never contain Drafts or voided records, whatever the status filter asks.
-    private static readonly int[] ExportableStatuses = [S.Confirmed, S.Superseded];
+    // Exports never contain voided records, whatever the status filter asks (interim until OMTS-219 W3).
+    private static readonly int[] ExportableStatuses = [S.Active];
 
     public async Task<Result<Paged<WaterMeasurementListItem>>> SearchAsync(Guid zoneId, WaterHistoryQuery query, CancellationToken cancellationToken)
     {
@@ -103,13 +104,13 @@ public sealed class WaterMeasurementQueryService(
             return AppError.Invalid(GroupByField, $"Grouping by month covers at most {MaxChartYears} years.");
         }
 
-        var samples = await ConfirmedSamplesAsync(zoneId, period.Value!, cancellationToken);
+        var samples = await ActiveSamplesAsync(zoneId, period.Value!, cancellationToken);
         return new WaterChart(
             zoneId, period.Value!.From, period.Value.To, grouping, WaterThresholds.Of(zone),
             WaterChartBuilder.Build(samples, period.Value, grouping));
     }
 
-    /// <summary>The history rows (Confirmed, and Corrected when asked) and the monthly summary as .xlsx.</summary>
+    /// <summary>The Active history rows and the monthly summary as .xlsx.</summary>
     public async Task<Result<ExportFile>> ExportAsync(Guid zoneId, WaterHistoryQuery query, CancellationToken cancellationToken)
     {
         var filter = await FilterAsync(zoneId, query, cancellationToken);
@@ -123,7 +124,7 @@ public sealed class WaterMeasurementQueryService(
         var rows = exported.Count == 0
             ? []
             : await measurements.ListAsync(zoneId, period.FromInstant, period.ToExclusive, exported, cancellationToken);
-        var months = WaterChartBuilder.Build(await ConfirmedSamplesAsync(zoneId, period, cancellationToken), period, WaterChartGrouping.Month);
+        var months = WaterChartBuilder.Build(await ActiveSamplesAsync(zoneId, period, cancellationToken), period, WaterChartGrouping.Month);
         var sheets = WaterMeasurementExport.Sheets(await views.ListItemsAsync(rows, cancellationToken), months);
 
         try
@@ -155,15 +156,14 @@ public sealed class WaterMeasurementQueryService(
         var statusIds = WaterMeasurementStatuses.ParseFilter(query.Status);
         if (statusIds is null)
         {
-            return AppError.Invalid(StatusField, "Use Draft, Confirmed, Corrected, Voided or All.");
+            return AppError.Invalid(StatusField, "Use Active, Voided or All.");
         }
 
         return (zone, period.Value!, statusIds);
     }
 
-    private async Task<IReadOnlyList<WaterSample>> ConfirmedSamplesAsync(Guid zoneId, WaterPeriod period, CancellationToken cancellationToken) =>
-        (await measurements.ListAsync(zoneId, period.FromInstant, period.ToExclusive, [S.Confirmed], cancellationToken))
-            .Where(m => m.Ph is not null && m.Salinity is not null)
-            .Select(m => new WaterSample(m.MeasuredAt, m.Ph!.Value, m.Salinity!.Value))
+    private async Task<IReadOnlyList<WaterSample>> ActiveSamplesAsync(Guid zoneId, WaterPeriod period, CancellationToken cancellationToken) =>
+        (await measurements.ListAsync(zoneId, period.FromInstant, period.ToExclusive, [S.Active], cancellationToken))
+            .Select(m => new WaterSample(m.MeasuredAt, m.Ph, m.Salinity))
             .ToList();
 }

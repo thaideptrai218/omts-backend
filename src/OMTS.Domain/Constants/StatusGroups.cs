@@ -11,9 +11,10 @@ public static class StatusGroups
     public const string Employee = "EMPLOYEE";
     public const string AccessGrant = "ACCESS_GRANT";
     public const string CultivationCycle = "CULTIVATION_CYCLE";
-    public const string WaterMeasurement = "WATER_MEASUREMENT";
+    public const string WaterMeasurement = "WATER_MEASUREMENT_RECORD";
     public const string PurchaseReceipt = "PURCHASE_RECEIPT";
     public const string MessageDelivery = "MESSAGE_DELIVERY";
     public const string SupplierPayment = "SUPPLIER_PAYMENT";
     public const string Lane = "LANE";
+    public const string PurchaseRequest = "PURCHASE_REQUEST";
 }

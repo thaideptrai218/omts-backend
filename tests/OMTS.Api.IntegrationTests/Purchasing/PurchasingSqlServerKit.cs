@@ -29,7 +29,7 @@ public static class PurchasingSqlServerKit
         var raft = await host.QueryAsync(db => db.Rafts.SingleAsync(r => r.Id == raftId));
         return new PurchasingWorld(
             owner, zone, raft, await owner.CreateSupplierAsync(),
-            await owner.CreateItemAsync("Seed", "kg"), await owner.CreateItemAsync("RaftMaterial", "piece"), await owner.CreateItemAsync("Other", "bag"));
+            await owner.CreateItemAsync("Seed", "kg"), await owner.CreateItemAsync("Material", "piece"), await owner.CreateItemAsync("Other", "bag"));
     }
 
     /// <summary>Logged-in staff with one pair of the fixed <paramref name="role"/> in the zone (All zones when null).</summary>
@@ -59,6 +59,20 @@ public static class PurchasingSqlServerKit
         }).ToList();
         start.Release(count);
         return await Task.WhenAll(tasks);
+    }
+
+    /// <summary>What a client does on 409 MSG06: the same request again. Each round has a winner, so the attempts are not reached.</summary>
+    public static async Task<HttpResponseMessage> AgainOnConflictAsync(Func<Task<HttpResponseMessage>> request)
+    {
+        const int attempts = 30;
+        for (var attempt = 1; ; attempt++)
+        {
+            var response = await request();
+            if (attempt == attempts || await response.CodeOrStatusAsync() != "409 MSG06")
+            {
+                return response;
+            }
+        }
     }
 
     public static async Task<string?> CodeOrStatusAsync(this HttpResponseMessage response)

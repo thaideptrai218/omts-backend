@@ -4,7 +4,7 @@ using OMTS.Application.Features.WaterQuality.Dtos;
 
 namespace OMTS.Application.Features.WaterQuality;
 
-/// <summary>ENV-03 export content: a "Measurements" sheet (the history rows) and a "Monthly summary" of the confirmed values.</summary>
+/// <summary>WATER-03 export content: a "Measurements" sheet (the history rows) and a "Monthly summary" of the active values.</summary>
 public static class WaterMeasurementExport
 {
     public const string MeasurementsSheet = "Measurements";
@@ -12,8 +12,7 @@ public static class WaterMeasurementExport
 
     public static readonly IReadOnlyList<string> MeasurementHeaders =
     [
-        "Measured at", "Measurement point", "pH", "Salinity (‰)", "Status", "Input source", "Alert", "Violated values",
-        "Measured by", "Confirmed by", "Record version", "Has photo",
+        "Measured at", "Raft", "pH", "Salinity (‰)", "Temperature (°C)", "Status", "Alert", "Violated values", "Measured by",
     ];
 
     public static readonly IReadOnlyList<string> SummaryHeaders =
@@ -23,7 +22,7 @@ public static class WaterMeasurementExport
     ];
 
     /// <param name="rows">History rows, oldest first.</param>
-    /// <param name="months">Monthly chart periods of the confirmed values.</param>
+    /// <param name="months">Monthly chart periods of the active values.</param>
     public static IReadOnlyList<SpreadsheetSheet> Sheets(IReadOnlyList<WaterMeasurementListItem> rows, IReadOnlyList<WaterChartPeriod> months) =>
     [
         new SpreadsheetSheet(MeasurementsSheet, MeasurementHeaders, rows.Select(MeasurementRow).ToList()),
@@ -39,9 +38,8 @@ public static class WaterMeasurementExport
 
     private static IReadOnlyList<object?> MeasurementRow(WaterMeasurementListItem m) =>
     [
-        m.MeasuredAt.ToOffset(BusinessClock.UtcOffset).DateTime, m.MeasurementPoint, m.Ph, m.Salinity, m.Status, m.InputSource.ToString(),
-        m.AlertState == WaterAlertState.None ? null : m.AlertState.ToString(), m.ViolatedValues,
-        m.MeasuredBy?.Name, m.ConfirmedBy?.Name, m.RecordVersion, m.HasPhoto,
+        m.MeasuredAt.ToOffset(BusinessClock.UtcOffset).DateTime, m.RaftCode, m.Ph, m.Salinity, m.Temperature, m.Status,
+        m.AlertState == WaterAlertState.None ? null : m.AlertState.ToString(), m.ViolatedValues, m.MeasuredBy?.Name,
     ];
 
     private static IReadOnlyList<object?> SummaryRow(WaterChartPeriod p) =>

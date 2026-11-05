@@ -29,6 +29,7 @@ public class FileStorageListTests
         AssertListed(photos, listed);
         Assert.Equal([licenseKey], (await storage.ListAsync(FileCategories.ZoneLicenses)).Select(f => f.Key));
         await Assert.ThrowsAsync<ArgumentException>(() => storage.ListAsync("../raft-photos"));
+        await AssertOwnerFolderAsync(storage);
     }
 
     [AzuriteFact]
@@ -49,6 +50,24 @@ public class FileStorageListTests
         Assert.Equal([licenseKey], (await storage.ListAsync(FileCategories.ZoneLicenses)).Select(f => f.Key));
         Assert.True(await storage.DeleteAsync(photos[0]));
         Assert.Equal([photos[1]], (await storage.ListAsync(FileCategories.RaftPhotos)).Select(f => f.Key));
+        await AssertOwnerFolderAsync(storage);
+    }
+
+    // Meter photos are stored under a folder of the account (WATER-01): readable by key, listed with their category.
+    private static async Task AssertOwnerFolderAsync(IFileStorage storage)
+    {
+        var owner = Guid.NewGuid().ToString("N");
+        var key = (await storage.UploadAsync(Validated(), $"{FileCategories.WaterMeterPhotos}/{owner}")).Key!;
+
+        Assert.StartsWith($"{FileCategories.WaterMeterPhotos}/{owner}/", key);
+        Assert.Equal([key], (await storage.ListAsync(FileCategories.WaterMeterPhotos)).Select(f => f.Key));
+        await using (var content = await storage.OpenReadAsync(key))
+        {
+            Assert.NotNull(content);
+        }
+
+        Assert.True(await storage.DeleteAsync(key));
+        Assert.Empty(await storage.ListAsync(FileCategories.WaterMeterPhotos));
     }
 
     private static async Task<(List<string> Photos, string License)> UploadAsync(IFileStorage storage)

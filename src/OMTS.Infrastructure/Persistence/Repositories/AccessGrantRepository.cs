@@ -34,11 +34,14 @@ internal sealed class AccessGrantRepository(OmtsDbContext db) : IAccessGrantRepo
             .OrderByDescending(g => g.CreatedAt)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<AccessGrant>> ListEffectiveForAccountAsync(Guid accountId, CancellationToken cancellationToken) =>
+    public Task<IReadOnlyList<AccessGrant>> ListEffectiveForAccountAsync(Guid accountId, CancellationToken cancellationToken) =>
+        ListEffectiveForAccountsAsync([accountId], cancellationToken);
+
+    public async Task<IReadOnlyList<AccessGrant>> ListEffectiveForAccountsAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken cancellationToken) =>
         await db.AccessGrants.AsNoTracking()
             .Include(g => g.Role)
             .Include(g => g.Zone)
-            .Where(g => g.AccountId == accountId)
+            .Where(g => accountIds.Contains(g.AccountId))
             .EffectiveOfFixedRoles()
             .OrderByDescending(g => g.CreatedAt)
             .ToListAsync(cancellationToken);

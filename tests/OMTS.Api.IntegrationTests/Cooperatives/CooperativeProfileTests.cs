@@ -21,7 +21,7 @@ public class CooperativeProfileTests
     {
         using var api = new AuthApiFactory();
         var cooperative = await api.EnsureCooperativeAsync();
-        await api.UpdateAsync<Cooperative>(cooperative.Id, c => c.BankAccount = new BankAccountInfo { BankName = "VCB", AccountNumber = "0011223344", AccountHolderName = "HTX" });
+        await api.UpdateAsync<Cooperative>(cooperative.Id, c => c.BankAccount = new ReceivingBankAccount { BankBin = "970436", BankName = "VCB", AccountNumber = "DEMO00000002", AccountHolderName = "HTX" });
         var owner = await OwnerAsync(api);
 
         var before = await owner.GetFromJsonAsync<JsonElement>("/api/cooperative/profile");
@@ -42,7 +42,7 @@ public class CooperativeProfileTests
             preview.EnumerateObject().Select(p => p.Name));
 
         var stored = await api.QueryAsync(db => db.Cooperatives.AsNoTracking().SingleAsync());
-        Assert.Equal("0011223344", stored.BankAccount?.AccountNumber);
+        Assert.Equal("DEMO00000002", stored.BankAccount?.AccountNumber);
         var actions = await api.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == cooperative.Id).Select(e => e.Action).ToListAsync());
         Assert.Equal(["Cooperative.Updated"], actions);
     }

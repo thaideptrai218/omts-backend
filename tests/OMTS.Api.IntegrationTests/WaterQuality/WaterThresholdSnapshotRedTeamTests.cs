@@ -8,61 +8,65 @@ using OMTS.Domain.Entities.Farming;
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
-/// ENV-01/02/04 threshold snapshot and evaluation (QA red team): the set used is the one current at the
-/// confirmation, a correction chain keeps the first set, bounds are inclusive, an unset bound is never
-/// checked and values with more than two decimals are refused instead of rounded.
+/// WATER-01/02/04 threshold copy and evaluation (QA red team): the copy is the set current when the measurement was saved,
+/// corrections keep it, bounds are inclusive, an unset bound is never checked and values with more than two decimals are
+/// refused instead of rounded.
 /// </summary>
 public class WaterThresholdSnapshotRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApiFactory>
 {
     [Fact]
-    public async Task Draft_is_evaluated_with_the_thresholds_current_at_its_confirmation_not_at_its_creation()
+    public async Task The_copy_is_the_set_current_when_the_measurement_is_saved_after_the_recognition()
     {
         var z = await api.ZoneAsync();
         var (_, manager) = await api.StaffAsync(z.Zone);
-        var raisedLater =await z.RecordedAsync(8.8m, 20m, confirm: false);
-        var loweredLater = await z.RecordedAsync(8.4m, 20m, confirm: false);
+        var keyOne = await z.Owner.PhotoKeyAsync(z.Zone.Id);
+        var keyTwo = await z.Owner.PhotoKeyAsync(z.Zone.Id);
 
         await SetPhAsync(z, 6.5m, 9.0m);
-        var underWider = await ConfirmAsync(z, raisedLater.Id());
+        var underWider = await SavedAsync(await z.RecordAsync(8.8m, 20m, photoKey: keyOne));
         await SetPhAsync(z, 6.5m, 8.0m);
-        var underNarrower = await ConfirmAsync(z, loweredLater.Id());
+        var underNarrower = await SavedAsync(await z.RecordAsync(8.4m, 20m, photoKey: keyTwo));
 
         Assert.Equal("None", underWider.Text("alertState"));
         Assert.Equal(9.0m, underWider.GetProperty("thresholdsUsed").GetProperty("phMax").GetDecimal());
-        Assert.Empty(await api.AlertsOfAsync(raisedLater.Id()));
+        Assert.Empty(await api.AlertsOfAsync(underWider.Id()));
         Assert.Equal("Active", underNarrower.Text("alertState"));
         Assert.Equal("pH 8.40 > 8.00", underNarrower.Text("violatedValues"));
-        Assert.Single(await api.AlertsOfAsync(loweredLater.Id()), n => n.RecipientAccountId == manager.Id);
+        Assert.Single(await api.AlertsOfAsync(underNarrower.Id()), n => n.RecipientAccountId == manager.Id);
     }
 
     [Fact]
     public async Task Only_minimums_set_checks_the_minimums_and_never_the_missing_maximums()
     {
         var z = await api.ZoneAsync();
-        await api.UpdateAsync<FarmingZone>(z.Zone.Id, zone => (zone.PhMin, zone.PhMax, zone.SalinityMin, zone.SalinityMax) = (6.5m, null, 15m, null));
+        await api.UpdateAsync<FarmingZone>(z.Zone.Id, zone =>
+        {
+            (zone.PhMin, zone.PhMax, zone.SalinityMin, zone.SalinityMax) = (6.5m, null, 15m, null);
+            (zone.TemperatureMin, zone.TemperatureMax) = (10m, null);
+        });
 
-        var below = await z.RecordedAsync(6.49m, 14.99m);
-        var farAbove = await z.RecordedAsync(14m, 100m);
+        var below = await z.RecordedAsync(6.49m, 14.99m, temperature: 9.99m);
+        var farAbove = await z.RecordedAsync(14m, 50m, temperature: 45m);
 
         Assert.Equal("Active", below.Text("alertState"));
-        Assert.Equal("pH 6.49 < 6.50; Salinity 14.99 < 15.00", below.Text("violatedValues"));
+        Assert.Equal("pH 6.49 < 6.50; Salinity 14.99 < 15.00; Temperature 9.99 < 10.00", below.Text("violatedValues"));
         Assert.Equal("None", farAbove.Text("alertState"));
         Assert.Empty(await api.AlertsOfAsync(farAbove.Id()));
         Assert.Equal(JsonValueKind.Null, farAbove.GetProperty("thresholdsUsed").GetProperty("phMax").ValueKind);
     }
 
     [Fact]
-    public async Task Zone_without_thresholds_confirms_with_an_empty_snapshot_and_no_alert()
+    public async Task Zone_without_thresholds_saves_an_empty_copy_and_no_alert()
     {
         var z = await api.ZoneAsync(thresholds: false);
 
-        var body = await z.RecordedAsync(0m, 100m);
+        var body = await z.RecordedAsync(0m, 50m);
 
-        Assert.Equal("Confirmed", body.Text("status"));
+        Assert.Equal("Active", body.Text("status"));
         Assert.Equal("None", body.Text("alertState"));
         Assert.False(body.GetProperty("thresholdExceeded").GetBoolean());
         var used = body.GetProperty("thresholdsUsed");
-        foreach (var bound in new[] { "phMin", "phMax", "salinityMin", "salinityMax" })
+        foreach (var bound in new[] { "phMin", "phMax", "salinityMin", "salinityMax", "temperatureMin", "temperatureMax" })
         {
             Assert.Equal(JsonValueKind.Null, used.GetProperty(bound).ValueKind);
         }
@@ -75,9 +79,12 @@ public class WaterThresholdSnapshotRedTeamTests(AuthApiFactory api) : IClassFixt
     {
         var z = await api.ZoneAsync();
 
-        var saved = await z.Owner.PutAsJsonAsync($"/api/zones/{z.Zone.Id}/water-thresholds", new { phMin = 0m, phMax = 14m, salinityMin = 0m, salinityMax = 100m });
-        var low = await z.RecordedAsync(0m, 0m);
-        var high = await z.RecordedAsync(14m, 100m);
+        var saved = await z.Owner.PutAsJsonAsync($"/api/zones/{z.Zone.Id}/water-thresholds", new
+        {
+            phMin = 0m, phMax = 14m, salinityMin = 0m, salinityMax = 50m, temperatureMin = 0m, temperatureMax = 45m,
+        });
+        var low = await z.RecordedAsync(0m, 0m, temperature: 0m);
+        var high = await z.RecordedAsync(14m, 50m, temperature: 45m);
 
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
         Assert.Equal("None", low.Text("alertState"));
@@ -88,15 +95,17 @@ public class WaterThresholdSnapshotRedTeamTests(AuthApiFactory api) : IClassFixt
     public async Task Values_with_more_than_two_decimals_are_refused_not_rounded()
     {
         var z = await api.ZoneAsync();
-        var confirmed = await z.RecordedAsync(7m, 20m);
+        var saved = await z.RecordedAsync(7m, 20m);
 
         var record = await z.RecordAsync(7.125m, 20m);
         var salinity = await z.RecordAsync(7m, 20.005m);
-        var correct = await z.Owner.CorrectAsync(confirmed.Id(), 7.125m, 20m, recordVersion: 1);
+        var temperature = await z.RecordAsync(7m, 20m, 25.005m);
+        var correct = await z.Owner.CorrectAsync(saved.Id(), 7.125m, 20m);
         var threshold = await z.Owner.PutAsJsonAsync($"/api/zones/{z.Zone.Id}/water-thresholds", new { phMin = 6.555m, phMax = 8.5m, salinityMin = 15m, salinityMax = 30m });
 
         Assert.Equal("pH", await FieldAsync(record));
         Assert.Equal("Salinity", await FieldAsync(salinity));
+        Assert.Equal("Temperature", await FieldAsync(temperature));
         Assert.Equal("pH", await FieldAsync(correct));
         Assert.Equal("pH minimum", await FieldAsync(threshold));
         Assert.Equal(1, await api.QueryAsync(db => db.WaterMeasurements.CountAsync(m => m.ZoneId == z.Zone.Id)));
@@ -105,7 +114,7 @@ public class WaterThresholdSnapshotRedTeamTests(AuthApiFactory api) : IClassFixt
     }
 
     [Fact]
-    public async Task Cooperative_wide_MSG28_keeps_every_zone_unchanged_and_writes_no_audit()
+    public async Task Cooperative_wide_MSG_WATER_05_keeps_every_zone_unchanged_and_writes_no_audit()
     {
         await using var own = new WaterApiFactory();
         var a = await own.ZoneAsync();
@@ -123,26 +132,23 @@ public class WaterThresholdSnapshotRedTeamTests(AuthApiFactory api) : IClassFixt
     }
 
     [Fact]
-    public async Task Correction_of_a_correction_keeps_the_thresholds_of_the_first_confirmation()
+    public async Task Corrections_keep_the_thresholds_of_the_measurement_when_the_zone_changes_in_between()
     {
         var z = await api.ZoneAsync();
         var (_, manager) = await api.StaffAsync(z.Zone);
-        var v1 = await z.RecordedAsync(8.0m, 20m);
+        var saved = await z.RecordedAsync(8.0m, 20m);
         await SetPhAsync(z, 6.5m, 9.5m);
-        var v2 = await (await z.Owner.CorrectAsync(v1.Id(), 8.4m, 20m, recordVersion: 1)).Content.ReadFromJsonAsync<JsonElement>();
+        var first = await SavedOkAsync(await z.Owner.CorrectAsync(saved.Id(), 8.4m, 20m));
         await SetPhAsync(z, 6.5m, 8.0m);
 
-        var v3Response = await z.Owner.CorrectAsync(v2.Id(), 8.6m, 20m, recordVersion: 2);
-        var v3 = await v3Response.Content.ReadFromJsonAsync<JsonElement>();
+        var second = await SavedOkAsync(await z.Owner.CorrectAsync(saved.Id(), 8.6m, 20m));
 
-        Assert.Equal(HttpStatusCode.Created, v3Response.StatusCode);
-        Assert.Equal("None", v2.Text("alertState"));
-        Assert.Equal(8.5m, v2.GetProperty("thresholdsUsed").GetProperty("phMax").GetDecimal());
-        Assert.Equal(3, v3.GetProperty("recordVersion").GetInt32());
-        Assert.Equal("Active", v3.Text("alertState"));
-        Assert.Equal("pH 8.60 > 8.50", v3.Text("violatedValues"));
-        Assert.Equal(8.5m, v3.GetProperty("thresholdsUsed").GetProperty("phMax").GetDecimal());
-        Assert.Single(await api.AlertsOfAsync(v3.Id()), n => n.RecipientAccountId == manager.Id);
+        Assert.Equal("None", first.Text("alertState"));
+        Assert.Equal(8.5m, first.GetProperty("thresholdsUsed").GetProperty("phMax").GetDecimal());
+        Assert.Equal("Active", second.Text("alertState"));
+        Assert.Equal("pH 8.60 > 8.50", second.Text("violatedValues"));
+        Assert.Equal(8.5m, second.GetProperty("thresholdsUsed").GetProperty("phMax").GetDecimal());
+        Assert.Single(await api.AlertsOfAsync(saved.Id()), n => n.RecipientAccountId == manager.Id);
     }
 
     private static async Task SetPhAsync(WaterZone z, decimal min, decimal max)
@@ -151,9 +157,14 @@ public class WaterThresholdSnapshotRedTeamTests(AuthApiFactory api) : IClassFixt
         Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
-    private static async Task<JsonElement> ConfirmAsync(WaterZone z, Guid id)
+    private static async Task<JsonElement> SavedAsync(HttpResponseMessage response)
     {
-        var response = await z.Owner.PostAsJsonAsync($"/api/water-measurements/{id}/confirm", new { });
+        Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    private static async Task<JsonElement> SavedOkAsync(HttpResponseMessage response)
+    {
         Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }

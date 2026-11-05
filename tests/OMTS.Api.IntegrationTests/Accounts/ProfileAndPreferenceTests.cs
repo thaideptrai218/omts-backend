@@ -68,8 +68,9 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Equal("MSG-GEN-01", await same.ErrorCodeAsync());
     }
 
+    // BR-ACCOUNT-04: the link stays; the offline profile with the new number is neither linked nor merged.
     [Fact]
-    public async Task Trader_phone_change_merges_the_unique_offline_profile()
+    public async Task Trader_phone_change_updates_the_own_profile_only()
     {
         var cooperative = await factory.EnsureCooperativeAsync();
         var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
@@ -84,7 +85,9 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         await client.PostAsJsonAsync("/api/me/contact-changes/confirm", new { verificationToken = token });
 
         var stored = await factory.QueryAsync(db => db.Customers.AsNoTracking().Where(c => c.Id == offline.Id || c.Id == own.Id).ToListAsync());
-        Assert.Equal(own.Id, stored.Single(c => c.Id == offline.Id).MergedIntoCustomerId);
+        Assert.Null(stored.Single(c => c.Id == offline.Id).MergedIntoCustomerId);
+        Assert.Null(stored.Single(c => c.Id == offline.Id).AccountId);
+        Assert.Equal(trader.Id, stored.Single(c => c.Id == own.Id).AccountId);
         Assert.Equal(phone, stored.Single(c => c.Id == own.Id).PhoneNumber);
     }
 
@@ -109,14 +112,19 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         var accountantTypes = await TypesAsync(await factory.LoginAsync(accountant.Username, PreferencePassword));
         var traderTypes = await TypesAsync(await factory.LoginAsync(trader.Username, PreferencePassword));
 
-        Assert.Equal(["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "ZONE_LICENSE_EXPIRY", "COOPERATIVE_CERTIFICATION_EXPIRY"], ownerTypes.Keys);
+        Assert.Equal(
+            ["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "ZONE_LICENSE_EXPIRY", "COOPERATIVE_CERTIFICATION_EXPIRY", "PURCHASE_REQUEST_NEW", "PURCHASE_REQUEST_CANCELLED", "PURCHASE_RECEIPT_COMPLETED", "PURCHASE_RECEIPT_CANCELLED_ADVANCE", "SUPPLIER_TRANSACTION"],
+            ownerTypes.Keys);
         Assert.Equal(["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE"], managerTypes.Keys);
-        Assert.Empty(accountantTypes);
-        Assert.Empty(traderTypes);
+        Assert.Equal(["PURCHASE_RECEIPT_CANCELLED_ADVANCE"], accountantTypes.Keys);
+        Assert.Equal(["PURCHASE_REQUEST_RESPONSE"], traderTypes.Keys);
         Assert.Equal((true, true), ownerTypes["WATER_ALERT"]);
         Assert.Equal((true, true), ownerTypes["ZONE_LICENSE_EXPIRY"]);
         Assert.Equal((true, true), ownerTypes["COOPERATIVE_CERTIFICATION_EXPIRY"]);
         Assert.Equal((false, true), ownerTypes["WATER_MEASUREMENT_OVERDUE"]);
+        Assert.Equal((false, true), ownerTypes["PURCHASE_RECEIPT_COMPLETED"]);
+        // BR-PURCHASE-05: the transaction of the Accountant is always pushed.
+        Assert.Equal((true, true), ownerTypes["SUPPLIER_TRANSACTION"]);
     }
 
     [Fact]

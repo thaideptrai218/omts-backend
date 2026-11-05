@@ -18,7 +18,7 @@ namespace OMTS.Api.IntegrationTests.Cultivation;
 /// <summary>Independent QA of the CultivationCyclesV2 migration and of the demo cycle step on SQL Server.</summary>
 public class CyclesQaTestsMigrationAndDemo
 {
-    private const string MigrationBefore = "20261104103030_RaftsV2";
+    private const string MigrationBefore = "20261105161142_RaftsV2";
 
     private const string SchemaQuery = """
         SELECT CONCAT('column ', c.name, ' ', t.name, ' ', c.max_length, ' ', c.precision, ' ', c.scale, ' ', c.is_nullable, ' ', c.default_object_id) AS [Value]

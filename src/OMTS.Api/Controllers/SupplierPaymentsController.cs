@@ -5,13 +5,12 @@ using OMTS.Api.Filters;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Purchasing.Payments;
-using OMTS.Domain.Enums;
 
 namespace OMTS.Api.Controllers;
 
 /// <summary>
-/// PURCHASE-05 – supplier payments. They have no zone, so they follow the role only (BR-FARM-08): any Effective pair of
-/// a role holding SUPPLIER_PAYMENTS (the Accountant), whatever its zone, or the Owner.
+/// PURCHASE-05 – supplier payments, money paid back and their cancellation. They have no zone, so they follow the role only
+/// (BR-FARM-08): any Effective pair of a role holding SUPPLIER_PAYMENTS (the Accountant), whatever its zone, or the Owner.
 /// </summary>
 [ApiController]
 [Route("api/supplier-payments")]
@@ -21,21 +20,30 @@ public sealed class SupplierPaymentsController(SupplierPaymentService payments) 
     [HttpGet]
     [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.View, PermissionScope.NoZone)]
     [ProducesResponseType<SupplierPaymentPage>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Search(
-        Guid? supplierId, Guid? receiptId, Guid? zoneId, PaymentMethod? method, int? statusId, DateOnly? from, DateOnly? to,
-        int page = 1, int pageSize = 20, CancellationToken cancellationToken = default) =>
-        Ok(await payments.SearchAsync(supplierId, receiptId, zoneId, method, statusId, from, to, page, pageSize, cancellationToken));
+    public async Task<IActionResult> Search([FromQuery] SupplierPaymentQuery query, CancellationToken cancellationToken) =>
+        Ok(await payments.SearchAsync(query, cancellationToken));
 
-    /// <summary>A repeated <c>deduplicationKey</c> returns the first payment and creates nothing.</summary>
+    [HttpGet("{id:guid}")]
+    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.View, PermissionScope.NoZone)]
+    [ProducesResponseType<SupplierPaymentView>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken) =>
+        (await payments.GetAsync(id, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// A larger amount than the debt answers 409 MSG-PURCHASE-05 until <c>confirmAdvance</c> is sent, and a bank reference
+    /// already recorded 409 MSG-PURCHASE-06 until <c>confirmDuplicateBankReference</c> is. A repeated <c>deduplicationKey</c>
+    /// returns the first payment and creates nothing.
+    /// </summary>
     [HttpPost]
     [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.Create, PermissionScope.NoZone)]
     [ProducesResponseType<SupplierPaymentView>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Record(RecordSupplierPaymentRequest request, CancellationToken cancellationToken) =>
         (await payments.RecordAsync(request, cancellationToken)).ToActionResult(p => StatusCode(StatusCodes.Status201Created, p));
 
-    [HttpPost("{id:guid}/allocate")]
+    /// <summary>PURCHASE-05.3: a payment recorded by mistake, with a reason; 409 MSG-GEN-09 when it is already cancelled.</summary>
+    [HttpPost("{id:guid}/cancel")]
     [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.Create, PermissionScope.NoZone)]
     [ProducesResponseType<SupplierPaymentView>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Allocate(Guid id, AllocatePaymentRequest request, CancellationToken cancellationToken) =>
-        (await payments.AllocateAsync(id, request, cancellationToken)).ToActionResult(Ok);
+    public async Task<IActionResult> Cancel(Guid id, CancelSupplierPaymentRequest request, CancellationToken cancellationToken) =>
+        (await payments.CancelAsync(id, request, cancellationToken)).ToActionResult(Ok);
 }

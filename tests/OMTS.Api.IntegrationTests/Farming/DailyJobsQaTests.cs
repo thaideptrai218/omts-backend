@@ -87,8 +87,8 @@ public class DailyJobsQaTests
         watch.Stop();
 
         Assert.True(hosted.ExecuteTask!.IsCompletedSuccessfully, $"The job ended as {hosted.ExecuteTask.Status}.");
-        // The job waits for a timer hours away, so a minute proves it does not wait for it; a busy test machine can take many seconds.
-        Assert.InRange(watch.Elapsed, TimeSpan.Zero, TimeSpan.FromMinutes(1));
+        // The job waits for a timer hours away, so five minutes prove it does not wait for it; a busy CI runner has taken over a minute.
+        Assert.InRange(watch.Elapsed, TimeSpan.Zero, TimeSpan.FromMinutes(5));
     }
 
     private sealed class CatchUpSettingFactory : AuthApiFactory

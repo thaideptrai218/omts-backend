@@ -15,15 +15,18 @@ public static class MessageCodes
     public const string Gen08 = "MSG-GEN-08";
     public const string Gen09 = "MSG-GEN-09";
     public const string Gen10 = "MSG-GEN-10";
+    public const string Gen11 = "MSG-GEN-11";
 
     public const string Farm01 = "MSG-FARM-01";
     public const string Farm02 = "MSG-FARM-02";
 
     public const string Water01 = "MSG-WATER-01";
+    public const string Water02 = "MSG-WATER-02";
     public const string Water03 = "MSG-WATER-03";
     public const string Water05 = "MSG-WATER-05";
     public const string Water06 = "MSG-WATER-06";
 
+    public const string Account01 = "MSG-ACCOUNT-01";
     public const string Account02 = "MSG-ACCOUNT-02";
     public const string Account03 = "MSG-ACCOUNT-03";
     public const string Account04 = "MSG-ACCOUNT-04";
@@ -44,17 +47,45 @@ public static class MessageCodes
     public const string Account20 = "MSG-ACCOUNT-20";
     public const string Account21 = "MSG-ACCOUNT-21";
     public const string Account22 = "MSG-ACCOUNT-22";
+    public const string Account23 = "MSG-ACCOUNT-23";
 
+    public const string Purchase01 = "MSG-PURCHASE-01";
     public const string Purchase03 = "MSG-PURCHASE-03";
+    public const string Purchase04 = "MSG-PURCHASE-04";
+    public const string Purchase05 = "MSG-PURCHASE-05";
+    public const string Purchase06 = "MSG-PURCHASE-06";
+    public const string Purchase07 = "MSG-PURCHASE-07";
+    public const string Purchase08 = "MSG-PURCHASE-08";
     public const string Purchase09 = "MSG-PURCHASE-09";
+    public const string Purchase10 = "MSG-PURCHASE-10";
 
+    public const string Labor01 = "MSG-LABOR-01";
+    public const string Labor02 = "MSG-LABOR-02";
     public const string Labor03 = "MSG-LABOR-03";
 
+    public const string Debt01 = "MSG-DEBT-01";
+    public const string Debt02 = "MSG-DEBT-02";
+
+    public const string Sale01 = "MSG-SALE-01";
+    public const string Sale02 = "MSG-SALE-02";
+    public const string Sale03 = "MSG-SALE-03";
+    public const string Sale04 = "MSG-SALE-04";
+    public const string Sale05 = "MSG-SALE-05";
+
     /// <summary>
-    /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-22, the
-    /// related record of a notification no longer exists (ACCOUNT-08 is new in PR 0.5).
+    /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-01, the
+    /// account is linked to the existing customer profile; MSG-ACCOUNT-22, the record of a notification or of an audit
+    /// event no longer exists (ACCOUNT-08 and ACCOUNT-10 are new in OMTS-216); MSG-PURCHASE-01/07/08, the purchase receipt
+    /// notifications and the advance warning, and MSG-PURCHASE-10, the Owner's correction (OMTS-218 P2); MSG-PURCHASE-04/05/06,
+    /// the transaction notification and the two payment confirmations (OMTS-218 P3); MSG-LABOR-01 and MSG-LABOR-02, the
+    /// approval of a new employee and the reminder to lock a staff account (OMTS-227); MSG-SALE-04 and MSG-SALE-05, the merge
+    /// of customer profiles (SALE-04 is new); MSG-DEBT-01 and MSG-DEBT-02, the receiving bank account (DEBT-01); MSG-GEN-11,
+    /// MSG-SALE-01, MSG-SALE-02 and MSG-SALE-03, the purchase requests (new in PR S4).
     /// </summary>
-    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal) { Account22 };
+    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Account01, Account22, Gen11, Purchase01, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Sale01, Sale02, Sale03, Sale04, Sale05, Debt01, Debt02, Water02,
+    };
 
     /// <summary>
     /// Codes of the old list. Most are only sent as <c>legacyCode</c> next to the new code, for one release.
@@ -82,7 +113,6 @@ public static class MessageCodes
         public const string Msg19 = "MSG19";
         public const string Msg20 = "MSG20";
         public const string Msg22 = "MSG22";
-        public const string Msg24 = "MSG24";
         public const string Msg25 = "MSG25";
         public const string Msg26 = "MSG26";
         public const string Msg27 = "MSG27";
@@ -112,17 +142,15 @@ public static class MessageCodes
         /// <item>MSG05: an export file could not be generated, or a stored file could not be read (not an upload).</item>
         /// <item>MSG06: edit conflict (NFR-09, still cited by Part IV).</item>
         /// <item>MSG19: session expired.</item>
-        /// <item>MSG24: the account is already linked to another employee (LABOR).</item>
-        /// <item>MSG41: multiple of 1,000 VND (BR-PURCHASE-02 drops the rule in the PURCHASE PR).</item>
-        /// <item>MSG45: receipt discount, paid-now and refund limits (fields not in the SRS; PURCHASE PR).</item>
-        /// <item>MSG57: old documents hidden after a phone verification (PR 0.4, BR-ACCOUNT-04).</item>
+        /// <item>MSG41: multiple of 1,000 VND, only the refund and debt reduction of a purchase return now (dropped with PURCHASE-02, P4).</item>
+        /// <item>MSG45: refund and debt reduction limits of a purchase return (fields not in the SRS; P4).</item>
         /// <item>MSG58: someone else is editing the record (NFR-13, still cited by Part IV).</item>
         /// <item>NOT_FOUND, TOO_MANY_REQUESTS (per-IP limit), UNEXPECTED_ERROR, PASSWORD_CHANGE_REQUIRED: technical codes.</item>
         /// </list>
         /// </summary>
         public static readonly IReadOnlySet<string> KeptAsCode = new HashSet<string>(StringComparer.Ordinal)
         {
-            Msg05, Msg06, Msg19, Msg24, Msg41, Msg45, Msg57, Msg58,
+            Msg05, Msg06, Msg19, Msg41, Msg45, Msg58,
             NotFound, TooManyRequests, UnexpectedError, PasswordChangeRequired,
         };
     }

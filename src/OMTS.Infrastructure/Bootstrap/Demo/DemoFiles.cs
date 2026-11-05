@@ -4,12 +4,19 @@ using OMTS.Application.Features.Files;
 
 namespace OMTS.Infrastructure.Bootstrap.Demo;
 
-/// <summary>Placeholder files for the demo data: a generated logo and cover photo, and a one-page document.</summary>
+/// <summary>Placeholder files for the demo data: a generated logo and cover photo, a meter photo and a one-page document.</summary>
 internal static class DemoFiles
 {
     private const int LogoSize = 64;
     private const int CoverWidth = 240;
     private const int CoverHeight = 80;
+
+    /// <summary>A PNG standing in for the photo of the meter display; the values are those of the demo reading.</summary>
+    public static IncomingFile MeterPhoto()
+    {
+        var photo = Logo();
+        return new IncomingFile("meter-demo.png", photo.Length, photo.Content);
+    }
 
     /// <summary>A 64×64 PNG: a pale disc on blue, standing in for the cooperative logo.</summary>
     public static IncomingFile Logo() => Png("logo-demo.png", LogoSize, LogoSize, (x, y) =>

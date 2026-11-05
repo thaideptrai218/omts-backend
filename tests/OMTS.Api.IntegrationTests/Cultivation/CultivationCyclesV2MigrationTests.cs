@@ -16,7 +16,7 @@ namespace OMTS.Api.IntegrationTests.Cultivation;
 /// </summary>
 public class CultivationCyclesV2MigrationTests
 {
-    private const string MigrationBefore = "20261104103030_RaftsV2";
+    private const string MigrationBefore = "20261105161142_RaftsV2";
     private const string TransitionGuard = "Every seeded lane is Harvested; any other close is an early close the Cooperative Owner approves first (BR-CYCLE-07).";
 
     [SqlServerFact]

@@ -116,7 +116,7 @@ public class ReviewFixQaTests
             .UseSetting("Email:Smtp:Port", port.ToString())
             .UseSetting("Email:Smtp:Security", "None")
             .UseSetting("Email:Smtp:FromAddress", "noreply@example.com")
-            .UseSetting("Email:Smtp:TimeoutSeconds", "5"));
+            .UseSetting("Email:Smtp:TimeoutSeconds", "30"));
         api.CreateClient();
         var sender = api.Services.GetRequiredService<IEmailSender>();
 

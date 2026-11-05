@@ -13,18 +13,13 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
 namespace OMTS.Api.IntegrationTests.Purchasing;
 
-public sealed record LineBody(Guid? ItemId, decimal? Quantity, decimal? UnitPrice, string? SupplierLotCode = null, string? ActualSource = null);
+public sealed record LineBody(Guid? ItemId, decimal? Quantity, decimal? UnitPrice, string? SupplierLotCode = null, Guid? RaftId = null);
 
-/// <summary>INP-03 request body; every field can be left out (null) to check the validation.</summary>
+/// <summary>PURCHASE-01 request body; every field can be left out (null) to check the validation.</summary>
 public sealed record ReceiptBody
 {
     public Guid? SupplierId { get; init; }
-    public Guid? ZoneId { get; init; }
-    public Guid? RaftId { get; init; }
     public DateOnly? ReceiptDate { get; init; } = PurchasingTestKit.Today;
-    public decimal? DiscountAmount { get; init; }
-    public decimal? AmountPaidNow { get; init; }
-    public string? PaidNowMethod { get; init; }
     public string? Notes { get; init; }
     public IReadOnlyList<LineBody>? Lines { get; init; }
     public bool Complete { get; init; }
@@ -43,22 +38,29 @@ public sealed record ReturnBody
     public IReadOnlyList<ReturnLineBody>? Lines { get; init; }
 }
 
+/// <summary>PURCHASE-05 request body: a cash payment dated today unless the test says otherwise.</summary>
 public sealed record PaymentBody
 {
     public Guid? SupplierId { get; init; }
-    public Guid? ReceiptId { get; init; }
+    public string? Kind { get; init; } = "Payment";
     public decimal? Amount { get; init; }
     public DateOnly? PaymentDate { get; init; } = PurchasingTestKit.Today;
-    public string? Method { get; init; } = "BankTransfer";
-    public string? ReferenceCode { get; init; }
+    public string? Method { get; init; } = "Cash";
+    public string? BankReference { get; init; }
+    public string? Note { get; init; }
+    public bool ConfirmAdvance { get; init; }
+    public bool ConfirmDuplicateBankReference { get; init; }
     public string? DeduplicationKey { get; init; }
 }
 
 /// <summary>A zone with one In Use raft, a supplier and one item per group, created by the Owner through the API.</summary>
 public sealed record PurchasingWorld(HttpClient Owner, FarmingZone Zone, Raft Raft, Guid SupplierId, Guid Seed, Guid Material, Guid Other)
 {
-    /// <summary>A body for this world's zone and supplier.</summary>
-    public ReceiptBody Body(params LineBody[] lines) => new() { SupplierId = SupplierId, ZoneId = Zone.Id, Lines = lines };
+    /// <summary>A body for this world's supplier (receipts have no zone).</summary>
+    public ReceiptBody Body(params LineBody[] lines) => new() { SupplierId = SupplierId, Lines = lines };
+
+    /// <summary>A Material line bought for the world's raft (it counts in the raft material cost, BR-FARM-05).</summary>
+    public LineBody MaterialForRaft(decimal quantity, decimal unitPrice) => new(Material, quantity, unitPrice, RaftId: Raft.Id);
 }
 
 /// <summary>Shared INP-01…INP-07 helpers: accounts with purchasing grants, catalogue rows and request bodies.</summary>
@@ -106,7 +108,7 @@ public static class PurchasingTestKit
         var (zone, raft) = await factory.ZoneWithRaftAsync();
         return new PurchasingWorld(
             owner, zone, raft, await owner.CreateSupplierAsync(),
-            await owner.CreateItemAsync("Seed", "kg"), await owner.CreateItemAsync("RaftMaterial", "piece"), await owner.CreateItemAsync("Other", "bag"));
+            await owner.CreateItemAsync("Seed", "kg"), await owner.CreateItemAsync("Material", "piece"), await owner.CreateItemAsync("Other", "bag"));
     }
 
     public static async Task<Guid> CreateSupplierAsync(this HttpClient client, string type = "Seed", string? phone = null, string? name = null)
@@ -115,9 +117,14 @@ public static class PurchasingTestKit
         return (await response.ReadAsync(HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
+    /// <summary>
+    /// An item named "{group} item {code}" (names are unique, BR-PURCHASE-10). Every Seed item of one database shares a
+    /// unit, so the tests use "kg" for seed.
+    /// </summary>
     public static async Task<Guid> CreateItemAsync(this HttpClient owner, string group, string unit = "kg", string? code = null)
     {
-        var response = await owner.PostAsJsonAsync("/api/farming-input-items", new { code = code ?? NewCode(), name = $"{group} item", group, unit });
+        code ??= NewCode();
+        var response = await owner.PostAsJsonAsync("/api/farming-input-items", new { code, name = $"{group} item {code}", group, unit });
         return (await response.ReadAsync(HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
@@ -127,13 +134,28 @@ public static class PurchasingTestKit
     public static async Task<JsonElement> CreateReceiptAsync(this HttpClient client, ReceiptBody body) =>
         await (await client.PostReceiptAsync(body)).ReadAsync(HttpStatusCode.Created);
 
-    /// <summary>A Completed receipt of the world with the given lines (a raft when a raft material is bought).</summary>
-    public static Task<JsonElement> CompletedAsync(this PurchasingWorld world, decimal discount, decimal paidNow, params LineBody[] lines) =>
-        world.Owner.CreateReceiptAsync(world.Body(lines) with
+    /// <summary>A Completed receipt of the world's supplier with the given lines, recorded by the Owner.</summary>
+    public static Task<JsonElement> CompletedAsync(this PurchasingWorld world, params LineBody[] lines) =>
+        world.Owner.CreateReceiptAsync(world.Body(lines) with { Complete = true });
+
+    /// <summary>A Completed receipt, then a payment of <paramref name="paid"/> to its supplier (payments are not linked to receipts, BR-PURCHASE-04).</summary>
+    public static async Task<JsonElement> PaidAsync(this PurchasingWorld world, decimal paid, params LineBody[] lines)
+    {
+        var receipt = await world.CompletedAsync(lines);
+        await world.PayAsync(paid);
+        return receipt;
+    }
+
+    /// <summary>A payment to the world's supplier, recorded by the Owner, answering Yes to the advance warning.</summary>
+    public static async Task<JsonElement> PayAsync(this PurchasingWorld world, decimal amount, DateOnly? date = null, string kind = "Payment") =>
+        await (await world.Owner.PostPaymentAsync(new PaymentBody
         {
-            RaftId = lines.Any(l => l.ItemId == world.Material) ? world.Raft.Id : null,
-            DiscountAmount = discount, AmountPaidNow = paidNow, PaidNowMethod = paidNow > 0 ? "Cash" : null, Complete = true,
-        });
+            SupplierId = world.SupplierId, Kind = kind, Amount = amount, PaymentDate = date ?? Today, ConfirmAdvance = true,
+        })).ReadAsync(HttpStatusCode.Created);
+
+    /// <summary>The supplier debt today, as PURCHASE-04 shows it.</summary>
+    public static async Task<decimal> DebtAsync(this PurchasingWorld world) =>
+        (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/supplier-debts/{world.SupplierId}")).Money("debtToday");
 
     public static Task<HttpResponseMessage> PostReturnAsync(this HttpClient client, Guid receiptId, ReturnBody body) =>
         client.PostAsJsonAsync($"/api/purchase-receipts/{receiptId}/returns", body);
@@ -141,8 +163,20 @@ public static class PurchasingTestKit
     public static Task<HttpResponseMessage> PostPaymentAsync(this HttpClient client, PaymentBody body) =>
         client.PostAsJsonAsync("/api/supplier-payments", body);
 
-    public static Task<HttpResponseMessage> CancelAsync(this HttpClient client, Guid receiptId, string? reason, bool? cancelPayments) =>
-        client.PostAsJsonAsync($"/api/purchase-receipts/{receiptId}/cancel", new { reason, cancelPayments });
+    public static Task<HttpResponseMessage> CancelPaymentAsync(this HttpClient client, Guid paymentId, string? reason, string? rowVersion = null) =>
+        client.PostAsJsonAsync($"/api/supplier-payments/{paymentId}/cancel", new { reason, rowVersion });
+
+    public static Task<HttpResponseMessage> CancelAsync(this HttpClient client, Guid receiptId, string? reason) =>
+        client.PostAsJsonAsync($"/api/purchase-receipts/{receiptId}/cancel", new { reason });
+
+    public static Task<HttpResponseMessage> CompleteAsync(this HttpClient client, Guid receiptId) =>
+        client.PostAsync($"/api/purchase-receipts/{receiptId}/complete", null);
+
+    public static Task<HttpResponseMessage> EditAsync(this HttpClient client, JsonElement draft, ReceiptBody body) =>
+        client.PutAsJsonAsync($"/api/purchase-receipts/{draft.Id()}", body with { RowVersion = draft.GetProperty("rowVersion").GetString() });
+
+    /// <summary>The seed lot code (GBR-04) of the line of <paramref name="itemId"/>, or null.</summary>
+    public static string? SeedLotCodeOf(this JsonElement receipt, Guid itemId) => receipt.LineViewOf(itemId).GetProperty("seedLotCode").GetString();
 
     /// <summary>The id of the receipt line of <paramref name="itemId"/>.</summary>
     public static Guid LineOf(this JsonElement receipt, Guid itemId) =>
@@ -175,17 +209,19 @@ public static class PurchasingTestKit
     public static async Task<string?> FieldAsync(this HttpResponseMessage response, HttpStatusCode status, string code) =>
         (await response.ProblemAsync(status, code)).TryGetProperty("field", out var field) ? field.GetString() : null;
 
-    /// <summary>Stocks <paramref name="quantity"/> of the seed lot of a receipt line, as CULT-02 will (it does not exist yet).</summary>
-    public static async Task StockAsync(this AuthApiFactory factory, Guid raftId, Guid receiptLineId, decimal? quantity)
+    /// <summary>
+    /// Seeds <paramref name="quantity"/> (null: a session without a quantity) of the seed lot that is the receipt line
+    /// (GBR-04), as CYCLE-02 will (it does not exist yet).
+    /// </summary>
+    public static async Task SeedAsync(this AuthApiFactory factory, Guid raftId, Guid receiptLineId, decimal? quantity)
     {
-        var lotId = await factory.QueryAsync(db => db.SeedReceiptLots.Where(l => l.PurchaseReceiptLineId == receiptLineId).Select(l => l.Id).SingleAsync());
         var cycle = new CultivationCycle { RaftId = raftId, StartDate = Today };
         await factory.UseDbAsync(db =>
         {
             db.CultivationCycles.Add(cycle);
             db.SeedingEvents.Add(new SeedingEvent
             {
-                CycleId = cycle.Id, SeedLotId = lotId, SeedingDate = Today, SeedQuantity = quantity, RecordedByAccountId = db.Accounts.First().Id,
+                CycleId = cycle.Id, SeedLotId = receiptLineId, SeedingDate = Today, SeedQuantity = quantity, RecordedByAccountId = db.Accounts.First().Id,
             });
         });
     }

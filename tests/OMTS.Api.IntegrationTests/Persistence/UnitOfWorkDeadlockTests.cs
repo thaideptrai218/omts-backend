@@ -17,7 +17,7 @@ public class UnitOfWorkDeadlockTests
         await using var victim = database.CreateContext();
         await using var other = database.CreateContext();
         await victim.Database.MigrateAsync();
-        var (first, second) = (StatusIds.WaterMeasurement.Draft, StatusIds.WaterMeasurement.Confirmed);
+        var (first, second) = (StatusIds.WaterMeasurement.Active, StatusIds.WaterMeasurement.Voided);
         var status = await victim.Statuses.SingleAsync(s => s.Id == first);
         status.Meaning += " (changed)";
 
