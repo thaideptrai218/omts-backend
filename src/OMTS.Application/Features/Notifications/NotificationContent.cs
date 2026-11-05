@@ -25,6 +25,9 @@ public static class RelatedRecordTypes
 
     public const string Account = "Account";
 
+    /// <summary>A purchase receipt (PURCHASE-01, PURCHASE-06); it has no zone.</summary>
+    public const string PurchaseReceipt = "PurchaseReceipt";
+
     public static readonly IReadOnlyDictionary<string, string> Names = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         [WaterMeasurement] = "Water measurement",
@@ -32,5 +35,6 @@ public static class RelatedRecordTypes
         [ZoneLicense] = "Zone license",
         [CooperativeCertification] = "Certification",
         [Account] = "Account",
+        [PurchaseReceipt] = "Purchase receipt",
     };
 }

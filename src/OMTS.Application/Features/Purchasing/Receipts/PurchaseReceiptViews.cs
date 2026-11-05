@@ -1,57 +1,65 @@
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
-using OMTS.Application.Common.Interfaces.Storage;
-using OMTS.Application.Features.Employees;
+using OMTS.Application.Features.WaterQuality.Dtos;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Purchasing;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Purchasing.Receipts;
 
-/// <summary>Builds the INP-03 receipt detail: lines with stocked/returnable quantities, payments, returns and money.</summary>
-public sealed class PurchaseReceiptViews(IPurchaseReceiptRepository receipts, IFileStorage storage, IStatusCatalog statusCatalog)
+/// <summary>Builds the PURCHASE-03.1 receipt detail: lines with rafts, seed lot codes, seeded/returned/returnable quantities, returns.</summary>
+public sealed class PurchaseReceiptViews(IPurchaseReceiptRepository receipts, IAccountRepository accounts, IStatusCatalog statusCatalog)
 {
     public async Task<PurchaseReceiptView> ViewAsync(Guid receiptId, CancellationToken cancellationToken)
     {
         var r = await receipts.GetForEditAsync(receiptId, cancellationToken) ?? throw new InvalidOperationException($"Receipt {receiptId} not found.");
-        var stocked = await receipts.StockedAsync(r.Lines.Select(l => l.Id).ToList(), cancellationToken);
-        var returned = r.Returns.SelectMany(rt => rt.Lines).GroupBy(l => l.ReceiptLineId).ToDictionary(g => g.Key, g => g.Sum(l => l.Quantity));
+        var seeded = await receipts.SeededAsync(r.Lines.Select(l => l.Id).ToList(), cancellationToken);
+        var returned = ReturnedQuantities(r);
+        var names = await accounts.GetDisplayNamesAsync([r.RecordedByAccountId], cancellationToken);
         var figures = PurchaseMoney.Of(r);
-        var photos = new List<string>();
-        foreach (var key in r.InvoicePhotoUrls)
-        {
-            photos.Add(await storage.GetReadUrlAsync(key, cancellationToken: cancellationToken));
-        }
-
         return new PurchaseReceiptView(
             r.Id,
             r.Code,
             new SupplierRef(r.Supplier.Id, r.Supplier.Name, r.Supplier.PhoneNumber),
-            new ZoneRef(r.Zone.Id, r.Zone.Code, r.Zone.Name),
-            r.Raft is null ? null : new RaftRef(r.Raft.Id, r.Raft.Code),
-            PurchaseMoney.DateOrNull(r.ReceiptDate),
-            figures.Subtotal, figures.Discount, figures.Payable, figures.Returned, figures.Paid, figures.Refunded, figures.Outstanding,
-            r.AmountPaidNow, r.PaidNowMethod, r.Notes, photos,
-            r.StatusId, statusCatalog.DisplayNameOf(r.StatusId), r.CompletedAt, r.CancelledAt, r.CancelReason, r.CopiedFromReceiptId,
-            r.Lines.OrderBy(l => l.Item.Code).Select(l =>
+            r.ReceiptDate,
+            figures.Total,
+            figures.Returned,
+            r.Notes,
+            r.StatusId,
+            statusCatalog.DisplayNameOf(r.StatusId),
+            new AccountRef(r.RecordedByAccountId, names.GetValueOrDefault(r.RecordedByAccountId) ?? string.Empty),
+            r.CompletedAt,
+            r.CancelledAt,
+            r.CancelReason,
+            r.Lines.OrderBy(l => l.LineNumber).Select(l =>
             {
-                var (stockedQuantity, unknown) = stocked.GetValueOrDefault(l.Id);
+                var (seededQuantity, unknown) = seeded.GetValueOrDefault(l.Id);
                 var lineReturned = returned.GetValueOrDefault(l.Id);
                 return new ReceiptLineView(
-                    l.Id, l.ItemId, l.Item.Code, l.Item.Name, l.Item.Group, l.Unit, l.Quantity, l.UnitPrice, l.LineAmount,
-                    l.SupplierLotCode, l.ActualSource, l.SeedLot?.Id, l.SeedLot?.InternalCode,
-                    unknown ? l.Quantity : stockedQuantity, lineReturned, Returnable(l, stockedQuantity, unknown, lineReturned));
+                    l.Id, l.LineNumber, l.ItemId, l.Item?.Code, l.Item?.Name, l.Item?.Group, l.Unit, l.Quantity, l.UnitPrice,
+                    l.Quantity is null || l.UnitPrice is null ? null : l.LineAmount,
+                    l.SupplierLotCode,
+                    l.Raft is null ? null : new LineRaftRef(l.Raft.Id, l.Raft.Code, l.Raft.ZoneId, l.Raft.Zone.Code),
+                    IsSeedLot(r, l) ? DocumentCodes.SeedLotCode(r.Code, l.LineNumber) : null,
+                    unknown ? l.Quantity ?? 0 : seededQuantity, lineReturned, Returnable(l, seededQuantity, unknown, lineReturned));
             }).ToList(),
-            r.Payments.OrderBy(p => p.PaymentDate).Select(p => new ReceiptPaymentView(
-                p.Id, p.Amount, p.PaymentDate, p.Method, p.ReferenceCode, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId))).ToList(),
-            r.Returns.OrderBy(rt => rt.ReturnDate).Select(rt => new ReceiptReturnView(
+            r.Returns.OrderBy(rt => rt.ReturnDate).ThenBy(rt => rt.Code).Select(rt => new ReceiptReturnView(
                 rt.Id, rt.Code, rt.ReturnDate, rt.Reason, rt.Lines.Sum(l => l.ReturnValue), rt.RefundAmount, rt.DebtReductionAmount)).ToList(),
             RowVersionGuard.Encode(r.RowVersion));
     }
 
+    /// <summary>GBR-04: only the Seed lines of a Completed receipt are seed lots.</summary>
+    public static bool IsSeedLot(PurchaseReceipt receipt, PurchaseReceiptLine line) =>
+        receipt.StatusId == StatusIds.PurchaseReceipt.Completed && line.Item?.Group == InputItemGroup.Seed;
+
+    public static IReadOnlyDictionary<Guid, decimal> ReturnedQuantities(PurchaseReceipt receipt) =>
+        receipt.Returns.SelectMany(rt => rt.Lines).GroupBy(l => l.ReceiptLineId).ToDictionary(g => g.Key, g => g.Sum(l => l.Quantity));
+
     /// <summary>
-    /// Received − stocked − already returned. A seeding of the lot without a quantity counts as fully stocked,
-    /// so nothing of that line can be returned (assumption of the ticket).
+    /// BR-PURCHASE-07: received − seeded − already returned. A seeding of the lot without a quantity counts as fully
+    /// seeded, so nothing of that line can be returned.
     /// </summary>
-    public static decimal Returnable(PurchaseReceiptLine line, decimal stocked, bool unknownStocked, decimal returned) =>
-        unknownStocked ? 0 : Math.Max(0, line.Quantity - stocked - returned);
+    public static decimal Returnable(PurchaseReceiptLine line, decimal seeded, bool unknownSeeded, decimal returned) =>
+        unknownSeeded ? 0 : Math.Max(0, (line.Quantity ?? 0) - seeded - returned);
 }

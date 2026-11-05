@@ -58,6 +58,7 @@ public static class DependencyInjection
             options.UseSqlServer(connectionString);
         });
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IDocumentNumberAllocator, DocumentNumberAllocator>();
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<ILoginSessionRepository, LoginSessionRepository>();
         services.AddScoped<IAccessGrantRepository, AccessGrantRepository>();

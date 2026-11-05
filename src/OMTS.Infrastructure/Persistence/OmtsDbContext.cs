@@ -39,7 +39,6 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<PurchaseReturn> PurchaseReturns => Set<PurchaseReturn>();
     public DbSet<PurchaseReturnLine> PurchaseReturnLines => Set<PurchaseReturnLine>();
     public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
-    public DbSet<SeedReceiptLot> SeedReceiptLots => Set<SeedReceiptLot>();
     public DbSet<CultivationCycle> CultivationCycles => Set<CultivationCycle>();
     public DbSet<SeedingEvent> SeedingEvents => Set<SeedingEvent>();
     public DbSet<LaneSegment> LaneSegments => Set<LaneSegment>();
@@ -61,6 +60,7 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<Status> Statuses => Set<Status>();
     public DbSet<StatusTransition> StatusTransitions => Set<StatusTransition>();
+    public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {

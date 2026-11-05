@@ -44,12 +44,12 @@ internal static class StatusCatalogSeed
         NewStatus(S.MessageDelivery.Sent, G.MessageDelivery, "SENT", "Sent", "Accepted by the service; this does not mean that the trader has read it.", final: true),
         NewStatus(S.MessageDelivery.NotSent, G.MessageDelivery, "NOT_SENT", "Not sent", "Not accepted by the service; nothing that was saved is undone (GFR-06).", final: true),
 
-        NewStatus(S.PurchaseReceipt.Draft, G.PurchaseReceipt, "DRAFT", "Draft", "Being recorded; does not count in costs, supplier debt or seed lots.", initial: true),
-        NewStatus(S.PurchaseReceipt.Completed, G.PurchaseReceipt, "COMPLETED", "Completed", "Counts in input costs and supplier debt; seed lots created; never edited."),
-        NewStatus(S.PurchaseReceipt.Cancelled, G.PurchaseReceipt, "CANCELLED", "Cancelled", "Recorded by mistake; leaves costs and supplier debt, its seed lots cannot be stocked.", final: true),
+        NewStatus(S.PurchaseReceipt.Draft, G.PurchaseReceipt, "DRAFT", "Draft", "Being prepared; counts nowhere and creates no seed lot. Removed, never cancelled.", initial: true),
+        NewStatus(S.PurchaseReceipt.Completed, G.PurchaseReceipt, "COMPLETED", "Completed", "Cannot be changed; counts in the supplier debt and raft material costs; each Seed line is a seed lot."),
+        NewStatus(S.PurchaseReceipt.Cancelled, G.PurchaseReceipt, "CANCELLED", "Cancelled", "Kept with its reason; counts nowhere; its Seed lines are no longer seed lots.", final: true),
 
         NewStatus(S.SupplierPayment.Recorded, G.SupplierPayment, "RECORDED", "Recorded", "Money paid to the supplier; reduces supplier debt.", initial: true),
-        NewStatus(S.SupplierPayment.Cancelled, G.SupplierPayment, "CANCELLED", "Cancelled", "Cancelled together with its purchase receipt.", final: true),
+        NewStatus(S.SupplierPayment.Cancelled, G.SupplierPayment, "CANCELLED", "Cancelled", "Recorded by mistake; no longer counts in the supplier debt.", final: true),
     ];
 
     public static readonly StatusTransition[] Transitions =
@@ -79,10 +79,10 @@ internal static class StatusCatalogSeed
         NewTransition(55, S.WaterMeasurement.Draft, S.WaterMeasurement.Voided, "ENV-02", OwnerOrZoneManager, Action, "Void a wrong draft.", true),
         NewTransition(56, S.WaterMeasurement.Confirmed, S.WaterMeasurement.Voided, "ENV-02", OwnerOrZoneManager, Action, "Void the latest version of a wrong measurement.", true),
 
-        NewTransition(70, S.PurchaseReceipt.Draft, S.PurchaseReceipt.Completed, "INP-03", OwnerOrZoneManager, Action, "Full validation of supplier, zone, raft, lines and amounts passes.", false),
-        NewTransition(71, S.PurchaseReceipt.Draft, S.PurchaseReceipt.Cancelled, "INP-04", OwnerOrZoneManager, Action, "Cancel a draft that will not be completed.", true),
-        NewTransition(72, S.PurchaseReceipt.Completed, S.PurchaseReceipt.Cancelled, "INP-04", OwnerOrZoneManager, Action, "No seed lot of the receipt is stocked and the receipt has no purchase return.", true),
-        NewTransition(73, S.SupplierPayment.Recorded, S.SupplierPayment.Cancelled, "INP-04", OwnerOrZoneManager, Action, "The receipt is cancelled together with its payments.", true),
+        // A Draft receipt is removed, never cancelled (BR-PURCHASE-09): transition 71 no longer exists.
+        NewTransition(70, S.PurchaseReceipt.Draft, S.PurchaseReceipt.Completed, "PURCHASE-01", "Zone Manager (own drafts); Cooperative Owner", Action, "Supplier In Use, date received not later than today, and every line complete with an input item In Use, a quantity greater than 0 and a unit price of 0 or more.", false),
+        NewTransition(72, S.PurchaseReceipt.Completed, S.PurchaseReceipt.Cancelled, "PURCHASE-06", "Zone Manager (own receipts); Cooperative Owner", Action, "No seed lot of the receipt has been seeded and the receipt has no purchase return that is not cancelled.", true),
+        NewTransition(73, S.SupplierPayment.Recorded, S.SupplierPayment.Cancelled, "PURCHASE-05", "Accountant; Cooperative Owner", Action, "A payment recorded by mistake; payments are never cancelled with a purchase receipt.", true),
     ];
 
     private static Status NewStatus(int id, string group, string code, string displayName, string meaning, bool initial = false, bool final = false) =>

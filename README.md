@@ -79,8 +79,11 @@ bootstrap temporary password. To get every demo login back, reset the environmen
 The demo data also holds the cooperative profile (with a logo, a cover photo and two certifications: one Valid, one
 expiring within 30 days), a fictional receiving bank account (`DEMO00000001`; skipped with a message when `Payments:Provider` does not accept it, as `None` does not), the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued), zone licenses (`DEMO-01`:
 an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid license and an older expired one), about 10 rafts with lanes per zone, 8 employees (one Left),
-5 suppliers, 15 farming input items (codes VT001–VT015, every seed item counted in `con`) and 20 purchase receipts of the last 3 months with payments, discounts and a return,
-4 products (one Discontinued) and 7 customer profiles (2 linked to the trader accounts, 2 the same buyer ready to merge).
+5 suppliers, 15 farming input items (codes VT001–VT015, every seed item counted in `con`) and 20 purchase receipts of the last 3 months
+(16 Completed, 2 Cancelled, 2 Draft): Material lines and two seed receipts name the raft they were bought for, one line has a
+fractional quantity (its amount is not a whole thousand), with payments and a return. The Owner's list holds a MSG-PURCHASE-01
+notification for each completed receipt.
+The demo data also holds 4 products (one Discontinued) and 7 customer profiles (2 linked to the trader accounts, 2 the same buyer ready to merge).
 `DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰) and one water measurement a day for the
 30 days before the seed day: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
 26.0 ‰) and one voided reading. The mistyped 2.6 ‰ alerted before its correction, so the inboxes hold four sets of water
@@ -88,11 +91,11 @@ alerts. Phone numbers are fake (`0900 000 0xx`).
 
 Dates are set relative to the day of the first seed and are not moved afterwards:
 - After a few weeks the "expiring" license and certification have expired. `docker compose down -v` gives fresh dates.
-- Receipt codes carry the seed date (`PR-<seed date>-nnn`), not the receipt date.
+- Receipt codes follow one sequence in the order they were seeded (`PN000001`…`PN000020`), not the receipt date; return
+  codes carry the seed date (`PRT-<seed date>-nnn`).
 - The last water measurement is from the day before the seed: a month later without new ones, the zones are overdue and
   get the 06:00 reminder (MSG-WATER-06).
-- The receipt list shows the current calendar year by default. Seeded in January–March, part of the history is in the
-  previous year: pass `from`/`to` to see it.
+- The receipt list shows the current month by default (PURCHASE-03): pass `from`/`to` to see the older demo receipts.
 
 **Verification codes.** SMS, email and push use the fake providers: nothing leaves the machine. What would have been
 sent stays in memory until the API restarts. Read it in the dev inbox, also listed in Swagger:
@@ -115,7 +118,7 @@ you trust, never on public Wi-Fi.
 **Phone on the same Wi-Fi.** The API listens on every interface of the PC. Find the PC's LAN IP (`ipconfig` on Windows,
 `ipconfig getifaddr en0` on macOS) and point the mobile app at `http://<LAN IP>:8080`. If the phone cannot connect, allow
 inbound TCP 8080 in the PC's firewall. The Android emulator reaches the PC at `http://10.0.2.2:8080`. File links (license
-documents, raft drawings, invoice photos) are relative, signed paths such as `/api/files/local/...?expires=…&sig=…`.
+documents, raft drawings, supplier certificates) are relative, signed paths such as `/api/files/local/...?expires=…&sig=…`.
 Prefix them with the API base URL.
 
 **Web app.** In Development `Cors:AllowedOrigins` allows `http://localhost:3000`, so the Next.js dev server can call the
@@ -173,8 +176,10 @@ discontinued: `GET /api/roles` lists the two staff roles with their `code` (`ZON
 permissions, the static matrix of SRS §I.4.4 in `FixedRoles`. The Owner grants a staff account zone–role pairs
 (`POST /api/accounts/{id}/grants` with `role` (code) or `roleId`, and a `zoneId` or none for All zones). A pair is Effective
 until it is revoked with a reason; there are no validity dates. On records with a zone a role works only in the zones of
-its pairs; records with no zone (suppliers, supplier payments and debts, customers, payroll…) follow the role only, so an
-Accountant pair for one zone opens them (BR-FARM-08). A staff account without an Effective pair cannot log in.
+its pairs; records with no zone (suppliers, purchase receipts and returns, supplier payments and debts, customers,
+payroll…) follow the role only, so an Accountant pair for one zone opens them (BR-FARM-08). The rafts a Zone Manager names on
+a purchase receipt line are still those of the zones of their Zone Manager pairs. A staff account without an Effective pair
+cannot log in.
 
 ### Farming zones and licenses
 
@@ -201,6 +206,8 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | `ZONE_LICENSE_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
 | `COOPERATIVE_CERTIFICATION_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
 | `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (not sent yet: LABOR PR) | never: list only | Owner |
+| `PURCHASE_RECEIPT_COMPLETED` | MSG-PURCHASE-01, when a receipt is completed (never for a draft), also when the Owner completed it | unless turned off | Owner |
+| `PURCHASE_RECEIPT_CANCELLED_ADVANCE` | MSG-PURCHASE-08, when a cancelled receipt leaves the supplier debt below zero | unless turned off | Owner, Accountant |
 
 - Preferences (ACCOUNT-07): `GET`/`PUT /api/me/notification-preferences` list the types of the roles the account
   holds with `push` on or off (`items: [{ type, push }]`). Mandatory types are shown as always pushed and cannot be
@@ -218,6 +225,8 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   | MSG-WATER-06 | `zone_name`, `last_date` |
   | MSG-FARM-01 / MSG-FARM-02 (`ZONE_LICENSE_EXPIRY`) | `document_type` (license type code, null when none), `document_number`, `zone_codes` (list holding the license's one zone), `expiry_date`, `days` (MSG-FARM-01 only) |
   | MSG-FARM-01 / MSG-FARM-02 (`COOPERATIVE_CERTIFICATION_EXPIRY`) | `certification_name`, `certification_number` (null when none), `expiry_date`, `days` (MSG-FARM-01 only) |
+  | MSG-PURCHASE-01 | `user_name`, `receipt_code`, `supplier_name`, `line_count`, `total_amount` (whole VND: the sum of the lines, each rounded half up to the dong) |
+  | MSG-PURCHASE-08 | `user_name`, `receipt_code`, `supplier_name`, `advance_amount` (VND paid in advance, positive) |
 - `GET /api/me/notifications/{id}/open` checks the access again (GFR-02): 403 MSG-GEN-08 when the user may no longer
   open the record (e.g. a revoked zone–role pair), 404 MSG-ACCOUNT-22 when the record was removed. A push carries the
   notification id.
@@ -323,6 +332,12 @@ created by a one-time command run on the server by the deployment operator (not 
    Upgrading a database from before the purchasing catalogue of SRS 27/10 (migration `PurchaseCatalogueV2`): the item
    group `RaftMaterial` becomes `Material`, the supplier's free-text "other contacts" become its address, and the
    migration stops when two farming input items have the same name (rename one first, or reset a demo database).
+   Upgrading a database from before the purchase receipts of SRS 27/10 (migration `PurchaseReceiptsV2`): receipts lose their
+   zone, discount, paid-now amount and invoice photos; their lines get numbers and the receipt raft on their Seed and
+   Material lines; seed lots become the Seed lines themselves (the seeding events are re-pointed); old codes
+   (`PR-yyyyMMdd-nnn`) stay and new receipts take `PN000123` codes from the `DocumentSequences` counter, which starts after
+   the highest PN code and never gives a number twice. Down is lossy. Demo databases are not converted further:
+   reset them (`docker compose down -v`).
    An Owner who cannot log in (for example after losing the first password) is recovered with
    `dotnet OMTS.Api.dll seed --reset-owner-password`. It sets `Bootstrap:Owner:TemporaryPassword` (from configuration, never
    from the command line, so it never lands in shell history) as a new password that must be changed at first login and
