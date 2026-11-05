@@ -77,7 +77,6 @@ public sealed class SupplierDebtExportService(SupplierDebtService debts, ISpread
     {
         SupplierStatementEntryKind.Receipt => "Purchase receipt",
         SupplierStatementEntryKind.Return => "Purchase return",
-        SupplierStatementEntryKind.ReturnRefund => "Refund on a purchase return",
         SupplierStatementEntryKind.Payment => "Payment",
         _ => "Money paid back",
     };

@@ -58,7 +58,7 @@ public class PurchaseReceiptSearchTests(AuthApiFactory factory) : IClassFixture<
         await (await world.Owner.CancelAsync(cancelled.Id(), "Wrong")).ReadAsync(HttpStatusCode.OK);
         // A return dated today of a material line received last month counts this month (BR-FARM-05).
         var lastMonth = await world.CompletedAsync(world.MaterialForRaft(10, 20_000));
-        await (await world.Owner.PostReturnAsync(lastMonth.Id(), new ReturnBody { DebtReductionAmount = 40_000, Lines = [new ReturnLineBody(lastMonth.LineOf(world.Material), 2)] }))
+        await (await world.Owner.PostReturnAsync(lastMonth.Id(), new ReturnBody { Lines = [new ReturnLineBody(lastMonth.LineOf(world.Material), 2)] }))
             .ReadAsync(HttpStatusCode.Created);
         await MoveAsync(lastMonth, Today.AddMonths(-1));
         var period = $"supplierId={world.SupplierId}&from={new DateOnly(Today.Year, Today.Month, 1):yyyy-MM-dd}&to={Today:yyyy-MM-dd}";
@@ -95,7 +95,7 @@ public class PurchaseReceiptSearchTests(AuthApiFactory factory) : IClassFixture<
         var bought = await world.CompletedAsync(world.MaterialForRaft(3, 100_000), new LineBody(world.Seed, 100, 1_000, RaftId: world.Raft.Id),
             new LineBody(world.Material, 1, 70_000, RaftId: otherRaft.Id));
         var older = await world.CompletedAsync(world.MaterialForRaft(5, 10_000));
-        await (await world.Owner.PostReturnAsync(older.Id(), new ReturnBody { DebtReductionAmount = 20_000, Lines = [new ReturnLineBody(older.LineOf(world.Material), 2)] }))
+        await (await world.Owner.PostReturnAsync(older.Id(), new ReturnBody { Lines = [new ReturnLineBody(older.LineOf(world.Material), 2)] }))
             .ReadAsync(HttpStatusCode.Created);
         await MoveAsync(older, Today.AddMonths(-2));
         var month = $"from={new DateOnly(Today.Year, Today.Month, 1):yyyy-MM-dd}&to={Today:yyyy-MM-dd}";

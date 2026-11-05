@@ -1,34 +1,26 @@
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Purchasing;
 
 namespace OMTS.Application.Features.Purchasing;
 
 /// <summary>Money figures of one purchase receipt in VND (PURCHASE-01…03). Payments are not linked to receipts (BR-PURCHASE-04).</summary>
 /// <param name="Total">Σ rounded line amounts (BR-PURCHASE-02).</param>
-/// <param name="Returned">Σ return values of its purchase returns.</param>
-/// <param name="Refunded">Σ refunds received on its returns, until P4 turns them into money paid back.</param>
-public sealed record ReceiptFigures(decimal Total, decimal Returned, decimal Refunded)
+/// <param name="Returned">Σ amounts of its purchase returns that are not cancelled, as recorded.</param>
+public sealed record ReceiptFigures(decimal Total, decimal Returned)
 {
-    /// <summary>What the receipt adds to the supplier debt: its total, less the returns, plus the money those returns brought back.</summary>
-    public decimal DebtShare => Total - Returned + Refunded;
+    /// <summary>What the receipt adds to the supplier debt: its total, less its returns.</summary>
+    public decimal DebtShare => Total - Returned;
 }
 
 /// <summary>The purchasing money rules in one place, as pure functions so they are unit tested.</summary>
 public static class PurchaseMoney
 {
-    public const decimal Thousand = 1000m;
-
     /// <summary>
     /// The rounding of purchasing money: half up to a whole number (BR-PURCHASE-02, PM 03/11), so 561,242.5 is 561,243 where
     /// the .NET default (half to even) gives 561,242. These amounts are never negative, and there "away from zero" is half
     /// up; MidpointRounding.ToPositiveInfinity is not, it is a ceiling.
     /// </summary>
     public static decimal RoundHalfUp(decimal amount) => Math.Round(amount, 0, MidpointRounding.AwayFromZero);
-
-    /// <summary>Only the return values of the old return logic, until P4 moves them to the rule of <see cref="RoundHalfUp"/>. Never a receipt line or total.</summary>
-    public static decimal RoundToThousand(decimal amount) => RoundHalfUp(amount / Thousand) * Thousand;
-
-    /// <summary>The money of purchase returns is still whole thousands until PURCHASE-02 (P4) changes it; supplier payments are not.</summary>
-    public static bool IsThousands(decimal amount) => amount % Thousand == 0;
 
     /// <summary>Quantity × unit price, half up to the dong and never to thousands (BR-PURCHASE-02): 12.5 × 45,501 = 568,762.5 is 568,763.</summary>
     public static decimal LineAmount(decimal quantity, decimal unitPrice) => RoundHalfUp(quantity * unitPrice);
@@ -40,38 +32,11 @@ public static class PurchaseMoney
     /// <summary>The total of a receipt: the sum of its rounded line amounts, not the rounded sum of the products (BR-PURCHASE-02).</summary>
     public static decimal Total(IEnumerable<PurchaseReceiptLine> lines) => lines.Sum(l => l.LineAmount);
 
-    /// <summary>Value of returned goods: quantity × unit price, rounded to the nearest 1,000 VND (the return rework, P4, makes it exact).</summary>
-    public static decimal ReturnValue(decimal quantity, decimal unitPrice) => RoundToThousand(quantity * unitPrice);
-
-    /// <summary>
-    /// Return value capped by what is left of the line's rounded value, so returning a line in parts never credits more
-    /// than the line is worth and its last unit can still be returned.
-    /// </summary>
-    public static decimal CappedReturnValue(decimal quantity, PurchaseReceiptLine line, decimal alreadyReturned) =>
-        Math.Min(ReturnValue(quantity, line.UnitPrice ?? 0), Math.Max(0, RoundToThousand(line.LineAmount) - alreadyReturned));
-
-    /// <summary>
-    /// Receipt-level cap of one return: the values never add up to more than what is left of the total (total − already
-    /// returned, in whole thousands), and the return that leaves nothing returnable is worth exactly that rest, so the
-    /// rounding of the per-line values never blocks the last return. The difference goes on the last lines.
-    /// </summary>
-    public static decimal[] FitToReceipt(IReadOnlyList<decimal> values, decimal remaining, bool leavesNothingReturnable)
-    {
-        var fitted = values.ToArray();
-        remaining = Math.Max(0, remaining);
-        var difference = (leavesNothingReturnable ? remaining : Math.Min(fitted.Sum(), remaining)) - fitted.Sum();
-        for (var i = fitted.Length - 1; i >= 0 && difference != 0; i--)
-        {
-            var adjusted = Math.Max(0, fitted[i] + difference);
-            difference -= adjusted - fitted[i];
-            fitted[i] = adjusted;
-        }
-
-        return fitted;
-    }
+    /// <summary>The returns of the receipt that count: a Cancelled return counts nowhere (BR-PURCHASE-07).</summary>
+    public static IEnumerable<PurchaseReturn> RecordedReturns(PurchaseReceipt receipt) =>
+        receipt.Returns.Where(r => r.StatusId == StatusIds.PurchaseReturn.Recorded);
 
     public static ReceiptFigures Of(PurchaseReceipt receipt) => new(
         Total(receipt.Lines),
-        receipt.Returns.SelectMany(r => r.Lines).Sum(l => l.ReturnValue),
-        receipt.Returns.Sum(r => r.RefundAmount));
+        RecordedReturns(receipt).SelectMany(r => r.Lines).Sum(l => l.ReturnValue));
 }

@@ -300,10 +300,13 @@ public static class UserMessages
         },
     };
 
+    /// <summary>MSG-PURCHASE-02 (PURCHASE-02 step 4): a Zone Manager confirms that the Owner approved the return in person; a confirmation.</summary>
+    public static UserMessage ReturnOwnerApproval(decimal returnAmount, string supplierName) => new(
+        Purchase02, $"Has the Cooperative Owner approved this return of {Vnd(returnAmount)} VND to {supplierName} in person?");
+
     /// <summary>MSG-PURCHASE-03 (PURCHASE-02.0.E1): a quantity to return is not greater than 0 or above what is left.</summary>
-    /// <param name="legacyCode">MSG59 (not greater than 0) or MSG45 (above the limit).</param>
-    public static UserMessage ReturnQuantityOutsideLimit(string itemName, string maxQuantity, string unit, string limitExplanation, string legacyCode) => new(
-        Purchase03, $"{itemName}: enter a quantity greater than 0 and at most {maxQuantity} {unit}. {limitExplanation}".TrimEnd(), legacyCode);
+    public static UserMessage ReturnQuantityOutsideLimit(string itemName, string maxQuantity, string unit, string limitExplanation) => new(
+        Purchase03, $"{itemName}: enter a quantity greater than 0 and at most {maxQuantity} {unit}. {limitExplanation}".TrimEnd(), Legacy.Msg59);
 
     /// <summary>MSG-PURCHASE-04 (BR-PURCHASE-05): notification to the Owner of a payment, money paid back or a cancelled payment; always pushed.</summary>
     /// <param name="transaction">The English {transaction_text}: what was recorded, up to the code ("the cancellation of payment"), from which the text is built.</param>
@@ -497,10 +500,6 @@ public static class UserMessages
         "The data was just updated by another user. Your changes have not been saved; please review the new version and then save again or cancel.");
 
     public static readonly UserMessage SessionExpired = new(Legacy.Msg19, "Your login session has expired. Please log in again.");
-
-    public static readonly UserMessage NotThousands = new(Legacy.Msg41, "The amount must be a multiple of 1,000 VND.");
-
-    public static UserMessage ExceedsLimit(string field, string limit) => new(Legacy.Msg45, $"{field} exceeds the allowed limit ({limit}).");
 
     /// <summary>MSG58 (NFR-13).</summary>
     public static UserMessage SomeoneIsEditing(string userName, string time) => new(

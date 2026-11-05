@@ -93,7 +93,7 @@ public class PurchaseReceiptCancelTests(AuthApiFactory factory) : IClassFixture<
         var returned = await world.CompletedAsync(new LineBody(world.Other, 4, 25_000));
         var withReturn = await (await world.Owner.PostReturnAsync(returned.Id(), new ReturnBody
         {
-            DebtReductionAmount = 25_000, Lines = [new ReturnLineBody(returned.LineOf(world.Other), 1)],
+            Lines = [new ReturnLineBody(returned.LineOf(world.Other), 1)],
         })).ReadAsync(HttpStatusCode.Created);
         var returnCode = withReturn.GetProperty("returns")[0].GetProperty("code").GetString();
         var returnProblem = await (await world.Owner.CancelAsync(returned.Id(), "Wrong")).ProblemAsync(HttpStatusCode.Conflict, "MSG-PURCHASE-09");

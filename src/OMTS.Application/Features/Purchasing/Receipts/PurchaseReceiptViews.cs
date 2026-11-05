@@ -16,7 +16,7 @@ public sealed class PurchaseReceiptViews(IPurchaseReceiptRepository receipts, IA
         var r = await receipts.GetForEditAsync(receiptId, cancellationToken) ?? throw new InvalidOperationException($"Receipt {receiptId} not found.");
         var seeded = await receipts.SeededAsync(r.Lines.Select(l => l.Id).ToList(), cancellationToken);
         var returned = ReturnedQuantities(r);
-        var names = await accounts.GetDisplayNamesAsync([r.RecordedByAccountId], cancellationToken);
+        var names = await accounts.GetDisplayNamesAsync(r.Returns.Select(rt => rt.RecordedByAccountId).Append(r.RecordedByAccountId).Distinct().ToList(), cancellationToken);
         var figures = PurchaseMoney.Of(r);
         return new PurchaseReceiptView(
             r.Id,
@@ -45,7 +45,9 @@ public sealed class PurchaseReceiptViews(IPurchaseReceiptRepository receipts, IA
                     unknown ? l.Quantity ?? 0 : seededQuantity, lineReturned, Returnable(l, seededQuantity, unknown, lineReturned));
             }).ToList(),
             r.Returns.OrderBy(rt => rt.ReturnDate).ThenBy(rt => rt.Code).Select(rt => new ReceiptReturnView(
-                rt.Id, rt.Code, rt.ReturnDate, rt.Reason, rt.Lines.Sum(l => l.ReturnValue), rt.RefundAmount, rt.DebtReductionAmount)).ToList(),
+                rt.Id, rt.Code, rt.ReturnDate, rt.Reason, rt.Lines.Sum(l => l.ReturnValue), rt.StatusId, statusCatalog.DisplayNameOf(rt.StatusId),
+                rt.CancelledAt, rt.CancelReason, new AccountRef(rt.RecordedByAccountId, names.GetValueOrDefault(rt.RecordedByAccountId) ?? string.Empty),
+                RowVersionGuard.Encode(rt.RowVersion))).ToList(),
             RowVersionGuard.Encode(r.RowVersion));
     }
 
@@ -53,8 +55,9 @@ public sealed class PurchaseReceiptViews(IPurchaseReceiptRepository receipts, IA
     public static bool IsSeedLot(PurchaseReceipt receipt, PurchaseReceiptLine line) =>
         receipt.StatusId == StatusIds.PurchaseReceipt.Completed && line.Item?.Group == InputItemGroup.Seed;
 
+    /// <summary>Per receipt line, the quantity on its returns that are not cancelled: a Cancelled return frees its quantity (BR-PURCHASE-07).</summary>
     public static IReadOnlyDictionary<Guid, decimal> ReturnedQuantities(PurchaseReceipt receipt) =>
-        receipt.Returns.SelectMany(rt => rt.Lines).GroupBy(l => l.ReceiptLineId).ToDictionary(g => g.Key, g => g.Sum(l => l.Quantity));
+        PurchaseMoney.RecordedReturns(receipt).SelectMany(rt => rt.Lines).GroupBy(l => l.ReceiptLineId).ToDictionary(g => g.Key, g => g.Sum(l => l.Quantity));
 
     /// <summary>
     /// BR-PURCHASE-07: received − seeded − already returned. A seeding of the lot without a quantity counts as fully

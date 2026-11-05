@@ -14,8 +14,8 @@ namespace OMTS.Application.Features.Purchasing.Receipts;
 
 /// <summary>
 /// PURCHASE-06 – remove a Draft (PURCHASE-06.1) or cancel a Completed receipt with a reason, by the person who recorded it
-/// or the Owner (BR-PURCHASE-09). A receipt whose seed lot was seeded, or that has a purchase return, cannot be cancelled
-/// (MSG-PURCHASE-09). Payments are not linked to receipts and are never cancelled with one, so the debt may go below zero
+/// or the Owner (BR-PURCHASE-09). A receipt whose seed lot was seeded, or that has a purchase return that is not cancelled,
+/// cannot be cancelled (MSG-PURCHASE-09). Payments are not linked to receipts and are never cancelled with one, so the debt may go below zero
 /// (MSG-PURCHASE-07 before, MSG-PURCHASE-08 after).
 /// </summary>
 public sealed class PurchaseReceiptCancellationService(
@@ -128,8 +128,8 @@ public sealed class PurchaseReceiptCancellationService(
     }
 
     /// <summary>
-    /// PURCHASE-06.0.E1: the first seed lot of the receipt that has been seeded, else its first purchase return; null when
-    /// it can be cancelled. Also tells the Owner's correction (PURCHASE-06.2) that the receipt can no longer be cancelled.
+    /// PURCHASE-06.0.E1: the first seed lot of the receipt that has been seeded, else its first purchase return that is not
+    /// cancelled; null when it can be cancelled. Also tells the Owner's correction (PURCHASE-06.2) that the receipt can no longer be cancelled.
     /// </summary>
     public async Task<CancelBlock?> BlockAsync(PurchaseReceipt receipt, CancellationToken cancellationToken)
     {
@@ -139,7 +139,7 @@ public sealed class PurchaseReceiptCancellationService(
             return Block("Seeded", DocumentCodes.SeedLotCode(receipt.Code, seededLine.LineNumber), receipt);
         }
 
-        return receipt.Returns.OrderBy(r => r.ReturnDate).ThenBy(r => r.Code).FirstOrDefault() is { } purchaseReturn
+        return PurchaseMoney.RecordedReturns(receipt).OrderBy(r => r.ReturnDate).ThenBy(r => r.Code).FirstOrDefault() is { } purchaseReturn
             ? Block("Returned", purchaseReturn.Code, receipt)
             : null;
     }
@@ -172,13 +172,12 @@ public sealed class PurchaseReceiptCancellationService(
     }
 
     /// <summary>
-    /// The supplier debt now and after the cancellation: the receipt leaves the debt, and the payments, not linked to it, stay
-    /// recorded, so they still lower it (BR-PURCHASE-04, BR-PURCHASE-09).
+    /// The supplier debt now and after the cancellation: the receipt leaves the debt with its returns that are not cancelled (a
+    /// Cancelled return is already out of it), and the payments, not linked to it, stay recorded, so they still lower it
+    /// (BR-PURCHASE-04, BR-PURCHASE-09).
     /// </summary>
     private async Task<(decimal Before, decimal After)> DebtsAsync(PurchaseReceipt receipt, CancellationToken cancellationToken)
     {
-        // Every return blocks a cancel today. When P4 lets a receipt with only Cancelled returns be cancelled, this formula
-        // must count the returns that are not cancelled only.
         var before = await debts.DebtAsync(receipt.SupplierId, cancellationToken);
         return (before, before - PurchaseMoney.Of(receipt).DebtShare);
     }

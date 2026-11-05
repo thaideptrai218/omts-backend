@@ -4,14 +4,14 @@ namespace OMTS.Application.Features.Purchasing;
 
 /// <summary>
 /// Document codes. Purchase receipts follow GBR-04: PN000123, one cooperative-wide sequence; the seed lot of a Seed line is
-/// the receipt code and the line number (PN000123-1). Supplier payments are TT000123, in one sequence too. Returns keep their
-/// daily code PRT-20261022-001 until PURCHASE-02.
+/// the receipt code and the line number (PN000123-1). Supplier payments are TT000123 and purchase returns TH000123, in one
+/// sequence each.
 /// </summary>
 public static class DocumentCodes
 {
     public const string ReceiptPrefix = "PN";
     public const string PaymentPrefix = "TT";
-    public const string ReturnPrefix = "PRT";
+    public const string ReturnPrefix = "TH";
 
     /// <summary>
     /// PN followed by at least six digits: PN000001…PN999999, then PN1000000. The number comes from the PN document
@@ -22,12 +22,9 @@ public static class DocumentCodes
     /// <summary>TT followed by at least six digits; the number comes from the TT document sequence (BR-PURCHASE-08: the system gives each payment a code).</summary>
     public static string PaymentCode(long number) => $"{PaymentPrefix}{number.ToString("000000", CultureInfo.InvariantCulture)}";
 
+    /// <summary>TH followed by at least six digits; the number comes from the TH document sequence (PURCHASE-02 step 6: saved "with its code").</summary>
+    public static string ReturnCode(long number) => $"{ReturnPrefix}{number.ToString("000000", CultureInfo.InvariantCulture)}";
+
     /// <summary>The seed lot code of a Seed line (GBR-04), written on the seed bags.</summary>
     public static string SeedLotCode(string receiptCode, int lineNumber) => $"{receiptCode}-{lineNumber.ToString(CultureInfo.InvariantCulture)}";
-
-    public static string PrefixFor(string kind, DateOnly day) => $"{kind}-{day:yyyyMMdd}-";
-
-    /// <param name="used">Codes of that day already used.</param>
-    /// <param name="attempt">0 first; a code taken by a parallel save is retried with the next number.</param>
-    public static string Next(string prefix, int used, int attempt = 0) => $"{prefix}{used + 1 + attempt:000}";
 }

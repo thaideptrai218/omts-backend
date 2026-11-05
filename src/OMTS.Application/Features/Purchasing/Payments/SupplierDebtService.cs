@@ -99,10 +99,6 @@ public sealed class SupplierDebtService(
     public async Task<decimal> DebtAsync(Guid supplierId, CancellationToken cancellationToken) =>
         (await SumsAsync(supplierId, timeProvider.Today(), cancellationToken)).Debt;
 
-    /// <summary>The sums of the supplier today.</summary>
-    public Task<SupplierDebtSums> SumsAsync(Guid supplierId, CancellationToken cancellationToken) =>
-        SumsAsync(supplierId, timeProvider.Today(), cancellationToken);
-
     private async Task<SupplierDebtSums> SumsAsync(Guid supplierId, DateOnly asOf, CancellationToken cancellationToken) =>
         (await queries.SumsAsync(supplierId, asOf, cancellationToken)).GetValueOrDefault(supplierId) ?? SupplierDebtSums.Zero;
 
@@ -141,7 +137,8 @@ public sealed class SupplierDebtService(
             var moneyBack = (await queries.MoneyBackAsync(withoutReceipt, cancellationToken)).ToLookup(m => m.SupplierId);
             foreach (var supplierId in withoutReceipt)
             {
-                oldest[supplierId] = SupplierDebtLedger.OldestUncoveredMoneyBack(moneyBack[supplierId], owing[supplierId].Paid);
+                oldest[supplierId] = SupplierDebtLedger.OldestUncoveredMoneyBack(
+                    moneyBack[supplierId], owing[supplierId].Paid + SupplierDebtLedger.ReturnExcess(receipts[supplierId]));
             }
         }
 

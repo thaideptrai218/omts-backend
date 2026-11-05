@@ -1809,6 +1809,28 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
+                            Id = 1901,
+                            Code = "RECORDED",
+                            DisplayName = "Recorded",
+                            Group = "PURCHASE_RETURN",
+                            IsFinal = false,
+                            IsInitial = true,
+                            Meaning = "Lowers the supplier debt and the material cost of the raft; cannot be edited.",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 1902,
+                            Code = "CANCELLED",
+                            DisplayName = "Cancelled",
+                            Group = "PURCHASE_RETURN",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "Recorded by mistake; no longer counts.",
+                            SortOrder = 2
+                        },
+                        new
+                        {
                             Id = 2001,
                             Code = "IN_USE",
                             DisplayName = "In Use",
@@ -2074,6 +2096,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
+                            Id = 74,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 1901,
+                            GuardCondition = "A return recorded by mistake; it no longer counts in the supplier debt, the material cost of a raft or the quantity returned.",
+                            ReasonRequired = true,
+                            ToStatusId = 1902,
+                            TriggerEvent = "Action",
+                            UseCases = "PURCHASE-02"
+                        },
+                        new
+                        {
                             Id = 76,
                             AllowedPerformers = "Cooperative Owner",
                             FromStatusId = 2001,
@@ -2336,6 +2369,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -2346,14 +2386,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<decimal>("DebtReductionAmount")
-                        .HasPrecision(18)
-                        .HasColumnType("decimal(18,0)");
-
-                    b.Property<string>("EvidenceUrls")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Reason")
                         .IsRequired()
@@ -2366,14 +2398,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("RecordedByAccountId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal>("RefundAmount")
-                        .HasPrecision(18)
-                        .HasColumnType("decimal(18,0)");
-
-                    b.Property<string>("RefundMethod")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.Property<DateOnly>("ReturnDate")
                         .HasColumnType("date");
 
@@ -2382,6 +2406,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
+
+                    b.Property<int>("StatusId")
+                        .HasColumnType("int");
 
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
@@ -2398,12 +2425,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RecordedByAccountId");
 
-                    b.ToTable("PurchaseReturns", t =>
-                        {
-                            t.HasCheckConstraint("CK_PurchaseReturn_DebtReductionAmount_Thousands", "[DebtReductionAmount] % 1000 = 0");
+                    b.HasIndex("StatusId");
 
-                            t.HasCheckConstraint("CK_PurchaseReturn_RefundAmount_Thousands", "[RefundAmount] % 1000 = 0");
-                        });
+                    b.ToTable("PurchaseReturns");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.PurchaseReturnLine", b =>
@@ -2432,10 +2456,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ReturnId");
 
-                    b.ToTable("PurchaseReturnLines", t =>
-                        {
-                            t.HasCheckConstraint("CK_PurchaseReturnLine_ReturnValue_Thousands", "[ReturnValue] % 1000 = 0");
-                        });
+                    b.ToTable("PurchaseReturnLines");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.Supplier", b =>
@@ -3408,7 +3429,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
+                        .WithMany()
+                        .HasForeignKey("StatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Receipt");
+
+                    b.Navigation("Status");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.PurchaseReturnLine", b =>

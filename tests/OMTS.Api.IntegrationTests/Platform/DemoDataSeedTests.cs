@@ -167,7 +167,10 @@ public class DemoDataSeedTests
         Assert.Equal(20, statuses.Sum(s => s.Count));
         Assert.Equal(2, statuses.Single(s => s.Key == StatusIds.PurchaseReceipt.Draft).Count);
         Assert.Equal(2, statuses.Single(s => s.Key == StatusIds.PurchaseReceipt.Cancelled).Count);
-        Assert.Equal(1, await db.PurchaseReturns.CountAsync());
+        // One return stands and one was cancelled by the Owner (PURCHASE-02.1), both with TH codes.
+        Assert.Equal(1, await db.PurchaseReturns.CountAsync(r => r.StatusId == StatusIds.PurchaseReturn.Recorded));
+        Assert.Equal(1, await db.PurchaseReturns.CountAsync(r => r.StatusId == StatusIds.PurchaseReturn.Cancelled && r.CancelReason != null));
+        Assert.True(await db.PurchaseReturns.AllAsync(r => r.Code.StartsWith("TH")));
         // TT codes; payments are not linked to receipts; a supplier paid back and a payment was cancelled (PURCHASE-05.2/05.3).
         Assert.True(await db.SupplierPayments.AnyAsync(p => p.StatusId == StatusIds.SupplierPayment.Recorded && p.Kind == SupplierPaymentKind.Payment));
         Assert.True(await db.SupplierPayments.AnyAsync(p => p.StatusId == StatusIds.SupplierPayment.Recorded && p.Kind == SupplierPaymentKind.PaidBack));

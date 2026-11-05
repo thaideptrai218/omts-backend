@@ -86,7 +86,7 @@ public class PurchasingSqlServerTests
 
         var returns = await InParallelAsync(completed.Count, i => world.Owner.PostReturnAsync(completed[i].Id(), new ReturnBody
         {
-            DebtReductionAmount = 10_000, Lines = [new ReturnLineBody(completed[i].LineOf(world.Seed), 1)],
+            Lines = [new ReturnLineBody(completed[i].LineOf(world.Seed), 1)],
         }));
         foreach (var response in returns)
         {
@@ -95,6 +95,7 @@ public class PurchasingSqlServerTests
 
         var returnCodes = await host.QueryAsync(db => db.PurchaseReturns.Where(r => r.Receipt.SupplierId == world.SupplierId).Select(r => r.Code).ToListAsync());
         Assert.Equal(completed.Count, returnCodes.Distinct().Count());
+        Assert.All(returnCodes, code => Assert.Matches("^TH\\d{6}$", code));
     }
 
     // PURCHASE-01: a double Complete completes once and notifies once.
@@ -160,7 +161,7 @@ public class PurchasingSqlServerTests
         Assert.Equal(547, failure.Number);
     }
 
-    // INP-05: concurrent returns never exceed the returnable quantity (receipt row version; loser MSG06).
+    // BR-PURCHASE-07: concurrent returns never exceed the returnable quantity (receipt row version; loser MSG06).
     [SqlServerFact]
     public async Task Parallel_returns_never_exceed_the_returnable_quantity()
     {
@@ -171,7 +172,7 @@ public class PurchasingSqlServerTests
 
         var responses = await InParallelAsync(6, _ => world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody
         {
-            DebtReductionAmount = 300_000, Lines = [new ReturnLineBody(line, 30)],
+            Lines = [new ReturnLineBody(line, 30)],
         }));
 
         var created = responses.Count(r => r.StatusCode == HttpStatusCode.Created);
@@ -192,7 +193,7 @@ public class PurchasingSqlServerTests
         for (var round = 0; round < 3; round++)
         {
             var receipt = await world.CompletedAsync(new LineBody(world.Seed, 10, 10_000));
-            var returnTask = world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { DebtReductionAmount = 10_000, Lines = [new ReturnLineBody(receipt.LineOf(world.Seed), 1)] });
+            var returnTask = world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(receipt.LineOf(world.Seed), 1)] });
             var cancelTask = world.Owner.CancelAsync(receipt.Id(), "Wrong");
             var paymentReceipt = await world.CompletedAsync(new LineBody(world.Other, 1, 100_000));
             var paymentTask = world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, Amount = 100_000, ConfirmAdvance = true });
@@ -241,30 +242,20 @@ public class PurchasingSqlServerTests
     }
 
     [SqlServerFact]
-    public async Task Check_constraints_and_unique_indexes_hold_and_line_amounts_are_no_longer_thousands()
+    public async Task Unique_indexes_hold_and_line_and_return_amounts_are_no_longer_thousands()
     {
         await using var host = await FarmingHost.StartAsync();
         var world = await host.WorldAsync();
         var receipt = await world.PaidAsync(100_000, new LineBody(world.Seed, 10, 100_000), new LineBody(world.Other, 1.5m, 333));
-        var returned = await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody
-        {
-            RefundAmount = 100_000, RefundMethod = "Cash", Lines = [new ReturnLineBody(receipt.LineOf(world.Seed), 1)],
-        })).ReadAsync(HttpStatusCode.Created);
+        var returned = await world.ReturnAsync(receipt.Id(), receipt.LineOf(world.Other), 0.5m);
         var returnId = returned.GetProperty("returns")[0].Id();
         var lineId = receipt.LineOf(world.Seed);
 
-        foreach (var sql in new[]
-        {
-            $"UPDATE PurchaseReturns SET RefundAmount = 98500, DebtReductionAmount = 500 WHERE Id = '{returnId}'",
-            $"UPDATE PurchaseReturnLines SET ReturnValue = 99500 WHERE ReturnId = '{returnId}'",
-        })
-        {
-            await using var db = host.Database.CreateContext();
-            var failure = await Assert.ThrowsAsync<SqlException>(() => db.Database.ExecuteSqlRawAsync(sql));
-            Assert.Equal(547, failure.Number);
-        }
-
-        // BR-PURCHASE-02: line amounts keep their dongs; line numbers are unique on a receipt (the seed lot code).
+        // BR-PURCHASE-02: line amounts keep their dongs, and so do return amounts (166.5 → 167), and return codes are unique;
+        // line numbers are unique on a receipt (the seed lot code).
+        Assert.Equal(167m, await host.QueryAsync(db => db.PurchaseReturnLines.Where(l => l.ReturnId == returnId).Select(l => l.ReturnValue).SingleAsync()));
+        var secondReturn = (await world.ReturnAsync(receipt.Id(), receipt.LineOf(world.Other), 0.5m)).GetProperty("returns")[1];
+        await AssertDuplicateAsync(host, $"UPDATE PurchaseReturns SET Code = '{secondReturn.GetProperty("code").GetString()}' WHERE Id = '{returnId}'");
         Assert.Equal(500m, await host.QueryAsync(db => db.PurchaseReceiptLines.Where(l => l.ReceiptId == receipt.Id() && l.LineNumber == 2).Select(l => l.LineAmount).SingleAsync()));
         await AssertDuplicateAsync(host, $"UPDATE PurchaseReceiptLines SET LineNumber = 2 WHERE Id = '{lineId}'");
         var second = await world.PayAsync(1000);
@@ -306,7 +297,7 @@ public class PurchasingSqlServerTests
 
         await (await owner.PostReturnAsync(receipt.Id(), new ReturnBody
         {
-            Reason = new string('ắ', 1000), DebtReductionAmount = 1000, Lines = [new ReturnLineBody(receipt.LineOf(item.Id()), 1)],
+            Reason = new string('ắ', 1000), Lines = [new ReturnLineBody(receipt.LineOf(item.Id()), 1)],
         })).ReadAsync(HttpStatusCode.Created);
         var other = await owner.CreateReceiptAsync(new ReceiptBody { SupplierId = supplier.Id(), Complete = true, Lines = [new LineBody(item.Id(), 1, 1000)] });
         await (await owner.CancelAsync(other.Id(), new string('ỷ', 1000))).ReadAsync(HttpStatusCode.OK);
@@ -328,7 +319,7 @@ public class PurchasingSqlServerTests
 
         var receipt = await world.PaidAsync(200_000,
             new LineBody(world.Seed, 100, 10_000, RaftId: world.Raft.Id), world.MaterialForRaft(10, 10_000), new LineBody(world.Other, 1.5m, 333));
-        await (await owner.PostReturnAsync(receipt.Id(), new ReturnBody { DebtReductionAmount = 10_000, Lines = [new ReturnLineBody(receipt.LineOf(world.Material), 1)] }))
+        await (await owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(receipt.LineOf(world.Material), 1)] }))
             .ReadAsync(HttpStatusCode.Created);
         var draft = await owner.CreateReceiptAsync(world.Body(new LineBody(null, 1, 1000)));
         var code = receipt.GetProperty("code").GetString()!;

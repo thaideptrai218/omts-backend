@@ -147,23 +147,24 @@ public class SupplierPaymentsDebtsQaTests(AuthApiFactory factory) : IClassFixtur
         }
     }
 
-    // FINDING L5, goes away with P4. BR-PURCHASE-04: the unpaid receipts show what is owed. Until P4 a return can pass its receipt (1,500 returns as 2,000);
-    // SupplierDebtLedger.UnpaidReceipts counts that excess as credit only for receipts after it, so older ones show more than the debt.
-    [Fact(Skip = "Goes away with P4: returns become paid-back payments")]
-    public async Task Finding_L5_the_unpaid_receipts_do_not_add_up_to_more_than_the_debt_when_a_later_return_passes_its_receipt()
+    // BR-PURCHASE-04: the unpaid receipts show what is owed. A return keeps its amount (PM 03/11), so a lower unit price corrected later
+    // leaves it above its receipt: that excess lowers the debt, so it also covers the receipts older than the return.
+    [Fact]
+    public async Task The_unpaid_receipts_add_up_to_the_debt_when_a_return_passes_its_own_later_receipt()
     {
         var world = await factory.WorldAsync();
-        await world.Owner.CreateReceiptAsync(Dated(world, Today.AddDays(-9), 1_000));
-        var later = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 1_500)) with { ReceiptDate = Today.AddDays(-3), Complete = true });
-        await (await world.Owner.PostReturnAsync(later.Id(), new ReturnBody
-        {
-            DebtReductionAmount = 2_000, Lines = [new ReturnLineBody(later.LineOf(world.Other), 1)],
-        })).ReadAsync(HttpStatusCode.Created);
+        var older = await world.Owner.CreateReceiptAsync(Dated(world, Today.AddDays(-9), 1_000));
+        var later = await world.Owner.CreateReceiptAsync(Dated(world, Today.AddDays(-3), 2_000));
+        var line = later.LineOf(world.Other);
+        await world.ReturnAsync(later.Id(), line, 1);
+        await (await world.Owner.CorrectAsync(later.Id(), "Invoice price", new { lineId = line, unitPrice = 1_500 })).ReadAsync(HttpStatusCode.OK);
 
         var detail = await (await world.Owner.GetAsync($"{Debts}/{world.SupplierId}")).ReadAsync(HttpStatusCode.OK);
 
-        Assert.Equal(500m, detail.Money("debtToday"));
-        Assert.Equal(500m, detail.GetProperty("unpaidReceipts").EnumerateArray().Sum(r => r.Money("remaining")));
+        // 1,000 + 1,500 − 2,000: the 500 above the later receipt covers half of the older one.
+        Assert.Equal((500m, 9), (detail.Money("debtToday"), detail.GetProperty("debtAgeDays").GetInt32()));
+        var unpaid = Assert.Single(detail.GetProperty("unpaidReceipts").EnumerateArray());
+        Assert.Equal((older.Id(), 500m, 500m), (unpaid.Id(), unpaid.Money("covered"), unpaid.Money("remaining")));
     }
 
     // PURCHASE-05.1/05.4: each flag answers its own question only, and neither skips a field check or the other question.

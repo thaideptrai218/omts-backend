@@ -38,7 +38,7 @@ public class PurchaseReceiptCancelCorrectListQaTests(AuthApiFactory factory) : I
             await (await world.Owner.CancelAsync(receipt.Id(), "Again")).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
             await (await CorrectAsync(world.Owner, receipt.Id(), new { reason = "Price", lines = new[] { new { lineId = receipt.LineOf(world.Other), unitPrice = 900 } } }))
                 .ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
-            await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { DebtReductionAmount = 1_000, Lines = [new ReturnLineBody(receipt.LineOf(world.Other), 1)] }))
+            await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(receipt.LineOf(world.Other), 1)] }))
                 .ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
         }
 
@@ -129,7 +129,7 @@ public class PurchaseReceiptCancelCorrectListQaTests(AuthApiFactory factory) : I
         var world = await factory.WorldAsync();
         var receipt = await world.CompletedAsync(world.MaterialForRaft(4, 25_000), new LineBody(world.Other, 1, 10_000));
         var material = receipt.LineOf(world.Material);
-        await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { DebtReductionAmount = 25_000, Lines = [new ReturnLineBody(material, 1)] })).ReadAsync(HttpStatusCode.Created);
+        await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(material, 1)] })).ReadAsync(HttpStatusCode.Created);
         var current = await world.Owner.GetFromJsonAsync<JsonElement>($"{Receipts}/{receipt.Id()}");
 
         Assert.Equal("Lines", await (await CorrectAsync(world.Owner, receipt.Id(), new { reason = "x", lines = new[] { new { lineId = material, unitPrice = 1 }, new { lineId = material, unitPrice = 2 } } }))
@@ -155,7 +155,7 @@ public class PurchaseReceiptCancelCorrectListQaTests(AuthApiFactory factory) : I
         var world = await factory.WorldAsync();
         var completed = await world.CompletedAsync(world.MaterialForRaft(1.5m, 333), new LineBody(world.Other, 1, 1_000));
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 2, 1_000)));
-        await (await world.Owner.PostReturnAsync(completed.Id(), new ReturnBody { DebtReductionAmount = 1_000, Lines = [new ReturnLineBody(completed.LineOf(world.Other), 1)] }))
+        await (await world.Owner.PostReturnAsync(completed.Id(), new ReturnBody { Lines = [new ReturnLineBody(completed.LineOf(world.Other), 1)] }))
             .ReadAsync(HttpStatusCode.Created);
 
         foreach (var (filter, rows, totals) in new[]
