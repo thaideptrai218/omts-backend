@@ -77,7 +77,7 @@ A password you change stays changed: the seed never resets it. The Owner gets `D
 bootstrap temporary password. To get every demo login back, reset the environment with `docker compose down -v`.
 
 The demo data also holds the cooperative profile (with a logo, a cover photo and two certifications: one Valid, one
-expiring within 30 days), the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued), zone licenses (`DEMO-01`:
+expiring within 30 days), a fictional receiving bank account (`DEMO00000001`; skipped with a message when `Payments:Provider` does not accept it, as `None` does not), the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued), zone licenses (`DEMO-01`:
 an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid license and an older expired one), about 10 rafts with lanes per zone, 8 employees (one Left),
 5 suppliers, 15 farming input items (codes VT001–VT015, every seed item counted in `con`) and 20 purchase receipts of the last 3 months with payments, discounts and a return,
 4 products (one Discontinued) and 7 customer profiles (2 linked to the trader accounts, 2 the same buyer ready to merge).
@@ -223,6 +223,16 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   notification id.
 - The same table keeps SMS and Zalo OA sendings to traders (`channel`, phone, delivery status Sending / Sent / Not
   sent, provider message id or error code); they are never in a list. No sender uses them yet (SALE-06, TRACE-04).
+- Mandatory types also go out as one SMS (PM decision OMTS-216, 03/11): to the Owners among the recipients and, for the
+  water alert and its withdrawal, to the Zone Managers of the zone among them. The rule is data on the type
+  (`NotificationSmsRule`, `NotificationTypes.All`). The SMS shares the queue of the push: sent once, only after the save
+  commits, never for a failed save, never retried, and not kept as a row. A failed or slow SMS changes nothing; a
+  recipient without a verified phone number gets none and a log line. The text is the MSG text without Vietnamese marks,
+  at most 160 GSM 7-bit characters; a money type (`MoneyToOwner`) carries only its name, document code and amount, so
+  never a bank account number. Operational texts read as their fields do, digits included. At 160 the values, allowed
+  ranges, time and expiry date stay; in order the free text gives way to a short minimum (zone name or list, raft code or
+  license type name, license number), then the closing sentence, then the longer wording of the water alert, then the
+  free text below its minimum. Logs hold the type and the account id only, never what a provider answered.
 
 ### Database (EF Core code-first)
 
@@ -249,6 +259,9 @@ Development; they are anonymous, so never expose a Development environment publi
 The OCR Service of the water meter photos (ENV-01) is only faked until its provider ticket: the fake answers with
 `Ocr:Fake` (default pH 7.8, salinity 25.5), unless the photo bytes contain a marker such as `ph9.1_sal20`, `conf0.6`,
 `at2026-10-20T08:00`, `ocr-fail` or `ocr-timeout` (used by the tests).
+The Payment Notification Service (API-12) has no provider yet, so there is only an interface (`IPaymentNotificationService`)
+and a fake that works in Development: it accepts every receiving bank account except the numbers of
+`Payments:Fake:RejectAccounts` (default `REJECT000001`) and `Payments:Fake:TimeoutAccounts` (default `TIMEOUT00001`, never answers).
 
 ### Background jobs
 
@@ -325,9 +338,10 @@ created by a one-time command run on the server by the deployment operator (not 
 | Area | Keys |
 |---|---|
 | Email (`Email:Provider` = `Smtp` or `Fake`; `Email:Smtp:Security` = `StartTls` (587), `SslOnConnect` (465) or `None`, which is refused outside Development) | `Email:Smtp:Host`, `Port`, `Security`, `Username`, `Password`, `FromAddress`, `FromName`, `TimeoutSeconds`, `Email:Fake:FailFor` |
-| SMS (`Sms:Provider` = `None`, the default: nothing is sent and phone verification cannot complete; `Fake` keeps messages in the dev inbox and is set in Development only) | `Sms:Fake:FailFor` (test numbers that fail) |
+| SMS (`Sms:Provider` = `None`, the default: nothing is sent, phone verification cannot complete and each save with mandatory SMS writes one warning; `Fake` keeps messages in the dev inbox and is set in Development only) | `Sms:Fake:FailFor` (test numbers that fail), `Sms:MandatoryTimeoutSeconds` (default 5, from 1 to 60 or the host does not start: the longest the answer of an action waits for the SMS of its mandatory notifications) |
 | Push (`Push:Provider` = `None` by default, `Fake` in Development) | `Push:Fake:FailFor` |
 | OCR (`Ocr:Provider` unset by default: meter photos are not read and the values are entered by hand (MSG-WATER-01); `Fake` invents readings, so it is set in Development only and stops the host elsewhere) | `Ocr:TimeoutSeconds` (default 15), `Ocr:UncertainBelow` (default 0.8), `Ocr:Fake:Mode` (`Success`, `Fail`, `Timeout`), `Ocr:Fake:Ph`, `Ocr:Fake:Salinity`, `Ocr:Fake:Confidence` |
+| Payment notifications, API-12 (`Payments:Provider` = `None`, the default: no provider is chosen, so no receiving bank account can be accepted and the Owner gets MSG-DEBT-02; `Fake` works in Development only and elsewhere acts as `None`) | `Payments:TimeoutSeconds` (default 15; 1 to 300, anything else stops the host at startup), `Payments:Fake:RejectAccounts`, `Payments:Fake:TimeoutAccounts` |
 | File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development; one container or folder per environment, see Background jobs) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
 | Bootstrap (see Deployment) | `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:*` |
 | Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30) |
