@@ -64,6 +64,7 @@ public static class DependencyInjection
         services.AddScoped<IAccessGrantRepository, AccessGrantRepository>();
         services.AddScoped<IFarmingZoneRepository, FarmingZoneRepository>();
         services.AddScoped<IAuditEventRepository, AuditEventRepository>();
+        services.AddScoped<IAuditEventQuery, AuditEventQuery>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IRelatedRecordQuery, RelatedRecordQuery>();
         services.AddScoped<ISentInvoiceQrCodeQuery, SentInvoiceQrCodeQuery>();
@@ -76,6 +77,7 @@ public static class DependencyInjection
         services.AddScoped<ICooperativeRepository, CooperativeRepository>();
         services.AddScoped<IPushDeviceRepository, PushDeviceRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
+        services.AddScoped<IEmployeeWorkRecords, EmployeeWorkRecords>();
         services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddScoped<IRaftRepository, RaftRepository>();
         services.AddScoped<IZoneLicenseRepository, ZoneLicenseRepository>();
@@ -112,6 +114,11 @@ public static class DependencyInjection
         // Overdue water measurement reminder (formerly JOB-05)
         services.AddOptions<WaterMeasurementOverdueOptions>().Bind(configuration.GetSection(WaterMeasurementOverdueOptions.SectionName));
         services.AddHostedService<WaterMeasurementOverdueJob>();
+
+        // LABOR-01: Left from the day after the last working day
+        services.AddOptions<EmploymentEndOptions>().Bind(configuration.GetSection(EmploymentEndOptions.SectionName));
+        services.AddSingleton<EmploymentEndJob>();
+        services.AddHostedService<EmploymentEndHostedService>();
 
         // Raft photos, license files, cover photos and certificate files no record points to (cooperative logos are never touched)
         services.AddOptions<OrphanFileCleanupOptions>()
