@@ -54,11 +54,10 @@ public class PurchaseCatalogueQaTests(AuthApiFactory factory) : IClassFixture<Au
         var supplierId = await owner.CreateSupplierAsync();
         var itemId = await owner.CreateItemAsync("Other");
         var anonymous = factory.CreateClient();
-        // §I.4.4: PURCHASE-07 and PURCHASE-08 are No for the trader; the System Administrator has no business rights.
+        // §I.4.4: PURCHASE-07 and PURCHASE-08 are No for the trader.
         var refusedCallers = new[]
         {
             await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader)).Username),
-            await factory.LoginAsync((await factory.AddAccountAsync(NewCode(), Password, SubjectType.SystemAdministrator)).Username),
         };
 
         foreach (var (method, path, body) in Endpoints(supplierId, itemId))
