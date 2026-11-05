@@ -27,13 +27,17 @@ public sealed record RaftBody(
     string? Code, decimal? Latitude, decimal? Longitude, string? Location, string? Size, string? ConditionNotes,
     IReadOnlyList<LaneBody>? Lanes, object? LayoutDrawing = null, string? RowVersion = null);
 
-/// <summary>FARM-03 multipart form fields; <see cref="File"/> null sends no file.</summary>
+/// <summary>
+/// FARM-03 multipart form fields; <see cref="File"/> null sends no file. The expiry date is required since PR 0.8: it
+/// defaults to five years ahead. <see cref="ZoneIds"/> sends the deprecated <c>zoneIds</c> field.
+/// </summary>
 public sealed record LicenseFields
 {
     public string? DocumentType { get; init; } = "AQUACULTURE_LICENSE";
     public string? DocumentNumber { get; init; } = $"GP-{NewCode()}";
     public DateOnly? EffectiveDate { get; init; }
-    public DateOnly? ExpiryDate { get; init; }
+    public DateOnly? ExpiryDate { get; init; } = FarmingTestKit.Today.AddYears(5);
+    public Guid? ZoneId { get; init; }
     public IReadOnlyList<Guid> ZoneIds { get; init; } = [];
     public string? IssuingAuthority { get; init; }
     public string? Holder { get; init; }
@@ -61,6 +65,7 @@ public sealed record LicenseFields
         Add(Holder, "holder");
         Add(LegalScope, "legalScope");
         Add(RowVersion, "rowVersion");
+        Add(ZoneId?.ToString(), "zoneId");
         foreach (var zoneId in ZoneIds)
         {
             form.Add(new StringContent(zoneId.ToString()), "zoneIds");
@@ -146,8 +151,13 @@ public static class FarmingTestKit
         code ?? NewCode(), 21.05m, 107.35m, "Raft row 2", "40 m x 20 m", null,
         Enumerable.Range(1, lanes).Select(n => new LaneBody(n, length, "A", "B")).ToList());
 
+    /// <summary>Creates a zone and returns the saved zone, the <c>zone</c> of the answer (FARM-02.0 step 6).</summary>
     public static async Task<JsonElement> CreateZoneAsync(this HttpClient owner, ZoneBody? body = null) =>
-        await (await owner.PostAsJsonAsync("/api/zones", body ?? NewZoneBody())).ReadAsync(HttpStatusCode.Created);
+        (await (await owner.PostAsJsonAsync("/api/zones", body ?? NewZoneBody())).ReadAsync(HttpStatusCode.Created)).GetProperty("zone");
+
+    /// <summary>Edits a zone and returns the saved zone, the <c>zone</c> of the answer (FARM-02.1).</summary>
+    public static async Task<JsonElement> EditZoneAsync(this HttpClient owner, Guid zoneId, ZoneBody body) =>
+        (await (await owner.PutAsJsonAsync($"/api/zones/{zoneId}", body)).ReadAsync(HttpStatusCode.OK)).GetProperty("zone");
 
     public static async Task<JsonElement> CreateRaftAsync(this HttpClient owner, Guid zoneId, RaftBody? body = null) =>
         await (await owner.PostAsJsonAsync($"/api/zones/{zoneId}/rafts", body ?? NewRaftBody())).ReadAsync(HttpStatusCode.Created);
@@ -207,7 +217,8 @@ public static class FarmingTestKit
 
     /// <summary>
     /// InMemory never generates rowversions, so they stay empty – and an empty <c>rowVersion</c> form field binds as
-    /// null (MSG01). Stores a version on the row, as SQL Server would, and returns it for the multipart edit forms.
+    /// null (MSG01). Stores a version on the row, as SQL Server would, and returns it for the multipart edit forms. Its
+    /// last byte is 1–254, so it never equals <see cref="AcsTestKit.StaleRowVersion"/>.
     /// </summary>
     public static async Task<string> IssueRowVersionAsync<T>(this AuthApiFactory factory, Guid id) where T : OMTS.Domain.Common.AuditableEntity
     {

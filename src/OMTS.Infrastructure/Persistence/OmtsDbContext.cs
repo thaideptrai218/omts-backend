@@ -14,6 +14,7 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
 {
     // Organization, identity and access control
     public DbSet<Cooperative> Cooperatives => Set<Cooperative>();
+    public DbSet<CooperativeCertification> CooperativeCertifications => Set<CooperativeCertification>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<EmployeeWorkingZone> EmployeeWorkingZones => Set<EmployeeWorkingZone>();
@@ -26,7 +27,6 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     // Farming zones and rafts
     public DbSet<FarmingZone> FarmingZones => Set<FarmingZone>();
     public DbSet<ZoneComplianceDocument> ZoneComplianceDocuments => Set<ZoneComplianceDocument>();
-    public DbSet<DocumentZoneScope> DocumentZoneScopes => Set<DocumentZoneScope>();
     public DbSet<Raft> Rafts => Set<Raft>();
     public DbSet<RaftLayoutVersion> RaftLayoutVersions => Set<RaftLayoutVersion>();
     public DbSet<Lane> Lanes => Set<Lane>();
@@ -39,7 +39,6 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<PurchaseReturn> PurchaseReturns => Set<PurchaseReturn>();
     public DbSet<PurchaseReturnLine> PurchaseReturnLines => Set<PurchaseReturnLine>();
     public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
-    public DbSet<SeedReceiptLot> SeedReceiptLots => Set<SeedReceiptLot>();
     public DbSet<CultivationCycle> CultivationCycles => Set<CultivationCycle>();
     public DbSet<SeedingEvent> SeedingEvents => Set<SeedingEvent>();
     public DbSet<LaneSegment> LaneSegments => Set<LaneSegment>();
@@ -61,6 +60,7 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<Status> Statuses => Set<Status>();
     public DbSet<StatusTransition> StatusTransitions => Set<StatusTransition>();
+    public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {

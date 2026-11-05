@@ -281,6 +281,25 @@ public class ReviewFixQaSqlServerTests
         Assert.Equal(StatusIds.Usage.Discontinued, raftStatus);
     }
 
+    /// <summary>
+    /// GBR-01 under a race (PR 0.8): a license create whose zone is discontinued between its check and its save is refused
+    /// (MSG06), leaves no license and removes its upload.
+    /// </summary>
+    [SqlServerFact]
+    public async Task License_create_racing_a_zone_discontinue_is_refused_and_leaves_no_license()
+    {
+        await using var host = await ZoneRaceSqlHost.StartAsync();
+        var zoneId = (await host.Owner.CreateZoneAsync()).Id();
+        var number = $"GP-{NewCode()}";
+
+        host.Race.Arm(zoneId);
+        var response = await host.Owner.PostAsync("/api/zone-licenses", new LicenseFields { DocumentNumber = number, ZoneId = zoneId, EffectiveDate = Today }.ToForm());
+
+        Assert.Equal((HttpStatusCode.Conflict, "MSG06"), (response.StatusCode, await response.ErrorCodeAsync()));
+        Assert.Equal(StatusIds.Usage.Discontinued, await host.QueryAsync(async db => (await db.FarmingZones.SingleAsync(z => z.Id == zoneId)).StatusId));
+        Assert.Equal(0, await host.QueryAsync(db => db.ZoneComplianceDocuments.CountAsync(d => d.DocumentNumber == number)));
+    }
+
     /// <summary>On SQL Server (real row versions): the same drawing written differently keeps the row version; a notes-only edit bumps it once.</summary>
     [SqlServerFact]
     public async Task Same_drawing_keeps_the_row_version_and_a_notes_edit_bumps_it_once_on_sql_server()
@@ -330,7 +349,7 @@ public class ReviewFixQaSqlServerTests
         var zone = await host.Owner.CreateZoneAsync();
         var license = await host.Owner.CreateLicenseAsync(new LicenseFields
         {
-            ZoneIds = [zone.Id()],
+            ZoneId = zone.Id(),
             EffectiveDate = Today.AddYears(-1),
             ExpiryDate = Today.AddDays(-2),
         });
@@ -365,12 +384,11 @@ public class ReviewFixQaSqlServerTests
     public async Task Candidate_query_on_sql_server_returns_only_licenses_with_a_notice_due()
     {
         await using var host = await ZoneRaceSqlHost.StartAsync();
-        var zone = await host.Owner.CreateZoneAsync();
-        var zoneIds = new[] { zone.Id() };
-        var due = (await host.Owner.CreateLicenseAsync(new LicenseFields { ZoneIds = zoneIds, EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(10) })).Id();
-        var far = (await host.Owner.CreateLicenseAsync(new LicenseFields { ZoneIds = zoneIds, EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(90) })).Id();
-        var told = (await host.Owner.CreateLicenseAsync(new LicenseFields { ZoneIds = zoneIds, EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(5) })).Id();
-        var lapsedTold = (await host.Owner.CreateLicenseAsync(new LicenseFields { ZoneIds = zoneIds, EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(-3) })).Id();
+        var zoneId = (await host.Owner.CreateZoneAsync()).Id();
+        var due = (await host.Owner.CreateLicenseAsync(new LicenseFields { ZoneId = zoneId, EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(10) })).Id();
+        var far = (await host.Owner.CreateLicenseAsync(new LicenseFields { ZoneId = zoneId, EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(90) })).Id();
+        var told = (await host.Owner.CreateLicenseAsync(new LicenseFields { ZoneId = zoneId, EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(5) })).Id();
+        var lapsedTold = (await host.Owner.CreateLicenseAsync(new LicenseFields { ZoneId = zoneId, EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(-3) })).Id();
         await host.UseDbAsync(async db =>
         {
             foreach (var document in await db.ZoneComplianceDocuments.Where(d => d.Id == told || d.Id == lapsedTold).ToListAsync())
@@ -417,7 +435,7 @@ internal sealed class ZoneRace
 
     public void Arm(Guid zoneId) => _armedZoneId = zoneId;
 
-    /// <summary>The armed zone when this save touches a raft of it (and disarms), otherwise null.</summary>
+    /// <summary>The armed zone when this save touches a raft or a license of it (and disarms), otherwise null.</summary>
     public Guid? TakeIfAffected(OmtsDbContext db)
     {
         if (_armedZoneId is not { } zoneId)
@@ -426,7 +444,9 @@ internal sealed class ZoneRace
         }
 
         var affected = db.ChangeTracker.Entries<Raft>()
-            .Any(e => e.Entity.ZoneId == zoneId && (e.State == EntityState.Added || e.State == EntityState.Modified));
+                .Any(e => e.Entity.ZoneId == zoneId && (e.State == EntityState.Added || e.State == EntityState.Modified))
+            || db.ChangeTracker.Entries<ZoneComplianceDocument>()
+                .Any(e => e.Entity.ZoneId == zoneId && (e.State == EntityState.Added || e.State == EntityState.Modified));
         if (!affected)
         {
             return null;
@@ -550,6 +570,8 @@ internal sealed class ZoneRaceSqlHost : IAsyncDisposable
                 DisplayName = "Owner",
                 PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher>().Hash(Password),
                 SubjectType = SubjectType.CooperativeOwner,
+                PhoneNumber = NewPhone(),
+                PhoneVerifiedAt = DateTimeOffset.UtcNow,
                 StatusId = StatusIds.Account.Active,
             };
             db.Accounts.Add(owner);

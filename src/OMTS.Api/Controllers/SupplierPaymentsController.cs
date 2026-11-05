@@ -22,9 +22,9 @@ public sealed class SupplierPaymentsController(SupplierPaymentService payments) 
     [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.View, PermissionScope.NoZone)]
     [ProducesResponseType<SupplierPaymentPage>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Search(
-        Guid? supplierId, Guid? receiptId, Guid? zoneId, PaymentMethod? method, int? statusId, DateOnly? from, DateOnly? to,
+        Guid? supplierId, Guid? receiptId, PaymentMethod? method, int? statusId, DateOnly? from, DateOnly? to,
         int page = 1, int pageSize = 20, CancellationToken cancellationToken = default) =>
-        Ok(await payments.SearchAsync(supplierId, receiptId, zoneId, method, statusId, from, to, page, pageSize, cancellationToken));
+        Ok(await payments.SearchAsync(supplierId, receiptId, method, statusId, from, to, page, pageSize, cancellationToken));
 
     /// <summary>A repeated <c>deduplicationKey</c> returns the first payment and creates nothing.</summary>
     [HttpPost]

@@ -29,7 +29,7 @@ public class WaterMeasurementsV2MigrationTests
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync(before);
         var (cooperative, zone, account) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
-        await db.Database.ExecuteSqlAsync($"INSERT INTO Cooperatives (Id, FullName, StatusId, CreatedAt) VALUES ({cooperative}, N'HTX', 201, SYSDATETIMEOFFSET())");
+        await db.Database.ExecuteSqlAsync($"INSERT INTO Cooperatives (Id, FullName, CreatedAt) VALUES ({cooperative}, N'HTX', SYSDATETIMEOFFSET())");
         await db.Database.ExecuteSqlAsync($"INSERT INTO FarmingZones (Id, CooperativeId, Code, Name, StatusId, CreatedAt, WaterMeasurementPoint) VALUES ({zone}, {cooperative}, N'Z1', N'Zone 1', 101, SYSDATETIMEOFFSET(), N'Phao 1')");
         await db.Database.ExecuteSqlAsync(
             $"INSERT INTO Accounts (Id, Username, DisplayName, PasswordHash, SubjectType, StatusId, FailedLoginCount, MustChangePassword, CreatedAt) VALUES ({account}, N'old', N'Old', N'x', N'Staff', 301, 0, 0, SYSDATETIMEOFFSET())");

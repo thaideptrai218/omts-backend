@@ -3,12 +3,18 @@ using OMTS.Domain.Common;
 namespace OMTS.Domain.Entities.Farming;
 
 /// <summary>
-/// E08 – Legal document that may cover several zones. Renewal creates a new document pointing to the
-/// replaced one; “Expiring soon” / “Expired” are derived from <see cref="ExpiryDate"/> (JOB-06).
+/// ZoneLicense of the SRS (FARM-03): a license of one farming zone with its validity dates and file. A newer license can
+/// replace it (<see cref="ReplacesDocumentId"/> on the newer one); Not yet effective, Valid, Expiring soon, Expired and
+/// Replaced are worked out from the dates and the replacing license (BR-FARM-06), never stored.
 /// </summary>
-public class ZoneComplianceDocument : AuditableEntity
+public class ZoneComplianceDocument : AuditableEntity, IHasExpiryReminderMarkers
 {
-    public string DocumentType { get; set; } = string.Empty;
+    public Guid ZoneId { get; set; }
+    public FarmingZone Zone { get; set; } = null!;
+
+    /// <summary>Optional license type code (not in the SRS); null when not given.</summary>
+    public string? DocumentType { get; set; }
+
     public string DocumentNumber { get; set; } = string.Empty;
     public string? Holder { get; set; }
     public string? IssuingAuthority { get; set; }
@@ -20,11 +26,9 @@ public class ZoneComplianceDocument : AuditableEntity
     public Guid? ReplacesDocumentId { get; set; }
     public ZoneComplianceDocument? ReplacesDocument { get; set; }
 
-    public ICollection<DocumentZoneScope> ZoneScopes { get; set; } = [];
-
-    /// <summary>When the 30-day expiry reminder was sent (FARM-03 reminder job); cleared when the expiry date changes.</summary>
+    /// <summary>When the Expiring soon reminder was sent (GFR-03); cleared when the expiry date changes.</summary>
     public DateTimeOffset? ExpiringReminderSentAt { get; set; }
 
-    /// <summary>When the "expired" reminder was sent; cleared when the expiry date changes.</summary>
+    /// <summary>When the Expired reminder was sent (GFR-03); cleared when the expiry date changes.</summary>
     public DateTimeOffset? ExpiredReminderSentAt { get; set; }
 }

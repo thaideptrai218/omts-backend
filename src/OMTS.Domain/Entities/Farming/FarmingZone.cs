@@ -39,6 +39,7 @@ public class FarmingZone : AuditableEntity, IHasStatus
     public Status Status { get; set; } = null!;
 
     public ICollection<Raft> Rafts { get; set; } = [];
-    public ICollection<DocumentZoneScope> DocumentScopes { get; set; } = [];
+    /// <summary>The zone licenses (FARM-03); each license belongs to one zone.</summary>
+    public ICollection<ZoneComplianceDocument> Licenses { get; set; } = [];
     public ICollection<WaterMeasurement> WaterMeasurements { get; set; } = [];
 }

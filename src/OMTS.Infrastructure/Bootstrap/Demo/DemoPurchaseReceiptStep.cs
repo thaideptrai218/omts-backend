@@ -8,11 +8,12 @@ using OMTS.Domain.Enums;
 namespace OMTS.Infrastructure.Bootstrap.Demo;
 
 /// <summary>
-/// INP-03…INP-06: the twenty demo receipts of <see cref="DemoReceiptPlans"/>, saved through the receipt,
-/// cancellation, return and payment services with their real dates (the services accept past receipt, payment
-/// and return dates), so totals, supplier debts and raft material costs are computed by the normal rules.
-/// Each receipt is found by its code at the start of its notes; every follow-up (payment, return, cancel) is
-/// checked against the stored state, so an interrupted run is completed by the next one.
+/// PURCHASE-01/06 (and the returns and payments of today): the twenty demo receipts of <see cref="DemoReceiptPlans"/>, saved
+/// through the receipt, cancellation, return and payment services with their real dates (the services accept past receipt,
+/// payment and return dates), so totals, supplier debts and raft material costs are computed by the normal rules. The
+/// Owner is notified of each completed receipt (MSG-PURCHASE-01). Each receipt is found by its plan code at the start of its
+/// notes; every follow-up (payment, return, cancel) is checked against the stored state, so an interrupted run is completed
+/// by the next one.
 /// </summary>
 internal sealed class DemoPurchaseReceiptStep : IDemoSeedStep
 {
@@ -46,20 +47,21 @@ internal sealed class DemoPurchaseReceiptStep : IDemoSeedStep
         DemoSeedContext context, DemoReceiptPlan plan, Guid supplierId, string prefix, CancellationToken cancellationToken)
     {
         var db = context.Db;
-        var zoneId = await db.FarmingZones.Where(z => z.Code == plan.Zone).Select(z => z.Id).SingleAsync(cancellationToken);
         Guid? raftId = null;
-        if (plan.RaftNumber is { } raftNumber)
+        if (plan is { RaftZone: { } raftZone, RaftNumber: { } raftNumber })
         {
-            var raftCode = DemoRaftStep.RaftCode(plan.Zone, raftNumber);
-            raftId = await db.Rafts.Where(r => r.ZoneId == zoneId && r.Code == raftCode).Select(r => r.Id).SingleAsync(cancellationToken);
+            var raftCode = DemoRaftStep.RaftCode(raftZone, raftNumber);
+            raftId = await db.Rafts.Where(r => r.Zone.Code == raftZone && r.Code == raftCode).Select(r => r.Id).SingleAsync(cancellationToken);
         }
 
         var itemCodes = plan.Lines.Select(l => l.Item).ToList();
-        var itemIds = await db.FarmingInputItems.Where(i => itemCodes.Contains(i.Code)).ToDictionaryAsync(i => i.Code, i => i.Id, cancellationToken);
+        var items = await db.FarmingInputItems.Where(i => itemCodes.Contains(i.Code)).ToDictionaryAsync(i => i.Code, cancellationToken);
+        // The raft goes on the Seed and Material lines only (GBR-04, BR-FARM-05).
         return new SavePurchaseReceiptRequest(
-            supplierId, zoneId, raftId, context.Today.AddDays(-plan.DaysAgo), plan.Discount, plan.PaidNow,
-            plan.PaidNow > 0 ? plan.PaidNowMethod : null, $"{prefix}{plan.Note}",
-            plan.Lines.Select(l => new ReceiptLineInput(itemIds[l.Item], l.Quantity, l.UnitPrice, l.SupplierLotCode, l.ActualSource)).ToList(),
+            supplierId, context.Today.AddDays(-plan.DaysAgo), $"{prefix}{plan.Note}",
+            plan.Lines.Select(l => new ReceiptLineInput(
+                items[l.Item].Id, l.Quantity, l.UnitPrice, l.SupplierLotCode,
+                items[l.Item].Group is InputItemGroup.Seed or InputItemGroup.Material ? raftId : null)).ToList(),
             Complete: plan.Outcome != DemoReceiptOutcome.Draft);
     }
 
@@ -74,11 +76,11 @@ internal sealed class DemoPurchaseReceiptStep : IDemoSeedStep
         }
 
         var payments = context.Get<SupplierPaymentService>();
-        for (var i = 0; i < (plan.Later?.Length ?? 0); i++)
+        for (var i = 0; i < (plan.Payments?.Length ?? 0); i++)
         {
-            var later = plan.Later![i];
+            var payment = plan.Payments![i];
             DemoSeedContext.Ensure(await payments.RecordAsync(new RecordSupplierPaymentRequest(
-                supplierId, receiptId, later.Amount, context.Today.AddDays(-later.DaysAgo), later.Method, null, $"{plan.Code}-PAY{i + 1}"), cancellationToken),
+                supplierId, receiptId, payment.Amount, context.Today.AddDays(-payment.DaysAgo), payment.Method, null, $"{plan.Code}-PAY{i + 1}"), cancellationToken),
                 $"payment {i + 1} of {plan.Code}");
         }
 
@@ -94,7 +96,7 @@ internal sealed class DemoPurchaseReceiptStep : IDemoSeedStep
         if (plan.Outcome == DemoReceiptOutcome.Cancelled)
         {
             DemoSeedContext.Ensure(await context.Get<PurchaseReceiptCancellationService>().CancelAsync(
-                receiptId, new CancelReceiptRequest(plan.CancelReason, CancelPayments: true, RowVersion: null), cancellationToken), $"cancelling {plan.Code}");
+                receiptId, new CancelReceiptRequest(plan.CancelReason), cancellationToken), $"cancelling {plan.Code}");
         }
     }
 }
