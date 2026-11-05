@@ -19,15 +19,15 @@ public class MandatorySmsLicenseReminderTests(AuthApiFactory api) : IClassFixtur
         var zoneId = (await owner.Client.CreateZoneAsync()).Id();
         var manager = await api.AddAccountAsync(NewCode(), NewPassword(), SubjectType.Staff);
         await api.GrantAsync(manager, StaffRole.ZoneManager, zoneId);
-        await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneIds = [zoneId], EffectiveDate = Today.AddDays(-300), ExpiryDate = Today.AddDays(10) });
+        await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zoneId, EffectiveDate = Today.AddDays(-300), ExpiryDate = Today.AddDays(10) });
         var job = api.Services.GetRequiredService<ZoneLicenseReminderJob>();
 
         Assert.Equal(1, await job.RunOnceAsync(Today));
         Assert.Equal(0, await job.RunOnceAsync(Today));
 
         Assert.Contains("in 10 days", Assert.Single(api.SmsTo(owner.Account)).Text);
-        // The manager keeps the notification as before; the SMS of a license is for the Owner only.
-        Assert.Equal(1, await api.NotificationCountAsync(manager.Id, NotificationTypes.ZoneLicenseExpiry));
+        // The expiry reminder of a license is for the Owner only: the notification and the SMS (GFR-03).
+        Assert.Equal(0, await api.NotificationCountAsync(manager.Id, NotificationTypes.ZoneLicenseExpiry));
         Assert.Empty(api.SmsTo(manager));
     }
 }

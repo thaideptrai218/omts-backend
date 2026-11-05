@@ -25,6 +25,7 @@ internal static class NotificationSmsLayouts
     private const int RaftMinimum = 6;
     private const int LicenseTypeMinimum = 12;
     private const int LicenseNumberMinimum = 20;
+    private const int CertificationNameMinimum = 12;
 
     private const string CheckTheWater = " Please check the water.";
     private const string RenewIt = " Please renew it and record the new one.";
@@ -32,7 +33,7 @@ internal static class NotificationSmsLayouts
     public static NotificationSmsLayout? Of(UserMessage message) => (message.Code, message.Parameters) switch
     {
         (MessageCodes.Water03, { } parameters) => WaterAlert(parameters),
-        (MessageCodes.Farm01 or MessageCodes.Farm02, { } parameters) => License(parameters),
+        (MessageCodes.Farm01 or MessageCodes.Farm02, { } parameters) => License(parameters) ?? Certification(parameters),
         _ => null,
     };
 
@@ -58,6 +59,32 @@ internal static class NotificationSmsLayouts
             [Full, free => WithoutEnding(Full(free), CheckTheWater), Short]);
     }
 
+    private static NotificationSmsLayout? Certification(IReadOnlyDictionary<string, object?> parameters)
+    {
+        if (parameters.GetValueOrDefault("certification_name") is not string name
+            || parameters.GetValueOrDefault("expiry_date") is not DateOnly expiry)
+        {
+            return null;
+        }
+
+        var number = parameters.GetValueOrDefault("certification_number") as string;
+        var days = parameters.GetValueOrDefault("days") as int?;
+
+        string Full(IReadOnlyList<string> free)
+        {
+            var shownNumber = number is null ? null : free[1];
+            return (days is { } left
+                ? UserMessages.CertificationExpiringSoon(free[0], shownNumber, expiry, left)
+                : UserMessages.CertificationExpired(free[0], shownNumber, expiry)).Text;
+        }
+
+        return new NotificationSmsLayout(
+            number is null
+                ? [new SmsFreeText(name, CertificationNameMinimum)]
+                : [new SmsFreeText(name, CertificationNameMinimum), new SmsFreeText(number, LicenseNumberMinimum)],
+            [Full, free => WithoutEnding(Full(free), RenewIt)]);
+    }
+
     private static NotificationSmsLayout? License(IReadOnlyDictionary<string, object?> parameters)
     {
         if (parameters.GetValueOrDefault("document_type") is not string type
@@ -72,8 +99,8 @@ internal static class NotificationSmsLayouts
         var days = parameters.GetValueOrDefault("days") as int?;
 
         string Full(IReadOnlyList<string> free) => (days is { } left
-            ? UserMessages.LicenseExpiringSoon(type, free[1], free[2], [free[0]], expiry, left)
-            : UserMessages.LicenseExpired(type, free[1], free[2], [free[0]], expiry)).Text;
+            ? UserMessages.LicenseExpiringSoon(type, free[1], free[2], free[0], expiry, left)
+            : UserMessages.LicenseExpired(type, free[1], free[2], free[0], expiry)).Text;
 
         return new NotificationSmsLayout(
             [

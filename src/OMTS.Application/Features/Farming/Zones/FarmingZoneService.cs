@@ -1,5 +1,6 @@
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
@@ -16,7 +17,8 @@ namespace OMTS.Application.Features.Farming.Zones;
 
 /// <summary>
 /// FARM-02 – farming zones. Writes are Cooperative Owner only (checked by the API filter); reads are
-/// limited to the zones the caller may see (<see cref="FarmingLookupAccess"/>).
+/// limited to the zones the caller may see (<see cref="FarmingLookupAccess"/>). A Discontinued zone is read-only until
+/// it is resumed (GBR-01, MSG-GEN-09).
 /// </summary>
 public sealed class FarmingZoneService(
     IFarmingZoneRepository zones,
@@ -75,7 +77,13 @@ public sealed class FarmingZoneService(
             z.Rafts.OrderBy(r => r.Code).Select(r => new MapRaft(r.Id, r.Code, r.Latitude, r.Longitude)).ToList())).ToList();
     }
 
-    public async Task<Result<FarmingZoneView>> CreateAsync(SaveFarmingZoneRequest request, CancellationToken cancellationToken)
+    /// <summary>The proposed code of a new zone (KV01, KV02…; GBR-03); the Owner may replace it.</summary>
+    public async Task<FarmingZoneCodeProposal> ProposeCodeAsync(CancellationToken cancellationToken) => new(
+        SequentialCodes.Next(
+            SequentialCodes.ZonePrefix, SequentialCodes.ZoneDigits, SequentialCodes.ZoneCodeMaxLength,
+            await zones.CodesStartingWithAsync(SequentialCodes.ZonePrefix, cancellationToken)));
+
+    public async Task<Result<FarmingZoneSaved>> CreateAsync(SaveFarmingZoneRequest request, CancellationToken cancellationToken)
     {
         if (await cooperatives.GetCurrentAsync(cancellationToken) is not { } cooperative)
         {
@@ -97,16 +105,26 @@ public sealed class FarmingZoneService(
         Apply(zone, values);
         zones.Add(zone);
         audit.Record(new AuditEntry("FarmingZone.Created", RecordType) { RecordId = zone.Id, RecordCode = zone.Code, ZoneId = zone.Id, After = Snapshot(zone) });
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return await ViewAsync(zone, cancellationToken);
+        if (await SaveAsync(zone, exceptZoneId: null, cancellationToken) is { } duplicate)
+        {
+            return duplicate;
+        }
+
+        return await SavedAsync(zone, cancellationToken);
     }
 
-    public async Task<Result<FarmingZoneView>> UpdateAsync(Guid zoneId, SaveFarmingZoneRequest request, CancellationToken cancellationToken)
+    /// <summary>FARM-02.1: only an In Use zone is edited (FARM-02.1.E1, MSG-GEN-09); the codes of its rafts never change.</summary>
+    public async Task<Result<FarmingZoneSaved>> UpdateAsync(Guid zoneId, SaveFarmingZoneRequest request, CancellationToken cancellationToken)
     {
         var zone = await zones.GetForEditAsync(zoneId, cancellationToken);
         if (zone is null)
         {
             return AppError.NotFound;
+        }
+
+        if (zone.StatusId != StatusIds.Usage.InUse)
+        {
+            return WrongStatus(zone);
         }
 
         var check = Validate(request, out var values);
@@ -135,10 +153,13 @@ public sealed class FarmingZoneService(
             {
                 RecordId = zone.Id, RecordCode = zone.Code, ZoneId = zone.Id, Before = changedBefore, After = changedAfter,
             });
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+            if (await SaveAsync(zone, zone.Id, cancellationToken) is { } duplicate)
+            {
+                return duplicate;
+            }
         }
 
-        return await ViewAsync(zone, cancellationToken);
+        return await SavedAsync(zone, cancellationToken);
     }
 
     /// <summary>In Use → Discontinued, blocked while the zone still has In Use rafts (MSG-GEN-06).</summary>
@@ -164,7 +185,10 @@ public sealed class FarmingZoneService(
         return await ChangeStatusAsync(zone, StatusIds.Usage.Discontinued, "FarmingZone.Discontinued", request, cancellationToken);
     }
 
-    /// <summary>Discontinued → In Use, always allowed.</summary>
+    /// <summary>
+    /// FARM-02.3 Resume: Discontinued → In Use with the same code and history, always allowed. Its rafts keep their own
+    /// status, and its licenses that are not Replaced are reminded again from the next check (GFR-03).
+    /// </summary>
     public async Task<Result<FarmingZoneView>> ReactivateAsync(Guid zoneId, ChangeStatusRequest request, CancellationToken cancellationToken)
     {
         var zone = await zones.GetForEditAsync(zoneId, cancellationToken);
@@ -189,6 +213,35 @@ public sealed class FarmingZoneService(
 
     private AppError WrongStatus(FarmingZone zone) => statusChanges.WrongStatus($"Farming zone {zone.Code}", zone);
 
+    /// <summary>
+    /// Saves the zone. A parallel save of the same code stopped by the unique index answers what the pre-check answers
+    /// (MSG-GEN-02 with the existing zone, FARM-02.0.E1), not the generic duplicate error. Null when saved.
+    /// </summary>
+    private async Task<AppError?> SaveAsync(FarmingZone zone, Guid? exceptZoneId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return null;
+        }
+        catch (DuplicateRecordException)
+        {
+            if (await zones.FindByCodeAsync(zone.Code, exceptZoneId, cancellationToken) is { } existing)
+            {
+                return Duplicate(existing.Id);
+            }
+
+            throw;
+        }
+    }
+
+    /// <summary>The zone with MSG-GEN-05 (FARM-02.0 step 6).</summary>
+    private async Task<FarmingZoneSaved> SavedAsync(FarmingZone zone, CancellationToken cancellationToken)
+    {
+        var saved = UserMessages.Saved("Farming zone");
+        return new FarmingZoneSaved(await ViewAsync(zone, cancellationToken), saved.Text, saved.Code);
+    }
+
     private static AppError Duplicate(Guid existingId) => new(
         ErrorKind.Conflict,
         UserMessages.AlreadyExists("Farming zone"),
@@ -203,8 +256,8 @@ public sealed class FarmingZoneService(
         }
 
         var today = timeProvider.Today();
-        var covering = await licenses.ListCoveringAsync(zoneIds, cancellationToken);
-        return zoneIds.ToDictionary(id => id, id => ZoneLicenseOverview.WorstFor(id, covering, today));
+        var zoneLicenses = await licenses.ListForZonesAsync(zoneIds, cancellationToken);
+        return zoneIds.ToDictionary(id => id, id => ZoneLicenseOverview.BadgeFor(id, zoneLicenses, today));
     }
 
     private async Task<FarmingZoneView> ViewAsync(FarmingZone zone, CancellationToken cancellationToken)
@@ -220,12 +273,13 @@ public sealed class FarmingZoneService(
     private static FieldCheck Validate(SaveFarmingZoneRequest request, out ZoneValues values)
     {
         var check = new FieldCheck();
-        var code = check.Required(request.Code, "Code", 50);
+        var code = check.Required(request.Code, "Code", SequentialCodes.ZoneCodeMaxLength);
         var name = check.Required(request.Name, "Name", 200);
         var location = check.Required(request.Location, "Location", 500);
         check.Coordinates(request.Latitude, request.Longitude, required: true);
         check.Check(request.Area is > 0 and < 100_000_000_000_000m, "Area");
-        var point = check.Required(request.WaterMeasurementPoint, "Water measurement point", 200);
+        // Optional since SRS 27/10: water is measured per zone with no fixed point (BR-WATER-01).
+        var point = check.Optional(request.WaterMeasurementPoint, "Water measurement point", 200);
         values = new ZoneValues(code, name, location, request.Latitude, request.Longitude, request.Area, point);
         return check;
     }
@@ -244,5 +298,5 @@ public sealed class FarmingZoneService(
     private static object Snapshot(FarmingZone z) => new { z.Code, z.Name, z.Location, z.Latitude, z.Longitude, z.Area, z.WaterMeasurementPoint };
 
     private sealed record ZoneValues(
-        string Code, string Name, string Location, decimal? Latitude, decimal? Longitude, decimal? Area, string WaterMeasurementPoint);
+        string Code, string Name, string Location, decimal? Latitude, decimal? Longitude, decimal? Area, string? WaterMeasurementPoint);
 }

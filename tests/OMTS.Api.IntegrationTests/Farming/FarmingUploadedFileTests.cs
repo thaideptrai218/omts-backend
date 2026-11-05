@@ -51,7 +51,7 @@ public class FarmingUploadedFileTests
         using var factory = new FileFaultApiFactory();
         var owner = await factory.OwnerAsync();
         var zoneId = (await owner.Client.CreateZoneAsync()).Id();
-        var fields = new LicenseFields { ZoneIds = [zoneId], EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddYears(1) };
+        var fields = new LicenseFields { ZoneId = zoneId, EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddYears(1) };
         var license = await owner.Client.CreateLicenseAsync(fields);
         var original = await LicenseFileAsync(factory, license.Id());
         var edit = fields with { Holder = "HTX Trung Nam", RowVersion = await factory.IssueRowVersionAsync<ZoneComplianceDocument>(license.Id()) };
@@ -75,7 +75,7 @@ public class FarmingUploadedFileTests
         Assert.Equal(kept, StoredKeys(factory, FileCategories.ZoneLicenses));
 
         factory.Faults.FailNextSave(DatabaseDown);
-        var failedCreate = await owner.Client.PostAsync("/api/zone-licenses", new LicenseFields { ZoneIds = [zoneId], EffectiveDate = Today }.ToForm());
+        var failedCreate = await owner.Client.PostAsync("/api/zone-licenses", new LicenseFields { ZoneId = zoneId, EffectiveDate = Today }.ToForm());
         Assert.Equal(HttpStatusCode.InternalServerError, failedCreate.StatusCode);
         Assert.Equal(kept, StoredKeys(factory, FileCategories.ZoneLicenses));
     }

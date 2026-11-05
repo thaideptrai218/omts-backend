@@ -3,7 +3,7 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
-/// <summary>Who must hear about something happening in a zone (license reminders, water alerts, overdue reminders).</summary>
+/// <summary>Who must hear about something happening in a zone or the cooperative (expiry reminders, water alerts, overdue reminders).</summary>
 public interface IZoneRecipientQuery
 {
     /// <summary>
@@ -15,6 +15,8 @@ public interface IZoneRecipientQuery
     Task<IReadOnlyList<Guid>> GetRecipientsAsync(
         Guid zoneId, string functionCode, PermissionAction action, CancellationToken cancellationToken);
 
+    /// <summary>Active Cooperative Owner accounts only (e.g. the expiry reminders of GFR-03).</summary>
+    Task<IReadOnlyList<Guid>> GetCooperativeOwnersAsync(CancellationToken cancellationToken);
     /// <summary>
     /// Active Cooperative Owner accounts, plus active Staff accounts with an Effective pair of one of
     /// <paramref name="staffRoles"/> in any zone (records with no zone, BR-FARM-08): e.g. the Accountant and the Owner of

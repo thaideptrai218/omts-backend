@@ -1,11 +1,12 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using OMTS.Application.Features.Cooperatives;
 using OMTS.Application.Features.Farming.Licenses;
 
 namespace OMTS.Infrastructure.Jobs;
 
-/// <summary>"Jobs:ZoneLicenseReminder" section.</summary>
+/// <summary>"Jobs:ZoneLicenseReminder" section of the GFR-03 expiry reminder (zone licenses and cooperative certifications).</summary>
 public sealed class ZoneLicenseReminderOptions : IDailyJobOptions
 {
     public const string SectionName = "Jobs:ZoneLicenseReminder";
@@ -21,34 +22,45 @@ public sealed class ZoneLicenseReminderOptions : IDailyJobOptions
 }
 
 /// <summary>
-/// FARM-03 expiring license reminder. Each license runs in its own scope and unit of work, so one failing
-/// license is logged and skipped while the others continue.
+/// GFR-03 daily expiry check: the zone licenses (<see cref="ZoneLicenseReminderService"/>), then the cooperative
+/// certifications (<see cref="CertificationReminderService"/>). Each record runs in its own scope and unit of work, so one
+/// failing record is logged and skipped while the others continue. The name and the settings section keep the license
+/// reminder's, so deployed settings stay valid.
 /// </summary>
 public sealed class ZoneLicenseReminderJob(IServiceScopeFactory scopes, ILogger<ZoneLicenseReminderJob> logger)
 {
-    /// <summary>Number of notices sent; running twice on the same day sends nothing new.</summary>
-    public async Task<int> RunOnceAsync(DateOnly today, CancellationToken cancellationToken = default)
+    /// <summary>Number of notices sent (licenses and certifications); running twice on the same day sends nothing new.</summary>
+    public async Task<int> RunOnceAsync(DateOnly today, CancellationToken cancellationToken = default) =>
+        await RemindEachAsync<ZoneLicenseReminderService>("license", s => s.CandidateIdsAsync(today, cancellationToken),
+            (s, id) => s.RemindAsync(id, today, cancellationToken), cancellationToken)
+        + await RemindEachAsync<CertificationReminderService>("certification", s => s.CandidateIdsAsync(today, cancellationToken),
+            (s, id) => s.RemindAsync(id, today, cancellationToken), cancellationToken);
+
+    private async Task<int> RemindEachAsync<TService>(
+        string recordName, Func<TService, Task<IReadOnlyList<Guid>>> candidates, Func<TService, Guid, Task<bool>> remind, CancellationToken cancellationToken)
+        where TService : notnull
     {
-        IReadOnlyList<Guid> candidates;
+        IReadOnlyList<Guid> ids;
         using (var scope = scopes.CreateScope())
         {
-            candidates = await scope.ServiceProvider.GetRequiredService<ZoneLicenseReminderService>().CandidateIdsAsync(today, cancellationToken);
+            ids = await candidates(scope.ServiceProvider.GetRequiredService<TService>());
         }
 
         var sent = 0;
-        foreach (var documentId in candidates)
+        foreach (var id in ids)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 using var scope = scopes.CreateScope();
-                if (await scope.ServiceProvider.GetRequiredService<ZoneLicenseReminderService>().RemindAsync(documentId, today, cancellationToken))
+                if (await remind(scope.ServiceProvider.GetRequiredService<TService>(), id))
                 {
                     sent++;
                 }
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                logger.LogError(exception, "Zone license reminder failed for license {LicenseId}; skipped.", documentId);
+                logger.LogError(exception, "Expiry reminder failed for {Record} {RecordId}; skipped.", recordName, id);
             }
         }
 

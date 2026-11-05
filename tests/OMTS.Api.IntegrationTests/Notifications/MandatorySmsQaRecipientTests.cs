@@ -206,15 +206,14 @@ public class MandatorySmsQaRecipientTests(AuthApiFactory api) : IClassFixture<Au
     }
 
     [Fact]
-    public async Task A_license_of_two_zones_reminds_each_owner_once_and_no_manager_also_when_it_expires()
+    public async Task A_license_reminds_each_owner_once_and_no_manager_also_when_it_expires()
     {
         var owner = await FarmingKit.OwnerAsync(api);
         var secondOwner = await api.AddAccountAsync(NewCode(), NewPassword());
-        var (zoneA, zoneB) = (await NewZoneIdAsync(owner.Client), await NewZoneIdAsync(owner.Client));
+        var zoneA = await NewZoneIdAsync(owner.Client);
         var manager = await api.AddAccountAsync(NewCode(), NewPassword(), SubjectType.Staff);
         await api.GrantAsync(manager, StaffRole.ZoneManager, zoneA);
-        await api.GrantAsync(manager, StaffRole.ZoneManager, zoneB);
-        await FarmingKit.CreateLicenseAsync(owner.Client, new LicenseFields { ZoneIds = [zoneA, zoneB], EffectiveDate = FarmingKit.Today.AddDays(-300), ExpiryDate = FarmingKit.Today.AddDays(5) });
+        await FarmingKit.CreateLicenseAsync(owner.Client, new LicenseFields { ZoneId = zoneA, EffectiveDate = FarmingKit.Today.AddDays(-300), ExpiryDate = FarmingKit.Today.AddDays(5) });
         var job = api.Services.GetRequiredService<ZoneLicenseReminderJob>();
 
         Assert.Equal(1, await job.RunOnceAsync(FarmingKit.Today));

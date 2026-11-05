@@ -113,13 +113,14 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         var traderTypes = await TypesAsync(await factory.LoginAsync(trader.Username, PreferencePassword));
 
         Assert.Equal(
-            ["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "ZONE_LICENSE_EXPIRY", "PURCHASE_RECEIPT_COMPLETED", "PURCHASE_RECEIPT_CANCELLED_ADVANCE"],
+            ["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "ZONE_LICENSE_EXPIRY", "COOPERATIVE_CERTIFICATION_EXPIRY", "PURCHASE_RECEIPT_COMPLETED", "PURCHASE_RECEIPT_CANCELLED_ADVANCE"],
             ownerTypes.Keys);
         Assert.Equal(["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE"], managerTypes.Keys);
         Assert.Equal(["PURCHASE_RECEIPT_CANCELLED_ADVANCE"], accountantTypes.Keys);
         Assert.Empty(traderTypes);
         Assert.Equal((true, true), ownerTypes["WATER_ALERT"]);
         Assert.Equal((true, true), ownerTypes["ZONE_LICENSE_EXPIRY"]);
+        Assert.Equal((true, true), ownerTypes["COOPERATIVE_CERTIFICATION_EXPIRY"]);
         Assert.Equal((false, true), ownerTypes["WATER_MEASUREMENT_OVERDUE"]);
         Assert.Equal((false, true), ownerTypes["PURCHASE_RECEIPT_COMPLETED"]);
     }

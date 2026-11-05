@@ -32,6 +32,7 @@ public class NotificationsV2PreferenceQaTests(AuthApiFactory factory) : IClassFi
         var attempts = new[]
         {
             (manager, "ZONE_LICENSE_EXPIRY"),
+            (manager, "COOPERATIVE_CERTIFICATION_EXPIRY"),
             (manager, "STAFF_ACCOUNT_LOCK_REMINDER"),
             (accountant, "WATER_MEASUREMENT_OVERDUE"),
             (accountant, "WATER_ALERT"),

@@ -24,7 +24,7 @@ public class OrphanFileCleanupTests
         var raftId = (await owner.Client.CreateRaftAsync(zoneId)).Id();
         await (await owner.Client.PostAsync($"/api/rafts/{raftId}/photo", new MultipartFormDataContent { { FileContent(Jpeg), "file", "raft.jpg" } }))
             .ReadAsync(HttpStatusCode.OK);
-        await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneIds = [zoneId], EffectiveDate = Today });
+        await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zoneId, EffectiveDate = Today });
         // The first logo is replaced: no record points to it any more, but published versions may still show it.
         await (await CooperativeProfileRequests.UploadLogoAsync(owner.Client, Png, "logo.png")).ReadAsync(HttpStatusCode.OK);
         await (await CooperativeProfileRequests.UploadLogoAsync(owner.Client, Jpeg, "logo.jpg")).ReadAsync(HttpStatusCode.OK);
@@ -75,7 +75,7 @@ public class OrphanFileCleanupTests
         var raftId = (await owner.CreateRaftAsync(zoneId)).Id();
         await (await owner.PostAsync($"/api/rafts/{raftId}/photo", new MultipartFormDataContent { { FileContent(Jpeg), "file", "raft.jpg" } }))
             .ReadAsync(HttpStatusCode.OK);
-        await owner.CreateLicenseAsync(new LicenseFields { ZoneIds = [zoneId], EffectiveDate = Today });
+        await owner.CreateLicenseAsync(new LicenseFields { ZoneId = zoneId, EffectiveDate = Today });
         var referenced = host.StoredKeys(FileCategories.RaftPhotos).Concat(host.StoredKeys(FileCategories.ZoneLicenses)).Order().ToList();
         await StoreAsync(host.Api.Services.GetRequiredService<IFileStorage>(), FileCategories.ZoneLicenses, Pdf);
 
