@@ -34,7 +34,8 @@ internal sealed record DemoEmployeePlan(
     string BankName,
     string BankAccountNumber,
     DemoLoginKind Login = DemoLoginKind.Normal,
-    int? LeftDaysAgo = null)
+    int? LeftDaysAgo = null,
+    string[]? JobTypes = null)
 {
     /// <summary>Those with a login work in the office or manage a zone; the others are seasonal workers, paid through OMTS.</summary>
     public EmployeeType Type => Username is null ? EmployeeType.SeasonalWorker : EmployeeType.Staff;
@@ -42,7 +43,7 @@ internal sealed record DemoEmployeePlan(
 
 /// <summary>
 /// The nine demo employees (LABOR-01): phones come from the fake range 0900 000 0xx, bank accounts from the fake range
-/// 9999 0000 00xx. The job types of their profiles come with LABOR-11.
+/// 9999 0000 00xx. The seasonal workers have job types on their profiles (see <see cref="DemoLaborSettingsStep"/>).
 /// </summary>
 internal static class DemoEmployeePlans
 {
@@ -70,10 +71,13 @@ internal static class DemoEmployeePlans
         new("Hoàng Văn Sơn", "0900000016", "nhanvien.hethan", ZoneManagerRole, DemoFarmingZoneStep.ZoneOne, RevokedPairReason,
             ZoneOne, new(1989, 9, 27), "Xã Ngọc Vừng", "Agribank", "999900000016"),
         new("Nguyễn Văn Phúc", "0900000017", null, ZoneManagerRole, null, null,
-            ZoneOne, new(1995, 1, 30), "Xã Ngọc Vừng", "Techcombank", "999900000017"),
+            ZoneOne, new(1995, 1, 30), "Xã Ngọc Vừng", "Techcombank", "999900000017",
+            JobTypes: [DemoLaborSettingsStep.Harvesting, DemoLaborSettingsStep.HangingSeed]),
         new("Bùi Văn Thắng", "0900000018", null, ZoneManagerRole, null, null,
-            ZoneTwo, new(1985, 9, 9), "Xã Minh Châu", "Vietcombank", "999900000018", LeftDaysAgo: 20),
+            ZoneTwo, new(1985, 9, 9), "Xã Minh Châu", "Vietcombank", "999900000018", LeftDaysAgo: 20,
+            JobTypes: [DemoLaborSettingsStep.Harvesting]),
         new("Đinh Văn Nam", null, null, ZoneManagerRole, null, null,
-            ZoneTwo, new(1998, 4, 3), "Xã Minh Châu", "Vietcombank", "999900000019"),
+            ZoneTwo, new(1998, 4, 3), "Xã Minh Châu", "Vietcombank", "999900000019",
+            JobTypes: [DemoLaborSettingsStep.CleaningLines]),
     ];
 }

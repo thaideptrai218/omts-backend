@@ -31,6 +31,12 @@ public class Cooperative : AuditableEntity, IHasStatus
     /// <summary>Used to build the VietQR payment QR (UC48); never shown on the traceability page.</summary>
     public BankAccountInfo? BankAccount { get; set; }
 
+    /// <summary>The day of the month a pay period starts, 1 to 28 (LABOR-16, BR-LABOR-13).</summary>
+    public int PayPeriodStartDay { get; set; } = 1;
+
+    /// <summary>The daily check creates the payroll of each new pay period (LABOR-16, GFR-07).</summary>
+    public bool AutomaticPayroll { get; set; }
+
     public int StatusId { get; set; } = StatusIds.Cooperative.Draft;
     public Status Status { get; set; } = null!;
 

@@ -23,6 +23,7 @@ internal static class DemoDataSeeder
         new DemoFarmingZoneStep(),
         new DemoZoneLicenseStep(),
         new DemoRaftStep(),
+        new DemoLaborSettingsStep(),
         new DemoStaffAndEmployeeStep(),
         new DemoTraderStep(),
         new DemoSupplierStep(),

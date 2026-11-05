@@ -13,4 +13,5 @@ public static class StatusGroups
     public const string PurchaseReceipt = "PURCHASE_RECEIPT";
     public const string MessageDelivery = "MESSAGE_DELIVERY";
     public const string SupplierPayment = "SUPPLIER_PAYMENT";
+    public const string Payroll = "PAYROLL";
 }

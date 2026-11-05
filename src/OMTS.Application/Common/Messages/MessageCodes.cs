@@ -51,13 +51,16 @@ public static class MessageCodes
     public const string Labor01 = "MSG-LABOR-01";
     public const string Labor02 = "MSG-LABOR-02";
     public const string Labor03 = "MSG-LABOR-03";
+    public const string Labor04 = "MSG-LABOR-04";
+    public const string Labor36 = "MSG-LABOR-36";
 
     /// <summary>
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-22, the
     /// record of a notification or of an audit event no longer exists (ACCOUNT-08 and ACCOUNT-10 are new in OMTS-216);
-    /// MSG-LABOR-01 and MSG-LABOR-02, the approval of a new employee and the reminder to lock a staff account (OMTS-227).
+    /// MSG-LABOR-01 and MSG-LABOR-02, the approval of a new employee and the reminder to lock a staff account; MSG-LABOR-04
+    /// and MSG-LABOR-36, the pay period lock and the question before saving the payroll settings (OMTS-227).
     /// </summary>
-    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal) { Account22, Labor01, Labor02 };
+    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal) { Account22, Labor01, Labor02, Labor04, Labor36 };
 
     /// <summary>
     /// Codes of the old list. Most are only sent as <c>legacyCode</c> next to the new code, for one release.

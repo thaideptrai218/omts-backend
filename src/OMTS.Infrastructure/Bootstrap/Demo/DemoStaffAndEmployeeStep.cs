@@ -97,11 +97,15 @@ internal sealed class DemoStaffAndEmployeeStep : IDemoSeedStep
                 [new GrantDraft(grantZoneId, Role: FixedRoles.Of(plan.Role).Code)]);
         }
 
+        var jobTypeNames = plan.JobTypes ?? [];
+        var jobTypeIds = await context.Db.JobTypes
+            .Where(j => jobTypeNames.Contains(j.Name)).Select(j => j.Id).ToListAsync(cancellationToken);
+
         return new SaveEmployeeRequest(
             plan.FullName, plan.Phone, plan.Birthday, $"{plan.Ward}, Huyện Vân Đồn, Tỉnh Quảng Ninh", "Vân Đồn", plan.Ward,
             null, "Dữ liệu minh họa", zoneIds,
             new EmployeeBankAccountInput(plan.BankName, plan.BankAccountNumber, plan.FullName),
-            plan.Type, Account: account);
+            plan.Type, JobTypeIds: jobTypeIds, Account: account);
     }
 
     /// <summary>

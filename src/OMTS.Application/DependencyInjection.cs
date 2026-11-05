@@ -13,6 +13,7 @@ using OMTS.Application.Features.Farming.Licenses;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Application.Features.Farming.Zones;
 using OMTS.Application.Features.Files;
+using OMTS.Application.Features.Labor;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
@@ -79,6 +80,14 @@ public static class DependencyInjection
         services.AddScoped<EmployeeWorkingZoneService>();
         services.AddScoped<EmploymentService>();
         services.AddScoped<EmploymentEndService>();
+
+        // LABOR-11 job types and rates, LABOR-15 attendance settings, LABOR-16 payroll settings, the pay period lock (BR-LABOR-13)
+        services.AddScoped<PayPeriodLock>();
+        services.AddScoped<JobTypeQueryService>();
+        services.AddScoped<JobTypeService>();
+        services.AddScoped<PayRateService>();
+        services.AddScoped<AttendanceSettingsService>();
+        services.AddScoped<PayrollSettingsService>();
 
         // FARM-02 zones, FARM-03 zone licenses, FARM-04 rafts
         services.AddScoped<FarmingLookupAccess>();

@@ -53,6 +53,12 @@ internal static class StatusCatalogSeed
 
         NewStatus(S.SupplierPayment.Recorded, G.SupplierPayment, "RECORDED", "Recorded", "Money paid to the supplier; reduces supplier debt.", initial: true),
         NewStatus(S.SupplierPayment.Cancelled, G.SupplierPayment, "CANCELLED", "Cancelled", "Cancelled together with its purchase receipt.", final: true),
+
+        // The transitions of a payroll come with LABOR-12 and LABOR-13, which perform them.
+        NewStatus(S.Payroll.Draft, G.Payroll, "DRAFT", "Draft", "Being prepared; its lines are calculated from the current records.", initial: true),
+        NewStatus(S.Payroll.AwaitingFinalization, G.Payroll, "AWAITING_FINALIZATION", "Awaiting finalization", "Sent to the Cooperative Owner; the records of the period are locked."),
+        NewStatus(S.Payroll.SentBack, G.Payroll, "SENT_BACK", "Sent back", "Returned with a note for correction; the records of the period can change again."),
+        NewStatus(S.Payroll.Finalized, G.Payroll, "FINALIZED", "Finalized", "The amounts are saved; never changed or reopened.", final: true),
     ];
 
     public static readonly StatusTransition[] Transitions =
