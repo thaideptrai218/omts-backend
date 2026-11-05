@@ -15,11 +15,14 @@ public class ForwardedHeadersTests(AuthApiFactory factory) : IClassFixture<AuthA
 {
     private const string ProxyAddress = "10.0.0.5";
 
+    // The limit is per minute, and logins sent one after another took longer than that on a busy CI runner, so the last one
+    // fell in a fresh window. Sent together, they all take their permit in one window, before the slow part of the login.
+
     [Fact]
     public async Task Clients_behind_a_trusted_proxy_get_their_own_login_bucket()
     {
         using var api = BehindProxy(trusted: true);
-        var client = await StartedClientAsync(api);
+        var client = api.CreateClient();
 
         var sameClient = await Task.WhenAll(LoginFromAsync(client, "203.0.113.1"), LoginFromAsync(client, "203.0.113.1"), LoginFromAsync(client, "203.0.113.1"));
         var otherClient = await LoginFromAsync(client, "203.0.113.2");
@@ -33,7 +36,7 @@ public class ForwardedHeadersTests(AuthApiFactory factory) : IClassFixture<AuthA
     public async Task Forwarded_header_from_an_untrusted_address_is_ignored()
     {
         using var api = BehindProxy(trusted: false);
-        var client = await StartedClientAsync(api);
+        var client = api.CreateClient();
 
         var answers = await Task.WhenAll(LoginFromAsync(client, "203.0.113.1"), LoginFromAsync(client, "203.0.113.2"), LoginFromAsync(client, "203.0.113.3"));
 
@@ -56,15 +59,6 @@ public class ForwardedHeadersTests(AuthApiFactory factory) : IClassFixture<AuthA
         b.UseSetting("ForwardedHeaders:KnownNetworks:0", trusted ? "10.0.0.0/8" : "192.168.0.0/16");
         b.ConfigureServices(s => s.AddTransient<IStartupFilter, ProxyConnectionStartupFilter>());
     });
-
-    // The limit is per minute, and starting a host on a busy runner can take that long: the host starts before the first
-    // login counts, and the logins go together, so they all fall in one window.
-    private static async Task<HttpClient> StartedClientAsync(Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> api)
-    {
-        var client = api.CreateClient();
-        (await client.GetAsync("/health")).EnsureSuccessStatusCode();
-        return client;
-    }
 
     private static Task<HttpResponseMessage> LoginFromAsync(HttpClient client, string clientAddress)
     {
