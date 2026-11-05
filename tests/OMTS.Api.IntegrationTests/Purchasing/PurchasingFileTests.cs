@@ -7,7 +7,7 @@ using OMTS.Api.IntegrationTests.Infrastructure;
 
 namespace OMTS.Api.IntegrationTests.Purchasing;
 
-/// <summary>INP-01 certificates and INP-03 invoice photos: real file type, 10 MB, 10 files, storage failure (503 MSG04), zones and audit.</summary>
+/// <summary>PURCHASE-07 certificates: real file type, 10 MB, 10 files, storage failure (503 MSG-GEN-03) and audit; receipts take no photo.</summary>
 public class PurchasingFileTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
     private static readonly byte[] Pdf = "%PDF-1.4\n%certificate\n"u8.ToArray();
@@ -84,57 +84,35 @@ public class PurchasingFileTests(AuthApiFactory factory) : IClassFixture<AuthApi
         Assert.Equal(10, (await factory.QueryAsync(db => db.Suppliers.Where(s => s.Id == supplierId).Select(s => s.CertificateUrls).SingleAsync())).Count);
     }
 
+    // BR-PURCHASE-01: a purchase receipt has no photo of the supplier's invoice, so it has no upload endpoint any more.
     [Fact]
-    public async Task Invoice_photos_follow_the_same_file_rules_the_zone_check_and_are_copied_with_the_receipt()
+    public async Task A_receipt_takes_no_invoice_photo()
     {
         var world = await factory.WorldAsync();
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 100_000)));
-        var url = $"/api/purchase-receipts/{draft.Id()}/invoice-photos";
 
-        Assert.Equal("note.txt", await (await world.Owner.PostAsync(url, Form((Text, "note.txt")))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-        Assert.Equal("huge.jpg", await (await world.Owner.PostAsync(url, Form((Sized(Jpeg, 10 * 1024 * 1024 + 1), "huge.jpg")))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-        Assert.Equal("Invoice photos", await (await world.Owner.PostAsync(url, Form(Enumerable.Range(1, 11).Select(i => (Png, $"p{i}.png")).ToArray()))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-        Assert.Equal("Invoice photos", await (await world.Owner.PostAsync(url, Form())).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        var response = await world.Owner.PostAsync($"/api/purchase-receipts/{draft.Id()}/invoice-photos", Form((Png, "invoice.png")));
 
-        var (otherZone, _) = await factory.ZoneWithRaftAsync();
-        var otherManager = await factory.ZoneManagerAsync(otherZone);
-        await (await otherManager.PostAsync(url, Form((Png, "invoice.png")))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        Assert.Empty(await factory.QueryAsync(db => db.PurchaseReceipts.Where(r => r.Id == draft.Id()).Select(r => r.InvoicePhotoUrls).SingleAsync()));
-
-        var manager = await factory.ZoneManagerAsync(world.Zone);
-        var withPhotos = await (await manager.PostAsync(url, Form((Png, "invoice.png"), (Pdf, "invoice.pdf")))).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(2, withPhotos.GetProperty("invoicePhotoUrls").GetArrayLength());
-        var keys = await factory.QueryAsync(db => db.PurchaseReceipts.Where(r => r.Id == draft.Id()).Select(r => r.InvoicePhotoUrls).SingleAsync());
-        Assert.All(keys, k => Assert.StartsWith("purchase-invoices/", k));
-        var audit = await factory.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.RecordId == draft.Id() && e.Action == "PurchaseReceipt.Updated"));
-        Assert.Equal(world.Zone.Id, audit.ZoneId);
-
-        await (await world.Owner.PostAsync($"/api/purchase-receipts/{draft.Id()}/complete", null)).ReadAsync(HttpStatusCode.OK);
-        var copy = await (await world.Owner.PostAsync($"/api/purchase-receipts/{draft.Id()}/copy", null)).ReadAsync(HttpStatusCode.Created);
-        Assert.Equal(keys, await factory.QueryAsync(db => db.PurchaseReceipts.Where(r => r.Id == copy.Id()).Select(r => r.InvoicePhotoUrls).SingleAsync()));
+        Assert.True(response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed, response.StatusCode.ToString());
+        Assert.False(draft.TryGetProperty("invoicePhotoUrls", out _));
     }
 
     [Fact]
-    public async Task A_storage_failure_answers_503_MSG_GEN_03_and_leaves_supplier_and_receipt_unchanged()
+    public async Task A_storage_failure_answers_503_MSG_GEN_03_and_leaves_the_supplier_unchanged()
     {
         using var api = new AuthApiFactory();
         // A file where a category folder should be makes the real Local provider fail every upload of that category.
         Directory.CreateDirectory(api.StorageRoot);
         await File.WriteAllTextAsync(Path.Combine(api.StorageRoot, "supplier-certificates"), "blocked");
-        await File.WriteAllTextAsync(Path.Combine(api.StorageRoot, "purchase-invoices"), "blocked");
         var world = await api.WorldAsync();
-        var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 100_000)));
 
         var certificate = await world.Owner.PostAsync($"/api/suppliers/{world.SupplierId}/certificates", Form((Pdf, "vietgap.pdf")));
         var problem = await certificate.ProblemAsync(HttpStatusCode.ServiceUnavailable, "MSG-GEN-03");
         Assert.Equal("The file could not be uploaded. Your other entries are kept; please try again.", problem.GetProperty("detail").GetString());
         Assert.Equal("MSG04", problem.GetProperty("legacyCode").GetString());
-        var photo = await world.Owner.PostAsync($"/api/purchase-receipts/{draft.Id()}/invoice-photos", Form((Png, "invoice.png")));
-        await photo.ProblemAsync(HttpStatusCode.ServiceUnavailable, "MSG-GEN-03");
 
         Assert.Empty(await api.QueryAsync(db => db.Suppliers.Where(s => s.Id == world.SupplierId).Select(s => s.CertificateUrls).SingleAsync()));
-        Assert.Empty(await api.QueryAsync(db => db.PurchaseReceipts.Where(r => r.Id == draft.Id()).Select(r => r.InvoicePhotoUrls).SingleAsync()));
-        Assert.Equal(0, await api.QueryAsync(db => db.AuditEvents.CountAsync(e => (e.RecordId == world.SupplierId || e.RecordId == draft.Id()) && e.Action.EndsWith(".Updated"))));
-        Assert.Equal(2, Directory.GetFileSystemEntries(api.StorageRoot, "*", SearchOption.AllDirectories).Length);
+        Assert.Equal(0, await api.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == world.SupplierId && e.Action.EndsWith(".Updated"))));
+        Assert.Single(Directory.GetFileSystemEntries(api.StorageRoot, "*", SearchOption.AllDirectories));
     }
 }

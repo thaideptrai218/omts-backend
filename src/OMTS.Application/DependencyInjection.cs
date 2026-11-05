@@ -102,10 +102,14 @@ public static class DependencyInjection
         services.AddScoped<ProductReadService>();
         services.AddScoped<CustomerService>();
         services.AddScoped<CustomerMergeService>();
+        services.AddScoped<PurchaseReceiptAccess>();
         services.AddScoped<PurchaseReceiptValidator>();
         services.AddScoped<PurchaseReceiptViews>();
+        services.AddScoped<PurchaseReceiptNotifications>();
         services.AddScoped<PurchaseReceiptService>();
         services.AddScoped<PurchaseReceiptCancellationService>();
+        services.AddScoped<PurchaseReceiptCorrectionService>();
+        services.AddScoped<PurchaseReceiptCopyService>();
         services.AddScoped<PurchaseReturnService>();
         services.AddScoped<PurchaseReceiptQueryService>();
         services.AddScoped<SupplierPaymentService>();

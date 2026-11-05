@@ -1,4 +1,5 @@
 using OMTS.Application.Features.Authorization.Models;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
@@ -13,4 +14,11 @@ public interface IZoneRecipientQuery
     /// </summary>
     Task<IReadOnlyList<Guid>> GetRecipientsAsync(
         Guid zoneId, string functionCode, PermissionAction action, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Active Cooperative Owner accounts, plus active Staff accounts with an Effective pair of one of
+    /// <paramref name="staffRoles"/> in any zone (records with no zone, BR-FARM-08): e.g. the Accountant and the Owner of
+    /// MSG-PURCHASE-08. An empty list gives the Owners only.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> GetOwnersAndRolesAsync(IReadOnlyCollection<StaffRole> staffRoles, CancellationToken cancellationToken);
 }
