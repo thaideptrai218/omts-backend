@@ -29,6 +29,7 @@ public class DemoDataSeedTests
         ("Accounts", db => db.Accounts.CountAsync()),
         ("AccessGrants", db => db.AccessGrants.CountAsync()),
         ("Customers", db => db.Customers.CountAsync()),
+        ("Products", db => db.Products.CountAsync()),
         ("Employees", db => db.Employees.CountAsync()),
         ("FarmingZones", db => db.FarmingZones.CountAsync()),
         ("ZoneComplianceDocuments", db => db.ZoneComplianceDocuments.CountAsync()),
@@ -38,7 +39,6 @@ public class DemoDataSeedTests
         ("FarmingInputItems", db => db.FarmingInputItems.CountAsync()),
         ("PurchaseReceipts", db => db.PurchaseReceipts.CountAsync()),
         ("PurchaseReceiptLines", db => db.PurchaseReceiptLines.CountAsync()),
-        ("SeedReceiptLots", db => db.SeedReceiptLots.CountAsync()),
         ("SupplierPayments", db => db.SupplierPayments.CountAsync()),
         ("PurchaseReturns", db => db.PurchaseReturns.CountAsync()),
         ("WaterMeasurements", db => db.WaterMeasurements.CountAsync()),
@@ -86,7 +86,8 @@ public class DemoDataSeedTests
         }
     }
 
-    // Any environment but Development, and no setting reopens it (the old Bootstrap:SeedDemoData switch is gone).
+    // Outside Development the old Bootstrap:SeedDemoData switch reopens nothing; only Staging has a flag of its own
+    // (DemoSeedGateTests).
     [Theory]
     [InlineData("Production")]
     [InlineData("Staging")]
@@ -98,7 +99,7 @@ public class DemoDataSeedTests
         var refused = await RunAsync(host);
 
         Assert.Equal(DeploymentBootstrapper.Failure, refused.ExitCode);
-        Assert.Contains(refused.Messages, m => m.Contains("refused outside Development"));
+        Assert.Contains(refused.Messages, m => m.Contains("refused"));
         using var scope = host.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
         Assert.False(await db.Cooperatives.AnyAsync());
@@ -140,6 +141,14 @@ public class DemoDataSeedTests
         Assert.Equal(1, await db.Employees.CountAsync(e => e.StatusId == StatusIds.Employee.Left));
         Assert.Equal(5, await db.Suppliers.CountAsync());
         Assert.Equal(15, await db.FarmingInputItems.CountAsync());
+        // SALE-11: a price list with one Discontinued product to resume. SALE-04: the two trader profiles and five offline
+        // ones, every offline number checked, the last two the same buyer to merge.
+        Assert.Equal(4, await db.Products.CountAsync());
+        Assert.Equal(1, await db.Products.CountAsync(p => p.StatusId == StatusIds.Usage.Discontinued));
+        Assert.All(await db.Products.ToListAsync(), p => Assert.True(p.UnitPrice > 0));
+        Assert.Equal(7, await db.Customers.CountAsync());
+        Assert.Equal(2, await db.Customers.CountAsync(c => c.AccountId != null));
+        Assert.Equal(5, await db.Customers.CountAsync(c => c.AccountId == null && c.PhoneCheckedByStaff));
 
         var statuses = await db.PurchaseReceipts.GroupBy(r => r.StatusId).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
         Assert.Equal(20, statuses.Sum(s => s.Count));
@@ -147,7 +156,13 @@ public class DemoDataSeedTests
         Assert.Equal(2, statuses.Single(s => s.Key == StatusIds.PurchaseReceipt.Cancelled).Count);
         Assert.Equal(1, await db.PurchaseReturns.CountAsync());
         Assert.True(await db.SupplierPayments.AnyAsync(p => p.StatusId == StatusIds.SupplierPayment.Recorded));
-        Assert.True(await db.PurchaseReceipts.AnyAsync(r => r.DiscountAmount > 0));
+        // PN codes; Material lines name their raft, seed lines may; one amount keeps its dongs (BR-PURCHASE-02).
+        Assert.True(await db.PurchaseReceipts.AllAsync(r => r.Code.StartsWith("PN")));
+        Assert.True(await db.PurchaseReceiptLines.AnyAsync(l => l.RaftId != null && l.Item!.Group == InputItemGroup.Seed));
+        Assert.True(await db.PurchaseReceiptLines.Where(l => l.Item!.Group == InputItemGroup.Material && l.Receipt.StatusId != StatusIds.PurchaseReceipt.Draft).AllAsync(l => l.RaftId != null));
+        Assert.True(await db.PurchaseReceiptLines.AnyAsync(l => l.LineAmount % 1000 != 0));
+        // The Owner was told of each completed receipt (MSG-PURCHASE-01), cancelled ones included.
+        Assert.Equal(18, await db.Notifications.Where(n => n.Type == NotificationTypes.PurchaseReceiptCompleted).Select(n => n.RelatedRecordId).Distinct().CountAsync());
 
         // Dates are relative to today in UTC+7, whenever the seed runs.
         var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime);

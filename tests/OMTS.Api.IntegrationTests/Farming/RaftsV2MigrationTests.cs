@@ -18,7 +18,7 @@ namespace OMTS.Api.IntegrationTests.Farming;
 /// </summary>
 public class RaftsV2MigrationTests
 {
-    private const string MigrationBefore = "20261104072437_ZonesLicensesV2";
+    private const string MigrationBefore = "20261105075725_PurchaseReceiptsV2";
     private const string OldPhoto = "raft-photos/2026/01/old.jpg";
     private const string SecondPhoto = "raft-photos/2026/01/second.jpg";
 

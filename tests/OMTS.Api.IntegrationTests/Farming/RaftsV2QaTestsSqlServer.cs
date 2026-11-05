@@ -18,7 +18,7 @@ namespace OMTS.Api.IntegrationTests.Farming;
 /// <summary>Independent QA of FARM-04 on SQL Server: parallel saves with real row versions, and more of the migration.</summary>
 public class RaftsV2QaTestsSqlServer
 {
-    private const string MigrationBefore = "20261104072437_ZonesLicensesV2";
+    private const string MigrationBefore = "20261105075725_PurchaseReceiptsV2";
 
     private static async Task<string> Show(HttpResponseMessage[] answers)
     {
@@ -256,7 +256,7 @@ public class RaftsV2QaTestsSqlServer
         await owner.EditRaftAsync(raft.Id(), body with { RowVersion = withPhoto.Text("rowVersion") });
     }
 
-    // Down keeps the lowest slot, also when slot 1 is free; a blank PhotoUrl makes no photo; SeedingEvents and SeedReceiptLots stay; the model has no pending change.
+    // Down keeps the lowest slot, also when slot 1 is free; a blank PhotoUrl makes no photo; SeedingEvents stays; the model has no pending change.
     [SqlServerFact]
     public async Task The_migration_keeps_the_lowest_slot_ignores_blanks_and_leaves_seed_tables_alone()
     {
@@ -280,7 +280,7 @@ public class RaftsV2QaTestsSqlServer
         Assert.Empty(await db.RaftPhotos.AsNoTracking().ToListAsync());
         Assert.Equal(StatusIds.Lane.InUse, await db.Lanes.AsNoTracking().Select(l => l.StatusId).SingleAsync());
         Assert.Equal(StatusIds.Usage.Discontinued, await db.Rafts.AsNoTracking().Where(r => r.Id == secondOnly).Select(r => r.StatusId).SingleAsync());
-        Assert.Equal(2, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.tables WHERE name IN ('SeedingEvents', 'SeedReceiptLots')"));
+        Assert.Equal(1, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.tables WHERE name = 'SeedingEvents'"));
         Assert.Equal(1, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.indexes WHERE name = 'IX_RaftPhotos_RaftId_SortOrder' AND is_unique = 1"));
         Assert.Equal(1, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.check_constraints WHERE name = 'CK_RaftPhoto_SortOrder'"));
         Assert.Equal(1, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.foreign_keys WHERE name = 'FK_Lanes_Statuses_StatusId'"));

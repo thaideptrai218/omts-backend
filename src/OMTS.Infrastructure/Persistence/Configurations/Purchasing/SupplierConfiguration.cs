@@ -11,6 +11,7 @@ internal sealed class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
         builder.Property(x => x.Name).HasMaxLength(Lengths.Name);
         builder.Property(x => x.PhoneNumber).HasMaxLength(Lengths.Phone);
         builder.HasIndex(x => x.PhoneNumber).IsUnique();
-        builder.Property(x => x.OtherContacts).HasMaxLength(Lengths.Address);
+        builder.Property(x => x.Address).HasMaxLength(Lengths.Address);
+        builder.Property(x => x.Email).HasMaxLength(Lengths.Email);
     }
 }

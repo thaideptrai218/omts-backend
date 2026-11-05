@@ -7,14 +7,19 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 
 /// <summary>
 /// What every demo step needs: the scope's services (the same ones the API uses, acting as the Owner),
-/// the database, and "today" in the business time zone (UTC+7) that all demo dates are relative to.
+/// the database, the demo password <see cref="DemoSeedGate"/> approved, and "today" in the business time zone (UTC+7)
+/// that all demo dates are relative to.
 /// </summary>
-internal sealed class DemoSeedContext(IServiceProvider services, OmtsDbContext db, Guid cooperativeId, Guid ownerId, DateTimeOffset now)
+internal sealed class DemoSeedContext(IServiceProvider services, OmtsDbContext db, Guid cooperativeId, Guid ownerId, string password, bool ownerLoginMayBeSet, DateTimeOffset now)
 {
-    public const string Password = "Demo@1234";
-
     /// <summary>Audit action written when an account gets its demo login; at most once per account.</summary>
     public const string DemoLoginSetAction = "Account.DemoCredentialsSet";
+
+    /// <summary>The password of every demo account; only ever stored hashed, and never written to a message or log.</summary>
+    public string Password { get; } = password;
+
+    /// <summary>Development: always. Staging: only in the run that wrote the demo mark, so a rerun leaves the Owner alone.</summary>
+    public bool OwnerLoginMayBeSet { get; } = ownerLoginMayBeSet;
 
     public OmtsDbContext Db { get; } = db;
     public Guid CooperativeId { get; } = cooperativeId;
@@ -23,6 +28,9 @@ internal sealed class DemoSeedContext(IServiceProvider services, OmtsDbContext d
 
     /// <summary>Today in UTC+7, the same day the application services use.</summary>
     public DateOnly Today { get; } = DateOnly.FromDateTime(now.ToOffset(TimeSpan.FromHours(7)).DateTime);
+
+    /// <summary>Set by a step that left out something optional: the command output says why instead of giving a count.</summary>
+    public string? SkipReason { get; set; }
 
     public T Get<T>() where T : notnull => services.GetRequiredService<T>();
 

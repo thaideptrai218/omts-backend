@@ -29,12 +29,12 @@ public class MigrationTests
     // LaneSegments and CultivationLogEntries lived here until RaftsV2 (PR 0.9) dropped them.
     private static readonly string[] KeptTables =
     [
-        "CultivationCycles", "SeedingEvents", "SeedReceiptLots",
+        "CultivationCycles", "SeedingEvents",
         "Products", "Customers", "Contractors", "SeasonalWorkers", "WorkAssignments", "AttendanceRecords",
     ];
 
     private const string MigrationBeforeCleanup = "20261025175348_AddPushDeviceLoginSession";
-    private const string MigrationBeforeRaftsV2 = "20261104072437_ZonesLicensesV2";
+    private const string MigrationBeforeRaftsV2 = "20261105075725_PurchaseReceiptsV2";
 
     // OMTS-208 done criteria: a fresh database built from the migrations has the status catalog, keeps the
     // schema rules (no cascade delete) and the API starts on it.

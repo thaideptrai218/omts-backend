@@ -1,5 +1,6 @@
 # Local environment for web, mobile and QA: SQL Server, a one-shot seed (migrations, cooperative, demo data) and the
 # API in Development on http://<this PC>:8080. Secrets come from .env (copy .env.example); see README "Run with Docker".
+# Never the shared server: anyone on the network can read the codes in the dev inbox (README "Demo on a shared server").
 name: omts
 
 x-api: &api
@@ -55,7 +56,7 @@ services:
 
   api:
     <<: *api
-    # All interfaces, so a phone on the same Wi-Fi reaches http://<this PC's LAN IP>:8080.
+    # All interfaces, so a phone on the same trusted Wi-Fi reaches http://<this PC's LAN IP>:8080, and so does anyone else there.
     ports:
       - "0.0.0.0:8080:8080"
     restart: unless-stopped

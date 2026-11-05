@@ -97,12 +97,12 @@ public class EmployeeStatusAndAuditTests(AuthApiFactory factory) : IClassFixture
     {
         var (owner, zone, _) = await SetupAsync(factory);
         var phone = NewPhone();
-        var saved = await CreateAsync(owner, Profile($"Audit {NewCode()}", phone, zone.Id, b => b["bankAccount"] = Bank("11112222333344")));
+        var saved = await CreateAsync(owner, Profile($"Audit {NewCode()}", phone, zone.Id, b => b["bankAccount"] = Bank("999900000021")));
         var id = IdOf(saved);
 
         var updated = await owner.PutAsJsonAsync($"/api/employees/{id}", Profile(saved.GetProperty("employee").GetProperty("fullName").GetString()!, phone, zone.Id, b =>
         {
-            b["bankAccount"] = Bank("55556666777788");
+            b["bankAccount"] = Bank("999900000022");
             b["notes"] = "Chuyển sang ca đêm";
             b["rowVersion"] = RowVersionOf(saved);
         }));
@@ -110,11 +110,11 @@ public class EmployeeStatusAndAuditTests(AuthApiFactory factory) : IClassFixture
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
         var audit = await factory.QueryAsync(db => db.AuditEvents.AsNoTracking().SingleAsync(e => e.RecordId == id && e.Action == "Employee.Updated"));
         Assert.Equal(["BankAccount", "Notes"], JsonDocument.Parse(audit.After!).RootElement.EnumerateObject().Select(p => p.Name).Order());
-        Assert.Contains("**********3344", audit.Before);
-        Assert.Contains("**********7788", audit.After);
+        Assert.Contains("********0021", audit.Before);
+        Assert.Contains("********0022", audit.After);
         var allAudit = await factory.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == id).Select(e => (e.Before ?? "") + (e.After ?? "")).ToListAsync());
-        Assert.DoesNotContain(allAudit, a => a.Contains("11112222333344") || a.Contains("55556666777788"));
-        Assert.DoesNotContain(factory.Logs.Lines, l => l.Contains("11112222333344") || l.Contains("55556666777788") || l.Contains(phone));
+        Assert.DoesNotContain(allAudit, a => a.Contains("999900000021") || a.Contains("999900000022"));
+        Assert.DoesNotContain(factory.Logs.Lines, l => l.Contains("999900000021") || l.Contains("999900000022") || l.Contains(phone));
     }
 
     [Fact]

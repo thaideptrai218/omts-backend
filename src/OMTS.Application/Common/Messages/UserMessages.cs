@@ -91,6 +91,26 @@ public static class UserMessages
     {
         Parameters = CertificationParameters(name, number, expiryDate, days: null),
     };
+    // ---- MSG-DEBT ----
+
+    /// <summary>MSG-DEBT-01 (DEBT-01 step 5): asks to use the account, after the Payment Notification Service accepted it.</summary>
+    /// <param name="oldCodesText">{old_codes_text}: empty, or <see cref="OldVietQrCodesText"/>.</param>
+    public static UserMessage UseReceivingBankAccount(string oldCodesText, string accountNumber, string bankName, string accountHolder) => new(
+        Debt01, $"{oldCodesText}Use account {accountNumber} at {bankName} ({accountHolder}) for the VietQR codes of the sales invoices?");
+
+    /// <summary>
+    /// {old_codes_text} of MSG-DEBT-01 when an account was already set (BR-DEBT-01). The SRS gives the placeholder but no
+    /// wording; this is the rule of BR-DEBT-01 in a sentence.
+    /// </summary>
+    public static string OldVietQrCodesText(int count) => count == 1
+        ? "1 unpaid invoice has a VietQR code already sent for the old account. A transfer made with it is not recorded automatically. "
+        : $"{count} unpaid invoices have VietQR codes already sent for the old account. A transfer made with them is not recorded automatically. ";
+
+    /// <summary>MSG-DEBT-02 (DEBT-01.0.E2): the Payment Notification Service does not accept the account or does not answer.</summary>
+    public static UserMessage ReceivingBankAccountNotAccepted(string accountNumber, string bankName) => new(
+        Debt02,
+        $"The payment notification service did not accept account {accountNumber} at {bankName}. The receiving bank account has not been changed. Please check the account, or try again later.");
+
     // ---- MSG-WATER ----
 
     /// <summary>MSG-WATER-01 (WATER-01.2): the OCR Service read nothing, or did not answer.</summary>
@@ -134,7 +154,11 @@ public static class UserMessages
 
     // ---- MSG-ACCOUNT ----
 
-    /// <summary>MSG-ACCOUNT-02: the trader account got a new customer profile (several offline profiles share the number).</summary>
+    /// <summary>MSG-ACCOUNT-01: the trader account is linked to the existing customer profile (ACCOUNT-01 step 7).</summary>
+    public static readonly UserMessage RegisteredWithExistingCustomerProfile = new(
+        Account01, "Your account has been created. Please log in with your phone number or email and your password.");
+
+    /// <summary>MSG-ACCOUNT-02: the trader account got a new customer profile, as no profile or several matched (ACCOUNT-01.1).</summary>
     public static readonly UserMessage RegisteredWithNewCustomerProfile = new(
         Account02,
         "Your account has been created. Invoices from before today will appear in your account after the cooperative adds them. Please log in.",
@@ -156,10 +180,11 @@ public static class UserMessages
 
     /// <summary>
     /// MSG-ACCOUNT-06: login is paused for <see cref="Account.TemporaryLockDuration"/> after too many failed
-    /// attempts. The retry time is the length of the pause, the same for every identifier (BR-ACCOUNT-05).
+    /// attempts (BR-ACCOUNT-05).
     /// </summary>
-    public static readonly UserMessage TooManyLoginAttempts = new(
-        Account06, $"Too many failed login attempts. Please try again after {Duration(Account.TemporaryLockDuration)}.", Legacy.Msg69);
+    /// <param name="waitSeconds">What is left of the pause: {retry_time} in the text.</param>
+    public static UserMessage TooManyLoginAttempts(int waitSeconds) => new(
+        Account06, $"Too many failed login attempts. Please try again after {Duration(TimeSpan.FromSeconds(waitSeconds))}.", Legacy.Msg69);
 
     /// <summary>MSG-ACCOUNT-07: the account is Locked or has no effective zone–role pair.</summary>
     public static readonly UserMessage AccountUnusable = new(
@@ -205,15 +230,13 @@ public static class UserMessages
 
     /// <summary>MSG-ACCOUNT-17: a code was entered wrongly too many times and is cancelled.</summary>
     public static readonly UserMessage TooManyWrongCodes = new(
-        Account17, "You have entered a wrong code too many times. Please start again to get a new code.", Legacy.Msg69);
+        Account17, "You have entered a wrong code too many times. Please start again to get a new code.", Legacy.Msg16);
 
     /// <summary>MSG-ACCOUNT-18: too many codes were asked for (BR-ACCOUNT-09).</summary>
-    /// <param name="waitSeconds">0 when this request has no send left: a new request must be started.</param>
+    /// <param name="waitSeconds">The real wait until a new code can be sent: {retry_time} in the text.</param>
     public static UserMessage TooManyCodeRequests(int waitSeconds) => new(
         Account18,
-        waitSeconds > 0
-            ? $"You have asked for too many codes. Please try again after {Duration(TimeSpan.FromSeconds(waitSeconds))}."
-            : "You have asked for too many codes for this request. Please start again to get a new code.",
+        $"You have asked for too many codes. Please try again after {Duration(TimeSpan.FromSeconds(waitSeconds))}.",
         Legacy.TooManyRequests);
 
     /// <summary>MSG-ACCOUNT-19: a verification code has been sent to the partly hidden address.</summary>
@@ -239,14 +262,57 @@ public static class UserMessages
 
     // ---- MSG-PURCHASE ----
 
+    /// <summary>MSG-PURCHASE-01 (BR-PURCHASE-05): notification to the Owner when a purchase receipt is completed.</summary>
+    /// <param name="totalAmount">The total of the receipt in whole VND: the sum of its rounded lines (BR-PURCHASE-02).</param>
+    public static UserMessage ReceiptCompleted(string userName, string receiptCode, string supplierName, int lineCount, decimal totalAmount) => new(
+        Purchase01, $"{userName} completed purchase receipt {receiptCode} from {supplierName}: {lineCount} lines, {Vnd(totalAmount)} VND.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["user_name"] = userName,
+            ["receipt_code"] = receiptCode,
+            ["supplier_name"] = supplierName,
+            ["line_count"] = lineCount,
+            ["total_amount"] = totalAmount,
+        },
+    };
+
     /// <summary>MSG-PURCHASE-03 (PURCHASE-02.0.E1): a quantity to return is not greater than 0 or above what is left.</summary>
     /// <param name="legacyCode">MSG59 (not greater than 0) or MSG45 (above the limit).</param>
     public static UserMessage ReturnQuantityOutsideLimit(string itemName, string maxQuantity, string unit, string limitExplanation, string legacyCode) => new(
         Purchase03, $"{itemName}: enter a quantity greater than 0 and at most {maxQuantity} {unit}. {limitExplanation}".TrimEnd(), legacyCode);
 
+    /// <summary>MSG-PURCHASE-07 (PURCHASE-06 step 2): cancelling the receipt would bring the supplier debt below zero.</summary>
+    /// <param name="advanceAmount">What the cooperative will then have paid in advance (a positive amount).</param>
+    public static UserMessage PaidInAdvanceAfterCancel(string supplierName, decimal advanceAmount) => new(
+        Purchase07,
+        $"After this cancellation, the cooperative will have paid {supplierName} {Vnd(advanceAmount)} VND in advance. The payments already recorded are not cancelled.")
+    {
+        Parameters = new Dictionary<string, object?> { ["supplier_name"] = supplierName, ["advance_amount"] = advanceAmount },
+    };
+
+    /// <summary>MSG-PURCHASE-08 (PURCHASE-06 step 7): notification to the Accountant and the Owner of a debt below zero after a cancellation.</summary>
+    public static UserMessage ReceiptCancelledPaidInAdvance(string userName, string receiptCode, string supplierName, decimal advanceAmount) => new(
+        Purchase08,
+        $"{userName} cancelled purchase receipt {receiptCode} from {supplierName}. The cooperative has now paid {supplierName} {Vnd(advanceAmount)} VND in advance.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["user_name"] = userName,
+            ["receipt_code"] = receiptCode,
+            ["supplier_name"] = supplierName,
+            ["advance_amount"] = advanceAmount,
+        },
+    };
+
     /// <summary>MSG-PURCHASE-09 (PURCHASE-06.0.E1): a seed lot was seeded or the receipt has a purchase return.</summary>
     public static UserMessage ReceiptCannotBeCancelled(string receiptCode, string cause) => new(
         Purchase09, $"Receipt {receiptCode} cannot be cancelled: {cause}. The Cooperative Owner can correct it instead.", Legacy.Msg61);
+
+    /// <summary>MSG-PURCHASE-10 (PURCHASE-06.2.E1): a corrected quantity is below the quantity seeded plus the quantity returned.</summary>
+    public static UserMessage QuantityBelowUsed(string itemName, decimal minQuantity, string unit, decimal seededQuantity, decimal returnedQuantity) => new(
+        Purchase10,
+        $"{itemName}: the quantity cannot be less than {Quantity(minQuantity)} {unit} ({Quantity(seededQuantity)} seeded, {Quantity(returnedQuantity)} returned).");
 
     // ---- MSG-LABOR ----
 
@@ -255,6 +321,21 @@ public static class UserMessages
         Labor03,
         $"This phone number belongs to {employeeName}. Each employee needs their own phone number for the employee app: enter another number, or leave it empty.",
         Legacy.Msg03);
+
+    // ---- MSG-SALE ----
+
+    /// <summary>MSG-SALE-04 (SALE-04.3): a Zone Manager merges two profiles after confirming that the Owner agreed.</summary>
+    /// <param name="mergedDebt">The amount as shown, e.g. "1,000,000".</param>
+    public static UserMessage CustomerMergeNeedsOwnerAgreement(
+        string mergedName, string mergedPhone, string mergedDebt, string keptName, string keptPhone, string keptDebt) => new(
+        Sale04,
+        $"Has the Cooperative Owner agreed to merge {mergedName} ({mergedPhone}, debt {mergedDebt} VND) into {keptName} ({keptPhone}, debt {keptDebt} VND)? The merge cannot be undone.");
+
+    /// <summary>MSG-SALE-05 (SALE-04.3.E1): the profile to merge has a trader account.</summary>
+    /// <param name="bothLinked">The kept profile has one too, so the two are not merged at all.</param>
+    public static UserMessage CustomerMergeRefused(string mergedName, string keptName, bool bothLinked) => new(
+        Sale05,
+        $"{mergedName} cannot be merged into {keptName}: {(bothLinked ? "both have a trader account" : $"keep {mergedName} instead, so that its trader account keeps its data")}.");
 
     // ---- Old codes still sent as the code (Legacy.KeptAsCode) ----
 
@@ -281,9 +362,6 @@ public static class UserMessages
 
     public static UserMessage ExceedsLimit(string field, string limit) => new(Legacy.Msg45, $"{field} exceeds the allowed limit ({limit}).");
 
-    public static readonly UserMessage OldDocumentsHidden = new(
-        Legacy.Msg57, "Old documents are temporarily hidden until identity verification is complete.");
-
     /// <summary>MSG58 (NFR-13).</summary>
     public static UserMessage SomeoneIsEditing(string userName, string time) => new(
         Legacy.Msg58,
@@ -307,6 +385,12 @@ public static class UserMessages
 
     /// <summary>A date as shown in messages, e.g. "29/11/2026".</summary>
     private static string Date(DateOnly date) => date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+
+    /// <summary>A VND amount as shown in messages, e.g. "1,250,500" (never rounded, BR-PURCHASE-02).</summary>
+    private static string Vnd(decimal amount) => amount.ToString("#,0.###", CultureInfo.InvariantCulture);
+
+    /// <summary>A quantity as shown in messages, e.g. "12.5" (at most 3 decimals).</summary>
+    private static string Quantity(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 
     // {document} of MSG-FARM-01/02: "the license number with its zone".
     private static string LicenseDocument(string? documentTypeName, string documentNumber, string zoneCode) =>

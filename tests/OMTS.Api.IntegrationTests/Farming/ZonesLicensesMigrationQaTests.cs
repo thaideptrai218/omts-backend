@@ -16,7 +16,11 @@ namespace OMTS.Api.IntegrationTests.Farming;
 /// </summary>
 public class ZonesLicensesMigrationQaTests
 {
-    private const string MigrationBefore = "20261104072358_CooperativeProfileV2";
+    private static string MigrationBefore(DbContext db)
+    {
+        var migrations = db.Database.GetMigrations().ToList();
+        return migrations[migrations.FindIndex(m => m.EndsWith("_ZonesLicensesV2", StringComparison.Ordinal)) - 1];
+    }
 
     [SqlServerFact]
     public async Task Up_down_and_up_again_keep_the_license_data_and_the_lowest_code_ignores_case()
@@ -24,7 +28,7 @@ public class ZonesLicensesMigrationQaTests
         await using var database = SqlServerTestDatabase.Create();
         await using var db = database.CreateContext();
         var migrator = db.GetService<IMigrator>();
-        await migrator.MigrateAsync(MigrationBefore);
+        await migrator.MigrateAsync(MigrationBefore(db));
 
         var cooperative = new Cooperative { FullName = "HTX" };
         var upper = new FarmingZone { Cooperative = cooperative, Code = "KV-B", Name = "B" };
@@ -44,7 +48,7 @@ public class ZonesLicensesMigrationQaTests
         await AssertLicensesAsync();
         Assert.False(db.Database.HasPendingModelChanges());
 
-        await migrator.MigrateAsync(MigrationBefore);
+        await migrator.MigrateAsync(MigrationBefore(db));
         Assert.Equal(2, await db.Database.SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM DocumentZoneScopes").SingleAsync());
         await migrator.MigrateAsync();
 
@@ -68,7 +72,7 @@ public class ZonesLicensesMigrationQaTests
         await using var database = SqlServerTestDatabase.Create();
         await using var db = database.CreateContext();
         var migrator = db.GetService<IMigrator>();
-        await migrator.MigrateAsync(MigrationBefore);
+        await migrator.MigrateAsync(MigrationBefore(db));
         var orphan = Guid.NewGuid();
         await db.Database.ExecuteSqlAsync($"""
             INSERT INTO ZoneComplianceDocuments (Id, DocumentType, DocumentNumber, EffectiveDate, ExpiryDate, CreatedAt)
@@ -77,7 +81,7 @@ public class ZonesLicensesMigrationQaTests
 
         await Assert.ThrowsAsync<SqlException>(() => migrator.MigrateAsync());
 
-        Assert.Equal(MigrationBefore, (await db.Database.GetAppliedMigrationsAsync()).Last());
+        Assert.Equal(MigrationBefore(db), (await db.Database.GetAppliedMigrationsAsync()).Last());
         Assert.Equal(1, await db.Database.SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM sys.tables WHERE name = 'DocumentZoneScopes'").SingleAsync());
         Assert.Equal(0, await db.Database.SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM sys.columns WHERE object_id = OBJECT_ID('ZoneComplianceDocuments') AND name = 'ZoneId'").SingleAsync());
     }
