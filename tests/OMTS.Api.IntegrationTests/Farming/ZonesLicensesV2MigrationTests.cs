@@ -28,12 +28,10 @@ public class ZonesLicensesV2MigrationTests
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync(MigrationBefore(db));
 
-        // Cooperatives and zones are unchanged by the migration, so the current model writes them.
-        var cooperative = new Cooperative { FullName = "HTX" };
-        var zoneB = new FarmingZone { Cooperative = cooperative, Code = "KV-B", Name = "B" };
-        var zoneA = new FarmingZone { Cooperative = cooperative, Code = "KV-A", Name = "A" };
-        db.FarmingZones.AddRange(zoneB, zoneA);
-        await db.SaveChangesAsync();
+        // Later migrations add columns to the zone table, so the rows are written with the columns of this schema only.
+        var cooperativeId = await ZoneRowsAtOlderSchema.AddCooperativeAsync(db);
+        var zoneB = new { Id = await ZoneRowsAtOlderSchema.AddZoneAsync(db, cooperativeId, "KV-B", "B") };
+        var zoneA = new { Id = await ZoneRowsAtOlderSchema.AddZoneAsync(db, cooperativeId, "KV-A", "A") };
         var (shared, single) = (Guid.NewGuid(), Guid.NewGuid());
         await db.Database.ExecuteSqlAsync($"""
             INSERT INTO ZoneComplianceDocuments (Id, DocumentType, DocumentNumber, EffectiveDate, ExpiryDate, CreatedAt)

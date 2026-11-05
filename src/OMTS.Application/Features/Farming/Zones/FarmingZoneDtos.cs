@@ -2,7 +2,7 @@ using OMTS.Application.Features.Farming.Licenses;
 
 namespace OMTS.Application.Features.Farming.Zones;
 
-/// <summary>FARM-02 create/edit body; <see cref="WaterMeasurementPoint"/> is optional; <see cref="RowVersion"/> is required on edit only.</summary>
+/// <summary>FARM-02 create/edit body; <see cref="RowVersion"/> is required on edit only.</summary>
 public sealed record SaveFarmingZoneRequest(
     string? Code,
     string? Name,

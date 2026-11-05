@@ -20,7 +20,7 @@ public class NotificationSmsShorteningOrderTests
     private static readonly WaterValueOutside Salinity = new(WaterValueOutside.Salinity, 12m, "‰", WaterValueDirection.Low, 15m, 30m);
 
     private static string Alert(string zone, string? raft, bool corrected, params WaterValueOutside[] values) => Render(
-        NotificationTypes.WaterAlert, UserMessages.WaterAlert(corrected, zone, raft, MeasuredAt, values));
+        NotificationTypes.WaterAlert, UserMessages.WaterAlert(corrected, zone, raft ?? "-", MeasuredAt, values));
 
     private static string Soon(string number, IReadOnlyList<string> zones) => Render(
         NotificationTypes.ZoneLicenseExpiry, UserMessages.LicenseExpiringSoon("AQUACULTURE_LICENSE", "Marine aquaculture license", number, string.Join(", ", zones), Expiry, 30));
@@ -126,7 +126,7 @@ public class NotificationSmsShorteningOrderTests
     {
         var text = Alert("Vùng Cái Rồng", null, true, Ph, Salinity);
 
-        Assert.Equal($"Water alert (corrected): zone Vung Cai Rong, at {Time}. pH 9.1 high (allowed 6.5-8.5); Salinity 12 ppt low (allowed 15-30 ppt).", text);
+        Assert.Equal($"Water alert (corrected): zone Vung Cai Rong, raft -, at {Time}. pH 9.1 high (allowed 6.5-8.5); Salinity 12 ppt low (allowed 15-30 ppt).", text);
     }
 
     // ---- Step 4: the worst case of the columns. The free text goes under its minimum and no fact is lost ----

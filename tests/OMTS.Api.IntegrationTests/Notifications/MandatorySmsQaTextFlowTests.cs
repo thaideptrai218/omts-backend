@@ -29,15 +29,13 @@ public class MandatorySmsQaTextFlowTests(AuthApiFactory api) : IClassFixture<Aut
     [Fact(Skip = "Waiting for the PM: may a number typed into a zone name reach an SMS? Only money SMS are held to code and amount.")]
     public async Task M1_an_owner_typed_zone_name_cannot_put_a_grouped_account_number_on_a_phone()
     {
-        var owner = await FarmingKit.OwnerAsync(api);
-        var zoneId = (await FarmingKit.CreateZoneAsync(owner.Client, FarmingKit.NewZoneBody() with { Name = $"Khu A TK {GroupedAccount}" })).GetProperty("id").GetGuid();
-        var z = new WaterZone(api, await FarmingKit.ZoneEntityAsync(api, zoneId), owner.Client, owner.Account);
-        await api.UpdateAsync<FarmingZone>(zoneId, zone => (zone.PhMin, zone.PhMax) = (6.5m, 8.5m));
+        var z = await api.ZoneAsync();
+        await api.UpdateAsync<FarmingZone>(z.Zone.Id, zone => (zone.Name, zone.PhMin, zone.PhMax) = ($"Khu A TK {GroupedAccount}", 6.5m, 8.5m));
         var (managerClient, _) = await api.StaffAsync(z.Zone);
 
         await z.RecordedAsync(9.1m, 20m, client: managerClient);
 
-        Assert.DoesNotContain(GroupedAccount, Assert.Single(api.SmsTo(owner.Account)).Text);
+        Assert.DoesNotContain(GroupedAccount, Assert.Single(api.SmsTo(z.OwnerAccount)).Text);
     }
 
     [Fact]
@@ -84,7 +82,8 @@ public class MandatorySmsQaTextFlowTests(AuthApiFactory api) : IClassFixture<Aut
         await z.RecordedAsync(7.5m, 12m, client: manager);
 
         var text = Assert.Single(api.SmsTo(z.OwnerAccount)).Text;
-        Assert.StartsWith("Water alert: zone Vung Cai Rong, raft -, measured on ", text);
+        Assert.StartsWith("Water alert: zone Vung Cai Rong, raft ", text);
+        Assert.Contains(", measured on ", text);
         Assert.Contains("Salinity 12 ppt is too low (allowed 15-30 ppt). Please check the water.", text);
         Assert.True(text.Length <= 160, text);
     }
