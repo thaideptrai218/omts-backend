@@ -201,10 +201,12 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         var client = factory.CreateClient();
         var id = await VerificationIdAsync(await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }));
 
+        var agedAt = DateTimeOffset.UtcNow;
         var restart = await (await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }))
             .SrsProblemAsync(HttpStatusCode.TooManyRequests, "MSG-ACCOUNT-18", "TOO_MANY_REQUESTS");
         var resend = await (await client.PostAsync($"/api/verifications/{id}/resend", null))
             .SrsProblemAsync(HttpStatusCode.TooManyRequests, "MSG-ACCOUNT-18", "TOO_MANY_REQUESTS");
+        var elapsed = (DateTimeOffset.UtcNow - agedAt).TotalSeconds;
 
         Assert.Matches(TooManyCodes, restart.Detail());
         Assert.InRange(restart.GetProperty("retryAfterSeconds").GetInt32(), 1, 60);
@@ -263,14 +265,16 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
             await AgeRequestsToAsync(phone);
         }
 
+        var agedAt = DateTimeOffset.UtcNow;
         var restart = await (await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }))
             .SrsProblemAsync(HttpStatusCode.TooManyRequests, "MSG-ACCOUNT-18", "TOO_MANY_REQUESTS");
         var resend = await (await client.PostAsync($"/api/verifications/{id}/resend", null))
             .SrsProblemAsync(HttpStatusCode.TooManyRequests, "MSG-ACCOUNT-18", "TOO_MANY_REQUESTS");
+        var elapsed = (DateTimeOffset.UtcNow - agedAt).TotalSeconds;
 
         Assert.Equal("You have asked for too many codes. Please try again after 54 minutes.", restart.Detail());
-        // The wait shrinks by the real time the two requests above take, which a loaded CI runner stretches past a few seconds.
-        Assert.InRange(restart.GetProperty("retryAfterSeconds").GetInt32(), 3600 - 6 * 60 - 30, 3600 - 6 * 60);
+        // The wait shrinks by the real time the two requests above took, however loaded the runner is.
+        Assert.InRange(restart.GetProperty("retryAfterSeconds").GetInt32(), (int)Math.Floor(3600 - 6 * 60 - elapsed) - 2, 3600 - 6 * 60);
         Assert.Equal(restart.Detail(), resend.Detail());
         Assert.Equal(0, resend.GetProperty("sendsLeft").GetInt32());
     }
