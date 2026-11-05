@@ -33,6 +33,11 @@ internal sealed class ProblemExceptionHandler(ILogger<ProblemExceptionHandler> l
         {
             logger.LogError(exception, "Unhandled exception on {Method} {Path}", httpContext.Request.Method, httpContext.Request.Path);
         }
+        else if (SqlServerDeadlock.IsVictim(exception))
+        {
+            // The client gets an ordinary conflict, so this line is the only trace of how often deadlocks happen.
+            logger.LogWarning("Deadlock victim on {Method} {Path}, answered 409", httpContext.Request.Method, httpContext.Request.Path);
+        }
 
         var problem = ProblemResults.Problem(status, message);
         httpContext.Response.StatusCode = status;
