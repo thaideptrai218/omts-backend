@@ -20,7 +20,10 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
     private static readonly WaterValueOutside SalinityLow = new(WaterValueOutside.Salinity, 12m, "‰", WaterValueDirection.Low, 15m, 30m);
     private static readonly WaterValueOutside PhHigh = new(WaterValueOutside.Ph, 9.1m, null, WaterValueDirection.High, 7.5m, 8.5m);
 
-    public static TheoryData<string> Cases => new() { "farm-01", "farm-02", "water-03", "water-03-corrected", "water-06" };
+    public static TheoryData<string> Cases => new()
+    {
+        "farm-01", "farm-02", "farm-01-no-type", "farm-01-certification", "farm-02-certification-no-number", "water-03", "water-03-corrected", "water-06",
+    };
 
     [Theory]
     [MemberData(nameof(Cases))]
@@ -39,14 +42,31 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
     {
         "farm-01" => (
             "MSG-FARM-01", Farm01,
-            UserMessages.LicenseExpiringSoon("AQUACULTURE_LICENSE", "Marine aquaculture license", "GP-01", ["KV01", "KV02"], new DateOnly(2026, 11, 29), 30),
-            "Marine aquaculture license GP-01 (KV01, KV02) expires on 29/11/2026, in 30 days. Please renew it and record the new one.",
-            """{"document_type":"AQUACULTURE_LICENSE","document_number":"GP-01","zone_codes":["KV01","KV02"],"expiry_date":"2026-11-29","days":30}"""),
+            UserMessages.LicenseExpiringSoon("AQUACULTURE_LICENSE", "Marine aquaculture license", "GP-01", "KV02", new DateOnly(2026, 11, 29), 30),
+            "Marine aquaculture license GP-01 (KV02) expires on 29/11/2026, in 30 days. Please renew it and record the new one.",
+            """{"document_type":"AQUACULTURE_LICENSE","document_number":"GP-01","zone_codes":["KV02"],"expiry_date":"2026-11-29","days":30}"""),
         "farm-02" => (
             "MSG-FARM-02", Farm02,
-            UserMessages.LicenseExpired("SEA_AREA_ALLOCATION", "Sea area allocation decision", "QĐ-7", ["KV01"], new DateOnly(2026, 11, 29)),
+            UserMessages.LicenseExpired("SEA_AREA_ALLOCATION", "Sea area allocation decision", "QĐ-7", "KV01", new DateOnly(2026, 11, 29)),
             "Sea area allocation decision QĐ-7 (KV01) expired on 29/11/2026. Please renew it and record the new one.",
             """{"document_type":"SEA_AREA_ALLOCATION","document_number":"QĐ-7","zone_codes":["KV01"],"expiry_date":"2026-11-29"}"""),
+        // The license type is optional since PR 0.8.
+        "farm-01-no-type" => (
+            "MSG-FARM-01", Farm01,
+            UserMessages.LicenseExpiringSoon(null, null, "GP-02", "KV01", new DateOnly(2026, 11, 1), 1),
+            "Zone license GP-02 (KV01) expires on 01/11/2026, in 1 days. Please renew it and record the new one.",
+            """{"document_type":null,"document_number":"GP-02","zone_codes":["KV01"],"expiry_date":"2026-11-01","days":1}"""),
+        // {document} of a certification: its name and number (GFR-03).
+        "farm-01-certification" => (
+            "MSG-FARM-01", Farm01,
+            UserMessages.CertificationExpiringSoon("VietGAP", "VG-01", new DateOnly(2026, 11, 29), 29),
+            "VietGAP (VG-01) expires on 29/11/2026, in 29 days. Please renew it and record the new one.",
+            """{"certification_name":"VietGAP","certification_number":"VG-01","expiry_date":"2026-11-29","days":29}"""),
+        "farm-02-certification-no-number" => (
+            "MSG-FARM-02", Farm02,
+            UserMessages.CertificationExpired("Chứng nhận ATTP", null, new DateOnly(2026, 10, 30)),
+            "Chứng nhận ATTP expired on 30/10/2026. Please renew it and record the new one.",
+            """{"certification_name":"Chứng nhận ATTP","certification_number":null,"expiry_date":"2026-10-30"}"""),
         "water-03" => (
             "MSG-WATER-03", Water03,
             UserMessages.WaterAlert(false, "Vùng A", null, MeasuredAt, [SalinityLow]),

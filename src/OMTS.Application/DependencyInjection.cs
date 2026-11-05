@@ -17,6 +17,9 @@ using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
 using OMTS.Application.Features.Purchasing.Suppliers;
+using OMTS.Application.Features.ReceivingBankAccounts;
+using OMTS.Application.Features.Sales.Customers;
+using OMTS.Application.Features.Sales.Products;
 using OMTS.Application.Features.Verification;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
@@ -33,7 +36,7 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddMemoryCache();
 
-        services.AddSingleton(_ => new UnknownLoginCounter());
+        services.AddSingleton(provider => new UnknownLoginCounter(timeProvider: provider.GetRequiredService<TimeProvider>()));
         services.AddScoped<AuthService>();
 
         services.AddSingleton<PermissionCache>();
@@ -44,12 +47,14 @@ public static class DependencyInjection
         services.AddScoped<AuditLogService>();
         services.AddScoped<StatusChangeService>();
         services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
+        services.AddScoped<MandatorySmsQueue>();
         services.AddScoped<OwnerActorRecipientFilter>();
         services.AddScoped<NotificationInboxService>();
         services.AddScoped<RowVersionGuard>();
 
         // ACS – personal accounts
         services.AddScoped<VerificationThrottle>();
+        services.AddSingleton<VerificationStartGate>();
         services.AddScoped<VerificationService>();
         services.AddScoped<TraderCustomerLinker>();
         services.AddScoped<UsernameGenerator>();
@@ -69,14 +74,23 @@ public static class DependencyInjection
         services.AddScoped<RoleService>();
 
         // FARM-01 cooperative profile, LAB-01 employees
+        services.AddScoped<CooperativeProfileViews>();
         services.AddScoped<CooperativeProfileService>();
+        services.AddScoped<CooperativeCoverPhotoService>();
+        services.AddScoped<CooperativeCertificationService>();
         services.AddScoped<EmployeeService>();
+
+        // DEBT-01 receiving bank account
+        services.AddScoped<ReceivingAccountAcceptance>();
+        services.AddScoped<ReceivingBankAccountService>();
 
         // FARM-02 zones, FARM-03 zone licenses, FARM-04 rafts
         services.AddScoped<FarmingLookupAccess>();
         services.AddScoped<FarmingZoneService>();
         services.AddScoped<ZoneLicenseService>();
+        // GFR-03 expiry reminders of zone licenses and cooperative certifications
         services.AddScoped<ZoneLicenseReminderService>();
+        services.AddScoped<CertificationReminderService>();
         services.AddScoped<RaftService>();
         services.AddScoped<RaftConditionService>();
         services.AddScoped<UploadedFileSaver>();
@@ -86,6 +100,10 @@ public static class DependencyInjection
         services.AddScoped<ZoneAccessGuard>();
         services.AddScoped<SupplierService>();
         services.AddScoped<FarmingInputItemService>();
+        services.AddScoped<ProductService>();
+        services.AddScoped<ProductReadService>();
+        services.AddScoped<CustomerService>();
+        services.AddScoped<CustomerMergeService>();
         services.AddScoped<PurchaseReceiptAccess>();
         services.AddScoped<PurchaseReceiptValidator>();
         services.AddScoped<PurchaseReceiptViews>();

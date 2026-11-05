@@ -14,8 +14,8 @@ internal sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
         builder.Property(x => x.PhoneNumber).HasMaxLength(Lengths.Phone);
         builder.HasIndex(x => x.PhoneNumber).IsUnique();
         builder.Property(x => x.Email).HasMaxLength(Lengths.Email);
-        // Only a verified email is unique system-wide (BR-32).
-        builder.HasIndex(x => x.Email).IsUnique().HasFilter("[Email] IS NOT NULL AND [EmailVerifiedAt] IS NOT NULL");
+        // An email is unique system-wide, verified or not (BR-ACCOUNT-02).
+        builder.HasIndex(x => x.Email).IsUnique().HasFilter("[Email] IS NOT NULL");
         builder.Property(x => x.PasswordHash).HasMaxLength(Lengths.Address);
 
         builder.OwnsMany(x => x.NotificationPreferences, preferences =>

@@ -33,8 +33,8 @@ public class EmployeeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         Assert.Equal(zone.Code, body.GetProperty("employee").GetProperty("workingZones")[0].GetProperty("code").GetString());
         Assert.Equal(1, found.GetProperty("total").GetInt32());
         var audit = await factory.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.RecordId == id && e.Action == "Employee.Created"));
-        Assert.Contains("******7890", audit.After);
-        Assert.DoesNotContain("1234567890", audit.After);
+        Assert.Contains("********0011", audit.After);
+        Assert.DoesNotContain("999900000011", audit.After);
     }
 
     [Fact]
@@ -146,7 +146,7 @@ public class EmployeeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
         await factory.GrantAsync(staff, StaffRole.ZoneManager, null);
 
-        var stale = await owner.PutAsJsonAsync($"/api/employees/{id}", new { fullName = name, phoneNumber = phone, rowVersion = "AAAAAAAAB9E=" });
+        var stale = await owner.PutAsJsonAsync($"/api/employees/{id}", new { fullName = name, phoneNumber = phone, rowVersion = StaleRowVersion });
         var forbidden = await (await factory.LoginAsync(staff.Username)).GetAsync("/api/employees");
 
         Assert.Equal("MSG06", await stale.ErrorCodeAsync());
@@ -170,7 +170,7 @@ public class EmployeeTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         phoneNumber = phone,
         birthday = "1990-05-01",
         workingZoneIds = new[] { zoneId },
-        bankAccount = bank ? new { bankName = "Vietcombank", accountNumber = "1234567890", accountHolderName = "Nguyen Van A" } : null,
+        bankAccount = bank ? new { bankName = "Vietcombank", accountNumber = "999900000011", accountHolderName = "Nguyen Van A" } : null,
         accountId,
         account,
     };

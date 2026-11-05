@@ -35,7 +35,10 @@ internal sealed record DemoEmployeePlan(
     DemoLoginKind Login = DemoLoginKind.Normal,
     int? LeftDaysAgo = null);
 
-/// <summary>The eight demo employees (LAB-01); phones come from the fake range 0900 000 0xx.</summary>
+/// <summary>
+/// The eight demo employees (LAB-01); phones come from the fake range 0900 000 0xx. An employee's number is digits only, so
+/// only a pattern can show that it is fictional: bank numbers come from 9999 0000 0xxx.
+/// </summary>
 internal static class DemoEmployeePlans
 {
     private const StaffRole ZoneManagerRole = StaffRole.ZoneManager;
@@ -50,20 +53,20 @@ internal static class DemoEmployeePlans
     public static readonly IReadOnlyList<DemoEmployeePlan> All =
     [
         new("Lê Minh Tuấn", "0900000011", "quanlyvung1", ZoneManagerRole, DemoFarmingZoneStep.ZoneOne, null,
-            ZoneOne, new(1988, 3, 14), "Thị trấn Cái Rồng", "Vietcombank", "1900000011"),
+            ZoneOne, new(1988, 3, 14), "Thị trấn Cái Rồng", "Vietcombank", "999900000001"),
         new("Phạm Thị Lan", "0900000012", "quanlyvung2", ZoneManagerRole, DemoFarmingZoneStep.ZoneTwo, null,
-            ZoneTwo, new(1991, 7, 22), "Xã Minh Châu", "Agribank", "5000000012"),
+            ZoneTwo, new(1991, 7, 22), "Xã Minh Châu", "Agribank", "999900000002"),
         new("Trần Thu Hà", "0900000013", "ketoan", AccountantRole, null, null,
-            [.. ZoneOne, .. ZoneTwo], new(1990, 11, 5), "Thị trấn Cái Rồng", "BIDV", "3100000013"),
+            [.. ZoneOne, .. ZoneTwo], new(1990, 11, 5), "Thị trấn Cái Rồng", "BIDV", "999900000003"),
         new("Đỗ Văn Cường", "0900000014", "nhanvien.doimk", ZoneManagerRole, DemoFarmingZoneStep.ZoneOne, null,
-            ZoneOne, new(1993, 5, 18), "Xã Đoàn Kết", "Vietinbank", "1070000014", DemoLoginKind.MustChangePassword),
+            ZoneOne, new(1993, 5, 18), "Xã Đoàn Kết", "Vietinbank", "999900000004", DemoLoginKind.MustChangePassword),
         new("Vũ Thị Mai", "0900000015", "nhanvien.chuaxacthuc", ZoneManagerRole, DemoFarmingZoneStep.ZoneTwo, null,
-            ZoneTwo, new(1996, 12, 2), "Xã Minh Châu", "MB Bank", "0900000015", DemoLoginKind.PhoneUnverified),
+            ZoneTwo, new(1996, 12, 2), "Xã Minh Châu", "MB Bank", "999900000005", DemoLoginKind.PhoneUnverified),
         new("Hoàng Văn Sơn", "0900000016", "nhanvien.hethan", ZoneManagerRole, DemoFarmingZoneStep.ZoneOne, RevokedPairReason,
-            ZoneOne, new(1989, 9, 27), "Xã Ngọc Vừng", "Agribank", "5000000016"),
+            ZoneOne, new(1989, 9, 27), "Xã Ngọc Vừng", "Agribank", "999900000006"),
         new("Nguyễn Văn Phúc", "0900000017", null, ZoneManagerRole, null, null,
-            ZoneOne, new(1995, 1, 30), "Xã Ngọc Vừng", "Techcombank", "1900000017"),
+            ZoneOne, new(1995, 1, 30), "Xã Ngọc Vừng", "Techcombank", "999900000007"),
         new("Bùi Văn Thắng", "0900000018", null, ZoneManagerRole, null, null,
-            ZoneTwo, new(1985, 9, 9), "Xã Minh Châu", "Vietcombank", "1900000018", LeftDaysAgo: 20),
+            ZoneTwo, new(1985, 9, 9), "Xã Minh Châu", "Vietcombank", "999900000008", LeftDaysAgo: 20),
     ];
 }

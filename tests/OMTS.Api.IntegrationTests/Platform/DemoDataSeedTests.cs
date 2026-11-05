@@ -25,9 +25,11 @@ public class DemoDataSeedTests
     private static readonly (string Table, Func<OmtsDbContext, Task<int>> Count)[] SeededTables =
     [
         ("Cooperatives", db => db.Cooperatives.CountAsync()),
+        ("CooperativeCertifications", db => db.CooperativeCertifications.CountAsync()),
         ("Accounts", db => db.Accounts.CountAsync()),
         ("AccessGrants", db => db.AccessGrants.CountAsync()),
         ("Customers", db => db.Customers.CountAsync()),
+        ("Products", db => db.Products.CountAsync()),
         ("Employees", db => db.Employees.CountAsync()),
         ("FarmingZones", db => db.FarmingZones.CountAsync()),
         ("ZoneComplianceDocuments", db => db.ZoneComplianceDocuments.CountAsync()),
@@ -84,7 +86,8 @@ public class DemoDataSeedTests
         }
     }
 
-    // Any environment but Development, and no setting reopens it (the old Bootstrap:SeedDemoData switch is gone).
+    // Outside Development the old Bootstrap:SeedDemoData switch reopens nothing; only Staging has a flag of its own
+    // (DemoSeedGateTests).
     [Theory]
     [InlineData("Production")]
     [InlineData("Staging")]
@@ -96,7 +99,7 @@ public class DemoDataSeedTests
         var refused = await RunAsync(host);
 
         Assert.Equal(DeploymentBootstrapper.Failure, refused.ExitCode);
-        Assert.Contains(refused.Messages, m => m.Contains("refused outside Development"));
+        Assert.Contains(refused.Messages, m => m.Contains("refused"));
         using var scope = host.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
         Assert.False(await db.Cooperatives.AnyAsync());
@@ -108,14 +111,40 @@ public class DemoDataSeedTests
         using var scope = api.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
 
+        // FARM-01: the SRS 27/10 profile fields, a logo and a cover photo, and one Valid certification with its file.
+        var cooperative = await db.Cooperatives.AsNoTracking().SingleAsync();
+        Assert.Equal(("HTX Hàu Vân Đồn", 2012), (cooperative.ShortName, cooperative.YearEstablished));
+        Assert.All(
+            new[] { cooperative.TaxCode, cooperative.SocialLink, cooperative.IntroductionVi, cooperative.IntroductionEn, cooperative.LogoUrl, cooperative.CoverPhotoUrl },
+            value => Assert.False(string.IsNullOrEmpty(value)));
+        // Two certifications with their files: one Valid and one Expiring soon (GFR-03 reminds it).
+        var certifications = await db.CooperativeCertifications.AsNoTracking().OrderBy(c => c.ExpiryDate).ToListAsync();
+        Assert.Equal(2, certifications.Count);
+        Assert.All(certifications, c => Assert.Equal(cooperative.Id, c.CooperativeId));
+        Assert.All(certifications, c => Assert.NotNull(c.FileUrl));
+        var businessToday = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+        Assert.InRange(certifications[0].ExpiryDate!.Value, businessToday, businessToday.AddDays(30));
+        Assert.True(certifications[1].ExpiryDate > businessToday.AddDays(30));
+
         Assert.Equal(3, await db.FarmingZones.CountAsync());
         Assert.Equal(1, await db.FarmingZones.CountAsync(z => z.StatusId == StatusIds.Usage.Discontinued));
-        Assert.Equal(6, await db.ZoneComplianceDocuments.CountAsync());
+        // One zone per license: DEMO-01 an expired license replaced by one expiring soon, DEMO-02 a valid one and an older expired one.
+        Assert.Equal(4, await db.ZoneComplianceDocuments.CountAsync());
+        Assert.Equal(1, await db.ZoneComplianceDocuments.CountAsync(d => d.ReplacesDocumentId != null));
+        Assert.Equal(2, await db.ZoneComplianceDocuments.Select(d => d.ZoneId).Distinct().CountAsync());
         Assert.Equal(20, await db.Rafts.CountAsync());
         Assert.Equal(8, await db.Employees.CountAsync());
         Assert.Equal(1, await db.Employees.CountAsync(e => e.StatusId == StatusIds.Employee.Left));
         Assert.Equal(5, await db.Suppliers.CountAsync());
         Assert.Equal(15, await db.FarmingInputItems.CountAsync());
+        // SALE-11: a price list with one Discontinued product to resume. SALE-04: the two trader profiles and five offline
+        // ones, every offline number checked, the last two the same buyer to merge.
+        Assert.Equal(4, await db.Products.CountAsync());
+        Assert.Equal(1, await db.Products.CountAsync(p => p.StatusId == StatusIds.Usage.Discontinued));
+        Assert.All(await db.Products.ToListAsync(), p => Assert.True(p.UnitPrice > 0));
+        Assert.Equal(7, await db.Customers.CountAsync());
+        Assert.Equal(2, await db.Customers.CountAsync(c => c.AccountId != null));
+        Assert.Equal(5, await db.Customers.CountAsync(c => c.AccountId == null && c.PhoneCheckedByStaff));
 
         var statuses = await db.PurchaseReceipts.GroupBy(r => r.StatusId).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
         Assert.Equal(20, statuses.Sum(s => s.Count));

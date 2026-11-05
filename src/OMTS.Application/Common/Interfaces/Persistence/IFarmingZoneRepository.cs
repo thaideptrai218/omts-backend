@@ -26,6 +26,9 @@ public interface IFarmingZoneRepository
     /// <summary>Zones (In Use, plus Discontinued when asked) limited to the permitted zones, ordered by code, untracked.</summary>
     Task<IReadOnlyList<FarmingZone>> ListAsync(bool includeDiscontinued, PermittedZones permitted, CancellationToken cancellationToken);
 
+    /// <summary>Codes of every zone (discontinued included) that start with <paramref name="prefix"/>, ignoring case (GBR-03).</summary>
+    Task<IReadOnlyList<string>> CodesStartingWithAsync(string prefix, CancellationToken cancellationToken);
+
     /// <summary>Codes of the zone's In Use rafts.</summary>
     Task<IReadOnlyList<string>> InUseRaftCodesAsync(Guid zoneId, CancellationToken cancellationToken);
 

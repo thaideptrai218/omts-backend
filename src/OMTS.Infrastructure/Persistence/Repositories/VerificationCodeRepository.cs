@@ -11,11 +11,15 @@ internal sealed class VerificationCodeRepository(OmtsDbContext db) : IVerificati
 
     public void Remove(VerificationCode code) => db.VerificationCodes.Remove(code);
 
-    public async Task<int> CountSendsToTargetAsync(string target, DateTimeOffset since, CancellationToken cancellationToken) =>
-        await db.VerificationCodes.Where(c => c.Target == target && c.LastSentAt >= since).SumAsync(c => (int?)c.SendCount, cancellationToken) ?? 0;
+    public Task<IReadOnlyList<DateTimeOffset>> GetSendTimesToTargetAsync(string target, DateTimeOffset since, CancellationToken cancellationToken) =>
+        SendTimesAsync(db.VerificationCodes.Where(c => c.Target == target), since, cancellationToken);
 
     public async Task<int> CountSmsSendsAsync(DateTimeOffset since, CancellationToken cancellationToken) =>
         await db.VerificationCodes.Where(c => c.Channel == VerificationChannel.Sms && c.LastSentAt >= since).SumAsync(c => (int?)c.SendCount, cancellationToken) ?? 0;
+
+    public Task<IReadOnlyList<DateTimeOffset>> GetSendTimesAsync(
+        VerificationPurpose purpose, string target, DateTimeOffset since, CancellationToken cancellationToken) =>
+        SendTimesAsync(db.VerificationCodes.Where(c => c.Purpose == purpose && c.Target == target), since, cancellationToken);
 
     public Task<VerificationCode?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         db.VerificationCodes.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
@@ -30,4 +34,24 @@ internal sealed class VerificationCodeRepository(OmtsDbContext db) : IVerificati
             .Where(c => accountId != null ? c.AccountId == accountId : c.AccountId == null && c.Target == target)
             .OrderByDescending(c => c.CreatedAt)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<VerificationCode>> ListOpenAsync(
+        VerificationPurpose purpose, string target, DateTimeOffset now, CancellationToken cancellationToken) =>
+        await db.VerificationCodes
+            .Where(c => c.Purpose == purpose && c.Target == target && c.ConsumedAt == null && c.CancelledAt == null && c.ExpiresAt > now)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<VerificationCode>> ListUsableOfAccountAsync(
+        Guid accountId, VerificationChannel channel, DateTimeOffset now, CancellationToken cancellationToken) =>
+        await db.VerificationCodes
+            .Where(c => c.AccountId == accountId && c.Channel == channel && c.CancelledAt == null && c.TokenConsumedAt == null)
+            .Where(c => c.ExpiresAt > now || c.TokenExpiresAt > now)
+            .ToListAsync(cancellationToken);
+
+    private static async Task<IReadOnlyList<DateTimeOffset>> SendTimesAsync(
+        IQueryable<VerificationCode> requests, DateTimeOffset since, CancellationToken cancellationToken)
+    {
+        var times = await requests.AsNoTracking().Where(c => c.LastSentAt > since).Select(c => c.SendTimes).ToListAsync(cancellationToken);
+        return times.SelectMany(sent => sent).Where(sent => sent > since).Order().ToList();
+    }
 }

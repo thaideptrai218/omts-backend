@@ -16,6 +16,12 @@ public static partial class AcsTestKit
 {
     public const string Password = "Secret123";
 
+    /// <summary>
+    /// The row version of a stale screen: no save ever issues it. SQL Server's counter never reaches 0xFF…FF, and
+    /// <c>FarmingTestKit.IssueRowVersionAsync</c> ends its versions with a byte of 1–254.
+    /// </summary>
+    public const string StaleRowVersion = "//////////8=";
+
     // A random start plus a counter: unique for the whole test run (random numbers met about once in 10,000
     // runs), and different between runs.
     private static int _phoneSequence = Random.Shared.Next(0, PhoneRange);
@@ -93,6 +99,14 @@ public static partial class AcsTestKit
     {
         using var scope = factory.Services.CreateScope();
         return await query(scope.ServiceProvider.GetRequiredService<OmtsDbContext>());
+    }
+
+    /// <summary>Moves a verification request into the past, as if that much time had passed since its codes were sent.</summary>
+    public static void AgeBy(this VerificationCode request, TimeSpan age)
+    {
+        request.CreatedAt -= age;
+        request.LastSentAt -= age;
+        request.SendTimes = request.SendTimes.Select(sent => sent - age).ToList();
     }
 
     /// <summary>A password that meets the policy (letters and a digit), new for each call.</summary>

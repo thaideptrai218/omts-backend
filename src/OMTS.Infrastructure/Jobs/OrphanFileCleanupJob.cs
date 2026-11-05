@@ -1,5 +1,4 @@
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OMTS.Application.Features.Files;
@@ -7,7 +6,7 @@ using OMTS.Application.Features.Files;
 namespace OMTS.Infrastructure.Jobs;
 
 /// <summary>"Jobs:OrphanFileCleanup" section.</summary>
-public sealed class OrphanFileCleanupOptions
+public sealed class OrphanFileCleanupOptions : IDailyJobOptions
 {
     public const string SectionName = "Jobs:OrphanFileCleanup";
 
@@ -20,13 +19,20 @@ public sealed class OrphanFileCleanupOptions
     /// <summary>Daily run time in the business time zone (UTC+7), outside working hours.</summary>
     public TimeOnly RunAt { get; set; } = new(3, 0);
 
+    /// <summary>
+    /// Off by default: a missed day only delays the clean-up, and a run at every restart would scan the storage for
+    /// nothing. Safe when turned on, as a second run finds nothing more to delete.
+    /// </summary>
+    public bool CatchUpOnStart { get; set; }
+
     /// <summary>A file written less than this long ago is kept, so a file uploaded right now is never deleted.</summary>
     public TimeSpan GracePeriod { get; set; } = TimeSpan.FromHours(24);
 }
 
 /// <summary>
-/// Deletes raft photo and license files that no record points to (<see cref="OrphanFileCleanupService"/>). Each
-/// category runs in its own scope, so a failing one is logged and skipped while the other continues.
+/// Deletes raft photos, license files, cooperative cover photos and certificate files that no record points to
+/// (<see cref="OrphanFileCleanupService"/>). Each category runs in its own scope, so a failing one is logged and skipped
+/// while the others continue.
 /// </summary>
 public sealed class OrphanFileCleanupJob(IServiceScopeFactory scopes, IOptions<OrphanFileCleanupOptions> options, ILogger<OrphanFileCleanupJob> logger)
 {
@@ -52,32 +58,18 @@ public sealed class OrphanFileCleanupJob(IServiceScopeFactory scopes, IOptions<O
     }
 }
 
-/// <summary>Runs <see cref="OrphanFileCleanupJob"/> once a day at <see cref="OrphanFileCleanupOptions.RunAt"/>.</summary>
+/// <summary>Runs <see cref="OrphanFileCleanupJob"/> once a day at <see cref="OrphanFileCleanupOptions.RunAt"/> (see <see cref="DailyJobHostedService"/>).</summary>
 internal sealed class OrphanFileCleanupHostedService(
     OrphanFileCleanupJob job,
     IOptions<OrphanFileCleanupOptions> options,
     TimeProvider timeProvider,
-    ILogger<OrphanFileCleanupHostedService> logger) : BackgroundService
+    ILogger<OrphanFileCleanupHostedService> logger) : DailyJobHostedService(options.Value, timeProvider, logger)
 {
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override string JobName => "Orphan file clean-up";
+
+    protected override async Task RunOnceAsync(DateOnly today, CancellationToken cancellationToken)
     {
-        // A missed day only delays the clean-up: no catch-up run at start.
-        while (options.Value.Enabled && !stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                await Task.Delay(DailyRunTime.DelayUntilNext(timeProvider.GetUtcNow(), options.Value.RunAt), timeProvider, stoppingToken);
-                var deleted = await job.RunOnceAsync(timeProvider.GetUtcNow(), stoppingToken);
-                logger.LogInformation("Orphan file clean-up deleted {Count} files.", deleted);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                return;
-            }
-            catch (Exception exception)
-            {
-                logger.LogError(exception, "Orphan file clean-up run failed.");
-            }
-        }
+        var deleted = await job.RunOnceAsync(Clock.GetUtcNow(), cancellationToken);
+        Logger.LogInformation("Orphan file clean-up deleted {Count} files.", deleted);
     }
 }

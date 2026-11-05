@@ -51,4 +51,7 @@ internal sealed class ZoneRecipientQuery(OmtsDbContext db) : IZoneRecipientQuery
             .Where(g => roleCodes.Contains(g.Role.Code)
                 && g.Account.SubjectType == SubjectType.Staff
                 && g.Account.StatusId == StatusIds.Account.Active);
+
+    public async Task<IReadOnlyList<Guid>> GetCooperativeOwnersAsync(CancellationToken cancellationToken) =>
+        await OwnersAsync(cancellationToken);
 }
