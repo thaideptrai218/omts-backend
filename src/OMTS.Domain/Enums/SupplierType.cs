@@ -1,6 +1,6 @@
 namespace OMTS.Domain.Enums;
 
-/// <summary>What a supplier mainly provides (INP-01).</summary>
+/// <summary>The type of a supplier (BR-PURCHASE-06): Seed, Material or Other.</summary>
 public enum SupplierType
 {
     Seed,

@@ -25,6 +25,7 @@ public static class MessageCodes
     public const string Water05 = "MSG-WATER-05";
     public const string Water06 = "MSG-WATER-06";
 
+    public const string Account01 = "MSG-ACCOUNT-01";
     public const string Account02 = "MSG-ACCOUNT-02";
     public const string Account03 = "MSG-ACCOUNT-03";
     public const string Account04 = "MSG-ACCOUNT-04";
@@ -45,17 +46,22 @@ public static class MessageCodes
     public const string Account20 = "MSG-ACCOUNT-20";
     public const string Account21 = "MSG-ACCOUNT-21";
     public const string Account22 = "MSG-ACCOUNT-22";
+    public const string Account23 = "MSG-ACCOUNT-23";
 
     public const string Purchase03 = "MSG-PURCHASE-03";
     public const string Purchase09 = "MSG-PURCHASE-09";
 
     public const string Labor03 = "MSG-LABOR-03";
 
+    public const string Sale04 = "MSG-SALE-04";
+    public const string Sale05 = "MSG-SALE-05";
+
     /// <summary>
-    /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-22, the
-    /// related record of a notification no longer exists (ACCOUNT-08 is new in PR 0.5).
+    /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-01, the
+    /// account is linked to the existing customer profile; MSG-ACCOUNT-22, the related record of a notification no longer
+    /// exists (ACCOUNT-08 is new in PR 0.5); MSG-SALE-04 and MSG-SALE-05, the merge of customer profiles (SALE-04 is new).
     /// </summary>
-    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal) { Account22, Water02 };
+    public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal) { Account01, Account22, Sale04, Sale05, Water02 };
 
     /// <summary>
     /// Codes of the old list. Most are only sent as <c>legacyCode</c> next to the new code, for one release.
@@ -116,14 +122,13 @@ public static class MessageCodes
         /// <item>MSG24: the account is already linked to another employee (LABOR).</item>
         /// <item>MSG41: multiple of 1,000 VND (BR-PURCHASE-02 drops the rule in the PURCHASE PR).</item>
         /// <item>MSG45: receipt discount, paid-now and refund limits (fields not in the SRS; PURCHASE PR).</item>
-        /// <item>MSG57: old documents hidden after a phone verification (PR 0.4, BR-ACCOUNT-04).</item>
         /// <item>MSG58: someone else is editing the record (NFR-13, still cited by Part IV).</item>
         /// <item>NOT_FOUND, TOO_MANY_REQUESTS (per-IP limit), UNEXPECTED_ERROR, PASSWORD_CHANGE_REQUIRED: technical codes.</item>
         /// </list>
         /// </summary>
         public static readonly IReadOnlySet<string> KeptAsCode = new HashSet<string>(StringComparer.Ordinal)
         {
-            Msg05, Msg06, Msg19, Msg24, Msg41, Msg45, Msg57, Msg58,
+            Msg05, Msg06, Msg19, Msg24, Msg41, Msg45, Msg58,
             NotFound, TooManyRequests, UnexpectedError, PasswordChangeRequired,
         };
     }

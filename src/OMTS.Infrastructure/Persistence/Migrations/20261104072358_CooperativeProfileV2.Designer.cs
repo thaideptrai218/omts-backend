@@ -12,8 +12,8 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(OmtsDbContext))]
-    [Migration("20261104110500_WaterMeasurementsV2")]
-    partial class WaterMeasurementsV2
+    [Migration("20261104072358_CooperativeProfileV2")]
+    partial class CooperativeProfileV2
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -408,11 +408,29 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("ClientOperationId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("ConfirmedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ConfirmedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CorrectedFromMeasurementId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CorrectionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("InputSource")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<DateTimeOffset>("MeasuredAt")
                         .HasColumnType("datetimeoffset");
@@ -420,7 +438,22 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("MeasuredByAccountId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal>("Ph")
+                    b.Property<string>("MeasurementPoint")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("OcrMeasuredAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<decimal?>("OcrPh")
+                        .HasPrecision(4, 2)
+                        .HasColumnType("decimal(4,2)");
+
+                    b.Property<decimal?>("OcrSalinity")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal?>("Ph")
                         .HasPrecision(4, 2)
                         .HasColumnType("decimal(4,2)");
 
@@ -433,12 +466,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasColumnType("decimal(4,2)");
 
                     b.Property<string>("PhotoUrl")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
-                    b.Property<Guid>("RaftId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<int>("RecordVersion")
+                        .HasColumnType("int");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -446,7 +478,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
-                    b.Property<decimal>("Salinity")
+                    b.Property<decimal?>("Salinity")
                         .HasPrecision(5, 2)
                         .HasColumnType("decimal(5,2)");
 
@@ -460,18 +492,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("StatusId")
                         .HasColumnType("int");
-
-                    b.Property<decimal>("Temperature")
-                        .HasPrecision(4, 2)
-                        .HasColumnType("decimal(4,2)");
-
-                    b.Property<decimal?>("TemperatureMaxUsed")
-                        .HasPrecision(4, 2)
-                        .HasColumnType("decimal(4,2)");
-
-                    b.Property<decimal?>("TemperatureMinUsed")
-                        .HasPrecision(4, 2)
-                        .HasColumnType("decimal(4,2)");
 
                     b.Property<bool>("ThresholdExceeded")
                         .HasColumnType("bit");
@@ -495,10 +515,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PhotoUrl")
-                        .IsUnique();
+                    b.HasIndex("ConfirmedByAccountId");
 
-                    b.HasIndex("RaftId");
+                    b.HasIndex("CorrectedFromMeasurementId")
+                        .IsUnique()
+                        .HasFilter("[CorrectedFromMeasurementId] IS NOT NULL");
 
                     b.HasIndex("StatusId");
 
@@ -598,19 +619,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<int>("StatusId")
                         .HasColumnType("int");
 
-                    b.Property<decimal?>("TemperatureMax")
-                        .HasPrecision(4, 2)
-                        .HasColumnType("decimal(4,2)");
-
-                    b.Property<decimal?>("TemperatureMin")
-                        .HasPrecision(4, 2)
-                        .HasColumnType("decimal(4,2)");
-
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("WaterMeasurementPoint")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<DateTimeOffset?>("WaterOverdueRemindedAt")
                         .HasColumnType("datetimeoffset");
@@ -1054,6 +1071,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<string>("CoverPhotoUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -1068,6 +1089,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("IntroductionEn")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("IntroductionVi")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("LegalRepresentative")
                         .HasMaxLength(255)
@@ -1091,8 +1120,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
-                    b.Property<int>("StatusId")
-                        .HasColumnType("int");
+                    b.Property<string>("ShortName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("SocialLink")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<string>("TaxCode")
                         .HasMaxLength(20)
@@ -1108,15 +1142,70 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
-                    b.HasKey("Id");
+                    b.Property<int?>("YearEstablished")
+                        .HasColumnType("int");
 
-                    b.HasIndex("StatusId");
+                    b.HasKey("Id");
 
                     b.HasIndex("TaxCode")
                         .IsUnique()
                         .HasFilter("[TaxCode] IS NOT NULL");
 
                     b.ToTable("Cooperatives");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.CooperativeCertification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CooperativeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("ExpiryDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("FileUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Issuer")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Number")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CooperativeId");
+
+                    b.ToTable("CooperativeCertifications");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.Employee", b =>
@@ -1949,28 +2038,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
-                            Id = 201,
-                            Code = "DRAFT",
-                            DisplayName = "Preliminary",
-                            Group = "COOPERATIVE",
-                            IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "Created at deployment; the Cooperative Owner has not completed the legal profile yet.",
-                            SortOrder = 1
-                        },
-                        new
-                        {
-                            Id = 202,
-                            Code = "COMPLETED",
-                            DisplayName = "Completed",
-                            Group = "COOPERATIVE",
-                            IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "The Cooperative Owner has entered all mandatory cooperative profile information.",
-                            SortOrder = 2
-                        },
-                        new
-                        {
                             Id = 301,
                             Code = "ACTIVE",
                             DisplayName = "Active",
@@ -2059,25 +2126,47 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
-                            Id = 2101,
-                            Code = "ACTIVE",
-                            DisplayName = "Active",
-                            Group = "WATER_MEASUREMENT_RECORD",
+                            Id = 701,
+                            Code = "DRAFT",
+                            DisplayName = "Draft",
+                            Group = "WATER_MEASUREMENT",
                             IsFinal = false,
                             IsInitial = true,
-                            Meaning = "Counts in the charts and the water alert of the zone.",
+                            Meaning = "OCR or manually entered values not yet confirmed; not used for reports or alerts.",
                             SortOrder = 1
                         },
                         new
                         {
-                            Id = 2102,
-                            Code = "VOIDED",
-                            DisplayName = "Voided",
-                            Group = "WATER_MEASUREMENT_RECORD",
+                            Id = 702,
+                            Code = "CONFIRMED",
+                            DisplayName = "Confirmed",
+                            Group = "WATER_MEASUREMENT",
+                            IsFinal = false,
+                            IsInitial = false,
+                            Meaning = "Checked against the photo and confirmed; used for alerts and reports.",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 703,
+                            Code = "SUPERSEDED",
+                            DisplayName = "Corrected",
+                            Group = "WATER_MEASUREMENT",
                             IsFinal = true,
                             IsInitial = false,
-                            Meaning = "Kept in the history with its reason; no longer counts.",
-                            SortOrder = 2
+                            Meaning = "Replaced by a new correction version; the old record is kept for reference.",
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 704,
+                            Code = "VOIDED",
+                            DisplayName = "Voided",
+                            Group = "WATER_MEASUREMENT",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "Recorded by mistake and voided with a reason; excluded from charts, reports, exports and the overdue check.",
+                            SortOrder = 4
                         },
                         new
                         {
@@ -2236,17 +2325,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
-                            Id = 3,
-                            AllowedPerformers = "Cooperative Owner",
-                            FromStatusId = 201,
-                            GuardCondition = "All mandatory fields of the cooperative profile are filled.",
-                            ReasonRequired = false,
-                            ToStatusId = 202,
-                            TriggerEvent = "Action",
-                            UseCases = "FARM-01"
-                        },
-                        new
-                        {
                             Id = 4,
                             AllowedPerformers = "Cooperative Owner (staff accounts); System Administrator (trader accounts, platform administration outside the cooperative app)",
                             FromStatusId = 301,
@@ -2313,6 +2391,28 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
+                            Id = 10,
+                            AllowedPerformers = "Cooperative Owner; Zone Manager",
+                            FromStatusId = 701,
+                            GuardCondition = "Check against the photo and confirm the values.",
+                            ReasonRequired = false,
+                            ToStatusId = 702,
+                            TriggerEvent = "Action",
+                            UseCases = "UC26"
+                        },
+                        new
+                        {
+                            Id = 11,
+                            AllowedPerformers = "Cooperative Owner; Zone Manager",
+                            FromStatusId = 702,
+                            GuardCondition = "Save a new correction version.",
+                            ReasonRequired = true,
+                            ToStatusId = 703,
+                            TriggerEvent = "Action",
+                            UseCases = "UC26"
+                        },
+                        new
+                        {
                             Id = 53,
                             AllowedPerformers = "System",
                             FromStatusId = 1601,
@@ -2335,14 +2435,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
-                            Id = 80,
-                            AllowedPerformers = "Zone Manager (own); Cooperative Owner",
-                            FromStatusId = 2101,
-                            GuardCondition = "Void a wrong measurement with a reason.",
+                            Id = 55,
+                            AllowedPerformers = "Cooperative Owner; Zone Manager",
+                            FromStatusId = 701,
+                            GuardCondition = "Void a wrong draft.",
                             ReasonRequired = true,
-                            ToStatusId = 2102,
+                            ToStatusId = 704,
                             TriggerEvent = "Action",
-                            UseCases = "WATER-02"
+                            UseCases = "ENV-02"
+                        },
+                        new
+                        {
+                            Id = 56,
+                            AllowedPerformers = "Cooperative Owner; Zone Manager",
+                            FromStatusId = 702,
+                            GuardCondition = "Void the latest version of a wrong measurement.",
+                            ReasonRequired = true,
+                            ToStatusId = 704,
+                            TriggerEvent = "Action",
+                            UseCases = "ENV-02"
                         },
                         new
                         {
@@ -3166,14 +3277,18 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 {
                     b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
-                        .HasForeignKey("MeasuredByAccountId")
+                        .HasForeignKey("ConfirmedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.WaterMeasurement", "CorrectedFromMeasurement")
                         .WithMany()
-                        .HasForeignKey("RaftId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .HasForeignKey("CorrectedFromMeasurementId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("MeasuredByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
@@ -3187,7 +3302,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Raft");
+                    b.Navigation("CorrectedFromMeasurement");
 
                     b.Navigation("Status");
 
@@ -3370,12 +3485,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.Cooperative", b =>
                 {
-                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
-                        .WithMany()
-                        .HasForeignKey("StatusId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.OwnsOne("OMTS.Domain.Entities.Identity.BankAccountInfo", "BankAccount", b1 =>
                         {
                             b1.Property<Guid>("CooperativeId")
@@ -3405,8 +3514,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
 
                     b.Navigation("BankAccount");
+                });
 
-                    b.Navigation("Status");
+            modelBuilder.Entity("OMTS.Domain.Entities.Identity.CooperativeCertification", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Cooperative", "Cooperative")
+                        .WithMany("Certifications")
+                        .HasForeignKey("CooperativeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Cooperative");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.Employee", b =>
@@ -3935,6 +4053,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.Cooperative", b =>
                 {
+                    b.Navigation("Certifications");
+
                     b.Navigation("Customers");
 
                     b.Navigation("Employees");

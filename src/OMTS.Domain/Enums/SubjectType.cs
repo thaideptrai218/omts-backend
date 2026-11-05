@@ -1,9 +1,8 @@
 namespace OMTS.Domain.Enums;
 
-/// <summary>Kind of person an account belongs to (E02).</summary>
+/// <summary>The three account types of BR-ACCOUNT-02 (E02).</summary>
 public enum SubjectType
 {
-    SystemAdministrator,
     CooperativeOwner,
     Staff,
     Trader,

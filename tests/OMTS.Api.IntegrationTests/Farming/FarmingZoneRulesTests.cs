@@ -108,7 +108,7 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         }
 
         // A version the server never issued stands for a stale one (InMemory has no rowversion): nothing changes.
-        var stale = await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/discontinue", new { rowVersion = "AAAAAAAAB9E=" });
+        var stale = await owner.Client.PostAsJsonAsync($"/api/zones/{zone.Id()}/discontinue", new { rowVersion = StaleRowVersion });
         Assert.Equal("MSG06", await stale.ErrorCodeAsync());
         Assert.Equal(StatusIds.Usage.InUse, (await factory.ZoneEntityAsync(zone.Id())).StatusId);
 

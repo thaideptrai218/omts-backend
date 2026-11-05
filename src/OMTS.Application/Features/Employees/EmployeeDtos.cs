@@ -7,15 +7,15 @@ namespace OMTS.Application.Features.Employees;
 public sealed record EmployeeBankAccountInput(string? BankName, string? AccountNumber, string? AccountHolderName);
 
 /// <summary>
-/// Optional login account created together with the employee (ACS-09 extends LAB-01). Display name and
-/// phone default to the employee's; at least one zone–role row.
+/// Optional login account created together with the employee (ACCOUNT-09 from LABOR-01). Display name and phone default to
+/// the employee's; the zone–role rows are optional, as the pairs can be granted later in FARM-05.
 /// </summary>
 public sealed record NewEmployeeAccount(
     string Username,
     string? DisplayName,
     string? PhoneNumber,
     string? Email,
-    IReadOnlyList<GrantDraft> Grants,
+    IReadOnlyList<GrantDraft>? Grants = null,
     SubjectType? SubjectType = null);
 
 /// <param name="AccountId">
@@ -72,8 +72,9 @@ public sealed record EmployeeListItem(Guid Id, string FullName, string? PhoneNum
 /// <param name="Message">MSG-GEN-05.</param>
 /// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
 /// <param name="TemporaryPassword">Only when a login account was created in the same save; shown once.</param>
+/// <param name="AccountMessageCode">MSG-ACCOUNT-23 with <paramref name="TemporaryPassword"/>: the client fills it in, as for a staff account.</param>
 public sealed record EmployeeSaved(
-    EmployeeView Employee, string Message, string MessageCode, string? TemporaryPassword = null, DateTimeOffset? TemporaryPasswordExpiresAt = null);
+    EmployeeView Employee, string Message, string MessageCode, string? TemporaryPassword = null, DateTimeOffset? TemporaryPasswordExpiresAt = null, string? AccountMessageCode = null);
 
 /// <summary>Asks the web to let the Owner review the linked account (lock it, or unlock / re-grant it).</summary>
 public sealed record FollowUp(string Action, Guid AccountId);

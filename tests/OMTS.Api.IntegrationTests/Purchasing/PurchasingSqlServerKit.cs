@@ -29,7 +29,7 @@ public static class PurchasingSqlServerKit
         var raft = await host.QueryAsync(db => db.Rafts.SingleAsync(r => r.Id == raftId));
         return new PurchasingWorld(
             owner, zone, raft, await owner.CreateSupplierAsync(),
-            await owner.CreateItemAsync("Seed", "kg"), await owner.CreateItemAsync("RaftMaterial", "piece"), await owner.CreateItemAsync("Other", "bag"));
+            await owner.CreateItemAsync("Seed", "kg"), await owner.CreateItemAsync("Material", "piece"), await owner.CreateItemAsync("Other", "bag"));
     }
 
     /// <summary>Logged-in staff with one pair of the fixed <paramref name="role"/> in the zone (All zones when null).</summary>

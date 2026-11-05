@@ -17,6 +17,8 @@ using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
 using OMTS.Application.Features.Purchasing.Suppliers;
+using OMTS.Application.Features.Sales.Customers;
+using OMTS.Application.Features.Sales.Products;
 using OMTS.Application.Features.Verification;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
@@ -33,7 +35,7 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddMemoryCache();
 
-        services.AddSingleton(_ => new UnknownLoginCounter());
+        services.AddSingleton(provider => new UnknownLoginCounter(timeProvider: provider.GetRequiredService<TimeProvider>()));
         services.AddScoped<AuthService>();
 
         services.AddSingleton<PermissionCache>();
@@ -50,6 +52,7 @@ public static class DependencyInjection
 
         // ACS – personal accounts
         services.AddScoped<VerificationThrottle>();
+        services.AddSingleton<VerificationStartGate>();
         services.AddScoped<VerificationService>();
         services.AddScoped<TraderCustomerLinker>();
         services.AddScoped<UsernameGenerator>();
@@ -69,7 +72,10 @@ public static class DependencyInjection
         services.AddScoped<RoleService>();
 
         // FARM-01 cooperative profile, LAB-01 employees
+        services.AddScoped<CooperativeProfileViews>();
         services.AddScoped<CooperativeProfileService>();
+        services.AddScoped<CooperativeCoverPhotoService>();
+        services.AddScoped<CooperativeCertificationService>();
         services.AddScoped<EmployeeService>();
 
         // FARM-02 zones, FARM-03 zone licenses, FARM-04 rafts
@@ -86,6 +92,10 @@ public static class DependencyInjection
         services.AddScoped<ZoneAccessGuard>();
         services.AddScoped<SupplierService>();
         services.AddScoped<FarmingInputItemService>();
+        services.AddScoped<ProductService>();
+        services.AddScoped<ProductReadService>();
+        services.AddScoped<CustomerService>();
+        services.AddScoped<CustomerMergeService>();
         services.AddScoped<PurchaseReceiptValidator>();
         services.AddScoped<PurchaseReceiptViews>();
         services.AddScoped<PurchaseReceiptService>();

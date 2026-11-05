@@ -141,7 +141,7 @@ public sealed class PurchaseReceiptValidator(
             }
         }
 
-        var needsRaft = lines.Any(l => lineItems.TryGetValue(l.ItemId, out var item) && item.Group == InputItemGroup.RaftMaterial);
+        var needsRaft = lines.Any(l => lineItems.TryGetValue(l.ItemId, out var item) && item.Group == InputItemGroup.Material);
         if (receipt.RaftId is { } raftId)
         {
             var raft = await rafts.GetForEditAsync(raftId, cancellationToken);
