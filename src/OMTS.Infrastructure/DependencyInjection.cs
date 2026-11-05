@@ -67,6 +67,7 @@ public static class DependencyInjection
         services.AddScoped<IRelatedRecordQuery, RelatedRecordQuery>();
         services.AddScoped<ISentInvoiceQrCodeQuery, SentInvoiceQrCodeQuery>();
         services.AddScoped<IZoneRecipientQuery, ZoneRecipientQuery>();
+        services.AddScoped<IMandatorySmsRecipientQuery, MandatorySmsRecipientQuery>();
         services.AddScoped<IVerificationCodeRepository, VerificationCodeRepository>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<ICustomerReferences, CustomerReferences>();
@@ -137,7 +138,12 @@ public static class DependencyInjection
     private static void AddMessaging(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<EmailOptions>().Bind(configuration.GetSection(EmailOptions.SectionName));
-        services.AddOptions<SmsOptions>().Bind(configuration.GetSection(SmsOptions.SectionName));
+        services.AddOptions<SmsOptions>()
+            .Bind(configuration.GetSection(SmsOptions.SectionName))
+            .Validate(
+                o => o.MandatoryTimeoutSeconds is >= SmsOptions.MinMandatoryTimeoutSeconds and <= SmsOptions.MaxMandatoryTimeoutSeconds,
+                $"{SmsOptions.SectionName}:MandatoryTimeoutSeconds must be from {SmsOptions.MinMandatoryTimeoutSeconds} to {SmsOptions.MaxMandatoryTimeoutSeconds}.")
+            .ValidateOnStart();
         services.AddOptions<PushOptions>().Bind(configuration.GetSection(PushOptions.SectionName));
 
         services.AddSingleton<FakeEmailSender>();
@@ -168,6 +174,8 @@ public static class DependencyInjection
 
         services.AddScoped<PushOutbox>();
         services.AddScoped<IPushOutbox>(provider => provider.GetRequiredService<PushOutbox>());
+        services.AddScoped<IMandatorySmsOutbox>(provider => provider.GetRequiredService<PushOutbox>());
+        services.AddSingleton<MandatorySmsDelivery>();
 
         // Resolves the configured adapters at startup, so a configuration error stops the host right away.
         services.AddHostedService<ExternalServicesStartupCheck>();

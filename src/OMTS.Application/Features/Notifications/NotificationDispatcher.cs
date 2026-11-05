@@ -15,7 +15,8 @@ public interface INotificationDispatcher
     /// change), whatever the preferences (BR-ACCOUNT-12), and queues push messages that are sent only after that save
     /// commits; a push failure is logged and never rolls back the change (GFR-06). Push follows the type
     /// (<see cref="NotificationPushPolicy"/>): mandatory types are always pushed, never-push types never, the others
-    /// unless the account turned their push off (ACCOUNT-07).
+    /// unless the account turned their push off (ACCOUNT-07). A type with an SMS rule also queues its SMS, under the
+    /// same rule of the commit (<see cref="MandatorySmsQueue"/>).
     /// </summary>
     /// <exception cref="ArgumentException">The type is not registered in <see cref="NotificationTypes.All"/>.</exception>
     Task NotifyAsync(IReadOnlyCollection<Guid> recipientAccountIds, NotificationContent content, CancellationToken cancellationToken);
@@ -25,6 +26,7 @@ public sealed class NotificationDispatcher(
     INotificationRepository notifications,
     IPushDeviceRepository devices,
     IPushOutbox pushOutbox,
+    MandatorySmsQueue mandatorySms,
     TimeProvider timeProvider) : INotificationDispatcher
 {
     // Column sizes of Notification: a long text must not fail the caller's business save.
@@ -78,6 +80,8 @@ public sealed class NotificationDispatcher(
                 pushed.Add(notification);
             }
         }
+
+        await mandatorySms.QueueAsync(definition, content, recipients.Where(preferences.ContainsKey).ToList(), cancellationToken);
 
         if (pushed.Count == 0)
         {

@@ -53,7 +53,7 @@ internal sealed class ExternalServicesStartupCheck(
 
         if (sms.Value.Provider is SmsOptions.FakeProvider or SmsOptions.NoneProvider)
         {
-            logger.LogWarning("SMS provider is {Provider}: SMS messages (verification codes) are NOT sent, so phone verification cannot complete.", sms.Value.Provider);
+            logger.LogWarning("SMS provider is {Provider}: SMS messages (verification codes, mandatory notifications) are NOT sent, so phone verification cannot complete.", sms.Value.Provider);
         }
 
         if (push.Value.Provider is PushOptions.FakeProvider or PushOptions.NoneProvider)
