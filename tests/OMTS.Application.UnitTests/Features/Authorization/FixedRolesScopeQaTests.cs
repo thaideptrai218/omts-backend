@@ -19,10 +19,10 @@ public class FixedRolesScopeQaTests
     private static readonly Guid ZoneC = Guid.NewGuid();
 
     /// <summary>
-    /// Function, true when its records have no zone (BR-FARM-08: suppliers, customers, payroll, pay rates, customer and
-    /// supplier payments and debts, and purchase requests: PM 03/11, Zone Managers see all of them). Deliberately zone-scoped
-    /// for now: purchase receipts (they still carry a zone, PURCHASE ticket), quality claims (accepted default), employees
-    /// (the cooperative-wide employee list comes with the LABOR ticket; the endpoints are Owner-only today).
+    /// Function, true when its records have no zone (BR-FARM-08: suppliers, purchase receipts and returns, customers,
+    /// payroll, pay rates, customer and supplier payments and debts, and purchase requests: PM 03/11, Zone Managers see all
+    /// of them). Deliberately zone-scoped for now: quality claims (accepted default), employees (the cooperative-wide
+    /// employee list comes with the LABOR ticket; the endpoints are Owner-only today).
     /// </summary>
     public static readonly TheoryData<string, bool> RecordsWithNoZone = new()
     {
@@ -33,6 +33,7 @@ public class FixedRolesScopeQaTests
         { CustomerDebts, true },
         { PayRules, true },
         { Payroll, true },
+        { PurchaseReceipts, true },
         { CultivationCycles, false },
         { CultivationLogs, false },
         { WaterMeasurements, false },
@@ -40,7 +41,6 @@ public class FixedRolesScopeQaTests
         { HarvestLots, false },
         { LotTracing, false },
         { Provenance, false },
-        { PurchaseReceipts, false },
         { PurchaseRequests, true },
         { SalesInvoices, false },
         { QualityClaims, false },
@@ -74,14 +74,21 @@ public class FixedRolesScopeQaTests
     {
         var access = Staff(Pair(ZoneC, FixedRoles.Accountant));
 
-        foreach (var (function, action) in new[] { (SupplierPayments, Create), (SupplierPayments, View), (CustomerDebts, View), (CustomerPayments, Edit), (Payroll, Create), (PayRules, Edit), (Suppliers, View) })
+        foreach (var (function, action) in new[]
+        {
+            (SupplierPayments, Create), (SupplierPayments, View), (CustomerDebts, View), (CustomerPayments, Edit), (Payroll, Create), (PayRules, Edit), (Suppliers, View),
+            (PurchaseReceipts, View),
+        })
         {
             Assert.True(access.Allows(function, action, PermissionScope.NoZone, null), $"{function} {action}");
             Assert.True(access.Allows(function, action, PermissionScope.ZoneScoped, ZoneA), $"{function} {action} on a record of zone A");
             Assert.True(access.PermittedZonesFor(function, action).AllZones, $"{function} {action}");
         }
 
-        foreach (var function in new[] { PurchaseReceipts, SalesInvoices, LotTracing, SalesReports })
+        // The pairs themselves still have a zone: the rafts a role may name are those of its pairs (BR-PURCHASE-01).
+        Assert.Equal([ZoneC], access.PairZonesFor(PurchaseReceipts, View).ZoneIds);
+
+        foreach (var function in new[] { SalesInvoices, LotTracing, SalesReports })
         {
             Assert.True(access.Allows(function, View, PermissionScope.ZoneScoped, ZoneC), function);
             Assert.False(access.Allows(function, View, PermissionScope.ZoneScoped, ZoneA), function);
@@ -91,9 +98,10 @@ public class FixedRolesScopeQaTests
             Assert.Equal([ZoneC], zones.ZoneIds);
         }
 
-        // View only on receipts and invoices (PURCHASE-03 R, SALE-09 R), nothing of the Zone Manager.
+        // View only on invoices (SALE-09 R), view and export on receipts (PURCHASE-03 R includes the export), nothing of the
+        // Zone Manager.
         Assert.False(access.Allows(PurchaseReceipts, Create, PermissionScope.AnyZone, null));
-        Assert.False(access.Allows(PurchaseReceipts, Export, PermissionScope.AnyZone, null));
+        Assert.True(access.Allows(PurchaseReceipts, Export, PermissionScope.AnyZone, null));
         Assert.False(access.Allows(SalesInvoices, Create, PermissionScope.ZoneScoped, ZoneC));
         Assert.False(access.Allows(Suppliers, Create, PermissionScope.AnyZone, null));
         Assert.False(access.Allows(WaterMeasurements, View, PermissionScope.ZoneScoped, ZoneC));
@@ -113,7 +121,10 @@ public class FixedRolesScopeQaTests
         Assert.False(access.Allows(SalesInvoices, View, PermissionScope.ZoneScoped, ZoneB));
         Assert.Equal(new[] { ZoneA, ZoneC }.Order(), access.PermittedZonesFor(SalesInvoices, View).ZoneIds.Order());
         Assert.Equal([ZoneA], access.PermittedZonesFor(SalesInvoices, Export).ZoneIds);
-        Assert.Equal([ZoneA], access.PermittedZonesFor(PurchaseReceipts, Delete).ZoneIds);
+        // Purchase receipts have no zone: every receipt for the Zone Manager role, rafts of zone A only (PairZonesFor).
+        Assert.True(access.PermittedZonesFor(PurchaseReceipts, Delete).AllZones);
+        Assert.Equal([ZoneA], access.PairZonesFor(PurchaseReceipts, Create).ZoneIds);
+        Assert.True(access.Allows(PurchaseReceipts, Create, PermissionScope.NoZone, null));
         Assert.False(access.Allows(WaterMeasurements, Create, PermissionScope.ZoneScoped, ZoneC));
         Assert.False(access.Allows(SalesReports, View, PermissionScope.ZoneScoped, ZoneA));
 

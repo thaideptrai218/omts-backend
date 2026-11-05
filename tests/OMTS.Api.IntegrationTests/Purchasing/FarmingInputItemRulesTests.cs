@@ -68,7 +68,7 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
     public async Task A_used_item_keeps_group_and_unit_with_the_create_a_new_item_hint(string change, string field)
     {
         var world = await factory.WorldAsync();
-        await world.CompletedAsync(0, 0, new LineBody(world.Seed, 1, 10_000));
+        await world.CompletedAsync(new LineBody(world.Seed, 1, 10_000));
         var view = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/farming-input-items/{world.Seed}");
         Assert.True(view.GetProperty("isUsed").GetBoolean());
         var code = view.GetProperty("code").GetString();
@@ -189,7 +189,7 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
 
         var complete = await world.Owner.PostAsync($"/api/purchase-receipts/{draft.Id()}/complete", null);
         Assert.Equal("Line 1 item", await complete.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-        Assert.Equal(0, await factory.QueryAsync(db => db.SeedReceiptLots.CountAsync(l => l.SeedTypeId == oldSeed)));
+        Assert.Equal(StatusIds.PurchaseReceipt.Draft, await factory.QueryAsync(db => db.PurchaseReceipts.Where(r => r.Id == draft.Id()).Select(r => r.StatusId).SingleAsync()));
 
         await (await world.Owner.PostAsync($"/api/farming-input-items/{oldSeed}/reactivate", null)).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(["FarmingInputItem.Created", "FarmingInputItem.Discontinued", "FarmingInputItem.Reactivated"], await factory.AuditActionsAsync(oldSeed));

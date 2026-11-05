@@ -23,6 +23,16 @@ internal sealed class CooperativeRepository(OmtsDbContext db) : ICooperativeRepo
     public Task<CooperativeCertification?> GetCertificationAsync(Guid cooperativeId, Guid certificationId, CancellationToken cancellationToken) =>
         db.CooperativeCertifications.FirstOrDefaultAsync(c => c.Id == certificationId && c.CooperativeId == cooperativeId, cancellationToken);
 
+    public async Task<IReadOnlyList<Guid>> ListCertificationReminderCandidateIdsAsync(DateOnly today, int expiringSoonDays, CancellationToken cancellationToken)
+    {
+        var soon = today.AddDays(expiringSoonDays);
+        return await db.CooperativeCertifications.AsNoTracking()
+            .Where(c => c.ExpiryDate != null && c.ExpiryDate <= soon
+                && (c.ExpiringReminderSentAt == null || (c.ExpiryDate < today && c.ExpiredReminderSentAt == null)))
+            .Select(c => c.Id)
+            .ToListAsync(cancellationToken);
+    }
+
     public void AddCertification(CooperativeCertification certification) => db.CooperativeCertifications.Add(certification);
 
     public void RemoveCertification(CooperativeCertification certification) => db.CooperativeCertifications.Remove(certification);

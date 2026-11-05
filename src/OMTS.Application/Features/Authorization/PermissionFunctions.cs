@@ -46,7 +46,7 @@ public static class PermissionFunctions
     private static readonly PermissionAction[] Crud = [View, Create, Edit, Delete];
 
     // CooperativeWide = the records have no zone, so they follow the role only (BR-FARM-08): any Effective pair of a
-    // role holding the function opens every record. Purchase receipts still carry a zone in this version (PURCHASE).
+    // role holding the function opens every record (suppliers, purchase receipts and returns, payments, debts…).
     public static readonly IReadOnlyList<FunctionDefinition> All =
     [
         new(CultivationCycles, "Cultivation cycles, seeding, material usage and progress (CYCLE-01, CYCLE-02, CYCLE-03, CYCLE-05, CYCLE-06)", false, Crud),
@@ -57,7 +57,7 @@ public static class PermissionFunctions
         new(LotTracing, "Lot tracing (TRACE-02)", false, [View]),
         new(Provenance, "Provenance publication and corrections (TRACE-01, TRACE-03; withdrawing, TRACE-04, is Owner-only)", false, [View, Create, Edit, Publish]),
         new(Suppliers, "Suppliers (PURCHASE-07)", true, [View, Create, Edit]),
-        new(PurchaseReceipts, "Purchase receipts, returns and cancellations (PURCHASE-01, PURCHASE-02, PURCHASE-03, PURCHASE-06)", false, [View, Create, Edit, Delete, Export]),
+        new(PurchaseReceipts, "Purchase receipts, returns and cancellations (PURCHASE-01, PURCHASE-02, PURCHASE-03, PURCHASE-06; correcting a receipt is Owner-only)", true, [View, Create, Edit, Delete, Export]),
         new(SupplierPayments, "Supplier payments and supplier debts (PURCHASE-04, PURCHASE-05)", true, [View, Create, Export]),
         new(Customers, "Customers (SALE-04)", true, [View, Create, Edit]),
         new(PurchaseRequests, "Purchase requests (SALE-03; responding is Owner-only)", true, [View, Edit]),

@@ -30,6 +30,7 @@ internal sealed class CooperativeConfiguration : IEntityTypeConfiguration<Cooper
 
         builder.OwnsOne(x => x.BankAccount, bank =>
         {
+            bank.Property(b => b.BankBin).HasMaxLength(6);
             bank.Property(b => b.BankName).HasMaxLength(Lengths.Name);
             bank.Property(b => b.AccountNumber).HasMaxLength(Lengths.Code);
             bank.Property(b => b.AccountHolderName).HasMaxLength(Lengths.Name);

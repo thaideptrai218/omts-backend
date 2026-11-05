@@ -5,14 +5,15 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 
 /// <summary>
 /// FARM-01: completes the cooperative profile (short name, tax code, year established, address, contacts, social link,
-/// introduction in both languages), sets a generated placeholder logo and cover photo, and adds one Valid certification.
-/// The full name stays what the bootstrap created. A profile that already has a tax code and a short name, a logo, a
-/// cover photo or the demo certification is not touched; a profile seeded before the short name existed keeps its values
-/// and only gets the new fields.
+/// introduction in both languages), sets a generated placeholder logo and cover photo, and adds two certifications: one
+/// Valid and one expiring in 20 days. The full name stays what the bootstrap created. A profile that already has a tax
+/// code and a short name, a logo, a cover photo or a demo certification (by number) is not touched; a profile seeded
+/// before the short name existed keeps its values and only gets the new fields.
 /// </summary>
 internal sealed class DemoCooperativeProfileStep : IDemoSeedStep
 {
     private const string CertificationNumber = "VG-DEMO-2026-01";
+    private const string ExpiringCertificationNumber = "ATTP-DEMO-2024-02";
 
     public string Name => "cooperative profile";
 
@@ -64,21 +65,28 @@ internal sealed class DemoCooperativeProfileStep : IDemoSeedStep
             created++;
         }
 
-        if (!await context.Db.CooperativeCertifications.AnyAsync(c => c.Number == CertificationNumber, cancellationToken))
-        {
-            DemoSeedContext.Ensure(await context.Get<CooperativeCertificationService>().CreateAsync(
-                new SaveCooperativeCertificationRequest
-                {
-                    Name = "Chứng nhận VietGAP nuôi hàu",
-                    Number = CertificationNumber,
-                    Issuer = "Tổ chức chứng nhận VietGAP (dữ liệu mẫu)",
-                    ExpiryDate = context.Today.AddDays(500),
-                },
-                DemoFiles.LicenseDocument(CertificationNumber),
-                cancellationToken), $"certification {CertificationNumber}");
-            created++;
-        }
+        created += await AddCertificationAsync(
+            context, "Chứng nhận VietGAP nuôi hàu", CertificationNumber, "Tổ chức chứng nhận VietGAP (dữ liệu mẫu)", 500, cancellationToken);
+        // Expiring soon: the daily reminder sends MSG-FARM-01 for it (GFR-03).
+        created += await AddCertificationAsync(
+            context, "Giấy chứng nhận cơ sở đủ điều kiện an toàn thực phẩm", ExpiringCertificationNumber,
+            "Chi cục Quản lý chất lượng Nông lâm sản và Thủy sản Quảng Ninh (dữ liệu mẫu)", 20, cancellationToken);
 
         return created;
+    }
+
+    private static async Task<int> AddCertificationAsync(
+        DemoSeedContext context, string name, string number, string issuer, int expiryDays, CancellationToken cancellationToken)
+    {
+        if (await context.Db.CooperativeCertifications.AnyAsync(c => c.Number == number, cancellationToken))
+        {
+            return 0;
+        }
+
+        DemoSeedContext.Ensure(await context.Get<CooperativeCertificationService>().CreateAsync(
+            new SaveCooperativeCertificationRequest { Name = name, Number = number, Issuer = issuer, ExpiryDate = context.Today.AddDays(expiryDays) },
+            DemoFiles.LicenseDocument(number),
+            cancellationToken), $"certification {number}");
+        return 1;
     }
 }

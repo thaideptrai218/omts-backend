@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Application.Common;
 using OMTS.Domain.Enums;
+using OMTS.Infrastructure.Messaging;
 using OMTS.Infrastructure.Persistence;
 
 namespace OMTS.Infrastructure.Bootstrap.Demo;
@@ -20,6 +21,7 @@ internal static class DemoDataSeeder
     private static readonly IDemoSeedStep[] Steps =
     [
         new DemoCooperativeProfileStep(),
+        new DemoReceivingBankAccountStep(),
         new DemoFarmingZoneStep(),
         new DemoZoneLicenseStep(),
         new DemoRaftStep(),
@@ -44,6 +46,10 @@ internal static class DemoDataSeeder
             ?? throw new InvalidOperationException("Demo data needs the Cooperative Owner created by the bootstrap.");
         var context = new DemoSeedContext(services, db, cooperativeId, owner.Id, password, ownerLoginMayBeSet, services.GetRequiredService<TimeProvider>().GetUtcNow());
 
+        // The steps act through the real services, so their mandatory types (new purchase requests, water alerts) queue an SMS:
+        // demo data must not text anyone through a sender that could reach a real phone.
+        services.GetRequiredService<PushOutbox>().DropsMandatorySms = !context.SmsSenderReachesNoPhone;
+
         var messages = new List<string>();
         // A system action like the bootstrap itself: no acting account yet.
         messages.Add(Describe("owner login", await new DemoOwnerStep().RunAsync(context, cancellationToken)));
@@ -52,7 +58,9 @@ internal static class DemoDataSeeder
         using var acting = services.GetRequiredService<AmbientActor>().Use(owner.Id);
         foreach (var step in Steps)
         {
-            messages.Add(Describe(step.Name, await step.RunAsync(context, cancellationToken)));
+            context.SkipReason = null;
+            var created = await step.RunAsync(context, cancellationToken);
+            messages.Add(context.SkipReason is { } reason ? $"Demo {step.Name}: skipped, {reason}" : Describe(step.Name, created));
         }
 
         messages.AddRange(context.Notes);

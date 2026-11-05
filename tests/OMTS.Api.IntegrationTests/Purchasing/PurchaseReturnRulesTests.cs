@@ -8,14 +8,17 @@ using static OMTS.Api.IntegrationTests.Purchasing.PurchasingTestKit;
 
 namespace OMTS.Api.IntegrationTests.Purchasing;
 
-/// <summary>INP-05 rules and error bullets: returnable quantity, money split, dates, grants, views and audit.</summary>
+/// <summary>
+/// INP-05 rules and error bullets (until the PURCHASE-02 rework): returnable quantity (received − seeded − returned), money
+/// split, dates, roles, views and audit. Receipts have no zone, so returns follow the role only (BR-FARM-08).
+/// </summary>
 public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
-    // Seed 100 kg × 10,000, discount 100,000 (payable 900,000 = 90 %), paid now 300,000: outstanding 600,000, net paid 300,000.
+    // Seed 100 kg × 9,000 (total 900,000), 300,000 paid: outstanding 600,000, net paid 300,000.
     private async Task<(PurchasingWorld World, JsonElement Receipt, Guid SeedLine)> SeedReceiptAsync()
     {
         var world = await factory.WorldAsync();
-        var receipt = await world.CompletedAsync(100_000, 300_000, new LineBody(world.Seed, 100, 10_000));
+        var receipt = await world.PaidAsync(300_000, new LineBody(world.Seed, 100, 9_000));
         return (world, receipt, receipt.LineOf(world.Seed));
     }
 
@@ -24,24 +27,24 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
         RefundAmount = refund, RefundMethod = refund > 0 ? "Cash" : null, DebtReductionAmount = debtReduction, Lines = [new ReturnLineBody(lineId, quantity)],
     };
 
-    // Done when: cumulative returns stop at received − stocked; refund and debt-reduction cases give the expected outstanding and supplier debt.
+    // Done when: cumulative returns stop at received − seeded; refund and debt-reduction cases give the expected supplier debt.
     [Fact]
-    public async Task Cumulative_returns_stop_at_received_minus_stocked_and_each_split_gives_the_expected_outstanding_and_debt()
+    public async Task Cumulative_returns_stop_at_received_minus_seeded_and_each_split_gives_the_expected_debt()
     {
         var (world, receipt, line) = await SeedReceiptAsync();
-        await factory.StockAsync(world.Raft.Id, line, 30);
+        await factory.SeedAsync(world.Raft.Id, line, 30);
         var view = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{receipt.Id()}");
-        Assert.Equal((30m, 70m), (view.LineViewOf(world.Seed).Money("stocked"), view.LineViewOf(world.Seed).Money("returnable")));
+        Assert.Equal((30m, 70m), (view.LineViewOf(world.Seed).Money("seeded"), view.LineViewOf(world.Seed).Money("returnable")));
 
-        // 50 kg: 450,000 = 100,000 refund + 350,000 debt reduction → outstanding 600,000 − 350,000.
+        // 50 kg: 450,000 = 100,000 refund + 350,000 debt reduction → debt 600,000 − 350,000.
         var first = await (await world.Owner.PostReturnAsync(receipt.Id(), Return(line, 50, 100_000, 350_000))).ReadAsync(HttpStatusCode.Created);
-        Assert.Equal((450_000m, 100_000m, 250_000m), (first.Money("returned"), first.Money("refunded"), first.Money("outstanding")));
+        Assert.Equal(450_000m, first.Money("returned"));
         Assert.Equal(20, first.LineViewOf(world.Seed).Money("returnable"));
         Assert.Equal(250_000, await DebtAsync(world));
 
-        // 20 kg: 180,000 all refunded → the outstanding does not change.
+        // 20 kg: 180,000 all refunded → the debt does not change.
         var second = await (await world.Owner.PostReturnAsync(receipt.Id(), Return(line, 20, 180_000, 0))).ReadAsync(HttpStatusCode.Created);
-        Assert.Equal((630_000m, 280_000m, 250_000m, 0m), (second.Money("returned"), second.Money("refunded"), second.Money("outstanding"), second.LineViewOf(world.Seed).Money("returnable")));
+        Assert.Equal((630_000m, 0m), (second.Money("returned"), second.LineViewOf(world.Seed).Money("returnable")));
         Assert.Equal(70, second.LineViewOf(world.Seed).Money("returnedQuantity"));
         Assert.Equal(250_000, await DebtAsync(world));
 
@@ -61,7 +64,7 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
     public async Task Returned_quantity_above_returnable_names_the_line_and_the_limit_with_its_unit()
     {
         var (world, receipt, line) = await SeedReceiptAsync();
-        await factory.StockAsync(world.Raft.Id, line, 30);
+        await factory.SeedAsync(world.Raft.Id, line, 30);
         var over = await world.Owner.PostReturnAsync(receipt.Id(), Return(line, 70.5m, 0, 0));
         var problem = await over.ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-03");
         Assert.EndsWith(
@@ -75,18 +78,18 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
     public async Task A_seed_lot_seeded_without_a_quantity_leaves_nothing_to_return()
     {
         var (world, receipt, line) = await SeedReceiptAsync();
-        await factory.StockAsync(world.Raft.Id, line, null);
+        await factory.SeedAsync(world.Raft.Id, line, null);
         var view = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{receipt.Id()}");
-        Assert.Equal((100m, 0m), (view.LineViewOf(world.Seed).Money("stocked"), view.LineViewOf(world.Seed).Money("returnable")));
+        Assert.Equal((100m, 0m), (view.LineViewOf(world.Seed).Money("seeded"), view.LineViewOf(world.Seed).Money("returnable")));
         var problem = await (await world.Owner.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000))).ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-03");
         Assert.EndsWith("at most 0 kg. The quantity already seeded from this line is not known.", problem.GetProperty("detail").GetString());
     }
 
     [Fact]
-    public async Task Non_seed_lines_are_never_stocked_and_a_material_return_lowers_the_raft_material_cost()
+    public async Task Non_seed_lines_are_never_seeded_and_a_material_return_lowers_the_raft_material_cost()
     {
         var world = await factory.WorldAsync();
-        var receipt = await world.CompletedAsync(0, 0, new LineBody(world.Material, 10, 50_000), new LineBody(world.Other, 4, 25_000));
+        var receipt = await world.CompletedAsync(world.MaterialForRaft(10, 50_000), new LineBody(world.Other, 4, 25_000));
         Assert.Equal(500_000, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{world.Raft.Id}")).Money("materialCost"));
 
         var returned = await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody
@@ -95,8 +98,29 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
             Lines = [new ReturnLineBody(receipt.LineOf(world.Material), 10), new ReturnLineBody(receipt.LineOf(world.Other), 4)],
         })).ReadAsync(HttpStatusCode.Created);
 
-        Assert.Equal((600_000m, 0m), (returned.Money("returned"), returned.Money("outstanding")));
+        Assert.Equal(600_000m, returned.Money("returned"));
+        Assert.All(returned.GetProperty("lines").EnumerateArray(), l => Assert.Equal(0m, l.Money("seeded")));
         Assert.Equal(0, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{world.Raft.Id}")).Money("materialCost"));
+        Assert.Equal(0, await DebtAsync(world));
+    }
+
+    // Returning a line unit by unit adds up to the line, and the last unit can still be returned (the exact amounts of the
+    // PURCHASE-02 rework come with P4; until then return values stay whole thousands).
+    [Fact]
+    public async Task Returning_a_line_unit_by_unit_never_credits_more_than_the_line_and_the_last_unit_can_be_returned()
+    {
+        var world = await factory.WorldAsync();
+        var receipt = await world.CompletedAsync(new LineBody(world.Other, 3, 1_000));
+        var line = receipt.LineOf(world.Other);
+
+        JsonElement last = default;
+        for (var unit = 0; unit < 3; unit++)
+        {
+            last = await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { DebtReductionAmount = 1_000, Lines = [new ReturnLineBody(line, 1)] }))
+                .ReadAsync(HttpStatusCode.Created);
+        }
+
+        Assert.Equal((3_000m, 0m), (last.Money("returned"), last.LineViewOf(world.Other).Money("returnable")));
         Assert.Equal(0, await DebtAsync(world));
     }
 
@@ -132,12 +156,10 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
     public async Task Reason_date_refund_method_and_lines_are_checked_with_MSG01_or_MSG59()
     {
         var world = await factory.WorldAsync();
-        var receipt = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Seed, 100, 10_000)) with
-        {
-            ReceiptDate = Today.AddDays(-5), AmountPaidNow = 100_000, PaidNowMethod = "Cash", Complete = true,
-        });
+        var receipt = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Seed, 100, 10_000)) with { ReceiptDate = Today.AddDays(-5), Complete = true });
+        await (await world.Owner.PostPaymentAsync(new PaymentBody { SupplierId = world.SupplierId, ReceiptId = receipt.Id(), Amount = 100_000 })).ReadAsync(HttpStatusCode.Created);
         var line = receipt.LineOf(world.Seed);
-        var otherReceipt = await world.CompletedAsync(0, 0, new LineBody(world.Other, 1, 1000));
+        var otherReceipt = await world.CompletedAsync(new LineBody(world.Other, 1, 1000));
         var valid = Return(line, 1, 0, 10_000);
 
         foreach (var (body, field) in new (ReturnBody, string)[]
@@ -176,8 +198,8 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
     {
         var world = await factory.WorldAsync();
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 10_000)));
-        var cancelled = await world.CompletedAsync(0, 0, new LineBody(world.Other, 1, 10_000));
-        await (await world.Owner.CancelAsync(cancelled.Id(), "Wrong", null)).ReadAsync(HttpStatusCode.OK);
+        var cancelled = await world.CompletedAsync(new LineBody(world.Other, 1, 10_000));
+        await (await world.Owner.CancelAsync(cancelled.Id(), "Wrong")).ReadAsync(HttpStatusCode.OK);
 
         foreach (var receipt in new[] { draft, cancelled })
         {
@@ -205,30 +227,28 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
         await (await world.Owner.GetAsync($"/api/purchase-returns/{Guid.NewGuid()}")).ReadAsync(HttpStatusCode.NotFound);
 
         var audit = await factory.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.RecordId == listed.Id()));
-        Assert.Equal(("PurchaseReturn.Created", world.Zone.Id, "Weak seed"), (audit.Action, audit.ZoneId, audit.Reason));
+        Assert.Equal(("PurchaseReturn.Created", (Guid?)null, "Weak seed"), (audit.Action, audit.ZoneId, audit.Reason));
         Assert.Contains("90000", audit.After);
         Assert.Contains(line.ToString(), audit.After);
     }
 
     [Fact]
-    public async Task Returns_need_create_in_the_receipt_zone_and_are_not_readable_from_another_zone()
+    public async Task Returns_follow_the_role_only_any_zone_manager_creates_and_reads_them_and_the_accountant_only_reads()
     {
         var (world, receipt, line) = await SeedReceiptAsync();
         var created = await (await world.Owner.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000))).ReadAsync(HttpStatusCode.Created);
         var returnId = created.GetProperty("returns")[0].Id();
         var (otherZone, _) = await factory.ZoneWithRaftAsync();
 
+        // Receipts and returns have no zone (BR-FARM-08): a Zone Manager of another zone reads and returns too.
         var otherManager = await factory.ZoneManagerAsync(otherZone);
-        await (await otherManager.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        await (await otherManager.GetAsync($"/api/purchase-returns/{returnId}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await otherManager.GetAsync($"/api/purchase-returns/{returnId}")).ReadAsync(HttpStatusCode.OK);
+        await (await otherManager.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000))).ReadAsync(HttpStatusCode.Created);
         // The Accountant views receipts and returns but creates none (§I.4.4 PURCHASE-02 No, PURCHASE-03 R).
         var viewer = await factory.AccountantAsync(world.Zone);
         await (await viewer.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await viewer.GetAsync($"/api/purchase-returns/{returnId}")).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(1, await factory.QueryAsync(db => db.PurchaseReturns.CountAsync(r => r.ReceiptId == receipt.Id())));
-
-        var manager = await factory.ZoneManagerAsync(world.Zone);
-        await (await manager.PostReturnAsync(receipt.Id(), Return(line, 1, 0, 9000))).ReadAsync(HttpStatusCode.Created);
+        Assert.Equal(2, await factory.QueryAsync(db => db.PurchaseReturns.CountAsync(r => r.ReceiptId == receipt.Id())));
     }
 
     private async Task<decimal> DebtAsync(PurchasingWorld world) =>

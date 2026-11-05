@@ -59,6 +59,12 @@ internal sealed class FarmingZoneRepository(OmtsDbContext db) : IFarmingZoneRepo
             .OrderBy(z => z.Code)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<string>> CodesStartingWithAsync(string prefix, CancellationToken cancellationToken)
+    {
+        var upper = prefix.ToUpperInvariant();
+        return await db.FarmingZones.AsNoTracking().Where(z => z.Code.ToUpper().StartsWith(upper)).Select(z => z.Code).ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<string>> InUseRaftCodesAsync(Guid zoneId, CancellationToken cancellationToken) =>
         await db.Rafts.Where(r => r.ZoneId == zoneId && r.StatusId == StatusIds.Usage.InUse)
             .OrderBy(r => r.Code).Select(r => r.Code)

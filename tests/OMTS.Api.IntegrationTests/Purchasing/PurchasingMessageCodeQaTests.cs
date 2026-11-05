@@ -27,7 +27,7 @@ public class PurchasingMessageCodeQaTests(AuthApiFactory factory) : IClassFixtur
     public async Task Return_quantity_zero_is_msg_purchase_03_with_the_limit_and_a_missing_one_msg_gen_01_both_legacy_msg59()
     {
         var world = await factory.WorldAsync();
-        var receipt = await world.CompletedAsync(0, 0, new LineBody(world.Other, 4, 25_000));
+        var receipt = await world.CompletedAsync(new LineBody(world.Other, 4, 25_000));
         var line = receipt.LineOf(world.Other);
         var body = new ReturnBody { DebtReductionAmount = 25_000, RefundAmount = 0 };
 

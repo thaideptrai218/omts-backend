@@ -19,12 +19,17 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
             // Owner-only records: their zones are not checked.
             case RelatedRecordTypes.ZoneLicense:
                 return await db.ZoneComplianceDocuments.AnyAsync(d => d.Id == recordId, cancellationToken) ? new RelatedRecordLocation(null) : null;
+            case RelatedRecordTypes.CooperativeCertification:
+                return await db.CooperativeCertifications.AnyAsync(c => c.Id == recordId, cancellationToken) ? new RelatedRecordLocation(null) : null;
             case RelatedRecordTypes.Account:
                 return await db.Accounts.AnyAsync(a => a.Id == recordId, cancellationToken) ? new RelatedRecordLocation(null) : null;
             // No zone (PM 03/11): the Owner opens it, and the trader of its customer profile.
             case RelatedRecordTypes.PurchaseRequest:
                 var traders = await db.PurchaseRequests.AsNoTracking().Where(r => r.Id == recordId).Select(r => r.Customer.AccountId).ToListAsync(cancellationToken);
                 return traders.Count == 0 ? null : new RelatedRecordLocation(null, traders[0]);
+            // No zone: the type's function is checked by role only (BR-FARM-08). A removed Draft no longer exists.
+            case RelatedRecordTypes.PurchaseReceipt:
+                return await db.PurchaseReceipts.AnyAsync(r => r.Id == recordId, cancellationToken) ? new RelatedRecordLocation(null) : null;
             default:
                 return null;
         }

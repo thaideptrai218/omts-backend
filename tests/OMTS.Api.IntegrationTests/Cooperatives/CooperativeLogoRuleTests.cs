@@ -103,7 +103,7 @@ public class CooperativeLogoRuleTests
     {
         using var api = new AuthApiFactory();
         var cooperative = await api.EnsureCooperativeAsync();
-        await api.UpdateAsync<Cooperative>(cooperative.Id, c => c.BankAccount = new BankAccountInfo { BankName = "BIDV", AccountNumber = "21510001234567", AccountHolderName = "HTX TRUNG NAM" });
+        await api.UpdateAsync<Cooperative>(cooperative.Id, c => c.BankAccount = new ReceivingBankAccount { BankBin = "970418", BankName = "BIDV", AccountNumber = "TEST00112233", AccountHolderName = "HTX TRUNG NAM" });
         var owner = await OwnerAsync(api);
 
         var uploaded = await (await UploadLogoAsync(owner, Png, "logo.png")).Content.ReadFromJsonAsync<JsonElement>();
@@ -113,11 +113,11 @@ public class CooperativeLogoRuleTests
         foreach (var body in new[] { uploaded, removed, read })
         {
             Assert.DoesNotContain(body.EnumerateObject(), p => p.Name.Contains("bank", StringComparison.OrdinalIgnoreCase));
-            Assert.DoesNotContain("21510001234567", body.GetRawText());
+            Assert.DoesNotContain("TEST00112233", body.GetRawText());
         }
 
         var stored = await api.QueryAsync(db => db.Cooperatives.AsNoTracking().SingleAsync());
-        Assert.Equal(("BIDV", "21510001234567", "HTX TRUNG NAM"), (stored.BankAccount?.BankName, stored.BankAccount?.AccountNumber, stored.BankAccount?.AccountHolderName));
+        Assert.Equal(("BIDV", "TEST00112233", "HTX TRUNG NAM"), (stored.BankAccount?.BankName, stored.BankAccount?.AccountNumber, stored.BankAccount?.AccountHolderName));
         Assert.Null(stored.LogoUrl);
     }
 

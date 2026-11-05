@@ -35,6 +35,6 @@ public class Raft : AuditableEntity, IHasStatus
     public ICollection<Lane> Lanes { get; set; } = [];
     public ICollection<RaftLayoutVersion> LayoutVersions { get; set; } = [];
     public ICollection<CultivationCycle> CultivationCycles { get; set; } = [];
-    /// <summary>Purchase receipts of raft materials; their total is the raft material cost (FARM-04, INP-03).</summary>
-    public ICollection<PurchaseReceipt> PurchaseReceipts { get; set; } = [];
+    /// <summary>Purchase receipt lines bought for the raft; its Material lines make its material cost (BR-FARM-05).</summary>
+    public ICollection<PurchaseReceiptLine> PurchaseReceiptLines { get; set; } = [];
 }

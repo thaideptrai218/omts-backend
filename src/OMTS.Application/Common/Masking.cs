@@ -19,6 +19,14 @@ public static class Masking
             : $"{phoneNumber[..3]}{new string('*', phoneNumber.Length - 6)}{phoneNumber[^3..]}";
     }
 
+    /// <summary>A bank account number of an employee (6 digits or more), for audit rows and logs: "999900000001" → "********0001".</summary>
+    public static string AccountNumber(string number) =>
+        number.Length <= 4 ? number : new string('*', number.Length - 4) + number[^4..];
+
+    /// <summary>The receiving bank account, which may be as short as 1 character: too short to show its ending, it shows nothing.</summary>
+    public static string ReceivingAccountNumber(string number) =>
+        number.Length <= 4 ? new string('*', number.Length) : AccountNumber(number);
+
     /// <summary>"nguyen@mail.com" → "n***@mail.com".</summary>
     public static string Email(string? email)
     {

@@ -7,6 +7,7 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Farming;
+using OMTS.Application.Features.Farming.Licenses;
 using OMTS.Application.Features.Files;
 using OMTS.Domain.Entities.Identity;
 
@@ -17,7 +18,7 @@ namespace OMTS.Application.Features.Cooperatives;
 /// and remove, each audited (GBR-02). The file is mandatory and uploaded first, so a storage failure saves nothing
 /// (MSG-GEN-03, GFR-01); an upload whose save fails is removed again, and a replaced or removed file is deleted once
 /// the change is saved (<see cref="UploadedFileSaver"/>). The expiry reminders of GFR-03 belong to the daily expiry
-/// job, not to these saves.
+/// job (<see cref="CertificationReminderService"/>), not to these saves; a new expiry date re-arms them.
 /// </summary>
 public sealed class CooperativeCertificationService(
     ICooperativeRepository cooperatives,
@@ -111,6 +112,7 @@ public sealed class CooperativeCertificationService(
 
         var before = Snapshot(certification);
         var replacedFile = uploaded is null ? null : certification.FileUrl;
+        ExpiryReminderRule.RearmOnNewExpiry(certification, input.ExpiryDate);
         Apply(certification, input, uploaded ?? certification.FileUrl);
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, Snapshot(certification));
         if (changedAfter is not null)

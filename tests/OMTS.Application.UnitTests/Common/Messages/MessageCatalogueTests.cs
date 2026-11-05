@@ -106,7 +106,7 @@ public sealed class MessageCatalogueTests
         { Name: "legacyCode" } => MessageCodes.Legacy.Msg03,
         { ParameterType: var t } when t == typeof(string) => "Sample",
         { ParameterType: var t } when t == typeof(int) => 3,
-        { ParameterType: var t } when t == typeof(decimal) => 3m,
+        { ParameterType: var t } when t == typeof(decimal) => 1_250_500.5m,
         { ParameterType: var t } when t == typeof(bool) => true,
         { ParameterType: var t } when t == typeof(DateOnly) => new DateOnly(2026, 10, 1),
         { ParameterType: var t } when t == typeof(DateTimeOffset) => new DateTimeOffset(2026, 10, 1, 1, 0, 0, TimeSpan.Zero),

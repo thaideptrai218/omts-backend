@@ -76,24 +76,31 @@ server uses a secret of its own (see [Demo on a shared server](#demo-on-a-shared
 A password you change stays changed: the seed never resets it. The Owner gets `Demo@1234` only while still on the
 bootstrap temporary password. To get every demo login back, reset the environment with `docker compose down -v`.
 
-The demo data also holds the cooperative profile (with a logo, a cover photo and one Valid certification), the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued),
-license documents (valid, expiring within 30 days, expired), about 10 rafts with lanes per zone, 8 employees (one Left),
-5 suppliers, 15 farming input items (codes VT001–VT015, every seed item counted in `con`) and 20 purchase receipts of the last 3 months with payments, discounts and a return,
-4 products (one Discontinued), 7 customer profiles (2 linked to the trader accounts, 2 the same buyer ready to merge) and
+The demo data also holds the cooperative profile (with a logo, a cover photo and two certifications: one Valid, one
+expiring within 30 days), a fictional receiving bank account (`DEMO00000001`; skipped with a message when `Payments:Provider` does not accept it, as `None` does not), the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued), zone licenses (`DEMO-01`:
+an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid license and an older expired one), about 10 rafts with lanes per zone, 8 employees (one Left),
+5 suppliers, 15 farming input items (codes VT001–VT015, every seed item counted in `con`) and 20 purchase receipts of the last 3 months
+(16 Completed, 2 Cancelled, 2 Draft): Material lines and two seed receipts name the raft they were bought for, one line has a
+fractional quantity (its amount is not a whole thousand), with payments and a return. The Owner's list holds a MSG-PURCHASE-01
+notification for each completed receipt.
+The demo data also holds 4 products (one Discontinued), 7 customer profiles (2 linked to the trader accounts, 2 the same buyer ready to merge) and
 4 purchase requests of `thuonglai1`, one in each state (Awaiting response, Accepted for fewer kg with pay later, Declined, Cancelled).
-An answer sends an SMS, so with an SMS sender other than Fake or None the requests stay unanswered and the seed output says so.
-`DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰) and one water measurement a day for the
-30 days before the seed day: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
-26.0 ‰) and one voided reading. The mistyped 2.6 ‰ alerted before its correction, so the inboxes hold four sets of water
-alerts. Phone numbers are fake (`0900 000 0xx`).
+An answer sends an SMS, so with an SMS sender other than Fake or None the requests stay unanswered and the seed output says so;
+such a sender gets no mandatory SMS of the seed either (new purchase requests, water alerts).
+`DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰, temperature 15–32 °C) and one water
+measurement a day for the 30 days before the seed day, going round the rafts In Use of the zone, each with its temperature
+and a placeholder meter photo: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
+26.0 ‰) and one voided reading. The mistyped 2.6 ‰ alerted before its correction, so the Zone Managers' inboxes hold four
+sets of water alerts (the demo records as the Owner, who is not told of their own action). Phone numbers are fake
+(`0900 000 0xx`).
 
 Dates are set relative to the day of the first seed and are not moved afterwards:
-- After a few weeks the "expiring" license has expired. `docker compose down -v` gives fresh dates.
-- Receipt codes carry the seed date (`PR-<seed date>-nnn`), not the receipt date.
+- After a few weeks the "expiring" license and certification have expired. `docker compose down -v` gives fresh dates.
+- Receipt codes follow one sequence in the order they were seeded (`PN000001`…`PN000020`), not the receipt date; return
+  codes carry the seed date (`PRT-<seed date>-nnn`).
 - The last water measurement is from the day before the seed: a month later without new ones, the zones are overdue and
   get the 06:00 reminder (MSG-WATER-06).
-- The receipt list shows the current calendar year by default. Seeded in January–March, part of the history is in the
-  previous year: pass `from`/`to` to see it.
+- The receipt list shows the current month by default (PURCHASE-03): pass `from`/`to` to see the older demo receipts.
 
 **Verification codes.** SMS, email and push use the fake providers: nothing leaves the machine. What would have been
 sent stays in memory until the API restarts. Read it in the dev inbox, also listed in Swagger:
@@ -116,7 +123,7 @@ you trust, never on public Wi-Fi.
 **Phone on the same Wi-Fi.** The API listens on every interface of the PC. Find the PC's LAN IP (`ipconfig` on Windows,
 `ipconfig getifaddr en0` on macOS) and point the mobile app at `http://<LAN IP>:8080`. If the phone cannot connect, allow
 inbound TCP 8080 in the PC's firewall. The Android emulator reaches the PC at `http://10.0.2.2:8080`. File links (license
-documents, raft drawings, invoice photos) are relative, signed paths such as `/api/files/local/...?expires=…&sig=…`.
+documents, raft drawings, supplier certificates) are relative, signed paths such as `/api/files/local/...?expires=…&sig=…`.
 Prefix them with the API base URL.
 
 **Web app.** In Development `Cors:AllowedOrigins` allows `http://localhost:3000`, so the Next.js dev server can call the
@@ -174,8 +181,21 @@ discontinued: `GET /api/roles` lists the two staff roles with their `code` (`ZON
 permissions, the static matrix of SRS §I.4.4 in `FixedRoles`. The Owner grants a staff account zone–role pairs
 (`POST /api/accounts/{id}/grants` with `role` (code) or `roleId`, and a `zoneId` or none for All zones). A pair is Effective
 until it is revoked with a reason; there are no validity dates. On records with a zone a role works only in the zones of
-its pairs; records with no zone (suppliers, supplier payments and debts, customers, payroll…) follow the role only, so an
-Accountant pair for one zone opens them (BR-FARM-08). A staff account without an Effective pair cannot log in.
+its pairs; records with no zone (suppliers, purchase receipts and returns, supplier payments and debts, customers,
+payroll…) follow the role only, so an Accountant pair for one zone opens them (BR-FARM-08). The rafts a Zone Manager names on
+a purchase receipt line are still those of the zones of their Zone Manager pairs. A staff account without an Effective pair
+cannot log in.
+
+### Farming zones and licenses
+
+- Zones (FARM-02): `GET /api/zones/next-code` (Owner) proposes the next code `KV01`, `KV02`… (GBR-03: the highest `KVnn` in
+  use, discontinued zones included, plus one); the Owner may save another code. A Discontinued zone is read-only: its
+  edit answers MSG-GEN-09 until `POST /api/zones/{id}/resume` (`/reactivate` is the older route, kept for one release).
+  The water measurement point is optional. Create and edit answer `{ zone, message, messageCode }` (MSG-GEN-05).
+- Licenses (FARM-03): a license belongs to one zone (`zoneId`; the older `zoneIds` is read for one release, with one
+  zone only) and is added, edited or replaced only while that zone is In Use (MSG-GEN-09). The expiry date is required;
+  the type, holder and legal scope are optional. A license is Replaced from the day the license replacing it is recorded,
+  whatever its dates (BR-FARM-06); a Replaced license cannot be edited or replaced again (MSG-GEN-09).
 
 ### Notifications
 
@@ -189,7 +209,10 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | `WATER_ALERT_WITHDRAWN` | MSG-WATER-04 (not sent yet: WATER PR) | always (mandatory) | Owner, Zone Manager |
 | `WATER_MEASUREMENT_OVERDUE` | MSG-WATER-06 | unless turned off | Owner, Zone Manager |
 | `ZONE_LICENSE_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
+| `COOPERATIVE_CERTIFICATION_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
 | `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (not sent yet: LABOR PR) | never: list only | Owner |
+| `PURCHASE_RECEIPT_COMPLETED` | MSG-PURCHASE-01, when a receipt is completed (never for a draft), also when the Owner completed it | unless turned off | Owner |
+| `PURCHASE_RECEIPT_CANCELLED_ADVANCE` | MSG-PURCHASE-08, when a cancelled receipt leaves the supplier debt below zero | unless turned off | Owner, Accountant |
 
 - Preferences (ACCOUNT-07): `GET`/`PUT /api/me/notification-preferences` list the types of the roles the account
   holds with `push` on or off (`items: [{ type, push }]`). Mandatory types are shown as always pushed and cannot be
@@ -205,7 +228,10 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   |---|---|
   | MSG-WATER-03 | `corrected` (bool), `zone_name`, `raft_code` (null: no raft yet, "–"), `measurement_time`, `values_outside`: `[{ indicator: PH \| SALINITY, value, unit: "‰" \| null, direction: High \| Low, min, max }]` |
   | MSG-WATER-06 | `zone_name`, `last_date` |
-  | MSG-FARM-01 / MSG-FARM-02 | `document_type` (license type code), `document_number`, `zone_codes` (list), `expiry_date`, `days` (MSG-FARM-01 only) |
+  | MSG-FARM-01 / MSG-FARM-02 (`ZONE_LICENSE_EXPIRY`) | `document_type` (license type code, null when none), `document_number`, `zone_codes` (list holding the license's one zone), `expiry_date`, `days` (MSG-FARM-01 only) |
+  | MSG-FARM-01 / MSG-FARM-02 (`COOPERATIVE_CERTIFICATION_EXPIRY`) | `certification_name`, `certification_number` (null when none), `expiry_date`, `days` (MSG-FARM-01 only) |
+  | MSG-PURCHASE-01 | `user_name`, `receipt_code`, `supplier_name`, `line_count`, `total_amount` (whole VND: the sum of the lines, each rounded half up to the dong) |
+  | MSG-PURCHASE-08 | `user_name`, `receipt_code`, `supplier_name`, `advance_amount` (VND paid in advance, positive) |
 - `GET /api/me/notifications/{id}/open` checks the access again (GFR-02): 403 MSG-GEN-08 when the user may no longer
   open the record (e.g. a revoked zone–role pair), 404 MSG-ACCOUNT-22 when the record was removed. A push carries the
   notification id.
@@ -213,6 +239,17 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   sent, provider message id or error code); they are never in a list. The response to a purchase request (SALE-03) uses
   them through `ITraderMessageSender`, whose only route is SMS (`Sms:Provider`, Fake or None) until the Zalo OA templates
   are approved; SALE-06 and TRACE-04 follow.
+- Mandatory types also go out as one SMS (PM decision OMTS-216, 03/11): to the Owners among the recipients and, for the
+  water alert and its withdrawal, to the Zone Managers of the zone among them. The rule is data on the type
+  (`NotificationSmsRule`, `NotificationTypes.All`). The SMS shares the queue of the push: sent once, only after the save
+  commits, never for a failed save, never retried, and not kept as a row. A failed or slow SMS changes nothing; a
+  recipient without a verified phone number gets none and a log line. The text is the MSG text without Vietnamese marks,
+  at most 160 GSM 7-bit characters; a money type (`MoneyToOwner`) carries only its name, document code and amount, so
+  never a bank account number. Operational texts read as their fields do, digits included. At 160 the values, allowed
+  ranges, time, expiry date and, for a new purchase request, kg and pickup date stay; in order the free text gives way to
+  a short minimum (zone name or list, raft code or license type name, license number; note, customer, product), then the
+  closing sentence, then the longer wording of the water alert, then the free text below its minimum. Logs hold the type
+  and the account id only, never what a provider answered.
 
 ### Database (EF Core code-first)
 
@@ -236,24 +273,39 @@ lists the tokens a real provider would deliver to: those registered (`POST /api/
 logged in. These endpoints answer 404 outside
 Development; they are anonymous, so never expose a Development environment publicly. Local storage writes under `src/OMTS.Api/App_Data/files` (git-ignored); for Azurite set
 `Storage:Provider=AzureBlob` and `Storage:AzureBlob:ConnectionString=UseDevelopmentStorage=true`.
-The OCR Service of the water meter photos (ENV-01) is only faked until its provider ticket: the fake answers with
-`Ocr:Fake` (default pH 7.8, salinity 25.5), unless the photo bytes contain a marker such as `ph9.1_sal20`, `conf0.6`,
-`at2026-10-20T08:00`, `ocr-fail` or `ocr-timeout` (used by the tests).
+The OCR Service of the water meter photos (WATER-01) is only faked until its provider ticket: the fake answers with
+`Ocr:Fake` (default pH 7.8, salinity 25.5, temperature 28.5), unless the photo bytes contain a marker such as
+`ph9.1_sal20_tmp28.5`, `conf0.6`, `at2026-10-20T08:00`, `ocr-fail` or `ocr-timeout` (used by the tests).
+The Payment Notification Service (API-12) has no provider yet, so there is only an interface (`IPaymentNotificationService`)
+and a fake that works in Development: it accepts every receiving bank account except the numbers of
+`Payments:Fake:RejectAccounts` (default `REJECT000001`) and `Payments:Fake:TimeoutAccounts` (default `TIMEOUT00001`, never answers).
 
 ### Background jobs
 
-`WaterMeasurementOverdueJob` runs every day at 06:00 (Asia/Ho_Chi_Minh): each In Use zone without a Confirmed water
+Every daily job runs on one base (`DailyJobHostedService`): a run time in business time (UTC+7), an optional catch-up run
+when the host starts after it, and a failed run logged without stopping the next day's.
+
+
+`WaterMeasurementOverdueJob` runs every day at 06:00 (Asia/Ho_Chi_Minh): each In Use zone without an Active water
 measurement for more than one calendar month gets one MSG-WATER-06 reminder per overdue period (Owners and the zone's staff
-with View on `WATER_MEASUREMENTS`). Like the zone license reminder (07:00), a host started after the run time runs it
+with View on `WATER_MEASUREMENTS`). Like the expiry reminder (07:00), a host started after the run time runs it
 once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A reminder already
 sent is never sent again.
 
+The expiry reminder (GFR-03, `ZoneLicenseReminderJob`, 07:00) checks the zone licenses and the cooperative certifications.
+It notifies the active Cooperative Owners only (mandatory push), once when a record becomes Expiring soon (30 days or fewer,
+MSG-FARM-01) and once when it becomes Expired (MSG-FARM-02); a record found already Expired gets the Expired notice only.
+Every license of an In Use zone that is not Replaced is reminded on its own state, not only the newest one: a Replaced
+license and the licenses of a Discontinued zone are not. After a resume, each of these licenses gets the notice of its
+current state at the next check if that notice was not sent yet; nothing is sent twice. A new expiry date re-arms both
+notices.
+
 A replaced raft photo, license file, cooperative cover photo or certificate file is removed right after the save (a removed
 certification or cover photo too), and the upload of a failed save right away. `OrphanFileCleanupJob` runs every day at
-03:00 (Asia/Ho_Chi_Minh) and deletes what such a removal left behind: raft photos (`raft-photos/`), license files
-(`zone-licenses/`), cover photos (`cooperative-covers/`) and certificate files (`cooperative-certifications/`) that no
-record points to and that were written more than the grace period (24 hours) ago. No other storage folder is scanned, so
-cooperative logos are kept for ever.
+03:00 (Asia/Ho_Chi_Minh), with no catch-up at start unless `CatchUpOnStart` is set, and deletes what such a removal left behind: raft photos (`raft-photos/`), license files
+(`zone-licenses/`), cover photos (`cooperative-covers/`), certificate files (`cooperative-certifications/`) and water meter
+photos (`water-meter-photos/`, a recognition that was never saved as a measurement) that no record points to and that were
+written more than the grace period (24 hours) ago. No other storage folder is scanned, so cooperative logos are kept for ever.
 
 **Every environment must use its own storage container (`Storage:AzureBlob:Container`) or folder
 (`Storage:Local:RootPath`); never share one between environments.** The job deletes the files its own database does not
@@ -289,6 +341,12 @@ created by a one-time command run on the server by the deployment operator (not 
    Upgrading a database from before the purchasing catalogue of SRS 27/10 (migration `PurchaseCatalogueV2`): the item
    group `RaftMaterial` becomes `Material`, the supplier's free-text "other contacts" become its address, and the
    migration stops when two farming input items have the same name (rename one first, or reset a demo database).
+   Upgrading a database from before the purchase receipts of SRS 27/10 (migration `PurchaseReceiptsV2`): receipts lose their
+   zone, discount, paid-now amount and invoice photos; their lines get numbers and the receipt raft on their Seed and
+   Material lines; seed lots become the Seed lines themselves (the seeding events are re-pointed); old codes
+   (`PR-yyyyMMdd-nnn`) stay and new receipts take `PN000123` codes from the `DocumentSequences` counter, which starts after
+   the highest PN code and never gives a number twice. Down is lossy. Demo databases are not converted further:
+   reset them (`docker compose down -v`).
    An Owner who cannot log in (for example after losing the first password) is recovered with
    `dotnet OMTS.Api.dll seed --reset-owner-password`. It sets `Bootstrap:Owner:TemporaryPassword` (from configuration, never
    from the command line, so it never lands in shell history) as a new password that must be changed at first login and
@@ -304,18 +362,19 @@ created by a one-time command run on the server by the deployment operator (not 
 | Area | Keys |
 |---|---|
 | Email (`Email:Provider` = `Smtp` or `Fake`; `Email:Smtp:Security` = `StartTls` (587), `SslOnConnect` (465) or `None`, which is refused outside Development) | `Email:Smtp:Host`, `Port`, `Security`, `Username`, `Password`, `FromAddress`, `FromName`, `TimeoutSeconds`, `Email:Fake:FailFor` |
-| SMS (`Sms:Provider` = `None`, the default: nothing is sent and phone verification cannot complete; `Fake` keeps messages in the dev inbox and is set in Development only) | `Sms:Fake:FailFor` (test numbers that fail) |
+| SMS (`Sms:Provider` = `None`, the default: nothing is sent, phone verification cannot complete and each save with mandatory SMS writes one warning; `Fake` keeps messages in the dev inbox and is set in Development only) | `Sms:Fake:FailFor` (test numbers that fail), `Sms:MandatoryTimeoutSeconds` (default 5, from 1 to 60 or the host does not start: the longest the answer of an action waits for the SMS of its mandatory notifications) |
 | Push (`Push:Provider` = `None` by default, `Fake` in Development) | `Push:Fake:FailFor` |
 | OCR (`Ocr:Provider` unset by default: meter photos are not read and the values are entered by hand (MSG-WATER-01); `Fake` invents readings, so it is set in Development only and stops the host elsewhere) | `Ocr:TimeoutSeconds` (default 15), `Ocr:UncertainBelow` (default 0.8), `Ocr:Fake:Mode` (`Success`, `Fail`, `Timeout`), `Ocr:Fake:Ph`, `Ocr:Fake:Salinity`, `Ocr:Fake:Confidence` |
+| Payment notifications, API-12 (`Payments:Provider` = `None`, the default: no provider is chosen, so no receiving bank account can be accepted and the Owner gets MSG-DEBT-02; `Fake` works in Development only and elsewhere acts as `None`) | `Payments:TimeoutSeconds` (default 15; 1 to 300, anything else stops the host at startup), `Payments:Fake:RejectAccounts`, `Payments:Fake:TimeoutAccounts` |
 | File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development; one container or folder per environment, see Background jobs) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
 | Bootstrap (see Deployment) | `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:*` |
 | Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30) |
 | CORS: the web app calls the API from the browser. Set its origin in every deployed environment; empty means no CORS. Development allows `http://localhost:3000`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`) |
 | Reverse proxy: X-Forwarded-For is trusted only from these addresses (and loopback), so the limits see the real client | `ForwardedHeaders:KnownProxies` (e.g. `10.0.0.4`), `ForwardedHeaders:KnownNetworks` (e.g. `10.0.0.0/24`) |
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG-ACCOUNT-13 and a critical log entry is written (BR-ACCOUNT-09: one purpose and one number or address get at most 3 codes per hour, at least 60 seconds apart; over all purposes one number or address gets at most 10) | `Verification:DailySmsLimit` (default 500) |
-| Zone license reminder (FARM-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
+| Expiry reminder of zone licenses and certifications (GFR-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
 | Overdue water measurement reminder (ENV-01, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
-| Orphan file clean-up: raft photos, license files, cover photos, certificate files (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
+| Orphan file clean-up: raft photos, license files, cover photos, certificate files, meter photos (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
 
 ## Demo on a shared server
 

@@ -14,31 +14,30 @@ public class FarmingRulesTests
     [InlineData(0, LicenseState.ExpiringSoon)]
     [InlineData(-1, LicenseState.Expired)]
     public void License_state_boundaries_around_the_expiry_date(int daysLeft, LicenseState expected) =>
-        Assert.Equal(expected, LicenseStateRules.StateOn(new LicenseFacts(Today.AddYears(-1), Today.AddDays(daysLeft), []), Today));
+        Assert.Equal(expected, LicenseStateRules.StateOn(new LicenseFacts(Today.AddYears(-1), Today.AddDays(daysLeft), null), Today));
 
     [Fact]
     public void License_without_expiry_is_valid_and_one_starting_later_is_not_yet_effective()
     {
-        Assert.Equal(LicenseState.Valid, LicenseStateRules.StateOn(new LicenseFacts(Today, null, []), Today));
-        Assert.Equal(LicenseState.NotYetEffective, LicenseStateRules.StateOn(new LicenseFacts(Today.AddDays(1), null, []), Today));
+        Assert.Equal(LicenseState.Valid, LicenseStateRules.StateOn(new LicenseFacts(Today, null, null), Today));
+        Assert.Equal(LicenseState.NotYetEffective, LicenseStateRules.StateOn(new LicenseFacts(Today.AddDays(1), null, null), Today));
+        Assert.Equal(LicenseState.Valid, LicenseStateRules.StateOn(new LicenseFacts(Today, Today.AddDays(31), null), Today));
     }
 
+    // BR-FARM-06: Replaced from the day the replacing license is recorded, whatever the dates, and before every other state.
     [Fact]
-    public void Replacement_supersedes_only_from_its_effective_date()
+    public void Replaced_from_the_record_day_of_the_replacement_whatever_the_dates()
     {
-        var replaced = new LicenseFacts(Today.AddYears(-2), Today.AddDays(10), [Today.AddDays(5)]);
+        var expired = new LicenseFacts(Today.AddYears(-2), Today.AddDays(-10), ReplacedOn: Today);
 
-        Assert.Equal(LicenseState.ExpiringSoon, LicenseStateRules.StateOn(replaced, Today));
-        Assert.Equal(LicenseState.Superseded, LicenseStateRules.StateOn(replaced, Today.AddDays(5)));
-    }
-
-    [Fact]
-    public void Worst_state_prefers_expired_then_expiring_then_missing()
-    {
-        Assert.Equal(LicenseState.Expired, LicenseStateRules.Worst([LicenseState.Valid, LicenseState.Missing, LicenseState.Expired]));
-        Assert.Equal(LicenseState.ExpiringSoon, LicenseStateRules.Worst([LicenseState.Missing, LicenseState.ExpiringSoon]));
-        Assert.Equal(LicenseState.Missing, LicenseStateRules.Worst([LicenseState.Valid, LicenseState.Missing]));
-        Assert.Null(LicenseStateRules.Worst([LicenseState.Valid, LicenseState.Superseded]));
+        Assert.Equal(LicenseState.Expired, LicenseStateRules.StateOn(expired, Today.AddDays(-1)));
+        Assert.Equal(LicenseState.Replaced, LicenseStateRules.StateOn(expired, Today));
+        Assert.Equal(LicenseState.Replaced, LicenseStateRules.StateOn(expired, Today.AddYears(5)));
+        // A license replaced before it was even effective, and one replaced while Valid or Expiring soon.
+        Assert.Equal(LicenseState.Replaced, LicenseStateRules.StateOn(new LicenseFacts(Today.AddDays(30), Today.AddYears(3), Today), Today));
+        Assert.Equal(LicenseState.NotYetEffective, LicenseStateRules.StateOn(new LicenseFacts(Today.AddDays(30), Today.AddYears(3), Today), Today.AddDays(-1)));
+        Assert.Equal(LicenseState.Replaced, LicenseStateRules.StateOn(new LicenseFacts(Today.AddYears(-1), Today.AddDays(5), Today), Today));
+        Assert.Equal(LicenseState.ExpiringSoon, LicenseStateRules.StateOn(new LicenseFacts(Today.AddYears(-1), Today.AddDays(5), Today), Today.AddDays(-1)));
     }
 
     // FARM-04 done criterion: seeded 0–40, harvested 0–10, written off 30–40 on a 50 m lane.

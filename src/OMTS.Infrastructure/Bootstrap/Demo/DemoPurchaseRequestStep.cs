@@ -3,7 +3,6 @@ using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Domain.Enums;
 using OMTS.Infrastructure.Messaging;
-using OMTS.Infrastructure.Messaging.Fakes;
 
 namespace OMTS.Infrastructure.Bootstrap.Demo;
 
@@ -71,8 +70,6 @@ internal sealed class DemoPurchaseRequestStep : IDemoSeedStep
         return 4;
     }
 
-    // By what would really receive the text, not by the name in Sms:Provider: anything not known to be harmless is treated as real.
     private static bool ReachesNoPhone(DemoSeedContext context) =>
-        context.Get<ITraderMessageSender>() is SmsTraderMessageSender
-        && context.Get<ISmsSender>() is FakeSmsSender or UnconfiguredSmsSender;
+        context.Get<ITraderMessageSender>() is SmsTraderMessageSender && context.SmsSenderReachesNoPhone;
 }

@@ -31,10 +31,13 @@ public class WaterOverdueMonthEndQaTests
         {
             ZoneId = z.Zone.Id,
             MeasuredAt = new DateTimeOffset(DateOnly.Parse(measured).ToDateTime(new TimeOnly(8, 0)), Local),
+            RaftId = z.Raft.Id,
             Ph = 7.5m,
             Salinity = 20m,
+            Temperature = 25m,
+            PhotoUrl = Guid.NewGuid().ToString("N"),
             ClientOperationId = Guid.NewGuid(),
-            StatusId = StatusIds.WaterMeasurement.Confirmed,
+            StatusId = StatusIds.WaterMeasurement.Active,
         }));
 
         var onTime = await RunAsync(api, DateOnly.Parse(lastOnTimeDay));

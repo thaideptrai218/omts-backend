@@ -20,12 +20,16 @@ public static class NotificationRoles
     /// The Owner and traders by account type; staff by the fixed roles of their Effective zone–role pairs, so a staff
     /// account without a pair holds none.
     /// </summary>
-    public static IReadOnlySet<NotificationRole> Of(SubjectType subjectType, IEnumerable<ZoneGrant> effectiveGrants) => subjectType switch
+    public static IReadOnlySet<NotificationRole> Of(SubjectType subjectType, IEnumerable<ZoneGrant> effectiveGrants) =>
+        OfRoleCodes(subjectType, effectiveGrants.Select(g => g.RoleCode));
+
+    /// <inheritdoc cref="Of"/>
+    public static IReadOnlySet<NotificationRole> OfRoleCodes(SubjectType subjectType, IEnumerable<string> effectiveRoleCodes) => subjectType switch
     {
         SubjectType.CooperativeOwner => new HashSet<NotificationRole> { NotificationRole.CooperativeOwner },
         SubjectType.Trader => new HashSet<NotificationRole> { NotificationRole.Trader },
-        SubjectType.Staff => effectiveGrants
-            .Select(g => FixedRoles.FindByCode(g.RoleCode)?.Role)
+        SubjectType.Staff => effectiveRoleCodes
+            .Select(code => FixedRoles.FindByCode(code)?.Role)
             .OfType<StaffRole>()
             .Select(r => r == StaffRole.ZoneManager ? NotificationRole.ZoneManager : NotificationRole.Accountant)
             .ToHashSet(),

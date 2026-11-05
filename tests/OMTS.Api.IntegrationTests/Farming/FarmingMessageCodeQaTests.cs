@@ -91,14 +91,14 @@ public class FarmingMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
     {
         var owner = await factory.OwnerAsync();
         var zoneId = (await owner.Client.CreateZoneAsync()).Id();
-        var old = await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneIds = [zoneId], EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(20) });
+        var old = await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zoneId, EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(20) });
         var renewal = new LicenseFields { DocumentType = null, EffectiveDate = Today, ExpiryDate = Today.AddYears(3) };
         var replacement = await (await owner.Client.PostAsync($"/api/zone-licenses/{old.Id()}/replace", renewal.ToForm())).ReadAsync(HttpStatusCode.Created);
         var expected = $"License {old.Text("documentNumber")} is Replaced by {replacement.Text("documentNumber")} and cannot be used for this action.";
 
         var edit = await (await owner.Client.PutAsync($"/api/zone-licenses/{old.Id()}", new LicenseFields
         {
-            ZoneIds = [zoneId], EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(40), RowVersion = old.Text("rowVersion"),
+            ZoneId = zoneId, EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddDays(40), RowVersion = old.Text("rowVersion"),
         }.ToForm())).SrsProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09", "LICENSE_REPLACED");
         var again = await (await owner.Client.PostAsync($"/api/zone-licenses/{old.Id()}/replace", renewal.ToForm()))
             .SrsProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09", "MSG03");

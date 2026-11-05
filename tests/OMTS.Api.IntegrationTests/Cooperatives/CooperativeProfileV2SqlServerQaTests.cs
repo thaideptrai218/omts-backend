@@ -216,12 +216,12 @@ public class CooperativeProfileV2SqlServerQaTests
             var again = await DemoAsync(api);
 
             Assert.Equal(DeploymentBootstrapper.Success, upgrade.ExitCode);
-            // The profile save, the cover photo and the certification; the logo was there already.
-            Assert.Contains("Demo cooperative profile: 3 created.", upgrade.Messages);
+            // The profile save, the cover photo and the two certifications (PR 0.8 adds one expiring soon); the logo was there already.
+            Assert.Contains("Demo cooperative profile: 4 created.", upgrade.Messages);
             Assert.Equal(("HTX Hàu Vân Đồn", 2012, taxCode, "banhang@htx-vandon.example.com"), (completed.ShortName, completed.YearEstablished, completed.TaxCode, completed.Email));
             Assert.All(new[] { completed.SocialLink, completed.IntroductionVi, completed.IntroductionEn, completed.CoverPhotoUrl }, v => Assert.False(string.IsNullOrEmpty(v)));
             Assert.Contains("Demo cooperative profile: already there.", again.Messages);
-            Assert.Equal(1, await FarmLabSqlServerKit.QueryAsync(api, db => db.CooperativeCertifications.CountAsync()));
+            Assert.Equal(2, await FarmLabSqlServerKit.QueryAsync(api, db => db.CooperativeCertifications.CountAsync()));
             Assert.Equal(completed.CoverPhotoUrl, await FarmLabSqlServerKit.QueryAsync(api, db => db.Cooperatives.Select(c => c.CoverPhotoUrl).SingleAsync()));
         }
         finally

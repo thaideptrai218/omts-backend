@@ -1,0 +1,86 @@
+namespace OMTS.Application.Features.ReceivingBankAccounts;
+
+/// <summary>
+/// The list of banks of DEBT-01 step 2. Source: the banks of https://api.vietqr.io/v2/banks read on 05/11/2026, without
+/// the e-wallets and the finance company (MoMo, ZaloPay, Viettel Money, VNPT Money, Mobifone Money, Mirae Asset), since
+/// the account of a cooperative is a bank account. Changes only with a release; the SRS names no source (PM question).
+/// </summary>
+public static class BankCatalog
+{
+    /// <summary>In the order of the short names.</summary>
+    public static readonly IReadOnlyList<BankView> All = new BankView[]
+    {
+        new("970416", "ACB", "Ngân hàng TMCP Á Châu"),
+        new("970425", "ABBANK", "Ngân hàng TMCP An Bình"),
+        new("970405", "Agribank", "Ngân hàng Nông nghiệp và Phát triển Nông thôn Việt Nam"),
+        new("970409", "BacABank", "Ngân hàng TMCP Bắc Á"),
+        new("970438", "BaoVietBank", "Ngân hàng TMCP Bảo Việt"),
+        new("555666", "BIDC", "Ngân hàng Đầu Tư Và Phát Triển Campuchia - Chi nhánh Hà Nội"),
+        new("970418", "BIDV", "Ngân hàng TMCP Đầu tư và Phát triển Việt Nam"),
+        new("963666", "BNP HCM", "Ngân hàng BNP Paribas – Chi nhánh Thành phố Hồ Chí Minh"),
+        new("963668", "BNP HN", "Ngân hàng BNP Paribas – Chi nhánh Hà Nội"),
+        new("963688", "BOCHK", "Ngân hàng Bank of China (Hong Kong) Limited – Chi nhánh Hồ Chí Minh"),
+        new("970465", "BSP", "Ngân hàng SinoPac - Chi nhánh Thành phố Hồ Chí Minh"),
+        new("546034", "CAKE", "TMCP Việt Nam Thịnh Vượng - Ngân hàng số CAKE by VPBank"),
+        new("970444", "CBBank", "Ngân hàng Thương mại trách nhiệm hữu hạn một thành viên Ngoại thương Công nghệ số (Vietcombank Neo Limited)"),
+        new("422589", "CIMB", "Ngân hàng TNHH MTV CIMB Việt Nam"),
+        new("533948", "Citibank", "Ngân hàng Citibank, N.A. - Chi nhánh Hà Nội"),
+        new("970446", "COOPBANK", "Ngân hàng Hợp tác xã Việt Nam"),
+        new("168999", "CUBHCM", "Ngân hàng Cathay United Bank – Chi nhánh Hồ Chí Minh"),
+        new("796500", "DBSBank", "DBS Bank Ltd - Chi nhánh Thành phố Hồ Chí Minh"),
+        new("963686", "ESUN", "Ngân hàng Thương mại TNHH E.SUN – Chi nhánh Đồng Nai (ESUNBANK)"),
+        new("970431", "Eximbank", "Ngân hàng TMCP Xuất Nhập khẩu Việt Nam"),
+        new("970408", "GPBank", "Ngân hàng Thương mại TNHH MTV Dầu Khí Toàn Cầu"),
+        new("970437", "HDBank", "Ngân hàng TMCP Phát triển Thành phố Hồ Chí Minh"),
+        new("970442", "HongLeong", "Ngân hàng TNHH MTV Hong Leong Việt Nam"),
+        new("458761", "HSBC", "Ngân hàng TNHH MTV HSBC (Việt Nam)"),
+        new("970456", "IBKHCM", "Ngân hàng Công nghiệp Hàn Quốc - Chi nhánh TP. Hồ Chí Minh"),
+        new("970455", "IBKHN", "Ngân hàng Công nghiệp Hàn Quốc - Chi nhánh Hà Nội"),
+        new("963669", "ICBC", "Ngân hàng Công thương Trung Quốc – Chi nhánh thành phố Hà Nội"),
+        new("970434", "IndovinaBank", "Ngân hàng TNHH Indovina"),
+        new("668888", "KBank", "Ngân hàng Đại chúng TNHH Kasikornbank"),
+        new("970466", "KEBHanaHCM", "Ngân hàng KEB Hana – Chi nhánh Thành phố Hồ Chí Minh"),
+        new("970467", "KEBHANAHN", "Ngân hàng KEB Hana – Chi nhánh Hà Nội"),
+        new("970452", "KienLongBank", "Ngân hàng TMCP Kiên Long"),
+        new("970463", "KookminHCM", "Ngân hàng Kookmin - Chi nhánh Thành phố Hồ Chí Minh"),
+        new("970462", "KookminHN", "Ngân hàng Kookmin - Chi nhánh Hà Nội"),
+        new("970449", "LPBank", "Ngân hàng TMCP Lộc Phát Việt Nam"),
+        new("970422", "MBBank", "Ngân hàng TMCP Quân đội"),
+        new("970414", "MBV", "Ngân hàng TNHH MTV Việt Nam Hiện Đại"),
+        new("970426", "MSB", "Ngân hàng TMCP Hàng Hải"),
+        new("970428", "NamABank", "Ngân hàng TMCP Nam Á"),
+        new("970419", "NCB", "Ngân hàng TMCP Quốc Dân"),
+        new("801011", "Nonghyup", "Ngân hàng Nonghyup - Chi nhánh Hà Nội"),
+        new("970448", "OCB", "Ngân hàng TMCP Phương Đông"),
+        new("970430", "PGBank", "Ngân hàng TMCP Thịnh vượng và Phát triển"),
+        new("970439", "PublicBank", "Ngân hàng TNHH MTV Public Việt Nam"),
+        new("970412", "PVcomBank", "Ngân hàng TMCP Đại Chúng Việt Nam"),
+        new("971133", "PVcomBank Pay", "Ngân hàng số PVcomBank"),
+        new("970403", "Sacombank", "Ngân hàng TMCP Sài Gòn Tài Lộc"),
+        new("970400", "SaigonBank", "Ngân hàng TMCP Sài Gòn Công Thương"),
+        new("970429", "SCB", "Ngân hàng TMCP Sài Gòn"),
+        new("970440", "SeABank", "Ngân hàng TMCP Đông Nam Á"),
+        new("970443", "SHB", "Ngân hàng TMCP Sài Gòn - Hà Nội"),
+        new("970424", "ShinhanBank", "Ngân hàng TNHH MTV Shinhan Việt Nam"),
+        new("970410", "StandardChartered", "Ngân hàng TNHH MTV Standard Chartered Bank Việt Nam"),
+        new("970407", "Techcombank", "Ngân hàng TMCP Kỹ thương Việt Nam"),
+        new("963388", "Timo", "Ngân hàng số Timo by Ban Viet Bank (Timo by Ban Viet Bank)"),
+        new("963326", "TNEX", "TNEX by MSB"),
+        new("970423", "TPBank", "Ngân hàng TMCP Tiên Phong"),
+        new("546035", "Ubank", "TMCP Việt Nam Thịnh Vượng - Ngân hàng số Ubank by VPBank"),
+        new("970458", "UnitedOverseas", "Ngân hàng United Overseas - Chi nhánh TP. Hồ Chí Minh"),
+        new("999888", "VBSP", "Ngân hàng Chính sách Xã hội"),
+        new("970441", "VIB", "Ngân hàng TMCP Quốc tế Việt Nam"),
+        new("970427", "VietABank", "Ngân hàng TMCP Việt Á"),
+        new("970433", "VietBank", "Ngân hàng TMCP Việt Nam Thương Tín"),
+        new("970454", "VietCapitalBank", "Ngân hàng TMCP Bản Việt"),
+        new("970436", "Vietcombank", "Ngân hàng TMCP Ngoại Thương Việt Nam"),
+        new("970415", "VietinBank", "Ngân hàng TMCP Công thương Việt Nam"),
+        new("970406", "Vikki", "Ngân hàng TNHH Một thành viên số Vikki"),
+        new("970432", "VPBank", "Ngân hàng TMCP Việt Nam Thịnh Vượng"),
+        new("970421", "VRB", "Ngân hàng Liên doanh Việt - Nga"),
+        new("970457", "Woori", "Ngân hàng TNHH MTV Woori Việt Nam"),
+    }.OrderBy(bank => bank.ShortName, StringComparer.OrdinalIgnoreCase).ToList();
+
+    public static BankView? FindByBin(string? bin) => All.FirstOrDefault(bank => bank.Bin == bin);
+}

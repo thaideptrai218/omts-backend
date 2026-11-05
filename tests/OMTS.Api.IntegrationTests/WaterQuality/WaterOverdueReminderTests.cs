@@ -12,8 +12,8 @@ using OMTS.Domain.Entities.Platform;
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
-/// Overdue water measurement reminder (formerly JOB-05): MSG26 once per overdue period to Owners and the zone's
-/// staff with View; only Confirmed measurements count. Each test has its own database (the job scans every zone).
+/// Overdue water measurement reminder (formerly JOB-05): MSG-WATER-06 once per overdue period to Owners and the
+/// Zone Managers of the zone; only Active measurements count. Each test has its own database (the job scans every zone).
 /// </summary>
 public class WaterOverdueReminderTests
 {
@@ -27,7 +27,7 @@ public class WaterOverdueReminderTests
         var z = await api.ZoneAsync();
         var (_, manager) = await api.StaffAsync(z.Zone);
         var (_, outsider) = await api.StaffAsync((await api.ZoneAsync()).Zone);
-        await AddAsync(api, z.Zone, StatusIds.WaterMeasurement.Confirmed, LocalMorning(Today.AddMonths(-2)));
+        await AddAsync(api, z, StatusIds.WaterMeasurement.Active, LocalMorning(Today.AddMonths(-2)));
 
         var first = await RunAsync(api, Today);
         var second = await RunAsync(api, Today.AddDays(1));
@@ -58,8 +58,8 @@ public class WaterOverdueReminderTests
         await using var api = new WaterApiFactory();
         var onTime = await api.ZoneAsync();
         var late = await api.ZoneAsync();
-        await AddAsync(api, onTime.Zone, StatusIds.WaterMeasurement.Confirmed, LocalMorning(today.AddMonths(-1)));
-        await AddAsync(api, late.Zone, StatusIds.WaterMeasurement.Confirmed, LocalMorning(today.AddMonths(-1).AddDays(-1)));
+        await AddAsync(api, onTime, StatusIds.WaterMeasurement.Active, LocalMorning(today.AddMonths(-1)));
+        await AddAsync(api, late, StatusIds.WaterMeasurement.Active, LocalMorning(today.AddMonths(-1).AddDays(-1)));
 
         Assert.Equal(1, await RunAsync(api, today));
 
@@ -68,15 +68,12 @@ public class WaterOverdueReminderTests
     }
 
     [Fact]
-    public async Task Drafts_corrected_and_voided_measurements_do_not_count()
+    public async Task Voided_measurements_do_not_count()
     {
         await using var api = new WaterApiFactory();
         var z = await api.ZoneAsync();
-        await AddAsync(api, z.Zone, StatusIds.WaterMeasurement.Confirmed, LocalMorning(Today.AddMonths(-3)));
-        foreach (var status in new[] { StatusIds.WaterMeasurement.Draft, StatusIds.WaterMeasurement.Superseded, StatusIds.WaterMeasurement.Voided })
-        {
-            await AddAsync(api, z.Zone, status, LocalMorning(Today.AddDays(-2)));
-        }
+        await AddAsync(api, z, StatusIds.WaterMeasurement.Active, LocalMorning(Today.AddMonths(-3)));
+        await AddAsync(api, z, StatusIds.WaterMeasurement.Voided, LocalMorning(Today.AddDays(-2)));
 
         Assert.Equal(1, await RunAsync(api, Today));
     }
@@ -96,15 +93,15 @@ public class WaterOverdueReminderTests
     }
 
     [Fact]
-    public async Task Newer_confirmed_measurement_ends_the_period_and_the_next_lapse_is_reminded_again()
+    public async Task Newer_active_measurement_ends_the_period_and_the_next_lapse_is_reminded_again()
     {
         await using var api = new WaterApiFactory();
         var z = await api.ZoneAsync();
-        await AddAsync(api, z.Zone, StatusIds.WaterMeasurement.Confirmed, LocalMorning(Today.AddMonths(-2)));
+        await AddAsync(api, z, StatusIds.WaterMeasurement.Active, LocalMorning(Today.AddMonths(-2)));
         Assert.Equal(1, await RunAsync(api, Today));
 
         // Measured after the reminder: a new period starts, on time until a month later.
-        await AddAsync(api, z.Zone, StatusIds.WaterMeasurement.Confirmed, DateTimeOffset.UtcNow.AddMinutes(1));
+        await AddAsync(api, z, StatusIds.WaterMeasurement.Active, DateTimeOffset.UtcNow.AddMinutes(1));
         Assert.Equal(0, await RunAsync(api, Today.AddDays(2)));
         Assert.Equal(1, await RunAsync(api, Today.AddMonths(1).AddDays(2)));
 
@@ -113,13 +110,16 @@ public class WaterOverdueReminderTests
 
     private static DateTimeOffset LocalMorning(DateOnly date) => new(date.ToDateTime(new TimeOnly(8, 0)), Local);
 
-    private static Task AddAsync(WaterApiFactory api, FarmingZone zone, int statusId, DateTimeOffset measuredAt) =>
+    private static Task AddAsync(WaterApiFactory api, WaterZone z, int statusId, DateTimeOffset measuredAt) =>
         api.UseDbAsync(db => db.WaterMeasurements.Add(new WaterMeasurement
         {
-            ZoneId = zone.Id,
+            ZoneId = z.Zone.Id,
+            RaftId = z.Raft.Id,
             MeasuredAt = measuredAt,
             Ph = 7.5m,
             Salinity = 20m,
+            Temperature = 25m,
+            PhotoUrl = Guid.NewGuid().ToString("N"),
             ClientOperationId = Guid.NewGuid(),
             StatusId = statusId,
         }));

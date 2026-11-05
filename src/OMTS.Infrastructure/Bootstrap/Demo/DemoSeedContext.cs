@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Results;
+using OMTS.Infrastructure.Messaging;
+using OMTS.Infrastructure.Messaging.Fakes;
 using OMTS.Infrastructure.Persistence;
 
 namespace OMTS.Infrastructure.Bootstrap.Demo;
@@ -32,7 +35,13 @@ internal sealed class DemoSeedContext(IServiceProvider services, OmtsDbContext d
     /// <summary>What a step did differently from usual, shown in the command output.</summary>
     public List<string> Notes { get; } = [];
 
+    /// <summary>Set by a step that left out something optional: the command output says why instead of giving a count.</summary>
+    public string? SkipReason { get; set; }
+
     public T Get<T>() where T : notnull => services.GetRequiredService<T>();
+
+    /// <summary>By what would really receive the text, not by the name in Sms:Provider: anything not known to be harmless is treated as real.</summary>
+    public bool SmsSenderReachesNoPhone => Get<ISmsSender>() is FakeSmsSender or UnconfiguredSmsSender;
 
     /// <summary>
     /// Whether an earlier run already gave this account its demo login. From then on, whatever happens to the
