@@ -25,6 +25,7 @@ namespace OMTS.Api.IntegrationTests.WaterQuality;
 /// QA of the rerun after a lost save on a real SQL Server: the rival saves for real just before the request's own save, so
 /// the row version conflict, the interceptor and the discard are all the production ones (no stand-in that drops the pushes).
 /// </summary>
+[Collection(WaterRaceTestCollection.Name)]
 public class WaterCorrectionQaTestsRaces
 {
     [SqlServerFact]

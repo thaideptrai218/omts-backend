@@ -8,7 +8,10 @@ public interface IDailyJobOptions
 
     /// <summary>
     /// A host that starts after today's run time (deploy, restart) runs once at start, so that day is not skipped.
-    /// Safe because each job sends a notice once per period and keeps a marker of it.
+    /// Safe because each job is idempotent: the reminders send a notice once per period and keep a marker of it.
     /// </summary>
     bool CatchUpOnStart { get; }
+
+    /// <summary>False stops the daily runs of the job; a job without the setting always runs.</summary>
+    bool Enabled => true;
 }

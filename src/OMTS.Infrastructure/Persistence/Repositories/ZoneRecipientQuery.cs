@@ -3,7 +3,6 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Domain.Constants;
-using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Infrastructure.Persistence.Repositories;
@@ -24,18 +23,26 @@ internal sealed class ZoneRecipientQuery(OmtsDbContext db) : IZoneRecipientQuery
         var owners = await OwnersAsync(cancellationToken);
         List<Guid> staff = roleCodes.Count == 0
             ? []
-            : await ActiveStaffGrants()
-                .Where(g => roleCodes.Contains(g.Role.Code) && (anyZone || g.ZoneId == null || g.ZoneId == zoneId))
+            : await ActiveStaffPairs(roleCodes)
+                .Where(g => anyZone || g.ZoneId == null || g.ZoneId == zoneId)
                 .Select(g => g.AccountId)
                 .ToListAsync(cancellationToken);
 
         return owners.Concat(staff).Distinct().ToList();
     }
 
+    public async Task<IReadOnlyList<Guid>> GetOwnersAndRolesAsync(IReadOnlyCollection<StaffRole> staffRoles, CancellationToken cancellationToken)
+    {
+        var roleCodes = staffRoles.Select(r => FixedRoles.Of(r).Code).ToList();
+        var owners = await OwnersAsync(cancellationToken);
+        List<Guid> staff = roleCodes.Count == 0 ? [] : await ActiveStaffPairs(roleCodes).Select(g => g.AccountId).ToListAsync(cancellationToken);
+        return owners.Concat(staff).Distinct().ToList();
+    }
+
     public async Task<IReadOnlyList<Guid>> GetZoneManagersOrOwnersAsync(Guid zoneId, CancellationToken cancellationToken)
     {
-        var managers = await ActiveStaffGrants()
-            .Where(g => g.Role.Code == FixedRoles.ZoneManagerCode && (g.ZoneId == null || g.ZoneId == zoneId))
+        var managers = await ActiveStaffPairs([FixedRoles.ZoneManagerCode])
+            .Where(g => g.ZoneId == null || g.ZoneId == zoneId)
             .Select(g => g.AccountId)
             .Distinct()
             .ToListAsync(cancellationToken);
@@ -48,8 +55,13 @@ internal sealed class ZoneRecipientQuery(OmtsDbContext db) : IZoneRecipientQuery
             .Select(a => a.Id)
             .ToListAsync(cancellationToken);
 
-    private IQueryable<AccessGrant> ActiveStaffGrants() =>
+    private IQueryable<Domain.Entities.Identity.AccessGrant> ActiveStaffPairs(IReadOnlyCollection<string> roleCodes) =>
         db.AccessGrants.AsNoTracking()
             .EffectiveOfFixedRoles()
-            .Where(g => g.Account.SubjectType == SubjectType.Staff && g.Account.StatusId == StatusIds.Account.Active);
+            .Where(g => roleCodes.Contains(g.Role.Code)
+                && g.Account.SubjectType == SubjectType.Staff
+                && g.Account.StatusId == StatusIds.Account.Active);
+
+    public async Task<IReadOnlyList<Guid>> GetCooperativeOwnersAsync(CancellationToken cancellationToken) =>
+        await OwnersAsync(cancellationToken);
 }

@@ -25,14 +25,16 @@ public class MigrationTests
         "PayRuleVersions", "PayLines", "LaborSettlements", "LaborPayments",
     ];
 
-    // Still read by live endpoints (raft lanes in use, end of employment) or replaced by later tickets.
+    // Still read by live endpoints (open cycle of a raft, seeded quantity) or replaced by later tickets. The labor tables kept
+    // here went with EmployeesV2, LaneSegments and CultivationLogEntries with RaftsV2 (PR 0.9).
     private static readonly string[] KeptTables =
     [
-        "CultivationCycles", "SeedingEvents", "SeedReceiptLots", "LaneSegments", "CultivationLogEntries",
-        "Products", "Customers", "Contractors", "SeasonalWorkers", "WorkAssignments", "AttendanceRecords",
+        "CultivationCycles", "SeedingEvents",
+        "Products", "Customers",
     ];
 
     private const string MigrationBeforeCleanup = "20261025175348_AddPushDeviceLoginSession";
+    private const string MigrationBeforeRaftsV2 = "20261105140242_SupplierPaymentsV2";
 
     // OMTS-208 done criteria: a fresh database built from the migrations has the status catalog, keeps the
     // schema rules (no cascade delete) and the API starts on it.
@@ -78,10 +80,13 @@ public class MigrationTests
 
         Assert.Empty(LegacyTables.Intersect(tables));
         Assert.Empty(KeptTables.Except(tables));
-        Assert.Empty(new[] { "OrderId", "HarvestEventId", "LotId" }.Intersect(await ColumnNamesAsync(db, "LaneSegments")));
         // MESSAGE_DELIVERY (1601–1603, transitions 53–54) comes back with NotificationsV2: the SMS rows use it.
         Assert.False(await db.Statuses.AnyAsync(s => s.Id >= 801 && s.Id <= 1600));
         Assert.False(await db.StatusTransitions.AnyAsync(t => t.Id >= 12 && t.Id <= 52));
+
+        // The cleanup took the legacy columns off LaneSegments, which RaftsV2 then dropped: seen just before RaftsV2.
+        await migrator.MigrateAsync(MigrationBeforeRaftsV2);
+        Assert.Empty(new[] { "OrderId", "HarvestEventId", "LotId" }.Intersect(await ColumnNamesAsync(db, "LaneSegments")));
 
         await migrator.MigrateAsync(MigrationBeforeCleanup);
         Assert.Empty(LegacyTables.Except(await TableNamesAsync(db)));

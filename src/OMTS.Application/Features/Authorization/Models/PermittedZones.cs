@@ -7,4 +7,6 @@ public sealed record PermittedZones(bool AllZones, IReadOnlySet<Guid> ZoneIds)
     public static readonly PermittedZones Everywhere = new(true, new HashSet<Guid>());
 
     public bool IsEmpty => !AllZones && ZoneIds.Count == 0;
+
+    public bool Allows(Guid zoneId) => AllZones || ZoneIds.Contains(zoneId);
 }

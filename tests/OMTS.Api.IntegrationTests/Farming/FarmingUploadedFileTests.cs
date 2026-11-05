@@ -22,27 +22,31 @@ public class FarmingUploadedFileTests
     private static InvalidOperationException DatabaseDown => new("Test: the database is down.");
 
     [Fact]
-    public async Task Raft_photo_of_a_failed_save_is_removed_and_the_replaced_photo_only_after_the_save()
+    public async Task Raft_photo_of_a_failed_save_is_removed_and_a_removed_photo_only_after_the_save()
     {
         using var factory = new FileFaultApiFactory();
         var owner = await factory.OwnerAsync();
         var raftId = (await owner.Client.CreateRaftAsync((await owner.Client.CreateZoneAsync()).Id())).Id();
-        await (await UploadPhotoAsync(owner, raftId)).ReadAsync(HttpStatusCode.OK);
-        var first = await PhotoKeyAsync(factory, raftId);
+        var photoId = (await owner.Client.AddRaftPhotoAsync(raftId)).GetProperty("photos")[0].Id();
+        var first = Assert.Single(await factory.RaftPhotoKeysAsync(raftId));
 
         factory.Faults.FailNextSave(Conflict);
-        Assert.Equal("MSG06", await (await UploadPhotoAsync(owner, raftId)).ErrorCodeAsync());
+        Assert.Equal("MSG06", await (await owner.Client.UploadRaftPhotoAsync(raftId)).ErrorCodeAsync());
         factory.Faults.FailNextSave(DatabaseDown);
-        Assert.Equal(HttpStatusCode.InternalServerError, (await UploadPhotoAsync(owner, raftId)).StatusCode);
+        Assert.Equal(HttpStatusCode.InternalServerError, (await owner.Client.UploadRaftPhotoAsync(raftId)).StatusCode);
 
         // Both failed saves left the current photo and removed their own upload.
-        Assert.Equal(first, await PhotoKeyAsync(factory, raftId));
+        Assert.Equal([first], await factory.RaftPhotoKeysAsync(raftId));
         Assert.Equal([first], StoredKeys(factory, FileCategories.RaftPhotos));
 
-        await (await UploadPhotoAsync(owner, raftId)).ReadAsync(HttpStatusCode.OK);
-        var second = await PhotoKeyAsync(factory, raftId);
-        Assert.NotEqual(first, second);
-        Assert.Equal([second], StoredKeys(factory, FileCategories.RaftPhotos));
+        // A removal whose save fails keeps the photo and its file; the next one removes both.
+        factory.Faults.FailNextSave(Conflict);
+        Assert.Equal("MSG06", await (await owner.Client.DeleteAsync($"/api/rafts/{raftId}/photos/{photoId}")).ErrorCodeAsync());
+        Assert.Equal([first], await factory.RaftPhotoKeysAsync(raftId));
+        Assert.Equal([first], StoredKeys(factory, FileCategories.RaftPhotos));
+
+        await (await owner.Client.DeleteAsync($"/api/rafts/{raftId}/photos/{photoId}")).ReadAsync(HttpStatusCode.OK);
+        Assert.Empty(StoredKeys(factory, FileCategories.RaftPhotos));
     }
 
     [Fact]
@@ -51,7 +55,7 @@ public class FarmingUploadedFileTests
         using var factory = new FileFaultApiFactory();
         var owner = await factory.OwnerAsync();
         var zoneId = (await owner.Client.CreateZoneAsync()).Id();
-        var fields = new LicenseFields { ZoneIds = [zoneId], EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddYears(1) };
+        var fields = new LicenseFields { ZoneId = zoneId, EffectiveDate = Today.AddYears(-1), ExpiryDate = Today.AddYears(1) };
         var license = await owner.Client.CreateLicenseAsync(fields);
         var original = await LicenseFileAsync(factory, license.Id());
         var edit = fields with { Holder = "HTX Trung Nam", RowVersion = await factory.IssueRowVersionAsync<ZoneComplianceDocument>(license.Id()) };
@@ -75,7 +79,7 @@ public class FarmingUploadedFileTests
         Assert.Equal(kept, StoredKeys(factory, FileCategories.ZoneLicenses));
 
         factory.Faults.FailNextSave(DatabaseDown);
-        var failedCreate = await owner.Client.PostAsync("/api/zone-licenses", new LicenseFields { ZoneIds = [zoneId], EffectiveDate = Today }.ToForm());
+        var failedCreate = await owner.Client.PostAsync("/api/zone-licenses", new LicenseFields { ZoneId = zoneId, EffectiveDate = Today }.ToForm());
         Assert.Equal(HttpStatusCode.InternalServerError, failedCreate.StatusCode);
         Assert.Equal(kept, StoredKeys(factory, FileCategories.ZoneLicenses));
     }
@@ -86,14 +90,15 @@ public class FarmingUploadedFileTests
         using var factory = new FileFaultApiFactory();
         var owner = await factory.OwnerAsync();
         var raftId = (await owner.Client.CreateRaftAsync((await owner.Client.CreateZoneAsync()).Id())).Id();
-        await (await UploadPhotoAsync(owner, raftId)).ReadAsync(HttpStatusCode.OK);
+        var firstId = (await owner.Client.AddRaftPhotoAsync(raftId)).GetProperty("photos")[0].Id();
         factory.Faults.DeleteThrows = true;
 
         factory.Faults.FailNextSave(Conflict);
-        Assert.Equal("MSG06", await (await UploadPhotoAsync(owner, raftId)).ErrorCodeAsync());
-        await (await UploadPhotoAsync(owner, raftId)).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal("MSG06", await (await owner.Client.UploadRaftPhotoAsync(raftId)).ErrorCodeAsync());
+        await owner.Client.AddRaftPhotoAsync(raftId);
+        await (await owner.Client.DeleteAsync($"/api/rafts/{raftId}/photos/{firstId}")).ReadAsync(HttpStatusCode.OK);
 
-        var current = await PhotoKeyAsync(factory, raftId);
+        var current = Assert.Single(await factory.RaftPhotoKeysAsync(raftId));
         Assert.Equal(3, StoredKeys(factory, FileCategories.RaftPhotos).Count);
         Assert.Contains(factory.Logs.Lines, l => l.StartsWith("Warning:") && l.Contains("could not be removed after a failed save"));
         Assert.Contains(factory.Logs.Lines, l => l.StartsWith("Warning:") && l.Contains("could not be removed after it was replaced"));
@@ -112,26 +117,19 @@ public class FarmingUploadedFileTests
         using var factory = new FileFaultApiFactory();
         var owner = await factory.OwnerAsync();
         var raftId = (await owner.Client.CreateRaftAsync((await owner.Client.CreateZoneAsync()).Id())).Id();
-        await (await UploadPhotoAsync(owner, raftId)).ReadAsync(HttpStatusCode.OK);
-        var first = await PhotoKeyAsync(factory, raftId);
+        await owner.Client.AddRaftPhotoAsync(raftId);
 
         factory.Faults.FailNextSaveAfterCommit(DatabaseDown);
-        Assert.Equal(HttpStatusCode.InternalServerError, (await UploadPhotoAsync(owner, raftId)).StatusCode);
+        Assert.Equal(HttpStatusCode.InternalServerError, (await owner.Client.UploadRaftPhotoAsync(raftId)).StatusCode);
 
-        var saved = await PhotoKeyAsync(factory, raftId);
-        Assert.NotEqual(first, saved);
-        Assert.Contains(saved, StoredKeys(factory, FileCategories.RaftPhotos));
+        var saved = await factory.RaftPhotoKeysAsync(raftId);
+        Assert.Equal(2, saved.Count);
+        Assert.Equal(saved.Order(), StoredKeys(factory, FileCategories.RaftPhotos));
         Assert.Contains(factory.Logs.Lines, l => l.Contains("is kept: the failed save was committed"));
-        // The request failed, so the replaced photo stayed; the clean-up removes it once it is old enough.
-        Assert.Equal(1, await factory.Services.GetRequiredService<OrphanFileCleanupJob>().RunOnceAsync(DateTimeOffset.UtcNow.AddDays(2)));
-        Assert.Equal([saved], StoredKeys(factory, FileCategories.RaftPhotos));
+        // Both rows hold their files, so the clean-up has nothing to remove however old they are.
+        Assert.Equal(0, await factory.Services.GetRequiredService<OrphanFileCleanupJob>().RunOnceAsync(DateTimeOffset.UtcNow.AddDays(2)));
+        Assert.Equal(saved.Order(), StoredKeys(factory, FileCategories.RaftPhotos));
     }
-
-    private static Task<HttpResponseMessage> UploadPhotoAsync(Actor owner, Guid raftId) =>
-        owner.Client.PostAsync($"/api/rafts/{raftId}/photo", new MultipartFormDataContent { { FileContent(Png), "file", "raft.png" } });
-
-    private static Task<string?> PhotoKeyAsync(AuthApiFactory factory, Guid raftId) =>
-        factory.QueryAsync(db => db.Rafts.Where(r => r.Id == raftId).Select(r => r.PhotoUrl).SingleAsync());
 
     private static Task<string?> LicenseFileAsync(AuthApiFactory factory, Guid licenseId) =>
         factory.QueryAsync(db => db.ZoneComplianceDocuments.Where(d => d.Id == licenseId).Select(d => d.EvidenceFileUrl).SingleAsync());

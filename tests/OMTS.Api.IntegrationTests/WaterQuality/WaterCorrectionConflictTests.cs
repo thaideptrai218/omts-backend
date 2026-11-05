@@ -130,7 +130,7 @@ public class WaterCorrectionConflictTests
         var api = new WaterApiFactory(services: services =>
         {
             services.AddScoped<UnitOfWork>();
-            services.AddScoped<IUnitOfWork>(provider => new LosingUnitOfWork(provider.GetRequiredService<PushOutbox>(), provider.GetRequiredService<UnitOfWork>(), saves));
+            services.AddScoped<IUnitOfWork>(provider => new LosingUnitOfWork(provider.GetRequiredService<UnitOfWork>(), saves));
         });
         return (api, saves);
     }
@@ -168,16 +168,15 @@ public class WaterCorrectionConflictTests
     }
 
     /// <summary>
-    /// A lost save ends as a real one on SQL Server does: nothing written, the push messages dropped by the failed save.
-    /// The in-memory database cannot show that by itself, as it writes the rows of a failing save one by one.
+    /// A lost save ends as a real one on SQL Server does: nothing written, and the push messages stay queued until the use
+    /// case discards its changes. The in-memory database cannot show that by itself, as it writes the rows of a failing save one by one.
     /// </summary>
-    private sealed class LosingUnitOfWork(PushOutbox outbox, IUnitOfWork inner, LostSaves saves) : IUnitOfWork
+    private sealed class LosingUnitOfWork(IUnitOfWork inner, LostSaves saves) : IUnitOfWork
     {
         public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             if (await saves.TakeLostSaveAsync())
             {
-                outbox.Discard();
                 throw new ConcurrencyConflictException(new DbUpdateConcurrencyException("Test: the row version changed."));
             }
 

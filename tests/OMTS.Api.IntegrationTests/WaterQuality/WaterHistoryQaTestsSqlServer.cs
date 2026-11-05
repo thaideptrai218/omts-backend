@@ -196,6 +196,12 @@ public class WaterHistoryQaTestsSqlServer
         public Task<IReadOnlyList<Guid>> GetRecipientsAsync(Guid zoneId, string functionCode, PermissionAction action, CancellationToken cancellationToken) =>
             inner.GetRecipientsAsync(zoneId, functionCode, action, cancellationToken);
 
+        public Task<IReadOnlyList<Guid>> GetCooperativeOwnersAsync(CancellationToken cancellationToken) =>
+            inner.GetCooperativeOwnersAsync(cancellationToken);
+
+        public Task<IReadOnlyList<Guid>> GetOwnersAndRolesAsync(IReadOnlyCollection<OMTS.Domain.Enums.StaffRole> staffRoles, CancellationToken cancellationToken) =>
+            inner.GetOwnersAndRolesAsync(staffRoles, cancellationToken);
+
         public async Task<IReadOnlyList<Guid>> GetZoneManagersOrOwnersAsync(Guid zoneId, CancellationToken cancellationToken)
         {
             await hook(zoneId);

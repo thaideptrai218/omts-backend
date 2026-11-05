@@ -12,10 +12,17 @@ public sealed record SaveFarmingZoneRequest(
     decimal? Area,
     string? RowVersion = null);
 
-/// <summary>Discontinue / reactivate body; the reason is optional and goes to the audit log.</summary>
+/// <summary>Discontinue / resume body; the reason is optional and goes to the audit log.</summary>
 public sealed record ChangeStatusRequest(string? Reason, string? RowVersion);
 
-/// <param name="LicenseState">Worst license state today (Expired, ExpiringSoon, Missing); null when all is fine or for staff.</param>
+/// <summary>The proposed code of a new zone (GBR-03).</summary>
+/// <param name="Code">e.g. KV03: the highest KVnn number in use (discontinued zones included) plus one.</param>
+public sealed record FarmingZoneCodeProposal(string Code);
+
+/// <param name="LicenseState">
+/// Expired or ExpiringSoon: the state today of the zone's newest license that is not Replaced; null when it is fine, when
+/// the zone has no license, or for staff.
+/// </param>
 public sealed record FarmingZoneListItem(
     Guid Id,
     string Code,
@@ -40,6 +47,11 @@ public sealed record FarmingZoneView(
     int InUseRaftCount,
     LicenseState? LicenseState,
     string RowVersion);
+
+/// <summary>Answer of a zone create or edit (FARM-02.0 step 6), in the shape of the FARM-01 saves.</summary>
+/// <param name="Message">MSG-GEN-05 "Farming zone saved.".</param>
+/// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
+public sealed record FarmingZoneSaved(FarmingZoneView Zone, string Message, string MessageCode);
 
 /// <summary>Picker row for other modules (water, harvest, sales…).</summary>
 public sealed record ZoneLookupItem(Guid Id, string Code, string Name, int StatusId, string Status);

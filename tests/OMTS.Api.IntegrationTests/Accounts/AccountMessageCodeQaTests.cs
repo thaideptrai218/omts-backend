@@ -130,11 +130,13 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Equal(("Your password has been changed. Please log in with your new password.", "MSG-ACCOUNT-10"), (reset.Str("message"), reset.Str("messageCode")));
     }
 
-    // ACCOUNT-01.1: several offline profiles share the number → MSG-ACCOUNT-02 as the notice (MSG57 before); one → no notice.
+    // ACCOUNT-01 step 7: the one matching profile is linked → MSG-ACCOUNT-01; no profile or several (ACCOUNT-01.1) →
+    // MSG-ACCOUNT-02.
     [Theory]
-    [InlineData(1, null)]
-    [InlineData(2, "MSG-ACCOUNT-02")]
-    public async Task Registration_notice_code_follows_the_number_of_offline_profiles(int offlineProfiles, string? noticeCode)
+    [InlineData(0, "MSG-ACCOUNT-02", "Your account has been created. Invoices from before today will appear in your account after the cooperative adds them. Please log in.")]
+    [InlineData(1, "MSG-ACCOUNT-01", "Your account has been created. Please log in with your phone number or email and your password.")]
+    [InlineData(2, "MSG-ACCOUNT-02", "Your account has been created. Invoices from before today will appear in your account after the cooperative adds them. Please log in.")]
+    public async Task Registration_notice_code_follows_the_number_of_offline_profiles(int offlineProfiles, string noticeCode, string notice)
     {
         var cooperative = await factory.EnsureCooperativeAsync();
         var phone = NewPhone();
@@ -150,9 +152,9 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         })).BodyAsync(HttpStatusCode.Created);
 
         Assert.Equal(noticeCode, registered.Str("noticeCode"));
-        Assert.Equal(
-            noticeCode is null ? null : "Your account has been created. Invoices from before today will appear in your account after the cooperative adds them. Please log in.",
-            registered.Str("notice"));
+        Assert.Equal(notice, registered.Str("notice"));
+        Assert.Equal(offlineProfiles == 1, registered.GetProperty("linkedExistingCustomer").GetBoolean());
+        Assert.False(registered.TryGetProperty("oldDocumentsHidden", out _));
     }
 
     // ACCOUNT-01.0.E1: MSG-ACCOUNT-03 naming the phone number or the email (MSG14 before).
@@ -207,7 +209,7 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Matches(TooManyCodes, restart.Detail());
         Assert.InRange(restart.GetProperty("retryAfterSeconds").GetInt32(), 1, 60);
         Assert.Matches(TooManyCodes, resend.Detail());
-        Assert.Equal(VerificationCode.MaxSends - 1, resend.GetProperty("sendsLeft").GetInt32());
+        Assert.Equal(VerificationCode.MaxCodesPerHour - 1, resend.GetProperty("sendsLeft").GetInt32());
     }
 
     // ACCOUNT-06.0.E1: MSG-ACCOUNT-16 (MSG16 before).
@@ -247,31 +249,32 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Equal("MSG-ACCOUNT-17", await later.ErrorCodeAsync());
     }
 
-    // MSG-ACCOUNT-17 tells the user to "start again to get a new code"; a start refused by the hourly budget of wrong
-    // codes must not answer it (the start itself is what is refused): MSG-ACCOUNT-18 with the retry time.
+    // MSG-ACCOUNT-18 has one text: the old "no send left, start again" variant is gone. After 3 codes, by new requests or
+    // resends, both answers give the real wait until the oldest code leaves the hour.
     [Fact]
-    public async Task Start_refused_after_ten_wrong_codes_gives_a_retry_time_instead_of_start_again()
+    public async Task Fourth_code_of_the_hour_is_msg_account_18_with_the_real_wait_for_a_new_request_and_a_resend()
     {
         var phone = NewPhone();
         var client = factory.CreateClient();
-        for (var request = 0; request < 2; request++)
+        Guid id = default;
+        var agedAt = DateTimeOffset.UtcNow;
+        for (var request = 0; request < VerificationCode.MaxCodesPerHour; request++)
         {
-            var id = await VerificationIdAsync(await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }));
-            var wrong = WrongCodeFor(factory.LastSmsCode(phone));
-            for (var i = 0; i < VerificationCode.MaxFailedAttempts; i++)
-            {
-                await client.PostAsJsonAsync($"/api/verifications/{id}/verify", new { code = wrong });
-            }
-
+            id = await VerificationIdAsync(await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }));
             await AgeRequestsToAsync(phone);
         }
 
-        var refused = await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone });
+        var restart = await (await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }))
+            .SrsProblemAsync(HttpStatusCode.TooManyRequests, "MSG-ACCOUNT-18", "TOO_MANY_REQUESTS");
+        var resend = await (await client.PostAsync($"/api/verifications/{id}/resend", null))
+            .SrsProblemAsync(HttpStatusCode.TooManyRequests, "MSG-ACCOUNT-18", "TOO_MANY_REQUESTS");
+        var elapsed = (DateTimeOffset.UtcNow - agedAt).TotalSeconds;
 
-        Assert.NotEqual("MSG-ACCOUNT-17", await refused.ErrorCodeAsync());
-        // The HTTP status stays 423 (lead decision: statuses unchanged); the old code was MSG69.
-        var body = await refused.SrsProblemAsync(HttpStatusCode.Locked, "MSG-ACCOUNT-18", "MSG69");
-        Assert.True(body.GetProperty("retryAfterSeconds").GetInt32() > 0);
+        Assert.Equal("You have asked for too many codes. Please try again after 54 minutes.", restart.Detail());
+        // The wait shrinks by the real time the two requests above took, however loaded the runner is.
+        Assert.InRange(restart.GetProperty("retryAfterSeconds").GetInt32(), (int)Math.Floor(3600 - 6 * 60 - elapsed) - 2, 3600 - 6 * 60);
+        Assert.Equal(restart.Detail(), resend.Detail());
+        Assert.Equal(0, resend.GetProperty("sendsLeft").GetInt32());
     }
 
     // ACCOUNT-02.1.E2 (MSG-ACCOUNT-09, MSG01 before) and ACCOUNT-04 texts with their legacy codes.
@@ -300,7 +303,7 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
             noEmail.Detail());
     }
 
-    // The current-password check counts like a login (deviation 4): the 5th failure is MSG-ACCOUNT-06 (MSG69 before), 423.
+    // The current-password check counts like a login (deviation 4): the 5th failure is MSG-ACCOUNT-06 (MSG69 before), 423, with the whole pause left.
     [Fact]
     public async Task Fifth_wrong_current_password_is_msg_account_06()
     {
@@ -316,6 +319,7 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         var paused = await (await client.PostAsJsonAsync("/api/me/password", new { currentPassword = WrongPassword, newPassword = ChangedPassword, passwordConfirmation = ChangedPassword }))
             .SrsProblemAsync(HttpStatusCode.Locked, "MSG-ACCOUNT-06", "MSG69");
         Assert.Equal("Too many failed login attempts. Please try again after 15 minutes.", paused.Detail());
+        Assert.Equal(900, paused.GetProperty("retryAfterSeconds").GetInt32());
     }
 
     private static string WrongCodeFor(string code) => ((int.Parse(code) + 1) % 1_000_000).ToString("D6");
@@ -326,11 +330,7 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         var ids = await factory.QueryAsync(db => db.VerificationCodes.Where(c => c.Target == target).Select(c => c.Id).ToListAsync());
         foreach (var id in ids)
         {
-            await factory.UpdateAsync<VerificationCode>(id, c =>
-            {
-                c.CreatedAt -= TimeSpan.FromMinutes(2);
-                c.LastSentAt -= TimeSpan.FromMinutes(2);
-            });
+            await factory.UpdateAsync<VerificationCode>(id, c => c.AgeBy(TimeSpan.FromMinutes(2)));
         }
     }
 }

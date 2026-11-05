@@ -12,12 +12,6 @@ public static class StatusIds
         public const int Discontinued = 102;
     }
 
-    public static class Cooperative
-    {
-        public const int Draft = 201;
-        public const int Completed = 202;
-    }
-
     public static class Account
     {
         public const int Active = 301;
@@ -59,6 +53,13 @@ public static class StatusIds
         public const int Cancelled = 1802;
     }
 
+    /// <summary>LANE (BR-FARM-04): a lane taken off the end of a raft is Removed, never deleted, and may return to In Use.</summary>
+    public static class Lane
+    {
+        public const int InUse = 2001;
+        public const int Removed = 2002;
+    }
+
     public static class MessageDelivery
     {
         public const int Sending = 1601;
@@ -70,5 +71,14 @@ public static class StatusIds
     {
         public const int Active = 2101;
         public const int Voided = 2102;
+    }
+
+    /// <summary>SALE-01 to SALE-03; Fulfilled is worked out from the invoices, not stored (BR-SALE-01).</summary>
+    public static class PurchaseRequest
+    {
+        public const int AwaitingResponse = 3201;
+        public const int Accepted = 3202;
+        public const int Declined = 3203;
+        public const int Cancelled = 3204;
     }
 }

@@ -224,7 +224,7 @@ public class DemoWaterSeedQaTests
     /// <summary>The production unit of work (SaveChanges with the same exception mapping) plus the armed crash.</summary>
     private sealed class CrashingUnitOfWork(OmtsDbContext db, CrashAfterWaterSaves crash) : IUnitOfWork
     {
-        private readonly UnitOfWork _inner = new(db);
+        private readonly UnitOfWork _inner = new(db, new OMTS.Infrastructure.Messaging.PushOutbox());
 
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {

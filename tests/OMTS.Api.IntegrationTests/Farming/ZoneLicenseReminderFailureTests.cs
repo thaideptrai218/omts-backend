@@ -43,12 +43,15 @@ public class ZoneLicenseReminderFailureTests(FailingNoticeApiFactory factory) : 
     public async Task A_failing_license_is_logged_and_skipped_while_the_others_are_reminded()
     {
         var owner = await factory.OwnerAsync();
-        var zoneId = (await owner.Client.CreateZoneAsync()).Id();
         var failing = await owner.Client.CreateLicenseAsync(new LicenseFields
         {
-            DocumentNumber = $"GP-{FailingNoticeApiFactory.Marker}-{NewCode()}", ZoneIds = [zoneId], EffectiveDate = Today.AddDays(-300), ExpiryDate = Today.AddDays(5),
+            DocumentNumber = $"GP-{FailingNoticeApiFactory.Marker}-{NewCode()}", ZoneId = (await owner.Client.CreateZoneAsync()).Id(),
+            EffectiveDate = Today.AddDays(-300), ExpiryDate = Today.AddDays(5),
         });
-        var fine = await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneIds = [zoneId], EffectiveDate = Today.AddDays(-300), ExpiryDate = Today.AddDays(5) });
+        var fine = await owner.Client.CreateLicenseAsync(new LicenseFields
+        {
+            ZoneId = (await owner.Client.CreateZoneAsync()).Id(), EffectiveDate = Today.AddDays(-300), ExpiryDate = Today.AddDays(5),
+        });
         var job = factory.Services.GetRequiredService<ZoneLicenseReminderJob>();
 
         Assert.Equal(1, await job.RunOnceAsync(Today));
@@ -59,7 +62,7 @@ public class ZoneLicenseReminderFailureTests(FailingNoticeApiFactory factory) : 
         // Nothing of the failed license was saved, so the next run tries it again.
         var unsent = await factory.QueryAsync(db => db.ZoneComplianceDocuments.SingleAsync(d => d.Id == failing.Id()));
         Assert.Null(unsent.ExpiringReminderSentAt);
-        Assert.Equal(2, factory.Logs.Lines.Count(l => l.Contains($"Zone license reminder failed for license {failing.Id()}", StringComparison.Ordinal)));
+        Assert.Equal(2, factory.Logs.Lines.Count(l => l.Contains($"Expiry reminder failed for license {failing.Id()}", StringComparison.Ordinal)));
     }
 
     private Task<List<OMTS.Domain.Entities.Platform.Notification>> NoticesAsync(Guid licenseId) =>

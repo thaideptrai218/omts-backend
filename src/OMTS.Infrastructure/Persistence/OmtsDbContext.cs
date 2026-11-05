@@ -14,6 +14,7 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
 {
     // Organization, identity and access control
     public DbSet<Cooperative> Cooperatives => Set<Cooperative>();
+    public DbSet<CooperativeCertification> CooperativeCertifications => Set<CooperativeCertification>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<EmployeeWorkingZone> EmployeeWorkingZones => Set<EmployeeWorkingZone>();
@@ -26,9 +27,8 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     // Farming zones and rafts
     public DbSet<FarmingZone> FarmingZones => Set<FarmingZone>();
     public DbSet<ZoneComplianceDocument> ZoneComplianceDocuments => Set<ZoneComplianceDocument>();
-    public DbSet<DocumentZoneScope> DocumentZoneScopes => Set<DocumentZoneScope>();
     public DbSet<Raft> Rafts => Set<Raft>();
-    public DbSet<RaftLayoutVersion> RaftLayoutVersions => Set<RaftLayoutVersion>();
+    public DbSet<RaftPhoto> RaftPhotos => Set<RaftPhoto>();
     public DbSet<Lane> Lanes => Set<Lane>();
 
     // Seed, cultivation and water measurements
@@ -39,28 +39,26 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<PurchaseReturn> PurchaseReturns => Set<PurchaseReturn>();
     public DbSet<PurchaseReturnLine> PurchaseReturnLines => Set<PurchaseReturnLine>();
     public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
-    public DbSet<SeedReceiptLot> SeedReceiptLots => Set<SeedReceiptLot>();
     public DbSet<CultivationCycle> CultivationCycles => Set<CultivationCycle>();
     public DbSet<SeedingEvent> SeedingEvents => Set<SeedingEvent>();
-    public DbSet<LaneSegment> LaneSegments => Set<LaneSegment>();
-    public DbSet<CultivationLogEntry> CultivationLogEntries => Set<CultivationLogEntry>();
     public DbSet<WaterMeasurement> WaterMeasurements => Set<WaterMeasurement>();
 
     // Products and customers
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<PurchaseRequest> PurchaseRequests => Set<PurchaseRequest>();
 
-    // Labor: what ending an employment still checks (LAB-01)
-    public DbSet<Contractor> Contractors => Set<Contractor>();
-    public DbSet<SeasonalWorker> SeasonalWorkers => Set<SeasonalWorker>();
-    public DbSet<WorkAssignment> WorkAssignments => Set<WorkAssignment>();
-    public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
+    // Labor (LABOR-01; the attendance and work assignment tables come with LABOR-04 and LABOR-02)
+    public DbSet<EmployeeTypePeriod> EmployeeTypePeriods => Set<EmployeeTypePeriod>();
+    public DbSet<JobType> JobTypes => Set<JobType>();
+    public DbSet<EmployeeJobType> EmployeeJobTypes => Set<EmployeeJobType>();
 
     // System
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<Status> Statuses => Set<Status>();
     public DbSet<StatusTransition> StatusTransitions => Set<StatusTransition>();
+    public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {

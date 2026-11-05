@@ -22,9 +22,10 @@ public class OrphanFileCleanupTests
         var owner = await factory.OwnerAsync();
         var zoneId = (await owner.Client.CreateZoneAsync()).Id();
         var raftId = (await owner.Client.CreateRaftAsync(zoneId)).Id();
-        await (await owner.Client.PostAsync($"/api/rafts/{raftId}/photo", new MultipartFormDataContent { { FileContent(Jpeg), "file", "raft.jpg" } }))
-            .ReadAsync(HttpStatusCode.OK);
-        await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneIds = [zoneId], EffectiveDate = Today });
+        // Two photos: every RaftPhoto row protects its file, not only the first.
+        await owner.Client.AddRaftPhotoAsync(raftId, Jpeg);
+        await owner.Client.AddRaftPhotoAsync(raftId, Png);
+        await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zoneId, EffectiveDate = Today });
         // The first logo is replaced: no record points to it any more, but published versions may still show it.
         await (await CooperativeProfileRequests.UploadLogoAsync(owner.Client, Png, "logo.png")).ReadAsync(HttpStatusCode.OK);
         await (await CooperativeProfileRequests.UploadLogoAsync(owner.Client, Jpeg, "logo.jpg")).ReadAsync(HttpStatusCode.OK);
@@ -73,15 +74,15 @@ public class OrphanFileCleanupTests
         var owner = host.Owner.Client;
         var zoneId = (await owner.CreateZoneAsync()).Id();
         var raftId = (await owner.CreateRaftAsync(zoneId)).Id();
-        await (await owner.PostAsync($"/api/rafts/{raftId}/photo", new MultipartFormDataContent { { FileContent(Jpeg), "file", "raft.jpg" } }))
-            .ReadAsync(HttpStatusCode.OK);
-        await owner.CreateLicenseAsync(new LicenseFields { ZoneIds = [zoneId], EffectiveDate = Today });
+        await owner.AddRaftPhotoAsync(raftId, Jpeg);
+        await owner.AddRaftPhotoAsync(raftId, Png);
+        await owner.CreateLicenseAsync(new LicenseFields { ZoneId = zoneId, EffectiveDate = Today });
         var referenced = host.StoredKeys(FileCategories.RaftPhotos).Concat(host.StoredKeys(FileCategories.ZoneLicenses)).Order().ToList();
         await StoreAsync(host.Api.Services.GetRequiredService<IFileStorage>(), FileCategories.ZoneLicenses, Pdf);
 
         Assert.Equal(1, await host.Api.Services.GetRequiredService<OrphanFileCleanupJob>().RunOnceAsync(DateTimeOffset.UtcNow.AddDays(2)));
 
-        Assert.Equal(2, referenced.Count);
+        Assert.Equal(3, referenced.Count);
         Assert.Equal(referenced, host.StoredKeys(FileCategories.RaftPhotos).Concat(host.StoredKeys(FileCategories.ZoneLicenses)).Order());
     }
 

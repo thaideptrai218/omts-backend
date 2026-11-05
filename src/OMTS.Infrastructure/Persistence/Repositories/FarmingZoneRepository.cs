@@ -49,7 +49,8 @@ internal sealed class FarmingZoneRepository(OmtsDbContext db) : IFarmingZoneRepo
     public async Task<IReadOnlyList<FarmingZone>> ListForMapAsync(bool includeDiscontinued, PermittedZones permitted, CancellationToken cancellationToken) =>
         await Permitted(db.FarmingZones.AsNoTracking(), permitted)
             .Where(z => includeDiscontinued || z.StatusId == StatusIds.Usage.InUse)
-            .Include(z => z.Rafts.Where(r => r.StatusId == StatusIds.Usage.InUse))
+            // The map pin of a raft is optional (FARM-04.0): a raft without one has nothing to show on the map.
+            .Include(z => z.Rafts.Where(r => r.StatusId == StatusIds.Usage.InUse && r.Latitude != null && r.Longitude != null))
             .OrderBy(z => z.Code)
             .ToListAsync(cancellationToken);
 
@@ -58,6 +59,12 @@ internal sealed class FarmingZoneRepository(OmtsDbContext db) : IFarmingZoneRepo
             .Where(z => includeDiscontinued || z.StatusId == StatusIds.Usage.InUse)
             .OrderBy(z => z.Code)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<string>> CodesStartingWithAsync(string prefix, CancellationToken cancellationToken)
+    {
+        var upper = prefix.ToUpperInvariant();
+        return await db.FarmingZones.AsNoTracking().Where(z => z.Code.ToUpper().StartsWith(upper)).Select(z => z.Code).ToListAsync(cancellationToken);
+    }
 
     public async Task<IReadOnlyList<string>> InUseRaftCodesAsync(Guid zoneId, CancellationToken cancellationToken) =>
         await db.Rafts.Where(r => r.ZoneId == zoneId && r.StatusId == StatusIds.Usage.InUse)

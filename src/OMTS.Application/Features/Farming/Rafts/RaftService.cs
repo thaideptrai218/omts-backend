@@ -1,69 +1,32 @@
-using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
-using OMTS.Application.Common.Interfaces.Storage;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
-using OMTS.Application.Features.Employees;
-using OMTS.Application.Features.Farming.Zones;
-using OMTS.Application.Features.Files;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
 
 namespace OMTS.Application.Features.Farming.Rafts;
 
 /// <summary>
-/// FARM-04 – rafts and their versioned lane layout. Writes are Cooperative Owner only (API filter); reads
-/// are open to staff of the raft's zone. A layout change is blocked while a cultivation cycle is open.
+/// FARM-04 create and edit of rafts and their lanes, Cooperative Owner only (API filter). A Discontinued raft is read-only
+/// until it is resumed (GBR-01), and the number of lanes changes only while no cultivation cycle is open (BR-FARM-04).
 /// </summary>
 public sealed class RaftService(
     IRaftRepository rafts,
     IFarmingZoneRepository zones,
-    IRaftMaterialCostQuery materialCosts,
-    FarmingLookupAccess lookupAccess,
-    IFileStorage storage,
-    UploadedFileSaver fileSaver,
+    RaftViews views,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
-    StatusChangeService statusChanges,
     AuditLogService audit,
-    IUnitOfWork unitOfWork,
-    TimeProvider timeProvider)
+    IUnitOfWork unitOfWork)
 {
     private const string RecordType = nameof(Raft);
 
-    public async Task<Result<IReadOnlyList<RaftListItem>>> ListAsync(Guid zoneId, int? statusId, CancellationToken cancellationToken)
-    {
-        if ((await zones.GetByIdsAsync([zoneId], cancellationToken)).Count == 0)
-        {
-            return AppError.NotFound;
-        }
-
-        if (!await lookupAccess.CanSeeZoneAsync(zoneId, cancellationToken))
-        {
-            return AppError.Forbidden;
-        }
-
-        var found = await rafts.ListByZoneAsync(zoneId, statusId, cancellationToken);
-        return found.Select(r => new RaftListItem(
-            r.Id, r.ZoneId, r.Code, r.Latitude, r.Longitude, r.Size, r.Lanes.Count, r.StatusId, statusCatalog.DisplayNameOf(r.StatusId))).ToList();
-    }
-
-    public async Task<Result<RaftView>> GetAsync(Guid raftId, CancellationToken cancellationToken)
-    {
-        var raft = await rafts.GetForEditAsync(raftId, cancellationToken);
-        if (raft is null)
-        {
-            return AppError.NotFound;
-        }
-
-        return await lookupAccess.CanSeeZoneAsync(raft.ZoneId, cancellationToken) ? await ViewAsync(raft, cancellationToken) : AppError.Forbidden;
-    }
-
-    public async Task<Result<RaftView>> CreateAsync(Guid zoneId, SaveRaftRequest request, CancellationToken cancellationToken)
+    public async Task<Result<RaftSaved>> CreateAsync(Guid zoneId, SaveRaftRequest request, CancellationToken cancellationToken)
     {
         var zone = await zones.GetForEditAsync(zoneId, cancellationToken);
         if (zone is null)
@@ -77,10 +40,9 @@ public sealed class RaftService(
             return AppError.NotUsableChoice($"Farming zone {zone.Code}", statusCatalog.DisplayNameOf(zone.StatusId), "Zone");
         }
 
-        var check = new FieldCheck();
         // The zone must still be In Use when this save commits: a parallel discontinue then fails with MSG06.
         unitOfWork.MarkChanged(zone);
-        var values = Read(request, check, out var lanes, out var drawing);
+        var check = RaftValues.Read(request, out var values);
         if (!check.IsValid)
         {
             return AppError.InvalidFields(check.Invalid);
@@ -92,27 +54,47 @@ public sealed class RaftService(
         }
 
         var raft = new Raft { ZoneId = zone.Id, Zone = zone };
-        Apply(raft, values);
-        rafts.Add(raft);
-        foreach (var lane in lanes!)
+        values.ApplyTo(raft);
+        foreach (var number in Enumerable.Range(1, values.LaneCount))
         {
-            raft.Lanes.Add(new Lane { RaftId = raft.Id, LaneNumber = lane.LaneNumber, Length = lane.Length, MeasurementMarkers = RaftLayout.Markers(lane) });
+            raft.Lanes.Add(new Lane { RaftId = raft.Id, LaneNumber = number });
         }
 
-        raft.LayoutVersions.Add(new RaftLayoutVersion
-        {
-            RaftId = raft.Id, VersionNumber = 1, LaneCount = lanes.Count, LayoutMap = RaftLayout.Snapshot(lanes, drawing), ValidFrom = timeProvider.Today(),
-        });
+        rafts.Add(raft);
         audit.Record(new AuditEntry("Raft.Created", RecordType)
         {
-            RecordId = raft.Id, RecordCode = raft.Code, ZoneId = raft.ZoneId, After = new { Raft = Snapshot(raft), Lanes = lanes },
+            RecordId = raft.Id, RecordCode = raft.Code, ZoneId = raft.ZoneId, After = new { Raft = RaftValues.Snapshot(raft), values.LaneCount },
         });
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return await ViewAsync(raft, cancellationToken);
+        return await SaveNewAsync(raft, cancellationToken) ?? (Result<RaftSaved>)await views.SavedAsync(raft, "Raft", cancellationToken);
     }
 
-    /// <summary>Edits the raft; a different lane layout becomes a new layout version.</summary>
-    public async Task<Result<RaftView>> UpdateAsync(Guid raftId, SaveRaftRequest request, CancellationToken cancellationToken)
+    /// <summary>
+    /// Saves a new raft with its zone row, so a parallel create of the same code usually loses on the row version of the
+    /// zone before it reaches the unique index. That loser answers like the pre-check too (MSG-GEN-02 with the existing
+    /// raft, FARM-04.0.E1); with no such raft, the zone itself changed meanwhile (MSG06). Null when saved.
+    /// </summary>
+    private async Task<AppError?> SaveNewAsync(Raft raft, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await SaveAsync(raft, null, cancellationToken);
+        }
+        catch (ConcurrencyConflictException)
+        {
+            if (await rafts.FindByCodeAsync(raft.ZoneId, raft.Code, null, cancellationToken) is { } existing)
+            {
+                return Duplicate(existing.Id);
+            }
+
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// FARM-04.2: edits an In Use raft (MSG-GEN-09 otherwise). A new number of lanes is refused with MSG-GEN-06 while a cycle is
+    /// open and nothing is saved: the client keeps the entries and may save the other edits with the old number (E1).
+    /// </summary>
+    public async Task<Result<RaftSaved>> UpdateAsync(Guid raftId, SaveRaftRequest request, CancellationToken cancellationToken)
     {
         var raft = await rafts.GetForEditAsync(raftId, cancellationToken);
         if (raft is null)
@@ -120,8 +102,12 @@ public sealed class RaftService(
             return AppError.NotFound;
         }
 
-        var check = new FieldCheck();
-        var values = Read(request, check, out var lanes, out var drawing);
+        if (views.EditRefusal(raft) is { } refused)
+        {
+            return refused;
+        }
+
+        var check = RaftValues.Read(request, out var values);
         if (!check.IsValid)
         {
             return AppError.InvalidFields(check.Invalid);
@@ -137,23 +123,19 @@ public sealed class RaftService(
             return conflict;
         }
 
-        var layoutChange = RaftLayout.DiffersFrom(lanes!, raft.Lanes)
-            ? await ChangeLayoutAsync(raft, lanes!, drawing, cancellationToken)
-            : KeepLayout(raft, lanes!, drawing);
-        if (layoutChange.Error is { } blocked)
+        if (RaftLaneChange.InUseCount(raft.Lanes) != values.LaneCount)
         {
-            return blocked;
+            if (await rafts.GetOpenCycleAsync(raft.Id, cancellationToken) is { } cycle)
+            {
+                return RaftStatusService.OpenCycle(cycle);
+            }
+
+            ChangeLanes(raft, values.LaneCount);
         }
 
-        // Lanes and layout versions are rows of their own: the raft must still get a new row version (MSG06 for stale tabs).
-        if (layoutChange.Changed)
-        {
-            unitOfWork.MarkChanged(raft);
-        }
-
-        var before = Snapshot(raft);
-        Apply(raft, values);
-        var (changedBefore, changedAfter) = AuditDiff.Changed(before, Snapshot(raft));
+        var before = RaftValues.Snapshot(raft);
+        values.ApplyTo(raft);
+        var (changedBefore, changedAfter) = AuditDiff.Changed(before, RaftValues.Snapshot(raft));
         if (changedAfter is not null)
         {
             audit.Record(new AuditEntry("Raft.Updated", RecordType)
@@ -162,235 +144,70 @@ public sealed class RaftService(
             });
         }
 
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return await ViewAsync(raft, cancellationToken);
+        return await SaveAsync(raft, raft.Id, cancellationToken) ?? (Result<RaftSaved>)await views.SavedAsync(raft, "Raft", cancellationToken);
     }
 
-    /// <summary>
-    /// JPEG/PNG photo, at most 10 MB, stored unchanged; a storage failure changes nothing (MSG-GEN-03). The replaced
-    /// photo file is removed once the new one is saved.
-    /// </summary>
-    public async Task<Result<RaftView>> UploadPhotoAsync(Guid raftId, IncomingFile file, CancellationToken cancellationToken)
+    private void ChangeLanes(Raft raft, int laneCount)
     {
-        var raft = await rafts.GetForEditAsync(raftId, cancellationToken);
-        if (raft is null)
+        var before = RaftLaneChange.InUseCount(raft.Lanes);
+        var change = RaftLaneChange.To(laneCount, raft.Lanes);
+        foreach (var lane in change.Removed)
         {
-            return AppError.NotFound;
+            lane.StatusId = StatusIds.Lane.Removed;
         }
 
-        var validated = FileValidator.Validate([file], FileRules.Photos with { MaxFiles = 1 });
-        if (!validated.IsValid)
+        foreach (var lane in change.Restored)
         {
-            return AppError.Invalid("Photo");
+            lane.StatusId = StatusIds.Lane.InUse;
         }
 
-        var uploaded = await storage.UploadAsync(validated.Files[0], FileCategories.RaftPhotos, cancellationToken);
-        if (!uploaded.Succeeded)
+        foreach (var number in change.NewNumbers)
         {
-            return new AppError(ErrorKind.BadGateway, UserMessages.UploadFailed);
+            var lane = new Lane { RaftId = raft.Id, LaneNumber = number };
+            raft.Lanes.Add(lane);
+            rafts.AddLane(lane);
         }
 
-        var replaced = raft.PhotoUrl;
-        audit.Record(new AuditEntry("Raft.Updated", RecordType)
-        {
-            RecordId = raft.Id, RecordCode = raft.Code, ZoneId = raft.ZoneId, Before = new { raft.PhotoUrl }, After = new { PhotoUrl = uploaded.Key },
-        });
-        raft.PhotoUrl = uploaded.Key;
-        await fileSaver.SaveAsync(uploaded.Key, replaced, cancellationToken);
-        return await ViewAsync(raft, cancellationToken);
-    }
-
-    /// <summary>In Use → Discontinued, only without an open cultivation cycle.</summary>
-    public async Task<Result<RaftView>> DiscontinueAsync(Guid raftId, ChangeStatusRequest request, CancellationToken cancellationToken)
-    {
-        var raft = await rafts.GetForEditAsync(raftId, cancellationToken);
-        if (raft is null)
-        {
-            return AppError.NotFound;
-        }
-
-        if (raft.StatusId != StatusIds.Usage.InUse)
-        {
-            return WrongStatus(raft);
-        }
-
-        // FARM-04.3.E1: MSG-GEN-06 naming the open cycle (MSG61 before).
-        if (await rafts.GetOpenCycleAsync(raft.Id, cancellationToken) is { } openCycle)
-        {
-            return OpenCycle(openCycle, MessageCodes.Legacy.Msg61);
-        }
-
-        return await ChangeStatusAsync(raft, StatusIds.Usage.Discontinued, "Raft.Discontinued", request, cancellationToken);
-    }
-
-    /// <summary>Discontinued → In Use, only when the zone is In Use.</summary>
-    public async Task<Result<RaftView>> ReactivateAsync(Guid raftId, ChangeStatusRequest request, CancellationToken cancellationToken)
-    {
-        var raft = await rafts.GetForEditAsync(raftId, cancellationToken);
-        if (raft is null)
-        {
-            return AppError.NotFound;
-        }
-
-        if (raft.StatusId != StatusIds.Usage.Discontinued)
-        {
-            return WrongStatus(raft);
-        }
-
-        // As on create: the zone row is part of this save, so a parallel zone discontinue fails with MSG06.
-        unitOfWork.MarkChanged(raft.Zone);
-        return raft.Zone.StatusId == StatusIds.Usage.InUse
-            ? await ChangeStatusAsync(raft, StatusIds.Usage.InUse, "Raft.Reactivated", request, cancellationToken)
-            : statusChanges.WrongStatus($"Farming zone {raft.Zone.Code}", raft.Zone);
-    }
-
-    private async Task<LayoutOutcome> ChangeLayoutAsync(Raft raft, IReadOnlyList<LayoutLane> lanes, string? drawing, CancellationToken cancellationToken)
-    {
-        if (await rafts.GetOpenCycleAsync(raft.Id, cancellationToken) is { } cycle)
-        {
-            return new LayoutOutcome(OpenCycle(cycle), false);
-        }
-
-        var removed = raft.Lanes.Where(l => l.LaneNumber > lanes.Count).ToList();
-        var inUse = removed.Count == 0 ? [] : await rafts.LanesInUseAsync(removed.Select(l => l.Id).ToList(), cancellationToken);
-        if (inUse.Count > 0)
-        {
-            return new LayoutOutcome(AppError.Conflict(
-                UserMessages.StillInUse(inUse.Count, string.Join(", ", inUse.Select(n => $"lane {n}"))),
-                new Dictionary<string, object?> { ["laneNumbers"] = inUse }), false);
-        }
-
-        foreach (var lane in removed)
-        {
-            raft.Lanes.Remove(lane);
-            rafts.RemoveLane(lane);
-        }
-
-        foreach (var lane in lanes)
-        {
-            if (raft.Lanes.FirstOrDefault(l => l.LaneNumber == lane.LaneNumber) is { } existing)
-            {
-                (existing.Length, existing.MeasurementMarkers) = (lane.Length, RaftLayout.Markers(lane));
-            }
-            else
-            {
-                var added = new Lane { RaftId = raft.Id, LaneNumber = lane.LaneNumber, Length = lane.Length, MeasurementMarkers = RaftLayout.Markers(lane) };
-                raft.Lanes.Add(added);
-                rafts.AddLane(added);
-            }
-        }
-
-        var today = timeProvider.Today();
-        var current = raft.LayoutVersions.MaxBy(v => v.VersionNumber);
-        if (current is not null)
-        {
-            current.ValidTo = today;
-        }
-
-        var version = new RaftLayoutVersion
-        {
-            RaftId = raft.Id, VersionNumber = (current?.VersionNumber ?? 0) + 1, LaneCount = lanes.Count,
-            LayoutMap = RaftLayout.Snapshot(lanes, drawing), ValidFrom = today,
-        };
-        raft.LayoutVersions.Add(version);
-        rafts.AddLayoutVersion(version);
-        audit.Record(new AuditEntry("Raft.LayoutChanged", RecordType)
+        // Lanes are rows of their own: the raft must still get a new row version (MSG06 for stale tabs, or a cycle started meanwhile).
+        unitOfWork.MarkChanged(raft);
+        audit.Record(new AuditEntry("Raft.LanesChanged", RecordType)
         {
             RecordId = raft.Id,
             RecordCode = raft.Code,
             ZoneId = raft.ZoneId,
-            Before = new { Version = current?.VersionNumber, LaneCount = current?.LaneCount },
-            After = new { Version = version.VersionNumber, version.LaneCount, Lanes = lanes },
+            Before = new { LaneCount = before },
+            After = new
+            {
+                LaneCount = laneCount,
+                RemovedLanes = change.Removed.Select(l => l.LaneNumber).ToList(),
+                RestoredLanes = change.Restored.Select(l => l.LaneNumber).ToList(),
+                NewLanes = change.NewNumbers,
+            },
         });
-        return new LayoutOutcome(null, Changed: true);
     }
 
-    /// <summary>Same lanes: only a changed drawing is written into the current version (audited, no new version).</summary>
-    private LayoutOutcome KeepLayout(Raft raft, IReadOnlyList<LayoutLane> lanes, string? drawing)
+    /// <summary>
+    /// Saves the raft. A parallel save of the same code stopped by the unique index answers what the pre-check answers
+    /// (MSG-GEN-02 with the existing raft, FARM-04.0.E1); with no such raft, the index was the lane number taken by a
+    /// parallel lane change of this raft (MSG06). Null when saved.
+    /// </summary>
+    private async Task<AppError?> SaveAsync(Raft raft, Guid? exceptRaftId, CancellationToken cancellationToken)
     {
-        var current = raft.LayoutVersions.MaxBy(v => v.VersionNumber);
-        if (current is null || RaftLayout.SameDrawing(current, drawing))
+        try
         {
-            return new LayoutOutcome(null, Changed: false);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return null;
         }
-
-        current.LayoutMap = RaftLayout.Snapshot(lanes, drawing);
-        audit.Record(new AuditEntry("Raft.LayoutDrawingChanged", RecordType)
+        catch (DuplicateRecordException exception)
         {
-            RecordId = raft.Id, RecordCode = raft.Code, ZoneId = raft.ZoneId, After = new { Version = current.VersionNumber, HasDrawing = drawing is not null },
-        });
-        return new LayoutOutcome(null, Changed: true);
-    }
-
-    private async Task<Result<RaftView>> ChangeStatusAsync(Raft raft, int newStatusId, string action, ChangeStatusRequest request, CancellationToken cancellationToken)
-    {
-        var entry = new AuditEntry(action, RecordType) { RecordId = raft.Id, RecordCode = raft.Code, ZoneId = raft.ZoneId };
-        return await statusChanges.ChangeAsync(raft, newStatusId, entry, request.Reason, request.RowVersion, cancellationToken) is { } error
-            ? error
-            : await ViewAsync(raft, cancellationToken);
-    }
-
-    private AppError WrongStatus(Raft raft) => statusChanges.WrongStatus($"Raft {raft.Code}", raft);
-
-    /// <summary>MSG-GEN-06 naming the open cultivation cycle, with its <c>cycleId</c>.</summary>
-    private static AppError OpenCycle(Domain.Entities.Cultivation.CultivationCycle cycle, string legacyCode = MessageCodes.Legacy.Msg11)
-    {
-        var name = $"cultivation cycle opened {BusinessClock.ToBusinessDate(cycle.OpenedAt):dd/MM/yyyy}";
-        return AppError.Conflict(UserMessages.StillInUse(1, name) with { LegacyCode = legacyCode }, new Dictionary<string, object?> { ["cycleId"] = cycle.Id });
+            return await rafts.FindByCodeAsync(raft.ZoneId, raft.Code, exceptRaftId, cancellationToken) is { } existing
+                ? Duplicate(existing.Id)
+                : throw new ConcurrencyConflictException(exception);
+        }
     }
 
     private static AppError Duplicate(Guid existingId) => new(
         ErrorKind.Conflict,
         UserMessages.AlreadyExists("Raft"),
         new Dictionary<string, object?> { ["existingId"] = existingId, ["existingRaftId"] = existingId });
-
-    private static RaftValues Read(SaveRaftRequest request, FieldCheck check, out IReadOnlyList<LayoutLane>? lanes, out string? drawing)
-    {
-        var code = check.Required(request.Code, "Code", 50);
-        check.Coordinates(request.Latitude, request.Longitude, required: true);
-        var location = check.Optional(request.Location, "Location", 500);
-        var size = check.Required(request.Size, "Size", 100);
-        var notes = check.Optional(request.ConditionNotes, "Condition notes", 2000);
-        lanes = RaftLayout.Read(request.Lanes, check);
-        drawing = RaftLayout.ReadDrawing(request.LayoutDrawing, check);
-        return new RaftValues(code, request.Latitude, request.Longitude, location, size, notes);
-    }
-
-    private static void Apply(Raft raft, RaftValues values)
-    {
-        raft.Code = values.Code;
-        raft.Latitude = values.Latitude;
-        raft.Longitude = values.Longitude;
-        raft.Location = values.Location;
-        raft.Size = values.Size;
-        raft.ConditionNotes = values.ConditionNotes;
-    }
-
-    private static object Snapshot(Raft r) => new { r.Code, r.Latitude, r.Longitude, r.Location, r.Size, r.ConditionNotes };
-
-    private async Task<RaftView> ViewAsync(Raft raft, CancellationToken cancellationToken)
-    {
-        var current = raft.LayoutVersions.MaxBy(v => v.VersionNumber);
-        var costs = await materialCosts.GetTotalsAsync([raft.Id], cancellationToken);
-        var photoUrl = raft.PhotoUrl is null ? null : await storage.GetReadUrlAsync(raft.PhotoUrl, cancellationToken: cancellationToken);
-        return new RaftView(
-            raft.Id,
-            new ZoneRef(raft.Zone.Id, raft.Zone.Code, raft.Zone.Name),
-            raft.Code, raft.Latitude, raft.Longitude, raft.Location, raft.Size, raft.ConditionNotes, photoUrl,
-            raft.StatusId, statusCatalog.DisplayNameOf(raft.StatusId),
-            current?.VersionNumber ?? 0,
-            raft.Lanes.OrderBy(l => l.LaneNumber).Select(l =>
-            {
-                var (markerA, markerB) = RaftLayout.ReadMarkers(l.MeasurementMarkers);
-                return new LaneView(l.Id, l.LaneNumber, l.Length, markerA, markerB);
-            }).ToList(),
-            RaftLayout.DrawingOf(current),
-            raft.LayoutVersions.OrderBy(v => v.VersionNumber).Select(v => new LayoutVersionView(v.VersionNumber, v.LaneCount, v.ValidFrom, v.ValidTo)).ToList(),
-            costs?.GetValueOrDefault(raft.Id),
-            RowVersionGuard.Encode(raft.RowVersion));
-    }
-
-    private sealed record RaftValues(string Code, decimal? Latitude, decimal? Longitude, string? Location, string Size, string? ConditionNotes);
-
-    private sealed record LayoutOutcome(AppError? Error, bool Changed);
 }

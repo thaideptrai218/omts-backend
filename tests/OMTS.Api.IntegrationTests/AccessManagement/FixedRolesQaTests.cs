@@ -194,42 +194,45 @@ public class FixedRolesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         Assert.Equal("MSG-ACCOUNT-07", await refused.ErrorCodeAsync());
     }
 
-    // AC-01 on live endpoints: Zone A – Zone Manager and Zone C – Accountant. Purchase receipts have a zone in this
-    // version: Zone Manager rights in A, view only in C (PURCHASE-03 R), nothing in B. Suppliers and supplier payments have
-    // no zone and follow each role (BR-FARM-08).
+    // AC-01 on live endpoints: Zone A – Zone Manager and Zone C – Accountant. Purchase receipts have no zone (BR-FARM-08):
+    // the Zone Manager role reads, writes and exports every receipt, but names rafts of zone A only; suppliers and supplier
+    // payments have no zone either and follow each role.
     [Fact]
-    public async Task Zone_manager_and_accountant_pairs_keep_receipts_to_their_own_zones_and_actions()
+    public async Task Zone_manager_and_accountant_pairs_reach_every_receipt_by_role_and_rafts_of_their_own_zones_only()
     {
         var owner = await factory.PurchasingOwnerAsync();
         var (a, b, c) = (await factory.WorldAsync(owner), await factory.WorldAsync(owner), await factory.WorldAsync(owner));
-        var receiptA = (await a.CompletedAsync(0, 0, new LineBody(a.Seed, 1, 1_000))).Id();
-        var receiptB = (await b.CompletedAsync(0, 0, new LineBody(b.Seed, 1, 1_000))).Id();
-        var receiptC = (await c.CompletedAsync(0, 0, new LineBody(c.Seed, 1, 1_000))).Id();
+        var receiptA = (await a.CompletedAsync(new LineBody(a.Seed, 1, 1_000))).Id();
+        var receiptB = (await b.CompletedAsync(new LineBody(b.Seed, 1, 1_000))).Id();
+        var receiptC = (await c.CompletedAsync(new LineBody(c.Seed, 1, 1_000))).Id();
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
         await factory.GrantAsync(staff, StaffRole.ZoneManager, a.Zone);
         await factory.GrantAsync(staff, StaffRole.Accountant, c.Zone);
         var client = await factory.LoginAsync(staff.Username);
 
-        await (await client.GetAsync($"/api/purchase-receipts/{receiptA}")).ReadAsync(HttpStatusCode.OK);
-        await (await client.GetAsync($"/api/purchase-receipts/{receiptC}")).ReadAsync(HttpStatusCode.OK);
-        await (await client.GetAsync($"/api/purchase-receipts/{receiptB}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        await (await client.GetAsync($"/api/purchase-receipts?zoneId={b.Zone.Id}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        foreach (var receipt in new[] { receiptA, receiptB, receiptC })
+        {
+            await (await client.GetAsync($"/api/purchase-receipts/{receipt}")).ReadAsync(HttpStatusCode.OK);
+        }
+
         var listed = (await (await client.GetAsync("/api/purchase-receipts?pageSize=100")).ReadAsync(HttpStatusCode.OK))
             .GetProperty("page").GetProperty("items").EnumerateArray().Select(r => r.Id()).ToList();
-        Assert.Contains(receiptA, listed);
-        Assert.Contains(receiptC, listed);
-        Assert.DoesNotContain(receiptB, listed);
+        Assert.Superset(new HashSet<Guid> { receiptA, receiptB, receiptC }, listed.ToHashSet());
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/purchase-receipts/export")).StatusCode);
 
-        // Writes and export only where the Zone Manager pair is.
-        await (await client.PostReceiptAsync(c.Body(new LineBody(c.Other, 1, 1_000)))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        await (await client.CancelAsync(receiptC, "Wrong supplier", false)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        await (await client.GetAsync($"/api/purchase-receipts/export?zoneId={c.Zone.Id}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/purchase-receipts/export?zoneId={a.Zone.Id}")).StatusCode);
-        await (await client.PostReceiptAsync(a.Body(new LineBody(a.Other, 1, 1_000)))).ReadAsync(HttpStatusCode.Created);
+        // The rafts offered on a line are those of the Zone Manager pair's zone (BR-PURCHASE-01): A, never B or C.
+        await (await client.PostReceiptAsync(b.Body(new LineBody(b.Material, 1, 1_000, RaftId: a.Raft.Id)))).ReadAsync(HttpStatusCode.Created);
+        foreach (var raft in new[] { b.Raft, c.Raft })
+        {
+            Assert.Equal("Line 1 raft", await (await client.PostReceiptAsync(b.Body(new LineBody(b.Material, 1, 1_000, RaftId: raft.Id)))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        }
+
+        // Cancelling stays with the person who recorded the receipt or the Owner (BR-PURCHASE-09).
+        await (await client.CancelAsync(receiptC, "Wrong supplier")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
 
         // No zone: suppliers by the Zone Manager role, supplier payments and debts by the Accountant role, in every zone.
-        await (await client.GetAsync($"/api/suppliers/{b.SupplierId}/debt")).ReadAsync(HttpStatusCode.OK);
-        await (await client.PostPaymentAsync(new PaymentBody { SupplierId = b.SupplierId, ReceiptId = receiptB, Amount = 1_000 })).ReadAsync(HttpStatusCode.Created);
+        await (await client.GetAsync($"/api/supplier-debts/{b.SupplierId}")).ReadAsync(HttpStatusCode.OK);
+        await (await client.PostPaymentAsync(new PaymentBody { SupplierId = b.SupplierId, Amount = 1_000, ConfirmAdvance = true })).ReadAsync(HttpStatusCode.Created);
         await client.CreateSupplierAsync();
     }
 

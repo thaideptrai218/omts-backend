@@ -2,27 +2,28 @@ using OMTS.Domain.Entities.Farming;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
-/// <summary>A license with the effective dates of the documents that replace it (FARM-03 Superseded rule).</summary>
-public sealed record LicenseWithReplacements(ZoneComplianceDocument Document, IReadOnlyList<DateOnly?> ReplacementEffectiveDates, bool IsReplaced);
+/// <summary>A license with the time the license replacing it was recorded, if any (BR-FARM-06 Replaced rule).</summary>
+public sealed record LicenseWithReplacement(ZoneComplianceDocument Document, DateTimeOffset? ReplacedAt)
+{
+    public bool IsReplaced => ReplacedAt is not null;
+}
 
 public interface IZoneLicenseRepository
 {
-    /// <summary>License with its zone scopes (and zones), tracked for editing.</summary>
+    /// <summary>License with its zone, tracked for editing.</summary>
     Task<ZoneComplianceDocument?> GetForEditAsync(Guid documentId, CancellationToken cancellationToken);
 
-    /// <summary>The document that replaces this one, if any.</summary>
+    /// <summary>The license that replaces this one, if any.</summary>
     Task<ZoneComplianceDocument?> FindReplacementAsync(Guid documentId, CancellationToken cancellationToken);
 
-    /// <summary>Every license covering any of the zones, with scopes and replacements, untracked.</summary>
-    Task<IReadOnlyList<LicenseWithReplacements>> ListCoveringAsync(IReadOnlyCollection<Guid> zoneIds, CancellationToken cancellationToken);
+    /// <summary>Every license of the zones, with its zone and replacement time, untracked.</summary>
+    Task<IReadOnlyList<LicenseWithReplacement>> ListForZonesAsync(IReadOnlyCollection<Guid> zoneIds, CancellationToken cancellationToken);
 
-    /// <summary>Licenses with an expiry date that have not been replaced, with zone scopes (reminder job), tracked.</summary>
-    /// <summary>Ids of unreplaced licenses with a reminder due on <paramref name="today"/> (expiring within the window, or expired, and not yet told).</summary>
+    /// <summary>
+    /// Ids of the licenses that may have a reminder due on <paramref name="today"/>: not replaced, of an In Use zone, expiring
+    /// within <paramref name="expiringSoonDays"/> days or expired, and not yet told. The caller re-checks each one.
+    /// </summary>
     Task<IReadOnlyList<Guid>> ListReminderCandidateIdsAsync(DateOnly today, int expiringSoonDays, CancellationToken cancellationToken);
 
     void Add(ZoneComplianceDocument document);
-
-    void AddScope(DocumentZoneScope scope);
-
-    void RemoveScope(DocumentZoneScope scope);
 }

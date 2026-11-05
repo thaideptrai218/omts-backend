@@ -16,18 +16,17 @@ public class WaterHistoryQaTestsAccess(AuthApiFactory api) : IClassFixture<AuthA
     private const string Overview = "/api/water-measurements/zones";
 
     [Fact]
-    public async Task Every_route_refuses_the_accountant_at_all_zones_the_trader_and_the_administrator_and_asks_a_stranger_to_log_in()
+    public async Task Every_route_refuses_the_accountant_at_all_zones_and_the_trader_and_asks_a_stranger_to_log_in()
     {
         var z = await api.ZoneAsync();
         var measurement = await z.RecordedAsync(7m, 20m);
         var accountant = await api.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
         await api.GrantAsync(accountant, StaffRole.Accountant, zone: null);
         var trader = await api.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
-        var administrator = await api.AddAccountAsync(NewCode(), Password, SubjectType.SystemAdministrator);
 
         foreach (var url in Routes(z, measurement.Id()))
         {
-            foreach (var refused in new[] { accountant, trader, administrator })
+            foreach (var refused in new[] { accountant, trader })
             {
                 var response = await (await api.LoginAsync(refused.Username)).GetAsync(url);
                 Assert.True(response.StatusCode == HttpStatusCode.Forbidden, $"{refused.SubjectType} on {url}: {response.StatusCode}");

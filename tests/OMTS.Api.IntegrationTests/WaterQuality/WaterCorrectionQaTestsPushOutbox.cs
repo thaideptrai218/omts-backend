@@ -34,7 +34,7 @@ public class WaterCorrectionQaTestsPushOutbox
     }
 
     [SqlServerFact]
-    public async Task A_conflict_drops_the_push_and_after_a_discard_only_the_new_one_goes_out()
+    public async Task A_conflict_sends_no_push_and_after_a_discard_only_the_new_one_goes_out()
     {
         await using var test = await Scoped.StartAsync();
         await test.LoseNextSaveAsync();
@@ -73,11 +73,11 @@ public class WaterCorrectionQaTestsPushOutbox
         Assert.Equal(["last", "saved"], test.Inbox().Order(StringComparer.Ordinal));
     }
 
-    // F-05 (latent): IUnitOfWork.ReloadAsync is documented for "retry after a conflict" and AuthService, CurrentPasswordProof and
-    // VerificationService retry that way. A module that notifies and retries so keeps its Notification row (it stays Added) but
-    // the conflict now dropped its push: BR-ACCOUNT-11 "always pushed". No caller does this today.
-    [SqlServerFact(Skip = "Accepted: no caller retries by reload; a caller that does must use DiscardChanges and notify again.")]
-    public async Task F05_a_notification_saved_by_a_reload_retry_is_still_pushed()
+    // IUnitOfWork.ReloadAsync is documented for "retry after a conflict" and AuthService, CurrentPasswordProof and
+    // VerificationService retry that way. A module that notifies and retries so keeps its Notification row (it stays Added),
+    // so its push must stay too: BR-ACCOUNT-11 "always pushed".
+    [SqlServerFact]
+    public async Task A_notification_saved_by_a_reload_retry_is_still_pushed()
     {
         await using var test = await Scoped.StartAsync();
         var zone = await test.LoseNextSaveAsync();
