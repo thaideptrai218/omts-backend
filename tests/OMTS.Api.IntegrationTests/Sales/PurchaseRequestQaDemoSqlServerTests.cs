@@ -16,12 +16,12 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 namespace OMTS.Api.IntegrationTests.Sales;
 
 /// <summary>
-/// QA of OMTS-223: DemoPurchaseRequestStep answers through the real services, so the seed hands two SMS to the configured sender. What that does with
-/// Fake, None, a refusing sender and one that would be real.
+/// QA of OMTS-223: DemoPurchaseRequestStep answers through the real services, so the seed hands two SMS to the Fake or None. What that does with
+/// those, and that any other sender gets nothing.
 /// </summary>
 public class PurchaseRequestQaDemoSqlServerTests
 {
-    private sealed class RecordingSender(Func<DeliveryResult> result) : ITraderMessageSender
+    private sealed class RecordingSender(Func<DeliveryResult> result) : ITraderMessageSender, ISmsSender
     {
         public List<(string Phone, string Text)> Sent { get; } = [];
 
@@ -147,7 +147,9 @@ public class PurchaseRequestQaDemoSqlServerTests
         var outcome = await SeedAsync(hooked);
 
         Assert.True(outcome.ExitCode == DeploymentBootstrapper.Success, string.Join(" | ", outcome.Messages));
-        Assert.All(await SendingsAsync(hooked), r => Assert.Equal(StatusIds.MessageDelivery.NotSent, r.DeliveryStatusId));
+        // L4: not the Fake or None, so it is never asked. Its refusal cannot reach the seed, and no row says Not sent.
+        Assert.Empty(sender.Sent);
+        Assert.Empty(await SendingsAsync(hooked));
     }
 
     // Pinned, an observation: the first request is the mark that the step is done, so a seed that dies after it is not completed by a rerun.
@@ -173,7 +175,29 @@ public class PurchaseRequestQaDemoSqlServerTests
             Interlocked.Increment(ref _calls) >= 2 ? throw new InvalidOperationException("The database went away.") : Task.FromResult<IReadOnlyList<Guid>>([]);
     }
 
-    // The step's own promise: "the demo seed runs only in Development, where that is the fake". Nothing checks the second half: the sender is whatever Sms:Provider says.
+    // L4 by the way a real provider will come: a new ISmsSender under Sms:Provider. The requests are seeded unanswered, the output says so once, and a rerun adds nothing.
+    [SqlServerFact]
+    public async Task With_a_real_sms_provider_the_requests_stay_unanswered_and_the_seed_says_so()
+    {
+        await using var host = Start();
+        var sms = new RecordingSender(() => DeliveryResult.Sent("real-1"));
+        await using var hooked = host.Api.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton<ISmsSender>(sms)));
+
+        var outcome = await SeedAsync(hooked);
+
+        Assert.True(outcome.ExitCode == DeploymentBootstrapper.Success, string.Join(" | ", outcome.Messages));
+        Assert.Empty(sms.Sent);
+        Assert.Empty(await SendingsAsync(hooked));
+        Assert.Equal([3201, 3201, 3201, 3204], await hooked.DbAsync(db => db.PurchaseRequests.AsNoTracking().Select(r => r.StatusId).OrderBy(s => s).ToListAsync()));
+        Assert.Single(outcome.Messages, m => m.Contains("neither Fake nor None"));
+
+        var rerun = await SeedAsync(hooked);
+
+        Assert.DoesNotContain(rerun.Messages, m => m.Contains("neither Fake nor None"));
+        Assert.Equal(4, await hooked.DbAsync(db => db.PurchaseRequests.CountAsync()));
+    }
+
+    // The step's own promise, now kept: nothing but the Fake or None is handed a message, whatever Sms:Provider says.
     [SqlServerFact]
     public async Task L4_the_demo_seed_hands_no_message_to_a_sender_that_is_not_the_fake()
     {

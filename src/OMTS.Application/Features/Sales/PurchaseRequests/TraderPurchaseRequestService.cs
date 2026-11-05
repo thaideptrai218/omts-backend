@@ -146,7 +146,7 @@ public sealed class TraderPurchaseRequestService(
             Reason = reason,
         });
         await notifications.CancelledAsync(request, cancellationToken);
-        if (await PurchaseRequestRules.SaveAsync(unitOfWork, request, PurchaseRequestRules.AllowsCancel, statusCatalog.DisplayNameOf, cancellationToken) is { } lost)
+        if (await PurchaseRequestRules.SaveAsync(unitOfWork, request, PurchaseRequestRules.AllowsCancel, r => Task.FromResult(statusCatalog.DisplayNameOf(r.StatusId)), cancellationToken) is { } lost)
         {
             return lost;
         }

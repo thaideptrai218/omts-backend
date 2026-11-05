@@ -1,3 +1,4 @@
+using System.Globalization;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
@@ -74,5 +75,20 @@ public sealed class PurchaseRequestNotifications(
 
     private static RelatedRecord Record(PurchaseRequest request) => new(RelatedRecordTypes.PurchaseRequest, request.Id);
 
-    private static string? ForSms(string? note) => note is { Length: > MaxNoteInSms } ? note[..MaxNoteInSms].TrimEnd() + "..." : note;
+    // Cut between whole characters as the reader sees them: never half an emoji, never a letter without its mark. So it can be under 80.
+    private static string? ForSms(string? note)
+    {
+        if (note is not { Length: > MaxNoteInSms })
+        {
+            return note;
+        }
+
+        var end = 0;
+        for (var next = 0; next <= MaxNoteInSms; next += StringInfo.GetNextTextElementLength(note.AsSpan(next)))
+        {
+            end = next;
+        }
+
+        return note[..end].TrimEnd() + "...";
+    }
 }

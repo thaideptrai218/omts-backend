@@ -50,6 +50,37 @@ public class PurchaseRequestRulesSqlServerTests
         Assert.Empty((await host.Api.NotificationRowsAsync(request.Id())).OfType(NotificationTypes.PurchaseRequestCancelled));
     }
 
+    // SALE-03.0.E1 for the loser of a race too: another answer and an invoice taking it in full commit after this answer read the row.
+    [SqlServerFact]
+    public async Task An_answer_that_loses_to_a_request_now_fulfilled_shows_fulfilled_as_the_screen_does()
+    {
+        await using var host = await FarmingHost.StartAsync();
+        var (owner, trader, productId) = await PurchaseRequestSqlServerTests.WorldAsync(host);
+        var request = await trader.Client.PlaceAsync(productId);
+        var fulfilment = new StubFulfilment();
+        var beforeTheSave = new RunsBeforeTheSave(async () =>
+        {
+            (await owner.AcceptAsync(request)).EnsureSuccessStatusCode();
+            fulfilment.Fulfilled.Add(request.Id());
+        });
+        await using var hooked = host.Api.WithWebHostBuilder(b => b.ConfigureTestServices(s =>
+        {
+            s.AddSingleton<IPurchaseRequestFulfilment>(fulfilment);
+            s.AddSingleton<INotificationDispatcher>(beforeTheSave);
+        }));
+        var client = hooked.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await LoginTokensAsync(client, host.Owner.Account.Username)).GetProperty("accessToken").GetString());
+
+        var refused = await (await client.DeclineAsync(request)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
+
+        Assert.Equal("Purchase request is Fulfilled and cannot be used for this action.", refused.GetProperty("detail").GetString());
+    }
+
+    private sealed class RunsBeforeTheSave(Func<Task> action) : INotificationDispatcher
+    {
+        public Task NotifyAsync(IReadOnlyCollection<Guid> recipientAccountIds, NotificationContent content, CancellationToken cancellationToken) => action();
+    }
+
     // An Accepted request may still be cancelled, so the loser is told to read again, not refused, and the trader sees the response first.
     [SqlServerFact]
     public async Task A_cancel_that_loses_to_an_accept_in_the_database_answers_msg06_and_can_be_repeated_after_reading()

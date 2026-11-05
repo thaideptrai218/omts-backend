@@ -80,6 +80,7 @@ license documents (valid, expiring within 30 days, expired), about 10 rafts with
 5 suppliers, 15 farming input items and 20 purchase receipts of the last 3 months with payments, discounts and a return,
 4 products (one Discontinued), 7 customer profiles (2 linked to the trader accounts, 2 the same buyer ready to merge) and
 4 purchase requests of `thuonglai1`, one in each state (Awaiting response, Accepted for fewer kg with pay later, Declined, Cancelled).
+An answer sends an SMS, so with an SMS sender other than Fake or None the requests stay unanswered and the seed output says so.
 `DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰) and one water measurement a day for the
 30 days before the seed day: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
 26.0 ‰) and one voided reading. The mistyped 2.6 ‰ alerted before its correction, so the inboxes hold four sets of water

@@ -23,7 +23,9 @@ public sealed class TraderMessageService(
     ILogger<TraderMessageService> logger)
 {
     private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(10);
-    private const int MaxErrorCodeLength = 100;
+
+    // Column size of both provider fields of Notification: what a service answers must not fail the second save and leave the row Sending.
+    private const int MaxProviderTextLength = 100;
     private const string SendFailed = "SEND_FAILED";
 
     /// <summary>The row to pass to <see cref="DeliverAsync"/>. <paramref name="recipientAccountId"/> is the account the profile is linked to.</summary>
@@ -57,8 +59,8 @@ public sealed class TraderMessageService(
         var result = await SendAsync(row);
         row.DeliveryStatusId = result.Succeeded ? StatusIds.MessageDelivery.Sent : StatusIds.MessageDelivery.NotSent;
         row.DeliveryStatusAt = timeProvider.GetUtcNow();
-        row.ProviderMessageId = result.MessageId;
-        row.ProviderErrorCode = result.ErrorCode is { Length: > MaxErrorCodeLength } code ? code[..MaxErrorCodeLength] : result.ErrorCode;
+        row.ProviderMessageId = FitColumn(result.MessageId);
+        row.ProviderErrorCode = FitColumn(result.ErrorCode);
         if (!result.Succeeded)
         {
             // The type and the error code only: never the number or the text.
@@ -74,6 +76,8 @@ public sealed class TraderMessageService(
             logger.LogError("The delivery status of message {Type} could not be saved: {Exception}", row.Type, exception.GetType().Name);
         }
     }
+
+    private static string? FitColumn(string? text) => text is { Length: > MaxProviderTextLength } ? text[..MaxProviderTextLength] : text;
 
     // On its own task and with a limit it enforces itself: a provider that hangs or ignores its cancellation holds the answer no longer.
     private async Task<DeliveryResult> SendAsync(Notification row)

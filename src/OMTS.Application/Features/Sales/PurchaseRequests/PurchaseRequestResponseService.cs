@@ -19,6 +19,7 @@ public sealed class PurchaseRequestResponseService(
     IPurchaseRequestRepository requests,
     PurchaseRequestNotifications notifications,
     PurchaseRequestViews views,
+    IPurchaseRequestFulfilment fulfilment,
     TraderMessageService traderMessages,
     ICurrentUser currentUser,
     IStatusCatalog statusCatalog,
@@ -98,11 +99,17 @@ public sealed class PurchaseRequestResponseService(
 
         if (!PurchaseRequestRules.AllowsResponse(request.StatusId))
         {
-            return (null, PurchaseRequestRules.WrongStatus(statusCatalog.DisplayNameOf(request.StatusId)));
+            return (null, PurchaseRequestRules.WrongStatus(await StatusNameAsync(request, cancellationToken)));
         }
 
         return (request, await rowVersions.CheckAsync(request, rowVersion, cancellationToken));
     }
+
+    // SALE-03.0.E1 "shows its status", as the screen reads it: Fulfilled is worked out by the hook and has no status id.
+    private async Task<string> StatusNameAsync(PurchaseRequest request, CancellationToken cancellationToken) =>
+        request.StatusId == StatusIds.PurchaseRequest.Accepted && (await fulfilment.FulfilledAmongAsync([request.Id], cancellationToken)).Contains(request.Id)
+            ? PurchaseRequestRules.FulfilledStatus
+            : statusCatalog.DisplayNameOf(request.StatusId);
 
     private async Task<Result<PurchaseRequestView>> SaveResponseAsync(PurchaseRequest request, int newStatusId, string? note, string auditAction, CancellationToken cancellationToken)
     {
@@ -118,7 +125,7 @@ public sealed class PurchaseRequestResponseService(
             After = new { Status = statusCatalog.CodeOf(newStatusId), request.AcceptedKg, request.AgreedPickupDate, request.PayLaterAgreed, Note = note },
         });
         var sending = await notifications.ResponseAsync(request, cancellationToken);
-        if (await PurchaseRequestRules.SaveAsync(unitOfWork, request, PurchaseRequestRules.AllowsResponse, statusCatalog.DisplayNameOf, cancellationToken) is { } lost)
+        if (await PurchaseRequestRules.SaveAsync(unitOfWork, request, PurchaseRequestRules.AllowsResponse, r => StatusNameAsync(r, cancellationToken), cancellationToken) is { } lost)
         {
             return lost;
         }

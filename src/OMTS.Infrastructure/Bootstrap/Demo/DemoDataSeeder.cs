@@ -55,6 +55,7 @@ internal static class DemoDataSeeder
             messages.Add(Describe(step.Name, await step.RunAsync(context, cancellationToken)));
         }
 
+        messages.AddRange(context.Notes);
         return messages;
     }
 

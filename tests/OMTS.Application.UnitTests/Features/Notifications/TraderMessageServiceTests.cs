@@ -52,6 +52,17 @@ public class TraderMessageServiceTests
     }
 
     [Fact]
+    public async Task An_accepted_message_with_a_long_id_stays_sent_and_the_id_fits_the_column()
+    {
+        var (service, stubs) = Build(_ => Task.FromResult(DeliveryResult.Sent(new string('m', 300))));
+        var row = service.Queue(Guid.NewGuid(), "0900000099", Content);
+
+        await service.DeliverAsync(row);
+
+        Assert.Equal((StatusIds.MessageDelivery.Sent, new string('m', 100), 1), (row.DeliveryStatusId, row.ProviderMessageId, stubs.Saves));
+    }
+
+    [Fact]
     public async Task A_refused_message_is_not_sent_and_a_long_error_code_fits_the_column()
     {
         var (service, _) = Build(_ => Task.FromResult(DeliveryResult.Failed(new string('E', 300))));

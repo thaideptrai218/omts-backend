@@ -33,9 +33,9 @@ internal static class PurchaseRequestRules
     /// The save of a status change. The loser of a race gets the status that won when it forbids the action (MSG-GEN-09,
     /// SALE-02.0.E1, SALE-03.0.E1), otherwise the conflict goes on to the handler as 409 MSG06, read again. Null when saved.
     /// </summary>
-    /// <param name="statusName">The display name of a status.</param>
+    /// <param name="statusName">The name to show of the status that won.</param>
     public static async Task<AppError?> SaveAsync(
-        IUnitOfWork unitOfWork, PurchaseRequest request, Func<int, bool> allowsAction, Func<int, string> statusName, CancellationToken cancellationToken)
+        IUnitOfWork unitOfWork, PurchaseRequest request, Func<int, bool> allowsAction, Func<PurchaseRequest, Task<string>> statusName, CancellationToken cancellationToken)
     {
         try
         {
@@ -50,7 +50,7 @@ internal static class PurchaseRequestRules
                 throw;
             }
 
-            return WrongStatus(statusName(request.StatusId));
+            return WrongStatus(await statusName(request));
         }
     }
 
