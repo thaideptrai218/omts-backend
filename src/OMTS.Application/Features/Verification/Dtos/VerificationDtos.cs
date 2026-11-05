@@ -1,6 +1,7 @@
 namespace OMTS.Application.Features.Verification.Dtos;
 
-/// <summary>A verification request whose code was sent; the target is masked (ACS-06).</summary>
+/// <summary>A verification request whose code was sent; the target is masked (ACCOUNT-06).</summary>
+/// <param name="SendsLeft">Codes this purpose and phone number or email can still get in the current hour (BR-ACCOUNT-09).</param>
 public sealed record VerificationStarted(
     Guid VerificationId,
     string MaskedTarget,

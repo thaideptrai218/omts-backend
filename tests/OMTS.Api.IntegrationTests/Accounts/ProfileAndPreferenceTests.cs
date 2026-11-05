@@ -22,7 +22,7 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
 
         var username = await client.PutAsJsonAsync("/api/me/profile", new { displayName = "New name", rowVersion, username = "hacker" });
         var empty = await client.PutAsJsonAsync("/api/me/profile", new { displayName = " ", rowVersion });
-        var stale = await client.PutAsJsonAsync("/api/me/profile", new { displayName = "New name", rowVersion = "AAAAAAAAB9E=" });
+        var stale = await client.PutAsJsonAsync("/api/me/profile", new { displayName = "New name", rowVersion = StaleRowVersion });
         var saved = await client.PutAsJsonAsync("/api/me/profile", new { displayName = "Chủ nhiệm Nguyễn", rowVersion });
 
         Assert.Equal("MSG-GEN-01", await username.ErrorCodeAsync());
@@ -68,8 +68,9 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Equal("MSG-GEN-01", await same.ErrorCodeAsync());
     }
 
+    // BR-ACCOUNT-04: the link stays; the offline profile with the new number is neither linked nor merged.
     [Fact]
-    public async Task Trader_phone_change_merges_the_unique_offline_profile()
+    public async Task Trader_phone_change_updates_the_own_profile_only()
     {
         var cooperative = await factory.EnsureCooperativeAsync();
         var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
@@ -84,7 +85,9 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         await client.PostAsJsonAsync("/api/me/contact-changes/confirm", new { verificationToken = token });
 
         var stored = await factory.QueryAsync(db => db.Customers.AsNoTracking().Where(c => c.Id == offline.Id || c.Id == own.Id).ToListAsync());
-        Assert.Equal(own.Id, stored.Single(c => c.Id == offline.Id).MergedIntoCustomerId);
+        Assert.Null(stored.Single(c => c.Id == offline.Id).MergedIntoCustomerId);
+        Assert.Null(stored.Single(c => c.Id == offline.Id).AccountId);
+        Assert.Equal(trader.Id, stored.Single(c => c.Id == own.Id).AccountId);
         Assert.Equal(phone, stored.Single(c => c.Id == own.Id).PhoneNumber);
     }
 

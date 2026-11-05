@@ -88,14 +88,14 @@ public sealed class RegistrationService(
             PasswordHash = passwordHasher.Hash(request.Password),
         };
         accounts.Add(trader);
-        var (customer, hidden) = await customerLinker.LinkNewTraderAsync(trader, cooperative.Id, cancellationToken);
+        var (customer, linkedExisting) = await customerLinker.LinkNewTraderAsync(trader, cooperative.Id, cancellationToken);
 
         audit.Record(new AuditEntry("Account.Registered", nameof(Account))
         {
             RecordId = trader.Id,
             RecordCode = trader.Username,
             ActorAccountId = trader.Id,
-            After = new { trader.Username, trader.SubjectType, trader.PhoneNumber, trader.Email, CustomerId = customer.Id, OldDocumentsHidden = hidden },
+            After = new { trader.Username, trader.SubjectType, trader.PhoneNumber, trader.Email, CustomerId = customer.Id, LinkedExistingCustomer = linkedExisting },
         });
         try
         {
@@ -107,9 +107,9 @@ public sealed class RegistrationService(
             return AlreadyRegistered(request.Channel);
         }
 
-        // MSG-ACCOUNT-02 (MSG57 before) when several offline profiles share the number (ACCOUNT-01.1).
-        var notice = hidden ? UserMessages.RegisteredWithNewCustomerProfile : null;
-        return new TraderRegistered(trader.Id, trader.Username, hidden, notice?.Text, notice?.Code);
+        // ACCOUNT-01 step 7: MSG-ACCOUNT-01 with the existing profile, MSG-ACCOUNT-02 with a new one (ACCOUNT-01.1).
+        var notice = linkedExisting ? UserMessages.RegisteredWithExistingCustomerProfile : UserMessages.RegisteredWithNewCustomerProfile;
+        return new TraderRegistered(trader.Id, trader.Username, linkedExisting, notice.Text, notice.Code);
     }
 
     /// <summary>MSG-ACCOUNT-03 naming the phone number or email, also as <c>field</c>.</summary>
@@ -120,5 +120,5 @@ public sealed class RegistrationService(
     private async Task<bool> IsTakenAsync(VerificationChannel channel, string identifier, CancellationToken cancellationToken) =>
         channel == VerificationChannel.Sms
             ? await accounts.FindByPhoneAsync(identifier, cancellationToken) is not null
-            : await accounts.FindByVerifiedEmailAsync(identifier, cancellationToken) is not null;
+            : await accounts.FindByEmailAsync(identifier, cancellationToken) is not null;
 }

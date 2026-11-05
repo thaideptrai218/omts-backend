@@ -207,7 +207,8 @@ public static class FarmingTestKit
 
     /// <summary>
     /// InMemory never generates rowversions, so they stay empty – and an empty <c>rowVersion</c> form field binds as
-    /// null (MSG01). Stores a version on the row, as SQL Server would, and returns it for the multipart edit forms.
+    /// null (MSG01). Stores a version on the row, as SQL Server would, and returns it for the multipart edit forms. Its
+    /// last byte is 1–254, so it never equals <see cref="AcsTestKit.StaleRowVersion"/>.
     /// </summary>
     public static async Task<string> IssueRowVersionAsync<T>(this AuthApiFactory factory, Guid id) where T : OMTS.Domain.Common.AuditableEntity
     {

@@ -26,7 +26,7 @@ public sealed class CurrentPasswordProof(IPasswordHasher passwordHasher, IUnitOf
         var now = timeProvider.GetUtcNow();
         if (account.IsTemporarilyLocked(now))
         {
-            return new AppError(ErrorKind.Locked, UserMessages.TooManyLoginAttempts);
+            return AppError.LoginPaused(account.LockoutEndAt!.Value - now);
         }
 
         if (passwordHasher.Verify(account.PasswordHash, password) != PasswordCheck.Failed)
@@ -55,7 +55,7 @@ public sealed class CurrentPasswordProof(IPasswordHasher passwordHasher, IUnitOf
         }
 
         return account.IsTemporarilyLocked(now)
-            ? new AppError(ErrorKind.Locked, UserMessages.TooManyLoginAttempts)
+            ? AppError.LoginPaused(account.LockoutEndAt!.Value - now)
             : new AppError(ErrorKind.Validation, UserMessages.WrongCurrentPassword);
     }
 
