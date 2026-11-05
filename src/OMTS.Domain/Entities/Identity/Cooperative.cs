@@ -48,8 +48,8 @@ public class Cooperative : AuditableEntity
     /// <summary>Introduction in English; the page shows the Vietnamese one when it is empty (BR-ORIGIN-02).</summary>
     public string? IntroductionEn { get; set; }
 
-    /// <summary>Used to build the VietQR payment QR (UC48); never shown on the traceability page.</summary>
-    public BankAccountInfo? BankAccount { get; set; }
+    /// <summary>The receiving bank account (DEBT-01); null until one is accepted and saved.</summary>
+    public ReceivingBankAccount? BankAccount { get; set; }
 
     public ICollection<FarmingZone> FarmingZones { get; set; } = [];
     public ICollection<Employee> Employees { get; set; } = [];

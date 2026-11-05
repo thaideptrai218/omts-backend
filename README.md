@@ -76,7 +76,7 @@ server uses a secret of its own (see [Demo on a shared server](#demo-on-a-shared
 A password you change stays changed: the seed never resets it. The Owner gets `Demo@1234` only while still on the
 bootstrap temporary password. To get every demo login back, reset the environment with `docker compose down -v`.
 
-The demo data also holds the cooperative profile (with a logo, a cover photo and one Valid certification), the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued),
+The demo data also holds the cooperative profile (with a logo, a cover photo and one Valid certification), a fictional receiving bank account (`DEMO00000001`; skipped with a message when `Payments:Provider` does not accept it, as `None` does not), the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued),
 license documents (valid, expiring within 30 days, expired), about 10 rafts with lanes per zone, 8 employees (one Left),
 5 suppliers, 15 farming input items (codes VT001–VT015, every seed item counted in `con`) and 20 purchase receipts of the last 3 months with payments, discounts and a return,
 4 products (one Discontinued) and 7 customer profiles (2 linked to the trader accounts, 2 the same buyer ready to merge).
@@ -235,6 +235,9 @@ Development; they are anonymous, so never expose a Development environment publi
 The OCR Service of the water meter photos (ENV-01) is only faked until its provider ticket: the fake answers with
 `Ocr:Fake` (default pH 7.8, salinity 25.5), unless the photo bytes contain a marker such as `ph9.1_sal20`, `conf0.6`,
 `at2026-10-20T08:00`, `ocr-fail` or `ocr-timeout` (used by the tests).
+The Payment Notification Service (API-12) has no provider yet, so there is only an interface (`IPaymentNotificationService`)
+and a fake that works in Development: it accepts every receiving bank account except the numbers of
+`Payments:Fake:RejectAccounts` (default `REJECT000001`) and `Payments:Fake:TimeoutAccounts` (default `TIMEOUT00001`, never answers).
 
 ### Background jobs
 
@@ -303,6 +306,7 @@ created by a one-time command run on the server by the deployment operator (not 
 | SMS (`Sms:Provider` = `None`, the default: nothing is sent and phone verification cannot complete; `Fake` keeps messages in the dev inbox and is set in Development only) | `Sms:Fake:FailFor` (test numbers that fail) |
 | Push (`Push:Provider` = `None` by default, `Fake` in Development) | `Push:Fake:FailFor` |
 | OCR (`Ocr:Provider` unset by default: meter photos are not read and the values are entered by hand (MSG-WATER-01); `Fake` invents readings, so it is set in Development only and stops the host elsewhere) | `Ocr:TimeoutSeconds` (default 15), `Ocr:UncertainBelow` (default 0.8), `Ocr:Fake:Mode` (`Success`, `Fail`, `Timeout`), `Ocr:Fake:Ph`, `Ocr:Fake:Salinity`, `Ocr:Fake:Confidence` |
+| Payment notifications, API-12 (`Payments:Provider` = `None`, the default: no provider is chosen, so no receiving bank account can be accepted and the Owner gets MSG-DEBT-02; `Fake` works in Development only and elsewhere acts as `None`) | `Payments:TimeoutSeconds` (default 15; 1 to 300, anything else stops the host at startup), `Payments:Fake:RejectAccounts`, `Payments:Fake:TimeoutAccounts` |
 | File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development; one container or folder per environment, see Background jobs) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
 | Bootstrap (see Deployment) | `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:*` |
 | Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30) |

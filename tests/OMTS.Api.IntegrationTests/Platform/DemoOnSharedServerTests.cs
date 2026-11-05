@@ -139,7 +139,8 @@ public class DemoOnSharedServerTests
         var rerun = await RunAsync(rotated, demo: true);
 
         Assert.Equal(DeploymentBootstrapper.Success, rerun.ExitCode);
-        Assert.All(rerun.Messages.Where(m => m.StartsWith("Demo ")), m => Assert.EndsWith("already there.", m));
+        // A step the Payment Notification Service refuses (the receiving bank account without a provider) is skipped again, not "already there".
+        Assert.All(rerun.Messages.Where(m => m.StartsWith("Demo ") && !m.Contains("skipped", StringComparison.OrdinalIgnoreCase)), m => Assert.EndsWith("already there.", m));
         await AssertEveryDemoLoginUsesAsync(rotated, secret);
     }
 
