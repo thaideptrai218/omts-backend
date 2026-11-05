@@ -201,12 +201,10 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         var client = factory.CreateClient();
         var id = await VerificationIdAsync(await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }));
 
-        var agedAt = DateTimeOffset.UtcNow;
         var restart = await (await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }))
             .SrsProblemAsync(HttpStatusCode.TooManyRequests, "MSG-ACCOUNT-18", "TOO_MANY_REQUESTS");
         var resend = await (await client.PostAsync($"/api/verifications/{id}/resend", null))
             .SrsProblemAsync(HttpStatusCode.TooManyRequests, "MSG-ACCOUNT-18", "TOO_MANY_REQUESTS");
-        var elapsed = (DateTimeOffset.UtcNow - agedAt).TotalSeconds;
 
         Assert.Matches(TooManyCodes, restart.Detail());
         Assert.InRange(restart.GetProperty("retryAfterSeconds").GetInt32(), 1, 60);
@@ -259,13 +257,13 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         var phone = NewPhone();
         var client = factory.CreateClient();
         Guid id = default;
+        var agedAt = DateTimeOffset.UtcNow;
         for (var request = 0; request < VerificationCode.MaxCodesPerHour; request++)
         {
             id = await VerificationIdAsync(await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }));
             await AgeRequestsToAsync(phone);
         }
 
-        var agedAt = DateTimeOffset.UtcNow;
         var restart = await (await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }))
             .SrsProblemAsync(HttpStatusCode.TooManyRequests, "MSG-ACCOUNT-18", "TOO_MANY_REQUESTS");
         var resend = await (await client.PostAsync($"/api/verifications/{id}/resend", null))
