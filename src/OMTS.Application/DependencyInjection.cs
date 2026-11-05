@@ -17,6 +17,10 @@ using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
 using OMTS.Application.Features.Purchasing.Suppliers;
+using OMTS.Application.Features.ReceivingBankAccounts;
+using OMTS.Application.Features.Sales.Customers;
+using OMTS.Application.Features.Sales.Products;
+using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Application.Features.Verification;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
@@ -33,7 +37,7 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddMemoryCache();
 
-        services.AddSingleton(_ => new UnknownLoginCounter());
+        services.AddSingleton(provider => new UnknownLoginCounter(timeProvider: provider.GetRequiredService<TimeProvider>()));
         services.AddScoped<AuthService>();
 
         services.AddSingleton<PermissionCache>();
@@ -42,14 +46,17 @@ public static class DependencyInjection
 
         services.AddScoped<AmbientActor>();
         services.AddScoped<AuditLogService>();
+        services.AddScoped<AuditEventSearchService>();
         services.AddScoped<StatusChangeService>();
         services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
+        services.AddScoped<MandatorySmsQueue>();
         services.AddScoped<OwnerActorRecipientFilter>();
         services.AddScoped<NotificationInboxService>();
         services.AddScoped<RowVersionGuard>();
 
         // ACS – personal accounts
         services.AddScoped<VerificationThrottle>();
+        services.AddSingleton<VerificationStartGate>();
         services.AddScoped<VerificationService>();
         services.AddScoped<TraderCustomerLinker>();
         services.AddScoped<UsernameGenerator>();
@@ -68,15 +75,31 @@ public static class DependencyInjection
         services.AddScoped<StaffAccountService>();
         services.AddScoped<RoleService>();
 
-        // FARM-01 cooperative profile, LAB-01 employees
+        // FARM-01 cooperative profile, LABOR-01 employees
+        services.AddScoped<CooperativeProfileViews>();
         services.AddScoped<CooperativeProfileService>();
+        services.AddScoped<CooperativeCoverPhotoService>();
+        services.AddScoped<CooperativeCertificationService>();
+        services.AddScoped<EmployeeCallerAccess>();
+        services.AddScoped<EmployeeViewBuilder>();
+        services.AddScoped<EmployeeProfileValidator>();
+        services.AddScoped<EmployeeQueryService>();
         services.AddScoped<EmployeeService>();
+        services.AddScoped<EmployeeWorkingZoneService>();
+        services.AddScoped<EmploymentService>();
+        services.AddScoped<EmploymentEndService>();
+
+        // DEBT-01 receiving bank account
+        services.AddScoped<ReceivingAccountAcceptance>();
+        services.AddScoped<ReceivingBankAccountService>();
 
         // FARM-02 zones, FARM-03 zone licenses, FARM-04 rafts
         services.AddScoped<FarmingLookupAccess>();
         services.AddScoped<FarmingZoneService>();
         services.AddScoped<ZoneLicenseService>();
+        // GFR-03 expiry reminders of zone licenses and cooperative certifications
         services.AddScoped<ZoneLicenseReminderService>();
+        services.AddScoped<CertificationReminderService>();
         services.AddScoped<RaftService>();
         services.AddScoped<RaftConditionService>();
         services.AddScoped<UploadedFileSaver>();
@@ -86,6 +109,17 @@ public static class DependencyInjection
         services.AddScoped<ZoneAccessGuard>();
         services.AddScoped<SupplierService>();
         services.AddScoped<FarmingInputItemService>();
+        services.AddScoped<ProductService>();
+        services.AddScoped<ProductReadService>();
+        services.AddScoped<CustomerService>();
+        services.AddScoped<CustomerMergeService>();
+        services.AddScoped<IPurchaseRequestFulfilment, NoInvoicesYetFulfilment>();
+        services.AddScoped<PurchaseRequestViews>();
+        services.AddScoped<PurchaseRequestNotifications>();
+        services.AddScoped<PurchaseRequestReadService>();
+        services.AddScoped<TraderPurchaseRequestService>();
+        services.AddScoped<PurchaseRequestResponseService>();
+        services.AddScoped<TraderMessageService>();
         services.AddScoped<PurchaseReceiptAccess>();
         services.AddScoped<PurchaseReceiptValidator>();
         services.AddScoped<PurchaseReceiptViews>();
@@ -104,6 +138,7 @@ public static class DependencyInjection
         // ENV-01…ENV-04 water quality monitoring and the overdue measurement reminder
         services.AddSingleton<EditingPresenceTracker>();
         services.AddScoped<WaterMeterRecognizer>();
+        services.AddScoped<WaterMeterPhotoStore>();
         services.AddScoped<WaterAlertService>();
         services.AddScoped<WaterMeasurementViewBuilder>();
         services.AddScoped<WaterMeasurementRecordingService>();

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Ocr;
+using OMTS.Application.Common.Interfaces.Payments;
 using OMTS.Application.Common.Interfaces.Storage;
 using OMTS.Infrastructure.Messaging;
 using OMTS.Infrastructure.Ocr;
@@ -13,7 +14,7 @@ namespace OMTS.Infrastructure;
 /// <summary>
 /// At startup: builds every external adapter so a configuration error (unknown provider, missing Local
 /// storage signing key, plain-text SMTP outside Development) stops the host instead of failing the first
-/// user request, and warns outside Development that SMS, push, email or OCR are not really used.
+/// user request, and warns outside Development that SMS, push, email, OCR or payment notifications are not really used.
 /// </summary>
 internal sealed class ExternalServicesStartupCheck(
     IServiceProvider services,
@@ -31,6 +32,7 @@ internal sealed class ExternalServicesStartupCheck(
         services.GetRequiredService<IPushSender>();
         services.GetRequiredService<IFileStorage>();
         services.GetRequiredService<IOcrService>();
+        services.GetRequiredService<IPaymentNotificationService>();
 
         if (environment.IsDevelopment())
         {
@@ -51,7 +53,7 @@ internal sealed class ExternalServicesStartupCheck(
 
         if (sms.Value.Provider is SmsOptions.FakeProvider or SmsOptions.NoneProvider)
         {
-            logger.LogWarning("SMS provider is {Provider}: SMS messages (verification codes) are NOT sent, so phone verification cannot complete.", sms.Value.Provider);
+            logger.LogWarning("SMS provider is {Provider}: SMS messages (verification codes, mandatory notifications) are NOT sent, so phone verification cannot complete.", sms.Value.Provider);
         }
 
         if (push.Value.Provider is PushOptions.FakeProvider or PushOptions.NoneProvider)
@@ -65,6 +67,7 @@ internal sealed class ExternalServicesStartupCheck(
         }
 
         logger.LogWarning("OCR provider '{Provider}' is not configured: meter photos are NOT read; users enter the values.", ocr.Value.Provider);
+        logger.LogWarning("Payment notification provider is not configured: no receiving bank account can be accepted (MSG-DEBT-02), so VietQR stays out of use.");
 
         return Task.CompletedTask;
     }

@@ -75,11 +75,8 @@ public class ReviewFixQaRegressionTests
         var oldId = await VerificationIdAsync(await client.PostAsJsonAsync("/api/me/phone-verification", new { phoneNumber = oldPhone }));
         var oldToken = await VerifyAsync(client, oldId, api.LastSmsCode(oldPhone));
 
-        var contactId = await VerificationIdAsync(await client.PostAsJsonAsync("/api/me/contact-changes",
-            new { channel = "Sms", target = newPhone, currentPassword = Password }));
-        var contactToken = await VerifyAsync(client, contactId, api.LastSmsCode(newPhone));
-        var confirmed = await client.PostAsJsonAsync("/api/me/contact-changes/confirm", new { verificationToken = contactToken });
-        Assert.Equal(HttpStatusCode.OK, confirmed.StatusCode);
+        // Another session finished the phone step with another number meanwhile.
+        await api.UpdateAsync<Account>(owner.Id, a => { a.PhoneNumber = newPhone; a.PhoneVerifiedAt = DateTimeOffset.UtcNow; });
 
         var stale = await client.PostAsJsonAsync("/api/me/phone-verification/confirm", new { verificationToken = oldToken });
         var stored = await api.QueryAsync(db => db.Accounts.SingleAsync(a => a.Id == owner.Id));

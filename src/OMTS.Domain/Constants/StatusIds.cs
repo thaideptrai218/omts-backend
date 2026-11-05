@@ -12,12 +12,6 @@ public static class StatusIds
         public const int Discontinued = 102;
     }
 
-    public static class Cooperative
-    {
-        public const int Draft = 201;
-        public const int Completed = 202;
-    }
-
     public static class Account
     {
         public const int Active = 301;
@@ -42,14 +36,7 @@ public static class StatusIds
         public const int Closed = 602;
     }
 
-    public static class WaterMeasurement
-    {
-        public const int Draft = 701;
-        public const int Confirmed = 702;
-        public const int Superseded = 703;
-        public const int Voided = 704;
-    }
-
+    // 701–704 were the Draft/Confirmed/Corrected/Voided water statuses of the SRS 22/10 model (removed in OMTS-219).
     // 801–1603 belonged to the SRS 22/10 order, harvest, traceability, claim and labor model (removed in
     // OMTS-216); new groups take fresh hundreds so a removed id is never reused with another meaning.
 
@@ -77,5 +64,20 @@ public static class StatusIds
         public const int Sending = 1601;
         public const int Sent = 1602;
         public const int NotSent = 1603;
+    }
+
+    public static class WaterMeasurement
+    {
+        public const int Active = 2101;
+        public const int Voided = 2102;
+    }
+
+    /// <summary>SALE-01 to SALE-03; Fulfilled is worked out from the invoices, not stored (BR-SALE-01).</summary>
+    public static class PurchaseRequest
+    {
+        public const int AwaitingResponse = 3201;
+        public const int Accepted = 3202;
+        public const int Declined = 3203;
+        public const int Cancelled = 3204;
     }
 }

@@ -25,9 +25,9 @@ public class StatusChangeQaTests(AuthApiFactory factory) : IClassFixture<AuthApi
 
         // Reason first, then the row version: a too long reason with a stale version is MSG01 "Reason".
         Assert.Equal(["Reason"], await (await owner.Client.PostAsJsonAsync($"{path}/discontinue",
-            new { reason = new string('r', 1001), rowVersion = "AAAAAAAAB9E=" })).InvalidFieldsAsync());
+            new { reason = new string('r', 1001), rowVersion = AcsTestKit.StaleRowVersion })).InvalidFieldsAsync());
         Assert.Equal(["RowVersion"], await (await owner.Client.PostAsJsonAsync($"{path}/discontinue", new { rowVersion = "not base64" })).InvalidFieldsAsync());
-        Assert.Equal("MSG06", await (await owner.Client.PostAsJsonAsync($"{path}/discontinue", new { rowVersion = "AAAAAAAAB9E=" })).ErrorCodeAsync());
+        Assert.Equal("MSG06", await (await owner.Client.PostAsJsonAsync($"{path}/discontinue", new { rowVersion = AcsTestKit.StaleRowVersion })).ErrorCodeAsync());
 
         // 1000 characters once trimmed are accepted; a blank reason is stored as none.
         var discontinued = await (await owner.Client.PostAsJsonAsync($"{path}/discontinue",

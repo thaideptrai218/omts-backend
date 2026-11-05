@@ -79,7 +79,7 @@ public class NotificationDispatchTests(AuthApiFactory factory) : IClassFixture<A
             new NotificationContent(
                 NotificationTypes.WaterAlert,
                 "Water alert",
-                UserMessages.WaterAlert(false, "Zone", null, DateTimeOffset.UtcNow, [new(WaterValueOutside.Ph, 9.1m, null, WaterValueDirection.High, 7.5m, 8.5m)]),
+                UserMessages.WaterAlert(false, "Zone", "BE-01", DateTimeOffset.UtcNow, [new(WaterValueOutside.Ph, 9.1m, null, WaterValueDirection.High, 7.5m, 8.5m)]),
                 new RelatedRecord(RelatedRecordTypes.FarmingZone, zoneId, zoneCode)),
             CancellationToken.None);
         await services.GetRequiredService<IUnitOfWork>().SaveChangesAsync();

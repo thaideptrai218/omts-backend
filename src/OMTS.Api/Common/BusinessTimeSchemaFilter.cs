@@ -1,13 +1,9 @@
-using System.Reflection;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace OMTS.Api.Common;
 
-/// <summary>
-/// Documents the business time rule on every date-time of the Swagger schema (each <see cref="DateTimeOffset"/>
-/// and each field marked <see cref="BusinessTimeAttribute"/>), in requests and responses alike.
-/// </summary>
+/// <summary>Documents the business time rule on every date-time of the Swagger schema, in requests and responses alike.</summary>
 internal sealed class BusinessTimeSchemaFilter : ISchemaFilter
 {
     public const string Rule =
@@ -18,8 +14,7 @@ internal sealed class BusinessTimeSchemaFilter : ISchemaFilter
     public void Apply(OpenApiSchema schema, SchemaFilterContext context)
     {
         var type = Nullable.GetUnderlyingType(context.Type) ?? context.Type;
-        var marked = context.MemberInfo?.IsDefined(typeof(BusinessTimeAttribute)) == true;
-        if (type != typeof(DateTimeOffset) && !marked)
+        if (type != typeof(DateTimeOffset))
         {
             return;
         }

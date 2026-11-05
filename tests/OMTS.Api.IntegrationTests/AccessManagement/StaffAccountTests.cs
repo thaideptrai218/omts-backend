@@ -68,20 +68,18 @@ public class StaffAccountTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     }
 
     [Fact]
-    public async Task Duplicates_and_missing_rows_are_refused()
+    public async Task Duplicates_and_invalid_usernames_are_refused()
     {
         var (owner, zone, role) = await SetupAsync();
         var existing = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
 
         var duplicateUsername = await owner.PostAsJsonAsync("/api/accounts", Body(zone, role, username: existing.Username));
         var duplicatePhone = await owner.PostAsJsonAsync("/api/accounts", Body(zone, role, phone: existing.PhoneNumber));
-        var noGrant = await owner.PostAsJsonAsync("/api/accounts", new { displayName = "A", username = $"s{NewCode()}", phoneNumber = NewPhone(), grants = Array.Empty<object>() });
         var phoneLikeUsername = await owner.PostAsJsonAsync("/api/accounts", Body(zone, role, username: "0912345678"));
 
         Assert.Equal("MSG-ACCOUNT-09", await duplicateUsername.ErrorCodeAsync());
         Assert.Equal(existing.Id, (await duplicateUsername.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("existingId").GetGuid());
         Assert.Equal("MSG-ACCOUNT-09", await duplicatePhone.ErrorCodeAsync());
-        Assert.Equal("MSG-GEN-01", await noGrant.ErrorCodeAsync());
         Assert.Equal("MSG-GEN-01", await phoneLikeUsername.ErrorCodeAsync());
     }
 
@@ -139,7 +137,7 @@ public class StaffAccountTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         await factory.UpdateAsync<Account>(id, a => a.PhoneVerifiedAt = DateTimeOffset.UtcNow);
         var current = await owner.GetFromJsonAsync<JsonElement>($"/api/accounts/{id}");
 
-        var stale = await owner.PutAsJsonAsync($"/api/accounts/{id}", new { displayName = "B", username = account.GetProperty("username").GetString(), phoneNumber = NewPhone(), rowVersion = "AAAAAAAAB9E=" });
+        var stale = await owner.PutAsJsonAsync($"/api/accounts/{id}", new { displayName = "B", username = account.GetProperty("username").GetString(), phoneNumber = NewPhone(), rowVersion = StaleRowVersion });
         var saved = await owner.PutAsJsonAsync($"/api/accounts/{id}", new { displayName = "B", username = account.GetProperty("username").GetString(), phoneNumber = NewPhone(), rowVersion = current.GetProperty("rowVersion").GetString() });
 
         Assert.Equal("MSG06", await stale.ErrorCodeAsync());

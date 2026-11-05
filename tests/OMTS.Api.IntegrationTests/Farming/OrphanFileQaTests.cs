@@ -27,7 +27,7 @@ public class OrphanFileQaTests
         var owner = await factory.OwnerAsync();
         var zoneId = (await owner.Client.CreateZoneAsync()).Id();
         var raftId = (await owner.Client.CreateRaftAsync(zoneId)).Id();
-        var licenseId = (await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneIds = [zoneId], EffectiveDate = Today })).Id();
+        var licenseId = (await owner.Client.CreateLicenseAsync(new LicenseFields { ZoneId = zoneId, EffectiveDate = Today })).Id();
         await factory.UpdateAsync<Raft>(raftId, r => r.PhotoUrl = ForeignKey(FileCategories.RaftPhotos, "jpg"));
         await factory.UpdateAsync<ZoneComplianceDocument>(licenseId, d => d.EvidenceFileUrl = ForeignKey(FileCategories.ZoneLicenses, "pdf"));
         var storage = factory.Services.GetRequiredService<IFileStorage>();
@@ -42,7 +42,7 @@ public class OrphanFileQaTests
         Assert.Equal(0, deleted);
     }
 
-    // Only raft-photos/ and zone-licenses/ are scanned; similar names are other categories.
+    // Only raft-photos/, zone-licenses/ and water-meter-photos/ are scanned; similar names are other categories.
     [Fact]
     public async Task Old_unreferenced_files_of_every_other_category_are_never_touched()
     {
@@ -55,7 +55,7 @@ public class OrphanFileQaTests
         var others = new List<string>();
         foreach (var category in new[]
                  {
-                     "cooperative-logos", "water-meter-photos", "supplier-certificates", "purchase-invoices", "raft-photos-old", "zone-licenses-archive",
+                     "cooperative-logos", "water-meter-photos-old", "supplier-certificates", "purchase-invoices", "raft-photos-old", "zone-licenses-archive",
                  })
         {
             others.Add(await StoreAsync(storage, category, Png));
@@ -119,7 +119,7 @@ public class OrphanFileQaTests
         var photo = await factory.QueryAsync(db => db.Rafts.Where(r => r.Id == raftId).Select(r => r.PhotoUrl!).SingleAsync());
         Assert.Equal([photo], await KeysAsync(storage, FileCategories.RaftPhotos));
 
-        var fields = new LicenseFields { ZoneIds = [zoneId], EffectiveDate = Today };
+        var fields = new LicenseFields { ZoneId = zoneId, EffectiveDate = Today };
         var license = await owner.Client.CreateLicenseAsync(fields);
         var edit = fields with { Holder = "HTX", RowVersion = await factory.IssueRowVersionAsync<ZoneComplianceDocument>(license.Id()) };
         await (await owner.Client.PutAsync($"/api/zone-licenses/{license.Id()}", edit.ToForm())).ReadAsync(HttpStatusCode.OK);
@@ -159,7 +159,7 @@ public class OrphanFileQaTests
             Assert.Contains(photo, host.StoredKeys(FileCategories.RaftPhotos));
         }
 
-        var fields = new LicenseFields { ZoneIds = [zoneId], EffectiveDate = Today };
+        var fields = new LicenseFields { ZoneId = zoneId, EffectiveDate = Today };
         var license = await owner.CreateLicenseAsync(fields);
         var edit = fields with { Holder = "HTX Trung Nam", RowVersion = license.Text("rowVersion") };
         var edits = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => owner.PutAsync($"/api/zone-licenses/{license.Id()}", edit.ToForm())));

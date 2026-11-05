@@ -7,27 +7,22 @@ using S = OMTS.Domain.Constants.StatusIds.WaterMeasurement;
 
 namespace OMTS.Application.Features.WaterQuality;
 
-/// <summary>Status filter values of the ENV-03 lists and the derived alert state.</summary>
+/// <summary>Status filter values of the WATER-03 lists and the derived alert state.</summary>
 public static class WaterMeasurementStatuses
 {
     /// <summary>Object name used in MSG-GEN-09.</summary>
     public const string ObjectName = "water measurement";
 
-    public static readonly IReadOnlyList<int> All = [S.Draft, S.Confirmed, S.Superseded, S.Voided];
-
     private static readonly Dictionary<string, int[]> ByName = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["Draft"] = [S.Draft],
-        ["Confirmed"] = [S.Confirmed],
-        ["Corrected"] = [S.Superseded],
-        ["Superseded"] = [S.Superseded],
+        ["Active"] = [S.Active],
         ["Voided"] = [S.Voided],
-        ["All"] = [S.Draft, S.Confirmed, S.Superseded, S.Voided],
+        ["All"] = [S.Active, S.Voided],
     };
 
     /// <summary>
-    /// Status ids of a filter given as repeated and/or comma-separated names (Draft, Confirmed, Corrected,
-    /// Voided, All). Empty means Confirmed only; an unknown name gives null.
+    /// Status ids of a filter given as repeated and/or comma-separated names (Active, Voided, All). Empty means Active
+    /// only (interim: OMTS-219 W3 makes the default both, WATER-03 step 3); an unknown name gives null.
     /// </summary>
     public static IReadOnlyList<int>? ParseFilter(IEnumerable<string>? values)
     {
@@ -36,7 +31,7 @@ public static class WaterMeasurementStatuses
             .ToList();
         if (names.Count == 0)
         {
-            return [S.Confirmed];
+            return [S.Active];
         }
 
         var ids = new HashSet<int>();
@@ -59,11 +54,5 @@ public static class WaterMeasurementStatuses
 
     public static WaterAlertState AlertStateOf(WaterMeasurement measurement) => !measurement.ThresholdExceeded
         ? WaterAlertState.None
-        : measurement.StatusId switch
-        {
-            S.Confirmed => WaterAlertState.Active,
-            S.Superseded => WaterAlertState.Corrected,
-            S.Voided => WaterAlertState.Voided,
-            _ => WaterAlertState.None,
-        };
+        : measurement.StatusId == S.Voided ? WaterAlertState.Voided : WaterAlertState.Active;
 }

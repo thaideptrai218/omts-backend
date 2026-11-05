@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
@@ -13,8 +14,8 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Accounts;
 
 /// <summary>
-/// ACS-02 phone step: traders and staff need a verified phone number before other functions (MSG-ACCOUNT-04).
-/// A trader enters a number; staff confirm the number the Owner entered or enter another one.
+/// ACCOUNT-02.1: every account needs a verified phone number before other functions (BR-ACCOUNT-03, MSG-ACCOUNT-04).
+/// A trader enters a number; staff and the Cooperative Owner confirm the number on the account or enter another one.
 /// </summary>
 public sealed class PhoneVerificationService(
     IAccountRepository accounts,
@@ -38,7 +39,7 @@ public sealed class PhoneVerificationService(
             return AppError.Invalid("Phone number");
         }
 
-        var input = request.PhoneNumber ?? (account.SubjectType == SubjectType.Staff ? account.PhoneNumber : null);
+        var input = request.PhoneNumber ?? (account.SubjectType == SubjectType.Trader ? null : account.PhoneNumber);
         var phone = PhoneNumbers.Normalize(input);
         if (phone is null)
         {
@@ -81,20 +82,36 @@ public sealed class PhoneVerificationService(
         }
 
         var before = new { account.PhoneNumber, account.PhoneVerifiedAt };
+        if (account.PhoneNumber != phone)
+        {
+            await verification.CancelForChangedContactAsync(account.Id, VerificationChannel.Sms, cancellationToken);
+        }
+
         account.PhoneNumber = phone;
         account.PhoneVerifiedAt = timeProvider.GetUtcNow();
-        var hidden = account.SubjectType == SubjectType.Trader && await customerLinker.ApplyVerifiedPhoneAsync(account, phone, cancellationToken);
+        if (account.SubjectType == SubjectType.Trader)
+        {
+            await customerLinker.ApplyVerifiedPhoneAsync(account, phone, cancellationToken);
+        }
 
         audit.Record(new AuditEntry("Account.PhoneVerified", nameof(Account))
         {
             RecordId = account.Id,
             RecordCode = account.Username,
             Before = before,
-            After = new { account.PhoneNumber, account.PhoneVerifiedAt, OldDocumentsHidden = hidden },
+            After = new { account.PhoneNumber, account.PhoneVerifiedAt },
         });
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        var notice = hidden ? UserMessages.OldDocumentsHidden : null;
-        return new ContactConfirmed(phone, hidden, notice?.Text, notice?.Code);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DuplicateRecordException)
+        {
+            // Another account took the number between the check above and this save (unique index).
+            return PhoneUsedByAnotherAccount();
+        }
+
+        return new ContactConfirmed(phone, null, null);
     }
 
     private async Task<bool> IsUsedByAnotherAccountAsync(string phone, Guid accountId, CancellationToken cancellationToken) =>

@@ -149,7 +149,6 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
         var otherManager = await factory.ZoneManagerAsync(otherZone);
         var accountant = await factory.AccountantAsync();
         var trader = await LoginAsNewAsync(SubjectType.Trader);
-        var administrator = await LoginAsNewAsync(SubjectType.SystemAdministrator);
         var anonymous = factory.CreateClient();
 
         // A line for a raft of another zone: receipts and returns follow the role only, also there.
@@ -167,19 +166,16 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
             await (await reader.GetAsync(returnUrl)).ReadAsync(HttpStatusCode.OK);
         }
 
-        foreach (var refused in new[] { accountant, trader, administrator })
+        foreach (var refused in new[] { accountant, trader })
         {
             await (await refused.PostReturnAsync(receipt.Id(), Return(line, 1, approved: true))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         }
 
-        foreach (var refused in new[] { trader, administrator })
-        {
-            await (await refused.GetAsync(returnsUrl)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-            await (await refused.GetAsync(returnUrl)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        }
+        await (await trader.GetAsync(returnsUrl)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await trader.GetAsync(returnUrl)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
 
         // The refusal comes before the body is read, so a body that could not be saved tells a non-Owner nothing.
-        foreach (var refused in new[] { manager, otherManager, accountant, trader, administrator })
+        foreach (var refused in new[] { manager, otherManager, accountant, trader })
         {
             await (await refused.CancelReturnAsync(returnId, "Mine")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
             await (await refused.PostAsync($"{returnUrl}/cancel", Json("not json"))).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");

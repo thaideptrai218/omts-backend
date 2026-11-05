@@ -35,9 +35,9 @@ public class WaterLogPrivacyRedTeamTests
 
         var alerting = await z.RecordedAsync(9.4m, 20m, client: client, measuredAt: DateTimeOffset.UtcNow.AddDays(-40));
         Assert.Equal(HttpStatusCode.OK, (await z.RecognizeAsync(client: client)).StatusCode);
-        Assert.Equal(HttpStatusCode.Created, (await client.CorrectAsync(alerting.Id(), 9.6m, 20m, recordVersion: 1, measuredAt: DateTimeOffset.UtcNow.AddDays(-40))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.CorrectAsync(alerting.Id(), 9.6m, 20m, measuredAt: DateTimeOffset.UtcNow.AddDays(-40))).StatusCode);
         var other = await z.RecordedAsync(7m, 20m, client: client);
-        Assert.Equal(HttpStatusCode.OK, (await client.VoidAsync(other.Id(), 1)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.VoidAsync(other.Id())).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await z.Owner.GetAsync($"{z.Base}/export")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/water-measurements/{alerting.Id()}")).StatusCode);
         using (var scope = api.Services.CreateScope())

@@ -8,10 +8,10 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
 {
     public void Configure(EntityTypeBuilder<Product> builder)
     {
-        builder.Property(x => x.Code).HasMaxLength(Lengths.Code);
-        builder.HasIndex(x => x.Code).IsUnique();
         builder.Property(x => x.Name).HasMaxLength(Lengths.Name);
-        builder.Property(x => x.Description).HasMaxLength(Lengths.LongText);
-        builder.Property(x => x.SalesUnit).HasMaxLength(30);
+        builder.HasIndex(x => x.Name).IsUnique();
+        // Whole VND; sales money is not limited to multiples of 1,000 (BR-SALE-06).
+        builder.Property(x => x.UnitPrice).HasPrecision(18, 0);
+        builder.ToTable(t => t.HasCheckConstraint("CK_Product_UnitPrice_Positive", "[UnitPrice] > 0"));
     }
 }

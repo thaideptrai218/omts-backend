@@ -7,11 +7,11 @@ using OMTS.Domain.Constants;
 namespace OMTS.Infrastructure.Bootstrap.Demo;
 
 /// <summary>
-/// ENV-01…ENV-04: the thresholds and the 30 days of water measurements of <see cref="DemoWaterPlans"/> for each In Use
-/// demo zone, through the threshold, recording and correction services, so alerts, threshold snapshots, version chains
-/// and audit rows come from the normal rules. A measurement is found by zone and device operation id (one per planned
-/// day); its date is relative to the first seed day, which a later run reads back from the stored measurements of any
-/// zone, so a rerun creates nothing and moves no date, and an interrupted run is completed on the same days.
+/// WATER-01…WATER-04: the thresholds and the 30 days of water measurements of <see cref="DemoWaterPlans"/> for each In
+/// Use demo zone, through the threshold, recording and correction services, so photos, alerts, threshold copies and
+/// audit rows come from the normal rules. A measurement is found by zone and client operation id (one per planned day);
+/// its date is relative to the first seed day, which a later run reads back from the stored measurements of any zone, so
+/// a rerun creates nothing and moves no date, and an interrupted run is completed on the same days.
 /// </summary>
 internal sealed class DemoWaterMeasurementStep : IDemoSeedStep
 {
@@ -26,7 +26,7 @@ internal sealed class DemoWaterMeasurementStep : IDemoSeedStep
             var zoneId = await context.Db.FarmingZones.Where(z => z.Code == zoneCode).Select(z => z.Id).SingleAsync(cancellationToken);
             await SetThresholdsOnceAsync(context, zoneId, zoneCode, cancellationToken);
             created += await RecordMissingDaysAsync(context, zoneId, zoneCode, firstSeedDay, cancellationToken);
-            created += await CorrectAndVoidAsync(context, zoneId, zoneCode, cancellationToken);
+            await CorrectAndVoidAsync(context, zoneId, zoneCode, cancellationToken);
         }
 
         return created;
@@ -47,7 +47,7 @@ internal sealed class DemoWaterMeasurementStep : IDemoSeedStep
         return stored is null ? context.Today : BusinessClock.ToBusinessDate(stored.MeasuredAt).AddDays(daysByOperation[stored.ClientOperationId]);
     }
 
-    /// <summary>ENV-04, once per zone: any threshold change already audited (by an earlier run or by the Owner) is kept.</summary>
+    /// <summary>WATER-04, once per zone: any threshold change already audited (by an earlier run or by the Owner) is kept.</summary>
     private static async Task SetThresholdsOnceAsync(DemoSeedContext context, Guid zoneId, string zoneCode, CancellationToken cancellationToken)
     {
         if (await context.Db.AuditEvents.AnyAsync(e => e.Action == WaterMeasurementAudit.ThresholdUpdated && e.RecordId == zoneId, cancellationToken))
@@ -67,6 +67,7 @@ internal sealed class DemoWaterMeasurementStep : IDemoSeedStep
             .Where(m => m.ZoneId == zoneId && operationIds.Contains(m.ClientOperationId))
             .Select(m => m.ClientOperationId)
             .ToListAsync(cancellationToken);
+        var raftIds = await context.Db.Rafts.AsNoTracking().Where(r => r.ZoneId == zoneId).ToDictionaryAsync(r => r.Code, r => r.Id, cancellationToken);
 
         var recording = context.Get<WaterMeasurementRecordingService>();
         var created = 0;
@@ -80,49 +81,52 @@ internal sealed class DemoWaterMeasurementStep : IDemoSeedStep
             var reading = DemoWaterPlans.Reading(zoneCode, daysAgo);
             var day = firstSeedDay.AddDays(-daysAgo);
             var measuredAt = BusinessClock.FromLocal(day.ToDateTime(reading.Time));
-            DemoSeedContext.Ensure(await recording.RecordAsync(
-                zoneId, new RecordWaterMeasurementRequest(operationId, measuredAt, reading.Ph, reading.Salinity, Confirm: true), null, cancellationToken),
-                $"water measurement of {zoneCode} on {day:yyyy-MM-dd}");
+            var what = $"water measurement of {zoneCode} on {day:yyyy-MM-dd}";
+            var photo = DemoSeedContext.Ensure(await recording.RecognizeAsync(zoneId, DemoFiles.MeterPhoto(), cancellationToken), what);
+            DemoSeedContext.Ensure(
+                await recording.RecordAsync(
+                    zoneId,
+                    new RecordWaterMeasurementRequest(raftIds[reading.RaftCode], measuredAt, reading.Ph, reading.Salinity, reading.Temperature, photo.PhotoKey, operationId),
+                    cancellationToken),
+                what);
             created++;
         }
 
         return created;
     }
 
-    /// <summary>ENV-02: the planned correction and void, each only while its reading is still the untouched Confirmed version.</summary>
-    private static async Task<int> CorrectAndVoidAsync(DemoSeedContext context, Guid zoneId, string zoneCode, CancellationToken cancellationToken)
+    /// <summary>WATER-02: the planned correction and void, each only while its reading is still as it was recorded and Active.</summary>
+    private static async Task CorrectAndVoidAsync(DemoSeedContext context, Guid zoneId, string zoneCode, CancellationToken cancellationToken)
     {
         var corrections = context.Get<WaterMeasurementCorrectionService>();
-        var created = 0;
         var correction = DemoWaterPlans.Correction;
-        if (correction.Zone == zoneCode && await ConfirmedAsync(context, zoneId, zoneCode, correction.DaysAgo, cancellationToken) is { } typo)
+        if (correction.Zone == zoneCode
+            && await ActiveAsync(context, zoneId, zoneCode, correction.DaysAgo, cancellationToken) is { } typo
+            && typo.Salinity == correction.TypedSalinity)
         {
-            DemoSeedContext.Ensure(await corrections.CorrectAsync(
-                typo.Id, new CorrectWaterMeasurementRequest(typo.MeasuredAt, typo.Ph, correction.Salinity, correction.Reason, typo.RecordVersion), cancellationToken),
+            DemoSeedContext.Ensure(
+                await corrections.CorrectAsync(typo.Id, new CorrectWaterMeasurementRequest(typo.MeasuredAt, typo.Ph, correction.Salinity, typo.Temperature, correction.Reason), cancellationToken),
                 $"correcting the water measurement of {zoneCode}");
-            created++;
         }
 
         var voided = DemoWaterPlans.Void;
-        if (voided.Zone == zoneCode && await ConfirmedAsync(context, zoneId, zoneCode, voided.DaysAgo, cancellationToken) is { } wrong)
+        if (voided.Zone == zoneCode && await ActiveAsync(context, zoneId, zoneCode, voided.DaysAgo, cancellationToken) is { } wrong)
         {
             DemoSeedContext.Ensure(
-                await corrections.VoidAsync(wrong.Id, new VoidWaterMeasurementRequest(voided.Reason, wrong.RecordVersion), cancellationToken),
+                await corrections.VoidAsync(wrong.Id, new VoidWaterMeasurementRequest(voided.Reason), cancellationToken),
                 $"voiding the water measurement of {zoneCode}");
         }
-
-        return created;
     }
 
-    // A corrected reading is Superseded and a voided one Voided: both are left as they are.
-    private static Task<StoredReading?> ConfirmedAsync(DemoSeedContext context, Guid zoneId, string zoneCode, int daysAgo, CancellationToken cancellationToken)
+    // A voided reading is left as it is.
+    private static Task<StoredReading?> ActiveAsync(DemoSeedContext context, Guid zoneId, string zoneCode, int daysAgo, CancellationToken cancellationToken)
     {
         var operationId = DemoWaterPlans.OperationId(zoneCode, daysAgo);
         return context.Db.WaterMeasurements.AsNoTracking()
-            .Where(m => m.ZoneId == zoneId && m.ClientOperationId == operationId && m.StatusId == StatusIds.WaterMeasurement.Confirmed)
-            .Select(m => new StoredReading(m.Id, m.MeasuredAt, m.Ph, m.RecordVersion))
+            .Where(m => m.ZoneId == zoneId && m.ClientOperationId == operationId && m.StatusId == StatusIds.WaterMeasurement.Active)
+            .Select(m => new StoredReading(m.Id, m.MeasuredAt, m.Ph, m.Salinity, m.Temperature))
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    private sealed record StoredReading(Guid Id, DateTimeOffset MeasuredAt, decimal? Ph, int RecordVersion);
+    private sealed record StoredReading(Guid Id, DateTimeOffset MeasuredAt, decimal Ph, decimal Salinity, decimal Temperature);
 }
