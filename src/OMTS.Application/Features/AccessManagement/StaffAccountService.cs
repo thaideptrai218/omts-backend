@@ -1,4 +1,5 @@
 using OMTS.Application.Common.Concurrency;
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Interfaces.Persistence;
@@ -9,6 +10,7 @@ using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Accounts;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.Verification;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
@@ -23,7 +25,9 @@ public sealed class StaffAccountService(
     IAccountRepository accounts,
     IEmployeeRepository employees,
     ILoginSessionRepository sessions,
+    IAccessGrantRepository grants,
     AccessGrantService grantService,
+    VerificationService verification,
     IPasswordHasher passwordHasher,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
@@ -38,9 +42,11 @@ public sealed class StaffAccountService(
     {
         (page, pageSize) = (Math.Max(1, page), Math.Clamp(pageSize, 1, 100));
         var (items, total) = await accounts.SearchStaffAsync(search, statusId, page, pageSize, cancellationToken);
-        // One query for the linked employees of the whole page.
-        var employeeIds = await employees.GetIdsByAccountIdsAsync(items.Select(a => a.Id).ToList(), cancellationToken);
-        var views = items.Select(a => View(a, employeeIds.TryGetValue(a.Id, out var employeeId) ? employeeId : null)).ToList();
+        // One query each for the linked employees and the pairs of the whole page.
+        var accountIds = items.Select(a => a.Id).ToList();
+        var employeeIds = await employees.GetIdsByAccountIdsAsync(accountIds, cancellationToken);
+        var pairs = (await grants.ListEffectiveForAccountsAsync(accountIds, cancellationToken)).ToLookup(g => g.AccountId);
+        var views = items.Select(a => View(a, employeeIds.TryGetValue(a.Id, out var employeeId) ? employeeId : null, pairs[a.Id])).ToList();
         return new Paged<StaffAccountView>(views, page, pageSize, total);
     }
 
@@ -73,8 +79,47 @@ public sealed class StaffAccountService(
             return created.Error!;
         }
 
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return created;
+        var account = created.Value!.Account;
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DuplicateRecordException)
+        {
+            // A parallel save took a value between the check and this save (unique index): answer as the check would.
+            if (await FindTakenFieldAsync(account.Username, account.PhoneNumber, account.Email, null, cancellationToken) is { } taken)
+            {
+                return taken;
+            }
+
+            throw;
+        }
+
+        return created.Value with { Account = await ViewAsync((await accounts.GetByIdAsync(account.Id, cancellationToken))!, cancellationToken) };
+    }
+
+    /// <summary>
+    /// MSG-ACCOUNT-09 (BR-ACCOUNT-02) naming the first of the username, phone number and email that another account
+    /// has, verified or not, with that account's id. Null when none is taken.
+    /// </summary>
+    public async Task<AppError?> FindTakenFieldAsync(string username, string? phone, string? email, Guid? accountId, CancellationToken cancellationToken)
+    {
+        if (await accounts.FindByUsernameAsync(username, cancellationToken) is { } sameUsername && sameUsername.Id != accountId)
+        {
+            return AppError.UsedByAnotherAccount(ErrorKind.Conflict, "Username", MessageCodes.Legacy.Msg03, sameUsername.Id);
+        }
+
+        if (phone is not null && await accounts.FindByPhoneAsync(phone, cancellationToken) is { } samePhone && samePhone.Id != accountId)
+        {
+            return AppError.UsedByAnotherAccount(ErrorKind.Conflict, "Phone number", MessageCodes.Legacy.Msg03, samePhone.Id);
+        }
+
+        if (email is not null && await accounts.FindByEmailAsync(email, cancellationToken) is { } sameEmail && sameEmail.Id != accountId)
+        {
+            return AppError.UsedByAnotherAccount(ErrorKind.Conflict, "Email", MessageCodes.Legacy.Msg03, sameEmail.Id);
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -150,7 +195,7 @@ public sealed class StaffAccountService(
             After = new { account.DisplayName, account.Username, account.PhoneNumber, account.Email, account.SubjectType, EmployeeId = employee?.Id, account.MustChangePassword },
         });
 
-        return new StaffAccountWithPassword(await ViewAsync(account, cancellationToken), temporaryPassword, now + Account.TemporaryPasswordLifetime);
+        return new StaffAccountWithPassword(await ViewAsync(account, cancellationToken), temporaryPassword, now + Account.TemporaryPasswordLifetime, MessageCodes.Account23);
     }
 
     public async Task<Result<StaffAccountView>> UpdateAsync(Guid id, UpdateStaffAccountRequest request, CancellationToken cancellationToken)
@@ -186,12 +231,14 @@ public sealed class StaffAccountService(
             // A new number must be verified again by the holder (at next login).
             account.PhoneNumber = phone;
             account.PhoneVerifiedAt = null;
+            await verification.CancelForChangedContactAsync(account.Id, VerificationChannel.Sms, cancellationToken);
         }
 
         if (account.Email != email)
         {
             account.Email = email;
             account.EmailVerifiedAt = null;
+            await verification.CancelForChangedContactAsync(account.Id, VerificationChannel.Email, cancellationToken);
         }
 
         audit.Record(new AuditEntry("Account.Updated", nameof(Account))
@@ -201,7 +248,21 @@ public sealed class StaffAccountService(
             Before = before,
             After = new { account.DisplayName, account.Username, account.PhoneNumber, account.Email },
         });
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DuplicateRecordException)
+        {
+            // A parallel save took a value between the check and this save (unique index): answer as the check would.
+            if (await FindTakenFieldAsync(username, phone, email, account.Id, cancellationToken) is { } taken)
+            {
+                return taken;
+            }
+
+            throw;
+        }
+
         return await ViewAsync(account, cancellationToken);
     }
 
@@ -211,7 +272,10 @@ public sealed class StaffAccountService(
     public Task<Result<StaffAccountView>> UnlockAsync(Guid id, ReasonRequest request, CancellationToken cancellationToken) =>
         ChangeStatusAsync(id, StatusIds.Account.Locked, StatusIds.Account.Active, request.Reason, cancellationToken);
 
-    /// <summary>New temporary password (24 h, must be changed at first login); every session ends.</summary>
+    /// <summary>
+    /// New temporary password (24 h, must be changed at first login) of an Active staff account (ACCOUNT-09.4); a Locked
+    /// one answers MSG-GEN-09. Every session ends.
+    /// </summary>
     public async Task<Result<StaffAccountWithPassword>> ResetPasswordAsync(Guid id, CancellationToken cancellationToken)
     {
         var account = await accounts.GetByIdAsync(id, cancellationToken);
@@ -223,6 +287,11 @@ public sealed class StaffAccountService(
         if (account.SubjectType != SubjectType.Staff)
         {
             return AppError.Forbidden;
+        }
+
+        if (account.StatusId != StatusIds.Account.Active)
+        {
+            return AppError.Conflict(UserMessages.WrongStatus("Account", statusCatalog.DisplayNameOf(account.StatusId)));
         }
 
         var now = timeProvider.GetUtcNow();
@@ -241,7 +310,7 @@ public sealed class StaffAccountService(
             After = new { account.MustChangePassword, account.TemporaryPasswordIssuedAt, SessionsRevoked = true },
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return new StaffAccountWithPassword(await ViewAsync(account, cancellationToken), temporaryPassword, now + Account.TemporaryPasswordLifetime);
+        return new StaffAccountWithPassword(await ViewAsync(account, cancellationToken), temporaryPassword, now + Account.TemporaryPasswordLifetime, MessageCodes.Account23);
     }
 
     private async Task<Result<StaffAccountView>> ChangeStatusAsync(Guid id, int from, int to, string? reason, CancellationToken cancellationToken)
@@ -307,23 +376,20 @@ public sealed class StaffAccountService(
             return AppError.Invalid("Email");
         }
 
-        if (await accounts.FindByUsernameAsync(normalizedUsername, cancellationToken) is { } sameUsername && sameUsername.Id != accountId)
+        if (await FindTakenFieldAsync(normalizedUsername, phone, normalizedEmail, accountId, cancellationToken) is { } taken)
         {
-            return AppError.UsedByAnotherAccount(ErrorKind.Conflict, "Username", MessageCodes.Legacy.Msg03, sameUsername.Id);
-        }
-
-        if (await accounts.FindByPhoneAsync(phone, cancellationToken) is { } samePhone && samePhone.Id != accountId)
-        {
-            return AppError.UsedByAnotherAccount(ErrorKind.Conflict, "Phone number", MessageCodes.Legacy.Msg03, samePhone.Id);
+            return taken;
         }
 
         return (name, normalizedUsername, phone, normalizedEmail);
     }
 
-    private async Task<StaffAccountView> ViewAsync(Account account, CancellationToken cancellationToken) =>
-        View(account, (await employees.GetByAccountIdAsync(account.Id, cancellationToken))?.Id ?? account.Employee?.Id);
+    private async Task<StaffAccountView> ViewAsync(Account account, CancellationToken cancellationToken) => View(
+        account,
+        (await employees.GetByAccountIdAsync(account.Id, cancellationToken))?.Id ?? account.Employee?.Id,
+        await grants.ListEffectiveForAccountAsync(account.Id, cancellationToken));
 
-    private StaffAccountView View(Account account, Guid? employeeId) => new(
+    private StaffAccountView View(Account account, Guid? employeeId, IEnumerable<AccessGrant> pairs) => new(
         account.Id,
         account.DisplayName,
         account.Username,
@@ -334,5 +400,6 @@ public sealed class StaffAccountService(
         statusCatalog.DisplayNameOf(account.StatusId),
         account.MustChangePassword,
         employeeId,
+        pairs.Select(g => new StaffAccountPairView(g.Id, g.ZoneId, g.Zone?.Name, g.ZoneId is null, g.Role.Code, g.Role.Name)).ToList(),
         AccountEditVersion.Of(account));
 }

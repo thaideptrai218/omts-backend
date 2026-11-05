@@ -9,8 +9,8 @@ namespace OMTS.Api.Controllers;
 
 /// <summary>
 /// FARM-03 – zone licenses; Cooperative Owner only. Create, edit and replace are multipart forms: the
-/// fields of <see cref="SaveZoneLicenseRequest"/> (repeat <c>zoneIds</c> per zone) plus the file in <c>file</c>
-/// (PDF, JPEG or PNG, at most 10 MB).
+/// fields of <see cref="SaveZoneLicenseRequest"/> (one <c>zoneId</c>) plus the file in <c>file</c>
+/// (PDF, JPEG or PNG, at most 10 MB). Writes need the zone In Use (MSG-GEN-09).
 /// </summary>
 [ApiController]
 [Authorize]
@@ -19,7 +19,7 @@ public sealed class ZoneLicensesController(ZoneLicenseService licenses) : Contro
 {
     private const long MaxRequestBytes = 11 * 1024 * 1024;
 
-    /// <summary>Every license covering the zone with its state as of <c>asOf</c> (default today), plus Missing rows.</summary>
+    /// <summary>The licenses of the zone with their state as of <c>asOf</c> (default today), newest first.</summary>
     [HttpGet("api/zones/{zoneId:guid}/licenses")]
     [ProducesResponseType<ZoneLicenseOverviewView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> ListForZone(Guid zoneId, DateOnly? asOf, CancellationToken cancellationToken) =>
@@ -44,8 +44,8 @@ public sealed class ZoneLicensesController(ZoneLicenseService licenses) : Contro
             .ToActionResult(l => StatusCode(StatusCodes.Status201Created, l));
 
     /// <summary>
-    /// Corrects a license that has not been replaced; <c>rowVersion</c> is required and <c>file</c> is optional here
-    /// (a new file replaces the stored one).
+    /// Corrects a license that is not Replaced (else MSG-GEN-09); <c>rowVersion</c> is required and <c>file</c> is optional
+    /// here (a new file replaces the stored one). The zone cannot change.
     /// </summary>
     [HttpPut("api/zone-licenses/{id:guid}")]
     [Consumes("multipart/form-data")]
@@ -56,8 +56,8 @@ public sealed class ZoneLicensesController(ZoneLicenseService licenses) : Contro
         (await licenses.UpdateAsync(id, request, await IncomingAsync(file, cancellationToken), cancellationToken)).ToActionResult(Ok);
 
     /// <summary>
-    /// Renewal: a new license replacing this one, with its own document in <c>file</c> (required). Empty
-    /// <c>documentType</c> and <c>zoneIds</c> keep those of the replaced license; no <c>rowVersion</c>.
+    /// Renewal: a new license of the same zone replacing this one, which is Replaced from today, with its own document in
+    /// <c>file</c> (required). An empty <c>documentType</c> keeps the replaced one's; no <c>rowVersion</c>.
     /// </summary>
     /// <param name="id">The license being replaced.</param>
     /// <param name="request">The new license's fields, one form field each.</param>

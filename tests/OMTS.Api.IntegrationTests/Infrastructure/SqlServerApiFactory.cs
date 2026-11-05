@@ -53,6 +53,13 @@ public sealed class SqlServerApiFactory(SqlServerTestDatabase database, IReadOnl
             SubjectType = subjectType,
             StatusId = StatusIds.Account.Active,
         };
+        if (subjectType == SubjectType.CooperativeOwner)
+        {
+            // The phone gate of ACCOUNT-02.1 holds for the Owner too: an Owner who works has verified it.
+            account.PhoneNumber = AcsTestKit.NewPhone();
+            account.PhoneVerifiedAt = DateTimeOffset.UtcNow;
+        }
+
         db.Accounts.Add(account);
         await db.SaveChangesAsync();
         return account;

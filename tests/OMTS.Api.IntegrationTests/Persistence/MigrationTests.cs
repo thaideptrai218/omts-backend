@@ -28,7 +28,7 @@ public class MigrationTests
     // Still read by live endpoints (raft lanes in use) or replaced by later tickets. The labor tables kept here went with EmployeesV2.
     private static readonly string[] KeptTables =
     [
-        "CultivationCycles", "SeedingEvents", "SeedReceiptLots", "LaneSegments", "CultivationLogEntries",
+        "CultivationCycles", "SeedingEvents", "LaneSegments", "CultivationLogEntries",
         "Products", "Customers",
     ];
 

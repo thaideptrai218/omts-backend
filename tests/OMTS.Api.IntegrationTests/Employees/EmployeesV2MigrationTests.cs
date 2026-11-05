@@ -30,7 +30,7 @@ public class EmployeesV2MigrationTests
 
         // By SQL: later migrations add columns of the model that this one does not have yet.
         var cooperative = Guid.NewGuid();
-        await ExecuteAsync(db, $"INSERT INTO Cooperatives (Id, FullName, StatusId, CreatedAt) VALUES ('{cooperative}', N'HTX', 201, SYSDATETIMEOFFSET())");
+        await ExecuteAsync(db, $"INSERT INTO Cooperatives (Id, FullName, CreatedAt) VALUES ('{cooperative}', N'HTX', SYSDATETIMEOFFSET())");
         var phone = NewPhone();
         await InsertEmployeeAsync(db, cooperative, "Một", phone, 401, "2026-01-01");
         await InsertEmployeeAsync(db, cooperative, "Hai", phone, 401, "2026-02-01");

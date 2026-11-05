@@ -9,9 +9,6 @@ namespace OMTS.Infrastructure.Persistence.Repositories;
 
 internal sealed class WaterMeasurementRepository(OmtsDbContext db) : IWaterMeasurementRepository
 {
-    // A correction chain is a handful of versions; the bound only stops a corrupted (cyclic) chain.
-    private const int MaxChainLength = 1000;
-
     public Task<FarmingZone?> GetZoneAsync(Guid zoneId, bool track, CancellationToken cancellationToken) =>
         Zones(track).FirstOrDefaultAsync(z => z.Id == zoneId, cancellationToken);
 
@@ -25,44 +22,23 @@ internal sealed class WaterMeasurementRepository(OmtsDbContext db) : IWaterMeasu
             .ToListAsync(cancellationToken);
     }
 
+    public Task<Raft?> GetRaftAsync(Guid raftId, CancellationToken cancellationToken) =>
+        db.Rafts.FirstOrDefaultAsync(r => r.Id == raftId, cancellationToken);
+
+    public Task<bool> HasRaftInUseAsync(Guid zoneId, CancellationToken cancellationToken) =>
+        db.Rafts.AnyAsync(r => r.ZoneId == zoneId && r.StatusId == StatusIds.Usage.InUse, cancellationToken);
+
+    public Task<bool> IsPhotoUsedAsync(string photoKey, CancellationToken cancellationToken) =>
+        db.WaterMeasurements.AnyAsync(m => m.PhotoUrl == photoKey, cancellationToken);
+
     public Task<WaterMeasurement?> GetAsync(Guid id, CancellationToken cancellationToken) =>
-        db.WaterMeasurements.Include(m => m.Zone).FirstOrDefaultAsync(m => m.Id == id, cancellationToken);
+        db.WaterMeasurements.Include(m => m.Zone).Include(m => m.Raft).FirstOrDefaultAsync(m => m.Id == id, cancellationToken);
 
     public Task<WaterMeasurement?> FindByClientOperationAsync(Guid accountId, Guid clientOperationId, CancellationToken cancellationToken) =>
         db.WaterMeasurements.AsNoTracking()
             .Include(m => m.Zone)
+            .Include(m => m.Raft)
             .FirstOrDefaultAsync(m => m.MeasuredByAccountId == accountId && m.ClientOperationId == clientOperationId, cancellationToken);
-
-    public async Task<IReadOnlyList<WaterMeasurement>> GetVersionChainAsync(Guid measurementId, CancellationToken cancellationToken)
-    {
-        var start = await db.WaterMeasurements.AsNoTracking().FirstOrDefaultAsync(m => m.Id == measurementId, cancellationToken);
-        if (start is null)
-        {
-            return [];
-        }
-
-        var chain = new List<WaterMeasurement> { start };
-        for (var previous = start; previous.CorrectedFromMeasurementId is { } previousId && chain.Count < MaxChainLength;)
-        {
-            previous = await db.WaterMeasurements.AsNoTracking().FirstAsync(m => m.Id == previousId, cancellationToken);
-            chain.Insert(0, previous);
-        }
-
-        for (var last = start; chain.Count < MaxChainLength;)
-        {
-            var lastId = last.Id;
-            var next = await db.WaterMeasurements.AsNoTracking().FirstOrDefaultAsync(m => m.CorrectedFromMeasurementId == lastId, cancellationToken);
-            if (next is null)
-            {
-                break;
-            }
-
-            chain.Add(next);
-            last = next;
-        }
-
-        return chain;
-    }
 
     public async Task<(IReadOnlyList<WaterMeasurement> Items, int Total)> SearchAsync(
         Guid zoneId, DateTimeOffset from, DateTimeOffset toExclusive, IReadOnlyCollection<int> statusIds, int page, int pageSize,
@@ -72,7 +48,8 @@ internal sealed class WaterMeasurementRepository(OmtsDbContext db) : IWaterMeasu
         var total = await query.CountAsync(cancellationToken);
         var items = await query
             .OrderByDescending(m => m.MeasuredAt)
-            .ThenByDescending(m => m.RecordVersion)
+            .ThenByDescending(m => m.CreatedAt)
+            .ThenByDescending(m => m.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
@@ -83,31 +60,32 @@ internal sealed class WaterMeasurementRepository(OmtsDbContext db) : IWaterMeasu
         Guid zoneId, DateTimeOffset from, DateTimeOffset toExclusive, IReadOnlyCollection<int> statusIds, CancellationToken cancellationToken) =>
         await InRange(zoneId, from, toExclusive, statusIds)
             .OrderBy(m => m.MeasuredAt)
-            .ThenBy(m => m.RecordVersion)
+            .ThenBy(m => m.CreatedAt)
+            .ThenBy(m => m.Id)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<ZoneLatestWaterMeasurement>> ListInUseZonesWithLatestConfirmedAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ZoneLatestWaterMeasurement>> ListInUseZonesWithLatestActiveAsync(CancellationToken cancellationToken)
     {
         var zones = await db.FarmingZones.Where(z => z.StatusId == StatusIds.Usage.InUse).OrderBy(z => z.Code).ToListAsync(cancellationToken);
         var latest = await db.WaterMeasurements.AsNoTracking()
-            .Where(m => m.StatusId == StatusIds.WaterMeasurement.Confirmed)
+            .Where(m => m.StatusId == StatusIds.WaterMeasurement.Active)
             .GroupBy(m => m.ZoneId)
-            .Select(g => g.OrderByDescending(m => m.MeasuredAt).ThenByDescending(m => m.ConfirmedAt).ThenByDescending(m => m.Id)
-                .Select(m => new { m.ZoneId, m.MeasuredAt, m.ConfirmedAt, m.Id, IsCorrection = m.CorrectedFromMeasurementId != null })
+            .Select(g => g.OrderByDescending(m => m.MeasuredAt).ThenByDescending(m => m.CreatedAt).ThenByDescending(m => m.Id)
+                .Select(m => new { m.ZoneId, m.MeasuredAt, m.CreatedAt, m.Id })
                 .First())
             .ToDictionaryAsync(x => x.ZoneId, cancellationToken);
 
         return zones
             .Select(z => latest.TryGetValue(z.Id, out var m)
-                ? new ZoneLatestWaterMeasurement(z, m.MeasuredAt, m.ConfirmedAt, m.Id, m.IsCorrection)
+                ? new ZoneLatestWaterMeasurement(z, m.MeasuredAt, m.CreatedAt, m.Id)
                 : new ZoneLatestWaterMeasurement(z, null))
             .ToList();
     }
 
-    public async Task<IReadOnlyList<WaterMeasurement>> ListLatestConfirmedAsync(Guid zoneId, int count, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<WaterMeasurement>> ListLatestActiveAsync(Guid zoneId, int count, CancellationToken cancellationToken) =>
         await db.WaterMeasurements.AsNoTracking()
-            .Where(m => m.ZoneId == zoneId && m.StatusId == StatusIds.WaterMeasurement.Confirmed)
-            .OrderByDescending(m => m.MeasuredAt).ThenByDescending(m => m.ConfirmedAt).ThenByDescending(m => m.Id)
+            .Where(m => m.ZoneId == zoneId && m.StatusId == StatusIds.WaterMeasurement.Active)
+            .OrderByDescending(m => m.MeasuredAt).ThenByDescending(m => m.CreatedAt).ThenByDescending(m => m.Id)
             .Take(count)
             .ToListAsync(cancellationToken);
 
@@ -127,6 +105,7 @@ internal sealed class WaterMeasurementRepository(OmtsDbContext db) : IWaterMeasu
     {
         var ids = statusIds.ToArray();
         return db.WaterMeasurements.AsNoTracking()
+            .Include(m => m.Raft)
             .Where(m => m.ZoneId == zoneId && m.MeasuredAt >= from && m.MeasuredAt < toExclusive && ids.Contains(m.StatusId));
     }
 }

@@ -1,19 +1,22 @@
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.WaterQuality.Dtos;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
 
 namespace OMTS.Application.Features.WaterQuality;
 
 /// <summary>
-/// ENV-04 – the Cooperative Owner sets the minimum and maximum of each water indicator per zone (or the same
-/// set for every In Use zone at once). New thresholds apply only to measurements confirmed afterwards: each
-/// confirmed measurement keeps the set it used, so existing alerts are never re-evaluated.
+/// WATER-04 – the Cooperative Owner sets the minimum and maximum of each water indicator per zone (or the same
+/// set for every In Use zone at once). New thresholds apply only to measurements saved afterwards: each
+/// measurement keeps its copy, so whether its values are outside never changes (BR-WATER-04). A Discontinued zone is
+/// read-only (GBR-01).
 /// </summary>
 public sealed class WaterThresholdService(
     IWaterMeasurementRepository measurements,
@@ -22,14 +25,17 @@ public sealed class WaterThresholdService(
     AuditLogService audit,
     IUnitOfWork unitOfWork)
 {
+    /// <summary>Object name used in MSG-GEN-09.</summary>
+    private const string ZoneObjectName = "farming zone";
+
     public async Task<Result<ZoneWaterThresholds>> GetAsync(Guid zoneId, CancellationToken cancellationToken) =>
         await measurements.GetZoneAsync(zoneId, track: false, cancellationToken) is { } zone ? View(zone) : AppError.NotFound;
 
-    /// <summary>The thresholds of every zone the caller may view (all zones for the Owner).</summary>
+    /// <summary>The thresholds of every In Use zone the caller may view (all of them for the Owner).</summary>
     public async Task<IReadOnlyList<ZoneWaterThresholds>> ListAsync(CancellationToken cancellationToken)
     {
         var permitted = await zoneAccess.PermittedZonesAsync(PermissionFunctions.WaterMeasurements, PermissionAction.View, cancellationToken);
-        return (await measurements.ListZonesAsync(permitted, inUseOnly: false, track: false, cancellationToken)).Select(View).ToList();
+        return (await measurements.ListZonesAsync(permitted, inUseOnly: true, track: false, cancellationToken)).Select(View).ToList();
     }
 
     public async Task<Result<ZoneWaterThresholds>> SetAsync(Guid zoneId, SetWaterThresholdsRequest request, CancellationToken cancellationToken)
@@ -44,6 +50,11 @@ public sealed class WaterThresholdService(
         if (zone is null)
         {
             return AppError.NotFound;
+        }
+
+        if (zone.StatusId != StatusIds.Usage.InUse)
+        {
+            return AppError.Conflict(UserMessages.WrongStatus(ZoneObjectName, statusCatalog.DisplayNameOf(zone.StatusId)));
         }
 
         Apply(zone, thresholds.Value!);
@@ -78,7 +89,9 @@ public sealed class WaterThresholdService(
             return;
         }
 
-        (zone.PhMin, zone.PhMax, zone.SalinityMin, zone.SalinityMax) = (thresholds.PhMin, thresholds.PhMax, thresholds.SalinityMin, thresholds.SalinityMax);
+        (zone.PhMin, zone.PhMax) = (thresholds.PhMin, thresholds.PhMax);
+        (zone.SalinityMin, zone.SalinityMax) = (thresholds.SalinityMin, thresholds.SalinityMax);
+        (zone.TemperatureMin, zone.TemperatureMax) = (thresholds.TemperatureMin, thresholds.TemperatureMax);
         audit.Record(new AuditEntry(WaterMeasurementAudit.ThresholdUpdated, nameof(FarmingZone))
         {
             RecordId = zone.Id,

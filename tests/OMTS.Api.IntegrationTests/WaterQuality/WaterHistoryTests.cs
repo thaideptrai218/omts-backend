@@ -10,15 +10,15 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
-/// <summary>ENV-03 – history list, detail with the version chain, chart and Excel export use only current confirmed values.</summary>
+/// <summary>WATER-03 – history list, detail, chart and Excel export use only active values (interim until OMTS-219 W3).</summary>
 public class WaterHistoryTests(AuthApiFactory api) : IClassFixture<AuthApiFactory>
 {
     private static readonly TimeSpan Local = TimeSpan.FromHours(7);
 
     [Fact]
-    public async Task Seeded_corrected_and_voided_measurements_leave_only_current_confirmed_values_in_chart_and_export()
+    public async Task Corrected_and_voided_measurements_leave_only_active_values_in_chart_and_export()
     {
-        var (z, ids) = await SeedAsync();
+        var (z, _) = await SeedAsync();
         var (from, to) = (DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(-2)), DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)));
 
         var chart = await z.Owner.GetFromJsonAsync<JsonElement>($"{z.Base}/chart?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}");
@@ -26,10 +26,11 @@ public class WaterHistoryTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
         var phValues = chart.GetProperty("periods").EnumerateArray().Where(p => !p.GetProperty("missing").GetBoolean())
             .Select(p => p.GetProperty("ph").GetProperty("maximum").GetDecimal()).ToList();
 
-        // Current: corrected version 7.2 and the untouched 7.6; not the corrected 9.0, the voided 5.0 or the draft 13.0.
+        // The corrected 7.2 and the untouched 7.6; not the 9.0 before the correction or the voided 5.0.
         Assert.Equal(2, counted);
         Assert.DoesNotContain(9.0m, phValues);
         Assert.Equal(8.5m, chart.GetProperty("thresholds").GetProperty("phMax").GetDecimal());
+        Assert.Equal(35m, chart.GetProperty("thresholds").GetProperty("temperatureMax").GetDecimal());
 
         var export = await z.Owner.GetAsync($"{z.Base}/export?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}");
         using var workbook = new XLWorkbook(await export.Content.ReadAsStreamAsync());
@@ -39,33 +40,33 @@ public class WaterHistoryTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
         Assert.Equal($"water-{z.Zone.Code}-{from:yyyy-MM-dd}-{to:yyyy-MM-dd}.xlsx", export.Content.Headers.ContentDisposition!.FileNameStar ?? export.Content.Headers.ContentDisposition.FileName);
         Assert.Equal([7.6m, 7.2m], rows.Order().Reverse());
         Assert.True(workbook.TryGetWorksheet("Monthly summary", out _));
-
-        var detail = await z.Owner.GetFromJsonAsync<JsonElement>($"/api/water-measurements/{ids.Corrected}");
-        Assert.Equal([9.0m, 7.2m], detail.GetProperty("versions").EnumerateArray().Select(v => v.GetProperty("ph").GetDecimal()));
-        Assert.Equal(["Corrected", "Confirmed"], detail.GetProperty("versions").EnumerateArray().Select(v => v.Text("status")));
+        Assert.Equal("Temperature (°C)", workbook.Worksheet("Measurements").Cell(1, 5).GetString());
     }
 
     [Fact]
-    public async Task History_defaults_to_confirmed_newest_first_and_shows_other_statuses_when_asked()
+    public async Task History_defaults_to_active_newest_first_and_shows_voided_when_asked()
     {
-        var (z, _) = await SeedAsync();
+        var (z, ids) = await SeedAsync();
 
-        var confirmed = await z.Owner.GetFromJsonAsync<JsonElement>(z.Base);
-        var all = await z.Owner.GetFromJsonAsync<JsonElement>($"{z.Base}?status=Draft,Confirmed&status=Corrected&status=Voided");
+        var active = await z.Owner.GetFromJsonAsync<JsonElement>(z.Base);
+        var all = await z.Owner.GetFromJsonAsync<JsonElement>($"{z.Base}?status=Active,Voided");
         var page = await z.Owner.GetFromJsonAsync<JsonElement>($"{z.Base}?status=All&pageSize=2&page=2");
+        var legacy = await z.Owner.GetAsync($"{z.Base}?status=Confirmed");
 
-        var rows = confirmed.GetProperty("items").EnumerateArray().ToList();
-        Assert.Equal(2, confirmed.GetProperty("total").GetInt32());
+        var rows = active.GetProperty("items").EnumerateArray().ToList();
+        Assert.Equal(2, active.GetProperty("total").GetInt32());
         Assert.True(rows[0].GetProperty("measuredAt").GetDateTimeOffset() >= rows[1].GetProperty("measuredAt").GetDateTimeOffset());
-        Assert.All(rows, r => Assert.Equal("Confirmed", r.Text("status")));
-        Assert.Equal("Cọc đo số 1", rows[0].Text("measurementPoint"));
-        Assert.Equal(5, all.GetProperty("total").GetInt32());
-        Assert.Equal(["Confirmed", "Corrected", "Draft", "Voided"], all.GetProperty("items").EnumerateArray().Select(r => r.Text("status")).Distinct().Order());
-        Assert.Equal(2, page.GetProperty("items").GetArrayLength());
-        Assert.Equal(5, page.GetProperty("total").GetInt32());
+        Assert.All(rows, r => Assert.Equal("Active", r.Text("status")));
+        Assert.Equal((z.Raft.Id, z.Raft.Code, 25m), (rows[0].GetProperty("raftId").GetGuid(), rows[0].Text("raftCode"), rows[0].GetProperty("temperature").GetDecimal()));
+        Assert.Equal(3, all.GetProperty("total").GetInt32());
+        Assert.Equal(["Active", "Voided"], all.GetProperty("items").EnumerateArray().Select(r => r.Text("status")).Distinct().Order());
+        Assert.Equal(1, page.GetProperty("items").GetArrayLength());
+        Assert.Equal(3, page.GetProperty("total").GetInt32());
         var voided = all.GetProperty("items").EnumerateArray().Single(r => r.Text("status") == "Voided");
-        Assert.Equal("Voided", voided.Text("alertState"));
-        Assert.Equal(20, confirmed.GetProperty("pageSize").GetInt32());
+        Assert.Equal(ids.Voided, voided.Id());
+        Assert.Equal("None", voided.Text("alertState"));
+        Assert.Equal(20, active.GetProperty("pageSize").GetInt32());
+        Assert.Equal(HttpStatusCode.BadRequest, legacy.StatusCode);
     }
 
     [Fact]
@@ -104,6 +105,7 @@ public class WaterHistoryTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
     [InlineData("chart?groupBy=week", "Group by")]
     [InlineData("?from=2026-13-01", "From")]
     [InlineData("?status=Deleted", "Status")]
+    [InlineData("?status=Draft", "Status")]
     [InlineData("export?from=2026-10-05&to=2026-10-01", "From")]
     // Extreme dates used to overflow DateTimeOffset (500); the month chart is capped at 10 years.
     [InlineData("?from=0001-01-01", "From")]
@@ -170,22 +172,22 @@ public class WaterHistoryTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
     }
 
     [Fact]
-    public async Task Export_needs_a_role_with_water_rights_in_the_zone_and_never_contains_drafts_or_voided_records()
+    public async Task Export_needs_a_role_with_water_rights_in_the_zone_and_never_contains_voided_records()
     {
         var (z, _) = await SeedAsync();
         // WATER-03 is No for the Accountant and Full* for the Zone Manager (§I.4.4).
-        var (viewer, _) = await api.StaffAsync(z.Zone, StaffRole.Accountant);
+        var (accountant, _) = await api.StaffAsync(z.Zone, StaffRole.Accountant);
         var (exporter, _) = await api.StaffAsync(z.Zone);
 
-        var refused = await viewer.GetAsync($"{z.Base}/export");
+        var refused = await accountant.GetAsync($"{z.Base}/export");
         var allowed = await exporter.GetAsync($"{z.Base}/export?status=All");
         using var workbook = new XLWorkbook(await allowed.Content.ReadAsStreamAsync());
 
         Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
         Assert.Equal("MSG-GEN-08", await refused.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
-        var statuses = workbook.Worksheet("Measurements").RowsUsed().Skip(1).Select(r => r.Cell(5).GetString()).ToList();
-        Assert.Equal(["Confirmed", "Confirmed", "Corrected"], statuses.Order());
+        var statuses = workbook.Worksheet("Measurements").RowsUsed().Skip(1).Select(r => r.Cell(6).GetString()).ToList();
+        Assert.Equal(["Active", "Active"], statuses);
     }
 
     [Fact]
@@ -218,38 +220,35 @@ public class WaterHistoryTests(AuthApiFactory api) : IClassFixture<AuthApiFactor
     }
 
     [Fact]
-    public async Task Detail_has_the_ocr_draft_thresholds_used_and_a_short_lived_photo_url()
+    public async Task Detail_has_the_thresholds_of_the_measurement_and_a_short_lived_photo_url()
     {
         var z = await api.ZoneAsync();
-        var draftId = (await (await z.RecognizeAsync("ph7.7_sal23")).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("measurement").Id();
-        await z.Owner.PostAsJsonAsync($"/api/water-measurements/{draftId}/confirm", new { ph = 7.5m });
+        var key = await z.Owner.PhotoKeyAsync(z.Zone.Id, "ph7.7_sal23");
+        var id = (await (await z.RecordAsync(7.5m, 23m, photoKey: key)).Content.ReadFromJsonAsync<JsonElement>()).Id();
 
-        var detail = await z.Owner.GetFromJsonAsync<JsonElement>($"/api/water-measurements/{draftId}");
+        var detail = await z.Owner.GetFromJsonAsync<JsonElement>($"/api/water-measurements/{id}");
         var photo = await z.Owner.GetAsync(detail.Text("photoUrl"));
 
-        Assert.Equal(7.7m, detail.GetProperty("ocrDraft").GetProperty("ph").GetDecimal());
         Assert.Equal(7.5m, detail.GetProperty("ph").GetDecimal());
         Assert.Equal(6.5m, detail.GetProperty("thresholdsUsed").GetProperty("phMin").GetDecimal());
-        Assert.Equal(z.Zone.Code, detail.Text("zoneCode"));
-        Assert.True(detail.GetProperty("isLatestVersion").GetBoolean());
+        Assert.Equal(10m, detail.GetProperty("thresholdsUsed").GetProperty("temperatureMin").GetDecimal());
+        Assert.Equal((z.Zone.Code, z.Raft.Code), (detail.Text("zoneCode"), detail.Text("raftCode")));
+        Assert.False(detail.TryGetProperty("ocrDraft", out _));
+        Assert.False(detail.TryGetProperty("recordVersion", out _));
         Assert.Equal(HttpStatusCode.OK, photo.StatusCode);
         Assert.Equal(WaterTestKit.Photo("ph7.7_sal23"), await photo.Content.ReadAsByteArrayAsync());
     }
 
-    /// <summary>
-    /// A zone with: one measurement corrected (9.0 → 7.2), one untouched (7.6), one voided (5.0) and one draft (13.0),
-    /// all measured within the last weeks.
-    /// </summary>
+    /// <summary>A zone with one measurement corrected (9.0 → 7.2), one untouched (7.6) and one voided (5.0), all within the last weeks.</summary>
     private async Task<(WaterZone Zone, (Guid Corrected, Guid Voided) Ids)> SeedAsync()
     {
         var z = await api.ZoneAsync();
         var now = DateTimeOffset.UtcNow;
         var toCorrect = await z.RecordedAsync(9.0m, 20m, measuredAt: now.AddDays(-20));
         await z.RecordedAsync(7.6m, 21m, measuredAt: now.AddDays(-10));
-        var toVoid = await z.RecordedAsync(5.0m, 22m, measuredAt: now.AddDays(-5));
-        await z.RecordedAsync(13.0m, 22m, confirm: false, measuredAt: now.AddDays(-1));
-        Assert.Equal(HttpStatusCode.Created, (await z.Owner.CorrectAsync(toCorrect.Id(), 7.2m, 20m, 1, measuredAt: now.AddDays(-20))).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await z.Owner.VoidAsync(toVoid.Id(), 1)).StatusCode);
+        var toVoid = await z.RecordedAsync(7.0m, 22m, measuredAt: now.AddDays(-5));
+        Assert.Equal(HttpStatusCode.OK, (await z.Owner.CorrectAsync(toCorrect.Id(), 7.2m, 20m, measuredAt: now.AddDays(-20))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await z.Owner.VoidAsync(toVoid.Id())).StatusCode);
         return (z, (toCorrect.Id(), toVoid.Id()));
     }
 

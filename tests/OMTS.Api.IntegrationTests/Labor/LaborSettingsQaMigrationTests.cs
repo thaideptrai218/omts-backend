@@ -28,7 +28,7 @@ public class LaborSettingsQaMigrationTests
         "SELECT dc.definition AS [Value] FROM sys.default_constraints dc JOIN sys.columns c ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id " +
         "WHERE dc.parent_object_id = OBJECT_ID('Cooperatives') AND c.name = 'PayPeriodStartDay'";
 
-    private static string InsertCooperative(Guid id) => $"INSERT INTO Cooperatives (Id, FullName, StatusId, CreatedAt) VALUES ('{id}', N'HTX', 201, SYSDATETIMEOFFSET())";
+    private static string InsertCooperative(Guid id) => $"INSERT INTO Cooperatives (Id, FullName, CreatedAt) VALUES ('{id}', N'HTX', SYSDATETIMEOFFSET())";
 
     [SqlServerFact]
     public async Task The_hand_edited_default_is_1_after_every_up_and_a_row_that_leaves_it_out_gets_it()
@@ -110,9 +110,4 @@ public class LaborSettingsQaMigrationTests
         Assert.Equal(4, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM Statuses WHERE [Group] = N'PAYROLL'"));
         Assert.DoesNotContain(own, await db.Database.GetPendingMigrationsAsync());
     }
-
-    // The two tests L2 changed in L1's migration tests insert by SQL what they inserted through the model: the row must be what the model wrote.
-    [Fact]
-    public void The_status_those_tests_write_by_hand_is_the_default_of_the_model() =>
-        Assert.Equal(201, new OMTS.Domain.Entities.Identity.Cooperative().StatusId);
 }

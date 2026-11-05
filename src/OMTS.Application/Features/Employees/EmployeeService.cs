@@ -83,7 +83,7 @@ public sealed class EmployeeService(
             After = EmployeeProfileChanges.Snapshot(employee, input.WorkingZoneIds, input.JobTypeIds),
             Reason = caller.IsOwner ? null : "The Zone Manager confirmed that the Cooperative Owner approved in person.",
         });
-        if (await SaveAsync(input, null, cancellationToken) is { } duplicate)
+        if (await SaveAsync(input, null, cancellationToken, created) is { } duplicate)
         {
             return duplicate;
         }
@@ -162,11 +162,12 @@ public sealed class EmployeeService(
 
     /// <summary>
     /// Saves; a parallel save of the same phone number passes the pre-check, so the unique index refuses the second one,
-    /// which then gets the same MSG-LABOR-03 as the pre-check. On an edit, any other duplicate is a type period, working zone
-    /// or job type row that a parallel save of this employee just added: its insert meets the index before the version check,
-    /// so it answers what that check would, MSG06. Other duplicates are left to the exception handler.
+    /// which then gets the same MSG-LABOR-03 as the pre-check, and a login account whose username, phone number or email was
+    /// taken meanwhile gets MSG-ACCOUNT-09. On an edit, any other duplicate is a type period, working zone or job type row
+    /// that a parallel save of this employee just added: its insert meets the index before the version check, so it answers
+    /// what that check would, MSG06. Other duplicates are left to the exception handler.
     /// </summary>
-    private async Task<AppError?> SaveAsync(EmployeeInput input, Guid? employeeId, CancellationToken cancellationToken)
+    private async Task<AppError?> SaveAsync(EmployeeInput input, Guid? employeeId, CancellationToken cancellationToken, StaffAccountWithPassword? created = null)
     {
         try
         {
@@ -175,9 +176,14 @@ public sealed class EmployeeService(
         }
         catch (DuplicateRecordException)
         {
-            if (await validator.PhoneRefusalAsync(input.PhoneNumber, employeeId, cancellationToken) is { } taken)
+            if (await validator.PhoneRefusalAsync(input.PhoneNumber, employeeId, cancellationToken) is { } phoneTaken)
             {
-                return taken;
+                return phoneTaken;
+            }
+
+            if (created is not null && await FindTakenFieldAsync(created, cancellationToken) is { } fieldTaken)
+            {
+                return fieldTaken;
             }
 
             if (employeeId is not null)
@@ -188,6 +194,9 @@ public sealed class EmployeeService(
             throw;
         }
     }
+
+    private Task<AppError?> FindTakenFieldAsync(StaffAccountWithPassword created, CancellationToken cancellationToken) =>
+        staffAccounts.FindTakenFieldAsync(created.Account.Username, created.Account.PhoneNumber, created.Account.Email, null, cancellationToken);
 
     /// <summary>Creates the login account of an employee who has none yet (Owner only); the temporary password is returned once.</summary>
     public async Task<Result<EmployeeSaved>> CreateAccountAsync(Guid id, NewEmployeeAccount request, CancellationToken cancellationToken)
@@ -214,7 +223,20 @@ public sealed class EmployeeService(
             return created.Error!;
         }
 
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DuplicateRecordException)
+        {
+            if (await FindTakenFieldAsync(created.Value!, cancellationToken) is { } taken)
+            {
+                return taken;
+            }
+
+            throw;
+        }
+
         return await SavedAsync(employee.Id, await callers.GetAsync(cancellationToken), created.Value, cancellationToken);
     }
 
@@ -246,6 +268,7 @@ public sealed class EmployeeService(
             saved.Text,
             saved.Code,
             created?.TemporaryPassword,
-            created?.TemporaryPasswordExpiresAt);
+            created?.TemporaryPasswordExpiresAt,
+            created?.MessageCode);
     }
 }

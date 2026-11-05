@@ -19,6 +19,9 @@ public class FixedRolesMatrixTests
     private const string R = "R";
     private const string No = "No";
 
+    /// <summary>R that also exports (a deviation only): View and Export of the row's actions, none of the others.</summary>
+    private const string RExport = "R+Export";
+
     /// <summary>UC, Zone Manager column, Accountant column (as in the SRS), function, actions of the use case.</summary>
     public static readonly TheoryData<string, string, string, string, PermissionAction[]> Matrix = new()
     {
@@ -78,11 +81,13 @@ public class FixedRolesMatrixTests
 
     /// <summary>
     /// Where the code deliberately differs from the SRS column: the Accountant views suppliers to pick the payee of a
-    /// supplier payment (PURCHASE-05). §I.4.4 shows PURCHASE-07 as No; kept by default until the BA answers (gap Q4).
+    /// supplier payment (PURCHASE-05). §I.4.4 shows PURCHASE-07 as No; kept by default until the BA answers (gap Q4). The
+    /// Accountant's R on PURCHASE-03 "includes exporting to a file", so it views and exports receipts (lead decision, QA P2 Q1).
     /// </summary>
     private static readonly Dictionary<(string Uc, StaffRole Role), string> Deviations = new()
     {
         [("PURCHASE-07", StaffRole.Accountant)] = R,
+        [("PURCHASE-03", StaffRole.Accountant)] = RExport,
     };
 
     [Theory]
@@ -108,7 +113,8 @@ public class FixedRolesMatrixTests
                     {
                         var column = Expected(row.Uc, fixedRole.Role, fixedRole.Role == StaffRole.ZoneManager ? row.Zm : row.Acc);
                         return row.Function == permission.FunctionCode
-                            && ((column == Full && row.Actions.Contains(action)) || (column == R && action == View));
+                            && ((column == Full && row.Actions.Contains(action)) || (column == R && action == View)
+                                || (column == RExport && action is View or Export && row.Actions.Contains(action)));
                     });
                     Assert.True(justified, $"{fixedRole.Code} holds {permission.FunctionCode} {action}, which no §I.4.4 row gives it.");
                 }
@@ -169,6 +175,10 @@ public class FixedRolesMatrixTests
             case R:
                 Assert.True(Holds(View), $"{uc}: {role} should view {function} (R).");
                 Assert.True(actions.Where(a => a != View).All(a => !Holds(a)), $"{uc}: {role} should only view {function} (R).");
+                break;
+            case RExport:
+                Assert.True(Holds(View) && Holds(Export), $"{uc}: {role} should view and export {function} (R+Export).");
+                Assert.True(actions.Where(a => a is not (View or Export)).All(a => !Holds(a)), $"{uc}: {role} should only view and export {function} (R+Export).");
                 break;
             default:
                 Assert.True(actions.All(a => !Holds(a)), $"{uc}: {role} should hold none of {string.Join(", ", actions)} on {function} (No).");

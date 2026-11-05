@@ -1,4 +1,5 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Entities.Purchasing;
 
 namespace OMTS.Domain.Entities.Cultivation;
 
@@ -10,8 +11,9 @@ public class SeedingEvent : AuditableEntity
 
     public DateOnly SeedingDate { get; set; }
 
+    /// <summary>The seed lot: a Seed line of a Completed purchase receipt (GBR-04). CYCLE C2 replaces this entity.</summary>
     public Guid SeedLotId { get; set; }
-    public SeedReceiptLot SeedLot { get; set; } = null!;
+    public PurchaseReceiptLine SeedLot { get; set; } = null!;
 
     public Guid RecordedByAccountId { get; set; }
     public string? Workers { get; set; }

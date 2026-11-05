@@ -16,7 +16,7 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 /// <summary>
 /// LAB-01 + ACS-09: the demo employees, and the staff accounts (with zone–role grants) created together with
 /// them through <see cref="EmployeeService"/>. The service issues random temporary passwords; this step then
-/// gives each account the fixed demo password and its intended login branch (see <see cref="DemoLoginKind"/>).
+/// gives each account the demo password and its intended login branch (see <see cref="DemoLoginKind"/>).
 /// One employee has Left. Matched by employee phone and by username.
 /// </summary>
 internal sealed class DemoStaffAndEmployeeStep : IDemoSeedStep
@@ -29,7 +29,7 @@ internal sealed class DemoStaffAndEmployeeStep : IDemoSeedStep
     public async Task<int> RunAsync(DemoSeedContext context, CancellationToken cancellationToken)
     {
         var service = context.Get<EmployeeService>();
-        var hash = context.Get<IPasswordHasher>().Hash(DemoSeedContext.Password);
+        var hash = context.Get<IPasswordHasher>().Hash(context.Password);
         var created = 0;
         foreach (var plan in DemoEmployeePlans.All)
         {

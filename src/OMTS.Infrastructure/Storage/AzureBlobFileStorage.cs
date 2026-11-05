@@ -52,6 +52,12 @@ internal sealed class AzureBlobFileStorage(
 
     public async Task<Stream?> OpenReadAsync(string key, CancellationToken cancellationToken = default)
     {
+        // The SDK normalizes "." segments and backslashes: without this check another spelling opens the same blob.
+        if (!StorageKeys.IsValid(key))
+        {
+            return null;
+        }
+
         try
         {
             var download = await Container.GetBlobClient(key).DownloadStreamingAsync(cancellationToken: cancellationToken);

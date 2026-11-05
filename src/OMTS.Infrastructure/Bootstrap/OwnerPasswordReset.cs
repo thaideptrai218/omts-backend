@@ -13,12 +13,11 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Infrastructure.Bootstrap;
 
 /// <summary>
-/// <c>dotnet OMTS.Api.dll seed --reset-owner-password</c>: recovery for a Cooperative Owner who cannot log in,
-/// typically after missing the 24-hour window of the bootstrap's temporary password. The new temporary
-/// password comes from <see cref="BootstrapSettings.OwnerTemporaryPasswordKey"/> (configuration, never a
-/// command-line argument, so it never lands in shell history). Same effect as an Owner's reset of a staff
-/// password, namely a temporary one that expires after 24 hours and must be changed at first login; every
-/// session ends and the reset is audited.
+/// <c>dotnet OMTS.Api.dll seed --reset-owner-password</c>: recovery for a Cooperative Owner who cannot log in, typically
+/// because the first password or a later one is lost and ACCOUNT-03 is impossible (BR-ACCOUNT-10). The new password
+/// comes from <see cref="BootstrapSettings.OwnerTemporaryPasswordKey"/> (configuration, never a command-line argument,
+/// so it never lands in shell history). Like the first password, it must be changed at first login and does not expire;
+/// every session ends and the reset is audited.
 /// </summary>
 public sealed class OwnerPasswordReset(
     OmtsDbContext db,
@@ -55,7 +54,7 @@ public sealed class OwnerPasswordReset(
             });
         }
 
-        // The key is the bootstrap's own: a value left in place would hand out the expired password again.
+        // The key is the bootstrap's own: a value left in place would hand out the same password again.
         if (passwordHasher.Verify(owner.PasswordHash, settings.OwnerTemporaryPassword) != PasswordCheck.Failed)
         {
             return Fail($"{BootstrapSettings.OwnerTemporaryPasswordKey} is the Owner's current password; set a new value first.");
@@ -80,7 +79,7 @@ public sealed class OwnerPasswordReset(
 
         return new BootstrapOutcome(DeploymentBootstrapper.Success,
         [
-            $"Temporary password set for Cooperative Owner '{owner.Username}'. It expires in 24 hours and must be changed at first login; every session was ended.",
+            $"Password set for Cooperative Owner '{owner.Username}'. It must be changed at first login; every session was ended.",
         ]);
     }
 

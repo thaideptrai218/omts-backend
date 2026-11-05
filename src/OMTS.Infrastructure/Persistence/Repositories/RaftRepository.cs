@@ -1,6 +1,7 @@
 using OMTS.Application.Common;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Features.Purchasing;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
@@ -15,6 +16,9 @@ internal sealed class RaftRepository(OmtsDbContext db) : IRaftRepository
             .Include(r => r.Lanes)
             .Include(r => r.LayoutVersions)
             .FirstOrDefaultAsync(r => r.Id == raftId, cancellationToken);
+
+    public async Task<IReadOnlyList<Raft>> GetByIdsAsync(IReadOnlyCollection<Guid> raftIds, CancellationToken cancellationToken) =>
+        raftIds.Count == 0 ? [] : await db.Rafts.AsNoTracking().Include(r => r.Zone).Where(r => raftIds.Contains(r.Id)).ToListAsync(cancellationToken);
 
     public Task<Raft?> FindByCodeAsync(Guid zoneId, string code, Guid? exceptRaftId, CancellationToken cancellationToken)
     {
@@ -64,7 +68,9 @@ internal sealed class RaftRepository(OmtsDbContext db) : IRaftRepository
             .Select(s => new
             {
                 s.Id, s.LaneId, s.SegmentType, s.FromPosition, s.ToPosition, s.SegmentDate, s.RecordedByAccountId, s.ConfirmedByAccountId,
-                s.SeedingId, SeedLotCode = s.Seeding != null ? s.Seeding.SeedLot.InternalCode : null, s.WriteOffReason,
+                // The seed lot is a receipt line: its code is the receipt code and the line number (GBR-04).
+                s.SeedingId, SeedLotReceiptCode = s.Seeding != null ? s.Seeding.SeedLot.Receipt.Code : null,
+                SeedLotLineNumber = s.Seeding != null ? (int?)s.Seeding.SeedLot.LineNumber : null, s.WriteOffReason,
             })
             .ToListAsync(cancellationToken);
 
@@ -75,7 +81,8 @@ internal sealed class RaftRepository(OmtsDbContext db) : IRaftRepository
             .Select(s => new LaneSegmentDetail(
                 s.Id, s.LaneId, s.SegmentType, s.FromPosition, s.ToPosition, s.SegmentDate,
                 names.GetValueOrDefault(s.RecordedByAccountId), s.ConfirmedByAccountId is { } c ? names.GetValueOrDefault(c) : null,
-                s.SeedingId, s.SeedLotCode, s.WriteOffReason))
+                s.SeedingId,
+                s is { SeedLotReceiptCode: { } receiptCode, SeedLotLineNumber: { } lineNumber } ? DocumentCodes.SeedLotCode(receiptCode, lineNumber) : null, s.WriteOffReason))
             .ToList();
     }
 

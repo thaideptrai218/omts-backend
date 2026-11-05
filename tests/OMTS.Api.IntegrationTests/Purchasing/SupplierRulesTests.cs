@@ -30,13 +30,13 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     }
 
     [Fact]
-    public async Task Too_long_name_or_contacts_return_MSG01()
+    public async Task Too_long_name_or_address_return_MSG01()
     {
         var owner = await factory.PurchasingOwnerAsync();
         var longName = await owner.PostAsJsonAsync("/api/suppliers", new { name = new string('a', 201), supplierType = "Seed", phoneNumber = NewPhone() });
         Assert.Equal("Name", await longName.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-        var longContacts = await owner.PostAsJsonAsync("/api/suppliers", new { name = "S", supplierType = "Seed", phoneNumber = NewPhone(), otherContacts = new string('a', 501) });
-        Assert.Equal("Other contacts", await longContacts.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        var longAddress = await owner.PostAsJsonAsync("/api/suppliers", new { name = "S", supplierType = "Seed", phoneNumber = NewPhone(), address = new string('a', 501) });
+        Assert.Equal("Address", await longAddress.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
     }
 
     [Fact]
@@ -72,10 +72,12 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var phone = view.GetProperty("phoneNumber").GetString();
         var edited = await (await manager.PutAsJsonAsync($"/api/suppliers/{id}", new
         {
-            name = "Phao xốp Hạ Long", supplierType = "Material", phoneNumber = phone, otherContacts = "Zalo 0900000000",
+            name = "Phao xốp Hạ Long", supplierType = "Material", phoneNumber = phone, address = "Bãi Cháy, Hạ Long", email = "phao@example.com",
             rowVersion = view.GetProperty("rowVersion").GetString(),
         })).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal("Phao xốp Hạ Long", edited.GetProperty("name").GetString());
+        Assert.Equal(
+            ("Phao xốp Hạ Long", "Bãi Cháy, Hạ Long", "phao@example.com"),
+            (edited.GetProperty("name").GetString(), edited.GetProperty("address").GetString(), edited.GetProperty("email").GetString()));
 
         var discontinued = await (await manager.PostAsync($"/api/suppliers/{id}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("Discontinued", discontinued.GetProperty("status").GetString());
@@ -96,7 +98,7 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     public async Task Discontinue_is_never_blocked_and_keeps_receipts_but_blocks_new_completions()
     {
         var world = await factory.WorldAsync();
-        var completed = await world.CompletedAsync(0, 0, new LineBody(world.Other, 1, 100_000));
+        var completed = await world.CompletedAsync(new LineBody(world.Other, 1, 100_000));
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 100_000)));
 
         await (await world.Owner.PostAsync($"/api/suppliers/{world.SupplierId}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
@@ -107,7 +109,6 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal("Supplier", await complete.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         var direct = await world.Owner.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 100_000)) with { Complete = true });
         Assert.Equal("Supplier", await direct.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-        Assert.Equal(0, await factory.QueryAsync(db => db.SupplierPayments.CountAsync(p => p.ReceiptId == draft.Id())));
 
         await (await world.Owner.PostAsync($"/api/suppliers/{world.SupplierId}/reactivate", null)).ReadAsync(HttpStatusCode.OK);
         await (await world.Owner.PostAsync($"/api/purchase-receipts/{draft.Id()}/complete", null)).ReadAsync(HttpStatusCode.OK);
@@ -141,24 +142,24 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     }
 
     [Fact]
-    public async Task Detail_returns_the_receipt_history_of_visible_zones_and_the_current_debt()
+    public async Task Detail_returns_the_whole_receipt_history_to_every_receipt_viewer_and_no_debt()
     {
         var world = await factory.WorldAsync();
-        var first = await world.CompletedAsync(0, 200_000, new LineBody(world.Other, 10, 100_000));
+        var first = await world.PaidAsync(200_000, new LineBody(world.Other, 10, 100_000));
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 50_000)));
         var (otherZone, _) = await factory.ZoneWithRaftAsync();
-        var elsewhere = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 3, 100_000)) with { ZoneId = otherZone.Id, Complete = true });
+        var elsewhere = await (await factory.ZoneManagerAsync(otherZone)).CreateReceiptAsync(world.Body(new LineBody(world.Other, 3, 100_000)) with { Complete = true });
 
         var view = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}");
-        Assert.Equal(800_000 + 300_000, view.Money("debt"));
+        // The supplier debt is PURCHASE-04, which the Zone Manager does not hold (§I.4.4): not on the supplier detail.
+        Assert.False(view.TryGetProperty("debt", out _));
         var history = view.GetProperty("receipts").EnumerateArray().Select(r => r.Id()).ToHashSet();
         Assert.Equal(new HashSet<Guid> { first.Id(), draft.Id(), elsewhere.Id() }, history);
 
-        // A Zone Manager of the first zone sees that zone's receipts only.
+        // Receipts have no zone (BR-FARM-08): a Zone Manager of another zone sees them all.
         var manager = await factory.ZoneManagerAsync(world.Zone);
         var managerView = await manager.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}");
-        Assert.DoesNotContain(managerView.GetProperty("receipts").EnumerateArray(), r => r.Id() == elsewhere.Id());
-        Assert.Contains(managerView.GetProperty("receipts").EnumerateArray(), r => r.Id() == first.Id());
+        Assert.Equal(history, managerView.GetProperty("receipts").EnumerateArray().Select(r => r.Id()).ToHashSet());
     }
 
     [Fact]
@@ -184,8 +185,8 @@ public class SupplierRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
 
         // Supplier debt is PURCHASE-04: the Zone Manager role does not hold SUPPLIER_PAYMENTS.
         var manager = await factory.ZoneManagerAsync(zone);
-        await (await manager.GetAsync($"/api/suppliers/{supplierId}/debt")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        await (await manager.GetAsync("/api/suppliers/debts")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await manager.GetAsync($"/api/supplier-debts/{supplierId}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await manager.GetAsync("/api/supplier-debts")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
     }
 
     [Fact]

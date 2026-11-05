@@ -11,7 +11,7 @@ namespace OMTS.Infrastructure.Ocr;
 /// <summary>
 /// OCR Service stand-in for development and tests (no real OCR call outside Production until a provider is
 /// chosen). Answers with <c>Ocr:Fake</c>, unless the photo bytes contain a marker text such as
-/// <c>ph7.8_sal25.5</c> (the file-name convention of the test photos), <c>conf0.6</c> (confidence),
+/// <c>ph7.8_sal25.5_tmp28.5</c> (the file-name convention of the test photos), <c>conf0.6</c> (confidence),
 /// <c>at2026-10-20T08:00</c> (local reading time), <c>ocr-fail</c> or <c>ocr-timeout</c>.
 /// </summary>
 public sealed partial class FakeOcrService(IOptions<OcrProviderOptions> options, ILogger<FakeOcrService> logger) : IOcrService
@@ -42,11 +42,13 @@ public sealed partial class FakeOcrService(IOptions<OcrProviderOptions> options,
         var confidence = Number(ConfidenceMarker().Match(text)) is { } c ? (double)c : fake.Confidence;
         var ph = Number(PhMarker().Match(text)) ?? fake.Ph;
         var salinity = Number(SalinityMarker().Match(text)) ?? fake.Salinity;
+        var temperature = Number(TemperatureMarker().Match(text)) ?? fake.Temperature;
         var measuredAt = Time(TimeMarker().Match(text)) ?? fake.MeasuredAt;
-        logger.LogInformation("Fake OCR read pH {Ph}, salinity {Salinity} ({ContentType})", ph, salinity, contentType);
+        logger.LogInformation("Fake OCR read pH {Ph}, salinity {Salinity}, temperature {Temperature} ({ContentType})", ph, salinity, temperature, contentType);
         return OcrResult.Read(
             ph is { } p ? new OcrReading<decimal>(p, confidence) : null,
             salinity is { } s ? new OcrReading<decimal>(s, confidence) : null,
+            temperature is { } t ? new OcrReading<decimal>(t, confidence) : null,
             measuredAt is { } at ? new OcrReading<DateTimeOffset>(at, confidence) : null);
     }
 
@@ -70,6 +72,9 @@ public sealed partial class FakeOcrService(IOptions<OcrProviderOptions> options,
 
     [GeneratedRegex(@"sal(?<v>\d{1,3}(?:\.\d{1,2})?)", RegexOptions.IgnoreCase)]
     private static partial Regex SalinityMarker();
+
+    [GeneratedRegex(@"tmp(?<v>\d{1,3}(?:\.\d{1,2})?)", RegexOptions.IgnoreCase)]
+    private static partial Regex TemperatureMarker();
 
     [GeneratedRegex(@"conf(?<v>[01](?:\.\d{1,3})?)", RegexOptions.IgnoreCase)]
     private static partial Regex ConfidenceMarker();

@@ -15,18 +15,19 @@ public class ForwardedHeadersTests(AuthApiFactory factory) : IClassFixture<AuthA
 {
     private const string ProxyAddress = "10.0.0.5";
 
+    // The limit is per minute, and logins sent one after another took longer than that on a busy CI runner, so the last one
+    // fell in a fresh window. Sent together, they all take their permit in one window, before the slow part of the login.
+
     [Fact]
     public async Task Clients_behind_a_trusted_proxy_get_their_own_login_bucket()
     {
         using var api = BehindProxy(trusted: true);
         var client = api.CreateClient();
 
-        await LoginFromAsync(client, "203.0.113.1");
-        await LoginFromAsync(client, "203.0.113.1");
-        var sameClient = await LoginFromAsync(client, "203.0.113.1");
+        var sameClient = await Task.WhenAll(LoginFromAsync(client, "203.0.113.1"), LoginFromAsync(client, "203.0.113.1"), LoginFromAsync(client, "203.0.113.1"));
         var otherClient = await LoginFromAsync(client, "203.0.113.2");
 
-        Assert.Equal(HttpStatusCode.TooManyRequests, sameClient.StatusCode);
+        Assert.Single(sameClient, r => r.StatusCode == HttpStatusCode.TooManyRequests);
         Assert.Equal(HttpStatusCode.Unauthorized, otherClient.StatusCode);
     }
 
@@ -37,11 +38,9 @@ public class ForwardedHeadersTests(AuthApiFactory factory) : IClassFixture<AuthA
         using var api = BehindProxy(trusted: false);
         var client = api.CreateClient();
 
-        await LoginFromAsync(client, "203.0.113.1");
-        await LoginFromAsync(client, "203.0.113.2");
-        var third = await LoginFromAsync(client, "203.0.113.3");
+        var answers = await Task.WhenAll(LoginFromAsync(client, "203.0.113.1"), LoginFromAsync(client, "203.0.113.2"), LoginFromAsync(client, "203.0.113.3"));
 
-        Assert.Equal(HttpStatusCode.TooManyRequests, third.StatusCode);
+        Assert.Single(answers, r => r.StatusCode == HttpStatusCode.TooManyRequests);
     }
 
     [Theory]

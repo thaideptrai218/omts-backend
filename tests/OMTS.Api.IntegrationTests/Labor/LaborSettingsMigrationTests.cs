@@ -25,7 +25,7 @@ public class LaborSettingsMigrationTests
         await migrator.MigrateAsync(previous);
 
         var cooperative = Guid.NewGuid();
-        await ExecuteAsync(db, $"INSERT INTO Cooperatives (Id, FullName, StatusId, CreatedAt) VALUES ('{cooperative}', N'HTX', 201, SYSDATETIMEOFFSET())");
+        await ExecuteAsync(db, $"INSERT INTO Cooperatives (Id, FullName, CreatedAt) VALUES ('{cooperative}', N'HTX', SYSDATETIMEOFFSET())");
         var jobType = Guid.NewGuid();
         await ExecuteAsync(db, $"INSERT INTO JobTypes (Id, Name, StatusId, CreatedAt) VALUES ('{jobType}', N'Thu hoạch', 101, SYSDATETIMEOFFSET())");
         var owner = Guid.NewGuid();

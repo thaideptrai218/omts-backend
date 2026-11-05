@@ -87,9 +87,11 @@ public sealed class NotificationInboxService(
 
         var rule = NotificationTypes.Find(notification.Type)?.Open ?? NotificationOpenAccess.OwnerOnly;
         var access = await permissions.GetAccessAsync(accountId, cancellationToken);
-        var allowed = access is not null && (rule.Function is { } function
-            ? access.Allows(function, rule.Action, PermissionScope.ZoneScoped, location.ZoneId)
-            : access.IsCooperativeOwner);
+        var allowed = access is not null && (rule.OwnTraderRecord
+            ? location.TraderAccountId == accountId
+            : rule.Function is { } function
+                ? access.Allows(function, rule.Action, PermissionScope.ZoneScoped, location.ZoneId)
+                : access.IsCooperativeOwner);
         return allowed
             ? new OpenedNotificationRecord(notification.Id, recordType, recordId, notification.RelatedRecordCode, location.ZoneId)
             : AppError.Forbidden;

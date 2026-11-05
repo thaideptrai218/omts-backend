@@ -42,8 +42,9 @@ internal sealed record DemoEmployeePlan(
 }
 
 /// <summary>
-/// The nine demo employees (LABOR-01): phones come from the fake range 0900 000 0xx, bank accounts from the fake range
-/// 9999 0000 00xx. The seasonal workers have job types on their profiles (see <see cref="DemoLaborSettingsStep"/>).
+/// The nine demo employees (LABOR-01): phones come from the fake range 0900 000 0xx. An employee's number is digits only,
+/// so only a pattern can show that it is fictional: bank numbers come from 9999 0000 00xx. The seasonal workers have job
+/// types on their profiles (see <see cref="DemoLaborSettingsStep"/>).
 /// </summary>
 internal static class DemoEmployeePlans
 {

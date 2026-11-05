@@ -12,7 +12,7 @@ using OMTS.Infrastructure.Persistence;
 
 namespace OMTS.Api.IntegrationTests.Platform;
 
-/// <summary><c>seed --reset-owner-password</c> (OMTS-214): recovery of an Owner who missed the 24-hour window.</summary>
+/// <summary><c>seed --reset-owner-password</c> (OMTS-214): recovery of an Owner who lost the first password.</summary>
 public class OwnerPasswordResetTests
 {
     private static readonly string BootstrapPassword = BootstrapTests.OwnerTemporaryPassword;
@@ -20,26 +20,32 @@ public class OwnerPasswordResetTests
     // Generated per run, so no password-like literal is committed (secret scanners).
     private static readonly string ResetPassword = AcsTestKit.NewPassword();
 
+    // PM decision 03/11: the Owner's first password is a forced change at first login and does not expire.
     [Fact]
-    public async Task Owner_who_missed_the_window_gets_a_new_temporary_password_and_every_session_ends()
+    public async Task Owner_first_password_does_not_expire_and_the_reset_replaces_it_and_ends_every_session()
     {
         var host = new AuthApiFactory();
         await using var api = BootstrapTests.WithSecrets(host);
         await BootstrapAsync(api);
         var client = api.CreateClient();
         var firstLogin = await AcsTestKit.LoginTokensAsync(client, "owner", BootstrapPassword);
-        await AgeTemporaryPasswordAsync(api, TimeSpan.FromHours(25));
-        var expired = await client.PostAsJsonAsync("/api/auth/login", new { identifier = "owner", password = BootstrapPassword });
+        await AgeTemporaryPasswordAsync(api, TimeSpan.FromDays(30));
+        var monthLater = await AcsTestKit.LoginTokensAsync(client, "owner", BootstrapPassword);
 
         await using var resetHost = WithResetPassword(api);
         var outcome = await ResetAsync(resetHost);
 
         var oldRefresh = await client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = firstLogin.GetProperty("refreshToken").GetString() });
+        var oldPassword = await client.PostAsJsonAsync("/api/auth/login", new { identifier = "owner", password = BootstrapPassword });
         var newLogin = await AcsTestKit.LoginTokensAsync(client, "owner", ResetPassword);
-        Assert.NotEqual(HttpStatusCode.OK, expired.StatusCode);
+        await AgeTemporaryPasswordAsync(api, TimeSpan.FromDays(30));
+        var newLoginLater = await AcsTestKit.LoginTokensAsync(client, "owner", ResetPassword);
+        Assert.True(monthLater.GetProperty("mustChangePassword").GetBoolean());
         Assert.Equal(DeploymentBootstrapper.Success, outcome.ExitCode);
         Assert.Equal(HttpStatusCode.Unauthorized, oldRefresh.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, oldPassword.StatusCode);
         Assert.True(newLogin.GetProperty("mustChangePassword").GetBoolean());
+        Assert.True(newLoginLater.GetProperty("mustChangePassword").GetBoolean());
 
         using var scope = api.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();

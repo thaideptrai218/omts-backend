@@ -37,6 +37,9 @@ internal sealed class AccountRepository(OmtsDbContext db) : IAccountRepository
     public Task<Account?> FindByVerifiedEmailAsync(string email, CancellationToken cancellationToken) =>
         db.Accounts.FirstOrDefaultAsync(a => a.Email == email && a.EmailVerifiedAt != null, cancellationToken);
 
+    public Task<Account?> FindByEmailAsync(string email, CancellationToken cancellationToken) =>
+        db.Accounts.FirstOrDefaultAsync(a => a.Email == email, cancellationToken);
+
     public async Task<(IReadOnlyList<Account> Items, int Total)> SearchStaffAsync(
         string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken)
     {

@@ -10,7 +10,7 @@ public sealed class WaterMeasurementOverdueOptions : IDailyJobOptions
 
     /// <summary>
     /// A host that starts after today's run time (deploy, restart) runs once at start, so that day is not skipped.
-    /// Safe because a zone gets MSG26 once per overdue period (marker <c>FarmingZone.WaterOverdueRemindedAt</c>).
+    /// Safe because a zone gets MSG-WATER-06 once per overdue period (marker <c>FarmingZone.WaterOverdueRemindedAt</c>).
     /// </summary>
     public bool CatchUpOnStart { get; set; } = true;
 }

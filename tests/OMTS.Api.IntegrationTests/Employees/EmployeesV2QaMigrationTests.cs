@@ -68,7 +68,7 @@ public class EmployeesV2QaMigrationTests
         await migrator.MigrateAsync(previous);
         // By SQL: later migrations add columns of the model that this one does not have yet.
         var cooperative = Guid.NewGuid();
-        await db.Database.ExecuteSqlAsync($"INSERT INTO Cooperatives (Id, FullName, StatusId, CreatedAt) VALUES ({cooperative}, N'HTX', 201, SYSDATETIMEOFFSET())");
+        await db.Database.ExecuteSqlAsync($"INSERT INTO Cooperatives (Id, FullName, CreatedAt) VALUES ({cooperative}, N'HTX', SYSDATETIMEOFFSET())");
         var phone = NewPhone();
         foreach (var (name, createdAt) in new[] { ("Một", "2026-01-01"), ("Hai", "2026-02-01") })
         {

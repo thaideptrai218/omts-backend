@@ -42,7 +42,7 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
         var updated = await owner.PutAsJsonAsync($"/api/zones/{zoneId}", ZoneBody(NewCode()) with { RowVersion = zone.GetProperty("rowVersion").GetString() });
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
         // InMemory does not generate rowversions: a version the server never issued stands for a stale one.
-        var stale = await owner.PutAsJsonAsync($"/api/zones/{zoneId}", ZoneBody(NewCode()) with { RowVersion = "AAAAAAAAB9E=" });
+        var stale = await owner.PutAsJsonAsync($"/api/zones/{zoneId}", ZoneBody(NewCode()) with { RowVersion = StaleRowVersion });
         Assert.Equal("MSG06", await stale.ErrorCodeAsync());
 
         // A Zone Manager of another zone: no write, no read of this zone, not in the lookup.
@@ -116,8 +116,8 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
         Assert.Equal("ExpiringSoon", license.GetProperty("state").GetString());
 
         var overview = await owner.GetFromJsonAsync<JsonElement>($"/api/zones/{zoneId}/licenses");
-        var rows = overview.GetProperty("licenses").EnumerateArray().ToList();
-        Assert.Contains(rows, r => r.GetProperty("state").GetString() == "Missing" && r.GetProperty("documentType").GetString() == "SEA_AREA_ALLOCATION");
+        var row = Assert.Single(overview.GetProperty("licenses").EnumerateArray());
+        Assert.Equal(("ExpiringSoon", true), (row.GetProperty("state").GetString(), row.GetProperty("isNewest").GetBoolean()));
 
         var job = factory.Services.GetRequiredService<ZoneLicenseReminderJob>();
         await job.RunOnceAsync(today);
@@ -157,13 +157,13 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
     {
         var response = await owner.PostAsJsonAsync("/api/zones", ZoneBody(NewCode()));
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return await response.Content.ReadFromJsonAsync<JsonElement>();
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("zone");
     }
 
     private static async Task<string> ZoneRowVersionAsync(HttpClient owner, Guid zoneId) =>
         (await owner.GetFromJsonAsync<JsonElement>($"/api/zones/{zoneId}")).GetProperty("rowVersion").GetString()!;
 
-    private static ZoneBodyDto ZoneBody(string code) => new(code, $"Zone {code}", "Bai Tu Long bay", 21.05m, 107.35m, 12.5m, "Buoy 3");
+    private static ZoneBodyDto ZoneBody(string code) => new(code, $"Zone {code}", "Bai Tu Long bay", 21.05m, 107.35m, 12.5m);
 
     private static RaftBodyDto RaftBody(string code, int lanes) => new(
         code, 21.05m, 107.35m, "Raft row 2", "40 m x 20 m", null,
@@ -180,7 +180,7 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
         };
         if (zoneId is not null)
         {
-            form.Add(new StringContent(zoneId.Value.ToString()), "zoneIds");
+            form.Add(new StringContent(zoneId.Value.ToString()), "zoneId");
         }
 
         if (rowVersion is not null)
@@ -195,7 +195,7 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
     }
 
     private sealed record ZoneBodyDto(
-        string Code, string Name, string Location, decimal? Latitude, decimal? Longitude, decimal Area, string WaterMeasurementPoint, string? RowVersion = null);
+        string Code, string Name, string Location, decimal? Latitude, decimal? Longitude, decimal Area, string? RowVersion = null);
 
     private sealed record LaneDto(int LaneNumber, decimal Length, string MarkerA, string MarkerB);
 

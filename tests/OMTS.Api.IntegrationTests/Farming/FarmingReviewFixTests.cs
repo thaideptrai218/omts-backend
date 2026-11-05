@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Features.Farming.Licenses;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Infrastructure.Jobs;
@@ -70,18 +71,22 @@ public class FarmingReviewFixTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal([5], problem.GetProperty("laneNumbers").EnumerateArray().Select(n => n.GetInt32()));
     }
 
-    // The reminder job loads only licenses with a notice due, never far-off or already-told ones.
+    // The reminder job loads only licenses of In Use zones with a notice due, never far-off or already-told ones.
     [Fact]
     public async Task Reminder_candidates_are_only_licenses_with_a_notice_due()
     {
         var today = Today;
-        var due = License(today.AddDays(10));
-        var far = License(today.AddDays(90));
-        var told = License(today.AddDays(5), expiringSent: true);
-        var expired = License(today.AddDays(-1), expiringSent: true);
-        var expiredTold = License(today.AddDays(-3), expiringSent: true, expiredSent: true);
-        var noExpiry = License(null);
-        await factory.UseDbAsync(db => db.ZoneComplianceDocuments.AddRange(due, far, told, expired, expiredTold, noExpiry));
+        var zoneId = (await factory.AddZoneAsync(NewCode())).Id;
+        var stoppedZoneId = (await factory.AddZoneAsync(NewCode())).Id;
+        await factory.UpdateAsync<FarmingZone>(stoppedZoneId, z => z.StatusId = StatusIds.Usage.Discontinued);
+        var due = License(zoneId, today.AddDays(10));
+        var far = License(zoneId, today.AddDays(90));
+        var told = License(zoneId, today.AddDays(5), expiringSent: true);
+        var expired = License(zoneId, today.AddDays(-1), expiringSent: true);
+        var expiredTold = License(zoneId, today.AddDays(-3), expiringSent: true, expiredSent: true);
+        var noExpiry = License(zoneId, null);
+        var zoneStopped = License(stoppedZoneId, today.AddDays(10));
+        await factory.UseDbAsync(db => db.ZoneComplianceDocuments.AddRange(due, far, told, expired, expiredTold, noExpiry, zoneStopped));
 
         using var scope = factory.Services.CreateScope();
         var ids = await scope.ServiceProvider.GetRequiredService<ZoneLicenseReminderService>().CandidateIdsAsync(today, default);
@@ -92,6 +97,7 @@ public class FarmingReviewFixTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.DoesNotContain(told.Id, ids);
         Assert.DoesNotContain(expiredTold.Id, ids);
         Assert.DoesNotContain(noExpiry.Id, ids);
+        Assert.DoesNotContain(zoneStopped.Id, ids);
     }
 
     // A host started after the daily run time (deploy, restart) runs once at start.
@@ -116,8 +122,9 @@ public class FarmingReviewFixTests(AuthApiFactory factory) : IClassFixture<AuthA
     private Task<int> DrawingChangesAsync(Guid raftId) =>
         factory.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == raftId && e.Action == "Raft.LayoutDrawingChanged"));
 
-    private static ZoneComplianceDocument License(DateOnly? expiry, bool expiringSent = false, bool expiredSent = false) => new()
+    private static ZoneComplianceDocument License(Guid zoneId, DateOnly? expiry, bool expiringSent = false, bool expiredSent = false) => new()
     {
+        ZoneId = zoneId,
         DocumentType = "AquacultureLicense",
         DocumentNumber = $"GP-{NewCode()}",
         ExpiryDate = expiry,
