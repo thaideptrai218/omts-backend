@@ -30,11 +30,9 @@ public class ZonesLicensesMigrationQaTests
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync(MigrationBefore(db));
 
-        var cooperative = new Cooperative { FullName = "HTX" };
-        var upper = new FarmingZone { Cooperative = cooperative, Code = "KV-B", Name = "B" };
-        var lower = new FarmingZone { Cooperative = cooperative, Code = "kv-a", Name = "A" };
-        db.FarmingZones.AddRange(upper, lower);
-        await db.SaveChangesAsync();
+        var cooperativeId = await ZoneRowsAtOlderSchema.AddCooperativeAsync(db);
+        var upper = new { Id = await ZoneRowsAtOlderSchema.AddZoneAsync(db, cooperativeId, "KV-B", "B") };
+        var lower = new { Id = await ZoneRowsAtOlderSchema.AddZoneAsync(db, cooperativeId, "kv-a", "A") };
         var (old, renewal) = (Guid.NewGuid(), Guid.NewGuid());
         await db.Database.ExecuteSqlAsync($"""
             INSERT INTO ZoneComplianceDocuments (Id, DocumentType, DocumentNumber, EffectiveDate, ExpiryDate, ExpiringReminderSentAt, CreatedAt)

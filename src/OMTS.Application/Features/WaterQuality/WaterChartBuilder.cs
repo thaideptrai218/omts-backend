@@ -4,11 +4,11 @@ using OMTS.Application.Features.WaterQuality.Dtos;
 
 namespace OMTS.Application.Features.WaterQuality;
 
-/// <summary>A confirmed measurement as the chart and the monthly summary see it.</summary>
+/// <summary>An active measurement as the chart and the monthly summary see it.</summary>
 public sealed record WaterSample(DateTimeOffset MeasuredAt, decimal Ph, decimal Salinity);
 
 /// <summary>
-/// ENV-03 chart aggregation: one period per month or day of the range (by local date in
+/// WATER-03 chart aggregation: one period per month or day of the range (by local date in
 /// Asia/Ho_Chi_Minh), each with average/minimum/maximum/count per indicator; a period without a
 /// measurement is returned with <c>Missing = true</c>.
 /// </summary>

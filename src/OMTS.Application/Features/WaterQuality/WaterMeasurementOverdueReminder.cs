@@ -8,11 +8,10 @@ using OMTS.Application.Features.Notifications;
 namespace OMTS.Application.Features.WaterQuality;
 
 /// <summary>
-/// Daily overdue water measurement reminder (formerly JOB-05, ENV-01 time event): every In Use zone whose
-/// latest Confirmed measurement is more than one calendar month old (or that has none and was created more
-/// than a month ago) gets MSG-WATER-06 once per overdue period, kept and pushed (normal type), to every active Cooperative Owner
-/// and the zone's staff holding View on WATER_MEASUREMENTS. Drafts, corrected and voided records never count; how a
-/// correction or a void re-arms the reminder is described on <see cref="WaterOverdueRule"/>.
+/// Daily overdue water measurement reminder. Interim until OMTS-219 W3 applies GFR-04: every In Use zone whose latest
+/// Active measurement is more than one calendar month old (or that has none and was created more than a month ago) gets
+/// MSG-WATER-06 once per overdue period, kept and pushed (normal type), to every active Cooperative Owner and the Zone
+/// Managers of the zone. Voided records never count; see <see cref="WaterOverdueRule"/> and <see cref="WaterOverdueRearm"/>.
 /// </summary>
 public sealed class WaterMeasurementOverdueReminder(
     IWaterMeasurementRepository measurements,
@@ -28,11 +27,10 @@ public sealed class WaterMeasurementOverdueReminder(
     {
         var now = timeProvider.GetUtcNow();
         var reminded = 0;
-        foreach (var latest in await measurements.ListInUseZonesWithLatestConfirmedAsync(cancellationToken))
+        foreach (var latest in await measurements.ListInUseZonesWithLatestActiveAsync(cancellationToken))
         {
             var zone = latest.Zone;
-            var knownAt = await PeriodKnownAtAsync(latest, cancellationToken);
-            if (!WaterOverdueRule.NeedsReminder(latest.LatestConfirmedMeasuredAt ?? zone.CreatedAt, zone.WaterOverdueRemindedAt, today, knownAt))
+            if (!WaterOverdueRule.NeedsReminder(latest.LatestMeasuredAt ?? zone.CreatedAt, zone.WaterOverdueRemindedAt, today, latest.LatestSavedAt))
             {
                 continue;
             }
@@ -40,7 +38,7 @@ public sealed class WaterMeasurementOverdueReminder(
             var accountIds = await recipients.GetRecipientsAsync(zone.Id, PermissionFunctions.WaterMeasurements, PermissionAction.View, cancellationToken);
             // TODO(OMTS-219 W3): GFR-04 {last_date} is the later of the latest active measurement and the start of the
             // earliest Open cycle of the zone; until cycles exist, a zone never measured falls back to its creation date.
-            var lastDate = BusinessClock.ToBusinessDate(latest.LatestConfirmedMeasuredAt ?? zone.CreatedAt);
+            var lastDate = BusinessClock.ToBusinessDate(latest.LatestMeasuredAt ?? zone.CreatedAt);
             await notifications.NotifyAsync(
                 accountIds,
                 new NotificationContent(
@@ -60,12 +58,4 @@ public sealed class WaterMeasurementOverdueReminder(
 
         return reminded;
     }
-
-    // A correction (ENV-02) is confirmed now but keeps the reminder state of an earlier version unless it moved the
-    // measurement later than all of them (WaterOverdueRule.PeriodKnownAt); only read when a reminder was already sent.
-    // The chain stops at the version read above, so a correction saved in between is not mixed in.
-    private async Task<DateTimeOffset?> PeriodKnownAtAsync(ZoneLatestWaterMeasurement latest, CancellationToken cancellationToken) =>
-        latest is { LatestIsCorrection: true, LatestId: { } id, Zone.WaterOverdueRemindedAt: not null }
-            ? WaterOverdueRule.PeriodKnownAt(await measurements.GetVersionChainAsync(id, cancellationToken), upTo: id)
-            : latest.LatestConfirmedAt;
 }

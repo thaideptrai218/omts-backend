@@ -41,21 +41,21 @@ internal static class NotificationSmsLayouts
     {
         if (parameters.GetValueOrDefault("zone_name") is not string zone
             || parameters.GetValueOrDefault("measurement_time") is not DateTimeOffset measuredAt
+            || parameters.GetValueOrDefault("raft_code") is not string raft
             || parameters.GetValueOrDefault("values_outside") is not IReadOnlyList<WaterValueOutside> values)
         {
             return null;
         }
 
         var corrected = parameters.GetValueOrDefault("corrected") is true;
-        var raft = parameters.GetValueOrDefault("raft_code") as string;
 
-        string Full(IReadOnlyList<string> free) => UserMessages.WaterAlert(corrected, free[0], raft is null ? null : free[1], measuredAt, values).Text;
+        string Full(IReadOnlyList<string> free) => UserMessages.WaterAlert(corrected, free[0], free[1], measuredAt, values).Text;
         string Short(IReadOnlyList<string> free) =>
-            $"Water alert{(corrected ? " (corrected)" : "")}: zone {free[0]}{(raft is null ? "" : $", raft {free[1]}")}, at {BusinessClock.Format(measuredAt)}. "
+            $"Water alert{(corrected ? " (corrected)" : "")}: zone {free[0]}, raft {free[1]}, at {BusinessClock.Format(measuredAt)}. "
             + $"{string.Join("; ", values.Select(v => v.Describe().Replace(" is too ", " ")))}.";
 
         return new NotificationSmsLayout(
-            raft is null ? [new SmsFreeText(zone, ZoneMinimum)] : [new SmsFreeText(zone, ZoneMinimum), new SmsFreeText(raft, RaftMinimum)],
+            [new SmsFreeText(zone, ZoneMinimum), new SmsFreeText(raft, RaftMinimum)],
             [Full, free => WithoutEnding(Full(free), CheckTheWater), Short]);
     }
 

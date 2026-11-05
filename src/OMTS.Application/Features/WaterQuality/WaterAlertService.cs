@@ -5,55 +5,38 @@ using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Notifications;
 using OMTS.Application.Features.WaterQuality.Dtos;
-using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
-using OMTS.Domain.Entities.Farming;
 
 namespace OMTS.Application.Features.WaterQuality;
 
 /// <summary>
-/// Confirmation step shared by ENV-01 (confirm, create confirmed) and ENV-02 (correction version): stores the
-/// threshold set used (BR-07), evaluates the values and, on a violation, raises the alert with mandatory
-/// WATER_ALERT notifications (MSG-WATER-03) to every active Cooperative Owner and the zone's staff holding View on
-/// WATER_MEASUREMENTS, except the Owner who confirmed it (the two callers always pass the confirming account; null
-/// would mean no actor and removes nobody). Notification rows join the caller's unit of work; push is sent after its commit.
+/// Checks a measurement against its own thresholds (BR-WATER-04) and, when a value is outside, sends the mandatory
+/// WATER_ALERT notification (MSG-WATER-03) to every active Cooperative Owner and the Zone Managers of the zone, except
+/// the Owner who did the action. Notification rows join the caller's unit of work; push is sent after its commit.
 /// </summary>
 public sealed class WaterAlertService(
     IZoneRecipientQuery recipients, OwnerActorRecipientFilter ownerActorFilter, INotificationDispatcher notifications, TimeProvider timeProvider)
 {
     public const string AlertTitle = "Water quality alert";
 
-    /// <summary>The measurement must carry its final pH and salinity.</summary>
-    public async Task ConfirmAsync(
-        WaterMeasurement measurement, FarmingZone zone, WaterThresholds thresholds, Guid? confirmedBy, CancellationToken cancellationToken)
+    /// <param name="measurement">With its final values and the thresholds of the measurement.</param>
+    /// <param name="corrected">An alert after a correction is marked as such in the message.</param>
+    public async Task EvaluateAsync(
+        WaterMeasurement measurement, string zoneName, string raftCode, Guid actorId, bool corrected, CancellationToken cancellationToken)
     {
-        var now = timeProvider.GetUtcNow();
-        measurement.StatusId = StatusIds.WaterMeasurement.Confirmed;
-        measurement.ConfirmedByAccountId = confirmedBy;
-        measurement.ConfirmedAt = now;
-        measurement.PhMinUsed = thresholds.PhMin;
-        measurement.PhMaxUsed = thresholds.PhMax;
-        measurement.SalinityMinUsed = thresholds.SalinityMin;
-        measurement.SalinityMaxUsed = thresholds.SalinityMax;
-
-        var evaluation = WaterThresholdEvaluator.Evaluate(
-            measurement.Ph ?? throw new InvalidOperationException("A confirmed measurement needs its pH."),
-            measurement.Salinity ?? throw new InvalidOperationException("A confirmed measurement needs its salinity."),
-            thresholds);
+        var evaluation = WaterThresholdEvaluator.Evaluate(measurement.Ph, measurement.Salinity, measurement.Temperature, WaterThresholds.UsedBy(measurement));
         measurement.ThresholdExceeded = evaluation.Exceeded;
         measurement.ViolatedValues = evaluation.ViolatedValues;
-        measurement.AlertedAt = evaluation.Exceeded ? now : null;
+        measurement.AlertedAt = evaluation.Exceeded ? timeProvider.GetUtcNow() : null;
         if (!evaluation.Exceeded)
         {
             return;
         }
 
-        var allRecipients = await recipients.GetRecipientsAsync(zone.Id, PermissionFunctions.WaterMeasurements, PermissionAction.View, cancellationToken);
-        // The Owner is not told of their own measurement or correction (PM decision OMTS-216); the zone's staff still are.
-        var accountIds = await ownerActorFilter.WithoutOwnerActorAsync(allRecipients, confirmedBy, cancellationToken);
-        // Measurements have no raft yet (the raft of a measurement comes with the WATER ticket).
-        var message = UserMessages.WaterAlert(
-            corrected: measurement.CorrectedFromMeasurementId is not null, zone.Name, raftCode: null, measurement.MeasuredAt, evaluation.ValuesOutside);
+        var allRecipients = await recipients.GetRecipientsAsync(measurement.ZoneId, PermissionFunctions.WaterMeasurements, PermissionAction.View, cancellationToken);
+        // The Owner is not told of their own measurement or correction (PM decision 03/11); the Zone Managers still are.
+        var accountIds = await ownerActorFilter.WithoutOwnerActorAsync(allRecipients, actorId, cancellationToken);
+        var message = UserMessages.WaterAlert(corrected, zoneName, raftCode, measurement.MeasuredAt, evaluation.ValuesOutside);
         await notifications.NotifyAsync(
             accountIds,
             new NotificationContent(NotificationTypes.WaterAlert, AlertTitle, message, new RelatedRecord(RelatedRecordTypes.WaterMeasurement, measurement.Id)),

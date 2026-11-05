@@ -23,7 +23,7 @@ public class MandatorySmsTextQaTests
     private static string Digits(string text) => new(text.Where(char.IsAsciiDigit).ToArray());
 
     private static string AlertWithZone(string zone, params WaterValueOutside[] values) => Render(
-        NotificationTypes.WaterAlert, new NotificationContent(NotificationTypes.WaterAlert, "Title", UserMessages.WaterAlert(false, zone, null, MeasuredAt, values)));
+        NotificationTypes.WaterAlert, new NotificationContent(NotificationTypes.WaterAlert, "Title", UserMessages.WaterAlert(false, zone, "R01", MeasuredAt, values)));
 
     private static string Render(string type, NotificationContent content)
     {
@@ -191,7 +191,7 @@ public class MandatorySmsTextQaTests
             new NotificationContent(
                 NotificationTypes.WaterAlert,
                 "Title",
-                UserMessages.WaterAlert(true, "Vùng nuôi hàu Vịnh Bái Tử Long khu số 2", null, MeasuredAt, [Ph(), Salinity()])));
+                UserMessages.WaterAlert(true, "Vùng nuôi hàu Vịnh Bái Tử Long khu số 2", "R01", MeasuredAt, [Ph(), Salinity()])));
 
         Assert.True(text.Contains("Salinity 12"), text);
     }

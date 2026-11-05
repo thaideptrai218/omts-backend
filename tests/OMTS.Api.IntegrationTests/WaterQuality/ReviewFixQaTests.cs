@@ -24,7 +24,7 @@ public class ReviewFixQaTests
     }
 
     [Fact]
-    public async Task Production_with_the_provider_unset_reads_no_values_and_keeps_the_draft()
+    public async Task Production_with_the_provider_unset_reads_no_values_and_keeps_the_photo()
     {
         await using var api = new ProductionWaterFactory(string.Empty);
         var z = await api.ZoneAsync();
@@ -39,10 +39,8 @@ public class ReviewFixQaTests
         Assert.Equal("MSG-WATER-01", ocr.GetProperty("warning").Text("code"));
         Assert.Equal(JsonValueKind.Null, ocr.GetProperty("ph").ValueKind);
         Assert.Equal(JsonValueKind.Null, ocr.GetProperty("salinity").ValueKind);
-        var draft = body.GetProperty("measurement");
-        Assert.Equal("Draft", draft.Text("status"));
-        Assert.Equal(JsonValueKind.Null, draft.GetProperty("ph").ValueKind);
-        Assert.Equal(JsonValueKind.Null, draft.GetProperty("salinity").ValueKind);
+        Assert.Equal(JsonValueKind.Null, ocr.GetProperty("temperature").ValueKind);
+        Assert.NotNull(body.Text("photoKey"));
     }
 
     [Theory]

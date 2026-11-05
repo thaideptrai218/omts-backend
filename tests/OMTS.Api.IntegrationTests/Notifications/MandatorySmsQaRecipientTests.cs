@@ -94,22 +94,19 @@ public class MandatorySmsQaRecipientTests(AuthApiFactory api) : IClassFixture<Au
     }
 
     [Fact]
-    public async Task The_owner_who_confirms_a_draft_or_corrects_is_left_out_and_the_others_are_told()
+    public async Task The_owner_who_records_or_corrects_is_left_out_and_the_others_are_told()
     {
         var z = await api.ZoneAsync();
         var secondOwner = await api.AddAccountAsync(NewCode(), NewPassword());
-        var (managerClient, manager) = await api.StaffAsync(z.Zone);
-        var draft = await z.RecordedAsync(9.1m, 20m, confirm: false, client: managerClient);
-
-        var confirmed = await z.Owner.PostAsJsonAsync($"/api/water-measurements/{draft.Id()}/confirm", new { });
-        Assert.Equal(HttpStatusCode.OK, confirmed.StatusCode);
+        var (_, manager) = await api.StaffAsync(z.Zone);
+        var recorded = await z.RecordedAsync(9.1m, 20m);
 
         Assert.Empty(api.SmsTo(z.OwnerAccount));
         Assert.Single(api.SmsTo(secondOwner));
         Assert.Single(api.SmsTo(manager));
 
-        var corrected = await z.Owner.CorrectAsync(draft.Id(), 9.5m, 20m, recordVersion: 1);
-        Assert.Equal(HttpStatusCode.Created, corrected.StatusCode);
+        var corrected = await z.Owner.CorrectAsync(recorded.Id(), 9.5m, 20m);
+        Assert.Equal(HttpStatusCode.OK, corrected.StatusCode);
 
         Assert.Empty(api.SmsTo(z.OwnerAccount));
         Assert.Equal(2, api.SmsTo(secondOwner).Count);
@@ -124,9 +121,9 @@ public class MandatorySmsQaRecipientTests(AuthApiFactory api) : IClassFixture<Au
         var manager = await ManagerAsync(z.Zone);
         var id = (await z.RecordedAsync(9.1m, 20m)).Id();
 
-        var corrected = await z.Owner.CorrectAsync(id, 9.1m, 20m, recordVersion: 1);
+        var corrected = await z.Owner.CorrectAsync(id, 9.1m, 20m);
 
-        Assert.Equal(HttpStatusCode.Created, corrected.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, corrected.StatusCode);
         Assert.Equal(2, api.SmsTo(manager).Count);
     }
 

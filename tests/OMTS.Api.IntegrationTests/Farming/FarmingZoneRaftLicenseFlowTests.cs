@@ -163,7 +163,7 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
     private static async Task<string> ZoneRowVersionAsync(HttpClient owner, Guid zoneId) =>
         (await owner.GetFromJsonAsync<JsonElement>($"/api/zones/{zoneId}")).GetProperty("rowVersion").GetString()!;
 
-    private static ZoneBodyDto ZoneBody(string code) => new(code, $"Zone {code}", "Bai Tu Long bay", 21.05m, 107.35m, 12.5m, "Buoy 3");
+    private static ZoneBodyDto ZoneBody(string code) => new(code, $"Zone {code}", "Bai Tu Long bay", 21.05m, 107.35m, 12.5m);
 
     private static RaftBodyDto RaftBody(string code, int lanes) => new(
         code, 21.05m, 107.35m, "Raft row 2", "40 m x 20 m", null,
@@ -195,7 +195,7 @@ public class FarmingZoneRaftLicenseFlowTests(AuthApiFactory factory) : IClassFix
     }
 
     private sealed record ZoneBodyDto(
-        string Code, string Name, string Location, decimal? Latitude, decimal? Longitude, decimal Area, string WaterMeasurementPoint, string? RowVersion = null);
+        string Code, string Name, string Location, decimal? Latitude, decimal? Longitude, decimal Area, string? RowVersion = null);
 
     private sealed record LaneDto(int LaneNumber, decimal Length, string MarkerA, string MarkerB);
 

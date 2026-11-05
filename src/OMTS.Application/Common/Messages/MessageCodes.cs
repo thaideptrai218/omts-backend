@@ -20,6 +20,7 @@ public static class MessageCodes
     public const string Farm02 = "MSG-FARM-02";
 
     public const string Water01 = "MSG-WATER-01";
+    public const string Water02 = "MSG-WATER-02";
     public const string Water03 = "MSG-WATER-03";
     public const string Water05 = "MSG-WATER-05";
     public const string Water06 = "MSG-WATER-06";
@@ -74,7 +75,7 @@ public static class MessageCodes
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
-        Account01, Account22, Purchase01, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Sale04, Sale05, Debt01, Debt02,
+        Account01, Account22, Purchase01, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Sale04, Sale05, Debt01, Debt02, Water02,
     };
 
     /// <summary>
