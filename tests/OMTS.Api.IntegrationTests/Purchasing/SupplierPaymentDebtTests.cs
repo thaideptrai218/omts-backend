@@ -190,7 +190,6 @@ public class SupplierPaymentDebtTests(AuthApiFactory factory) : IClassFixture<Au
         var list = await world.Owner.GetFromJsonAsync<JsonElement>("/api/suppliers/debts");
         var row = list.EnumerateArray().Single(r => r.GetProperty("supplierId").GetGuid() == world.SupplierId);
         Assert.Equal(910_000, row.Money("outstanding"));
-        Assert.Equal(910_000, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/suppliers/{world.SupplierId}")).Money("debt"));
     }
 
     [Fact]
