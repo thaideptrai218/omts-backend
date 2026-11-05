@@ -84,7 +84,10 @@ an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid l
 fractional quantity (its amount is not a whole thousand), with a return. Payments to the suppliers (`TT` codes, not linked to
 receipts), one amount of money paid back and one payment cancelled feed the supplier debts (`GET /api/supplier-debts`). The Owner's
 list holds a MSG-PURCHASE-01 notification for each completed receipt and a MSG-PURCHASE-04 for each transaction.
-The demo data also holds 4 products (one Discontinued) and 7 customer profiles (2 linked to the trader accounts, 2 the same buyer ready to merge).
+The demo data also holds 4 products (one Discontinued), 7 customer profiles (2 linked to the trader accounts, 2 the same buyer ready to merge) and
+4 purchase requests of `thuonglai1`, one in each state (Awaiting response, Accepted for fewer kg with pay later, Declined, Cancelled).
+An answer sends an SMS, so with an SMS sender other than Fake or None the requests stay unanswered and the seed output says so;
+such a sender gets no mandatory SMS of the seed either (new purchase requests, water alerts).
 `DEMO-01` and `DEMO-02` have water thresholds (pH 7.5–8.5, salinity 18–32 ‰, temperature 15–32 °C) and one water
 measurement a day for the 30 days before the seed day, going round the rafts In Use of the zone, each with its temperature
 and a placeholder meter photo: three readings outside the thresholds, one corrected reading (a salinity of 2.6 ‰ fixed to
@@ -237,7 +240,9 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   open the record (e.g. a revoked zone–role pair), 404 MSG-ACCOUNT-22 when the record was removed. A push carries the
   notification id.
 - The same table keeps SMS and Zalo OA sendings to traders (`channel`, phone, delivery status Sending / Sent / Not
-  sent, provider message id or error code); they are never in a list. No sender uses them yet (SALE-06, TRACE-04).
+  sent, provider message id or error code); they are never in a list. The response to a purchase request (SALE-03) uses
+  them through `ITraderMessageSender`, whose only route is SMS (`Sms:Provider`, Fake or None) until the Zalo OA templates
+  are approved; SALE-06 and TRACE-04 follow.
 - Mandatory types also go out as one SMS (PM decision OMTS-216, 03/11): to the Owners among the recipients and, for the
   water alert and its withdrawal, to the Zone Managers of the zone among them. The rule is data on the type
   (`NotificationSmsRule`, `NotificationTypes.All`). The SMS shares the queue of the push: sent once, only after the save
@@ -245,9 +250,10 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   recipient without a verified phone number gets none and a log line. The text is the MSG text without Vietnamese marks,
   at most 160 GSM 7-bit characters; a money type (`MoneyToOwner`) carries only its name, document code and amount, so
   never a bank account number. Operational texts read as their fields do, digits included. At 160 the values, allowed
-  ranges, time and expiry date stay; in order the free text gives way to a short minimum (zone name or list, raft code or
-  license type name, license number), then the closing sentence, then the longer wording of the water alert, then the
-  free text below its minimum. Logs hold the type and the account id only, never what a provider answered.
+  ranges, time, expiry date and, for a new purchase request, kg and pickup date stay; in order the free text gives way to
+  a short minimum (zone name or list, raft code or license type name, license number; note, customer, product), then the
+  closing sentence, then the longer wording of the water alert, then the free text below its minimum. Logs hold the type
+  and the account id only, never what a provider answered.
 
 ### Audit log
 

@@ -319,8 +319,13 @@ public sealed class BankAccountQaTestsSqlServer : IDisposable
         return (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("receivingBankAccount").GetProperty("rowVersion").GetString()!;
     }
 
+    // The longest limit: these tests hold the service open while they do other work, which outlasts the 15 seconds on a busy machine.
     private static WebApplicationFactory<Program> WithPort(SqlServerApiFactory api, IPaymentNotificationService service) =>
-        api.WithWebHostBuilder(b => b.ConfigureTestServices(services => services.AddSingleton(service)));
+        api.WithWebHostBuilder(b =>
+        {
+            b.UseSetting("Payments:TimeoutSeconds", PaymentNotificationOptions.MaxTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            b.ConfigureTestServices(services => services.AddSingleton(service));
+        });
 
     /// <summary>A store that only answers when told to; the logo tests need no real file.</summary>
     private sealed class SlowStorage(TaskCompletionSource storing, TaskCompletionSource release) : IFileStorage

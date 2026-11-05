@@ -28,6 +28,7 @@ public static partial class RelatedRecordTypes
     public const string CooperativeCertification = "CooperativeCertification";
 
     public const string Account = "Account";
+    public const string PurchaseRequest = "PurchaseRequest";
 
     /// <summary>A purchase receipt (PURCHASE-01, PURCHASE-06); it has no zone.</summary>
     public const string PurchaseReceipt = "PurchaseReceipt";

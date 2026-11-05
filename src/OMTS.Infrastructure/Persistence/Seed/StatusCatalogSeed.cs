@@ -14,6 +14,7 @@ internal static class StatusCatalogSeed
     private const string OwnerOrZoneManager = "Cooperative Owner; Zone Manager";
     private const string OwnerForStaffAdminForTraders =
         "Cooperative Owner (staff accounts); System Administrator (trader accounts, platform administration outside the cooperative app)";
+    private const string Trader = "Trader";
     private const string SystemActor = "System";
     private const string Action = "Action";
 
@@ -48,6 +49,12 @@ internal static class StatusCatalogSeed
 
         NewStatus(S.SupplierPayment.Recorded, G.SupplierPayment, "RECORDED", "Recorded", "Counts in the supplier debt; cannot be edited.", initial: true),
         NewStatus(S.SupplierPayment.Cancelled, G.SupplierPayment, "CANCELLED", "Cancelled", "Recorded by mistake; no longer counts in the supplier debt.", final: true),
+
+        // STD-PURCHASE-REQUEST. Fulfilled is worked out from the invoices, so it has no row (BR-SALE-01).
+        NewStatus(S.PurchaseRequest.AwaitingResponse, G.PurchaseRequest, "AWAITING_RESPONSE", "Awaiting response", "Sent by the trader; not answered yet.", initial: true),
+        NewStatus(S.PurchaseRequest.Accepted, G.PurchaseRequest, "ACCEPTED", "Accepted", "Accepted by the Cooperative Owner, possibly for fewer kg; invoices may be linked to it."),
+        NewStatus(S.PurchaseRequest.Declined, G.PurchaseRequest, "DECLINED", "Declined", "Declined by the Cooperative Owner with a note.", final: true),
+        NewStatus(S.PurchaseRequest.Cancelled, G.PurchaseRequest, "CANCELLED", "Cancelled", "Cancelled by the trader; no invoice can be linked to it.", final: true),
     ];
 
     public static readonly StatusTransition[] Transitions =
@@ -78,6 +85,11 @@ internal static class StatusCatalogSeed
         NewTransition(70, S.PurchaseReceipt.Draft, S.PurchaseReceipt.Completed, "PURCHASE-01", "Zone Manager (own drafts); Cooperative Owner", Action, "Supplier In Use, date received not later than today, and every line complete with an input item In Use, a quantity greater than 0 and a unit price of 0 or more.", false),
         NewTransition(72, S.PurchaseReceipt.Completed, S.PurchaseReceipt.Cancelled, "PURCHASE-06", "Zone Manager (own receipts); Cooperative Owner", Action, "No seed lot of the receipt has been seeded and the receipt has no purchase return that is not cancelled.", true),
         NewTransition(73, S.SupplierPayment.Recorded, S.SupplierPayment.Cancelled, "PURCHASE-05", "Accountant; Cooperative Owner", Action, "A payment recorded by mistake; payments are never cancelled with a purchase receipt.", true),
+
+        NewTransition(180, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Accepted, "SALE-03", Owner, Action, "The accepted kg is above 0 and not more than the requested kg; the pickup date is not before today.", false),
+        NewTransition(181, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Declined, "SALE-03", Owner, Action, "A note gives the reason.", true),
+        NewTransition(182, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Cancelled, "SALE-02", Trader, Action, "The trader cancels; a reason is optional.", false),
+        NewTransition(183, S.PurchaseRequest.Accepted, S.PurchaseRequest.Cancelled, "SALE-02", Trader, Action, "The request is not Fulfilled; a reason is optional.", false),
     ];
 
     private static Status NewStatus(int id, string group, string code, string displayName, string meaning, bool initial = false, bool final = false) =>

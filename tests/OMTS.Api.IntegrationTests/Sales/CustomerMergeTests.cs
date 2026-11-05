@@ -101,7 +101,7 @@ public class CustomerMergeTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         await (await owner.MergeAsync(middle.Id(), earlier.Id())).ReadAsync(HttpStatusCode.OK);
 
         var preview = await (await owner.GetAsync($"/api/customers/{kept.Id()}/merge-preview?mergedCustomerId={middle.Id()}")).ReadAsync(HttpStatusCode.OK);
-        var counted = Assert.Single(preview.GetProperty("countedWithKept").EnumerateArray());
+        var counted = Assert.Single(preview.GetProperty("countedWithKept").EnumerateArray(), c => c.GetProperty("count").GetInt32() > 0);
         Assert.Equal(("Merged customer profiles", 1), (counted.Text("name"), counted.GetProperty("count").GetInt32()));
 
         await (await owner.MergeAsync(kept.Id(), middle.Id())).ReadAsync(HttpStatusCode.OK);

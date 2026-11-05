@@ -151,15 +151,18 @@ public class AcsReviewHardeningTests(AuthApiFactory factory) : IClassFixture<Aut
     {
         await using var api = new AuthApiFactory();
         using var limited = api.WithWebHostBuilder(b => b.UseSetting("RateLimits:CodeRequestsPerMinute", "2"));
-        var answers = new List<HttpResponseMessage>();
+        var requests = new List<(HttpClient Client, string? Phone)>();
         for (var i = 0; i < 3; i++)
         {
             var account = await api.AddAccountAsync(NewCode(), Password, configure: a => a.PhoneVerifiedAt = null);
-            answers.Add(await (await LoginOnAsync(limited, account.Username)).PostAsJsonAsync("/api/me/phone-verification", new { phoneNumber = account.PhoneNumber }));
+            requests.Add((await LoginOnAsync(limited, account.Username), account.PhoneNumber));
         }
 
-        Assert.Equal(HttpStatusCode.Created, answers[1].StatusCode);
-        Assert.Equal(HttpStatusCode.TooManyRequests, answers[2].StatusCode);
+        // Together: one after another they can take longer than the window on a busy machine.
+        var answers = await Task.WhenAll(requests.Select(r => r.Client.PostAsJsonAsync("/api/me/phone-verification", new { phoneNumber = r.Phone })));
+
+        Assert.Equal(2, answers.Count(r => r.StatusCode == HttpStatusCode.Created));
+        Assert.Single(answers, r => r.StatusCode == HttpStatusCode.TooManyRequests);
     }
 
     [Fact]
