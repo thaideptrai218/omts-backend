@@ -21,7 +21,7 @@ public class NotificationSmsTextTests
     private static readonly string[] TypesSendingTheMessageText =
     [
         NotificationTypes.WaterAlert, NotificationTypes.WaterAlertWithdrawn, NotificationTypes.ZoneLicenseExpiry,
-        NotificationTypes.CooperativeCertificationExpiry,
+        NotificationTypes.CooperativeCertificationExpiry, NotificationTypes.PurchaseRequestNew,
     ];
 
     private static readonly NotificationTypeDefinition MoneyType = new(
@@ -112,6 +112,63 @@ public class NotificationSmsTextTests
         Assert.Equal("Marine aquaculture license GP-01 (KV01) expires on 29/11/2026, in 30 days. Please renew it and record the new one.", text);
     }
 
+    [Fact]
+    public void A_new_purchase_request_goes_to_the_owner_and_reads_as_its_message()
+    {
+        var text = RenderRequest("Chị Lan", 300.5m, "Hàu sữa", "Lấy sớm");
+
+        Assert.Equal([NotificationRole.CooperativeOwner], NotificationTypes.Find(NotificationTypes.PurchaseRequestNew)!.Sms!.To);
+        Assert.Equal("Chi Lan asks to buy about 300.5 kg of Hau sua, pickup on 07/11/2026. Lay som Please ask the Zone Manager to check the oysters, then respond.", text);
+    }
+
+    [Theory]
+    [InlineData(40, 40, 400)]
+    [InlineData(40, 200, 0)]
+    [InlineData(200, 200, 2000)]
+    public void A_long_new_purchase_request_keeps_the_kg_and_the_date_and_fits_one_sms(int customerLength, int productLength, int noteLength)
+    {
+        var text = RenderRequest(new string('Ư', customerLength), 123456789012345.125m, new string('à', productLength), noteLength == 0 ? null : new string('Đ', noteLength));
+
+        Assert.True(text.Length <= NotificationSmsText.MaxLength, text);
+        Assert.All(text, c => Assert.Contains(c, NotificationSmsText.Alphabet));
+        Assert.Contains("123456789012345.125 kg", text);
+        Assert.Contains("07/11/2026", text);
+    }
+
+    // The note gives way first: an ordinary customer and product stay whole while the closing sentence is kept.
+    [Fact]
+    public void A_long_note_gives_way_before_the_customer_the_product_and_the_closing_sentence()
+    {
+        var text = RenderRequest("Chị Lan", 300.5m, "Hàu sữa", string.Join(' ', Enumerable.Repeat("lấy sớm ở cảng", 20)));
+
+        Assert.True(text.Length <= NotificationSmsText.MaxLength, text);
+        Assert.Contains("Chi Lan asks to buy about 300.5 kg of Hau sua, pickup on 07/11/2026.", text);
+        Assert.Contains("lay som", text);
+        Assert.Contains("...", text);
+        Assert.EndsWith("Please ask the Zone Manager to check the oysters, then respond.", text);
+    }
+
+    // At their minimums the closing sentence no longer leaves room: it goes, and then the three fields have what is left.
+    [Fact]
+    public void The_closing_sentence_goes_when_the_free_text_at_its_minimum_does_not_fit_with_it()
+    {
+        var text = RenderRequest(new string('C', 200), 123456789012345.125m, new string('P', 200), new string('N', 400));
+
+        Assert.True(text.Length <= NotificationSmsText.MaxLength, text);
+        Assert.DoesNotContain("Please ask", text);
+        Assert.Contains("C...", text);
+        Assert.Contains("123456789012345.125 kg of P", text);
+    }
+
+    [Fact]
+    public void A_new_purchase_request_without_a_note_shortens_the_customer_before_the_product()
+    {
+        var text = RenderRequest(new string('C', 200), 300m, new string('P', 20), null);
+
+        Assert.True(text.Length <= NotificationSmsText.MaxLength, text);
+        Assert.Contains("C... asks to buy about 300 kg of " + new string('P', 20) + ", pickup on 07/11/2026.", text);
+    }
+
     [Theory]
     [InlineData("Đầm Hà Đông", "Dam Ha Dong")]
     [InlineData("VỊNH BÁI TỬ LONG", "VINH BAI TU LONG")]
@@ -161,6 +218,10 @@ public class NotificationSmsTextTests
 
     private static string Render(NotificationTypeDefinition definition, NotificationContent content) =>
         NotificationSmsText.Render(definition, definition.Sms!, content);
+
+    private static string RenderRequest(string customer, decimal kg, string product, string? note) => Render(
+        NotificationTypes.Find(NotificationTypes.PurchaseRequestNew)!,
+        new NotificationContent(NotificationTypes.PurchaseRequestNew, "New purchase request", UserMessages.PurchaseRequestNew(customer, kg, product, new DateOnly(2026, 11, 7), note)));
 
     private static string Digits(string text) => new(text.Where(char.IsAsciiDigit).ToArray());
 

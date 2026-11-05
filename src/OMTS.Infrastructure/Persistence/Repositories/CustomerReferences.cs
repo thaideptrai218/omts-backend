@@ -10,9 +10,8 @@ namespace OMTS.Infrastructure.Persistence.Repositories;
 internal sealed class CustomerReferences(OmtsDbContext db) : ICustomerReferences
 {
     /// <summary>
-    /// Every column that names a customer profile. A new table adds its line here, for example
-    /// <c>new Reference&lt;PurchaseRequest&gt;("Purchase requests", r =&gt; r.CustomerId),</c>; a test compares this list with
-    /// the foreign keys of the model, so a table left out fails the build. The writers of such a table must
+    /// Every column that names a customer profile. A new table adds its line here; a test compares this list with the
+    /// foreign keys of the model, so a table left out fails the build. The writers of such a table must
     /// <c>MarkChanged</c> the customer row, so that a save and a merge at the same moment conflict (409 MSG06) and no new
     /// row can stay on the merged profile.
     /// </summary>
@@ -20,6 +19,7 @@ internal sealed class CustomerReferences(OmtsDbContext db) : ICustomerReferences
     [
         // A profile merged earlier into the one being merged now: it follows, so a merged profile always points at a kept one.
         new Reference<Customer>("Merged customer profiles", c => c.MergedIntoCustomerId),
+        new Reference<PurchaseRequest>("Purchase requests", r => r.CustomerId),
     ];
 
     public IReadOnlyList<CustomerReferenceColumn> Columns { get; } = References.Select(r => r.Describe()).ToList();
