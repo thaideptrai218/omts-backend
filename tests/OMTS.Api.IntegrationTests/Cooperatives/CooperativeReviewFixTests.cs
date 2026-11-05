@@ -71,6 +71,7 @@ public class CooperativeReviewFixTests
         var response = await owner.PutAsJsonAsync("/api/cooperative/profile", new
         {
             fullName = "Hợp tác xã Trung Nam",
+            shortName = "HTX Trung Nam",
             taxCode = "٠١٢٣٤٥٦٧٨٩",
             officeAddress = "Vân Đồn, Quảng Ninh",
             phoneNumber = NewPhone(),
@@ -80,6 +81,7 @@ public class CooperativeReviewFixTests
         });
 
         Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
+        Assert.Equal("Tax code", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("field").GetString());
     }
 
     // Two identical zone–role rows are reported as such (MSG-GEN-02 "Zone-role pair"), not as a taken username or phone.
@@ -124,10 +126,10 @@ public class CooperativeReviewFixTests
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
 
         var future = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = today.AddDays(2).ToString("yyyy-MM-dd") });
-        var stale = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = today.ToString("yyyy-MM-dd"), rowVersion = "AAAAAAAAB9E=" });
+        var stale = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = today.ToString("yyyy-MM-dd"), rowVersion = StaleRowVersion });
         var ended = await owner.PostAsJsonAsync($"/api/employees/{id}/end-employment", new { endDate = today.ToString("yyyy-MM-dd"), rowVersion = RowVersionOf(saved) });
         // The in-memory provider issues no new row versions: a version the server never issued stands for a stale screen.
-        var staleReinstate = await owner.PostAsJsonAsync($"/api/employees/{id}/reinstate", new { rowVersion = "AAAAAAAAB9E=" });
+        var staleReinstate = await owner.PostAsJsonAsync($"/api/employees/{id}/reinstate", new { rowVersion = StaleRowVersion });
         var reinstated = await owner.PostAsync($"/api/employees/{id}/reinstate", null);
 
         Assert.Equal("End date", await FieldAsync(future));

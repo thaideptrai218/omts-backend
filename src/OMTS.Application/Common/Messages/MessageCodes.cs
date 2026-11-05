@@ -58,8 +58,7 @@ public static class MessageCodes
     /// <summary>
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-01, the
     /// account is linked to the existing customer profile; MSG-ACCOUNT-22, the related record of a notification no longer
-    /// exists (ACCOUNT-08 is new in PR 0.5); MSG-SALE-04 and MSG-SALE-05, the merge of customer profiles (SALE-04 is new
-    /// in PR S1).
+    /// exists (ACCOUNT-08 is new in PR 0.5); MSG-SALE-04 and MSG-SALE-05, the merge of customer profiles (SALE-04 is new).
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal) { Account01, Account22, Sale04, Sale05 };
 

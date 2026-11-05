@@ -98,7 +98,7 @@ public class PurchasingBugTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     public async Task The_item_filter_of_the_raft_material_cost_counts_that_item_only()
     {
         var world = await factory.WorldAsync();
-        var ropes = await world.Owner.CreateItemAsync("RaftMaterial", "roll");
+        var ropes = await world.Owner.CreateItemAsync("Material", "roll");
         await world.CompletedAsync(0, 0, new LineBody(world.Material, 10, 50_000), new LineBody(ropes, 2, 100_000));
 
         var costs = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/raft-material-costs?raftId={world.Raft.Id}&itemId={ropes}");
