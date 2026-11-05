@@ -1,11 +1,9 @@
-using OMTS.Application.Common.Concurrency;
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
-using OMTS.Application.Features.Authorization;
-using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.WaterQuality.Dtos;
 using OMTS.Domain.Entities.Cultivation;
 using S = OMTS.Domain.Constants.StatusIds.WaterMeasurement;
@@ -13,30 +11,63 @@ using S = OMTS.Domain.Constants.StatusIds.WaterMeasurement;
 namespace OMTS.Application.Features.WaterQuality;
 
 /// <summary>
-/// WATER-02 – correct or void a wrong measurement with a reason. A correction changes the values and the time of the
-/// same record and is evaluated against the thresholds of the measurement; a void is final.
+/// WATER-02 – correct or void a wrong measurement with a reason. A correction changes the values, the time and the raft
+/// of the same record against its own thresholds; a void is final. Who may do it: <see cref="WaterCorrectionPreconditions"/>;
+/// who is told: <see cref="WaterCorrectionNotifier"/>.
 /// <para>
-/// Interim until OMTS-219 W2: any holder of the Edit right in the zone may do it (own-only, zone In Use and the raft
-/// come with W2), a correction alerts whenever a value is outside (the WATER-02.2 matrix and MSG-WATER-04 come with W2),
-/// a void notifies nobody, and the editing indicator stays.
+/// Water has no version check (NFR-09, NFR-13): nobody is told to reload and the last save counts. Parallel changes still
+/// happen one at a time: a save that loses on the row version runs the whole change again from the record as it now is, so
+/// the row always holds one request's values with their result, an audit row starts where the one before it ended, and a
+/// correction never brings back or changes a measurement voided meanwhile (MSG-GEN-09).
 /// </para>
 /// </summary>
 public sealed class WaterMeasurementCorrectionService(
-    IWaterMeasurementRepository measurements,
-    ZoneAccessGuard zoneAccess,
-    WaterAlertService alerts,
+    WaterCorrectionPreconditions preconditions,
+    WaterCorrectionNotifier notifier,
     WaterOverdueRearm overdue,
     WaterMeasurementViewBuilder views,
-    EditingPresenceTracker editing,
     IStatusCatalog statusCatalog,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
     TimeProvider timeProvider)
 {
-    public async Task<Result<WaterMeasurementDetail>> CorrectAsync(Guid id, CorrectWaterMeasurementRequest request, CancellationToken cancellationToken)
+    // Each lost round means another save of the record went through, so a request loses at most once per parallel request.
+    private const int MaxSaveAttempts = 20;
+
+    public Task<Result<WaterMeasurementDetail>> CorrectAsync(Guid id, CorrectWaterMeasurementRequest request, CancellationToken cancellationToken) =>
+        SaveOneAtATimeAsync(() => ApplyCorrectionAsync(id, request, cancellationToken), cancellationToken);
+
+    /// <summary>Active → Voided (final); excluded from charts, exports and the overdue check.</summary>
+    public Task<Result<WaterMeasurementDetail>> VoidAsync(Guid id, VoidWaterMeasurementRequest request, CancellationToken cancellationToken) =>
+        SaveOneAtATimeAsync(() => ApplyVoidAsync(id, request, cancellationToken), cancellationToken);
+
+    private async Task<Result<WaterMeasurementDetail>> SaveOneAtATimeAsync(Func<Task<Result<WaterMeasurement>>> change, CancellationToken cancellationToken)
     {
-        var loaded = await LoadForEditAsync(id, cancellationToken);
+        for (var attempt = 1; ; attempt++)
+        {
+            var changed = await change();
+            if (!changed.IsSuccess)
+            {
+                return changed.Error!;
+            }
+
+            try
+            {
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+                return await views.DetailAsync(changed.Value!, changed.Value!.Zone, cancellationToken);
+            }
+            catch (ConcurrencyConflictException) when (attempt < MaxSaveAttempts)
+            {
+                // Drops this attempt's audit and notification rows and its push and SMS messages too.
+                unitOfWork.DiscardChanges();
+            }
+        }
+    }
+
+    private async Task<Result<WaterMeasurement>> ApplyCorrectionAsync(Guid id, CorrectWaterMeasurementRequest request, CancellationToken cancellationToken)
+    {
+        var loaded = await preconditions.LoadChangeableAsync(id, CallerId(), cancellationToken);
         if (!loaded.IsSuccess)
         {
             return loaded.Error!;
@@ -44,6 +75,12 @@ public sealed class WaterMeasurementCorrectionService(
 
         var measurement = loaded.Value!;
         var invalid = WaterValueRules.InvalidFields(request.Ph, request.Salinity, request.Temperature, request.MeasuredAt, timeProvider.GetUtcNow());
+        var raft = await preconditions.RaftOfCorrectionAsync(measurement, request.RaftId, cancellationToken);
+        if (raft is null)
+        {
+            invalid.Add(WaterMeasurementRecordingService.RaftField);
+        }
+
         var reason = WaterValueRules.Reason(request.Reason);
         if (reason is null)
         {
@@ -55,12 +92,8 @@ public sealed class WaterMeasurementCorrectionService(
             return AppError.InvalidFields(invalid);
         }
 
-        if (measurement.StatusId != S.Active)
-        {
-            return WaterMeasurementStatuses.CannotChange(statusCatalog, measurement.StatusId);
-        }
-
-        var accountId = CallerId();
+        var outsideBefore = WaterAlertService.Evaluate(measurement).ValuesOutside;
+        var measuredAtBefore = measurement.MeasuredAt;
         // A correction that moves the answer to the last overdue reminder before the zone's other measurements re-arms it.
         await overdue.BeforeCorrectionAsync(measurement, request.MeasuredAt!.Value, cancellationToken);
         var before = WaterMeasurementAudit.Snapshot(measurement, statusCatalog);
@@ -68,27 +101,18 @@ public sealed class WaterMeasurementCorrectionService(
         measurement.Ph = request.Ph!.Value;
         measurement.Salinity = request.Salinity!.Value;
         measurement.Temperature = request.Temperature!.Value;
-        // Against the thresholds of the measurement, never today's (BR-WATER-04).
-        await alerts.EvaluateAsync(measurement, measurement.Zone.Name, measurement.Raft.Code, accountId, corrected: true, cancellationToken);
-        audit.Record(new AuditEntry(WaterMeasurementAudit.Corrected, WaterMeasurementAudit.RecordType)
-        {
-            RecordId = measurement.Id,
-            ZoneId = measurement.ZoneId,
-            Before = before,
-            After = WaterMeasurementAudit.Snapshot(measurement, statusCatalog),
-            Reason = reason,
-        });
-
-        // A parallel save loses on the row version: 409 MSG06 from the exception handler.
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        editing.Stop(measurement.Id, accountId);
-        return await views.DetailAsync(measurement, measurement.Zone, cancellationToken);
+        measurement.Raft = raft!;
+        measurement.RaftId = raft!.Id;
+        await notifier.AfterCorrectionAsync(measurement, outsideBefore, measuredAtBefore, reason!, CallerId(), cancellationToken);
+        // Saved as changed even when the values stay the same, so the row version puts every correction in one order.
+        unitOfWork.MarkChanged(measurement);
+        AuditChange(WaterMeasurementAudit.Corrected, measurement, before, reason!);
+        return measurement;
     }
 
-    /// <summary>Active → Voided (final); excluded from charts, exports and the overdue check.</summary>
-    public async Task<Result<WaterMeasurementDetail>> VoidAsync(Guid id, VoidWaterMeasurementRequest request, CancellationToken cancellationToken)
+    private async Task<Result<WaterMeasurement>> ApplyVoidAsync(Guid id, VoidWaterMeasurementRequest request, CancellationToken cancellationToken)
     {
-        var loaded = await LoadForEditAsync(id, cancellationToken);
+        var loaded = await preconditions.LoadChangeableAsync(id, CallerId(), cancellationToken);
         if (!loaded.IsSuccess)
         {
             return loaded.Error!;
@@ -101,69 +125,26 @@ public sealed class WaterMeasurementCorrectionService(
             return AppError.InvalidFields([WaterValueRules.ReasonField]);
         }
 
-        if (measurement.StatusId != S.Active)
-        {
-            return WaterMeasurementStatuses.CannotChange(statusCatalog, measurement.StatusId);
-        }
-
         // Voiding the measurement that answered the last overdue reminder re-arms it (WaterOverdueRule).
         await overdue.BeforeVoidAsync(measurement, cancellationToken);
+        await notifier.AfterVoidAsync(measurement, reason, CallerId(), cancellationToken);
+        var before = WaterMeasurementAudit.Snapshot(measurement, statusCatalog);
         measurement.StatusId = S.Voided;
         measurement.VoidReason = reason;
-        audit.Record(new AuditEntry(WaterMeasurementAudit.Voided, WaterMeasurementAudit.RecordType)
+        AuditChange(WaterMeasurementAudit.Voided, measurement, before, reason);
+        return measurement;
+    }
+
+    /// <summary>GBR-02: the values before and after with the reason, saved with the change.</summary>
+    private void AuditChange(string action, WaterMeasurement measurement, object before, string reason) =>
+        audit.Record(new AuditEntry(action, WaterMeasurementAudit.RecordType)
         {
             RecordId = measurement.Id,
             ZoneId = measurement.ZoneId,
-            Before = new { Status = statusCatalog.CodeOf(S.Active) },
-            After = new { Status = statusCatalog.CodeOf(S.Voided) },
+            Before = before,
+            After = WaterMeasurementAudit.Snapshot(measurement, statusCatalog),
             Reason = reason,
         });
-
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        editing.Stop(measurement.Id, CallerId());
-        return await views.DetailAsync(measurement, measurement.Zone, cancellationToken);
-    }
-
-    /// <summary>Starts or keeps alive the caller's edit of the record (heartbeat); returns who else is editing (MSG58).</summary>
-    public async Task<Result<EditingStatus>> StartEditingAsync(Guid id, CancellationToken cancellationToken)
-    {
-        var loaded = await LoadForEditAsync(id, cancellationToken);
-        if (!loaded.IsSuccess)
-        {
-            return loaded.Error!;
-        }
-
-        var accountId = CallerId();
-        var names = await measurements.GetAccountNamesAsync([accountId], cancellationToken);
-        editing.Heartbeat(id, accountId, names.GetValueOrDefault(accountId, "Unknown account"));
-        var others = editing.EditorsOf(id, accountId).Select(e => new RecordEditorView(e.AccountId, e.Name, e.StartedAt)).ToList();
-        return new EditingStatus(others, WaterMeasurementViewBuilder.Notice(others));
-    }
-
-    public async Task<Result<Done>> StopEditingAsync(Guid id, CancellationToken cancellationToken)
-    {
-        var loaded = await LoadForEditAsync(id, cancellationToken);
-        if (!loaded.IsSuccess)
-        {
-            return loaded.Error!;
-        }
-
-        editing.Stop(id, CallerId());
-        return Done.Value;
-    }
-
-    private async Task<Result<WaterMeasurement>> LoadForEditAsync(Guid id, CancellationToken cancellationToken)
-    {
-        var measurement = await measurements.GetAsync(id, cancellationToken);
-        if (measurement is null)
-        {
-            return AppError.NotFound;
-        }
-
-        return await zoneAccess.AllowsAsync(PermissionFunctions.WaterMeasurements, PermissionAction.Edit, measurement.ZoneId, cancellationToken)
-            ? measurement
-            : AppError.Forbidden;
-    }
 
     private Guid CallerId() => currentUser.AccountId ?? throw new InvalidOperationException("Water measurements need an authenticated caller.");
 }

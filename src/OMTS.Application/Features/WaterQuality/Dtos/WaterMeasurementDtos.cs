@@ -1,5 +1,3 @@
-using OMTS.Application.Common.Messages;
-
 namespace OMTS.Application.Features.WaterQuality.Dtos;
 
 /// <summary>Derived alert state of a measurement (no column): Active = Active and outside, Voided = voided while outside; None otherwise.</summary>
@@ -27,10 +25,8 @@ public sealed record WaterMeasurementListItem(
     string? ViolatedValues,
     AccountRef? MeasuredBy);
 
-/// <summary>Someone with the edit form open (NFR-13); the record is never locked.</summary>
-public sealed record RecordEditorView(Guid AccountId, string Name, DateTimeOffset StartedAt);
-
-/// <summary>WATER-03.2 detail: all fields, a short-lived photo URL, the thresholds of the measurement and the current editors.</summary>
+/// <summary>WATER-03.2 detail: all fields, a short-lived photo URL and the thresholds of the measurement.</summary>
+/// <param name="AlertedAt">When the last water alert of this measurement was sent; null when none is standing or none was sent.</param>
 public sealed record WaterMeasurementDetail(
     Guid Id,
     Guid ZoneId,
@@ -51,12 +47,7 @@ public sealed record WaterMeasurementDetail(
     string? ViolatedValues,
     DateTimeOffset? AlertedAt,
     AccountRef? MeasuredBy,
-    string? VoidReason,
-    IReadOnlyList<RecordEditorView> CurrentEditors,
-    UserMessage? EditingNotice);
+    string? VoidReason);
 
 /// <summary>Result of WATER-01: <see cref="Replayed"/> when the client operation was already saved (answered 200, not 201).</summary>
 public sealed record RecordedWaterMeasurement(WaterMeasurementDetail Measurement, bool Replayed);
-
-/// <summary>Other people editing the record, with MSG58 for the first of them.</summary>
-public sealed record EditingStatus(IReadOnlyList<RecordEditorView> OtherEditors, UserMessage? Notice);

@@ -132,7 +132,12 @@ public sealed class WaterMeasurementRecordingService(
         };
         WaterThresholds.Of(zone).CopyTo(measurement);
         measurements.Add(measurement);
-        await alerts.EvaluateAsync(measurement, zone.Name, raft.Code, accountId, corrected: false, cancellationToken);
+        var evaluation = WaterAlertService.Recheck(measurement);
+        if (evaluation.Exceeded)
+        {
+            await alerts.SendAlertAsync(measurement, evaluation, zone.Name, raft.Code, accountId, corrected: false, cancellationToken);
+        }
+
         audit.Record(new AuditEntry(WaterMeasurementAudit.Created, WaterMeasurementAudit.RecordType)
         {
             RecordId = measurement.Id,

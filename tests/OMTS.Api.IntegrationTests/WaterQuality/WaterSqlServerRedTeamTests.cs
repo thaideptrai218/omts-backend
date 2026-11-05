@@ -32,13 +32,12 @@ public class WaterSqlServerRedTeamTests
             client.VoidAsync(id),
             client.CorrectAsync(id, 7.4m, 20m));
 
-        // Whoever loses reads the new status (MSG-GEN-09) or loses on the row version (MSG06); a correction that
-        // comes after another correction is a later edit of the same record, so it may also succeed.
+        // Whoever comes after the void is told its status (MSG-GEN-09): there is no version check (NFR-09), and a correction
+        // that comes after another correction is a later edit of the same record, so it also succeeds.
         foreach (var refused in responses.Where(r => !r.IsSuccessStatusCode))
         {
             Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
-            var code = await refused.ErrorCodeAsync();
-            Assert.True(code is "MSG06" or "MSG-GEN-09", code);
+            Assert.Equal("MSG-GEN-09", await refused.ErrorCodeAsync());
         }
 
         await using var db = database.CreateContext();
