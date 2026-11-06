@@ -48,15 +48,18 @@ internal static class EmployeeProfileChanges
         return removed.Count + added.Count > 0;
     }
 
+    /// <summary>Whether the type on its date is a change: the type already in force on that date changes nothing.</summary>
+    public static bool IsTypeChange(Employee employee, EmployeeType type, DateOnly from) =>
+        employee.TypePeriods.Count == 0 || EmployeeTypePeriod.TypeOn(employee.TypePeriods, from) != type;
+
     /// <summary>
-    /// A new type from its date; the earlier types stay (BR-LABOR-01). The type already in force on that date changes nothing,
-    /// and another type entered with the date of a period replaces that period (the audit row keeps the old one).
-    /// LABOR-01.1.E1 (the date must be after every pay period that is sent or finalized, MSG-LABOR-04) needs the payroll table
-    /// of LABOR-16: it goes before this call. Whether anything changed.
+    /// A new type from its date; the earlier types stay (BR-LABOR-01). Another type entered with the date of a period replaces
+    /// that period (the audit row keeps the old one). LABOR-01.1.E1, the pay period lock, is checked with the other fields, in
+    /// <see cref="EmployeeProfileValidator"/>. Whether anything changed.
     /// </summary>
     public static bool ChangeType(IEmployeeRepository employees, Employee employee, EmployeeType type, DateOnly from)
     {
-        if (employee.TypePeriods.Count > 0 && EmployeeTypePeriod.TypeOn(employee.TypePeriods, from) == type)
+        if (!IsTypeChange(employee, type, from))
         {
             return false;
         }

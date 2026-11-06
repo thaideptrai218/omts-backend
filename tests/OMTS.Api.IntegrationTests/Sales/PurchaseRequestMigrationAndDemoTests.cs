@@ -6,7 +6,6 @@ using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Features.Notifications;
 using OMTS.Domain.Constants;
-using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
 using OMTS.Infrastructure.Bootstrap;
 using OMTS.Infrastructure.Persistence;
@@ -26,13 +25,13 @@ public class PurchaseRequestMigrationAndDemoTests
         await using var db = database.CreateContext();
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync(MigrationBefore);
-        var cooperative = new Cooperative { FullName = "HTX" };
-        db.Cooperatives.Add(cooperative);
-        await db.SaveChangesAsync();
+        // By SQL: later migrations add columns of the model that this one does not have yet.
+        var cooperative = Guid.NewGuid();
+        await ExecuteAsync(database, $"INSERT INTO Cooperatives (Id, FullName, CreatedAt) VALUES ('{cooperative}', N'HTX', SYSDATETIMEOFFSET());");
 
         await db.Database.MigrateAsync();
         await ExecuteAsync(database, "INSERT INTO Products (Id, Name, UnitPrice, StatusId, CreatedAt) VALUES ('00000000-0000-0000-0000-000000000001', N'Hàu', 60000, 101, SYSDATETIMEOFFSET());");
-        await ExecuteAsync(database, $"INSERT INTO Customers (Id, CooperativeId, Name, PhoneCheckedByStaff, CreatedAt) VALUES ('00000000-0000-0000-0000-000000000002', '{cooperative.Id}', N'A', 0, SYSDATETIMEOFFSET());");
+        await ExecuteAsync(database, $"INSERT INTO Customers (Id, CooperativeId, Name, PhoneCheckedByStaff, CreatedAt) VALUES ('00000000-0000-0000-0000-000000000002', '{cooperative}', N'A', 0, SYSDATETIMEOFFSET());");
         await ExecuteAsync(database, "INSERT INTO PurchaseRequests (Id, CustomerId, ProductId, RequestedKg, PickupDate, SentAt, StatusId, CreatedAt) VALUES ('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 1.5, '2026-11-05', SYSDATETIMEOFFSET(), 3201, SYSDATETIMEOFFSET());");
         Assert.Equal(4, await db.Statuses.CountAsync(s => s.Group == StatusGroups.PurchaseRequest));
         Assert.Equal(4, await db.StatusTransitions.CountAsync(t => t.Id >= 180 && t.Id <= 183));

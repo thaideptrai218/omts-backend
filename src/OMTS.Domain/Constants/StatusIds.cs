@@ -53,6 +53,14 @@ public static class StatusIds
         public const int Cancelled = 1802;
     }
 
+    public static class Payroll
+    {
+        public const int Draft = 3401;
+        public const int AwaitingFinalization = 3402;
+        public const int SentBack = 3403;
+        public const int Finalized = 3404;
+    }
+
     public static class PurchaseReturn
     {
         public const int Recorded = 1901;

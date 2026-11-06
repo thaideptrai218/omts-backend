@@ -66,13 +66,13 @@ public class EmployeesV2QaMigrationTests
         await using var db = database.CreateContext();
         var (migrator, own, previous) = Plan(db);
         await migrator.MigrateAsync(previous);
-        var row = new OMTS.Domain.Entities.Identity.Cooperative { FullName = "HTX" };
-        db.Cooperatives.Add(row);
-        await db.SaveChangesAsync();
+        // By SQL: later migrations add columns of the model that this one does not have yet.
+        var cooperative = Guid.NewGuid();
+        await db.Database.ExecuteSqlAsync($"INSERT INTO Cooperatives (Id, FullName, CreatedAt) VALUES ({cooperative}, N'HTX', SYSDATETIMEOFFSET())");
         var phone = NewPhone();
         foreach (var (name, createdAt) in new[] { ("Một", "2026-01-01"), ("Hai", "2026-02-01") })
         {
-            await db.Database.ExecuteSqlAsync($"INSERT INTO Employees (Id, CooperativeId, FullName, PhoneNumber, StatusId, CreatedAt) VALUES (NEWID(), {row.Id}, {name}, {phone}, 401, {createdAt})");
+            await db.Database.ExecuteSqlAsync($"INSERT INTO Employees (Id, CooperativeId, FullName, PhoneNumber, StatusId, CreatedAt) VALUES (NEWID(), {cooperative}, {name}, {phone}, 401, {createdAt})");
         }
 
         var script = migrator.GenerateScript(previous, own, MigrationsSqlGenerationOptions.Idempotent);

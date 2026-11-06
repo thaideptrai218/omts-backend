@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using OMTS.Api.IntegrationTests.Infrastructure;
-using OMTS.Domain.Entities.Identity;
 
 namespace OMTS.Api.IntegrationTests.Sales;
 
@@ -19,14 +18,14 @@ public class SalesCatalogueMigrationTests
         await using var db = database.CreateContext();
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync(MigrationBefore);
-        var cooperative = new Cooperative { FullName = "HTX" };
-        db.Cooperatives.Add(cooperative);
-        await db.SaveChangesAsync();
+        // By SQL: later migrations add columns of the model that this one does not have yet.
+        var cooperative = Guid.NewGuid();
+        await db.Database.ExecuteSqlAsync($"INSERT INTO Cooperatives (Id, FullName, CreatedAt) VALUES ({cooperative}, N'HTX', SYSDATETIMEOFFSET())");
         await using (var connection = new SqlConnection(database.ConnectionString))
         {
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();
-            command.Parameters.AddWithValue("@cooperative", cooperative.Id);
+            command.Parameters.AddWithValue("@cooperative", cooperative);
             command.CommandText =
                 """
                 INSERT INTO Products (Id, Code, Name, SalesUnit, StatusId, CreatedAt) VALUES

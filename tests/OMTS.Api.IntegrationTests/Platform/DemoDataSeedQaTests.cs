@@ -122,7 +122,7 @@ public class DemoDataSeedQaTests
         Assert.Equal(DeploymentBootstrapper.Success, demo.ExitCode);
         Assert.Contains(demo.Messages, m => m.Contains("already initialized"));
         // Every step had work to do, the Owner's login included.
-        Assert.Equal(17, demo.Messages.Count(m => m.StartsWith("Demo ")));
+        Assert.Equal(18, demo.Messages.Count(m => m.StartsWith("Demo ")));
         Assert.All(demo.Messages.Where(m => m.StartsWith("Demo ")), m => Assert.EndsWith("created.", m));
         Assert.Equal(1, demoCounts["Cooperatives"]);
         Assert.Equal(3, demoCounts["FarmingZones"]);
