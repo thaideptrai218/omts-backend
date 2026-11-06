@@ -53,6 +53,12 @@ public static class StatusIds
         public const int Cancelled = 1802;
     }
 
+    public static class PurchaseReturn
+    {
+        public const int Recorded = 1901;
+        public const int Cancelled = 1902;
+    }
+
     /// <summary>LANE (BR-FARM-04): a lane taken off the end of a raft is Removed, never deleted, and may return to In Use.</summary>
     public static class Lane
     {

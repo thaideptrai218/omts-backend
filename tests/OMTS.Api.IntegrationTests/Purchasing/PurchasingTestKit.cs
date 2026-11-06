@@ -28,14 +28,12 @@ public sealed record ReceiptBody
 
 public sealed record ReturnLineBody(Guid? ReceiptLineId, decimal? Quantity);
 
+/// <summary>PURCHASE-02 request body: the date and the amount are the server's; a Zone Manager also sends <see cref="OwnerApproved"/>.</summary>
 public sealed record ReturnBody
 {
-    public DateOnly? ReturnDate { get; init; } = PurchasingTestKit.Today;
     public string? Reason { get; init; } = "Weak seed";
-    public decimal? RefundAmount { get; init; }
-    public string? RefundMethod { get; init; }
-    public decimal? DebtReductionAmount { get; init; }
     public IReadOnlyList<ReturnLineBody>? Lines { get; init; }
+    public bool OwnerApproved { get; init; }
 }
 
 /// <summary>PURCHASE-05 request body: a cash payment dated today unless the test says otherwise.</summary>
@@ -160,6 +158,16 @@ public static class PurchasingTestKit
     public static Task<HttpResponseMessage> PostReturnAsync(this HttpClient client, Guid receiptId, ReturnBody body) =>
         client.PostAsJsonAsync($"/api/purchase-receipts/{receiptId}/returns", body);
 
+    /// <summary>A return of <paramref name="quantity"/> of one line, by the Owner; answers the receipt.</summary>
+    public static async Task<JsonElement> ReturnAsync(this PurchasingWorld world, Guid receiptId, Guid lineId, decimal quantity) =>
+        await (await world.Owner.PostReturnAsync(receiptId, new ReturnBody { Lines = [new ReturnLineBody(lineId, quantity)] })).ReadAsync(HttpStatusCode.Created);
+
+    public static Task<HttpResponseMessage> CancelReturnAsync(this HttpClient client, Guid returnId, string? reason, string? rowVersion = null) =>
+        client.PostAsJsonAsync($"/api/purchase-returns/{returnId}/cancel", new { reason, rowVersion });
+
+    public static Task<HttpResponseMessage> CorrectAsync(this HttpClient client, Guid receiptId, string? reason, params object[] lines) =>
+        client.PostAsJsonAsync($"/api/purchase-receipts/{receiptId}/correct", new { reason, lines });
+
     public static Task<HttpResponseMessage> PostPaymentAsync(this HttpClient client, PaymentBody body) =>
         client.PostAsJsonAsync("/api/supplier-payments", body);
 
@@ -205,7 +213,7 @@ public static class PurchasingTestKit
         return body;
     }
 
-    /// <summary>The <c>field</c> of an MSG01/MSG45/MSG59 problem.</summary>
+    /// <summary>The <c>field</c> of an MSG-GEN-01 or MSG-PURCHASE-03 problem.</summary>
     public static async Task<string?> FieldAsync(this HttpResponseMessage response, HttpStatusCode status, string code) =>
         (await response.ProblemAsync(status, code)).TryGetProperty("field", out var field) ? field.GetString() : null;
 
@@ -215,7 +223,7 @@ public static class PurchasingTestKit
     /// </summary>
     public static async Task SeedAsync(this AuthApiFactory factory, Guid raftId, Guid receiptLineId, decimal? quantity)
     {
-        var cycle = new CultivationCycle { RaftId = raftId, OpenedAt = DateTimeOffset.UtcNow };
+        var cycle = new CultivationCycle { RaftId = raftId, StartDate = Today };
         await factory.UseDbAsync(db =>
         {
             db.CultivationCycles.Add(cycle);

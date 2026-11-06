@@ -7,7 +7,8 @@ namespace OMTS.Infrastructure.Persistence.Queries;
 
 /// <summary>
 /// FARM-04 raft material cost (BR-FARM-05): Σ of the Material lines of Completed purchase receipts that name the raft,
-/// minus the values returned on those lines; Seed lines that name the raft are not material cost. Summed in SQL.
+/// minus the amounts returned on those lines by returns that are not cancelled; Seed lines that name the raft are not
+/// material cost. Summed in SQL.
 /// </summary>
 internal sealed class RaftMaterialCostQuery(OmtsDbContext db) : IRaftMaterialCostQuery
 {
@@ -20,7 +21,7 @@ internal sealed class RaftMaterialCostQuery(OmtsDbContext db) : IRaftMaterialCos
             .Select(g => new { g.Key, Amount = g.Sum(l => l.LineAmount) })
             .ToDictionaryAsync(x => x.Key, x => x.Amount, cancellationToken);
         var lineIds = lines.Select(l => l.Id);
-        var returned = await db.PurchaseReturnLines.AsNoTracking()
+        var returned = await db.RecordedReturnLines()
             .Where(rl => lineIds.Contains(rl.ReceiptLineId))
             .GroupBy(rl => rl.ReceiptLine.RaftId!.Value)
             .Select(g => new { g.Key, Amount = g.Sum(rl => rl.ReturnValue) })

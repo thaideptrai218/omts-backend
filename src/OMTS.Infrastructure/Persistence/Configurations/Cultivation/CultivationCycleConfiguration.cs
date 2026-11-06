@@ -10,14 +10,16 @@ internal sealed class CultivationCycleConfiguration : IEntityTypeConfiguration<C
     public void Configure(EntityTypeBuilder<CultivationCycle> builder)
     {
         builder.HasOne(x => x.Raft).WithMany(r => r.CultivationCycles).HasForeignKey(x => x.RaftId);
-        builder.HasOne(x => x.PlannedSeedType).WithMany().HasForeignKey(x => x.PlannedSeedTypeId);
-        builder.Property(x => x.SeedingCompletionReason).HasMaxLength(Lengths.Reason);
-        builder.Property(x => x.ClosingSummary).HasMaxLength(Lengths.LongText);
+        builder.Property(x => x.ExpectedSeedQuantity).HasPrecision(18, 3);
+        builder.Property(x => x.TargetYieldKg).HasPrecision(18, 2);
+        builder.Property(x => x.Assessment).HasMaxLength(Lengths.LongText);
 
-        // A raft holds at most one Open cycle; a new one starts only after closing (BR-21).
+        // A raft holds at most one Open cycle, even for parallel starts (BR-CYCLE-01).
         builder.HasIndex(x => x.RaftId)
             .IsUnique()
             .HasFilter($"[StatusId] = {StatusIds.CultivationCycle.Open}")
             .HasDatabaseName("UX_CultivationCycles_RaftId_Open");
+
+        builder.HasIndex(x => new { x.RaftId, x.StartDate });
     }
 }

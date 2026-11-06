@@ -3,6 +3,7 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Enums;
+using OMTS.Infrastructure.Persistence.Queries;
 
 namespace OMTS.Infrastructure.Persistence.Repositories;
 
@@ -66,7 +67,7 @@ internal sealed partial class PurchaseReceiptRepository
                 l.Id, l.LineNumber, l.ItemId!.Value, l.Item!.Code, l.Item.Name, l.Unit, l.Quantity ?? 0m, l.UnitPrice ?? 0m, l.LineAmount))
             .ToListAsync(cancellationToken);
         var lineIds = lines.Select(l => l.Id);
-        var returnRows = await db.PurchaseReturnLines.AsNoTracking()
+        var returnRows = await db.RecordedReturnLines()
             .Where(rl => lineIds.Contains(rl.ReceiptLineId) && rl.Return.ReturnDate >= from && rl.Return.ReturnDate <= to)
             .Select(rl => new RaftCostReturnRow(
                 rl.ReceiptLine.RaftId!.Value, rl.ReceiptLine.Raft!.Code, rl.ReceiptLine.Raft.ZoneId, rl.ReceiptLine.Raft.Zone.Code, rl.ReceiptLine.Raft.Zone.Name,
@@ -77,8 +78,8 @@ internal sealed partial class PurchaseReceiptRepository
     }
 
     /// <summary>
-    /// Σ of the matching lines of the matching Completed receipts received in the period, and Σ of the returns of those
-    /// lines dated in the period whatever the date received (PURCHASE-03 step 3, BR-FARM-05).
+    /// Σ of the matching lines of the matching Completed receipts received in the period, and Σ of the returns of those lines
+    /// that are not cancelled, dated in the period whatever the date received (PURCHASE-03 step 3, BR-FARM-05).
     /// </summary>
     private async Task<(decimal Receipts, decimal Returns)> SumsAsync(PurchaseReceiptFilter filter, CancellationToken cancellationToken)
     {
@@ -93,7 +94,7 @@ internal sealed partial class PurchaseReceiptRepository
         var receipts = await lines.Where(l => l.Receipt.ReceiptDate >= from && l.Receipt.ReceiptDate <= to)
             .SumAsync(l => (decimal?)l.LineAmount, cancellationToken) ?? 0m;
         var lineIds = lines.Select(l => l.Id);
-        var returns = await db.PurchaseReturnLines.AsNoTracking()
+        var returns = await db.RecordedReturnLines()
             .Where(rl => lineIds.Contains(rl.ReceiptLineId) && rl.Return.ReturnDate >= from && rl.Return.ReturnDate <= to)
             .SumAsync(rl => (decimal?)rl.ReturnValue, cancellationToken) ?? 0m;
         return (receipts, returns);

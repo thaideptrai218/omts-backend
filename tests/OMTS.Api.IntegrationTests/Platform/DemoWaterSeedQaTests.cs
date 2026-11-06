@@ -95,8 +95,8 @@ public class DemoWaterSeedQaTests
         Assert.All(audit, e => Assert.Equal(ownerId, e.ActorAccountId));
     }
 
-    // README: "the demo has no Open cycle yet, so GFR-04 sends no reminder". With an Open cycle the demo zone is on time
-    // until a month after its last reading, then it is reminded.
+    // The demo now seeds Open cycles. Remove them in this disposable database to exercise the no-cycle case, then
+    // add one back: the zone is on time until a month after its last reading, then it is reminded.
     [SqlServerFact]
     public async Task Demo_sends_no_reminder_without_an_open_cycle_and_a_zone_with_one_is_reminded_a_month_after_its_last_reading()
     {
@@ -113,6 +113,13 @@ public class DemoWaterSeedQaTests
         });
         var lastDayOnTime = BusinessClock.ToBusinessDate(lastReading).AddMonths(1);
 
+        await host.QueryAsync(async db =>
+        {
+            var seededCycles = await db.CultivationCycles.ToListAsync();
+            Assert.NotEmpty(seededCycles);
+            db.CultivationCycles.RemoveRange(seededCycles);
+            return await db.SaveChangesAsync();
+        });
         Assert.False(await host.QueryAsync(db => db.CultivationCycles.AnyAsync()));
         Assert.Equal(0, await host.App.RemindOnAsync(lastDayOnTime.AddMonths(6)));
 

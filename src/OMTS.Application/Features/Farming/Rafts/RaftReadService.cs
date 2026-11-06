@@ -2,6 +2,7 @@ using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Features.Cultivation.Progress;
 
 namespace OMTS.Application.Features.Farming.Rafts;
 
@@ -15,6 +16,7 @@ public sealed class RaftReadService(
     IFarmingZoneRepository zones,
     RaftViews views,
     FarmingLookupAccess lookupAccess,
+    LaneStateReader laneStates,
     IStatusCatalog statusCatalog,
     TimeProvider timeProvider)
 {
@@ -55,7 +57,7 @@ public sealed class RaftReadService(
             : new RaftCodeProposal(SequentialCodes.NextRaft(found[0].Code, await rafts.CodesOfZoneAsync(zoneId, cancellationToken)));
     }
 
-    /// <summary>The lanes of a raft today with their status; CYCLE adds the state worked out from its records (BR-FARM-03).</summary>
+    /// <summary>The lanes of a raft today with their status and the state worked out from the records of the cycle (BR-FARM-03).</summary>
     public async Task<Result<RaftLanesToday>> LanesTodayAsync(Guid raftId, CancellationToken cancellationToken)
     {
         var raft = await rafts.GetForEditAsync(raftId, cancellationToken);
@@ -64,8 +66,13 @@ public sealed class RaftReadService(
             return AppError.NotFound;
         }
 
-        return (await lookupAccess.VisibleRaftZonesAsync(cancellationToken)).Allows(raft.ZoneId)
-            ? new RaftLanesToday(raft.Id, raft.Code, timeProvider.Today(), views.Lanes(raft))
-            : AppError.Forbidden;
+        if (!(await lookupAccess.VisibleRaftZonesAsync(cancellationToken)).Allows(raft.ZoneId))
+        {
+            return AppError.Forbidden;
+        }
+
+        var today = timeProvider.Today();
+        var day = await laneStates.ReadAsync(raft, today, cancellationToken);
+        return new RaftLanesToday(raft.Id, raft.Code, today, views.LanesOn(raft, day.States));
     }
 }

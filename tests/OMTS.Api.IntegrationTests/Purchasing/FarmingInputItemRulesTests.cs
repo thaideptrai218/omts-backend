@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Features.Authorization;
 using OMTS.Domain.Constants;
-using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Enums;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
@@ -95,20 +94,6 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
             code = $"{code}-NEW", name = renamed, group = "Seed", unit = "kg", description = "Hàu Thái Bình Dương", rowVersion = view.GetProperty("rowVersion").GetString(),
         })).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(($"{code}-NEW", renamed), (edited.GetProperty("code").GetString(), edited.GetProperty("name").GetString()));
-    }
-
-    [Fact]
-    public async Task An_item_planned_by_a_cultivation_cycle_is_used_too()
-    {
-        var world = await factory.WorldAsync();
-        await factory.UseDbAsync(db => db.CultivationCycles.Add(new CultivationCycle { RaftId = world.Raft.Id, OpenedAt = DateTimeOffset.UtcNow, PlannedSeedTypeId = world.Seed }));
-        var view = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/farming-input-items/{world.Seed}");
-        Assert.True(view.GetProperty("isUsed").GetBoolean());
-        var change = await world.Owner.PutAsJsonAsync($"/api/farming-input-items/{world.Seed}", new
-        {
-            code = view.GetProperty("code").GetString(), name = "Seed", group = "Seed", unit = "con", rowVersion = view.GetProperty("rowVersion").GetString(),
-        });
-        Assert.Equal("Unit", await change.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
     }
 
     [Fact]

@@ -42,10 +42,10 @@ public interface IFarmingInputItemRepository
     /// <summary>By code or name (contains), optional group and status, ordered by code.</summary>
     Task<IReadOnlyList<FarmingInputItem>> ListAsync(string? search, InputItemGroup? group, int? statusId, CancellationToken cancellationToken);
 
-    /// <summary>True when the item is on a receipt line or is the planned seed of a cultivation cycle.</summary>
+    /// <summary>True when the item is on a receipt line.</summary>
     Task<bool> IsUsedAsync(Guid itemId, CancellationToken cancellationToken);
 
-    /// <summary>Which of the items are used by a receipt line or a cycle plan (two grouped queries for a whole list).</summary>
+    /// <summary>Which of the items are used by a receipt line (one query for a whole list).</summary>
     Task<IReadOnlySet<Guid>> UsedAmongAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken);
 
     void Add(FarmingInputItem item);
@@ -69,9 +69,6 @@ public interface IPurchaseReceiptRepository
 {
     /// <summary>Receipt with supplier, lines (items, rafts and their zones) and returns (lines), tracked.</summary>
     Task<PurchaseReceipt?> GetForEditAsync(Guid receiptId, CancellationToken cancellationToken);
-
-    /// <summary>Return codes already used that start with <paramref name="prefix"/>.</summary>
-    Task<int> CountReturnCodesAsync(string prefix, CancellationToken cancellationToken);
 
     /// <summary>
     /// Per seed lot (receipt line): the quantity seeded from it, and whether a seeding session without a quantity uses it

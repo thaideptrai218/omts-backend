@@ -8,7 +8,7 @@ namespace OMTS.Infrastructure.Persistence.Queries;
 
 /// <summary>
 /// PURCHASE-04 read side: one grouped SQL sum per kind of figure, merged per supplier, so nothing but the sums leaves the
-/// database. Only Completed receipts (and so only their returns) and Recorded payments count (BR-PURCHASE-04).
+/// database. Only Completed receipts, their Recorded returns and Recorded payments count (BR-PURCHASE-04).
 /// </summary>
 internal sealed class SupplierDebtQuery(OmtsDbContext db) : ISupplierDebtQuery
 {
@@ -22,10 +22,6 @@ internal sealed class SupplierDebtQuery(OmtsDbContext db) : ISupplierDebtQuery
             .Where(l => l.Return.ReturnDate <= asOf && (supplierId == null || l.Return.Receipt.SupplierId == supplierId))
             .GroupBy(l => l.Return.Receipt.SupplierId).Select(g => new { g.Key, Amount = g.Sum(l => l.ReturnValue) })
             .ToDictionaryAsync(x => x.Key, x => x.Amount, cancellationToken);
-        var refunded = await Returns()
-            .Where(r => r.ReturnDate <= asOf && (supplierId == null || r.Receipt.SupplierId == supplierId))
-            .GroupBy(r => r.Receipt.SupplierId).Select(g => new { g.Key, Amount = g.Sum(r => r.RefundAmount) })
-            .ToDictionaryAsync(x => x.Key, x => x.Amount, cancellationToken);
         var payments = await RecordedPayments()
             .Where(p => p.PaymentDate <= asOf && (supplierId == null || p.SupplierId == supplierId))
             .GroupBy(p => new { p.SupplierId, p.Kind }).Select(g => new { g.Key.SupplierId, g.Key.Kind, Amount = g.Sum(p => p.Amount) })
@@ -33,9 +29,9 @@ internal sealed class SupplierDebtQuery(OmtsDbContext db) : ISupplierDebtQuery
 
         var paid = payments.Where(p => p.Kind == SupplierPaymentKind.Payment).ToDictionary(p => p.SupplierId, p => p.Amount);
         var paidBack = payments.Where(p => p.Kind == SupplierPaymentKind.PaidBack).ToDictionary(p => p.SupplierId, p => p.Amount);
-        return receipts.Keys.Union(returned.Keys).Union(refunded.Keys).Union(paid.Keys).Union(paidBack.Keys)
+        return receipts.Keys.Union(returned.Keys).Union(paid.Keys).Union(paidBack.Keys)
             .ToDictionary(id => id, id => new SupplierDebtSums(
-                receipts.GetValueOrDefault(id), returned.GetValueOrDefault(id), refunded.GetValueOrDefault(id), paid.GetValueOrDefault(id), paidBack.GetValueOrDefault(id)));
+                receipts.GetValueOrDefault(id), returned.GetValueOrDefault(id), paid.GetValueOrDefault(id), paidBack.GetValueOrDefault(id)));
     }
 
     public async Task<IReadOnlyList<DebtSupplierRow>> SuppliersAsync(IReadOnlyCollection<Guid> supplierIds, string? search, CancellationToken cancellationToken)
@@ -53,18 +49,12 @@ internal sealed class SupplierDebtQuery(OmtsDbContext db) : ISupplierDebtQuery
         await ReceiptRows(db.PurchaseReceipts.AsNoTracking().Where(r => r.StatusId == StatusIds.PurchaseReceipt.Completed && supplierIds.Contains(r.SupplierId)))
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<DebtMoneyBackRow>> MoneyBackAsync(IReadOnlyCollection<Guid> supplierIds, CancellationToken cancellationToken)
-    {
-        var paidBack = await RecordedPayments()
+    public async Task<IReadOnlyList<DebtMoneyBackRow>> MoneyBackAsync(IReadOnlyCollection<Guid> supplierIds, CancellationToken cancellationToken) =>
+        await RecordedPayments()
             .Where(p => p.Kind == SupplierPaymentKind.PaidBack && supplierIds.Contains(p.SupplierId))
+            .OrderBy(p => p.PaymentDate)
             .Select(p => new DebtMoneyBackRow(p.SupplierId, p.PaymentDate, p.Amount))
             .ToListAsync(cancellationToken);
-        var refunds = await Returns()
-            .Where(r => r.RefundAmount > 0 && supplierIds.Contains(r.Receipt.SupplierId))
-            .Select(r => new DebtMoneyBackRow(r.Receipt.SupplierId, r.ReturnDate, r.RefundAmount))
-            .ToListAsync(cancellationToken);
-        return paidBack.Concat(refunds).OrderBy(m => m.Date).ToList();
-    }
 
     public async Task<(IReadOnlyList<DebtReceiptRow> Receipts, IReadOnlyList<StatementReturnRow> Returns, IReadOnlyList<StatementPaymentRow> Payments)> StatementRowsAsync(
         Guid supplierId, DateOnly from, DateOnly to, CancellationToken cancellationToken)
@@ -72,9 +62,10 @@ internal sealed class SupplierDebtQuery(OmtsDbContext db) : ISupplierDebtQuery
         var receipts = await ReceiptRows(db.PurchaseReceipts.AsNoTracking().Where(r => r.StatusId == StatusIds.PurchaseReceipt.Completed
                 && r.SupplierId == supplierId && r.ReceiptDate >= from && r.ReceiptDate <= to))
             .ToListAsync(cancellationToken);
-        var returns = await Returns()
+        var returns = await db.PurchaseReturns.AsNoTracking()
+            .Where(r => r.Receipt.StatusId == StatusIds.PurchaseReceipt.Completed && r.StatusId == StatusIds.PurchaseReturn.Recorded)
             .Where(r => r.Receipt.SupplierId == supplierId && r.ReturnDate >= from && r.ReturnDate <= to)
-            .Select(r => new StatementReturnRow(r.Id, r.Code, r.Receipt.Code, r.ReturnDate, r.Lines.Sum(l => (decimal?)l.ReturnValue) ?? 0m, r.RefundAmount))
+            .Select(r => new StatementReturnRow(r.Id, r.Code, r.Receipt.Code, r.ReturnDate, r.Lines.Sum(l => (decimal?)l.ReturnValue) ?? 0m))
             .ToListAsync(cancellationToken);
         var payments = await RecordedPayments()
             .Where(p => p.SupplierId == supplierId && p.PaymentDate >= from && p.PaymentDate <= to)
@@ -86,11 +77,8 @@ internal sealed class SupplierDebtQuery(OmtsDbContext db) : ISupplierDebtQuery
     private IQueryable<PurchaseReceiptLine> CompletedLines() =>
         db.PurchaseReceiptLines.AsNoTracking().Where(l => l.Receipt.StatusId == StatusIds.PurchaseReceipt.Completed);
 
-    private IQueryable<PurchaseReturn> Returns() =>
-        db.PurchaseReturns.AsNoTracking().Where(r => r.Receipt.StatusId == StatusIds.PurchaseReceipt.Completed);
-
     private IQueryable<PurchaseReturnLine> ReturnLines() =>
-        db.PurchaseReturnLines.AsNoTracking().Where(l => l.Return.Receipt.StatusId == StatusIds.PurchaseReceipt.Completed);
+        db.RecordedReturnLines().Where(l => l.Return.Receipt.StatusId == StatusIds.PurchaseReceipt.Completed);
 
     private IQueryable<SupplierPayment> RecordedPayments() =>
         db.SupplierPayments.AsNoTracking().Where(p => p.StatusId == StatusIds.SupplierPayment.Recorded);
@@ -99,5 +87,5 @@ internal sealed class SupplierDebtQuery(OmtsDbContext db) : ISupplierDebtQuery
         receipts.OrderBy(r => r.ReceiptDate).ThenBy(r => r.Code).Select(r => new DebtReceiptRow(
             r.SupplierId, r.Id, r.Code, r.ReceiptDate,
             r.Lines.Sum(l => (decimal?)l.LineAmount) ?? 0m,
-            r.Returns.SelectMany(x => x.Lines).Sum(l => (decimal?)l.ReturnValue) ?? 0m));
+            r.Returns.Where(x => x.StatusId == StatusIds.PurchaseReturn.Recorded).SelectMany(x => x.Lines).Sum(l => (decimal?)l.ReturnValue) ?? 0m));
 }

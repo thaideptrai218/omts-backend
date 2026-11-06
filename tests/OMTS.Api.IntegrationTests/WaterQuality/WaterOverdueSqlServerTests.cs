@@ -51,7 +51,7 @@ public class WaterOverdueSqlServerTests
         Assert.All(reminders, n => Assert.Contains($"since {WaterOverdueTestKit.Named(BusinessClock.ToBusinessDate(measured))}.", n.Body));
     }
 
-    // 15/05 17:30 UTC is 16/05 00:30 in Vietnam: the start date is the Vietnam date. Closed cycles do not count.
+    // Cycle starts are business dates. Closed cycles do not count.
     [SqlServerFact]
     public async Task The_earliest_open_start_is_a_vietnam_date_per_zone_and_closed_cycles_are_left_out_on_sql_server()
     {
@@ -64,7 +64,7 @@ public class WaterOverdueSqlServerTests
         {
             db.Rafts.AddRange(closedRaft, secondRaft);
             await db.SaveChangesAsync();
-            db.CultivationCycles.Add(new CultivationCycle { RaftId = seeded.Raft.Id, OpenedAt = new DateTimeOffset(2026, 5, 15, 17, 30, 0, TimeSpan.Zero) });
+            db.CultivationCycles.Add(WaterOverdueTestKit.OpenCycle(seeded.Raft.Id, new DateOnly(2026, 5, 16)));
             db.CultivationCycles.Add(WaterOverdueTestKit.OpenCycle(secondRaft.Id, new DateOnly(2026, 7, 1)));
             db.CultivationCycles.Add(WaterOverdueTestKit.ClosedCycle(closedRaft.Id, new DateOnly(2026, 1, 1)));
             await db.SaveChangesAsync();

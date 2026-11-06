@@ -17,9 +17,9 @@ public static class WaterOverdueTestKit
 {
     public static DateTimeOffset LocalMorning(DateOnly date) => new(date.ToDateTime(new TimeOnly(8, 0)), BusinessClock.UtcOffset);
 
-    /// <summary>An Open cycle started on <paramref name="start"/>. The tests name the column of the start here: <c>OpenedAt</c> until the merge with OMTS-220.</summary>
+    /// <summary>An Open cycle started on the business date <paramref name="start"/>.</summary>
     public static CultivationCycle OpenCycle(Guid raftId, DateOnly start) =>
-        new() { RaftId = raftId, OpenedAt = LocalMorning(start), StatusId = StatusIds.CultivationCycle.Open };
+        new() { RaftId = raftId, StartDate = start, StatusId = StatusIds.CultivationCycle.Open };
 
     public static CultivationCycle ClosedCycle(Guid raftId, DateOnly start)
     {

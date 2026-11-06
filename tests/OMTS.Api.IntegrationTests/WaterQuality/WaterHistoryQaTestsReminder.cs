@@ -74,13 +74,13 @@ public class WaterHistoryQaTestsReminder
         Assert.All(afterMidnight, n => Assert.Contains($"since {Named(D("2026-09-23"))}.", n.Body));
     }
 
-    // Tests the OpenedAt port only: the merge with OMTS-220 has a StartDate with no time, and this test goes with OpenedAt.
+    // OMTS-220 stores the cycle start as a business date with no time or offset.
     [Fact]
-    public async Task The_cycle_start_counts_by_its_vietnam_date()
+    public async Task The_cycle_start_counts_by_its_business_date()
     {
         await using var api = new WaterApiFactory();
         var z = await api.ZoneAsync();
-        await api.UseDbAsync(db => db.CultivationCycles.Add(new CultivationCycle { RaftId = z.Raft.Id, OpenedAt = new DateTimeOffset(2026, 5, 15, 17, 0, 0, TimeSpan.Zero) }));
+        await z.OpenCycleAsync(D("2026-05-16"));
 
         Assert.Equal(0, await api.RemindOnAsync(D("2026-06-16")));
         Assert.Equal(1, await api.RemindOnAsync(D("2026-06-17")));

@@ -166,9 +166,4 @@ public sealed class PurchaseReceiptValidator(
         return new AppError(
             ErrorKind.Validation, UserMessages.Invalid(field) with { LegacyCode = MessageCodes.Legacy.Msg59 }, new Dictionary<string, object?> { ["field"] = field });
     }
-
-    public static AppError ExceedsLimit(string field, decimal limit) => new(
-        ErrorKind.Validation,
-        UserMessages.ExceedsLimit(field, limit.ToString("#,0", System.Globalization.CultureInfo.InvariantCulture)),
-        new Dictionary<string, object?> { ["field"] = field, ["limit"] = limit });
 }

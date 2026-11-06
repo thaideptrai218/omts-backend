@@ -8,9 +8,6 @@ public enum SupplierStatementEntryKind
 {
     Receipt,
     Return,
-
-    /// <summary>The money a return brought back (Refund of today's returns); P4 turns it into money paid back.</summary>
-    ReturnRefund,
     Payment,
     PaidBack,
 }
@@ -36,14 +33,15 @@ public static class SupplierDebtLedger
     /// <param name="credit">What the supplier holds (<see cref="SupplierDebtSums.Credit"/>); nothing is covered when it is zero or below.</param>
     public static IReadOnlyList<UnpaidReceipt> UnpaidReceipts(IEnumerable<DebtReceiptRow> receipts, decimal credit, DateOnly today)
     {
+        var rows = receipts.OrderBy(r => r.ReceiptDate).ThenBy(r => r.Code, StringComparer.Ordinal).ToList();
+        // Taken as credit before the walk, so it also covers receipts older than the return, and what stays unpaid adds up to the debt.
+        credit += ReturnExcess(rows);
         var unpaid = new List<UnpaidReceipt>();
-        foreach (var receipt in receipts.OrderBy(r => r.ReceiptDate).ThenBy(r => r.Code, StringComparer.Ordinal))
+        foreach (var receipt in rows)
         {
             var net = receipt.Total - receipt.Returned;
             if (net <= 0)
             {
-                // Until P4, a return value rounded to thousands can pass the total of its receipt: the excess is credit.
-                credit -= net;
                 continue;
             }
 
@@ -61,19 +59,26 @@ public static class SupplierDebtLedger
     }
 
     /// <summary>
-    /// The date a debt with no unpaid receipt comes from: the supplier paid back more than it was paid, and the debt is that
-    /// excess. The payments cover the oldest amounts paid back first; null when all of them are covered (gap OQ-6).
+    /// What the returns of the receipts are worth above those receipts. It lowers the debt like a payment, because a return
+    /// keeps its amount (PM 03/11): a later lower unit price leaves it above the receipt, and so can parts of a line rounded one by one.
     /// </summary>
-    public static DateOnly? OldestUncoveredMoneyBack(IEnumerable<DebtMoneyBackRow> moneyBack, decimal paid)
+    public static decimal ReturnExcess(IEnumerable<DebtReceiptRow> receipts) => receipts.Sum(r => Math.Max(0, r.Returned - r.Total));
+
+    /// <summary>
+    /// The date a debt with no unpaid receipt comes from: the supplier paid back more than it was paid, and the debt is that
+    /// excess. What it holds (payments and <see cref="ReturnExcess"/>) covers the oldest amounts paid back first; null when all
+    /// of them are covered (gap OQ-6).
+    /// </summary>
+    public static DateOnly? OldestUncoveredMoneyBack(IEnumerable<DebtMoneyBackRow> moneyBack, decimal covering)
     {
         foreach (var row in moneyBack.OrderBy(m => m.Date))
         {
-            if (row.Amount > paid)
+            if (row.Amount > covering)
             {
                 return row.Date;
             }
 
-            paid -= row.Amount;
+            covering -= row.Amount;
         }
 
         return null;
@@ -86,7 +91,6 @@ public static class SupplierDebtLedger
         var rows = receipts
             .Select(r => Entry(r.ReceiptDate, SupplierStatementEntryKind.Receipt, r.Id, r.Code, r.Total, null))
             .Concat(returns.Select(r => Entry(r.ReturnDate, SupplierStatementEntryKind.Return, r.Id, r.Code, -r.Value, r.ReceiptCode)))
-            .Concat(returns.Where(r => r.Refund > 0).Select(r => Entry(r.ReturnDate, SupplierStatementEntryKind.ReturnRefund, r.Id, r.Code, r.Refund, r.ReceiptCode)))
             .Concat(payments.Select(p => new SupplierStatementEntry(
                 p.PaymentDate,
                 p.Kind == SupplierPaymentKind.Payment ? SupplierStatementEntryKind.Payment : SupplierStatementEntryKind.PaidBack,
