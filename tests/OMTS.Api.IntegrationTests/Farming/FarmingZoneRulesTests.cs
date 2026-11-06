@@ -23,10 +23,10 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         var zonesBefore = await factory.QueryAsync(db => db.FarmingZones.CountAsync());
 
         var response = await owner.Client.PostAsJsonAsync("/api/zones", new ZoneBody(
-            "  ", null, new string('x', 501), 10m, null, 0m, new string('w', 201)));
+            "  ", null, new string('x', 501), 10m, null, 0m));
 
         var fields = await response.InvalidFieldsAsync();
-        Assert.Equal(["Code", "Name", "Location", "Longitude", "Area", "Water measurement point"], fields);
+        Assert.Equal(["Code", "Name", "Location", "Longitude", "Area"], fields);
         Assert.Equal(zonesBefore, await factory.QueryAsync(db => db.FarmingZones.CountAsync()));
 
         // Coordinates are required on create and out-of-range values are refused.
@@ -38,7 +38,7 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
 
         // The longest allowed values and the coordinate bounds are accepted.
         var longest = await owner.Client.CreateZoneAsync(new ZoneBody(
-            NewCode() + new string('C', 40), new string('n', 200), new string('l', 500), -90m, 180m, 0.0001m, new string('w', 200)));
+            NewCode() + new string('C', 40), new string('n', 200), new string('l', 500), -90m, 180m, 0.0001m));
         Assert.Equal(50, longest.Text("code").Length);
         Assert.Equal(zonesBefore + 1, await factory.QueryAsync(db => db.FarmingZones.CountAsync()));
     }
@@ -154,15 +154,15 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
 
         await (await owner.Client.PutAsJsonAsync($"/api/zones/{zone.Id()}", body with { Name = "Renamed zone", RowVersion = zone.Text("rowVersion") }))
             .ReadAsync(HttpStatusCode.OK);
-        // Location, coordinates and the measurement point stay editable (old measurements keep their own point).
+        // Location and coordinates stay editable.
         var moved = await owner.Client.EditZoneAsync(zone.Id(), body with
         {
-            Name = "Renamed zone", Location = "Cai Rong", Latitude = 21.1m, Longitude = 107.4m, WaterMeasurementPoint = "Buoy 7", RowVersion = zone.Text("rowVersion"),
+            Name = "Renamed zone", Location = "Cai Rong", Latitude = 21.1m, Longitude = 107.4m, RowVersion = zone.Text("rowVersion"),
         });
-        Assert.Equal("Buoy 7", moved.Text("waterMeasurementPoint"));
+        Assert.False(moved.TryGetProperty("waterMeasurementPoint", out _));
         await (await owner.Client.PutAsJsonAsync($"/api/zones/{zone.Id()}", body with
         {
-            Name = "Renamed zone", Location = "Cai Rong", Latitude = 21.1m, Longitude = 107.4m, WaterMeasurementPoint = "Buoy 7", RowVersion = moved.Text("rowVersion"),
+            Name = "Renamed zone", Location = "Cai Rong", Latitude = 21.1m, Longitude = 107.4m, RowVersion = moved.Text("rowVersion"),
         })).ReadAsync(HttpStatusCode.OK);
 
         var updates = await factory.QueryAsync(db => db.AuditEvents
@@ -171,9 +171,8 @@ public class FarmingZoneRulesTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse($$"""{"Name":"{{body.Name}}"}"""), JsonNode.Parse(updates[0].Before!)));
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""{"Name":"Renamed zone"}"""), JsonNode.Parse(updates[0].After!)));
         Assert.Equal(
-            ["Latitude", "Location", "Longitude", "WaterMeasurementPoint"],
+            ["Latitude", "Location", "Longitude"],
             JsonNode.Parse(updates[1].After!)!.AsObject().Select(p => p.Key).Order());
-        Assert.Equal("Buoy 3", JsonNode.Parse(updates[1].Before!)!["WaterMeasurementPoint"]!.GetValue<string>());
     }
 
     [Fact]

@@ -52,15 +52,18 @@ public class PurchaseReceiptRaftLookupTests(AuthApiFactory factory) : IClassFixt
         Assert.Contains(raftA, await IdsAsync(owner));
     }
 
+    // Receipts have no zone and follow the role only (BR-FARM-08): a pair in one zone sees the receipts of every raft, so the
+    // filter offers every raft too, or a receipt on the list could not be filtered by its own raft.
     [Theory]
     [InlineData(StaffRole.ZoneManager)]
     [InlineData(StaffRole.Accountant)]
-    public async Task Staff_of_one_zone_get_the_rafts_of_that_zone_and_staff_of_all_zones_every_raft(StaffRole role)
+    public async Task Staff_of_one_zone_and_staff_of_all_zones_get_every_raft(StaffRole role)
     {
         var (_, zoneA, _, raftA, raftB) = await ArrangeAsync();
 
         var ofZone = await IdsAsync((await factory.StaffAsync(await factory.ZoneEntityAsync(zoneA.Id()), role)).Client);
-        Assert.Equal([raftA], ofZone);
+        Assert.Contains(raftA, ofZone);
+        Assert.Contains(raftB, ofZone);
 
         var everywhere = await IdsAsync((await factory.StaffAsync(null, role)).Client);
         Assert.Contains(raftA, everywhere);
@@ -85,7 +88,7 @@ public class PurchaseReceiptRaftLookupTests(AuthApiFactory factory) : IClassFixt
         var (_, zoneA, _, raftA, _) = await ArrangeAsync();
         var accountant = (await factory.StaffAsync(await factory.ZoneEntityAsync(zoneA.Id()), StaffRole.Accountant)).Client;
 
-        var picked = Assert.Single(await IdsAsync(accountant));
+        var picked = Assert.Single(await IdsAsync(accountant), id => id == raftA);
 
         await (await accountant.GetAsync($"/api/purchase-receipts?raftId={picked}")).ReadAsync(HttpStatusCode.OK);
         await (await accountant.GetAsync($"/api/purchase-receipts/raft-material-costs?raftId={picked}")).ReadAsync(HttpStatusCode.OK);

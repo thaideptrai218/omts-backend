@@ -78,8 +78,9 @@ public class MessageCodeQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         using var api = factory.WithWebHostBuilder(b => b.UseSetting("RateLimits:LoginsPerMinute", "1"));
         var client = api.CreateClient();
 
-        await client.PostAsJsonAsync("/api/auth/login", new { identifier = NewCode(), password = Password });
-        var refused = await (await client.PostAsJsonAsync("/api/auth/login", new { identifier = NewCode(), password = Password }))
+        // Together: one after another they can take longer than the window on a busy machine.
+        var answers = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => client.PostAsJsonAsync("/api/auth/login", new { identifier = NewCode(), password = Password })));
+        var refused = await Assert.Single(answers, r => r.StatusCode == HttpStatusCode.TooManyRequests)
             .SrsProblemAsync(HttpStatusCode.TooManyRequests, "TOO_MANY_REQUESTS", null);
 
         Assert.Equal("Too many requests from this device. Please wait a minute and try again.", refused.Detail());

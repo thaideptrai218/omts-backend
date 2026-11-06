@@ -8,7 +8,7 @@ using static OMTS.Api.IntegrationTests.Infrastructure.FarmLabSqlServerKit;
 
 namespace OMTS.Api.IntegrationTests.Employees;
 
-/// <summary>LAB-01 uses the ACS rule for refusing Owner rights, so the audit row fits its column on SQL Server.</summary>
+/// <summary>LABOR-01 uses the ACS rule for refusing Owner rights, so the audit row fits its column on SQL Server.</summary>
 public class EmployeeOwnerRightsSqlServerTests
 {
     [SqlServerFact]

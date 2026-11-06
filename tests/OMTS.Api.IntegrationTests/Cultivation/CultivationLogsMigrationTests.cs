@@ -14,8 +14,6 @@ namespace OMTS.Api.IntegrationTests.Cultivation;
 /// <summary>The CultivationLogs migration (PR C4) on SQL Server: Up adds the two tables, Down gives back the schema it found, and Up runs again.</summary>
 public class CultivationLogsMigrationTests
 {
-    private const string MigrationBefore = "20261104113119_CultivationCyclesV2";
-
     private const string TablesOfLogs = "SELECT COUNT(*) AS [Value] FROM sys.tables WHERE name IN ('CultivationLogs', 'CultivationLogPhotos')";
 
     private const string SchemaQuery = """
@@ -36,7 +34,10 @@ public class CultivationLogsMigrationTests
         await using var database = SqlServerTestDatabase.Create();
         await using var db = database.CreateContext();
         var migrator = db.GetService<IMigrator>();
-        await migrator.MigrateAsync(MigrationBefore);
+        var migrations = db.Database.GetMigrations().ToList();
+        var own = migrations.Single(m => m.EndsWith("_CultivationLogs", StringComparison.Ordinal));
+        var previous = migrations[migrations.IndexOf(own) - 1];
+        await migrator.MigrateAsync(previous);
         var oldSchema = await SchemaAsync(db);
         Assert.Equal(0, await ScalarAsync(db, TablesOfLogs));
 
@@ -67,7 +68,7 @@ public class CultivationLogsMigrationTests
         await db.SaveChangesAsync();
 
         // Dev and demo data only: Down drops the logs with their tables; the cycle stays.
-        await migrator.MigrateAsync(MigrationBefore);
+        await migrator.MigrateAsync(previous);
 
         Assert.Equal(oldSchema, await SchemaAsync(db));
         db.ChangeTracker.Clear();

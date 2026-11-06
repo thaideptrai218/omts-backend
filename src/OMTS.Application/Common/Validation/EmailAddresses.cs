@@ -2,7 +2,11 @@ using System.Net.Mail;
 
 namespace OMTS.Application.Common.Validation;
 
-/// <summary>Emails are stored trimmed and lower-case so uniqueness and login comparisons are exact.</summary>
+/// <summary>
+/// Emails are stored trimmed and lower-case so uniqueness and login comparisons are exact. A quoted local part and a final
+/// dot are refused: they are other spellings of one mailbox, which would pass uniqueness and the limits on codes as new
+/// addresses (BR-ACCOUNT-02, BR-ACCOUNT-09).
+/// </summary>
 public static class EmailAddresses
 {
     public const int MaxLength = 256;
@@ -16,6 +20,11 @@ public static class EmailAddresses
         }
 
         var trimmed = input.Trim().ToLowerInvariant();
+        if (trimmed.Contains('"', StringComparison.Ordinal) || trimmed.EndsWith('.'))
+        {
+            return null;
+        }
+
         return MailAddress.TryCreate(trimmed, out var address) && address.Address == trimmed && trimmed.Contains('.', StringComparison.Ordinal)
             ? trimmed
             : null;

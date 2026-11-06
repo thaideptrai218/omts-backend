@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
 
@@ -36,6 +37,9 @@ internal sealed class AccountRepository(OmtsDbContext db) : IAccountRepository
     public Task<Account?> FindByVerifiedEmailAsync(string email, CancellationToken cancellationToken) =>
         db.Accounts.FirstOrDefaultAsync(a => a.Email == email && a.EmailVerifiedAt != null, cancellationToken);
 
+    public Task<Account?> FindByEmailAsync(string email, CancellationToken cancellationToken) =>
+        db.Accounts.FirstOrDefaultAsync(a => a.Email == email, cancellationToken);
+
     public async Task<(IReadOnlyList<Account> Items, int Total)> SearchStaffAsync(
         string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken)
     {
@@ -59,10 +63,10 @@ internal sealed class AccountRepository(OmtsDbContext db) : IAccountRepository
         return (items, total);
     }
 
-    public async Task<IReadOnlyList<Account>> ListLinkableStaffAsync(CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<Guid>> ListActiveOwnerIdsAsync(CancellationToken cancellationToken) =>
         await db.Accounts.AsNoTracking()
-            .Where(a => a.SubjectType == SubjectType.Staff && !db.Employees.Any(e => e.AccountId == a.Id))
-            .OrderBy(a => a.DisplayName)
+            .Where(a => a.SubjectType == SubjectType.CooperativeOwner && a.StatusId == StatusIds.Account.Active)
+            .Select(a => a.Id)
             .ToListAsync(cancellationToken);
 
     public void Add(Account account) => db.Accounts.Add(account);

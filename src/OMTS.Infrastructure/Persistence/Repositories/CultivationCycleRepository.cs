@@ -29,7 +29,6 @@ internal sealed class CultivationCycleRepository(OmtsDbContext db) : ICultivatio
         return seeded is null || visited < seeded ? visited : seeded;
     }
 
-    // A work assignment still points to its cycle (restricted key) until the labor rework derives the cycle from the date.
     public async Task<IReadOnlySet<Guid>> WithRecordsAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken)
     {
         if (cycleIds.Count == 0)
@@ -39,8 +38,7 @@ internal sealed class CultivationCycleRepository(OmtsDbContext db) : ICultivatio
 
         var seeded = await db.SeedingEvents.AsNoTracking().Where(e => cycleIds.Contains(e.CycleId)).Select(e => e.CycleId).Distinct().ToListAsync(cancellationToken);
         var logged = await db.CultivationLogs.AsNoTracking().Where(l => cycleIds.Contains(l.CycleId)).Select(l => l.CycleId).Distinct().ToListAsync(cancellationToken);
-        var assigned = await db.WorkAssignments.AsNoTracking().Where(w => w.CycleId != null && cycleIds.Contains(w.CycleId.Value)).Select(w => w.CycleId!.Value).Distinct().ToListAsync(cancellationToken);
-        return seeded.Concat(logged).Concat(assigned).ToHashSet();
+        return seeded.Concat(logged).ToHashSet();
     }
 
     public void Add(CultivationCycle cycle) => db.CultivationCycles.Add(cycle);
