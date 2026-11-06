@@ -19,12 +19,12 @@ public class SupplierDebtLedgerTests
         new(Guid.NewGuid(), code, kind, Ago(daysAgo), amount, PaymentMethod.Cash, null, null);
 
     [Fact]
-    public void The_debt_is_receipts_minus_returns_minus_payments_plus_money_paid_back_and_refunds()
+    public void The_debt_is_receipts_minus_returns_minus_payments_plus_money_paid_back()
     {
-        var sums = new SupplierDebtSums(Receipts: 1_000, Returned: 100, Refunded: 20, Paid: 300, PaidBack: 50);
+        var sums = new SupplierDebtSums(Receipts: 1_000, Returned: 100, Paid: 300, PaidBack: 50);
 
-        Assert.Equal(1_000 - 100 + 20 - 300 + 50, sums.Debt);
-        Assert.Equal(300 - 50 - 20, sums.Credit);
+        Assert.Equal(1_000 - 100 - 300 + 50, sums.Debt);
+        Assert.Equal(300 - 50, sums.Credit);
         Assert.Equal(sums.Receipts - sums.Returned - sums.Credit, sums.Debt);
     }
 
@@ -56,7 +56,7 @@ public class SupplierDebtLedgerTests
     public void An_advance_covers_later_receipts_and_a_debt_below_zero_leaves_nothing_unpaid()
     {
         // BR-PURCHASE-08: the next receipts use up what was paid in advance, whatever the dates.
-        var advance = new SupplierDebtSums(Receipts: 400, Returned: 0, Refunded: 0, Paid: 500, PaidBack: 0);
+        var advance = new SupplierDebtSums(Receipts: 400, Returned: 0, Paid: 500, PaidBack: 0);
 
         Assert.Equal(-100m, advance.Debt);
         Assert.Empty(SupplierDebtLedger.UnpaidReceipts([Receipt("PN000001", 1, 400)], advance.Credit, Today));
@@ -65,7 +65,7 @@ public class SupplierDebtLedgerTests
     [Fact]
     public void Money_paid_back_above_the_payments_covers_nothing_and_the_excess_stays_on_the_debt()
     {
-        var sums = new SupplierDebtSums(Receipts: 400, Returned: 0, Refunded: 0, Paid: 100, PaidBack: 150);
+        var sums = new SupplierDebtSums(Receipts: 400, Returned: 0, Paid: 100, PaidBack: 150);
         var unpaid = SupplierDebtLedger.UnpaidReceipts([Receipt("PN000001", 7, 400)], sums.Credit, Today);
 
         var row = Assert.Single(unpaid);
@@ -73,14 +73,42 @@ public class SupplierDebtLedgerTests
         Assert.Equal(450m, sums.Debt);
     }
 
+    // A return keeps its amount (PM 03/11), so a later lower unit price can leave it above its receipt: the excess is credit,
+    // as the debt formula says, for the receipts before it as much as for those after it.
     [Fact]
-    public void A_return_value_above_its_receipt_until_P4_counts_as_credit_for_the_next_receipt()
+    public void A_return_above_its_receipt_covers_the_next_receipt()
     {
-        // 1,500 rounds to a return of 2,000 until P4: the 500 over is credit, as the debt formula says.
         var unpaid = SupplierDebtLedger.UnpaidReceipts([Receipt("PN000001", 9, 1_500, returned: 2_000), Receipt("PN000002", 3, 800)], credit: 0, Today);
 
         var row = Assert.Single(unpaid);
         Assert.Equal(("PN000002", 500m, 300m), (row.Code, row.Covered, row.Remaining));
+    }
+
+    [Fact]
+    public void A_return_above_its_receipt_covers_an_older_receipt_so_what_is_unpaid_adds_up_to_the_debt()
+    {
+        DebtReceiptRow[] receipts = [Receipt("PN000001", 9, 1_000), Receipt("PN000002", 3, 1_500, returned: 2_000)];
+        var sums = new SupplierDebtSums(Receipts: 2_500, Returned: 2_000, Paid: 0, PaidBack: 0);
+
+        var row = Assert.Single(SupplierDebtLedger.UnpaidReceipts(receipts, sums.Credit, Today));
+
+        Assert.Equal(("PN000001", 500m, 500m), (row.Code, row.Covered, row.Remaining));
+        Assert.Equal(sums.Debt, row.Remaining);
+    }
+
+    [Fact]
+    public void The_excess_of_a_return_is_only_what_passes_its_own_receipt()
+    {
+        Assert.Equal(500m, SupplierDebtLedger.ReturnExcess([Receipt("PN000001", 9, 1_500, returned: 2_000), Receipt("PN000002", 3, 800, returned: 100), Receipt("PN000003", 1, 400)]));
+    }
+
+    [Fact]
+    public void The_excess_of_a_return_covers_money_paid_back_as_a_payment_does()
+    {
+        // Debt 300: 500 paid back, 300 paid back, a return 500 above its receipt. The first 500 is covered; the age counts from the next.
+        var moneyBack = new[] { new DebtMoneyBackRow(Guid.Empty, Ago(20), 500), new DebtMoneyBackRow(Guid.Empty, Ago(10), 300) };
+
+        Assert.Equal(Ago(10), SupplierDebtLedger.OldestUncoveredMoneyBack(moneyBack, covering: 500));
     }
 
     public static TheoryData<decimal, int?> MoneyBackVectors => new()
@@ -108,15 +136,15 @@ public class SupplierDebtLedgerTests
         var entries = SupplierDebtLedger.Statement(
             opening,
             [Receipt("PN000002", 2, 500), Receipt("PN000001", 2, 300), Receipt("PN000003", 9, 100)],
-            [new StatementReturnRow(Guid.NewGuid(), "PRT-1", "PN000001", Ago(2), 200, 50)],
+            [new StatementReturnRow(Guid.NewGuid(), "TH000001", "PN000001", Ago(2), 200)],
             [Payment("TT000002", 2, 70), Payment("TT000003", 2, 30, SupplierPaymentKind.PaidBack), Payment("TT000001", 9, 40)]);
 
         Assert.Equal(
             [
                 (Kind.Receipt, "PN000003", 100m, 1_100m), (Kind.Payment, "TT000001", -40m, 1_060m),
                 (Kind.Receipt, "PN000001", 300m, 1_360m), (Kind.Receipt, "PN000002", 500m, 1_860m),
-                (Kind.Return, "PRT-1", -200m, 1_660m), (Kind.ReturnRefund, "PRT-1", 50m, 1_710m),
-                (Kind.Payment, "TT000002", -70m, 1_640m), (Kind.PaidBack, "TT000003", 30m, 1_670m),
+                (Kind.Return, "TH000001", -200m, 1_660m),
+                (Kind.Payment, "TT000002", -70m, 1_590m), (Kind.PaidBack, "TT000003", 30m, 1_620m),
             ],
             entries.Select(e => (e.Kind, e.Code, e.Amount, e.DebtAfter)).ToList());
         Assert.Equal(opening + entries.Sum(e => e.Amount), entries[^1].DebtAfter);
@@ -124,9 +152,9 @@ public class SupplierDebtLedgerTests
     }
 
     [Fact]
-    public void A_return_with_no_refund_has_no_refund_entry_and_a_period_with_nothing_has_no_entry()
+    public void A_return_is_one_entry_and_a_period_with_nothing_has_no_entry()
     {
-        var entries = SupplierDebtLedger.Statement(0, [], [new StatementReturnRow(Guid.NewGuid(), "PRT-1", "PN000001", Ago(1), 200, 0)], []);
+        var entries = SupplierDebtLedger.Statement(0, [], [new StatementReturnRow(Guid.NewGuid(), "TH000001", "PN000001", Ago(1), 200)], []);
 
         Assert.Equal((Kind.Return, -200m), (Assert.Single(entries).Kind, entries[0].DebtAfter));
         Assert.Empty(SupplierDebtLedger.Statement(500, [], [], []));

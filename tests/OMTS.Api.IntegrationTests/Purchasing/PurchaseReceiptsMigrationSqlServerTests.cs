@@ -24,7 +24,7 @@ public class PurchaseReceiptsMigrationSqlServerTests
         var receipt = await world.CompletedAsync(
             new LineBody(world.Other, 1, 1_000), world.MaterialForRaft(2, 50_000), new LineBody(world.Seed, 10, 9_000, "LOT-1", world.Raft.Id));
         var seedLine = receipt.LineOf(world.Seed);
-        var cycle = new CultivationCycle { RaftId = world.Raft.Id, OpenedAt = DateTimeOffset.UtcNow };
+        var cycle = new CultivationCycle { RaftId = world.Raft.Id, StartDate = Today };
         await host.UseDbAsync(db =>
         {
             db.CultivationCycles.Add(cycle);

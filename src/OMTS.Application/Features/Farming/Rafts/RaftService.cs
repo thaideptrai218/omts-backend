@@ -18,6 +18,7 @@ namespace OMTS.Application.Features.Farming.Rafts;
 public sealed class RaftService(
     IRaftRepository rafts,
     IFarmingZoneRepository zones,
+    ICultivationCycleQuery cycles,
     RaftViews views,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
@@ -125,7 +126,7 @@ public sealed class RaftService(
 
         if (RaftLaneChange.InUseCount(raft.Lanes) != values.LaneCount)
         {
-            if (await rafts.GetOpenCycleAsync(raft.Id, cancellationToken) is { } cycle)
+            if (await cycles.OpenCycleAsync(raft.Id, cancellationToken) is { } cycle)
             {
                 return RaftStatusService.OpenCycle(cycle);
             }

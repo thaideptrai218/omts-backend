@@ -22,7 +22,7 @@ public class SupplierDebtSqlServerTests
 
     // The grouped SQL sums, with what must not count on the same supplier: Draft and Cancelled receipts, Cancelled payments.
     [SqlServerFact]
-    public async Task The_sql_sums_list_detail_statement_and_export_agree_on_one_debt_with_dongs_and_a_return_with_a_refund()
+    public async Task The_sql_sums_list_detail_statement_and_export_agree_on_one_debt_with_dongs_a_return_and_a_cancelled_return()
     {
         await using var host = await FarmingHost.StartAsync();
         var world = await host.WorldAsync();
@@ -34,8 +34,9 @@ public class SupplierDebtSqlServerTests
         Assert.Equal(568_763m + 500m, old.Money("total"));
         await world.PayAsync(100_001, Today.AddDays(-18));
         var recent = await owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 2, 250_000)) with { ReceiptDate = Today.AddDays(-5), Complete = true });
-        await (await owner.PostReturnAsync(recent.Id(), new ReturnBody { RefundAmount = 25_000, RefundMethod = "Cash", DebtReductionAmount = 100_000, Lines = [new ReturnLineBody(recent.LineOf(world.Other), 0.5m)] }))
-            .ReadAsync(HttpStatusCode.Created);
+        var mistaken = await world.ReturnAsync(recent.Id(), recent.LineOf(world.Other), 0.25m);
+        await (await owner.CancelReturnAsync(mistaken.GetProperty("returns")[0].Id(), "Not sent back")).ReadAsync(HttpStatusCode.OK);
+        await world.ReturnAsync(recent.Id(), recent.LineOf(world.Other), 0.5m);
         await world.PayAsync(7, Today.AddDays(-3), "PaidBack");
         var cancelledPayment = await world.PayAsync(55_555);
         await (await owner.CancelPaymentAsync(cancelledPayment.Id(), "Mistake")).ReadAsync(HttpStatusCode.OK);
@@ -43,17 +44,17 @@ public class SupplierDebtSqlServerTests
         await (await owner.CancelAsync(cancelledReceipt.Id(), "Wrong")).ReadAsync(HttpStatusCode.OK);
         await owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 888_000)));
 
-        // 569,263 + 500,000 − 125,000 + 25,000 − 100,001 + 7.
-        const decimal debt = 869_269m;
+        // 569,263 + 500,000 − 125,000 − 100,001 + 7.
+        const decimal debt = 844_269m;
         var list = await (await owner.GetAsync($"{Debts}?search={tag}")).ReadAsync(HttpStatusCode.OK);
         var row = Assert.Single(list.GetProperty("page").GetProperty("items").EnumerateArray());
         Assert.Equal((debt, 20), (row.Money("debt"), row.GetProperty("debtAgeDays").GetInt32()));
 
         var detail = await (await owner.GetAsync($"{Debts}/{world.SupplierId}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(debt, detail.Money("debtToday"));
-        // FIFO: the money held, 100,001 − 7 − 25,000, goes on the first receipt; a return of 125,000 lowers the second.
+        // FIFO: the money held, 100,001 − 7, goes on the first receipt; a return of 125,000 lowers the second.
         Assert.Equal(
-            [(old.Id(), 74_994m, 569_263m - 74_994m), (recent.Id(), 0m, 375_000m)],
+            [(old.Id(), 99_994m, 569_263m - 99_994m), (recent.Id(), 0m, 375_000m)],
             detail.GetProperty("unpaidReceipts").EnumerateArray().Select(r => (r.Id(), r.Money("covered"), r.Money("remaining"))).ToList());
 
         // Up to each day of a past period, the opening is what the sums said then.
@@ -62,7 +63,7 @@ public class SupplierDebtSqlServerTests
         var after = await (await owner.GetAsync($"{Debts}/{world.SupplierId}/statement?from={Today.AddDays(-5):yyyy-MM-dd}&to={Today:yyyy-MM-dd}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal((before.Money("closingDebt"), debt), (after.Money("openingDebt"), after.Money("closingDebt")));
         Assert.Equal(
-            [("Receipt", 500_000m), ("PaidBack", 7m), ("Return", -125_000m), ("ReturnRefund", 25_000m)],
+            [("Receipt", 500_000m), ("PaidBack", 7m), ("Return", -125_000m)],
             after.GetProperty("entries").EnumerateArray().Select(e => (e.GetProperty("kind").GetString(), e.Money("amount"))).ToList());
         Assert.Equal(after.Money("openingDebt") + after.GetProperty("entries").EnumerateArray().Sum(e => e.Money("amount")), after.Money("closingDebt"));
 
@@ -75,9 +76,9 @@ public class SupplierDebtSqlServerTests
         // The cancel preview reads the same debt; a receipt with a return cannot be cancelled.
         var preview = await (await owner.GetAsync($"/api/purchase-receipts/{old.Id()}/cancel-preview")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal((debt, debt - 569_263m), (preview.Money("debtBefore"), preview.Money("debtAfter")));
-        // What leaves the debt with a receipt is its total less its returns, plus the money those brought back.
+        // What leaves the debt with a receipt is its total less its returns that are not cancelled.
         var blocked = await (await owner.GetAsync($"/api/purchase-receipts/{recent.Id()}/cancel-preview")).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(("Returned", debt - 400_000m), (blocked.GetProperty("blocked").GetProperty("kind").GetString(), blocked.Money("debtAfter")));
+        Assert.Equal(("Returned", debt - 375_000m), (blocked.GetProperty("blocked").GetProperty("kind").GetString(), blocked.Money("debtAfter")));
     }
 
     [SqlServerFact]

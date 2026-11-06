@@ -27,7 +27,7 @@ public class PurchaseReceiptCorrectCopyTests(AuthApiFactory factory) : IClassFix
         var receipt = await world.CompletedAsync(new LineBody(world.Seed, 100, 9_000, "LOT-1"), new LineBody(world.Other, 4, 25_000));
         var (seedLine, otherLine) = (receipt.LineOf(world.Seed), receipt.LineOf(world.Other));
         await factory.SeedAsync(world.Raft.Id, seedLine, 30);
-        await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { DebtReductionAmount = 90_000, Lines = [new ReturnLineBody(seedLine, 10)] }))
+        await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(seedLine, 10)] }))
             .ReadAsync(HttpStatusCode.Created);
 
         var below = await (await CorrectAsync(world.Owner, receipt.Id(), "Counted again", new { lineId = seedLine, quantity = 39.5m }))
@@ -50,7 +50,7 @@ public class PurchaseReceiptCorrectCopyTests(AuthApiFactory factory) : IClassFix
         Assert.Equal(96_000m, corrected.LineViewOf(world.Other).Money("lineAmount"));
         Assert.Equal(436_000m, corrected.Money("total"));
         Assert.Equal(receipt.SeedLotCodeOf(world.Seed), corrected.SeedLotCodeOf(world.Seed));
-        // The supplier debt follows the new amounts (BR-PURCHASE-04).
+        // The supplier debt follows the new line amounts (BR-PURCHASE-04); the return keeps its 90,000 of 10 × 9,000 (PM 03/11).
         Assert.Equal(436_000m - 90_000m, await world.DebtAsync());
         var audit = await factory.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.RecordId == receipt.Id() && e.Action == "PurchaseReceipt.Corrected"));
         Assert.Equal("Supplier invoice checked", audit.Reason);

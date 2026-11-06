@@ -22,9 +22,9 @@ public class FarmingMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         var zoneId = (await owner.Client.CreateZoneAsync()).Id();
         var body = NewRaftBody(lanes: 2);
         var raft = await owner.Client.CreateRaftAsync(zoneId, body);
-        var openedAt = DateTimeOffset.UtcNow.AddDays(-3);
-        var cycle = await factory.AddCycleAsync(raft.Id(), openedAt);
-        var expected = $"Cannot proceed because 1 records are still in use: cultivation cycle opened {BusinessClock.ToBusinessDate(openedAt):dd/MM/yyyy}. Please handle these records first.";
+        var startDate = Today.AddDays(-3);
+        var cycle = await factory.AddCycleAsync(raft.Id(), startDate);
+        var expected = $"Cannot proceed because 1 records are still in use: cultivation cycle started {startDate:dd/MM/yyyy}. Please handle these records first.";
 
         var layout = await (await owner.Client.PutAsJsonAsync($"/api/rafts/{raft.Id()}", NewRaftBody(raft.Text("code"), lanes: 3) with { RowVersion = raft.Text("rowVersion") }))
             .SrsProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-06", "MSG11");

@@ -26,6 +26,7 @@ internal static class DemoDataSeeder
         new DemoZoneLicenseStep(),
         new DemoRaftStep(),
         new DemoLaborSettingsStep(),
+        new DemoCultivationCycleStep(),
         new DemoStaffAndEmployeeStep(),
         new DemoTraderStep(),
         new DemoProductStep(),

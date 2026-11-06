@@ -116,7 +116,7 @@ public class RaftsV2QaTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         var body = NewRaftBody(lanes: 4);
         var raft = await owner.CreateRaftAsync((await owner.CreateZoneAsync()).Id(), body);
         var two = await owner.EditRaftAsync(raft.Id(), body with { LaneCount = 2, RowVersion = raft.Text("rowVersion") });
-        var cycle = await factory.AddCycleAsync(raft.Id(), DateTimeOffset.UtcNow.AddDays(-1));
+        var cycle = await factory.AddCycleAsync(raft.Id(), FarmingTestKit.Today.AddDays(-1));
         var before = await factory.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == raft.Id()));
 
         // A restore is a lane change too: 2 -> 3 brings a Removed lane back, and is blocked.

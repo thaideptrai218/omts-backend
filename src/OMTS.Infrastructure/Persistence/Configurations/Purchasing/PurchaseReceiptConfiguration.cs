@@ -47,10 +47,7 @@ internal sealed class PurchaseReturnConfiguration : IEntityTypeConfiguration<Pur
         builder.HasOne(x => x.Receipt).WithMany(r => r.Returns).HasForeignKey(x => x.ReceiptId).OnDelete(DeleteBehavior.Restrict);
         builder.ReferencesAccount(nameof(PurchaseReturn.RecordedByAccountId));
         builder.Property(x => x.Reason).HasMaxLength(Lengths.Reason);
-        builder.Property(x => x.RefundAmount).HasPrecision(18, 0);
-        builder.Property(x => x.DebtReductionAmount).HasPrecision(18, 0);
-        builder.HasThousandVndCheck(nameof(PurchaseReturn.RefundAmount));
-        builder.HasThousandVndCheck(nameof(PurchaseReturn.DebtReductionAmount));
+        builder.Property(x => x.CancelReason).HasMaxLength(Lengths.Reason);
     }
 }
 
@@ -61,8 +58,8 @@ internal sealed class PurchaseReturnLineConfiguration : IEntityTypeConfiguration
         builder.HasOne(x => x.Return).WithMany(r => r.Lines).HasForeignKey(x => x.ReturnId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(x => x.ReceiptLine).WithMany().HasForeignKey(x => x.ReceiptLineId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(x => x.Quantity).HasPrecision(18, 3);
+        // Rounded half up to the dong when recorded (BR-PURCHASE-02), and kept: PM 03/11.
         builder.Property(x => x.ReturnValue).HasPrecision(18, 0);
-        builder.HasThousandVndCheck(nameof(PurchaseReturnLine.ReturnValue));
     }
 }
 

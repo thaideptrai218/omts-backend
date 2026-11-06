@@ -11,4 +11,7 @@ public static class DocumentSequenceKeys
 
     /// <summary>Supplier payments and money paid back, TT000123 (BR-PURCHASE-08).</summary>
     public const string SupplierPayment = "TT";
+
+    /// <summary>Purchase returns, TH000123 (PURCHASE-02).</summary>
+    public const string PurchaseReturn = "TH";
 }

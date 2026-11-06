@@ -60,7 +60,7 @@ public class PurchaseReceiptsSqlServerQaTests
         await using var host = await FarmingHost.StartAsync();
         var world = await host.WorldAsync();
         // One open cycle per raft: every round seeds into it.
-        var cycle = new CultivationCycle { RaftId = world.Raft.Id, OpenedAt = DateTimeOffset.UtcNow };
+        var cycle = new CultivationCycle { RaftId = world.Raft.Id, StartDate = Today };
         await host.UseDbAsync(db => db.CultivationCycles.Add(cycle));
 
         for (var round = 0; round < 4; round++)
@@ -71,12 +71,12 @@ public class PurchaseReceiptsSqlServerQaTests
             {
                 CycleId = cycle.Id, SeedLotId = line, SeedingDate = Today, SeedQuantity = 30, RecordedByAccountId = host.Owner.Account.Id,
             }));
-            await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { DebtReductionAmount = 100_000, Lines = [new ReturnLineBody(line, 10)] })).ReadAsync(HttpStatusCode.Created);
+            await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(line, 10)] })).ReadAsync(HttpStatusCode.Created);
 
             // The correction lowers the line to exactly seeded + returned; the return takes 20 more.
             var responses = await InParallelAsync(2, i => i == 0
                 ? world.Owner.PostAsJsonAsync($"{Receipts}/{receipt.Id()}/correct", new { reason = "Counted again", lines = new[] { new { lineId = line, quantity = 40 } } })
-                : world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { DebtReductionAmount = 200_000, Lines = [new ReturnLineBody(line, 20)] }));
+                : world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(line, 20)] }));
 
             Assert.All(responses, r => Assert.NotEqual(HttpStatusCode.InternalServerError, r.StatusCode));
             var quantity = await host.QueryAsync(db => db.PurchaseReceiptLines.Where(l => l.Id == line).Select(l => l.Quantity!.Value).SingleAsync());

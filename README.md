@@ -78,12 +78,13 @@ bootstrap temporary password. To get every demo login back, reset the environmen
 
 The demo data also holds the cooperative profile (with a logo, a cover photo and two certifications: one Valid, one
 expiring within 30 days), a fictional receiving bank account (`DEMO00000001`; skipped with a message when `Payments:Provider` does not accept it, as `None` does not), the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued), zone licenses (`DEMO-01`:
-an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid license and an older expired one), about 10 rafts with lanes per zone, 4 job types with hourly rates (one with a rate still
+an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid license and an older expired one), about 10 rafts with lanes per zone (the first five of each In Use zone with an Open cultivation cycle), 4 job types with hourly rates (one with a rate still
 to come, one Discontinued), two versions of the attendance settings, 9 employees (one Left, one without a phone number; the 3 seasonal workers have job types),
 payroll headers of the last two months without lines (Finalized, Awaiting finalization: a date up to the end of last month answers `MSG-LABOR-04`),
 5 suppliers, 15 farming input items (codes VT001–VT015, every seed item counted in `con`) and 20 purchase receipts of the last 3 months
 (16 Completed, 2 Cancelled, 2 Draft): Material lines and two seed receipts name the raft they were bought for, one line has a
-fractional quantity (its amount is not a whole thousand), with a return. Payments to the suppliers (`TT` codes, not linked to
+fractional quantity (its amount is not a whole thousand), with a return and a return the Owner cancelled (`TH` codes). Payments to the
+suppliers (`TT` codes, not linked to
 receipts), one amount of money paid back and one payment cancelled feed the supplier debts (`GET /api/supplier-debts`). The Owner's
 list holds a MSG-PURCHASE-01 notification for each completed receipt and a MSG-PURCHASE-04 for each transaction.
 The demo data also holds 4 products (one Discontinued), 7 customer profiles (2 linked to the trader accounts, 2 the same buyer ready to merge) and
@@ -100,7 +101,7 @@ sets of water alerts (the demo records as the Owner, who is not told of their ow
 Dates are set relative to the day of the first seed and are not moved afterwards:
 - After a few weeks the "expiring" license and certification have expired. `docker compose down -v` gives fresh dates.
 - Receipt codes follow one sequence in the order they were seeded (`PN000001`…`PN000020`), not the receipt date, and so do
-  payment codes (`TT000001`…); return codes carry the seed date (`PRT-<seed date>-nnn`).
+  payment codes (`TT000001`…) and return codes (`TH000001`…).
 - The debt age and the current-month statement of a supplier move with the calendar; pass `from`/`to` to the statement.
 - The last water measurement is from the day before the seed: a month later without new ones, the zones are overdue and
   get the 06:00 reminder (MSG-WATER-06).
@@ -373,8 +374,12 @@ created by a one-time command run on the server by the deployment operator (not 
    reset them (`docker compose down -v`).
    Upgrading a database from before the supplier payments of SRS 27/10 (migration `SupplierPaymentsV2`): payments are no
    longer linked to receipts and lose their evidence files; the rows get kind `Payment` and `TT000123` codes in payment order,
-   and the `DocumentSequences` counter starts after them. Refunds stay on the returns until the returns PR. Down is lossy (money
+   and the `DocumentSequences` counter starts after them. Down is lossy (money
    paid back is dropped, amounts are rounded to thousands). Demo databases are not converted further: reset them.
+   Upgrading a database from before the purchase returns of SRS 27/10 (migration `PurchaseReturnsV2`): the rows become Recorded
+   and keep their amounts and `PRT-…` codes, new returns take `TH000123` codes; the refund columns are dropped without turning
+   them into money paid back, so a refund already on a return leaves the debt. Down is lossy (Cancelled returns are deleted, amounts
+   are rounded to thousands). Demo databases are not converted further: reset them.
    An Owner who cannot log in (for example after losing the first password) is recovered with
    `dotnet OMTS.Api.dll seed --reset-owner-password`. It sets `Bootstrap:Owner:TemporaryPassword` (from configuration, never
    from the command line, so it never lands in shell history) as a new password that must be changed at first login and

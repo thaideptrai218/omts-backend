@@ -25,7 +25,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 table: "Cooperatives",
                 type: "int",
                 nullable: false,
-                // By hand: the start day is 1 when OMTS is set up (BR-LABOR-13), and the check below refuses 0. Regenerated: keep it.
+                // By hand: BR-LABOR-13 starts on day 1; the check below rejects 0. Keep on regeneration.
                 defaultValue: 1);
 
             migrationBuilder.CreateTable(

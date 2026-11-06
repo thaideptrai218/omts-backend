@@ -35,6 +35,7 @@ public class DemoDataSeedTests
         ("ZoneComplianceDocuments", db => db.ZoneComplianceDocuments.CountAsync()),
         ("Rafts", db => db.Rafts.CountAsync()),
         ("Lanes", db => db.Lanes.CountAsync()),
+        ("CultivationCycles", db => db.CultivationCycles.CountAsync()),
         ("Suppliers", db => db.Suppliers.CountAsync()),
         ("FarmingInputItems", db => db.FarmingInputItems.CountAsync()),
         ("PurchaseReceipts", db => db.PurchaseReceipts.CountAsync()),
@@ -142,6 +143,13 @@ public class DemoDataSeedTests
         Assert.Equal(6, await db.RaftPhotos.CountAsync());
         Assert.Equal(2, await db.Lanes.CountAsync(l => l.StatusId == StatusIds.Lane.Removed));
         Assert.Equal(2, await db.Rafts.CountAsync(r => r.Latitude == null && r.Longitude == null));
+        // CYCLE-01: five Open cycles per In Use zone, started weeks ago, for the later PRs and the GFR-04 reminder.
+        var cycles = await db.CultivationCycles.AsNoTracking().Include(c => c.Raft).ToListAsync();
+        Assert.Equal(10, cycles.Count);
+        Assert.All(cycles, c => Assert.Equal(StatusIds.CultivationCycle.Open, c.StatusId));
+        Assert.All(cycles, c => Assert.Equal(StatusIds.Usage.InUse, c.Raft.StatusId));
+        Assert.All(cycles, c => Assert.True(c.StartDate < businessToday.AddDays(-30)));
+        Assert.Equal(6, cycles.Count(c => c.ExpectedHarvestDate is not null));
         Assert.Equal(9, await db.Employees.CountAsync());
         // Everyone has a type (BR-LABOR-01): those with a login are Staff, the others seasonal workers; one has no phone number.
         Assert.Equal(9, await db.EmployeeTypePeriods.Select(p => p.EmployeeId).Distinct().CountAsync());
@@ -164,7 +172,10 @@ public class DemoDataSeedTests
         Assert.Equal(20, statuses.Sum(s => s.Count));
         Assert.Equal(2, statuses.Single(s => s.Key == StatusIds.PurchaseReceipt.Draft).Count);
         Assert.Equal(2, statuses.Single(s => s.Key == StatusIds.PurchaseReceipt.Cancelled).Count);
-        Assert.Equal(1, await db.PurchaseReturns.CountAsync());
+        // One return stands and one was cancelled by the Owner (PURCHASE-02.1), both with TH codes.
+        Assert.Equal(1, await db.PurchaseReturns.CountAsync(r => r.StatusId == StatusIds.PurchaseReturn.Recorded));
+        Assert.Equal(1, await db.PurchaseReturns.CountAsync(r => r.StatusId == StatusIds.PurchaseReturn.Cancelled && r.CancelReason != null));
+        Assert.True(await db.PurchaseReturns.AllAsync(r => r.Code.StartsWith("TH")));
         // TT codes; payments are not linked to receipts; a supplier paid back and a payment was cancelled (PURCHASE-05.2/05.3).
         Assert.True(await db.SupplierPayments.AnyAsync(p => p.StatusId == StatusIds.SupplierPayment.Recorded && p.Kind == SupplierPaymentKind.Payment));
         Assert.True(await db.SupplierPayments.AnyAsync(p => p.StatusId == StatusIds.SupplierPayment.Recorded && p.Kind == SupplierPaymentKind.PaidBack));
