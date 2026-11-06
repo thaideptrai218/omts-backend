@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Farming;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Domain.Entities.Cultivation;
-using OMTS.Domain.Entities.Labor;
 using static OMTS.Api.IntegrationTests.Farming.FarmingTestKit;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
@@ -154,19 +153,5 @@ public class CultivationCycleEditCancelTests(AuthApiFactory factory) : IClassFix
         Assert.Equal($"Cannot proceed because 1 records are still in use: records of the cultivation cycle started {Today:dd/MM/yyyy}. Please handle these records first.", refused.Detail());
         Assert.Equal(cycle.Id(), refused.GetProperty("cycleId").GetGuid());
         Assert.False((await owner.GetFromJsonAsync<JsonElement>($"/api/cultivation-cycles/{cycle.Id()}")).Flag("canCancel"));
-    }
-
-    // The old work assignment still points to its cycle with a restricted key: a clean refusal, not a failed delete.
-    [Fact]
-    public async Task A_cycle_named_by_a_work_assignment_cannot_be_cancelled()
-    {
-        var (owner, raft) = await OwnerWithRaftAsync();
-        var cycle = await owner.StartCycleAsync(raft.Id());
-        var zoneId = raft.GetProperty("zone").Id();
-        await factory.UseDbAsync(db => db.WorkAssignments.Add(new WorkAssignment { ZoneId = zoneId, CycleId = cycle.Id(), WorkDate = Today, Task = "Hang seed" }));
-
-        var answer = await owner.CancelCycleAsync(cycle.Id(), cycle.Text("rowVersion"));
-
-        Assert.Equal("MSG-GEN-06", await answer.ErrorCodeAsync());
     }
 }

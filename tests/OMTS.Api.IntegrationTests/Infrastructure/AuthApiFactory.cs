@@ -44,6 +44,7 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         // Background jobs never run on their own in tests; tests call them directly.
         builder.UseSetting("Jobs:ZoneLicenseReminder:CatchUpOnStart", "false");
         builder.UseSetting("Jobs:WaterMeasurementOverdue:CatchUpOnStart", "false");
+        builder.UseSetting("Jobs:EmploymentEnd:CatchUpOnStart", "false");
         builder.UseSetting("Jobs:OrphanFileCleanup:Enabled", "false");
         builder.ConfigureLogging(logging => logging.AddProvider(Logs));
         builder.ConfigureServices(services =>

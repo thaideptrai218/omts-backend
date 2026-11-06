@@ -20,25 +20,48 @@ internal sealed class ZoneRecipientQuery(OmtsDbContext db) : IZoneRecipientQuery
             .ToList();
         var anyZone = PermissionFunctions.IsCooperativeWide(functionCode);
 
-        var owners = await GetCooperativeOwnersAsync(cancellationToken);
-
+        var owners = await OwnersAsync(cancellationToken);
         List<Guid> staff = roleCodes.Count == 0
             ? []
-            : await db.AccessGrants.AsNoTracking()
-                .EffectiveOfFixedRoles()
-                .Where(g => roleCodes.Contains(g.Role.Code)
-                    && (anyZone || g.ZoneId == null || g.ZoneId == zoneId)
-                    && g.Account.SubjectType == SubjectType.Staff
-                    && g.Account.StatusId == StatusIds.Account.Active)
+            : await ActiveStaffPairs(roleCodes)
+                .Where(g => anyZone || g.ZoneId == null || g.ZoneId == zoneId)
                 .Select(g => g.AccountId)
                 .ToListAsync(cancellationToken);
 
         return owners.Concat(staff).Distinct().ToList();
     }
 
-    public async Task<IReadOnlyList<Guid>> GetCooperativeOwnersAsync(CancellationToken cancellationToken) =>
-        await db.Accounts.AsNoTracking()
+    public async Task<IReadOnlyList<Guid>> GetOwnersAndRolesAsync(IReadOnlyCollection<StaffRole> staffRoles, CancellationToken cancellationToken)
+    {
+        var roleCodes = staffRoles.Select(r => FixedRoles.Of(r).Code).ToList();
+        var owners = await OwnersAsync(cancellationToken);
+        List<Guid> staff = roleCodes.Count == 0 ? [] : await ActiveStaffPairs(roleCodes).Select(g => g.AccountId).ToListAsync(cancellationToken);
+        return owners.Concat(staff).Distinct().ToList();
+    }
+
+    public async Task<IReadOnlyList<Guid>> GetZoneManagersOrOwnersAsync(Guid zoneId, CancellationToken cancellationToken)
+    {
+        var managers = await ActiveStaffPairs([FixedRoles.ZoneManagerCode])
+            .Where(g => g.ZoneId == null || g.ZoneId == zoneId)
+            .Select(g => g.AccountId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        return managers.Count > 0 ? managers : await OwnersAsync(cancellationToken);
+    }
+
+    private Task<List<Guid>> OwnersAsync(CancellationToken cancellationToken) =>
+        db.Accounts.AsNoTracking()
             .Where(a => a.SubjectType == SubjectType.CooperativeOwner && a.StatusId == StatusIds.Account.Active)
             .Select(a => a.Id)
             .ToListAsync(cancellationToken);
+
+    private IQueryable<Domain.Entities.Identity.AccessGrant> ActiveStaffPairs(IReadOnlyCollection<string> roleCodes) =>
+        db.AccessGrants.AsNoTracking()
+            .EffectiveOfFixedRoles()
+            .Where(g => roleCodes.Contains(g.Role.Code)
+                && g.Account.SubjectType == SubjectType.Staff
+                && g.Account.StatusId == StatusIds.Account.Active);
+
+    public async Task<IReadOnlyList<Guid>> GetCooperativeOwnersAsync(CancellationToken cancellationToken) =>
+        await OwnersAsync(cancellationToken);
 }

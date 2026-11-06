@@ -16,7 +16,7 @@ namespace OMTS.Api.IntegrationTests.WaterQuality;
 /// QA of OMTS-214 item 2 (times without a UTC offset are Vietnam time). The test machine runs in UTC+7, so it cannot
 /// tell "server local" from "Vietnam time" by the wall clock: every check asserts the stored offset (+07:00) and the
 /// UTC instant of an offset-less value, and that "Z", "+00:00" and "+09:00" keep both their instant and their offset.
-/// Also: the multipart path, invalid values (400 MSG01 naming the field, never 500), the API-wide reach of the global
+/// Also: invalid values (400 MSG01 naming the field, never 500), the API-wide reach of the global
 /// converter (no other date-time inputs, responses unchanged).
 /// </summary>
 public class WaterBusinessTimeQaTests(AuthApiFactory api) : IClassFixture<AuthApiFactory>
@@ -43,7 +43,7 @@ public class WaterBusinessTimeQaTests(AuthApiFactory api) : IClassFixture<AuthAp
     {
         var z = await api.ZoneAsync();
 
-        var response = await z.Owner.PostAsJsonAsync(z.Base, new { clientOperationId = Guid.NewGuid(), measuredAt = $"{Day:yyyy-MM-dd}T08:00:00{suffix}", ph = 7.2m, salinity = 20m, confirm = true });
+        var response = await z.RecordAtAsync($"{Day:yyyy-MM-dd}T08:00:00{suffix}");
 
         Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         var stored = await api.QueryAsync(db => db.WaterMeasurements.AsNoTracking().SingleAsync(m => m.ZoneId == z.Zone.Id));
@@ -55,20 +55,6 @@ public class WaterBusinessTimeQaTests(AuthApiFactory api) : IClassFixture<AuthAp
         var text = detail.GetProperty("measuredAt").GetString()!;
         Assert.Equal(JsonSerializer.Serialize(stored.MeasuredAt).Trim('"'), text);
         Assert.Equal(TimeSpan.FromHours(offsetHours), DateTimeOffset.Parse(text).Offset);
-    }
-
-    [Theory]
-    [MemberData(nameof(Offsets))]
-    public async Task Multipart_entry_stores_the_same_instant_and_offset_as_json(string suffix, int utcHour, int offsetHours)
-    {
-        var z = await api.ZoneAsync();
-
-        var response = await z.Owner.PostAsync($"{z.Base}/with-photo", Form($"{Day:yyyy-MM-dd}T08:00:00{suffix}"));
-
-        Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
-        var stored = await api.QueryAsync(db => db.WaterMeasurements.AsNoTracking().SingleAsync(m => m.ZoneId == z.Zone.Id));
-        Assert.Equal(ExpectedUtc(utcHour), stored.MeasuredAt.UtcDateTime);
-        Assert.Equal(TimeSpan.FromHours(offsetHours), stored.MeasuredAt.Offset);
     }
 
     // A date-only value and a 7-digit fraction are ISO 8601 too: midnight / the exact tick, in Vietnam time.
@@ -130,7 +116,7 @@ public class WaterBusinessTimeQaTests(AuthApiFactory api) : IClassFixture<AuthAp
 
         var response = await PostRawAsync(z, measuredAt);
         var unreadableNumber = await z.Owner.PostAsync(z.Base, new StringContent(
-            $"{{\"clientOperationId\":\"{Guid.NewGuid()}\",\"ph\":\"seven\",\"salinity\":20,\"confirm\":true}}", System.Text.Encoding.UTF8, "application/json"));
+            "{\"ph\":\"seven\",\"salinity\":20}", System.Text.Encoding.UTF8, "application/json"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
@@ -148,34 +134,6 @@ public class WaterBusinessTimeQaTests(AuthApiFactory api) : IClassFixture<AuthAp
         var z = await api.ZoneAsync();
 
         var response = await PostRawAsync(z, measuredAt);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
-    }
-
-    // Same root cause on the multipart path (InvariantFormValues → BusinessClock.FromLocal).
-    [Fact]
-    public async Task Multipart_offset_less_time_before_the_first_utc_instant_is_400_MSG01_not_500()
-    {
-        var z = await api.ZoneAsync();
-
-        var response = await z.Owner.PostAsync($"{z.Base}/with-photo", Form("0001-01-01T00:00:00"));
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
-    }
-
-    // The multipart field is documented as ISO 8601 (Swagger, README) and the JSON body refuses other formats, but
-    // DateTime.TryParse(InvariantCulture) reads "03/04/2026 08:00" as 4 March (US order); a Vietnamese user means
-    // 3 April. Pre-existing leniency, now inconsistent with the JSON rule this PR documents.
-    [Theory]
-    [InlineData("03/04/2026 08:00")]
-    [InlineData("Oct 20 2026 08:00")]
-    public async Task Multipart_time_that_is_not_iso_8601_is_400_MSG01_like_json(string measuredAt)
-    {
-        var z = await api.ZoneAsync();
-
-        var response = await z.Owner.PostAsync($"{z.Base}/with-photo", Form(measuredAt));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
@@ -282,7 +240,7 @@ public class WaterBusinessTimeQaTests(AuthApiFactory api) : IClassFixture<AuthAp
 
     private static Task<HttpResponseMessage> PostRawAsync(WaterZone z, string measuredAt) =>
         z.Owner.PostAsync(z.Base, new StringContent(
-            $"{{\"clientOperationId\":\"{Guid.NewGuid()}\",\"ph\":7.1,\"salinity\":20,\"measuredAt\":{measuredAt},\"confirm\":true}}",
+            $"{{\"ph\":7.1,\"salinity\":20,\"temperature\":25,\"measuredAt\":{measuredAt}}}",
             System.Text.Encoding.UTF8,
             "application/json"));
 
@@ -291,15 +249,6 @@ public class WaterBusinessTimeQaTests(AuthApiFactory api) : IClassFixture<AuthAp
         var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
         return body.TryGetProperty("field", out var field) ? field.GetString() : null;
     }
-
-    private static MultipartFormDataContent Form(string measuredAt) => new()
-    {
-        { new StringContent(Guid.NewGuid().ToString()), "clientOperationId" },
-        { new StringContent(measuredAt), "measuredAt" },
-        { new StringContent("7.2"), "ph" },
-        { new StringContent("20"), "salinity" },
-        { new StringContent("true"), "confirm" },
-    };
 
     private sealed record TimeProbe(DateTimeOffset At, DateTimeOffset? Maybe, DateTimeOffset?[]? Many);
 }

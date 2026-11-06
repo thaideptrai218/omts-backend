@@ -18,7 +18,7 @@ namespace OMTS.Api.IntegrationTests.Farming;
 /// </summary>
 public class RaftsV2MigrationTests
 {
-    private const string MigrationBefore = "20261104072437_ZonesLicensesV2";
+    private const string MigrationBefore = "20261105140242_SupplierPaymentsV2";
     private const string OldPhoto = "raft-photos/2026/01/old.jpg";
     private const string SecondPhoto = "raft-photos/2026/01/second.jpg";
 
@@ -32,9 +32,11 @@ public class RaftsV2MigrationTests
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync(MigrationBefore);
 
-        // Cooperatives, zones and accounts are unchanged by the migration, so the current model writes them.
+        // Zones and accounts are unchanged by the migration, so the current model writes them. The cooperative by SQL: later migrations add columns of the model that this one does not have yet.
+        var cooperative = Guid.NewGuid();
+        await db.Database.ExecuteSqlAsync($"INSERT INTO Cooperatives (Id, FullName, CreatedAt) VALUES ({cooperative}, N'HTX', SYSDATETIMEOFFSET())");
         var account = new Account { Username = NewCode(), DisplayName = "Owner", PasswordHash = NewPassword(), SubjectType = SubjectType.CooperativeOwner, StatusId = StatusIds.Account.Active };
-        var zone = new FarmingZone { Cooperative = new Cooperative { FullName = "HTX" }, Code = "KV01", Name = "A" };
+        var zone = new FarmingZone { CooperativeId = cooperative, Code = "KV01", Name = "A" };
         db.Accounts.Add(account);
         db.FarmingZones.Add(zone);
         await db.SaveChangesAsync();

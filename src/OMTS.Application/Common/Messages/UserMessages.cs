@@ -91,22 +91,47 @@ public static class UserMessages
     {
         Parameters = CertificationParameters(name, number, expiryDate, days: null),
     };
+    // ---- MSG-DEBT ----
+
+    /// <summary>MSG-DEBT-01 (DEBT-01 step 5): asks to use the account, after the Payment Notification Service accepted it.</summary>
+    /// <param name="oldCodesText">{old_codes_text}: empty, or <see cref="OldVietQrCodesText"/>.</param>
+    public static UserMessage UseReceivingBankAccount(string oldCodesText, string accountNumber, string bankName, string accountHolder) => new(
+        Debt01, $"{oldCodesText}Use account {accountNumber} at {bankName} ({accountHolder}) for the VietQR codes of the sales invoices?");
+
+    /// <summary>
+    /// {old_codes_text} of MSG-DEBT-01 when an account was already set (BR-DEBT-01). The SRS gives the placeholder but no
+    /// wording; this is the rule of BR-DEBT-01 in a sentence.
+    /// </summary>
+    public static string OldVietQrCodesText(int count) => count == 1
+        ? "1 unpaid invoice has a VietQR code already sent for the old account. A transfer made with it is not recorded automatically. "
+        : $"{count} unpaid invoices have VietQR codes already sent for the old account. A transfer made with them is not recorded automatically. ";
+
+    /// <summary>MSG-DEBT-02 (DEBT-01.0.E2): the Payment Notification Service does not accept the account or does not answer.</summary>
+    public static UserMessage ReceivingBankAccountNotAccepted(string accountNumber, string bankName) => new(
+        Debt02,
+        $"The payment notification service did not accept account {accountNumber} at {bankName}. The receiving bank account has not been changed. Please check the account, or try again later.");
+
     // ---- MSG-WATER ----
 
-    /// <summary>MSG-WATER-01 (WATER-01.2): the OCR Service read nothing, or did not answer.</summary>
+    /// <summary>MSG-WATER-01 (WATER-01.2): the OCR Service could not read one or more values, or did not answer.</summary>
     /// <param name="indicatorList">The values not read, e.g. "pH and salinity".</param>
     public static UserMessage OcrValuesNotRead(string indicatorList) => new(
         Water01, $"OMTS could not read {indicatorList} from the photo. Please look at the meter and type in the missing values.", Legacy.Msg04);
 
+    /// <summary>MSG-WATER-02 (WATER-01 step 8): before saving, a value is outside the water thresholds of the zone.</summary>
+    /// <param name="valuesOutside">Each value outside with its allowed range.</param>
+    public static UserMessage WaterValuesOutsideBeforeSave(IReadOnlyList<WaterValueOutside> valuesOutside) => new(
+        Water02, $"{string.Join("; ", valuesOutside.Select(v => v.Describe()))}. Please check the meter again before you save.");
+
     /// <summary>MSG-WATER-03 (BR-WATER-05): the water alert notification.</summary>
     /// <param name="corrected">The alert of a corrected measurement: "(corrected measurement)" in the text.</param>
-    /// <param name="raftCode">Null while measurements have no raft ("–" in the text).</param>
+    /// <param name="raftCode">The raft where the water was measured.</param>
     /// <param name="measuredAt">Shown in Vietnam time.</param>
     /// <param name="valuesOutside">Each value outside with its allowed range.</param>
     public static UserMessage WaterAlert(
-        bool corrected, string zoneName, string? raftCode, DateTimeOffset measuredAt, IReadOnlyList<WaterValueOutside> valuesOutside) => new(
+        bool corrected, string zoneName, string raftCode, DateTimeOffset measuredAt, IReadOnlyList<WaterValueOutside> valuesOutside) => new(
         Water03,
-        $"Water alert{(corrected ? " (corrected measurement)" : "")}: zone {zoneName}, raft {raftCode ?? "–"}, measured on {BusinessClock.Format(measuredAt)}. "
+        $"Water alert{(corrected ? " (corrected measurement)" : "")}: zone {zoneName}, raft {raftCode}, measured on {BusinessClock.Format(measuredAt)}. "
             + $"{string.Join("; ", valuesOutside.Select(v => v.Describe()))}. Please check the water.",
         Legacy.Msg27)
     {
@@ -119,6 +144,24 @@ public static class UserMessages
             ["values_outside"] = valuesOutside,
         },
     };
+
+    /// <summary>MSG-WATER-04 (BR-WATER-05): an earlier water alert was withdrawn after a correction or a void.</summary>
+    /// <param name="measuredAt">The time of the alert being withdrawn, shown in Vietnam time.</param>
+    /// <param name="correctedOrVoided">"corrected" or "voided".</param>
+    public static UserMessage WaterAlertWithdrawn(string zoneName, DateTimeOffset measuredAt, string userName, string correctedOrVoided, string reason) => new(
+        Water04,
+        $"The water alert of zone {zoneName} (measured on {BusinessClock.Format(measuredAt)}) was withdrawn: {userName} {correctedOrVoided} the measurement. Reason: {reason}.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["zone_name"] = zoneName,
+            ["measurement_time"] = measuredAt.ToOffset(BusinessClock.UtcOffset),
+            ["user_name"] = userName,
+            ["corrected_or_voided"] = correctedOrVoided,
+            ["reason"] = reason,
+        },
+    };
+
     /// <summary>MSG-WATER-05: the minimum of an indicator is not less than its maximum.</summary>
     /// <param name="indicator">e.g. "pH", or "pH and salinity" when both are wrong.</param>
     public static UserMessage MinimumNotLessThanMaximum(string indicator) => new(
@@ -141,7 +184,11 @@ public static class UserMessages
 
     // ---- MSG-ACCOUNT ----
 
-    /// <summary>MSG-ACCOUNT-02: the trader account got a new customer profile (several offline profiles share the number).</summary>
+    /// <summary>MSG-ACCOUNT-01: the trader account is linked to the existing customer profile (ACCOUNT-01 step 7).</summary>
+    public static readonly UserMessage RegisteredWithExistingCustomerProfile = new(
+        Account01, "Your account has been created. Please log in with your phone number or email and your password.");
+
+    /// <summary>MSG-ACCOUNT-02: the trader account got a new customer profile, as no profile or several matched (ACCOUNT-01.1).</summary>
     public static readonly UserMessage RegisteredWithNewCustomerProfile = new(
         Account02,
         "Your account has been created. Invoices from before today will appear in your account after the cooperative adds them. Please log in.",
@@ -163,10 +210,11 @@ public static class UserMessages
 
     /// <summary>
     /// MSG-ACCOUNT-06: login is paused for <see cref="Account.TemporaryLockDuration"/> after too many failed
-    /// attempts. The retry time is the length of the pause, the same for every identifier (BR-ACCOUNT-05).
+    /// attempts (BR-ACCOUNT-05).
     /// </summary>
-    public static readonly UserMessage TooManyLoginAttempts = new(
-        Account06, $"Too many failed login attempts. Please try again after {Duration(Account.TemporaryLockDuration)}.", Legacy.Msg69);
+    /// <param name="waitSeconds">What is left of the pause: {retry_time} in the text.</param>
+    public static UserMessage TooManyLoginAttempts(int waitSeconds) => new(
+        Account06, $"Too many failed login attempts. Please try again after {Duration(TimeSpan.FromSeconds(waitSeconds))}.", Legacy.Msg69);
 
     /// <summary>MSG-ACCOUNT-07: the account is Locked or has no effective zone–role pair.</summary>
     public static readonly UserMessage AccountUnusable = new(
@@ -212,15 +260,13 @@ public static class UserMessages
 
     /// <summary>MSG-ACCOUNT-17: a code was entered wrongly too many times and is cancelled.</summary>
     public static readonly UserMessage TooManyWrongCodes = new(
-        Account17, "You have entered a wrong code too many times. Please start again to get a new code.", Legacy.Msg69);
+        Account17, "You have entered a wrong code too many times. Please start again to get a new code.", Legacy.Msg16);
 
     /// <summary>MSG-ACCOUNT-18: too many codes were asked for (BR-ACCOUNT-09).</summary>
-    /// <param name="waitSeconds">0 when this request has no send left: a new request must be started.</param>
+    /// <param name="waitSeconds">The real wait until a new code can be sent: {retry_time} in the text.</param>
     public static UserMessage TooManyCodeRequests(int waitSeconds) => new(
         Account18,
-        waitSeconds > 0
-            ? $"You have asked for too many codes. Please try again after {Duration(TimeSpan.FromSeconds(waitSeconds))}."
-            : "You have asked for too many codes for this request. Please start again to get a new code.",
+        $"You have asked for too many codes. Please try again after {Duration(TimeSpan.FromSeconds(waitSeconds))}.",
         Legacy.TooManyRequests);
 
     /// <summary>MSG-ACCOUNT-19: a verification code has been sent to the partly hidden address.</summary>
@@ -238,30 +284,239 @@ public static class UserMessages
         "Your preferences are saved. This device does not allow notifications from OMTS. To get them on this device, please turn them on in the device settings. You can still see all notifications in the notification list.",
         Legacy.Msg22);
 
-    /// <summary>MSG-ACCOUNT-22 (ACCOUNT-08.0.E1): the related record of a notification no longer exists.</summary>
+    /// <summary>MSG-ACCOUNT-22 (ACCOUNT-08.0.E1, ACCOUNT-10.1.E1): the record of a notification or of an audit event no longer exists.</summary>
     /// <param name="objectName">e.g. "Zone license"; the first letter is capitalized.</param>
-    /// <param name="recordCode">The code the notification shows for the record; may be empty.</param>
+    /// <param name="recordCode">The code the notification or the event shows for the record; may be empty.</param>
     public static UserMessage RecordNoLongerExists(string objectName, string recordCode) => new(
         Account22, $"{string.Join(' ', new[] { Capitalized(objectName), recordCode }.Where(p => p.Length > 0))} no longer exists.");
 
     // ---- MSG-PURCHASE ----
 
+    /// <summary>MSG-PURCHASE-01 (BR-PURCHASE-05): notification to the Owner when a purchase receipt is completed.</summary>
+    /// <param name="totalAmount">The total of the receipt in whole VND: the sum of its rounded lines (BR-PURCHASE-02).</param>
+    public static UserMessage ReceiptCompleted(string userName, string receiptCode, string supplierName, int lineCount, decimal totalAmount) => new(
+        Purchase01, $"{userName} completed purchase receipt {receiptCode} from {supplierName}: {lineCount} lines, {Vnd(totalAmount)} VND.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["user_name"] = userName,
+            ["receipt_code"] = receiptCode,
+            ["supplier_name"] = supplierName,
+            ["line_count"] = lineCount,
+            ["total_amount"] = totalAmount,
+        },
+    };
+
+    /// <summary>MSG-PURCHASE-02 (PURCHASE-02 step 4): a Zone Manager confirms that the Owner approved the return in person; a confirmation.</summary>
+    public static UserMessage ReturnOwnerApproval(decimal returnAmount, string supplierName) => new(
+        Purchase02, $"Has the Cooperative Owner approved this return of {Vnd(returnAmount)} VND to {supplierName} in person?");
+
     /// <summary>MSG-PURCHASE-03 (PURCHASE-02.0.E1): a quantity to return is not greater than 0 or above what is left.</summary>
-    /// <param name="legacyCode">MSG59 (not greater than 0) or MSG45 (above the limit).</param>
-    public static UserMessage ReturnQuantityOutsideLimit(string itemName, string maxQuantity, string unit, string limitExplanation, string legacyCode) => new(
-        Purchase03, $"{itemName}: enter a quantity greater than 0 and at most {maxQuantity} {unit}. {limitExplanation}".TrimEnd(), legacyCode);
+    public static UserMessage ReturnQuantityOutsideLimit(string itemName, string maxQuantity, string unit, string limitExplanation) => new(
+        Purchase03, $"{itemName}: enter a quantity greater than 0 and at most {maxQuantity} {unit}. {limitExplanation}".TrimEnd(), Legacy.Msg59);
+
+    /// <summary>MSG-PURCHASE-04 (BR-PURCHASE-05): notification to the Owner of a payment, money paid back or a cancelled payment; always pushed.</summary>
+    /// <param name="transaction">The English {transaction_text}: what was recorded, up to the code ("the cancellation of payment"), from which the text is built.</param>
+    /// <param name="transactionKind">The atomic parameter clients word it from: Payment, PaidBack, PaymentCancelled or PaidBackCancelled.</param>
+    /// <param name="preposition">"to" or "by" the supplier.</param>
+    /// <param name="debtAmount">The supplier debt after it; below zero when paid in advance.</param>
+    public static UserMessage SupplierTransaction(
+        string userName, string transaction, string transactionKind, string paymentCode, decimal amount, string preposition, string supplierName, decimal debtAmount)
+    {
+        var debtText = debtAmount < 0
+            ? $"The cooperative has now paid {supplierName} {Vnd(-debtAmount)} VND in advance."
+            : $"The cooperative now owes {supplierName} {Vnd(debtAmount)} VND.";
+        return new UserMessage(Purchase04, $"{userName} recorded {transaction} {paymentCode} of {Vnd(amount)} VND {preposition} {supplierName}. {debtText}")
+        {
+            Parameters = new Dictionary<string, object?>
+            {
+                ["user_name"] = userName,
+                ["transaction_kind"] = transactionKind,
+                ["payment_code"] = paymentCode,
+                ["amount"] = amount,
+                ["supplier_name"] = supplierName,
+                ["debt_amount"] = debtAmount,
+            },
+        };
+    }
+
+    /// <summary>MSG-PURCHASE-05 (PURCHASE-05.1): the payment is larger than the debt, or the debt is zero or below; a confirmation.</summary>
+    /// <param name="debtAmount">What the cooperative owes, 0 when it has already paid in advance (the exact debt goes in the details of the answer).</param>
+    /// <param name="advanceAmount">What it will have paid in advance after this payment (positive).</param>
+    public static UserMessage PaymentAboveDebt(string supplierName, decimal debtAmount, decimal advanceAmount) => new(
+        Purchase05,
+        $"The cooperative owes {supplierName} {Vnd(debtAmount)} VND. After this payment, it will have paid {Vnd(advanceAmount)} VND in advance. Do you want to save the payment?");
+
+    /// <summary>MSG-PURCHASE-06 (PURCHASE-05.4): a payment that is not cancelled has the same bank reference; a confirmation.</summary>
+    public static UserMessage BankReferenceAlreadyRecorded(string paymentCode, decimal amount, DateOnly paymentDate, string bankReference) => new(
+        Purchase06,
+        $"Payment {paymentCode} of {Vnd(amount)} VND on {Date(paymentDate)} already has bank reference {bankReference}. Do you want to save this payment as well?");
+
+    /// <summary>MSG-PURCHASE-07 (PURCHASE-06 step 2): cancelling the receipt would bring the supplier debt below zero.</summary>
+    /// <param name="advanceAmount">What the cooperative will then have paid in advance (a positive amount).</param>
+    public static UserMessage PaidInAdvanceAfterCancel(string supplierName, decimal advanceAmount) => new(
+        Purchase07,
+        $"After this cancellation, the cooperative will have paid {supplierName} {Vnd(advanceAmount)} VND in advance. The payments already recorded are not cancelled.")
+    {
+        Parameters = new Dictionary<string, object?> { ["supplier_name"] = supplierName, ["advance_amount"] = advanceAmount },
+    };
+
+    /// <summary>MSG-PURCHASE-08 (PURCHASE-06 step 7): notification to the Accountant and the Owner of a debt below zero after a cancellation.</summary>
+    public static UserMessage ReceiptCancelledPaidInAdvance(string userName, string receiptCode, string supplierName, decimal advanceAmount) => new(
+        Purchase08,
+        $"{userName} cancelled purchase receipt {receiptCode} from {supplierName}. The cooperative has now paid {supplierName} {Vnd(advanceAmount)} VND in advance.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["user_name"] = userName,
+            ["receipt_code"] = receiptCode,
+            ["supplier_name"] = supplierName,
+            ["advance_amount"] = advanceAmount,
+        },
+    };
 
     /// <summary>MSG-PURCHASE-09 (PURCHASE-06.0.E1): a seed lot was seeded or the receipt has a purchase return.</summary>
     public static UserMessage ReceiptCannotBeCancelled(string receiptCode, string cause) => new(
         Purchase09, $"Receipt {receiptCode} cannot be cancelled: {cause}. The Cooperative Owner can correct it instead.", Legacy.Msg61);
 
+    /// <summary>MSG-PURCHASE-10 (PURCHASE-06.2.E1): a corrected quantity is below the quantity seeded plus the quantity returned.</summary>
+    public static UserMessage QuantityBelowUsed(string itemName, decimal minQuantity, string unit, decimal seededQuantity, decimal returnedQuantity) => new(
+        Purchase10,
+        $"{itemName}: the quantity cannot be less than {Quantity(minQuantity)} {unit} ({Quantity(seededQuantity)} seeded, {Quantity(returnedQuantity)} returned).");
+
     // ---- MSG-LABOR ----
+
+    /// <summary>MSG-LABOR-01 (LABOR-01 step 5): asked of a Zone Manager adding an employee; a request without the answer is refused.</summary>
+    public static UserMessage OwnerApprovalNeeded(string employeeName) => new(
+        Labor01, $"Has the Cooperative Owner approved, in person, adding {employeeName} as a new employee?")
+    {
+        Parameters = new Dictionary<string, object?> { ["employee_name"] = employeeName },
+    };
+
+    /// <summary>MSG-LABOR-02 (LABOR-01.3 step 5): reminder to the Owner when a staff account has the phone number of an employee who left.</summary>
+    public static UserMessage LockStaffAccountReminder(string employeeName, DateOnly lastWorkingDay, string username) => new(
+        Labor02,
+        $"{employeeName} no longer works for the cooperative after {Date(lastWorkingDay)}. Staff account {username} has the same phone number: lock it in User accounts if it is no longer needed.")
+    {
+        Parameters = new Dictionary<string, object?> { ["employee_name"] = employeeName, ["last_working_day"] = lastWorkingDay, ["username"] = username },
+    };
 
     /// <summary>MSG-LABOR-03: the phone number belongs to another employee.</summary>
     public static UserMessage PhoneBelongsToEmployee(string employeeName) => new(
         Labor03,
         $"This phone number belongs to {employeeName}. Each employee needs their own phone number for the employee app: enter another number, or leave it empty.",
         Legacy.Msg03);
+
+    /// <summary>MSG-LABOR-04 (BR-LABOR-13): a change is dated in a pay period whose payroll, or a later one, is Awaiting finalization or Finalized.</summary>
+    /// <param name="period">The name of the payroll's period, e.g. "10/2026".</param>
+    /// <param name="payrollStatus">The display name of its status.</param>
+    /// <param name="lockedUntil">The change can be dated after it: the last day of the latest locked payroll, or the employee's first type date when that is later.</param>
+    /// <param name="canBeSentBack">Every locked payroll in the way is Awaiting finalization, so the Owner can send it back (LABOR-13.1).</param>
+    public static UserMessage PayrollLocksDate(string period, string payrollStatus, DateOnly date, DateOnly lockedUntil, bool canBeSentBack)
+    {
+        var nextStep = canBeSentBack
+            ? $"Choose a date after {Date(lockedUntil)}, or ask the Cooperative Owner to send the payroll back first."
+            : $"Choose a date after {Date(lockedUntil)}.";
+        return new UserMessage(Labor04, $"The payroll of {period} is {payrollStatus}, so this change cannot apply to {Date(date)}. {nextStep}")
+        {
+            Parameters = new Dictionary<string, object?> { ["period"] = period, ["payroll_status"] = payrollStatus, ["date"] = date, ["next_step"] = nextStep },
+        };
+    }
+
+    /// <summary>MSG-LABOR-36 (LABOR-16 step 3): asked before saving the payroll settings.</summary>
+    /// <param name="period1">The next pay period as shown to the user.</param>
+    /// <param name="automatic">Automatic payroll is on: the note about it is added.</param>
+    public static UserMessage NextPayPeriods(string period1, string period2, bool automatic)
+    {
+        var autoNote = automatic ? ", and OMTS creates the payroll of each new pay period at its start" : string.Empty;
+        return new UserMessage(Labor36, $"With these settings, the next pay periods are {period1} and {period2}{autoNote}. Do you want to save?")
+        {
+            Parameters = new Dictionary<string, object?> { ["period_1"] = period1, ["period_2"] = period2, ["auto_note"] = autoNote },
+        };
+    }
+
+    // ---- MSG-SALE ----
+
+    /// <summary>MSG-GEN-11 (SALE-10.0.E1): a list the user does not filter has nothing to show yet.</summary>
+    public static readonly UserMessage NothingToShowYet = new(Gen11, "There is nothing to show yet.");
+
+    /// <summary>MSG-SALE-01 (BR-SALE-03): a new purchase request, to the Cooperative Owner; a mandatory type.</summary>
+    public static UserMessage PurchaseRequestNew(string customerName, decimal requestedKg, string productName, DateOnly pickupDate, string? note) => new(
+        Sale01,
+        $"{customerName} asks to buy about {Kg(requestedKg)} kg of {productName}, pickup on {Date(pickupDate)}. {(note is null ? "" : note + " ")}Please ask the Zone Manager to check the oysters, then respond.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["customer_name"] = customerName,
+            ["requested_kg"] = KgValue(requestedKg),
+            ["product_name"] = productName,
+            ["pickup_date"] = pickupDate,
+            ["note"] = note,
+        },
+    };
+
+    /// <summary>MSG-SALE-02 (BR-SALE-03): a trader cancelled a purchase request, to the Cooperative Owner.</summary>
+    /// <param name="requestDate">The business day the request was sent.</param>
+    public static UserMessage PurchaseRequestCancelled(string customerName, DateOnly requestDate, decimal requestedKg, string productName, string? reason) => new(
+        Sale02,
+        $"{customerName} cancelled the purchase request of {Date(requestDate)} for about {Kg(requestedKg)} kg of {productName}.{(reason is null ? "" : " " + reason)}")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["customer_name"] = customerName,
+            ["request_date"] = requestDate,
+            ["requested_kg"] = KgValue(requestedKg),
+            ["product_name"] = productName,
+            ["reason"] = reason,
+        },
+    };
+
+    /// <summary>MSG-SALE-03 (BR-SALE-03): the response "accepted", to the trader account and the phone number of the profile.</summary>
+    public static UserMessage PurchaseRequestAccepted(
+        string cooperativeShortName, decimal requestedKg, string productName, decimal acceptedKg, DateOnly pickupDate, bool payLater, string? note) => new(
+        Sale03,
+        $"{cooperativeShortName}: your request for {Kg(requestedKg)} kg of {productName} is accepted for {Kg(acceptedKg)} kg, pickup on {Date(pickupDate)}{(payLater ? "; you may pay later" : "")}.{(note is null ? "" : " " + note)}")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["cooperative_short_name"] = cooperativeShortName,
+            ["requested_kg"] = KgValue(requestedKg),
+            ["product_name"] = productName,
+            ["accepted"] = true,
+            ["accepted_kg"] = KgValue(acceptedKg),
+            ["pickup_date"] = pickupDate,
+            ["pay_later"] = payLater,
+            ["note"] = note,
+        },
+    };
+
+    /// <summary>MSG-SALE-03 (BR-SALE-03): the response "declined", with the note that gives the reason.</summary>
+    public static UserMessage PurchaseRequestDeclined(string cooperativeShortName, decimal requestedKg, string productName, string note) => new(
+        Sale03,
+        $"{cooperativeShortName}: your request for {Kg(requestedKg)} kg of {productName} is declined. {note}")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["cooperative_short_name"] = cooperativeShortName,
+            ["requested_kg"] = KgValue(requestedKg),
+            ["product_name"] = productName,
+            ["accepted"] = false,
+            ["note"] = note,
+        },
+    };
+
+    /// <summary>MSG-SALE-04 (SALE-04.3): a Zone Manager merges two profiles after confirming that the Owner agreed.</summary>
+    /// <param name="mergedDebt">The amount as shown, e.g. "1,000,000".</param>
+    public static UserMessage CustomerMergeNeedsOwnerAgreement(
+        string mergedName, string mergedPhone, string mergedDebt, string keptName, string keptPhone, string keptDebt) => new(
+        Sale04,
+        $"Has the Cooperative Owner agreed to merge {mergedName} ({mergedPhone}, debt {mergedDebt} VND) into {keptName} ({keptPhone}, debt {keptDebt} VND)? The merge cannot be undone.");
+
+    /// <summary>MSG-SALE-05 (SALE-04.3.E1): the profile to merge has a trader account.</summary>
+    /// <param name="bothLinked">The kept profile has one too, so the two are not merged at all.</param>
+    public static UserMessage CustomerMergeRefused(string mergedName, string keptName, bool bothLinked) => new(
+        Sale05,
+        $"{mergedName} cannot be merged into {keptName}: {(bothLinked ? "both have a trader account" : $"keep {mergedName} instead, so that its trader account keeps its data")}.");
 
     // ---- Old codes still sent as the code (Legacy.KeptAsCode) ----
 
@@ -280,16 +535,6 @@ public static class UserMessages
         "The data was just updated by another user. Your changes have not been saved; please review the new version and then save again or cancel.");
 
     public static readonly UserMessage SessionExpired = new(Legacy.Msg19, "Your login session has expired. Please log in again.");
-
-    public static UserMessage AccountAlreadyLinked(string employeeName) => new(
-        Legacy.Msg24, $"This account is already linked to the employee profile {employeeName}.");
-
-    public static readonly UserMessage NotThousands = new(Legacy.Msg41, "The amount must be a multiple of 1,000 VND.");
-
-    public static UserMessage ExceedsLimit(string field, string limit) => new(Legacy.Msg45, $"{field} exceeds the allowed limit ({limit}).");
-
-    public static readonly UserMessage OldDocumentsHidden = new(
-        Legacy.Msg57, "Old documents are temporarily hidden until identity verification is complete.");
 
     /// <summary>MSG58 (NFR-13).</summary>
     public static UserMessage SomeoneIsEditing(string userName, string time) => new(
@@ -314,6 +559,18 @@ public static class UserMessages
 
     /// <summary>A date as shown in messages, e.g. "29/11/2026".</summary>
     private static string Date(DateOnly date) => date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+
+    /// <summary>A weight as shown in messages, with no trailing zeros, e.g. "1500.5".</summary>
+    private static string Kg(decimal kg) => kg.ToString("0.###", CultureInfo.InvariantCulture);
+
+    // The stored parameter reads the same whether the value came from a request or from a decimal(18,3) column.
+    private static decimal KgValue(decimal kg) => decimal.Parse(Kg(kg), CultureInfo.InvariantCulture);
+
+    /// <summary>A VND amount as shown in messages, e.g. "1,250,500" (never rounded, BR-PURCHASE-02).</summary>
+    private static string Vnd(decimal amount) => amount.ToString("#,0.###", CultureInfo.InvariantCulture);
+
+    /// <summary>A quantity as shown in messages, e.g. "12.5" (at most 3 decimals).</summary>
+    private static string Quantity(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 
     // {document} of MSG-FARM-01/02: "the license number with its zone".
     private static string LicenseDocument(string? documentTypeName, string documentNumber, string zoneCode) =>

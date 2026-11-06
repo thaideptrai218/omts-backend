@@ -29,6 +29,7 @@ public class DemoDataSeedTests
         ("Accounts", db => db.Accounts.CountAsync()),
         ("AccessGrants", db => db.AccessGrants.CountAsync()),
         ("Customers", db => db.Customers.CountAsync()),
+        ("Products", db => db.Products.CountAsync()),
         ("Employees", db => db.Employees.CountAsync()),
         ("FarmingZones", db => db.FarmingZones.CountAsync()),
         ("ZoneComplianceDocuments", db => db.ZoneComplianceDocuments.CountAsync()),
@@ -41,10 +42,14 @@ public class DemoDataSeedTests
         ("FarmingInputItems", db => db.FarmingInputItems.CountAsync()),
         ("PurchaseReceipts", db => db.PurchaseReceipts.CountAsync()),
         ("PurchaseReceiptLines", db => db.PurchaseReceiptLines.CountAsync()),
-        ("SeedReceiptLots", db => db.SeedReceiptLots.CountAsync()),
         ("SupplierPayments", db => db.SupplierPayments.CountAsync()),
         ("PurchaseReturns", db => db.PurchaseReturns.CountAsync()),
         ("WaterMeasurements", db => db.WaterMeasurements.CountAsync()),
+        ("JobTypes", db => db.JobTypes.CountAsync()),
+        ("PayRates", db => db.PayRates.CountAsync()),
+        ("EmployeeJobTypes", db => db.EmployeeJobTypes.CountAsync()),
+        ("AttendanceSettingsVersions", db => db.AttendanceSettingsVersions.CountAsync()),
+        ("Payrolls", db => db.Payrolls.CountAsync()),
         ("Notifications", db => db.Notifications.CountAsync()),
         ("AuditEvents", db => db.AuditEvents.CountAsync()),
     ];
@@ -89,7 +94,8 @@ public class DemoDataSeedTests
         }
     }
 
-    // Any environment but Development, and no setting reopens it (the old Bootstrap:SeedDemoData switch is gone).
+    // Outside Development the old Bootstrap:SeedDemoData switch reopens nothing; only Staging has a flag of its own
+    // (DemoSeedGateTests).
     [Theory]
     [InlineData("Production")]
     [InlineData("Staging")]
@@ -101,7 +107,7 @@ public class DemoDataSeedTests
         var refused = await RunAsync(host);
 
         Assert.Equal(DeploymentBootstrapper.Failure, refused.ExitCode);
-        Assert.Contains(refused.Messages, m => m.Contains("refused outside Development"));
+        Assert.Contains(refused.Messages, m => m.Contains("refused"));
         using var scope = host.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
         Assert.False(await db.Cooperatives.AnyAsync());
@@ -146,18 +152,47 @@ public class DemoDataSeedTests
         Assert.All(cycles, c => Assert.Equal(StatusIds.Usage.InUse, c.Raft.StatusId));
         Assert.All(cycles, c => Assert.True(c.StartDate < businessToday.AddDays(-30)));
         Assert.Equal(6, cycles.Count(c => c.ExpectedHarvestDate is not null));
-        Assert.Equal(8, await db.Employees.CountAsync());
+        Assert.Equal(9, await db.Employees.CountAsync());
+        // Everyone has a type (BR-LABOR-01): those with a login are Staff, the others seasonal workers; one has no phone number.
+        Assert.Equal(9, await db.EmployeeTypePeriods.Select(p => p.EmployeeId).Distinct().CountAsync());
+        Assert.Equal(3, await db.EmployeeTypePeriods.CountAsync(p => p.Type == OMTS.Domain.Enums.EmployeeType.SeasonalWorker));
+        Assert.Equal(1, await db.Employees.CountAsync(e => e.PhoneNumber == null));
+        Assert.True(await db.Employees.Where(e => e.BankAccount != null).AllAsync(e => e.BankAccount!.AccountNumber.StartsWith("9999")));
         Assert.Equal(1, await db.Employees.CountAsync(e => e.StatusId == StatusIds.Employee.Left));
         Assert.Equal(5, await db.Suppliers.CountAsync());
         Assert.Equal(15, await db.FarmingInputItems.CountAsync());
+        // SALE-11: a price list with one Discontinued product to resume. SALE-04: the two trader profiles and five offline
+        // ones, every offline number checked, the last two the same buyer to merge.
+        Assert.Equal(4, await db.Products.CountAsync());
+        Assert.Equal(1, await db.Products.CountAsync(p => p.StatusId == StatusIds.Usage.Discontinued));
+        Assert.All(await db.Products.ToListAsync(), p => Assert.True(p.UnitPrice > 0));
+        Assert.Equal(7, await db.Customers.CountAsync());
+        Assert.Equal(2, await db.Customers.CountAsync(c => c.AccountId != null));
+        Assert.Equal(5, await db.Customers.CountAsync(c => c.AccountId == null && c.PhoneCheckedByStaff));
 
         var statuses = await db.PurchaseReceipts.GroupBy(r => r.StatusId).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
         Assert.Equal(20, statuses.Sum(s => s.Count));
         Assert.Equal(2, statuses.Single(s => s.Key == StatusIds.PurchaseReceipt.Draft).Count);
         Assert.Equal(2, statuses.Single(s => s.Key == StatusIds.PurchaseReceipt.Cancelled).Count);
-        Assert.Equal(1, await db.PurchaseReturns.CountAsync());
-        Assert.True(await db.SupplierPayments.AnyAsync(p => p.StatusId == StatusIds.SupplierPayment.Recorded));
-        Assert.True(await db.PurchaseReceipts.AnyAsync(r => r.DiscountAmount > 0));
+        // One return stands and one was cancelled by the Owner (PURCHASE-02.1), both with TH codes.
+        Assert.Equal(1, await db.PurchaseReturns.CountAsync(r => r.StatusId == StatusIds.PurchaseReturn.Recorded));
+        Assert.Equal(1, await db.PurchaseReturns.CountAsync(r => r.StatusId == StatusIds.PurchaseReturn.Cancelled && r.CancelReason != null));
+        Assert.True(await db.PurchaseReturns.AllAsync(r => r.Code.StartsWith("TH")));
+        // TT codes; payments are not linked to receipts; a supplier paid back and a payment was cancelled (PURCHASE-05.2/05.3).
+        Assert.True(await db.SupplierPayments.AnyAsync(p => p.StatusId == StatusIds.SupplierPayment.Recorded && p.Kind == SupplierPaymentKind.Payment));
+        Assert.True(await db.SupplierPayments.AnyAsync(p => p.StatusId == StatusIds.SupplierPayment.Recorded && p.Kind == SupplierPaymentKind.PaidBack));
+        Assert.Equal(1, await db.SupplierPayments.CountAsync(p => p.StatusId == StatusIds.SupplierPayment.Cancelled));
+        Assert.True(await db.SupplierPayments.AllAsync(p => p.Code.StartsWith("TT")));
+        // Each transaction told the Owner (MSG-PURCHASE-04), the cancellation apart from its payment.
+        var payments = await db.SupplierPayments.CountAsync();
+        Assert.Equal(payments + 1, await db.Notifications.CountAsync(n => n.Type == NotificationTypes.SupplierTransaction));
+        // PN codes; Material lines name their raft, seed lines may; one amount keeps its dongs (BR-PURCHASE-02).
+        Assert.True(await db.PurchaseReceipts.AllAsync(r => r.Code.StartsWith("PN")));
+        Assert.True(await db.PurchaseReceiptLines.AnyAsync(l => l.RaftId != null && l.Item!.Group == InputItemGroup.Seed));
+        Assert.True(await db.PurchaseReceiptLines.Where(l => l.Item!.Group == InputItemGroup.Material && l.Receipt.StatusId != StatusIds.PurchaseReceipt.Draft).AllAsync(l => l.RaftId != null));
+        Assert.True(await db.PurchaseReceiptLines.AnyAsync(l => l.LineAmount % 1000 != 0));
+        // The Owner was told of each completed receipt (MSG-PURCHASE-01), cancelled ones included.
+        Assert.Equal(18, await db.Notifications.Where(n => n.Type == NotificationTypes.PurchaseReceiptCompleted).Select(n => n.RelatedRecordId).Distinct().CountAsync());
 
         // Dates are relative to today in UTC+7, whenever the seed runs.
         var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime);
@@ -166,10 +201,36 @@ public class DemoDataSeedTests
         Assert.True(await db.PurchaseReceipts.AllAsync(r => r.ReceiptDate <= today && r.ReceiptDate >= today.AddDays(-90)));
 
         await AssertWaterDataAsync(db, today);
+        await AssertLaborSettingsAsync(db, today);
     }
 
-    // ENV (OMTS-214): thresholds and 30 days of readings per In Use zone, three outside the thresholds plus a mistyped
-    // salinity that was corrected (both versions kept), and one voided reading.
+    // LABOR-11, LABOR-15, LABOR-16 (OMTS-227): job types with rates, one discontinued, the seasonal workers' profiles naming
+    // them, two versions of the settings, and last month locked. A rerun moves none of it, whichever day it runs.
+    private static async Task AssertLaborSettingsAsync(OmtsDbContext db, DateOnly today)
+    {
+        Assert.Equal(4, await db.JobTypes.CountAsync());
+        Assert.Equal(1, await db.JobTypes.CountAsync(j => j.StatusId == StatusIds.Usage.Discontinued));
+        Assert.True(await db.JobTypes.AllAsync(j => j.Rates.Any()));
+        Assert.Equal(6, await db.PayRates.CountAsync());
+        Assert.Equal(4, await db.EmployeeJobTypes.CountAsync());
+        var seasonal = await db.EmployeeTypePeriods.Where(p => p.Type == OMTS.Domain.Enums.EmployeeType.SeasonalWorker).Select(p => p.EmployeeId).ToListAsync();
+        Assert.True(await db.EmployeeJobTypes.AllAsync(j => seasonal.Contains(j.EmployeeId)));
+        Assert.Equal(2, await db.AttendanceSettingsVersions.CountAsync());
+
+        var cooperative = await db.Cooperatives.SingleAsync();
+        Assert.Equal((1, false), (cooperative.PayPeriodStartDay, cooperative.AutomaticPayroll));
+
+        var payrolls = await db.Payrolls.OrderBy(p => p.PeriodStart).ToListAsync();
+        Assert.Equal([StatusIds.Payroll.Finalized, StatusIds.Payroll.AwaitingFinalization], payrolls.Select(p => p.StatusId));
+        Assert.Equal(payrolls[0].PeriodEnd.AddDays(1), payrolls[1].PeriodStart);
+        // The test may run just after midnight of the first of a month, later than the seed: last month is then the one before.
+        Assert.InRange(payrolls[1].PeriodEnd, today.AddMonths(-1).AddDays(-1), today);
+        Assert.True(payrolls.All(p => p.PeriodStart.Day == 1));
+        Assert.True(await db.PayRates.Where(r => r.HourlyRate == 36_000).AllAsync(r => r.EffectiveFrom > payrolls[1].PeriodEnd));
+    }
+
+    // WATER (OMTS-219): thresholds and 30 days of readings per In Use zone, at its rafts, each with a temperature and a photo:
+    // three outside the thresholds, a mistyped salinity corrected in place and one voided reading.
     private static async Task AssertWaterDataAsync(OmtsDbContext db, DateOnly today)
     {
         var zones = await db.FarmingZones.Where(z => z.StatusId == StatusIds.Usage.InUse).ToListAsync();
@@ -177,16 +238,22 @@ public class DemoDataSeedTests
         Assert.All(zones, z => Assert.Equal((7.5m, 8.5m, 18m, 32m), (z.PhMin!.Value, z.PhMax!.Value, z.SalinityMin!.Value, z.SalinityMax!.Value)));
 
         var water = await db.WaterMeasurements.AsNoTracking().ToListAsync();
-        Assert.Equal(61, water.Count);
-        Assert.Equal(59, water.Count(m => m.StatusId == StatusIds.WaterMeasurement.Confirmed));
-        Assert.Single(water, m => m.StatusId == StatusIds.WaterMeasurement.Superseded && m.ThresholdExceeded && m.Salinity == 2.6m);
-        Assert.Single(water, m => m.CorrectedFromMeasurementId is not null && m.StatusId == StatusIds.WaterMeasurement.Confirmed && !m.ThresholdExceeded);
+        Assert.Equal(60, water.Count);
+        Assert.Equal(59, water.Count(m => m.StatusId == StatusIds.WaterMeasurement.Active));
+        Assert.DoesNotContain(water, m => m.Salinity == 2.6m);
+        var correctedId = await db.AuditEvents.Where(e => e.Action == "WaterMeasurement.Corrected").Select(e => e.RecordId).SingleAsync();
+        Assert.Single(water, m => m.Id == correctedId && m.Salinity == 26.0m && m.StatusId == StatusIds.WaterMeasurement.Active && !m.ThresholdExceeded && m.AlertedAt is null);
         Assert.Single(water, m => m.StatusId == StatusIds.WaterMeasurement.Voided && m.VoidReason is { Length: > 0 });
-        Assert.Equal(3, water.Count(m => m.StatusId == StatusIds.WaterMeasurement.Confirmed && m.ThresholdExceeded));
-        Assert.All(water, m => Assert.Equal(7.5m, m.PhMinUsed));
+        Assert.Equal(3, water.Count(m => m.StatusId == StatusIds.WaterMeasurement.Active && m.ThresholdExceeded));
+        Assert.All(water, m => Assert.Equal((7.5m, 15m, 32m), (m.PhMinUsed!.Value, m.TemperatureMinUsed!.Value, m.TemperatureMaxUsed!.Value)));
+        Assert.All(water, m => Assert.InRange(m.Temperature, 15m, 32m));
+        Assert.Equal(60, water.Select(m => m.PhotoUrl).Distinct().Count());
+        var rafts = await db.Rafts.AsNoTracking().ToDictionaryAsync(r => r.Id);
+        Assert.All(water, m => Assert.Equal((m.ZoneId, StatusIds.Usage.InUse), (rafts[m.RaftId].ZoneId, rafts[m.RaftId].StatusId)));
+        Assert.All(water.GroupBy(m => m.ZoneId), zone => Assert.Equal(8, zone.Select(m => m.RaftId).Distinct().Count()));
         foreach (var zone in zones)
         {
-            var days = water.Where(m => m.ZoneId == zone.Id && m.CorrectedFromMeasurementId is null)
+            var days = water.Where(m => m.ZoneId == zone.Id)
                 .Select(m => BusinessClock.ToBusinessDate(m.MeasuredAt)).ToList();
             Assert.Equal(30, days.Distinct().Count());
             Assert.All(days, d => Assert.InRange(d, today.AddDays(-30), today.AddDays(-1)));

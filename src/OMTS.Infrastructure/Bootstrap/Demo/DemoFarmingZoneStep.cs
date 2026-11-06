@@ -33,7 +33,7 @@ internal sealed class DemoFarmingZoneStep : IDemoSeedStep
             if (existing is null)
             {
                 var saved = DemoSeedContext.Ensure(await service.CreateAsync(new SaveFarmingZoneRequest(
-                    zone.Code, zone.Name, zone.Location, zone.Latitude, zone.Longitude, zone.Area, "Phao tiêu trung tâm vùng"), cancellationToken), $"zone {zone.Code}");
+                    zone.Code, zone.Name, zone.Location, zone.Latitude, zone.Longitude, zone.Area), cancellationToken), $"zone {zone.Code}");
                 (existing, created) = (await context.Db.FarmingZones.FirstAsync(z => z.Id == saved.Zone.Id, cancellationToken), created + 1);
             }
 

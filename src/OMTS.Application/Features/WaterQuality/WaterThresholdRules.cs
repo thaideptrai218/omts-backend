@@ -5,8 +5,8 @@ using OMTS.Application.Features.WaterQuality.Dtos;
 namespace OMTS.Application.Features.WaterQuality;
 
 /// <summary>
-/// ENV-04 input rules: each pair (pH, salinity) is set or cleared together, every value is in range
-/// (MSG-GEN-01), and the minimum is less than the maximum (MSG-WATER-05).
+/// WATER-04 input rules: each pair (pH, salinity, temperature) is set or cleared together, every value is in range
+/// (MSG-GEN-01), and the minimum is less than the maximum (MSG-WATER-05 names the indicators to fix).
 /// </summary>
 public static class WaterThresholdRules
 {
@@ -14,38 +14,46 @@ public static class WaterThresholdRules
     public const string PhMaxField = "pH maximum";
     public const string SalinityMinField = "Salinity minimum";
     public const string SalinityMaxField = "Salinity maximum";
+    public const string TemperatureMinField = "Temperature minimum";
+    public const string TemperatureMaxField = "Temperature maximum";
 
     public static Result<WaterThresholds> Validate(SetWaterThresholdsRequest request)
     {
         var invalid = new List<string>();
         CheckPair(request.PhMin, request.PhMax, PhMinField, PhMaxField, WaterValueRules.IsValidPh, invalid);
         CheckPair(request.SalinityMin, request.SalinityMax, SalinityMinField, SalinityMaxField, WaterValueRules.IsValidSalinity, invalid);
+        CheckPair(request.TemperatureMin, request.TemperatureMax, TemperatureMinField, TemperatureMaxField, WaterValueRules.IsValidTemperature, invalid);
         if (invalid.Count > 0)
         {
             return AppError.InvalidFields(invalid);
         }
 
-        var notLess = new List<string>();
+        var notLess = new List<(string Field, string Indicator)>();
         if (request.PhMin >= request.PhMax)
         {
-            notLess.Add(PhMinField);
+            notLess.Add((PhMinField, WaterIndicators.PhName));
         }
 
         if (request.SalinityMin >= request.SalinityMax)
         {
-            notLess.Add(SalinityMinField);
+            notLess.Add((SalinityMinField, WaterIndicators.SalinityName));
+        }
+
+        if (request.TemperatureMin >= request.TemperatureMax)
+        {
+            notLess.Add((TemperatureMinField, WaterIndicators.TemperatureName));
         }
 
         if (notLess.Count > 0)
         {
-            var indicator = notLess.Count == 2 ? "pH and salinity" : notLess[0] == PhMinField ? "pH" : "salinity";
+            var fields = notLess.Select(n => n.Field).ToList();
             return new AppError(
                 ErrorKind.Validation,
-                UserMessages.MinimumNotLessThanMaximum(indicator),
-                new Dictionary<string, object?> { ["field"] = notLess[0], ["fields"] = notLess });
+                UserMessages.MinimumNotLessThanMaximum(WaterIndicators.Join(notLess.Select(n => n.Indicator).ToList())),
+                new Dictionary<string, object?> { ["field"] = fields[0], ["fields"] = fields });
         }
 
-        return new WaterThresholds(request.PhMin, request.PhMax, request.SalinityMin, request.SalinityMax);
+        return new WaterThresholds(request.PhMin, request.PhMax, request.SalinityMin, request.SalinityMax, request.TemperatureMin, request.TemperatureMax);
     }
 
     private static void CheckPair(decimal? min, decimal? max, string minField, string maxField, Func<decimal, bool> isValid, List<string> invalid)

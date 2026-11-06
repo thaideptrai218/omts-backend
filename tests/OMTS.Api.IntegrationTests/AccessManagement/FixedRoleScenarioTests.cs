@@ -38,7 +38,7 @@ public class FixedRoleScenarioTests(AuthApiFactory factory) : IClassFixture<Auth
         Assert.Equal("MSG-GEN-08", await waterC.ErrorCodeAsync());
         // Zone C – Accountant: supplier payments and debts have no zone, so they follow the role only (BR-FARM-08).
         Assert.Equal(HttpStatusCode.OK, (await staff.GetAsync("/api/supplier-payments")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await staff.GetAsync("/api/suppliers/debts")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await staff.GetAsync("/api/supplier-debts")).StatusCode);
         // Owner-only functions stay closed (FARM-05, ACCOUNT-09).
         Assert.Equal("MSG-GEN-08", await (await staff.GetAsync("/api/accounts")).ErrorCodeAsync());
 

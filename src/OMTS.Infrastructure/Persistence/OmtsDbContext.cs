@@ -39,7 +39,6 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<PurchaseReturn> PurchaseReturns => Set<PurchaseReturn>();
     public DbSet<PurchaseReturnLine> PurchaseReturnLines => Set<PurchaseReturnLine>();
     public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
-    public DbSet<SeedReceiptLot> SeedReceiptLots => Set<SeedReceiptLot>();
     public DbSet<CultivationCycle> CultivationCycles => Set<CultivationCycle>();
     public DbSet<CultivationLog> CultivationLogs => Set<CultivationLog>();
     public DbSet<MaterialUsage> MaterialUsages => Set<MaterialUsage>();
@@ -50,18 +49,22 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     // Products and customers
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<PurchaseRequest> PurchaseRequests => Set<PurchaseRequest>();
 
-    // Labor: what ending an employment still checks (LAB-01)
-    public DbSet<Contractor> Contractors => Set<Contractor>();
-    public DbSet<SeasonalWorker> SeasonalWorkers => Set<SeasonalWorker>();
-    public DbSet<WorkAssignment> WorkAssignments => Set<WorkAssignment>();
-    public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
+    // Labor (LABOR-01, LABOR-11, LABOR-15; the attendance and work assignment tables come with LABOR-04 and LABOR-02)
+    public DbSet<EmployeeTypePeriod> EmployeeTypePeriods => Set<EmployeeTypePeriod>();
+    public DbSet<JobType> JobTypes => Set<JobType>();
+    public DbSet<EmployeeJobType> EmployeeJobTypes => Set<EmployeeJobType>();
+    public DbSet<PayRate> PayRates => Set<PayRate>();
+    public DbSet<AttendanceSettingsVersion> AttendanceSettingsVersions => Set<AttendanceSettingsVersion>();
+    public DbSet<Payroll> Payrolls => Set<Payroll>();
 
     // System
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<Status> Statuses => Set<Status>();
     public DbSet<StatusTransition> StatusTransitions => Set<StatusTransition>();
+    public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {

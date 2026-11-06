@@ -19,7 +19,7 @@ namespace OMTS.Api.IntegrationTests.Farming;
 public sealed record Actor(HttpClient Client, Account Account, AccessGrant? Grant = null);
 
 public sealed record ZoneBody(
-    string? Code, string? Name, string? Location, decimal? Latitude, decimal? Longitude, decimal? Area, string? WaterMeasurementPoint, string? RowVersion = null);
+    string? Code, string? Name, string? Location, decimal? Latitude, decimal? Longitude, decimal? Area, string? RowVersion = null);
 
 public sealed record RaftBody(
     string? Code, decimal? Latitude, decimal? Longitude, string? Location, string? Size, string? ConditionNotes, int? LaneCount, string? RowVersion = null);
@@ -141,7 +141,7 @@ public static class FarmingTestKit
     public static ZoneBody NewZoneBody(string? code = null)
     {
         code ??= NewCode();
-        return new ZoneBody(code, $"Zone {code}", "Bai Tu Long bay", 21.05m, 107.35m, 12.5m, "Buoy 3");
+        return new ZoneBody(code, $"Zone {code}", "Bai Tu Long bay", 21.05m, 107.35m, 12.5m);
     }
 
     public static RaftBody NewRaftBody(string? code = null, int lanes = 5) => new(

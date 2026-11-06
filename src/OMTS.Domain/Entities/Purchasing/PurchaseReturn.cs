@@ -1,25 +1,27 @@
 using OMTS.Domain.Common;
-using OMTS.Domain.Enums;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Platform;
 
 namespace OMTS.Domain.Entities.Purchasing;
 
 /// <summary>
-/// Goods returned to the supplier from a Completed receipt (INP-05), settled as a refund received, a debt
-/// reduction, or both. Never edited or deleted.
+/// PurchaseReturn (SRS 27/10 §I.3.2, PURCHASE-02): goods sent back to the supplier from one Completed receipt, after the Owner
+/// approved it in person. Dated the day it is recorded and never edited: the Owner cancels one recorded by mistake, with a
+/// reason, and it then counts nowhere (BR-PURCHASE-07). Money the supplier gives back is a supplier payment of kind PaidBack.
 /// </summary>
-public class PurchaseReturn : AuditableEntity
+public class PurchaseReturn : AuditableEntity, IHasStatus
 {
-    /// <summary>e.g. PRT-20261022-001.</summary>
+    /// <summary>TH000123: one cooperative-wide sequence, never given twice.</summary>
     public string Code { get; set; } = string.Empty;
     public Guid ReceiptId { get; set; }
     public PurchaseReceipt Receipt { get; set; } = null!;
     public DateOnly ReturnDate { get; set; }
     public string Reason { get; set; } = string.Empty;
-    public decimal RefundAmount { get; set; }
-    public PaymentMethod? RefundMethod { get; set; }
-    public decimal DebtReductionAmount { get; set; }
-    public List<string> EvidenceUrls { get; set; } = [];
     public Guid RecordedByAccountId { get; set; }
+    public int StatusId { get; set; } = StatusIds.PurchaseReturn.Recorded;
+    public Status Status { get; set; } = null!;
+    public DateTimeOffset? CancelledAt { get; set; }
+    public string? CancelReason { get; set; }
     public ICollection<PurchaseReturnLine> Lines { get; set; } = [];
 }
 
@@ -30,6 +32,10 @@ public class PurchaseReturnLine : Entity
     public Guid ReceiptLineId { get; set; }
     public PurchaseReceiptLine ReceiptLine { get; set; } = null!;
     public decimal Quantity { get; set; }
-    /// <summary>Quantity × unit price × (total payable ÷ subtotal), rounded to the nearest 1,000 VND.</summary>
+
+    /// <summary>
+    /// The amount when it was recorded: quantity × unit price of the line that day, half up to the dong. It is stored and a
+    /// later correction of the unit price does not change it (PM 03/11).
+    /// </summary>
     public decimal ReturnValue { get; set; }
 }
