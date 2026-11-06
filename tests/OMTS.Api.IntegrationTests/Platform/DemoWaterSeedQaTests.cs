@@ -95,7 +95,7 @@ public class DemoWaterSeedQaTests
         Assert.All(audit, e => Assert.Equal(ownerId, e.ActorAccountId));
     }
 
-    // The demo now seeds Open cycles. Remove them in this disposable database to exercise the no-cycle case, then
+    // The demo now seeds Open cycles. Close them in this disposable database to exercise the no-open-cycle case, then
     // add one back: the zone is on time until a month after its last reading, then it is reminded.
     [SqlServerFact]
     public async Task Demo_sends_no_reminder_without_an_open_cycle_and_a_zone_with_one_is_reminded_a_month_after_its_last_reading()
@@ -105,7 +105,10 @@ public class DemoWaterSeedQaTests
         var (zoneId, raftId, lastReading) = await host.QueryAsync(async db =>
         {
             var zone = await db.FarmingZones.SingleAsync(z => z.Code == "DEMO-01");
-            var raft = await db.Rafts.Where(r => r.ZoneId == zone.Id).OrderBy(r => r.Code).Select(r => r.Id).FirstAsync();
+            var raft = await db.Rafts
+                .Where(r => r.ZoneId == zone.Id && r.StatusId == StatusIds.Usage.InUse
+                    && !db.CultivationCycles.Any(c => c.RaftId == r.Id))
+                .OrderBy(r => r.Code).Select(r => r.Id).FirstAsync();
             var last = await db.WaterMeasurements.AsNoTracking()
                 .Where(m => m.ZoneId == zone.Id && m.StatusId == StatusIds.WaterMeasurement.Active)
                 .MaxAsync(m => m.MeasuredAt);
@@ -117,10 +120,14 @@ public class DemoWaterSeedQaTests
         {
             var seededCycles = await db.CultivationCycles.ToListAsync();
             Assert.NotEmpty(seededCycles);
-            db.CultivationCycles.RemoveRange(seededCycles);
+            foreach (var cycle in seededCycles)
+            {
+                cycle.StatusId = StatusIds.CultivationCycle.Closed;
+                cycle.CloseDate = TimeProvider.System.Today();
+            }
             return await db.SaveChangesAsync();
         });
-        Assert.False(await host.QueryAsync(db => db.CultivationCycles.AnyAsync()));
+        Assert.False(await host.QueryAsync(db => db.CultivationCycles.AnyAsync(c => c.StatusId == StatusIds.CultivationCycle.Open)));
         Assert.Equal(0, await host.App.RemindOnAsync(lastDayOnTime.AddMonths(6)));
 
         await host.QueryAsync(async db =>
