@@ -3,20 +3,20 @@ using OMTS.Application.Common;
 namespace OMTS.Application.Features.WaterQuality;
 
 /// <summary>
-/// Overdue water measurement reminder rule. Interim until OMTS-219 W3 applies GFR-04 (Open cycles, base date, monthly
-/// repeat). A zone's overdue period starts at its latest Active measurement (or at the zone's creation when it has
-/// none); the zone is overdue when that local date is more than one calendar month before today. One reminder per
-/// period: a reminder sent after the period started covers it; a newer measurement starts a new period once it is saved
-/// after that reminder, even when it was measured earlier. Corrections and voids re-arm it through
-/// <see cref="WaterOverdueRearm"/>.
+/// GFR-04, worked out from the data on every run. The base date is the later of the latest active measurement and the
+/// earliest Open cycle start of the zone, so a new measurement, a correction or a void moves it with nothing to reset. A
+/// zone is overdue when the base date is more than one calendar month before today, and is reminded again every month.
 /// </summary>
 public static class WaterOverdueRule
 {
-    /// <summary>Measured on 23/09 → still on time on 23/10, overdue from 24/10.</summary>
-    public static bool IsOverdue(DateOnly periodStartDate, DateOnly today) => periodStartDate.AddMonths(1) < today;
+    /// <param name="latestMeasuredAt">The latest active measurement of the zone; null when it has none.</param>
+    public static DateOnly BaseDate(DateTimeOffset? latestMeasuredAt, DateOnly earliestOpenStart) =>
+        latestMeasuredAt is { } measuredAt && BusinessClock.ToBusinessDate(measuredAt) > earliestOpenStart
+            ? BusinessClock.ToBusinessDate(measuredAt)
+            : earliestOpenStart;
 
-    /// <param name="periodStartSavedAt">When the measurement that starts the period was saved (null for a never-measured zone).</param>
-    public static bool NeedsReminder(DateTimeOffset periodStart, DateTimeOffset? remindedAt, DateOnly today, DateTimeOffset? periodStartSavedAt = null) =>
-        IsOverdue(BusinessClock.ToBusinessDate(periodStart), today)
-        && (remindedAt is null || remindedAt <= periodStart || periodStartSavedAt > remindedAt);
+    /// <summary>Base 23/09: on time on 23/10, overdue from 24/10. Reminded on 24/10: next on 24/11.</summary>
+    /// <param name="lastSent">The business date of the last reminder of the zone; null when it has had none.</param>
+    public static bool IsDue(DateOnly baseDate, DateOnly? lastSent, DateOnly today) =>
+        baseDate.AddMonths(1) < today && (lastSent is not { } sent || sent.AddMonths(1) <= today);
 }

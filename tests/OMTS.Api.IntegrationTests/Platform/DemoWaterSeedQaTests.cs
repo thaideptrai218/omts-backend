@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Api.IntegrationTests.WaterQuality;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Authorization;
@@ -23,7 +24,7 @@ namespace OMTS.Api.IntegrationTests.Platform;
 
 /// <summary>
 /// QA of the water demo step on SQL Server: it goes through the services (alerts and their notifications
-/// to the zone's recipients, audit rows by the Owner, thresholds used), the overdue reminder promise of the README,
+/// to the zone's recipients, audit rows by the Owner, thresholds used), the reminder as the README describes it,
 /// Owner changes kept by a rerun, and an interrupted first run completed later on the same days.
 /// </summary>
 public class DemoWaterSeedQaTests
@@ -94,31 +95,54 @@ public class DemoWaterSeedQaTests
         Assert.All(audit, e => Assert.Equal(ownerId, e.ActorAccountId));
     }
 
-    // README: "The last water measurement is from the day before the seed: a month later without new ones, the zones
-    // are overdue and get the 06:00 reminder (MSG-WATER-06)."
+    // The demo now seeds Open cycles. Close them in this disposable database to exercise the no-open-cycle case, then
+    // add one back: the zone is on time until a month after its last reading, then it is reminded.
     [SqlServerFact]
-    public async Task Demo_zones_are_on_time_until_a_month_after_the_last_reading_then_reminded_once()
+    public async Task Demo_sends_no_reminder_without_an_open_cycle_and_a_zone_with_one_is_reminded_a_month_after_its_last_reading()
     {
         await using var host = new DemoWaterHost();
         await host.RunAsync();
-        var today = TimeProvider.System.Today();
-        // Counted from the last seeded reading, not from today: at a month end both reach the same day
-        // (on 31/10 the last reading is 30/10, and 30/10 + 1 month = 31/10 + 1 month = 30/11).
-        var lastReading = await host.QueryAsync(db => db.WaterMeasurements.AsNoTracking()
-            .Where(m => m.StatusId == StatusIds.WaterMeasurement.Active)
-            .MaxAsync(m => m.MeasuredAt));
+        var (zoneId, raftId, lastReading) = await host.QueryAsync(async db =>
+        {
+            var zone = await db.FarmingZones.SingleAsync(z => z.Code == "DEMO-01");
+            var raft = await db.Rafts
+                .Where(r => r.ZoneId == zone.Id && r.StatusId == StatusIds.Usage.InUse
+                    && !db.CultivationCycles.Any(c => c.RaftId == r.Id))
+                .OrderBy(r => r.Code).Select(r => r.Id).FirstAsync();
+            var last = await db.WaterMeasurements.AsNoTracking()
+                .Where(m => m.ZoneId == zone.Id && m.StatusId == StatusIds.WaterMeasurement.Active)
+                .MaxAsync(m => m.MeasuredAt);
+            return (zone.Id, raft, last);
+        });
         var lastDayOnTime = BusinessClock.ToBusinessDate(lastReading).AddMonths(1);
 
-        Assert.Equal(0, await RemindAsync(host.App, today));
-        Assert.Equal(0, await RemindAsync(host.App, lastDayOnTime));
-        Assert.Equal(2, await RemindAsync(host.App, lastDayOnTime.AddDays(1)));
-        Assert.Equal(0, await RemindAsync(host.App, lastDayOnTime.AddDays(2)));
+        await host.QueryAsync(async db =>
+        {
+            var seededCycles = await db.CultivationCycles.ToListAsync();
+            Assert.NotEmpty(seededCycles);
+            foreach (var cycle in seededCycles)
+            {
+                cycle.StatusId = StatusIds.CultivationCycle.Closed;
+                cycle.CloseDate = TimeProvider.System.Today();
+            }
+            return await db.SaveChangesAsync();
+        });
+        Assert.False(await host.QueryAsync(db => db.CultivationCycles.AnyAsync(c => c.StatusId == StatusIds.CultivationCycle.Open)));
+        Assert.Equal(0, await host.App.RemindOnAsync(lastDayOnTime.AddMonths(6)));
 
-        using var scope = host.App.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
-        var reminded = await db.Notifications.Where(n => n.Type == NotificationTypes.WaterMeasurementOverdue)
-            .Select(n => n.RelatedRecordCode).Distinct().OrderBy(c => c).ToListAsync();
-        Assert.Equal(InUseZones, reminded);
+        await host.QueryAsync(async db =>
+        {
+            db.CultivationCycles.Add(WaterOverdueTestKit.OpenCycle(raftId, lastDayOnTime.AddMonths(-3)));
+            return await db.SaveChangesAsync();
+        });
+
+        Assert.Equal(0, await host.App.RemindOnAsync(lastDayOnTime));
+        Assert.Equal(1, await host.App.RemindOnAsync(lastDayOnTime.AddDays(1)));
+        Assert.Equal(0, await host.App.RemindOnAsync(lastDayOnTime.AddDays(2)));
+
+        var reminded = await host.QueryAsync(db => db.Notifications.Where(n => n.Type == NotificationTypes.WaterMeasurementOverdue)
+            .Select(n => n.RelatedRecordId).Distinct().ToListAsync());
+        Assert.Equal([zoneId], reminded.Select(id => id!.Value));
     }
 
     // Real use after the seed: the Owner changes DEMO-01's thresholds and voids one of its readings. A rerun keeps both.
@@ -190,12 +214,6 @@ public class DemoWaterSeedQaTests
             .Select(zone => $"{zone.Code}: {zone.Days[0]:yyyy-MM-dd}..{zone.Days[^1]:yyyy-MM-dd}")
             .ToList();
         Assert.True(moved.Count == 0, $"Expected {expected[0]:yyyy-MM-dd}..{expected[^1]:yyyy-MM-dd} for every zone; moved: {string.Join(", ", moved)}");
-    }
-
-    private static async Task<int> RemindAsync(WebApplicationFactory<Program> app, DateOnly today)
-    {
-        using var scope = app.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<WaterMeasurementOverdueReminder>().RunOnceAsync(today, CancellationToken.None);
     }
 
     /// <summary>The system clock moved forward by <see cref="Shift"/>, for a run "on a later day".</summary>

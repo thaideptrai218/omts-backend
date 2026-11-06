@@ -19,7 +19,8 @@ public sealed class WaterMeasurementViewBuilder(
         return items.Select(m => new WaterMeasurementListItem(
                 m.Id, m.MeasuredAt, m.RaftId, m.Raft.Code, m.Ph, m.Salinity, m.Temperature,
                 statusCatalog.DisplayNameOf(m.StatusId), statusCatalog.CodeOf(m.StatusId),
-                WaterMeasurementStatuses.AlertStateOf(m), m.ViolatedValues, Ref(m.MeasuredByAccountId, names)))
+                WaterMeasurementStatuses.AlertStateOf(m), m.ViolatedValues, Ref(m.MeasuredByAccountId, names),
+                WaterThresholds.UsedBy(m), WaterAlertService.Evaluate(m).ValuesOutside, m.VoidReason))
             .ToList();
     }
 

@@ -118,7 +118,8 @@ public static class DependencyInjection
 
         // Overdue water measurement reminder (formerly JOB-05)
         services.AddOptions<WaterMeasurementOverdueOptions>().Bind(configuration.GetSection(WaterMeasurementOverdueOptions.SectionName));
-        services.AddHostedService<WaterMeasurementOverdueJob>();
+        services.AddSingleton<WaterMeasurementOverdueJob>();
+        services.AddHostedService<WaterMeasurementOverdueHostedService>();
 
         // LABOR-01: Left from the day after the last working day
         services.AddOptions<EmploymentEndOptions>().Bind(configuration.GetSection(EmploymentEndOptions.SectionName));

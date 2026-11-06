@@ -265,7 +265,7 @@ public class WaterCorrectionQaTestsRecord(AuthApiFactory api) : IClassFixture<Au
 
         Assert.DoesNotContain(patterns, p => p.Contains("editing", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(
-            ["api/water-measurements/{id:guid}", "api/water-measurements/{id:guid}/corrections", "api/water-measurements/{id:guid}/void"],
+            ["api/water-measurements/zones", "api/water-measurements/{id:guid}", "api/water-measurements/{id:guid}/corrections", "api/water-measurements/{id:guid}/void"],
             patterns.Where(p => p.StartsWith("api/water-measurements", StringComparison.Ordinal)).Order(StringComparer.Ordinal).ToList());
         var one = $"/api/water-measurements/{saved.Id()}";
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await z.Owner.PutAsJsonAsync(one, new { })).StatusCode);

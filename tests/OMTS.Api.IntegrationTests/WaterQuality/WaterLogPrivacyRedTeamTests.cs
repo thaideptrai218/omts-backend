@@ -3,8 +3,8 @@ using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common;
 using OMTS.Application.Features.Authorization;
-using OMTS.Application.Features.WaterQuality;
 using OMTS.Domain.Enums;
+using OMTS.Infrastructure.Jobs;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
 namespace OMTS.Api.IntegrationTests.WaterQuality;
@@ -32,6 +32,7 @@ public class WaterLogPrivacyRedTeamTests
         var role = StaffRole.ZoneManager;
         await api.GrantAsync(manager, role, z.Zone);
         var client = await api.LoginAsync(manager.Username);
+        await z.OpenCycleAsync(TimeProvider.System.Today().AddMonths(-3));
 
         var alerting = await z.RecordedAsync(9.4m, 20m, client: client, measuredAt: DateTimeOffset.UtcNow.AddDays(-40));
         Assert.Equal(HttpStatusCode.OK, (await z.RecognizeAsync(client: client)).StatusCode);
@@ -40,11 +41,7 @@ public class WaterLogPrivacyRedTeamTests
         Assert.Equal(HttpStatusCode.OK, (await client.VoidAsync(other.Id())).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await z.Owner.GetAsync($"{z.Base}/export")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/water-measurements/{alerting.Id()}")).StatusCode);
-        using (var scope = api.Services.CreateScope())
-        {
-            Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<WaterMeasurementOverdueReminder>()
-                .RunOnceAsync(TimeProvider.System.Today(), CancellationToken.None));
-        }
+        Assert.Equal(1, await api.Services.GetRequiredService<WaterMeasurementOverdueJob>().RunOnceAsync(TimeProvider.System.Today()));
 
         var lines = api.Logs.Lines.ToList();
         Assert.NotEmpty(lines);

@@ -1,6 +1,6 @@
 namespace OMTS.Infrastructure.Jobs;
 
-/// <summary>"Jobs:WaterMeasurementOverdue" section of the overdue water measurement reminder (formerly JOB-05).</summary>
+/// <summary>"Jobs:WaterMeasurementOverdue" section of the overdue water measurement reminder (GFR-04).</summary>
 public sealed class WaterMeasurementOverdueOptions : IDailyJobOptions
 {
     public const string SectionName = "Jobs:WaterMeasurementOverdue";
@@ -10,7 +10,7 @@ public sealed class WaterMeasurementOverdueOptions : IDailyJobOptions
 
     /// <summary>
     /// A host that starts after today's run time (deploy, restart) runs once at start, so that day is not skipped.
-    /// Safe because a zone gets MSG-WATER-06 once per overdue period (marker <c>FarmingZone.WaterOverdueRemindedAt</c>).
+    /// Safe because a zone gets MSG-WATER-06 at most once a month (marker <c>FarmingZone.WaterOverdueRemindedAt</c>).
     /// </summary>
     public bool CatchUpOnStart { get; set; } = true;
 }
