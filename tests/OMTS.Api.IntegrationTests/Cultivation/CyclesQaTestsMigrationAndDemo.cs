@@ -40,7 +40,10 @@ public class CyclesQaTestsMigrationAndDemo
         await migrator.MigrateAsync(MigrationBefore);
         var oldSchema = await SchemaAsync(db);
 
-        var zone = new FarmingZone { Cooperative = new Cooperative { FullName = "HTX" }, Code = "KV01", Name = "A" };
+        // Seed only columns of this historical schema; later migrations add fields to the current Cooperative model.
+        var cooperativeId = Guid.NewGuid();
+        await db.Database.ExecuteSqlAsync($"INSERT INTO Cooperatives (Id, FullName, CreatedAt) VALUES ({cooperativeId}, N'HTX', SYSDATETIMEOFFSET())");
+        var zone = new FarmingZone { CooperativeId = cooperativeId, Code = "KV01", Name = "A" };
         var (raft, raftTwo) = (new Raft { Zone = zone, Code = "B01", Size = "1" }, new Raft { Zone = zone, Code = "B02", Size = "1" });
         var seed = new FarmingInputItem { Code = "VT001", Name = "Seed", Group = InputItemGroup.Seed, Unit = "con" };
         db.AddRange(raft, raftTwo, seed);
