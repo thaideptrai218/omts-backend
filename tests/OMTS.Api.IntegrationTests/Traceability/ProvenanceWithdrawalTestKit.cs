@@ -26,6 +26,11 @@ public static class ProvenanceWithdrawalTestKit
     public static async Task<JsonElement> WithdrawnAsync(this HttpClient client, Guid lotId, string? reason = "Seed lot data in doubt") =>
         await (await client.PostWithdrawAsync(lotId, reason)).ReadAsync(HttpStatusCode.OK);
 
+    public static Task<HttpResponseMessage> GetWithdrawalNoticesAsync(this HttpClient client, Guid lotId) => client.GetAsync($"/api/harvest-lots/{lotId}/withdrawal-notices");
+
+    public static async Task<JsonElement> WithdrawalNoticesAsync(this HttpClient client, Guid lotId) =>
+        await (await client.GetWithdrawalNoticesAsync(lotId)).ReadAsync(HttpStatusCode.OK);
+
     /// <summary>The withdrawal audit rows of the lot, oldest first.</summary>
     public static Task<List<AuditEvent>> WithdrawAuditAsync(this WebApplicationFactory<Program> api, Guid lotId) => api.DbAsync(db => db.AuditEvents.AsNoTracking()
         .Where(e => e.RecordId == lotId && e.Action == WithdrawnAction).OrderBy(e => e.OccurredAt).ToListAsync());

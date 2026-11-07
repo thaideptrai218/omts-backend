@@ -269,8 +269,11 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   `NO_CUSTOMER_PROFILE` / `NO_PHONE_NUMBER`, MSG-SALE-16). The withdrawal of a lot's origin information (TRACE-04, Owner
   only: `GET /api/harvest-lots/{id}/withdraw-preview`, `POST /api/harvest-lots/{id}/withdraw` with `{ reason }`) uses them
   too: one MSG-TRACE-05 per trader of the current invoices of the lot, listing their invoices, kept with the lot as its
-  record; a profile without a phone gets a Not sent row (`NO_PHONE_NUMBER`), a walk-in invoice nothing. The answer lists
-  each notice with its delivery status; a failed send undoes nothing and is marked `toCall`. There is no resend.
+  record; a profile without a phone gets a Not sent row (`NO_PHONE_NUMBER`), a walk-in invoice nothing. The notices are
+  sent at the same time after the save (the answer waits about one send). The answer lists each notice with its delivery
+  status; a failed send undoes nothing and is marked `toCall`; `GET /api/harvest-lots/{id}/withdrawal-notices` reads the
+  notices of the latest withdrawal again. There is no resend. Texts and parameters longer than their columns (2000) are
+  cut / left out, as for list rows.
 - Mandatory types also go out as one SMS (PM decision OMTS-216, 03/11): to the Owners among the recipients and, for the
   water alert and its withdrawal, to the Zone Managers of the zone among them. The rule is data on the type
   (`NotificationSmsRule`, `NotificationTypes.All`). The SMS shares the queue of the push: sent once, only after the save

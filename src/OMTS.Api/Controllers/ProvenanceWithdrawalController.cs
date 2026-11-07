@@ -32,4 +32,13 @@ public sealed class ProvenanceWithdrawalController(LotWithdrawalService withdraw
     [ProducesResponseType<LotWithdrawn>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Withdraw(Guid lotId, WithdrawLotRequest request, CancellationToken cancellationToken) =>
         (await withdrawals.WithdrawAsync(lotId, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// Step 7 read again: the notices of the latest withdrawal of the lot as saved, with their delivery status now and <c>toCall</c>, so that the traders to call are not lost with
+    /// the answer of the withdrawal. Also after the lot was published again; empty lists and no <c>withdrawnAt</c> for a lot never withdrawn. 404 for an unknown lot.
+    /// </summary>
+    [HttpGet("api/harvest-lots/{lotId:guid}/withdrawal-notices")]
+    [ProducesResponseType<LotWithdrawalNotices>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Notices(Guid lotId, CancellationToken cancellationToken) =>
+        (await withdrawals.NoticesAsync(lotId, cancellationToken)).ToActionResult(Ok);
 }

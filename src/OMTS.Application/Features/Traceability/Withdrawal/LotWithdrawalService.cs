@@ -21,11 +21,14 @@ namespace OMTS.Application.Features.Traceability.Withdrawal;
 /// </summary>
 /// <remarks>
 /// The withdrawal changes the lot row, so of two withdrawals of one lot one saves and the other reads the lot again and is refused (Withdrawn). A sale of the lot in the same moment
-/// marks the lot changed (SALE-05), so the withdrawal reads the invoices again and its trader is notified too; the end of a sale marks the Published lots its QR code relies on.
+/// marks the lot changed (SALE-05), so the withdrawal reads the invoices again and its trader is notified too. The end of a sale does not write a lot that is already Published, so
+/// parallel ends of the sales of one lot never conflict: a QR code decided just before a withdrawal saves is the serial order "end of the sale, then withdrawal" (BR-TRACE-02), and
+/// that invoice's trader is told by the withdrawal, which reads the invoices, not the QR codes.
 /// </remarks>
 public sealed class LotWithdrawalService(
     IHarvestLotRepository lots,
     ILotTraceQuery traces,
+    IWithdrawalNoticeQuery history,
     WithdrawalNotices notices,
     TraderMessageService traderMessages,
     HarvestLotViews views,
@@ -84,8 +87,11 @@ public sealed class LotWithdrawalService(
 
             // Step 1 again on current data: the traders notified are those of the invoices at the time of the save.
             var audience = WithdrawalAudience.Of(await traces.SaleLinesAsync(lot.Id, cancellationToken));
-            Withdraw(lot, reason, audience);
+            var before = new { OriginState = lot.OriginState.ToString(), lot.PublishedAt, lot.WithdrawnAt };
+            lot.WithdrawnAt = timeProvider.GetUtcNow();
+            lot.WithdrawalReason = reason;
             var queued = await notices.QueueAsync(lot, audience.Traders, cancellationToken);
+            Audit(lot, before, reason, audience, queued);
             try
             {
                 await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -100,46 +106,48 @@ public sealed class LotWithdrawalService(
         }
     }
 
+    /// <summary>
+    /// Step 7 read again: the notices of the latest withdrawal of the lot, from its audit row and the saved sendings, with their delivery status now. 404 for an unknown lot; a lot
+    /// never withdrawn has none. Changes nothing.
+    /// </summary>
+    public async Task<Result<LotWithdrawalNotices>> NoticesAsync(Guid lotId, CancellationToken cancellationToken)
+    {
+        var lot = await lots.GetAsync(lotId, cancellationToken);
+        if (lot is null)
+        {
+            return AppError.NotFound;
+        }
+
+        if (WithdrawalAudit.Read(await history.LatestWithdrawalAsync(lot.Id, cancellationToken)) is not { } latest)
+        {
+            return new LotWithdrawalNotices(lot.Id, lot.LotCode, lot.OriginState, null, [], []);
+        }
+
+        var sendings = (await history.SendingsAsync(lot.Id, latest.NotifiedTraders.Select(t => t.SendingId).ToList(), cancellationToken)).ToDictionary(s => s.Id);
+        var now = timeProvider.GetUtcNow();
+        var results = latest.NotifiedTraders.Select(t => WithdrawalAudit.NoticeOf(t, sendings.GetValueOrDefault(t.SendingId), statusCatalog, now)).ToList();
+        return new LotWithdrawalNotices(lot.Id, lot.LotCode, lot.OriginState, latest.WithdrawnAt, results, latest.WalkInInvoiceCodes);
+    }
+
     /// <summary>{action} of MSG-GEN-04 (TRACE-04 step 3).</summary>
     public static string ConfirmActionOf(string lotCode) => $"withdraw the origin information of harvest lot {lotCode}";
 
-    // Step 5: the lot comes tracked with its raft.
-    private void Withdraw(HarvestLot lot, string reason, WithdrawalAudience audience)
-    {
-        var before = new { OriginState = lot.OriginState.ToString(), lot.PublishedAt, lot.WithdrawnAt };
-        lot.WithdrawnAt = timeProvider.GetUtcNow();
-        lot.WithdrawalReason = reason;
+    // Step 5: the lot comes tracked with its raft. Each trader is kept with its sending, so that the notices can be read again (NoticesAsync).
+    private void Audit(HarvestLot lot, object before, string reason, WithdrawalAudience audience, IReadOnlyList<QueuedWithdrawalNotice> queued) =>
         audit.Record(HarvestLotAudit.Entry(WithdrawnAction, lot, lot.Raft.ZoneId) with
         {
             Before = before,
-            After = new
-            {
-                OriginState = lot.OriginState.ToString(),
-                lot.WithdrawnAt,
-                NotifiedTraders = audience.Traders.Select(t => new { t.CustomerId, t.CustomerName, t.InvoiceCodes }).ToList(),
-                audience.WalkInInvoiceCodes,
-            },
+            After = new WithdrawalAuditAfter(lot.OriginState.ToString(), lot.WithdrawnAt, queued.Select(WithdrawalAudit.TraderOf).ToList(), audience.WalkInInvoiceCodes),
             Reason = reason,
         });
-    }
 
-    // Steps 6-7 after the commit: each sending is handed to the service in turn and keeps its own result.
+    // Steps 6-7 after the commit: the sendings are handed to the service at the same time (the answer waits about one send), each keeps its own result.
     private async Task<LotWithdrawn> AnswerAsync(
         HarvestLot lot, WithdrawalAudience audience, IReadOnlyList<QueuedWithdrawalNotice> queued, CancellationToken cancellationToken)
     {
-        var results = new List<WithdrawalNotice>(queued.Count);
-        foreach (var (trader, sending, inApp) in queued)
-        {
-            if (sending.DeliveryStatusId == StatusIds.MessageDelivery.Sending)
-            {
-                await traderMessages.DeliverAsync(sending);
-            }
-
-            var status = sending.DeliveryStatusId ?? StatusIds.MessageDelivery.NotSent;
-            results.Add(new WithdrawalNotice(
-                trader.CustomerId, trader.CustomerName, trader.PhoneNumber, trader.TraderAccountId, trader.InvoiceCodes, sending.Channel, status, statusCatalog.DisplayNameOf(status),
-                inApp, status != StatusIds.MessageDelivery.Sent));
-        }
+        await traderMessages.DeliverAllAsync(queued.Select(q => q.Sending).Where(s => s.DeliveryStatusId == StatusIds.MessageDelivery.Sending).ToList());
+        var now = timeProvider.GetUtcNow();
+        var results = queued.Select(q => WithdrawalAudit.NoticeOf(WithdrawalAudit.TraderOf(q), q.Sending, statusCatalog, now)).ToList();
 
         var saved = UserMessages.Saved("Harvest lot");
         var notice = audience.NoInvoice ? UserMessages.NoTraderToNotify(lot.LotCode) : null;

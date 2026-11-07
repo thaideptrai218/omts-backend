@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +18,7 @@ namespace OMTS.Api.IntegrationTests.Traceability;
 /// <summary>
 /// TRACE-04 on SQL Server with real row versions: two withdrawals of one lot, a withdrawal while the Owner publishes it again, and a withdrawal while the end of a sale of the same lot
 /// decides its QR code. Every answer is a 200 or a 409, never a 500; the lot is withdrawn once per winner and each trader is told once.
+/// (The end of a sale does not write a lot that is already Published: parallel ends of the sales of one lot never conflict, see ProvenanceWithdrawalQaSqlServerTests.)
 /// </summary>
 public class ProvenanceWithdrawalSqlServerTests
 {
@@ -103,10 +103,11 @@ public class ProvenanceWithdrawalSqlServerTests
         }
     }
 
-    // BR-TRACE-02: a QR code needs a Published lot. The end of a second sale of the lot and its withdrawal both rely on the lot row, so the QR code is made only if the sale ended
-    // before the withdrawal; the trader of that sale is told either way, because the invoice was saved before.
+    // BR-TRACE-02 read as serial order: the end of a sale reads the lot and writes the invoice, the withdrawal reads the invoices and writes the lot, so the two never conflict. A QR
+    // code decided just before the withdrawal saved is the order "end of the sale, then withdrawal"; whichever order the database took, nothing fails, the lot ends Withdrawn and the
+    // trader of that invoice, saved before both, is told by the withdrawal.
     [SqlServerFact]
-    public async Task A_withdrawal_and_the_end_of_a_sale_of_the_same_lot_never_give_a_qr_code_after_the_withdrawal()
+    public async Task A_withdrawal_and_the_end_of_a_sale_of_the_same_lot_both_succeed_and_a_trader_with_a_qr_code_is_told()
     {
         var setup = await StartAsync();
         await using var _ = setup.Host;
@@ -119,14 +120,11 @@ public class ProvenanceWithdrawalSqlServerTests
 
             var withdrawn = await answers[0].ReadAsync(HttpStatusCode.OK);
             await answers[1].ReadAsync(HttpStatusCode.OK);
-            Assert.Equal(2, withdrawn.GetProperty("notices").GetArrayLength());
-            var lot = await LotAsync(setup, lotId);
+            Assert.Equal(HarvestLotOriginState.Withdrawn, (await LotAsync(setup, lotId)).OriginState);
+            var told = withdrawn.GetProperty("notices").EnumerateArray().Select(n => n.GetProperty("customerId").GetGuid()).ToList();
+            Assert.Equal(new[] { setup.CustomerId, setup.OtherCustomerId }.Order(), told.Order());
             var saved = await setup.Host.QueryAsync(db => db.SalesInvoices.AsNoTracking().SingleAsync(i => i.Id == invoice.Id()));
-            Assert.Equal(HarvestLotOriginState.Withdrawn, lot.OriginState);
-            // SQL Server row versions follow the order of the commits: the invoice row is last written by the end of the sale, the lot row by the withdrawal.
-            var saleEndedFirst = BinaryPrimitives.ReadUInt64BigEndian(saved.RowVersion) < BinaryPrimitives.ReadUInt64BigEndian(lot.RowVersion);
-            Assert.True(saleEndedFirst == (saved.QrToken is not null), $"QR code {(saved.QrToken is null ? "missing" : "made")} although the sale ended {(saleEndedFirst ? "before" : "after")} the withdrawal.");
-
+            Assert.True(saved.QrToken is null || told.Contains(setup.OtherCustomerId), "A QR code was made for an invoice whose trader the withdrawal did not tell.");
             Assert.Equal(1, await AuditAsync(setup, lotId, ProvenancePublishTestKit.PublishedAction));
         }
     }

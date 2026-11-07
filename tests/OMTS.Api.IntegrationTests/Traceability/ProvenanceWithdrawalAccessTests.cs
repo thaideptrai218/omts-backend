@@ -12,7 +12,7 @@ namespace OMTS.Api.IntegrationTests.Traceability;
 public class ProvenanceWithdrawalAccessTests
 {
     [Fact]
-    public async Task Only_the_owner_previews_and_withdraws()
+    public async Task Only_the_owner_previews_withdraws_and_reads_the_notices_again()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
@@ -40,6 +40,15 @@ public class ProvenanceWithdrawalAccessTests
         Assert.Empty(await api.NoticeSendingsAsync(sale.LotId));
 
         await sale.Owner.Client.WithdrawnAsync(sale.LotId);
+
+        // The notices of the withdrawal, read again: the Owner only, like the withdrawal.
+        foreach (var client in new[] { sale.Manager.Client, accountant.Client, trader })
+        {
+            var notices = await client.GetWithdrawalNoticesAsync(sale.LotId);
+            Assert.Equal((HttpStatusCode.Forbidden, "MSG-GEN-08"), (notices.StatusCode, await notices.ErrorCodeAsync()));
+        }
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await api.CreateClient().GetWithdrawalNoticesAsync(sale.LotId)).StatusCode);
 
         // R for the Zone Manager: the trace shows the lot Withdrawn with its date, never the reason.
         var seen = await sale.Manager.Client.TraceAsync(sale.LotId);

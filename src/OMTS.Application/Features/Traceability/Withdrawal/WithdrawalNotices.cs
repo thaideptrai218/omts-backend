@@ -11,7 +11,7 @@ public sealed record QueuedWithdrawalNotice(WithdrawalTrader Trader, Notificatio
 
 /// <summary>
 /// TRACE-04 steps 6 and TRACE-04.1: one MSG-TRACE-05 per trader, listing their invoices (BR-TRACE-07), added to the caller's save. The sending to the phone is kept with its delivery status
-/// (BR-SALE-09) and delivered by the caller after the save (<see cref="TraderMessageService.DeliverAsync"/>); a profile without a phone gets a Not sent row at once. A trader with an
+/// (BR-SALE-09) and delivered by the caller after the save, all at once (<see cref="TraderMessageService.DeliverAllAsync"/>); a profile without a phone gets a Not sent row at once. A trader with an
 /// active account also gets the notice in its list, pushed after the save. Nothing here saves.
 /// </summary>
 public sealed class WithdrawalNotices(
