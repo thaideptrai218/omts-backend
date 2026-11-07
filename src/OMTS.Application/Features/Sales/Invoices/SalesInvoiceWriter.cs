@@ -27,6 +27,7 @@ public sealed class SalesInvoiceWriter(
     public const string PaymentRecordType = nameof(CustomerPayment);
     public const string CreatedAction = "SalesInvoice.Created";
     public const string PaymentRecordedAction = "CustomerPayment.Recorded";
+    public const string CodeUnusedAction = "SalesInvoice.CodeUnused";
 
     internal SalesInvoice Write(SalesInvoiceEntries entries, SalesInvoiceFacts facts, SalesInvoiceDecision decision, string code, string? paymentCode, string? deduplicationKey)
     {
@@ -88,11 +89,28 @@ public sealed class SalesInvoiceWriter(
         // BR-HARVEST-04: a ticked lot is closed with the reason Sold whole lot and a leftover of 0, naming this invoice, so only it reopens the lot.
         foreach (var lot in facts.Lots.Where(l => !entries.NotSoldWholeLotIds.Contains(l.Id)))
         {
-            _ = lotStatuses.CloseSoldWholeLot(lot, today, invoice.Id);
+            // EnsureForSale (SalesInvoiceFactsReader) refused every lot no longer for sale, so a refusal here is a bug, never an answer.
+            if (lotStatuses.CloseSoldWholeLot(lot, today, invoice.Id) is { } refused)
+            {
+                throw new InvalidOperationException($"Harvest lot {lot.LotCode} was checked for sale and cannot be closed by invoice {invoice.Code}: {refused.Message.Text}");
+            }
         }
 
         return invoice;
     }
+
+    /// <summary>
+    /// BR-SALE-08: the codes an attempt took (outside the save, <see cref="IDocumentNumberAllocator"/>) and no invoice holds, with why, so the audit log explains the gap they leave.
+    /// Added to the caller's unit of work, which must hold nothing else.
+    /// </summary>
+    internal void RecordUnusedCodes(string code, string? paymentCode, Guid? zoneId, string reason) =>
+        audit.Record(new AuditEntry(CodeUnusedAction, RecordType)
+        {
+            RecordCode = code,
+            ZoneId = zoneId,
+            After = new { InvoiceCode = code, PaymentCode = paymentCode },
+            Reason = reason,
+        });
 
     private void RecordCash(SalesInvoice invoice, decimal amount, string code, DateOnly today, Guid collector)
     {

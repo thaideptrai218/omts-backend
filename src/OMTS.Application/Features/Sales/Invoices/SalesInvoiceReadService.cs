@@ -4,6 +4,7 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Sales.PurchaseRequests;
+using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Application.Features.Sales.Invoices;
 
@@ -29,13 +30,17 @@ public sealed class SalesInvoiceReadService(
             return AppError.NotFound;
         }
 
-        if (!await zoneAccess.AllowsAsync(PermissionFunctions.SalesInvoices, PermissionAction.View, invoice.ZoneId, cancellationToken))
+        if (!await MayViewAsync(invoice, cancellationToken))
         {
             return AppError.Forbidden;
         }
 
         return await views.ViewAsync(invoice, cancellationToken);
     }
+
+    /// <summary>The caller may view invoices of the zone of <paramref name="invoice"/> (BR-SALE-08, GFR-02): GET answers 403 MSG-GEN-08 when not, and so does a repeated save.</summary>
+    public Task<bool> MayViewAsync(SalesInvoice invoice, CancellationToken cancellationToken) =>
+        zoneAccess.AllowsAsync(PermissionFunctions.SalesInvoices, PermissionAction.View, invoice.ZoneId, cancellationToken);
 
     /// <summary>SALE-05.3 step 1: Accepted, not Fulfilled, pickup date not more than 3 days ago; with the accepted kg, pickup date and agreement to pay later.</summary>
     public async Task<Result<IReadOnlyList<OpenPurchaseRequestView>>> OpenRequestsAsync(Guid customerId, CancellationToken cancellationToken)

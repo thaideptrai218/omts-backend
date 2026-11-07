@@ -148,9 +148,10 @@ public class SalesInvoiceSqlServerTests
         }
     }
 
-    // The order of the commands of one save is EF's: a sale whose lot was removed after it was read may reach its line before the lot. The missing row is a conflict (read again), not a 500.
+    // The order of the commands of one save is EF's: a sale whose lot was removed after it was read may reach its line before the lot. The missing row is a foreign key violation,
+    // which SALE-05 alone reads as a lost race (read again); elsewhere it stays a 500.
     [SqlServerFact]
-    public async Task A_save_that_points_to_a_row_removed_meanwhile_is_a_conflict_and_saves_nothing()
+    public async Task A_save_that_points_to_a_row_removed_meanwhile_is_a_foreign_key_violation_and_saves_nothing()
     {
         var setup = await StartAsync();
         await using var _ = setup.Host;
@@ -163,7 +164,7 @@ public class SalesInvoiceSqlServerTests
             Lines = [new SalesInvoiceLine { LineNumber = 1, ProductId = setup.ProductId, HarvestLotId = Guid.NewGuid(), Kg = 1m, UnitPrice = 30_000m, ListPrice = 30_000m, Amount = 30_000m }],
         });
 
-        await Assert.ThrowsAsync<ConcurrencyConflictException>(() => unitOfWork.SaveChangesAsync());
+        await Assert.ThrowsAsync<ForeignKeyViolationException>(() => unitOfWork.SaveChangesAsync());
 
         Assert.Equal(0, await setup.Host.QueryAsync(db => db.SalesInvoices.CountAsync()));
     }
