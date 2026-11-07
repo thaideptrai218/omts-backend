@@ -132,7 +132,7 @@ public class ExpiryReminderZoneStatusAndCertificationTests(AuthApiFactory factor
 
         var owners = (await ActiveOwnersAsync()).Order().ToList();
         var first = await CertificationNoticesAsync(expiring.Id());
-        Assert.Equal(owners, first.Select(n => n.RecipientAccountId).Order());
+        Assert.Equal(owners, first.Select(n => n.RecipientAccountId!.Value).Order());
         Assert.DoesNotContain(first, n => n.RecipientAccountId == manager || n.RecipientAccountId == everywhere);
         Assert.All(first, n =>
         {

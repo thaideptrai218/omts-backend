@@ -68,7 +68,7 @@ public class PurchaseReceiptCancelCorrectListQaTests(AuthApiFactory factory) : I
         await (await world.Owner.CancelAsync(receipt.Id(), "Wrong supplier")).ReadAsync(HttpStatusCode.OK);
 
         var recipients = await factory.QueryAsync(db => db.Notifications
-            .Where(n => n.RelatedRecordId == receipt.Id() && n.Type == NotificationTypes.PurchaseReceiptCancelledPaidInAdvance).Select(n => n.RecipientAccountId).ToListAsync());
+            .Where(n => n.RelatedRecordId == receipt.Id() && n.Type == NotificationTypes.PurchaseReceiptCancelledPaidInAdvance).Select(n => n.RecipientAccountId!.Value).ToListAsync());
         var owners = await factory.QueryAsync(db => db.Accounts.Where(a => a.SubjectType == SubjectType.CooperativeOwner && a.StatusId == StatusIds.Account.Active).Select(a => a.Id).ToListAsync());
         Assert.Equal(owners.Append(allZones).Append(oneZone).Order(), recipients.Order());
         Assert.Contains(owner.Id, recipients);

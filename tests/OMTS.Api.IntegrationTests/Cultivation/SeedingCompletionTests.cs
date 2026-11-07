@@ -48,7 +48,7 @@ public class SeedingCompletionTests(AuthApiFactory factory) : IClassFixture<Auth
         var rows = await factory.SeedingNoticesAsync(setup.CycleId);
         Assert.Contains(rows, n => n.RecipientAccountId == setup.Owner.Account.Id);
         Assert.DoesNotContain(rows, n => n.RecipientAccountId == manager.Account.Id);
-        Assert.Equal(rows.Count, rows.Select(n => n.RecipientAccountId).Distinct().Count());
+        Assert.Equal(rows.Count, rows.Select(n => n.RecipientAccountId!.Value).Distinct().Count());
         Assert.All(rows, n =>
         {
             Assert.Equal(("MSG-CYCLE-02", false, "CultivationCycle", raftCode), (n.MessageCode, n.IsMandatory, n.RelatedRecordType, n.RelatedRecordCode));
@@ -74,7 +74,7 @@ public class SeedingCompletionTests(AuthApiFactory factory) : IClassFixture<Auth
 
         await setup.Owner.Client.MarkSeedingCompleteAsync(setup.CycleId);
 
-        var told = (await factory.SeedingNoticesAsync(setup.CycleId)).Select(n => n.RecipientAccountId).ToList();
+        var told = (await factory.SeedingNoticesAsync(setup.CycleId)).Select(n => n.RecipientAccountId!.Value).ToList();
         Assert.DoesNotContain(setup.Owner.Account.Id, told);
         Assert.Contains(other.Account.Id, told);
     }

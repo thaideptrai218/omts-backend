@@ -55,8 +55,8 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
 
         var owners = (await ActiveOwnersAsync()).Order().ToList();
         var first = await NoticesAsync(license.Id());
-        Assert.Equal(owners, first.Select(n => n.RecipientAccountId).Order());
-        Assert.DoesNotContain(first, n => staff.Contains(n.RecipientAccountId));
+        Assert.Equal(owners, first.Select(n => n.RecipientAccountId!.Value).Order());
+        Assert.DoesNotContain(first, n => staff.Contains(n.RecipientAccountId!.Value));
         Assert.All(first, n =>
         {
             Assert.Equal(
@@ -68,7 +68,7 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
             Assert.True(n.IsMandatory);
         });
         var olderFirst = await NoticesAsync(older.Id());
-        Assert.Equal(owners, olderFirst.Select(n => n.RecipientAccountId).Order());
+        Assert.Equal(owners, olderFirst.Select(n => n.RecipientAccountId!.Value).Order());
         Assert.All(olderFirst, n => Assert.Equal("MSG-FARM-02", n.MessageCode));
         Assert.Empty(await NoticesAsync(notDueYet.Id()));
         Assert.Empty(await NoticesAsync(replaced.Id()));
@@ -78,7 +78,7 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
         await Job.RunOnceAsync(Today.AddDays(31));
         await Job.RunOnceAsync(Today.AddDays(32));
         var all = await NoticesAsync(license.Id());
-        Assert.All(all.GroupBy(n => n.RecipientAccountId), g => Assert.Equal(2, g.Count()));
+        Assert.All(all.GroupBy(n => n.RecipientAccountId!.Value), g => Assert.Equal(2, g.Count()));
         Assert.Equal(owners.Count * 2, all.Count);
         Assert.Equal(owners.Count, all.Count(n => n.MessageCode == "MSG-FARM-02" && n.Title == "Zone license expired"
             && n.Body!.EndsWith($"expired on {Date(Today.AddDays(30))}. Please renew it and record the new one.", StringComparison.Ordinal)));
@@ -163,7 +163,7 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
         await Job.RunOnceAsync(Today.AddDays(1));
 
         var notices = await NoticesAsync(license.Id());
-        Assert.Equal((await ActiveOwnersAsync()).Order(), notices.Select(n => n.RecipientAccountId).Order());
+        Assert.Equal((await ActiveOwnersAsync()).Order(), notices.Select(n => n.RecipientAccountId!.Value).Order());
         Assert.All(notices, n => Assert.Equal(
             $"Sea area allocation decision {license.Text("documentNumber")} ({zone.Code}) expired on {Date(Today.AddDays(-5))}. Please renew it and record the new one.", n.Body));
         var saved = await factory.QueryAsync(db => db.ZoneComplianceDocuments.SingleAsync(d => d.Id == license.Id()));
@@ -180,7 +180,7 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
         var license = await owner.Client.CreateLicenseAsync(fields);
 
         await Job.RunOnceAsync(Today);
-        var recipients = (await NoticesAsync(license.Id())).Select(n => n.RecipientAccountId).ToList();
+        var recipients = (await NoticesAsync(license.Id())).Select(n => n.RecipientAccountId!.Value).ToList();
         Assert.Contains(owner.Account.Id, recipients);
         Assert.Equal(recipients.Count, recipients.Distinct().Count());
 
@@ -198,7 +198,7 @@ public class ZoneLicenseReminderJobTests(AuthApiFactory factory) : IClassFixture
         await Job.RunOnceAsync(Today);
         await Job.RunOnceAsync(Today);
         var notices = await NoticesAsync(license.Id());
-        Assert.All(notices.GroupBy(n => n.RecipientAccountId), g => Assert.Equal(2, g.Count()));
+        Assert.All(notices.GroupBy(n => n.RecipientAccountId!.Value), g => Assert.Equal(2, g.Count()));
         Assert.Equal(recipients.Count * 2, notices.Count);
         // A license without a type is named "Zone license" (the type is optional since PR 0.8).
         Assert.Contains(notices, n => n.Body ==

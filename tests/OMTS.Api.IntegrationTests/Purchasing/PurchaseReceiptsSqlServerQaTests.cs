@@ -104,7 +104,7 @@ public class PurchaseReceiptsSqlServerQaTests
         var actions = await host.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == receipt.Id()).Select(e => e.Action).ToListAsync());
         Assert.Single(actions, a => a == "PurchaseReceipt.Cancelled");
         var recipients = await host.QueryAsync(db => db.Notifications.Where(n => n.RelatedRecordId == receipt.Id() && n.Type == NotificationTypes.PurchaseReceiptCancelledPaidInAdvance)
-            .Select(n => n.RecipientAccountId).ToListAsync());
+            .Select(n => n.RecipientAccountId!.Value).ToListAsync());
         Assert.Equal(recipients.Distinct().Count(), recipients.Count);
         Assert.Contains(host.Owner.Account.Id, recipients);
         Assert.Equal(-300_000m, await world.DebtAsync());

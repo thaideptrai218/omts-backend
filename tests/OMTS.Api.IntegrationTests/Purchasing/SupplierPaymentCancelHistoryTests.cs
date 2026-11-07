@@ -68,7 +68,7 @@ public class SupplierPaymentCancelHistoryTests(AuthApiFactory factory) : IClassF
 
         Assert.Equal((first.Id(), 200_000m, -200_000m), (again.Id(), again.Money("amount"), again.Money("debtAfter")));
         Assert.Equal(1, await factory.QueryAsync(db => db.AuditEvents.CountAsync(e => e.Action == "SupplierPayment.Recorded" && e.RecordId == first.Id())));
-        var told = await factory.QueryAsync(db => db.Notifications.Where(n => n.RelatedRecordId == first.Id()).Select(n => n.RecipientAccountId).ToListAsync());
+        var told = await factory.QueryAsync(db => db.Notifications.Where(n => n.RelatedRecordId == first.Id()).Select(n => n.RecipientAccountId!.Value).ToListAsync());
         Assert.NotEmpty(told);
         Assert.Equal(told.Distinct().Count(), told.Count);
     }

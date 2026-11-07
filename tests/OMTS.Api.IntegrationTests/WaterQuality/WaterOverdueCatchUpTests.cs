@@ -134,7 +134,7 @@ public class WaterOverdueCatchUpTests
     private static Task<List<Guid>> RecipientsAsync(WaterApiFactory api, WaterZone z) =>
         api.QueryAsync(db => db.Notifications.AsNoTracking()
             .Where(n => n.Type == NotificationTypes.WaterMeasurementOverdue && n.RelatedRecordId == z.Zone.Id)
-            .Select(n => n.RecipientAccountId)
+            .Select(n => n.RecipientAccountId!.Value)
             .OrderBy(id => id)
             .ToListAsync());
 }
