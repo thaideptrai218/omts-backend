@@ -4,6 +4,7 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Cultivation.Closing;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
@@ -16,6 +17,7 @@ public sealed class CultivationCycleReadService(
     IRaftRepository rafts,
     IFarmingZoneRepository zones,
     CultivationCycleViews views,
+    CycleSummaryReader summaries,
     ZoneAccessGuard zoneAccess,
     IStatusCatalog statusCatalog,
     TimeProvider timeProvider)
@@ -29,6 +31,18 @@ public sealed class CultivationCycleReadService(
         }
 
         return await CanViewAsync(cycle.Raft.ZoneId, cancellationToken) ? await views.ViewAsync(cycle, cancellationToken) : AppError.Forbidden;
+    }
+
+    /// <summary>The cycle summary (BR-CYCLE-06, CYCLE-05.1): of a Closed cycle on its close date with the assessment, of an Open one as if it closed today.</summary>
+    public async Task<Result<CycleSummary>> SummaryAsync(Guid cycleId, CancellationToken cancellationToken)
+    {
+        var cycle = await cycles.GetAsync(cycleId, cancellationToken);
+        if (cycle is null)
+        {
+            return AppError.NotFound;
+        }
+
+        return await CanViewAsync(cycle.Raft.ZoneId, cancellationToken) ? await summaries.ReadAsync(cycle, cancellationToken) : AppError.Forbidden;
     }
 
     /// <summary>The cycles of the raft with their start and close dates, the newest first (CYCLE-05.1).</summary>
@@ -79,7 +93,8 @@ public sealed class CultivationCycleReadService(
                 lastClose,
                 noOpenCycle && zoneInUse && raft.StatusId == StatusIds.Usage.InUse && (lastClose is null || lastClose < today),
                 CultivationCycleViews.CanEdit(cycle, raft, zoneInUse),
-                CultivationCycleViews.CanCancel(cycle, raft, zoneInUse, cycle is not null && withRecords.Contains(cycle.Id)));
+                CultivationCycleViews.CanCancel(cycle, raft, zoneInUse, cycle is not null && withRecords.Contains(cycle.Id)),
+                CultivationCycleViews.CanEdit(cycle, raft, zoneInUse));
         }).ToList();
     }
 

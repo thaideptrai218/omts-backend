@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Cultivation.Closing;
 using OMTS.Application.Features.Cultivation.CultivationLogs;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Cultivation.Seeding;
@@ -49,13 +50,15 @@ public sealed record CycleSaved(CycleView Cycle, string Message, string MessageC
 public sealed record CycleStarted(CycleView Cycle, DateOnly? PreviousCloseDate, IReadOnlyList<LaneView> Lanes, string Message, string MessageCode);
 
 /// <summary>A cycle in the list of a raft (CYCLE-05.1), the newest first.</summary>
-public sealed record CycleListItem(Guid Id, DateOnly StartDate, DateOnly? CloseDate, int StatusId, string Status, string RowVersion);
+/// <param name="ClosedEarly">A Closed cycle was closed early (BR-CYCLE-07); false for an Open one.</param>
+public sealed record CycleListItem(Guid Id, DateOnly StartDate, DateOnly? CloseDate, int StatusId, string Status, string RowVersion, bool ClosedEarly);
 
 /// <summary>A raft on the Cultivation cycles screen (SCR-CYCLE-01). The commands are true only when the use case would accept them.</summary>
 /// <param name="LaneCount">The number of lanes In Use.</param>
 /// <param name="Cycle">The Open cycle, else the last closed one, else null.</param>
 /// <param name="LastCloseDate">The close date of the raft's last closed cycle, or null.</param>
 /// <param name="CanStart">In Use, no Open cycle, and the previous cycle was not closed today (CYCLE-01 PRE-3).</param>
+/// <param name="CanClose">The raft has an Open cycle that can still be changed (CYCLE-06 PRE-2): the same condition as <paramref name="CanEdit"/>.</param>
 public sealed record ZoneCycleItem(
     Guid RaftId,
     string RaftCode,
@@ -66,7 +69,8 @@ public sealed record ZoneCycleItem(
     DateOnly? LastCloseDate,
     bool CanStart,
     bool CanEdit,
-    bool CanCancel);
+    bool CanCancel,
+    bool CanClose);
 
 /// <summary>A lane on a date: its status In Use or Removed, and the state worked out for that date (BR-FARM-03).</summary>
 public sealed record LaneDayView(Guid Id, int LaneNumber, int StatusId, string Status, LaneState State);
@@ -77,5 +81,14 @@ public sealed record LaneDayView(Guid Id, int LaneNumber, int StatusId, string S
 /// <param name="NotSeededLanes">The numbers of the lanes on this view, In Use and Not seeded on the date (BR-CYCLE-02).</param>
 /// <param name="SeedLots">For each lane seeded on or before <paramref name="Date"/>, its seed lots and seeding dates (CYCLE-05.0); empty with no cycle.</param>
 /// <param name="Logs">Every cultivation log of <paramref name="Cycle"/>, the latest visit first (CYCLE-05.0); empty with no cycle.</param>
+/// <param name="Summary">For a Closed <paramref name="Cycle"/>, its summary on the close date with the assessment (CYCLE-05.1 step 2, CYCLE-05.2); null otherwise.</param>
 public sealed record CultivationProgressView(
-    Guid RaftId, string RaftCode, DateOnly Date, CycleView? Cycle, IReadOnlyList<LaneDayView> Lanes, IReadOnlyList<int> NotSeededLanes, IReadOnlyList<LaneSeedLots> SeedLots, IReadOnlyList<CultivationLogView> Logs);
+    Guid RaftId,
+    string RaftCode,
+    DateOnly Date,
+    CycleView? Cycle,
+    IReadOnlyList<LaneDayView> Lanes,
+    IReadOnlyList<int> NotSeededLanes,
+    IReadOnlyList<LaneSeedLots> SeedLots,
+    IReadOnlyList<CultivationLogView> Logs,
+    CycleSummary? Summary = null);
