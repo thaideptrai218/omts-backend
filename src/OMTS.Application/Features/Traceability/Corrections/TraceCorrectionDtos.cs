@@ -15,7 +15,9 @@ public sealed record TraceSeedingCorrectionRequest(
     DateOnly? SeedingDate, Guid? SeedLotId, IReadOnlyList<int>? LaneNumbers, decimal? Quantity, string? Reason, string? RowVersion = null, bool OwnerApproved = false);
 
 /// <summary>TRACE-03.2 preview: the harvest data as it should be. The harvest date and time are never sent: they never change (BR-TRACE-04).</summary>
-/// <param name="KeepPhotoKeys">The photos that stay; null keeps them all. New photos are not previewed: they come with the save.</param>
+/// <param name="KeepPhotoKeys">
+/// The photos that stay; a photo left out is removed, and no list at all removes them all, as the multipart save reads it. New photos are not previewed: they come with the save.
+/// </param>
 public sealed record TraceHarvestLotPreviewRequest(
     IReadOnlyList<int>? LaneNumbers, IReadOnlyList<int>? FinishedLaneNumbers, int? CageCount, decimal? EstimatedKg, IReadOnlyList<string?>? KeepPhotoKeys, string? Reason);
 

@@ -157,4 +157,35 @@ public class TraceClosedCycleCorrectionTests(AuthApiFactory factory) : IClassFix
 
         Assert.Equal(8, (await factory.LotRowAsync(t.LotId)).CageCount);
     }
+
+    /// <summary>
+    /// The lot preview reads the photos to keep as the save does, and as HARVEST-01.1 and the log corrections do: a photo left out is removed, and no list at all removes every photo.
+    /// A client that builds both from the same form is shown what the save will do. The photos are on the provenance page, so the lot's origin information changes (BR-ORIGIN-03).
+    /// </summary>
+    [Fact]
+    public async Task A_lot_preview_and_its_save_both_read_no_photos_to_keep_as_removing_every_photo()
+    {
+        var raft = await factory.SeededRaftAsync();
+        var lot = await raft.Owner.Client.HarvestLotAsync(raft.RaftId, new HarvestFields { Photos = [Jpeg, Png] });
+        await raft.Owner.Client.CloseCycleAsync(raft.CycleId);
+        var keys = lot.PhotoKeysOfLot();
+        Assert.Equal(2, keys.Count);
+
+        // The same lanes and cages: with every key the preview changes nothing; without the list every photo goes.
+        var keepAll = await (await raft.Owner.Client.PreviewLotAsync(lot.Id(),
+            new { laneNumbers = new[] { 1 }, finishedLaneNumbers = Array.Empty<int>(), cageCount = 8, keepPhotoKeys = keys, reason = TraceCorrectionTestKit.Reason })).ReadAsync(HttpStatusCode.OK);
+        Assert.Empty(keepAll.Strings("changedFields"));
+        Assert.Empty(keepAll.GetProperty("affectedLots").EnumerateArray());
+
+        var preview = await (await raft.Owner.Client.PreviewLotAsync(lot.Id(),
+            new { laneNumbers = new[] { 1 }, finishedLaneNumbers = Array.Empty<int>(), cageCount = 8, reason = TraceCorrectionTestKit.Reason })).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal(["photos"], preview.Strings("changedFields"));
+        Assert.Equal(keys.Order(), preview.GetProperty("before").Strings("photos").Order());
+        Assert.Empty(preview.GetProperty("after").Strings("photos"));
+        Assert.Equal(lot.Text("lotCode"), Assert.Single(preview.GetProperty("affectedLots").EnumerateArray()).Text("lotCode"));
+
+        var saved = await (await factory.SendLotTraceAsync(raft.Owner.Client, lot.Id(), HarvestFields.OfLanes(1))).ReadAsync(HttpStatusCode.OK);
+        Assert.Empty(saved.GetProperty("lot").PhotoKeysOfLot());
+        Assert.Empty((await factory.LotRowAsync(lot.Id())).Photos);
+    }
 }
