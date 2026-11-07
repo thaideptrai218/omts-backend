@@ -4,29 +4,21 @@ using OMTS.Application.Features.WaterQuality.Dtos;
 
 namespace OMTS.Application.Features.WaterQuality;
 
-/// <summary>WATER-03 export content: a "Measurements" sheet (the history rows) and a "Monthly summary" of the active values.</summary>
+/// <summary>WATER-03.3 export content: the measurements shown, each with its status and the thresholds saved with it.</summary>
 public static class WaterMeasurementExport
 {
     public const string MeasurementsSheet = "Measurements";
-    public const string MonthlySummarySheet = "Monthly summary";
 
     public static readonly IReadOnlyList<string> MeasurementHeaders =
     [
-        "Measured at", "Raft", "pH", "Salinity (‰)", "Temperature (°C)", "Status", "Alert", "Violated values", "Measured by",
+        "Measured at", "Raft", "pH", "Salinity (‰)", "Temperature (°C)", "Status", "Void reason", "Alert", "Violated values", "Measured by",
+        "pH minimum", "pH maximum", "Salinity minimum (‰)", "Salinity maximum (‰)", "Temperature minimum (°C)", "Temperature maximum (°C)",
     ];
 
-    public static readonly IReadOnlyList<string> SummaryHeaders =
-    [
-        "Month", "pH average", "pH minimum", "pH maximum", "pH count",
-        "Salinity average", "Salinity minimum", "Salinity maximum", "Salinity count", "No data",
-    ];
-
-    /// <param name="rows">History rows, oldest first.</param>
-    /// <param name="months">Monthly chart periods of the active values.</param>
-    public static IReadOnlyList<SpreadsheetSheet> Sheets(IReadOnlyList<WaterMeasurementListItem> rows, IReadOnlyList<WaterChartPeriod> months) =>
+    /// <param name="rows">History rows, in the order of the list.</param>
+    public static IReadOnlyList<SpreadsheetSheet> Sheets(IReadOnlyList<WaterMeasurementListItem> rows) =>
     [
         new SpreadsheetSheet(MeasurementsSheet, MeasurementHeaders, rows.Select(MeasurementRow).ToList()),
-        new SpreadsheetSheet(MonthlySummarySheet, SummaryHeaders, months.Select(SummaryRow).ToList()),
     ];
 
     /// <summary>water-{zoneCode}-{from}-{to}.xlsx with the zone code reduced to file-name-safe characters.</summary>
@@ -38,13 +30,9 @@ public static class WaterMeasurementExport
 
     private static IReadOnlyList<object?> MeasurementRow(WaterMeasurementListItem m) =>
     [
-        m.MeasuredAt.ToOffset(BusinessClock.UtcOffset).DateTime, m.RaftCode, m.Ph, m.Salinity, m.Temperature, m.Status,
+        m.MeasuredAt.ToOffset(BusinessClock.UtcOffset).DateTime, m.RaftCode, m.Ph, m.Salinity, m.Temperature, m.Status, m.VoidReason,
         m.AlertState == WaterAlertState.None ? null : m.AlertState.ToString(), m.ViolatedValues, m.MeasuredBy?.Name,
-    ];
-
-    private static IReadOnlyList<object?> SummaryRow(WaterChartPeriod p) =>
-    [
-        p.Period, p.Ph.Average, p.Ph.Minimum, p.Ph.Maximum, p.Ph.Count,
-        p.Salinity.Average, p.Salinity.Minimum, p.Salinity.Maximum, p.Salinity.Count, p.Missing,
+        m.ThresholdsUsed.PhMin, m.ThresholdsUsed.PhMax, m.ThresholdsUsed.SalinityMin, m.ThresholdsUsed.SalinityMax,
+        m.ThresholdsUsed.TemperatureMin, m.ThresholdsUsed.TemperatureMax,
     ];
 }

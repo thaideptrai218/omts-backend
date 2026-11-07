@@ -25,8 +25,6 @@ public sealed record WaterPeriod(DateOnly From, DateOnly To)
     /// <summary>Start of the day after <see cref="To"/> in local time.</summary>
     public DateTimeOffset ToExclusive => StartOf(To.AddDays(1));
 
-    public int Days => To.DayNumber - From.DayNumber + 1;
-
     /// <summary><c>to</c> defaults to today and <c>from</c> to <paramref name="defaultFrom"/>(to); from after to is invalid (MSG-GEN-01).</summary>
     public static Result<WaterPeriod> Parse(string? from, string? to, DateOnly today, Func<DateOnly, DateOnly> defaultFrom)
     {

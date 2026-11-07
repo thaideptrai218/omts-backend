@@ -23,4 +23,10 @@ public interface IZoneRecipientQuery
     /// MSG-PURCHASE-08. An empty list gives the Owners only.
     /// </summary>
     Task<IReadOnlyList<Guid>> GetOwnersAndRolesAsync(IReadOnlyCollection<StaffRole> staffRoles, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Active staff holding an Effective Zone Manager pair on <paramref name="zoneId"/> or at All zones (BR-FARM-08); when
+    /// the zone has none, every active Cooperative Owner instead (GFR-04).
+    /// </summary>
+    Task<IReadOnlyList<Guid>> GetZoneManagersOrOwnersAsync(Guid zoneId, CancellationToken cancellationToken);
 }

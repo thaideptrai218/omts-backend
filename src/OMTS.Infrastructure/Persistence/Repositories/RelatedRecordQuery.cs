@@ -39,6 +39,11 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
             return FindPurchaseRequestAsync(recordId, cancellationToken);
         }
 
+        if (recordType == RelatedRecordTypes.CultivationLog)
+        {
+            return FindCultivationLogAsync(recordId, cancellationToken);
+        }
+
         var entity = Aliases.TryGetValue(recordType, out var alias)
             ? db.Model.FindEntityType(alias)
             : db.Model.GetEntityTypes().FirstOrDefault(t =>
@@ -53,6 +58,13 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
             ? FindInZoneMethod.MakeGenericMethod(entity.ClrType, zoneType)
             : FindMethod.MakeGenericMethod(entity.ClrType);
         return (Task<RelatedRecordLocation?>)method.Invoke(this, [recordId, cancellationToken])!;
+    }
+
+    private async Task<RelatedRecordLocation?> FindCultivationLogAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var zones = await db.CultivationLogs.AsNoTracking().Where(l => l.Id == id)
+            .Select(l => l.Cycle.Raft.ZoneId).ToListAsync(cancellationToken);
+        return zones.Count == 0 ? null : new RelatedRecordLocation(zones[0]);
     }
 
     private async Task<RelatedRecordLocation?> FindPurchaseRequestAsync(Guid id, CancellationToken cancellationToken)

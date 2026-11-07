@@ -4,6 +4,7 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Cultivation.Cycles;
+using OMTS.Application.Features.Cultivation.CultivationLogs;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
@@ -18,6 +19,7 @@ public sealed class CultivationProgressService(
     LaneStateReader laneStates,
     RaftViews raftViews,
     CultivationCycleViews cycleViews,
+    CultivationLogViews logViews,
     ZoneAccessGuard zoneAccess,
     TimeProvider timeProvider)
 {
@@ -73,7 +75,8 @@ public sealed class CultivationProgressService(
             shown,
             cycle is null ? null : await cycleViews.ViewAsync(cycle, cancellationToken),
             lanes,
-            lanes.Where(l => l.StatusId == StatusIds.Lane.InUse && l.State == LaneState.NotSeeded).Select(l => l.LaneNumber).ToList());
+            lanes.Where(l => l.StatusId == StatusIds.Lane.InUse && l.State == LaneState.NotSeeded).Select(l => l.LaneNumber).ToList(),
+            cycle is null ? [] : await logViews.ListAsync(cycle, cancellationToken));
     }
 
     /// <summary>

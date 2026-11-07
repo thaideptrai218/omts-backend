@@ -115,6 +115,8 @@ public class CyclesQaTestsMigrationAndDemo
         Assert.Equal(DeploymentBootstrapper.Success, (await RunAsync(host.App)).ExitCode);
         var raftId = await UseDbAsync(host.App, async db =>
         {
+            await db.CultivationLogPhotos.ExecuteDeleteAsync();
+            await db.CultivationLogs.ExecuteDeleteAsync();
             await db.CultivationCycles.ExecuteDeleteAsync();
             await db.AuditEvents.Where(e => e.Action == "CultivationCycle.Started").ExecuteDeleteAsync();
             var raft = await db.Rafts.Where(r => r.Code == "B1-03").SingleAsync();

@@ -19,6 +19,20 @@ public sealed class FileFaults
     /// <summary>Every <see cref="IFileStorage.DeleteAsync"/> throws, as a provider bug would.</summary>
     public bool DeleteThrows { get; set; }
 
+    /// <summary>When set, this many uploads still work; each one after them is refused, as the storage service would.</summary>
+    public int? UploadsBeforeFailure { get; set; }
+
+    internal bool TakeUploadFailure()
+    {
+        if (UploadsBeforeFailure is not { } left)
+        {
+            return false;
+        }
+
+        UploadsBeforeFailure = Math.Max(left - 1, 0);
+        return left == 0;
+    }
+
     /// <summary>The next save throws <paramref name="failure"/> and saves nothing.</summary>
     public void FailNextSave(Exception failure) => _nextSave = (failure, false);
 
@@ -78,7 +92,7 @@ public sealed class FileFaultApiFactory : AuthApiFactory
     private sealed class FaultyDeleteStorage(IFileStorage inner, FileFaults faults) : IFileStorage
     {
         public Task<FileUploadResult> UploadAsync(ValidatedFile file, string category, CancellationToken cancellationToken = default) =>
-            inner.UploadAsync(file, category, cancellationToken);
+            faults.TakeUploadFailure() ? Task.FromResult(FileUploadResult.Failed("TEST_STORAGE_DOWN")) : inner.UploadAsync(file, category, cancellationToken);
 
         public Task<Stream?> OpenReadAsync(string key, CancellationToken cancellationToken = default) => inner.OpenReadAsync(key, cancellationToken);
 

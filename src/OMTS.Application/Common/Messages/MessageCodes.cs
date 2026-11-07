@@ -20,6 +20,8 @@ public static class MessageCodes
     public const string Farm01 = "MSG-FARM-01";
     public const string Farm02 = "MSG-FARM-02";
 
+    public const string Cycle04 = "MSG-CYCLE-04";
+
     public const string Water01 = "MSG-WATER-01";
     public const string Water02 = "MSG-WATER-02";
     public const string Water03 = "MSG-WATER-03";
@@ -86,11 +88,11 @@ public static class MessageCodes
     /// approval of a new employee and the reminder to lock a staff account, MSG-LABOR-04 and MSG-LABOR-36, the pay period
     /// lock and the question before saving the payroll settings (OMTS-227); MSG-SALE-04 and MSG-SALE-05, the merge
     /// of customer profiles (SALE-04 is new); MSG-DEBT-01 and MSG-DEBT-02, the receiving bank account (DEBT-01); MSG-GEN-11,
-    /// MSG-SALE-01, MSG-SALE-02 and MSG-SALE-03, the purchase requests (new in PR S4).
+    /// MSG-SALE-01, MSG-SALE-02 and MSG-SALE-03, the purchase requests (new in PR S4); MSG-CYCLE-04, a cultivation log to review (CYCLE-04).
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
-        Account01, Account22, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Debt01, Debt02, Water02, Water04,
+        Account01, Account22, Cycle04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Debt01, Debt02, Water02, Water04,
     };
 
     /// <summary>

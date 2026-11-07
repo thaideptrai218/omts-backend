@@ -33,6 +33,10 @@ internal static class DemoFiles
     public static IncomingFile RaftPhoto(int number) => Png($"raft-demo-{number}.png", CoverWidth, CoverHeight, (x, y) =>
         y > CoverHeight / 2 && (x + number * 7) % 24 < 3 ? ((byte)0x5D, (byte)0x4A, (byte)0x37) : ((byte)0x1B, (byte)(0x4F + y), (byte)0x72));
 
+    /// <summary>A 240×80 PNG: sea above, hanging lines of oysters below, standing in for a photo of a raft visit.</summary>
+    public static IncomingFile CultivationLogPhoto(int number) => Png($"log-demo-{number}.png", CoverWidth, CoverHeight, (x, y) =>
+        y > CoverHeight / 3 && (x + number * 5) % 16 < 2 ? ((byte)0xD9, (byte)0xCF, (byte)0xB8) : ((byte)0x1B, (byte)0x5F, (byte)(0x6A + y)));
+
     /// <summary>A tiny PDF that passes the document check; the facts of the license or certification live in its record.</summary>
     public static IncomingFile LicenseDocument(string number)
     {

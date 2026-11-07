@@ -21,9 +21,13 @@ internal sealed class CultivationCycleRepository(OmtsDbContext db) : ICultivatio
     public Task<DateOnly?> LastCloseDateAsync(Guid raftId, CancellationToken cancellationToken) =>
         db.CultivationCycles.AsNoTracking().Where(c => c.RaftId == raftId).MaxAsync(c => c.CloseDate, cancellationToken);
 
-    // SeedingEvent stands for the seeding session until C2; C2 and C4 change this to SeedingRecord and CultivationLog.
-    public Task<DateOnly?> FirstRecordDateAsync(Guid cycleId, CancellationToken cancellationToken) =>
-        db.SeedingEvents.AsNoTracking().Where(e => e.CycleId == cycleId).MinAsync(e => (DateOnly?)e.SeedingDate, cancellationToken);
+    // SeedingEvent stands for the seeding session until C2 changes it to SeedingRecord.
+    public async Task<DateOnly?> FirstRecordDateAsync(Guid cycleId, CancellationToken cancellationToken)
+    {
+        var seeded = await db.SeedingEvents.AsNoTracking().Where(e => e.CycleId == cycleId).MinAsync(e => (DateOnly?)e.SeedingDate, cancellationToken);
+        var visited = await db.CultivationLogs.AsNoTracking().Where(l => l.CycleId == cycleId).MinAsync(l => (DateOnly?)l.VisitDate, cancellationToken);
+        return seeded is null || visited < seeded ? visited : seeded;
+    }
 
     public async Task<IReadOnlySet<Guid>> WithRecordsAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken)
     {
@@ -32,7 +36,9 @@ internal sealed class CultivationCycleRepository(OmtsDbContext db) : ICultivatio
             return new HashSet<Guid>();
         }
 
-        return (await db.SeedingEvents.AsNoTracking().Where(e => cycleIds.Contains(e.CycleId)).Select(e => e.CycleId).Distinct().ToListAsync(cancellationToken)).ToHashSet();
+        var seeded = await db.SeedingEvents.AsNoTracking().Where(e => cycleIds.Contains(e.CycleId)).Select(e => e.CycleId).Distinct().ToListAsync(cancellationToken);
+        var logged = await db.CultivationLogs.AsNoTracking().Where(l => cycleIds.Contains(l.CycleId)).Select(l => l.CycleId).Distinct().ToListAsync(cancellationToken);
+        return seeded.Concat(logged).ToHashSet();
     }
 
     public void Add(CultivationCycle cycle) => db.CultivationCycles.Add(cycle);

@@ -1,10 +1,4 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
-using OMTS.Application.Features.Notifications;
-using OMTS.Application.Features.WaterQuality;
-using OMTS.Domain.Constants;
-using OMTS.Domain.Entities.Cultivation;
 
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
@@ -16,8 +10,6 @@ namespace OMTS.Api.IntegrationTests.WaterQuality;
 /// </summary>
 public class WaterOverdueMonthEndQaTests
 {
-    private static readonly TimeSpan Local = TimeSpan.FromHours(7);
-
     [Theory]
     [InlineData("2026-09-30", "2026-10-30", "2026-10-31")]
     [InlineData("2026-01-31", "2026-02-28", "2026-03-01")]
@@ -27,31 +19,29 @@ public class WaterOverdueMonthEndQaTests
     {
         await using var api = new WaterApiFactory();
         var z = await api.ZoneAsync();
-        await api.UseDbAsync(db => db.WaterMeasurements.Add(new WaterMeasurement
-        {
-            ZoneId = z.Zone.Id,
-            MeasuredAt = new DateTimeOffset(DateOnly.Parse(measured).ToDateTime(new TimeOnly(8, 0)), Local),
-            RaftId = z.Raft.Id,
-            Ph = 7.5m,
-            Salinity = 20m,
-            Temperature = 25m,
-            PhotoUrl = Guid.NewGuid().ToString("N"),
-            ClientOperationId = Guid.NewGuid(),
-            StatusId = StatusIds.WaterMeasurement.Active,
-        }));
+        await z.OpenCycleAsync(DateOnly.Parse(measured).AddMonths(-3));
+        await z.AddMeasurementAsync(DateOnly.Parse(measured));
 
-        var onTime = await RunAsync(api, DateOnly.Parse(lastOnTimeDay));
-        var overdue = await RunAsync(api, DateOnly.Parse(firstOverdueDay));
+        var onTime = await api.RemindOnAsync(DateOnly.Parse(lastOnTimeDay));
+        var overdue = await api.RemindOnAsync(DateOnly.Parse(firstOverdueDay));
 
         Assert.Equal(0, onTime);
         Assert.Equal(1, overdue);
-        Assert.True(await api.QueryAsync(db => db.Notifications.AnyAsync(
-            n => n.Type == NotificationTypes.WaterMeasurementOverdue && n.RelatedRecordCode == z.Zone.Code)));
+        Assert.NotEmpty(await api.RemindersOfAsync(z.Zone));
     }
 
-    private static async Task<int> RunAsync(WaterApiFactory api, DateOnly today)
+    // Reminded on 31/01: the month is up on 28/02, then 28/03 (the repeat counts from the reminder before it).
+    [Fact]
+    public async Task The_repeat_follows_the_calendar_at_a_month_end()
     {
-        using var scope = api.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<WaterMeasurementOverdueReminder>().RunOnceAsync(today, CancellationToken.None);
+        await using var api = new WaterApiFactory();
+        var z = await api.ZoneAsync();
+        await z.OpenCycleAsync(new DateOnly(2025, 12, 1));
+
+        Assert.Equal(1, await api.RemindOnAsync(new DateOnly(2026, 1, 31)));
+        Assert.Equal(0, await api.RemindOnAsync(new DateOnly(2026, 2, 27)));
+        Assert.Equal(1, await api.RemindOnAsync(new DateOnly(2026, 2, 28)));
+        Assert.Equal(0, await api.RemindOnAsync(new DateOnly(2026, 3, 27)));
+        Assert.Equal(1, await api.RemindOnAsync(new DateOnly(2026, 3, 28)));
     }
 }

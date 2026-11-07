@@ -9,7 +9,6 @@ using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Farming.Rafts;
-using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
 
@@ -26,6 +25,7 @@ public sealed class CultivationCycleService(
     IRaftRepository rafts,
     RaftViews raftViews,
     CultivationCycleViews views,
+    CycleWriteGuard writes,
     ZoneAccessGuard zoneAccess,
     RowVersionGuard rowVersions,
     AuditLogService audit,
@@ -98,7 +98,7 @@ public sealed class CultivationCycleService(
             return AppError.Forbidden;
         }
 
-        if (Refusal(cycle) is { } refused)
+        if (writes.Refusal(cycle) is { } refused)
         {
             return refused;
         }
@@ -145,7 +145,7 @@ public sealed class CultivationCycleService(
             return AppError.Forbidden;
         }
 
-        if (Refusal(cycle) is { } refused)
+        if (writes.Refusal(cycle) is { } refused)
         {
             return refused;
         }
@@ -193,17 +193,10 @@ public sealed class CultivationCycleService(
         }
     }
 
-    /// <summary>MSG-GEN-09 when the cycle is Closed (BR-CYCLE-04) or its raft is read-only (GBR-01), null when it may be changed.</summary>
-    private AppError? Refusal(CultivationCycle cycle) =>
-        cycle.StatusId != StatusIds.CultivationCycle.Open ? Refused(cycle.Raft, "Closed") : raftViews.EditRefusal(cycle.Raft);
-
     /// <summary>MSG-GEN-06, as a cycle with records blocks the cancel the way an Open cycle blocks a start or a lane change.</summary>
     private static AppError HasRecords(CultivationCycle cycle) => AppError.Conflict(
         UserMessages.StillInUse(1, $"records of the cultivation cycle started {cycle.StartDate:dd/MM/yyyy}"),
         new Dictionary<string, object?> { ["cycleId"] = cycle.Id });
-
-    private static AppError Refused(Raft raft, string status) =>
-        AppError.Conflict(UserMessages.WrongStatus($"The cultivation cycle of raft {raft.Code}", status));
 
     private static AuditEntry Entry(string action, CultivationCycle cycle) =>
         new(action, RecordType) { RecordId = cycle.Id, RecordCode = cycle.Raft.Code, ZoneId = cycle.Raft.ZoneId };

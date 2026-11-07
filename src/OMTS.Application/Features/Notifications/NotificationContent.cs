@@ -28,6 +28,9 @@ public static partial class RelatedRecordTypes
     public const string CooperativeCertification = "CooperativeCertification";
 
     public const string Account = "Account";
+
+    /// <summary>A cultivation log; the displayed code is its raft code.</summary>
+    public const string CultivationLog = "CultivationLog";
     public const string PurchaseRequest = "PurchaseRequest";
 
     /// <summary>A purchase receipt (PURCHASE-01, PURCHASE-06); it has no zone.</summary>
