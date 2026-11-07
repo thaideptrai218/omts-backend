@@ -33,11 +33,7 @@ public sealed class BankAccountQaTestsSqlServer : IDisposable
     /// <summary>As the kit, with logos stored in a folder of this test, not below the API project.</summary>
     private async Task<SqlServerApiFactory> StartAsync(SqlServerTestDatabase database)
     {
-        await using (var db = database.CreateContext())
-        {
-            await db.Database.MigrateAsync();
-        }
-
+        await database.MigrateToLatestAsync();
         return new SqlServerApiFactory(database, new Dictionary<string, string?> { ["Storage:Local:RootPath"] = _storage });
     }
 

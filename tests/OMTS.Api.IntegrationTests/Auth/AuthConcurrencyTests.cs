@@ -16,7 +16,7 @@ public class AuthConcurrencyTests
     public async Task Parallel_logins_of_one_account_all_succeed_or_fail_normally()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await MigrateAsync(database);
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         await api.AddAccountAsync("owner1", Password);
         var client = api.CreateClient();
@@ -33,7 +33,7 @@ public class AuthConcurrencyTests
     public async Task Parallel_refreshes_with_one_token_end_the_session()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await MigrateAsync(database);
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         await api.AddAccountAsync("owner2", Password);
         var client = api.CreateClient();
@@ -59,7 +59,7 @@ public class AuthConcurrencyTests
     public async Task Overlong_user_agent_and_device_name_are_truncated()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await MigrateAsync(database);
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         await api.AddAccountAsync("owner3", Password);
         var client = api.CreateClient();
@@ -69,12 +69,6 @@ public class AuthConcurrencyTests
             "/api/auth/login", new { identifier = "owner3", password = Password, deviceName = new string('d', 400) });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    private static async Task MigrateAsync(SqlServerTestDatabase database)
-    {
-        await using var db = database.CreateContext();
-        await db.Database.MigrateAsync();
     }
 
     private static Task<HttpResponseMessage> PostLoginAsync(HttpClient client, string identifier, string password) =>

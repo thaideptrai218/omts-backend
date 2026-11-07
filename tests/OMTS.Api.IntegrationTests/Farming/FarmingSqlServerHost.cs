@@ -34,10 +34,7 @@ public sealed class FarmingSqlServerHost : IAsyncDisposable
     public static async Task<FarmingSqlServerHost> StartAsync()
     {
         var database = SqlServerTestDatabase.Create();
-        await using (var db = database.CreateContext())
-        {
-            await db.Database.MigrateAsync();
-        }
+        await database.MigrateToLatestAsync();
 
         var storageRoot = Path.Combine(Path.GetTempPath(), $"omts-files-{Guid.NewGuid():N}");
         var api = new SqlServerApiFactory(database, new Dictionary<string, string?> { ["Storage:Local:RootPath"] = storageRoot });

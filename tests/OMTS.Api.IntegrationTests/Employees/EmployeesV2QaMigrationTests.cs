@@ -98,8 +98,8 @@ public class EmployeesV2QaMigrationTests
     public async Task The_new_key_keeps_an_employee_with_audit_rows_and_leaves_account_rows_alone()
     {
         await using var database = SqlServerTestDatabase.Create();
+        await database.MigrateToLatestAsync();
         await using var db = database.CreateContext();
-        await db.Database.MigrateAsync();
         var cooperative = new OMTS.Domain.Entities.Identity.Cooperative { FullName = "HTX" };
         var employee = new OMTS.Domain.Entities.Identity.Employee { Cooperative = cooperative, FullName = "Có audit" };
         db.Employees.Add(employee);

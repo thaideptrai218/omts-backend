@@ -364,10 +364,7 @@ internal sealed class ZoneRaceSqlHost : IAsyncDisposable
     public static async Task<ZoneRaceSqlHost> StartAsync()
     {
         var database = SqlServerTestDatabase.Create();
-        await using (var db = database.CreateContext())
-        {
-            await db.Database.MigrateAsync();
-        }
+        await database.MigrateToLatestAsync();
 
         var api = new ZoneRaceApiFactory(database);
         using (var scope = api.Services.CreateScope())

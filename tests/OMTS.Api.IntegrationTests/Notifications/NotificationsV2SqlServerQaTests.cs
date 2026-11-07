@@ -209,9 +209,9 @@ public class NotificationsV2SqlServerQaTests(ITestOutputHelper output)
     {
         var database = SqlServerTestDatabase.Create();
         var zone = new FarmingZone { Cooperative = new Cooperative { FullName = "HTX Trung Nam" }, Code = NewCode(), Name = "Vùng Cái Rồng" };
+        await database.MigrateToLatestAsync();
         await using (var db = database.CreateContext())
         {
-            await db.Database.MigrateAsync();
             db.FarmingZones.Add(zone);
             await db.SaveChangesAsync();
         }
