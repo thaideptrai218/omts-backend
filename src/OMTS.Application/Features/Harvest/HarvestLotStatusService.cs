@@ -28,8 +28,8 @@ public enum HarvestLotReopenCause
 /// </summary>
 public sealed class HarvestLotStatusService(IStatusCatalog statusCatalog, AuditLogService audit, IUnitOfWork unitOfWork)
 {
-    private const string CloseReasonField = "Close reason";
-    private const string LeftoverKgField = "Leftover kg";
+    public const string CloseReasonField = "Close reason";
+    public const string LeftoverKgField = "Leftover kg";
 
     /// <summary>SALE-05: every lot chosen is still for sale, else MSG-GEN-09 naming the first that is not, null when they are. Each is marked changed, so a parallel close makes one side fail.</summary>
     public AppError? EnsureForSale(IEnumerable<HarvestLot> lots)
@@ -37,7 +37,7 @@ public sealed class HarvestLotStatusService(IStatusCatalog statusCatalog, AuditL
         var chosen = lots.ToList();
         if (chosen.FirstOrDefault(l => !l.IsForSale) is { } closed)
         {
-            return WrongStatus(closed);
+            return NotForSale(closed);
         }
 
         chosen.ForEach(unitOfWork.MarkChanged);
@@ -49,7 +49,7 @@ public sealed class HarvestLotStatusService(IStatusCatalog statusCatalog, AuditL
     {
         if (!lot.IsForSale)
         {
-            return WrongStatus(lot);
+            return NotForSale(lot);
         }
 
         SetClosed(lot, date, 0m, HarvestLotCloseReason.SoldWholeLot, salesInvoiceId);
@@ -64,7 +64,7 @@ public sealed class HarvestLotStatusService(IStatusCatalog statusCatalog, AuditL
     {
         if (!lot.IsForSale)
         {
-            return WrongStatus(lot);
+            return NotForSale(lot);
         }
 
         if (leftoverKg < 0)
@@ -126,5 +126,6 @@ public sealed class HarvestLotStatusService(IStatusCatalog statusCatalog, AuditL
         });
     }
 
-    private AppError WrongStatus(HarvestLot lot) => AppError.Conflict(UserMessages.WrongStatus($"Harvest lot {lot.LotCode}", statusCatalog.DisplayNameOf(lot.StatusId)));
+    /// <summary>MSG-GEN-09 naming the lot and its status: it is no longer for sale.</summary>
+    public AppError NotForSale(HarvestLot lot) => AppError.Conflict(UserMessages.WrongStatus($"Harvest lot {lot.LotCode}", statusCatalog.DisplayNameOf(lot.StatusId)));
 }

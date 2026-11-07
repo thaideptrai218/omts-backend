@@ -147,6 +147,12 @@ public static class DependencyInjection
         services.AddSingleton<EmploymentEndJob>();
         services.AddHostedService<EmploymentEndHostedService>();
 
+        // GFR-05: harvest lots still for sale after the days before automatic close, and the warning the day before
+        services.AddOptions<HarvestLotAutoCloseOptions>().Bind(configuration.GetSection(HarvestLotAutoCloseOptions.SectionName));
+        services.AddSingleton<HarvestLotAutoCloseJob>();
+        services.AddSingleton<OMTS.Application.Features.Harvest.IHarvestAutoCloseSchedule, HarvestAutoCloseSchedule>();
+        services.AddHostedService<HarvestLotAutoCloseHostedService>();
+
         // Raft photos, license files, cover photos and certificate files no record points to (cooperative logos are never touched)
         services.AddOptions<OrphanFileCleanupOptions>()
             .Bind(configuration.GetSection(OrphanFileCleanupOptions.SectionName))

@@ -45,6 +45,9 @@ public interface IHarvestLotRepository
     /// <summary>The lots still for sale whose days count from <paramref name="lastDay"/> or earlier: the day reopened, else the harvest date (GFR-05).</summary>
     Task<int> CountForSaleSinceAtMostAsync(DateOnly lastDay, CancellationToken cancellationToken);
 
+    /// <summary>The ids of the same lots, oldest first: what the daily close check looks at (GFR-05).</summary>
+    Task<IReadOnlyList<Guid>> ListForSaleSinceAtMostAsync(DateOnly lastDay, CancellationToken cancellationToken);
+
     /// <summary>Adds the lot with the lanes and photos it holds.</summary>
     void Add(HarvestLot lot);
 

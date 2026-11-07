@@ -278,6 +278,14 @@ public static class UserMessages
         Parameters = new Dictionary<string, object?> { ["days"] = days, ["count"] = count },
     };
 
+    /// <summary>MSG-HARVEST-05 (GFR-05): the next daily close check closes this lot still for sale.</summary>
+    /// <param name="closeDate">The day of that check: the lot is closed at its start.</param>
+    public static UserMessage HarvestLotAutoCloseWarning(string lotCode, string raftCode, DateOnly closeDate) => new(
+        Harvest05, $"Lot {lotCode} (raft {raftCode}) will be closed automatically at the start of {Date(closeDate)}. Please sell it before then or close it yourself.")
+    {
+        Parameters = new Dictionary<string, object?> { ["lot_code"] = lotCode, ["raft_code"] = raftCode, ["close_date"] = closeDate },
+    };
+
     // ---- MSG-TRACE ----
 
     /// <summary>MSG-TRACE-03 (TRACE-03.0.E3): the correction would leave a lane of a harvest lot with no seed lot (BR-TRACE-01). The text names the first such lane.</summary>

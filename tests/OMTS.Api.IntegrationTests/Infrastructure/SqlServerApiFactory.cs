@@ -36,6 +36,7 @@ public sealed class SqlServerApiFactory(SqlServerTestDatabase database, IReadOnl
             ["Jobs:ZoneLicenseReminder:CatchUpOnStart"] = "false",
             ["Jobs:WaterMeasurementOverdue:CatchUpOnStart"] = "false",
             ["Jobs:EmploymentEnd:CatchUpOnStart"] = "false",
+            ["Jobs:HarvestLotAutoClose:CatchUpOnStart"] = "false",
             ["Jobs:OrphanFileCleanup:Enabled"] = "false",
             [AuthApiFactory.PublicBaseUrlKey] = AuthApiFactory.PublicBaseUrl,
         }.Concat(settings ?? new Dictionary<string, string?>())));

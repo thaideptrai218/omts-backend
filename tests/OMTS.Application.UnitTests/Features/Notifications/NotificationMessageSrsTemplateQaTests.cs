@@ -18,6 +18,7 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
     private const string Cycle08 = "Raft {raft_code}: every seeded lane is harvested. Please close its cultivation cycle.";
     private const string Harvest01 = "Raft {raft_code}: the harvest of {harvest_date} is recorded as lot {lot_code} ({cage_count} cages, about {estimated_kg} kg).";
     private const string Harvest03 = "With {days} days, the next daily close check will close {count} lots that are still for sale. Do you want to save?";
+    private const string Harvest05 = "Lot {lot_code} (raft {raft_code}) will be closed automatically at the start of {close_date}. Please sell it before then or close it yourself.";
     private const string Trace03 = "The correction is not saved: lane {lane_number} of harvest lot {lot_code} would have no seed lot. Please keep at least one seed lot for this lane.";
     private const string Trace04 = "This correction changes the origin information of harvest lots {lot_codes}. Has the Cooperative Owner agreed in person that the data is wrong?";
     private const string Farm01 ="{document} expires on {expiry_date}, in {days} days. Please renew it and record the new one.";
@@ -33,7 +34,7 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
     public static TheoryData<string> Cases => new()
     {
         "farm-01", "farm-02", "farm-01-no-type", "farm-01-certification", "farm-02-certification-no-number", "water-03", "water-03-corrected", "water-04-corrected", "water-04-voided", "water-06",
-        "cycle-04", "cycle-08", "harvest-01", "harvest-03",
+        "cycle-04", "cycle-08", "harvest-01", "harvest-03", "harvest-05",
         "cycle-05", "cycle-06", "cycle-06-early", "cycle-07", "cycle-07-no-seeding",
         "trace-03", "trace-04", "trace-04-no-lot",
     };
@@ -141,6 +142,12 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
             UserMessages.AutoCloseDaysLowered(2, 5),
             "With 2 days, the next daily close check will close 5 lots that are still for sale. Do you want to save?",
             """{"days":2,"count":5}"""),
+        // GFR-05 example: harvested 26/10 with 3 days, warned by the check of 29/10.
+        "harvest-05" => (
+            "MSG-HARVEST-05", Harvest05,
+            UserMessages.HarvestLotAutoCloseWarning("KV01-B01-20261026", "KV01-B01", new DateOnly(2026, 10, 30)),
+            "Lot KV01-B01-20261026 (raft KV01-B01) will be closed automatically at the start of 30/10/2026. Please sell it before then or close it yourself.",
+            """{"lot_code":"KV01-B01-20261026","raft_code":"KV01-B01","close_date":"2026-10-30"}"""),
         "cycle-04" => (
             "MSG-CYCLE-04", Cycle04,
             UserMessages.CultivationLogRecorded("KV01-B01", new DateOnly(2026, 10, 1)),

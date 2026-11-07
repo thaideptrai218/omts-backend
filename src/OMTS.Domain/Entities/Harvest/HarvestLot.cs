@@ -56,6 +56,12 @@ public class HarvestLot : AuditableEntity, IHasStatus
     /// <summary>The invoice whose "sold the whole lot" tick closed the lot, so that invoice alone reopens it (SALE-07, SALE-08); a foreign key to the sales invoices.</summary>
     public Guid? ClosedBySalesInvoiceId { get; set; }
 
+    /// <summary>
+    /// The close date the last MSG-HARVEST-05 warning announced (GFR-05): saved with that warning, so a second run, a catch-up or a second app instance never sends it again.
+    /// A reopen or a change of the days gives the lot another close date, which is warned once in its turn.
+    /// </summary>
+    public DateOnly? AutoCloseWarnedFor { get; set; }
+
     public DateTimeOffset? PublishedAt { get; set; }
     public DateTimeOffset? WithdrawnAt { get; set; }
 

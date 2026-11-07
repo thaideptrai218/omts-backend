@@ -772,6 +772,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateOnly?>("AutoCloseWarnedFor")
+                        .HasColumnType("date");
+
                     b.Property<int>("CageCount")
                         .HasColumnType("int");
 

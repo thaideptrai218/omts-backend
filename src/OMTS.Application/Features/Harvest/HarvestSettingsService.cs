@@ -15,7 +15,7 @@ namespace OMTS.Application.Features.Harvest;
 /// still for sale from the next daily close check. The settings live on the cooperative row, so saving them also makes an open profile form stale, and the other way round.
 /// </summary>
 public sealed class HarvestSettingsService(
-    ICooperativeRepository cooperatives, IHarvestLotRepository lots, RowVersionGuard rowVersions, AuditLogService audit, IUnitOfWork unitOfWork, TimeProvider timeProvider)
+    ICooperativeRepository cooperatives, IHarvestLotRepository lots, RowVersionGuard rowVersions, AuditLogService audit, IUnitOfWork unitOfWork, IHarvestAutoCloseSchedule schedule)
 {
     public const string AverageKgPerCageField = "Average kg per cage";
     public const string DaysBeforeAutoCloseField = "Days before automatic close";
@@ -65,7 +65,8 @@ public sealed class HarvestSettingsService(
     }
 
     /// <summary>
-    /// HARVEST-03 step 4. Today's check ran at the start of today, so the next one is tomorrow's: it closes a lot whose day it counts from, plus the days, is before tomorrow (GFR-05).
+    /// HARVEST-03 step 4. The next check (today's before its run time at the start of the day, tomorrow's after it) closes a lot whose day it counts from, plus the days, is before
+    /// that check's date (GFR-05).
     /// </summary>
     public async Task<Result<AutoClosePreview>> PreviewAsync(int? days, CancellationToken cancellationToken)
     {
@@ -80,7 +81,7 @@ public sealed class HarvestSettingsService(
             return AppError.Invalid(DaysBeforeAutoCloseField);
         }
 
-        var count = await lots.CountForSaleSinceAtMostAsync(timeProvider.Today().AddDays(-days!.Value), cancellationToken);
+        var count = await lots.CountForSaleSinceAtMostAsync(HarvestLotAutoCloseRule.LatestSinceClosedOn(schedule.NextCheckDate(), days!.Value), cancellationToken);
         var lowered = days < cooperative.DaysBeforeAutoClose;
         var question = lowered ? UserMessages.AutoCloseDaysLowered(days.Value, count) : null;
         return new AutoClosePreview(days.Value, count, lowered, question?.Text, question?.Code);
