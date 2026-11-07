@@ -33,7 +33,7 @@ public class WaterOverdueReminderTests
         Assert.Equal(1, await api.RemindOnAsync(Today));
 
         var reminders = await api.RemindersOfAsync(z.Zone);
-        Assert.Equal(new[] { manager.Id, allZones.Id }.Order(), reminders.Select(n => n.RecipientAccountId).Order());
+        Assert.Equal(new[] { manager.Id, allZones.Id }.Order(), reminders.Select(n => n.RecipientAccountId!.Value).Order());
         Assert.DoesNotContain(reminders, n => n.RecipientAccountId == z.OwnerAccount.Id || n.RecipientAccountId == accountant.Id || n.RecipientAccountId == otherZone.Id);
         // A normal type (BR-ACCOUNT-11). The zone id takes the tap to WATER-01 with the zone chosen.
         Assert.All(reminders, n =>
@@ -58,7 +58,7 @@ public class WaterOverdueReminderTests
 
         Assert.Equal(1, await api.RemindOnAsync(Today));
 
-        var recipients = (await api.RemindersOfAsync(z.Zone)).Select(n => n.RecipientAccountId).ToList();
+        var recipients = (await api.RemindersOfAsync(z.Zone)).Select(n => n.RecipientAccountId!.Value).ToList();
         Assert.Contains(z.OwnerAccount.Id, recipients);
         Assert.Contains(otherOwner.Id, recipients);
         Assert.Equal(recipients.Count, await api.QueryAsync(db => db.Accounts.CountAsync(a => a.SubjectType == SubjectType.CooperativeOwner)));
@@ -87,7 +87,7 @@ public class WaterOverdueReminderTests
 
         foreach (var z in new[] { locked, revoked })
         {
-            var recipients = (await api.RemindersOfAsync(z.Zone)).Select(n => n.RecipientAccountId).ToList();
+            var recipients = (await api.RemindersOfAsync(z.Zone)).Select(n => n.RecipientAccountId!.Value).ToList();
             Assert.Contains(z.OwnerAccount.Id, recipients);
             Assert.DoesNotContain(lockedManager.Id, recipients);
             Assert.DoesNotContain(formerManager.Id, recipients);

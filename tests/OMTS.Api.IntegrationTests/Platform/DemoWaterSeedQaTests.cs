@@ -55,7 +55,7 @@ public class DemoWaterSeedQaTests
             var expected = await recipients.GetRecipientsAsync(measurement.ZoneId, PermissionFunctions.WaterMeasurements, PermissionAction.View, default);
             var notified = await db.Notifications.AsNoTracking()
                 .Where(n => n.Type == NotificationTypes.WaterAlert && n.RelatedRecordId == measurement.Id)
-                .Select(n => n.RecipientAccountId).ToListAsync();
+                .Select(n => n.RecipientAccountId!.Value).ToListAsync();
             // The demo records as the Owner, who is not told of their own action; the zone's staff are.
             Assert.DoesNotContain(ownerId, notified);
             Assert.NotEmpty(notified);

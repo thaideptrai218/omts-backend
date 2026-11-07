@@ -170,7 +170,7 @@ public class PurchaseRequestQaNotificationTests(AuthApiFactory factory) : IClass
         var rows = await factory.NotificationRowsAsync(request.Id());
         foreach (var type in new[] { NotificationTypes.PurchaseRequestNew, NotificationTypes.PurchaseRequestCancelled })
         {
-            var of = rows.OfType(type).Select(n => n.RecipientAccountId).ToList();
+            var of = rows.OfType(type).Select(n => n.RecipientAccountId!.Value).ToList();
             Assert.Single(of, w.OwnerAccount.Id);
             Assert.Single(of, second.Id);
             Assert.DoesNotContain(locked.Id, of);

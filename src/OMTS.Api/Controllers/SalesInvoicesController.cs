@@ -16,7 +16,7 @@ namespace OMTS.Api.Controllers;
 [ApiController]
 [Route("api/sales-invoices")]
 [Authorize]
-public sealed class SalesInvoicesController(SalesInvoiceService invoices, SalesInvoiceReadService reads) : ControllerBase
+public sealed class SalesInvoicesController(SalesInvoiceService invoices, SalesInvoiceReadService reads, SalesInvoiceSendingService sending) : ControllerBase
 {
     /// <summary>
     /// 201 with the Completed invoice, the change and MSG-SALE-06; 409 MSG-SALE-10/11/12 asks a question, answered by the flag named in <c>confirmationField</c> in the same request;
@@ -33,6 +33,23 @@ public sealed class SalesInvoicesController(SalesInvoiceService invoices, SalesI
     [ProducesResponseType<SalesInvoiceView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken) =>
         (await reads.GetAsync(id, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// SALE-05 steps 9-11, once per invoice after the save: 409 MSG-SALE-07 asks the QR question (<c>confirmationField</c> = <c>wantsQrCode</c>); with the answer, the QR code is created
+    /// when a lot is Published and the invoice is sent (SALE-06). 200 with the delivery status, MSG-SALE-16 when nothing could be sent; 409 MSG-GEN-09 when already finished.
+    /// </summary>
+    [HttpPost("{id:guid}/finish")]
+    [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Create, PermissionScope.AnyZone)]
+    [ProducesResponseType<SalesInvoiceSent>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Finish(Guid id, FinishSalesInvoiceRequest request, CancellationToken cancellationToken) =>
+        (await sending.FinishAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>SALE-06.1: sends the invoice again at its latest values; 409 MSG-GEN-09 while the latest sending is Sending or for a Cancelled invoice.</summary>
+    [HttpPost("{id:guid}/resend")]
+    [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Create, PermissionScope.AnyZone)]
+    [ProducesResponseType<SalesInvoiceSent>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Resend(Guid id, CancellationToken cancellationToken) =>
+        (await sending.ResendAsync(id, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>SALE-05.3: the requests of the profile an invoice can be linked to.</summary>
     [HttpGet("open-purchase-requests")]

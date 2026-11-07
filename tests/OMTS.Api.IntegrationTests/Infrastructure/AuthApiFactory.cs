@@ -33,9 +33,15 @@ public class AuthApiFactory : WebApplicationFactory<Program>
     /// <summary>Every log line the host wrote.</summary>
     public CapturingLoggerProvider Logs { get; } = new();
 
+    /// <summary>Required in every environment (the host does not start without an absolute http(s) URL); the value of appsettings.Development.json.</summary>
+    public const string PublicBaseUrlKey = "Provenance:PublicBaseUrl";
+
+    public const string PublicBaseUrl = "http://localhost:3000";
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Jwt:SigningKey", _signingKey);
+        builder.UseSetting(PublicBaseUrlKey, PublicBaseUrl);
         builder.UseSetting("Storage:Local:RootPath", StorageRoot);
         builder.UseSetting("Storage:Local:SigningKey", _signingKey);
         // Every test client shares one IP; RateLimitTests lowers these to check the limiter itself.

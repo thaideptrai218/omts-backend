@@ -33,7 +33,7 @@ public class HarvestLotNotificationTests
         var lot = await manager.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1) with { EstimatedKg = "385.5" });
 
         var rows = await factory.NoticesAsync(LotType, lot.Id());
-        Assert.Equal(new[] { raft.Owner.Account.Id, otherOwner.Account.Id }.Order(), rows.Select(n => n.RecipientAccountId).Order());
+        Assert.Equal(new[] { raft.Owner.Account.Id, otherOwner.Account.Id }.Order(), rows.Select(n => n.RecipientAccountId!.Value).Order());
         var code = lot.Text("lotCode");
         var raftCode = lot.Text("raftCode");
         var date = lot.Date("harvestDate");
@@ -58,7 +58,7 @@ public class HarvestLotNotificationTests
 
         var lot = await raft.Owner.Client.HarvestLotAsync(raft.RaftId);
 
-        var told = (await factory.NoticesAsync(LotType, lot.Id())).Select(n => n.RecipientAccountId).ToList();
+        var told = (await factory.NoticesAsync(LotType, lot.Id())).Select(n => n.RecipientAccountId!.Value).ToList();
         Assert.DoesNotContain(raft.Owner.Account.Id, told);
         Assert.Contains(other.Account.Id, told);
     }
@@ -105,7 +105,7 @@ public class HarvestLotNotificationTests
 
         Assert.True(last.GetProperty("everySeededLaneHarvested").GetBoolean());
         var rows = await factory.NoticesAsync(ReminderType, cycle.Id());
-        Assert.Equal(new[] { manager.Account.Id, second.Account.Id, allZones.Account.Id }.Order(), rows.Select(n => n.RecipientAccountId).Order());
+        Assert.Equal(new[] { manager.Account.Id, second.Account.Id, allZones.Account.Id }.Order(), rows.Select(n => n.RecipientAccountId!.Value).Order());
         var raftCode = raft.Text("code");
         Assert.All(rows, n =>
         {
@@ -150,7 +150,7 @@ public class HarvestLotNotificationTests
         var saved = await raft.Owner.Client.RecordHarvestAsync(raft.RaftId, HarvestFields.OfLanes(1).FinishedLanes(1));
 
         Assert.True(saved.GetProperty("everySeededLaneHarvested").GetBoolean());
-        var told = (await factory.NoticesAsync(ReminderType, raft.CycleId)).Select(n => n.RecipientAccountId).ToList();
+        var told = (await factory.NoticesAsync(ReminderType, raft.CycleId)).Select(n => n.RecipientAccountId!.Value).ToList();
         Assert.Contains(other.Account.Id, told);
         Assert.DoesNotContain(raft.Owner.Account.Id, told);
     }
@@ -171,7 +171,7 @@ public class HarvestLotNotificationTests
         var second = await factory.OwnerAsync();
         await other.Owner.Client.RecordHarvestAsync(other.RaftId, HarvestFields.OfLanes(1).FinishedLanes(1));
 
-        var told = (await factory.NoticesAsync(ReminderType, other.CycleId)).Select(n => n.RecipientAccountId).ToList();
+        var told = (await factory.NoticesAsync(ReminderType, other.CycleId)).Select(n => n.RecipientAccountId!.Value).ToList();
         Assert.DoesNotContain(locked.Account.Id, told);
         Assert.Contains(second.Account.Id, told);
     }

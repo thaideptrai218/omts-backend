@@ -12,6 +12,7 @@ using OMTS.Application.Common.Interfaces.Payments;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Interfaces.Reports;
 using OMTS.Application.Common.Interfaces.Storage;
+using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Infrastructure.Bootstrap;
 using OMTS.Infrastructure.HealthChecks;
@@ -94,6 +95,12 @@ public static class DependencyInjection
         services.AddScoped<IHarvestLotSalesQuery, HarvestLotSalesQuery>();
         services.AddScoped<IPurchaseRequestFulfilment, PurchaseRequestFulfilmentQuery>();
         services.AddScoped<ISalesInvoiceRepository, SalesInvoiceRepository>();
+        // TRACE-01 registers the publisher that also publishes the ready lots at the end of a sale.
+        services.AddScoped<IProvenancePublisher, SavedOriginStateProvenancePublisher>();
+        services.AddOptions<ProvenanceOptions>()
+            .Bind(configuration.GetSection(ProvenanceOptions.SectionName))
+            .Validate(o => o.HasWebAddress(), ProvenanceOptions.InvalidPublicBaseUrl)
+            .ValidateOnStart();
         services.AddScoped<ICustomerDebtQuery, CustomerDebtQuery>();
         services.AddScoped<SeedLotRepository>();
         services.AddScoped<ISeedLotRepository>(provider => provider.GetRequiredService<SeedLotRepository>());

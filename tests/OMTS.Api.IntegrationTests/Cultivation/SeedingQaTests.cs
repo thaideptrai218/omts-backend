@@ -295,7 +295,7 @@ public class SeedingQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
 
         await manager.Client.MarkSeedingCompleteAsync(setup.CycleId);
 
-        var told = (await factory.SeedingNoticesAsync(setup.CycleId)).Select(n => n.RecipientAccountId).ToList();
+        var told = (await factory.SeedingNoticesAsync(setup.CycleId)).Select(n => n.RecipientAccountId!.Value).ToList();
         Assert.Contains(setup.Owner.Account.Id, told);
         Assert.Contains(other.Account.Id, told);
         Assert.DoesNotContain(locked.Account.Id, told);

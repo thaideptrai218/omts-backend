@@ -189,7 +189,7 @@ public class WaterHistoryQaTestsReminder
         Assert.Equal(0, await api.RemindOnAsync(D("2026-02-12")));
         Assert.Equal(1, await api.RemindOnAsync(D("2026-03-11")));
 
-        var recipients = (await api.RemindersOfAsync(z.Zone)).Select(n => n.RecipientAccountId).ToList();
+        var recipients = (await api.RemindersOfAsync(z.Zone)).Select(n => n.RecipientAccountId!.Value).ToList();
         Assert.Equal(1, recipients.Count(id => id == manager.Id));
         Assert.Equal(1, recipients.Count(id => id == z.OwnerAccount.Id));
     }

@@ -37,7 +37,7 @@ public class NotificationDispatchTests(AuthApiFactory factory) : IClassFixture<A
 
         using var scope = factory.Services.CreateScope();
         var rows = await scope.ServiceProvider.GetRequiredService<OmtsDbContext>().Notifications
-            .Where(n => n.RelatedRecordCode == zoneA.Code).Select(n => n.RecipientAccountId).ToListAsync();
+            .Where(n => n.RelatedRecordCode == zoneA.Code).Select(n => n.RecipientAccountId!.Value).ToListAsync();
         Assert.Equal(recipients.Order(), rows.Order());
         var pushed = factory.Services.GetRequiredService<FakePushSender>().Inbox.List(setup.ManagerOfA.ToString());
         Assert.Contains(pushed, m => m.Subject == "Water alert");

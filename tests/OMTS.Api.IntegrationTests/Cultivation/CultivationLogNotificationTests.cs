@@ -32,7 +32,7 @@ public class CultivationLogNotificationTests(AuthApiFactory factory) : IClassFix
         var rows = await OfLogAsync(log.Id());
         Assert.Contains(rows, n => n.RecipientAccountId == setup.Owner.Account.Id);
         Assert.DoesNotContain(rows, n => n.RecipientAccountId == manager.Account.Id);
-        Assert.Equal(rows.Count, rows.Select(n => n.RecipientAccountId).Distinct().Count());
+        Assert.Equal(rows.Count, rows.Select(n => n.RecipientAccountId!.Value).Distinct().Count());
         Assert.All(rows, n =>
         {
             Assert.Equal((Type, "MSG-CYCLE-04", false), (n.Type, n.MessageCode, n.IsMandatory));
@@ -52,7 +52,7 @@ public class CultivationLogNotificationTests(AuthApiFactory factory) : IClassFix
 
         var log = await setup.Owner.Client.RecordLogAsync(setup.CycleId);
 
-        var told = (await OfLogAsync(log.Id())).Select(n => n.RecipientAccountId).ToList();
+        var told = (await OfLogAsync(log.Id())).Select(n => n.RecipientAccountId!.Value).ToList();
         Assert.DoesNotContain(setup.Owner.Account.Id, told);
         Assert.Contains(other.Account.Id, told);
     }

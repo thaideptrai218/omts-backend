@@ -254,7 +254,12 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 - The same table keeps SMS and Zalo OA sendings to traders (`channel`, phone, delivery status Sending / Sent / Not
   sent, provider message id or error code); they are never in a list. The response to a purchase request (SALE-03) uses
   them through `ITraderMessageSender`, whose only route is SMS (`Sms:Provider`, Fake or None) until the Zalo OA templates
-  are approved; SALE-06 and TRACE-04 follow.
+  are approved. The sales invoice (SALE-06, MSG-SALE-15) uses them too: `POST /api/sales-invoices/{id}/finish`
+  (`{ wantsQrCode }`, once, after the save: the QR code only when a lot is Published; called again it answers the current
+  result and sends nothing) and `POST /api/sales-invoices/{id}/resend` (only after `finish`, not while the latest sending
+  is Sending; a Sending row older than 2 minutes reads Not sent); a profile without a trader account gets a row with no
+  recipient, and a walk-in customer or a profile without a phone gets a Not sent row with no phone (error code
+  `NO_CUSTOMER_PROFILE` / `NO_PHONE_NUMBER`, MSG-SALE-16). TRACE-04 follows.
 - Mandatory types also go out as one SMS (PM decision OMTS-216, 03/11): to the Owners among the recipients and, for the
   water alert and its withdrawal, to the Zone Managers of the zone among them. The rule is data on the type
   (`NotificationSmsRule`, `NotificationTypes.All`). The SMS shares the queue of the push: sent once, only after the save
@@ -359,7 +364,8 @@ There is no System Administrator inside the cooperative app: the cooperative and
 created by a one-time command run on the server by the deployment operator (not reachable over HTTP).
 
 1. Set the secrets (environment variables or the hosting secret store; `__` replaces `:` in variable names):
-   `ConnectionStrings:OmtsDb`, `Jwt:SigningKey`, the provider keys below, and the bootstrap keys
+   `ConnectionStrings:OmtsDb`, `Jwt:SigningKey`, `Provenance:PublicBaseUrl` (the absolute URL of the web app; the API does
+   not start without it), the provider keys below, and the bootstrap keys
    `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:DisplayName`, `Bootstrap:Owner:Username`,
    `Bootstrap:Owner:PhoneNumber`, `Bootstrap:Owner:Email` (optional), `Bootstrap:Owner:TemporaryPassword`.
 2. Run `dotnet OMTS.Api.dll seed --bootstrap` at handover time: it applies migrations, checks the status catalog, creates
@@ -417,6 +423,7 @@ created by a one-time command run on the server by the deployment operator (not 
 | Bootstrap (see Deployment) | `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:*` |
 | Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30) |
 | CORS: the web app calls the API from the browser. Set its origin in every deployed environment; empty means no CORS. Development allows `http://localhost:3000`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`) |
+| Provenance link: the QR code of a sales invoice and its SMS (MSG-SALE-15) link to `{PublicBaseUrl}/origin/{qrToken}`, the public page of the web app. **Required** in every environment: without an absolute `http`/`https` URL the host does not start (QR codes are permanent, so a relative link is never made). Development uses `http://localhost:3000`. | `Provenance:PublicBaseUrl` (e.g. `Provenance__PublicBaseUrl=https://<web host>`) |
 | Reverse proxy: X-Forwarded-For is trusted only from these addresses (and loopback), so the limits see the real client | `ForwardedHeaders:KnownProxies` (e.g. `10.0.0.4`), `ForwardedHeaders:KnownNetworks` (e.g. `10.0.0.0/24`) |
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG-ACCOUNT-13 and a critical log entry is written (BR-ACCOUNT-09: one purpose and one number or address get at most 3 codes per hour, at least 60 seconds apart; over all purposes one number or address gets at most 10) | `Verification:DailySmsLimit` (default 500) |
 | Expiry reminder of zone licenses and certifications (GFR-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |

@@ -2047,7 +2047,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("ReadAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<Guid>("RecipientAccountId")
+                    b.Property<Guid?>("RecipientAccountId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("RelatedRecordCode")
@@ -3735,6 +3735,16 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("PurchaseRequestId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("QrCreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("QrDecidedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("QrToken")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -3776,6 +3786,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasFilter("[DeduplicationKey] IS NOT NULL");
 
                     b.HasIndex("PurchaseRequestId");
+
+                    b.HasIndex("QrToken")
+                        .IsUnique()
+                        .HasFilter("[QrToken] IS NOT NULL");
 
                     b.HasIndex("StatusId");
 
@@ -4565,8 +4579,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasOne("OMTS.Domain.Entities.Identity.Account", "RecipientAccount")
                         .WithMany()
                         .HasForeignKey("RecipientAccountId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("DeliveryStatus");
 
