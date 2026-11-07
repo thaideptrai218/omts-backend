@@ -34,9 +34,24 @@ public sealed class KestrelApiFactory : AuthApiFactory
         var testHost = builder.Build();
         builder.ConfigureWebHost(web => web.UseKestrel(options => options.Listen(IPAddress.Loopback, 0)));
         _kestrelHost = builder.Build();
-        _kestrelHost.Start();
-        testHost.Start();
+        StartAndWait(_kestrelHost);
+        StartAndWait(testHost);
         return testHost;
+    }
+
+    /// <summary>
+    /// Starts a host built by the factory's deferred builder and waits until this host itself runs. Hosts built
+    /// twice from one builder share one "started" signal, so <c>IHost.Start</c> of the second host returns as soon
+    /// as the first one runs, before its own server is up ("The server has not been started").
+    /// </summary>
+    internal static void StartAndWait(IHost host)
+    {
+        var started = host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted;
+        host.Start();
+        if (!started.WaitHandle.WaitOne(TimeSpan.FromMinutes(2)))
+        {
+            throw new TimeoutException("The test host did not start within 2 minutes.");
+        }
     }
 
     protected override void Dispose(bool disposing)

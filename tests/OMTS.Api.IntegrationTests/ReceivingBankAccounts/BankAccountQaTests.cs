@@ -446,8 +446,8 @@ public sealed class BankAccountQaTests
             var testHost = builder.Build();
             builder.ConfigureWebHost(web => web.UseKestrel(options => options.Listen(IPAddress.Loopback, 0)));
             _kestrel = builder.Build();
-            _kestrel.Start();
-            testHost.Start();
+            KestrelApiFactory.StartAndWait(_kestrel);
+            KestrelApiFactory.StartAndWait(testHost);
             return testHost;
         }
 
