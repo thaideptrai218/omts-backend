@@ -36,10 +36,14 @@ public sealed record HarvestLotListItem(
     int StatusId,
     string Status,
     HarvestLotOriginState OriginState,
+    bool CanCorrect,
+    bool CanRemove,
     string RowVersion);
 
 /// <summary>A harvest lot with its figures (BR-HARVEST-07): the record a notification opens.</summary>
 /// <param name="Photos">In slot order.</param>
+/// <param name="CanCorrect">The caller may correct the lot now: its cycle is Open, its raft and zone are In Use, and the caller recorded it or is the Owner (BR-HARVEST-05).</param>
+/// <param name="CanRemove">The same, and the lot is on no sales invoice.</param>
 public sealed record HarvestLotView(
     Guid Id,
     string LotCode,
@@ -68,6 +72,8 @@ public sealed record HarvestLotView(
     IReadOnlyList<HarvestLotPhotoView> Photos,
     Guid RecordedByAccountId,
     string? RecordedByName,
+    bool CanCorrect,
+    bool CanRemove,
     string RowVersion);
 
 /// <summary>Answer of a recorded harvest.</summary>

@@ -24,7 +24,7 @@ public class StackMergeQaTestsMigrations
 {
     /// <summary>
     /// The migrations of the stack, in chain order, from the first SRS 27/10 one: the cultivation stack of develop (purchase, raft, cycle, log and material
-    /// migrations, now one linear chain), SeedingRecords on top of it and HarvestLots on top of that.
+    /// migrations, now one linear chain), SeedingRecords on top of it, HarvestLots on top of that and HarvestLotCorrections last.
     /// </summary>
     private static readonly string[] Interleave =
     [
@@ -32,7 +32,7 @@ public class StackMergeQaTestsMigrations
         "20261104174337_SalesCatalogueV2", "20261105070947_ReceivingBankAccount", "20261105071021_ZonesLicensesV2", "20261105071646_WaterMeasurementsV2", "20261105075725_PurchaseReceiptsV2",
         "20261105093720_AuditSearch", "20261105093736_EmployeesV2", "20261105122524_PurchaseRequests", "20261105140242_SupplierPaymentsV2", "20261105161142_RaftsV2",
         "20261105165022_CultivationCyclesV2", "20261105170348_PurchaseReturnsV2", "20261106081809_LaborSettings", "20261106083401_CultivationLogs", "20261106084757_MaterialUsages",
-        "20261107050042_SeedingRecords", "20261107052218_HarvestLots",
+        "20261107050042_SeedingRecords", "20261107052218_HarvestLots", "20261107055301_HarvestLotCorrections",
     ];
 
     private const string MigrationBeforeSeeding = "20261106084757_MaterialUsages";

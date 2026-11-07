@@ -23,8 +23,8 @@ public static class HarvestLotCodes
         $"{RaftPart(zoneCode, raftCode)}{Separator}{harvestDate.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}";
 
     /// <summary>
-    /// The next code after the highest one in use, so a code freed in the middle is not taken again. <paramref name="existing"/> holds the codes from <paramref name="baseCode"/>;
-    /// another text that happens to start the same way does not count.
+    /// The next code after the highest one ever given, so the code of a removed lot is not taken again (PM default). <paramref name="existing"/> holds the codes from
+    /// <paramref name="baseCode"/>, also those of removed lots (<see cref="Common.Interfaces.Persistence.IHarvestLotRepository.CodesFromAsync"/>); another text that happens to start the same way does not count.
     /// </summary>
     public static string Next(string baseCode, IEnumerable<string> existing)
     {

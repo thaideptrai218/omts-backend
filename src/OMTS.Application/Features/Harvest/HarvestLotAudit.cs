@@ -1,5 +1,7 @@
+using System.Text.Json.Nodes;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Domain.Entities.Harvest;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Harvest;
 
@@ -7,6 +9,8 @@ namespace OMTS.Application.Features.Harvest;
 public static class HarvestLotAudit
 {
     public const string Created = "HarvestLot.Created";
+    public const string Corrected = "HarvestLot.Corrected";
+    public const string Removed = "HarvestLot.Removed";
     public const string Closed = "HarvestLot.Closed";
     public const string Reopened = "HarvestLot.Reopened";
     public const string RecordType = nameof(HarvestLot);
@@ -30,6 +34,17 @@ public static class HarvestLotAudit
         lot.EstimatedKg,
         Photos = lot.Photos.OrderBy(p => p.SortOrder).Select(p => p.FileKey).ToList(),
     };
+
+    /// <summary>The changed values of a correction; a Published lot is named, as its page shows the correction at once (BR-TRACE-05).</summary>
+    internal static JsonObject WithAffectedPublishedLot(JsonObject changedAfter, HarvestLot lot)
+    {
+        if (lot.OriginState == HarvestLotOriginState.Published)
+        {
+            changedAfter["AffectedPublishedLotCodes"] = new JsonArray(lot.LotCode);
+        }
+
+        return changedAfter;
+    }
 
     /// <summary>The close facts of the lot, before and after a close or reopen.</summary>
     internal static object CloseFacts(HarvestLot lot, string status) => new

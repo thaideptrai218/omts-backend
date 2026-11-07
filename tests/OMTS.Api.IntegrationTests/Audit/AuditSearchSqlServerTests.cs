@@ -29,6 +29,9 @@ public class AuditSearchSqlServerTests
         ["IX_AuditEvents_Action_OccurredAt"] = "Action,OccurredAt",
         ["IX_AuditEvents_RecordCode_OccurredAt"] = "RecordCode,OccurredAt",
         ["IX_AuditEvents_RecordType_OccurredAt"] = "RecordType,OccurredAt",
+
+        // Not a search index: HarvestLotCorrections makes each harvest lot code one Created row, so a removed code is not given again (BR-HARVEST-05).
+        ["UX_AuditEvents_HarvestLotCreatedCode"] = "RecordCode",
     };
 
     [SqlServerFact]

@@ -13,4 +13,7 @@ internal sealed class NoSalesYetHarvestLotSalesQuery : IHarvestLotSalesQuery
         Task.FromResult<IReadOnlyDictionary<Guid, LotSalesFigures>>(lotIds.Distinct().ToDictionary(id => id, _ => LotSalesFigures.None));
 
     public Task<bool> IsOnAnyInvoiceAsync(Guid lotId, CancellationToken cancellationToken) => Task.FromResult(false);
+
+    public Task<IReadOnlySet<Guid>> LotsOnAnyInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlySet<Guid>>(new HashSet<Guid>());
 }

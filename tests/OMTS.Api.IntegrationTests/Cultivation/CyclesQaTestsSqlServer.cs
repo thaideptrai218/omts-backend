@@ -26,7 +26,7 @@ public class CyclesQaTestsSqlServer
         return string.Join(" | ", lines);
     }
 
-    // PM 03/11: a deadlock victim answers 409 MSG06, never 500. The reads run outside the unit of work, so they get no such mapping.
+    // PM 03/11: a deadlock victim answers 409 MSG06, never 500. The reads run outside the unit of work, so the API's exception handler maps theirs.
     [SqlServerFact]
     public async Task Starts_and_reads_of_one_raft_in_parallel_never_answer_500()
     {

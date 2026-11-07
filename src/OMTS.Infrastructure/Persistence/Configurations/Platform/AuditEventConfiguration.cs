@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using OMTS.Application.Features.Harvest;
 using OMTS.Domain.Entities.Platform;
 
 namespace OMTS.Infrastructure.Persistence.Configurations.Platform;
@@ -26,5 +27,12 @@ internal sealed class AuditEventConfiguration : IEntityTypeConfiguration<AuditEv
         // For the record code prefix. The prefix is a parameter, so SQL Server seeks only "RecordCode IS NOT NULL" and
         // reads every coded event of the log under a reused plan (QA 0.6 #3, deferred: matters at scale only).
         builder.HasIndex(x => new { x.RecordCode, x.OccurredAt });
+
+        // A lot code is given once, also after its lot is removed (BR-HARVEST-05, PM default): the Created row outlives the lot and commits with it, so this index
+        // refuses a save that read the codes before a lot took the code and was removed again; the loser takes the next code. It also serves the read of the codes.
+        builder.HasIndex(x => x.RecordCode)
+            .IsUnique()
+            .HasDatabaseName("UX_AuditEvents_HarvestLotCreatedCode")
+            .HasFilter($"[Action] = '{HarvestLotAudit.Created}' AND [RecordCode] IS NOT NULL");
     }
 }

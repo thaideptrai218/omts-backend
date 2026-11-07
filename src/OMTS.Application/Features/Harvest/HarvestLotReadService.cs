@@ -60,7 +60,7 @@ public sealed class HarvestLotReadService(
             cooperative.AverageKgPerCage,
             lanes.Any(l => l.CanHarvest),
             lanes,
-            open is null ? [] : await views.ListAsync(await lots.ListByCycleAsync(open.Id, cancellationToken), cancellationToken));
+            open is null ? [] : await views.ListAsync(await lots.ListByCycleAsync(open.Id, cancellationToken), open, raft, cancellationToken));
     }
 
     public async Task<Result<HarvestLotView>> GetAsync(Guid lotId, CancellationToken cancellationToken)

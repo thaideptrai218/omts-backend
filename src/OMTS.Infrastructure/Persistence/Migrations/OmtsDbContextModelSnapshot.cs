@@ -1953,6 +1953,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("OccurredAt");
 
+                    b.HasIndex("RecordCode")
+                        .IsUnique()
+                        .HasDatabaseName("UX_AuditEvents_HarvestLotCreatedCode")
+                        .HasFilter("[Action] = 'HarvestLot.Created' AND [RecordCode] IS NOT NULL");
+
                     b.HasIndex("Action", "OccurredAt");
 
                     b.HasIndex("ActorAccountId", "OccurredAt");

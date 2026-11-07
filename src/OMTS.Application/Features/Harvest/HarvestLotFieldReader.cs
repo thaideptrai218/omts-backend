@@ -12,6 +12,9 @@ namespace OMTS.Application.Features.Harvest;
 /// <summary>The checked fields of a lot; <paramref name="EstimatedKg"/> holds the worked-out value when none was sent.</summary>
 internal sealed record HarvestLotFields(IReadOnlyList<Lane> Lanes, IReadOnlySet<Guid> FinishedLaneIds, int CageCount, decimal EstimatedKg);
 
+/// <summary>What a correction adds to the fields of a harvest: the reason, kept in the audit log, and why the finished lanes cannot be so.</summary>
+internal sealed record HarvestLotCorrectionInput(string? Reason, string? FinishedHint);
+
 /// <summary>HARVEST-01 step 6: at least one lane Growing or Being harvested, the finished lanes among them, cages and estimated kg above 0 (BR-HARVEST-01, BR-HARVEST-02). Every invalid field is listed (MSG-GEN-01).</summary>
 internal static class HarvestLotFieldReader
 {
@@ -20,30 +23,40 @@ internal static class HarvestLotFieldReader
     public const string CagesField = "Number of cages";
     public const string EstimatedKgField = "Estimated kg";
     public const string PhotosField = "Photos";
+    public const string ReasonField = "Reason";
+    public const int MaxReasonLength = 1000;
 
     /// <summary>Checks the fields against the lanes as they are now; a null answer means <paramref name="fields"/> can be saved.</summary>
-    /// <param name="states">The lanes of the raft today.</param>
+    /// <param name="states">The lanes of the raft today; for a correction, as the lot being corrected sees them.</param>
+    /// <param name="kgPerCage">What the estimated kg is worked out with when none was sent.</param>
     /// <param name="photoHint">Why the photos were refused, or null.</param>
+    /// <param name="correction">The fields only a correction has.</param>
     public static AppError? Read(
-        RecordHarvestRequest request, Raft raft, IReadOnlyDictionary<Guid, LaneState> states, decimal kgPerCage, string? photoHint, out HarvestLotFields? fields)
+        RecordHarvestRequest request, Raft raft, IReadOnlyDictionary<Guid, LaneState> states, decimal kgPerCage, string? photoHint, out HarvestLotFields? fields, HarvestLotCorrectionInput? correction = null)
     {
         fields = null;
         var check = new FieldCheck();
         var (lanes, laneHint) = Lanes(raft, request.LaneNumbers, states);
         check.Check(lanes is not null && laneHint is null, LanesField);
         var finished = Finished(request, lanes);
-        check.Check(finished is not null, FinishedLanesField);
+        check.Check(finished is not null && correction?.FinishedHint is null, FinishedLanesField);
         check.Check(request.CageCount is > 0, CagesField);
         var estimated = request.EstimatedKg ?? (request.CageCount is > 0 ? request.CageCount * kgPerCage : null);
         var estimatedIsValid = !request.EstimatedKgIsUnreadable
             && (estimated is null || (estimated > 0 && estimated <= PurchaseReceiptValidator.MaxQuantity && PurchaseReceiptValidator.HasAllowedDecimals(estimated.Value)));
         check.Check(estimatedIsValid, EstimatedKgField);
         check.Check(photoHint is null, PhotosField);
+        if (correction is not null)
+        {
+            check.Required(correction.Reason, ReasonField, MaxReasonLength);
+        }
+
         if (!check.IsValid)
         {
             return check.Invalid switch
             {
                 [LanesField] when laneHint is not null => AppError.Invalid(LanesField, laneHint),
+                [FinishedLanesField] when correction?.FinishedHint is { } finishedHint => AppError.Invalid(FinishedLanesField, finishedHint),
                 [PhotosField] => AppError.Invalid(PhotosField, photoHint),
                 var invalid => AppError.InvalidFields(invalid),
             };
@@ -54,14 +67,21 @@ internal static class HarvestLotFieldReader
     }
 
     /// <summary>The photos are optional and checked once, as their content does not change: the answer holds why they were refused.</summary>
-    public static (IReadOnlyList<ValidatedFile> Files, string? Hint) ReadPhotos(IReadOnlyList<IncomingFile> photos, bool otherFilePart)
+    /// <param name="kept">How many current photos stay on the lot.</param>
+    /// <param name="keysAreKnown">Every key the client asked to keep is a photo of this lot.</param>
+    public static (IReadOnlyList<ValidatedFile> Files, string? Hint) ReadPhotos(IReadOnlyList<IncomingFile> photos, bool otherFilePart, int kept = 0, bool keysAreKnown = true)
     {
         if (otherFilePart)
         {
             return ([], "Send each photo in a part named photos.");
         }
 
-        if (photos.Count > HarvestLot.MaxPhotos)
+        if (!keysAreKnown)
+        {
+            return ([], "Keep only photos of this lot.");
+        }
+
+        if (kept + photos.Count > HarvestLot.MaxPhotos)
         {
             return ([], $"A lot holds at most {HarvestLot.MaxPhotos} photos.");
         }
