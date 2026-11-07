@@ -65,6 +65,9 @@ public static class NotificationTypes
     /// <summary>MSG-CYCLE-04, a new cultivation log to review, to the Cooperative Owner (CYCLE-04); not on a correction.</summary>
     public const string CultivationLogRecorded = "CULTIVATION_LOG_RECORDED";
 
+    /// <summary>MSG-SALE-08, a new sales invoice, to the Cooperative Owner, also for the Owner's own sale (BR-SALE-03). BR-ACCOUNT-11 does not list it as mandatory.</summary>
+    public const string SaleCompleted = "SALE_COMPLETED";
+
     public static readonly IReadOnlyList<NotificationTypeDefinition> All =
     [
         new(WaterAlert, "Water alert", AlwaysPush, [CooperativeOwner, ZoneManager],
@@ -109,6 +112,9 @@ public static class NotificationTypes
             NotificationSmsRule.MoneyToOwner("amount")),
         new(CultivationLogRecorded, "New cultivation log", Default, [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.CultivationLogs, PermissionAction.View)),
+        // Opens the invoice (SALE-09), in the zone of the invoice (BR-SALE-08).
+        new(SaleCompleted, "New sale", Default, [CooperativeOwner],
+            NotificationOpenAccess.InZone(PermissionFunctions.SalesInvoices, PermissionAction.View)),
     ];
 
     private static readonly Dictionary<string, NotificationTypeDefinition> ByCode = All.ToDictionary(t => t.Code, StringComparer.Ordinal);

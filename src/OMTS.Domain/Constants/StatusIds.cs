@@ -103,4 +103,19 @@ public static class StatusIds
         public const int Declined = 3203;
         public const int Cancelled = 3204;
     }
+
+    /// <summary>STD-SALES-INVOICE (BR-SALE-08): saved only when paid or put on the debt, so no draft; Paid and the delivery status are worked out.</summary>
+    public static class SalesInvoice
+    {
+        public const int Completed = 3501;
+        public const int Cancelled = 3502;
+    }
+
+    /// <summary>STD-CUSTOMER-PAYMENT (BR-DEBT-03): counts in the debt from its recording, also while Awaiting confirmation.</summary>
+    public static class CustomerPayment
+    {
+        public const int AwaitingConfirmation = 3601;
+        public const int Confirmed = 3602;
+        public const int Cancelled = 3603;
+    }
 }

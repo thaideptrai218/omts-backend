@@ -46,6 +46,12 @@ internal sealed class PurchaseRequestRepository(OmtsDbContext db) : IPurchaseReq
         return (items, total);
     }
 
+    public async Task<IReadOnlyList<PurchaseRequest>> ListAcceptedOfCustomerAsync(Guid customerId, DateOnly earliestPickup, CancellationToken cancellationToken) =>
+        await db.PurchaseRequests.AsNoTracking().Include(r => r.Product)
+            .Where(r => r.CustomerId == customerId && r.StatusId == StatusIds.PurchaseRequest.Accepted && r.AgreedPickupDate >= earliestPickup)
+            .OrderBy(r => r.AgreedPickupDate).ThenBy(r => r.SentAt)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<PurchaseRequestSending>> ListSendingsAsync(IReadOnlyCollection<Guid> requestIds, CancellationToken cancellationToken) =>
         await db.Notifications.AsNoTracking()
             .Where(n => n.RelatedRecordType == RelatedRecordTypes.PurchaseRequest && n.RelatedRecordId != null && requestIds.Contains(n.RelatedRecordId.Value)

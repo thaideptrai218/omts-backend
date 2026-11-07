@@ -7,6 +7,7 @@ using OMTS.Application.Common.Validation;
 using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.Sales.Debts;
 using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Application.Features.Sales.Customers;
@@ -20,6 +21,7 @@ namespace OMTS.Application.Features.Sales.Customers;
 public sealed class CustomerService(
     ICustomerRepository customers,
     ICooperativeRepository cooperatives,
+    CustomerDebtReader debts,
     RowVersionGuard rowVersions,
     AuditLogService audit,
     IUnitOfWork unitOfWork)
@@ -51,7 +53,9 @@ public sealed class CustomerService(
     }
 
     public async Task<Result<CustomerView>> GetAsync(Guid customerId, CancellationToken cancellationToken) =>
-        await customers.GetForEditAsync(customerId, cancellationToken) is { } customer ? View(customer) : AppError.NotFound;
+        await customers.GetForEditAsync(customerId, cancellationToken) is { } customer
+            ? View(customer, await debts.DebtAsync(customer.Id, cancellationToken))
+            : AppError.NotFound;
 
     public async Task<Result<CustomerSaved>> CreateAsync(SaveCustomerRequest request, CancellationToken cancellationToken)
     {
@@ -77,7 +81,8 @@ public sealed class CustomerService(
             return error;
         }
 
-        return Saved(customer);
+        // A new profile has no invoice or payment yet.
+        return Saved(customer, 0m);
     }
 
     /// <summary>SALE-04.2: invoices stay with the profile; a merged profile is read-only.</summary>
@@ -129,7 +134,7 @@ public sealed class CustomerService(
             }
         }
 
-        return Saved(customer);
+        return Saved(customer, await debts.DebtAsync(customer.Id, cancellationToken));
     }
 
     /// <summary>MSG-GEN-02 with the id of the profile to open (SALE-04.0.E2).</summary>
@@ -167,18 +172,19 @@ public sealed class CustomerService(
         }
     }
 
-    private static CustomerSaved Saved(Customer customer)
+    private static CustomerSaved Saved(Customer customer, decimal debt)
     {
         var saved = UserMessages.Saved(ObjectName);
-        return new CustomerSaved(View(customer), saved.Text, saved.Code);
+        return new CustomerSaved(View(customer, debt), saved.Text, saved.Code);
     }
 
-    internal static CustomerView View(Customer c) => new(
+    /// <param name="debt">The customer debt now (BR-DEBT-02, <see cref="CustomerDebtReader"/>).</param>
+    internal static CustomerView View(Customer c, decimal debt) => new(
         c.Id, c.Name, c.PhoneNumber, c.Email, c.Address, c.Note,
         c.AccountId is not null,
         c.Account is { } account ? new LinkedTraderAccount(account.Id, account.Username, account.DisplayName) : null,
         c.MergedIntoCustomerId,
-        CustomerFigures.CurrentDebt(c),
+        debt,
         RowVersionGuard.Encode(c.RowVersion));
 
     private static object Snapshot(Customer c) => new { c.Name, c.PhoneNumber, c.Address, c.Note };

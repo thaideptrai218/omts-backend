@@ -33,6 +33,9 @@ public interface IHarvestLotRepository
     /// <summary>The lots for sale (Open or Reopened) with their raft and zone, read only, the latest harvest first. Null: of every zone.</summary>
     Task<IReadOnlyList<HarvestLot>> ListForSaleAsync(IReadOnlyCollection<Guid>? zoneIds, CancellationToken cancellationToken);
 
+    /// <summary>The lots named on a sales invoice, whatever their status, with their raft and zone, tracked: the sale marks them changed or closes them (SALE-05).</summary>
+    Task<IReadOnlyList<HarvestLot>> ListForInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);
+
     /// <summary>How many lots are for sale now, of one zone or of every zone (BR-FARM-10).</summary>
     Task<int> CountForSaleAsync(Guid? zoneId, CancellationToken cancellationToken);
 

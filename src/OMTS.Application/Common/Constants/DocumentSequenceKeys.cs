@@ -14,4 +14,10 @@ public static class DocumentSequenceKeys
 
     /// <summary>Purchase returns, TH000123 (PURCHASE-02).</summary>
     public const string PurchaseReturn = "TH";
+
+    /// <summary>Sales invoices, HD000123 (BR-SALE-08).</summary>
+    public const string SalesInvoice = "HD";
+
+    /// <summary>Customer payments and money paid back, PT000123 (BR-DEBT-03 gives no prefix: PM default).</summary>
+    public const string CustomerPayment = "PT";
 }

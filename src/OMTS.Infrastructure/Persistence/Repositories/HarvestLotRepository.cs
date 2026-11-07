@@ -68,6 +68,12 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<HarvestLot>> ListForInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken)
+    {
+        var ids = lotIds.Distinct().ToList();
+        return await db.HarvestLots.Include(l => l.Raft).ThenInclude(r => r.Zone).Where(l => ids.Contains(l.Id)).ToListAsync(cancellationToken);
+    }
+
     public Task<int> CountForSaleAsync(Guid? zoneId, CancellationToken cancellationToken)
     {
         var forSale = ForSale(db.HarvestLots.AsNoTracking());

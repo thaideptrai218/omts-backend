@@ -19,6 +19,7 @@ using OMTS.Application.Features.Harvest;
 using OMTS.Domain.Common;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Harvest;
+using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
 using OMTS.Infrastructure.Persistence;
 using OMTS.Infrastructure.Storage;
@@ -575,6 +576,9 @@ public class HarvestLotsQaTestsSqlServer
         var raft = await SeededAsync(owner, zoneId);
         var lotId = (await owner.HarvestLotAsync(raft.RaftId)).Id();
         var day = new DateOnly(2026, 10, 30);
+        // The lot names the invoice that closed it, a foreign key since PR 6a: an invoice of 0 VND with no line is enough here.
+        var invoice = new SalesInvoice { Code = "HD900001", InvoicedAt = DateTimeOffset.UtcNow, InvoiceDate = day, ZoneId = zoneId, CreatedByAccountId = host.Owner.Account.Id };
+        await host.UseDbAsync(db => db.SalesInvoices.Add(invoice));
 
         using var first = host.Api.Services.CreateScope();
         using var second = host.Api.Services.CreateScope();
@@ -582,7 +586,7 @@ public class HarvestLotsQaTestsSqlServer
             await first.ServiceProvider.GetRequiredService<IHarvestLotRepository>().GetForEditAsync(lotId, CancellationToken.None),
             await second.ServiceProvider.GetRequiredService<IHarvestLotRepository>().GetForEditAsync(lotId, CancellationToken.None));
 
-        Assert.Null(first.ServiceProvider.GetRequiredService<HarvestLotStatusService>().CloseSoldWholeLot(firstLot!, day, Guid.NewGuid()));
+        Assert.Null(first.ServiceProvider.GetRequiredService<HarvestLotStatusService>().CloseSoldWholeLot(firstLot!, day, invoice.Id));
         Assert.Null(second.ServiceProvider.GetRequiredService<HarvestLotStatusService>().Close(secondLot!, day, 1m, HarvestLotCloseReason.Spoiled));
 
         await first.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();

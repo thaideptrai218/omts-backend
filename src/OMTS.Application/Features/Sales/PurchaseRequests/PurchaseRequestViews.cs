@@ -1,7 +1,7 @@
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
-using OMTS.Application.Features.Sales.Customers;
+using OMTS.Application.Features.Sales.Debts;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
 
@@ -11,6 +11,7 @@ namespace OMTS.Application.Features.Sales.PurchaseRequests;
 public sealed class PurchaseRequestViews(
     IPurchaseRequestRepository requests,
     IPurchaseRequestFulfilment fulfilment,
+    CustomerDebtReader debts,
     IStatusCatalog statusCatalog)
 {
     public async Task<IReadOnlyList<PurchaseRequestView>> ForStaffAsync(IReadOnlyList<PurchaseRequest> rows, CancellationToken cancellationToken)
@@ -18,12 +19,13 @@ public sealed class PurchaseRequestViews(
         var ids = rows.Select(r => r.Id).ToList();
         var fulfilled = await FulfilledAsync(rows, cancellationToken);
         var sendings = (await requests.ListSendingsAsync(ids, cancellationToken)).ToLookup(s => s.RequestId);
+        var owed = await debts.DebtsAsync(rows.Select(r => r.CustomerId).ToList(), cancellationToken);
         return rows.Select(r =>
         {
             var isFulfilled = fulfilled.Contains(r.Id);
             return new PurchaseRequestView(
                 r.Id,
-                new PurchaseRequestCustomerView(r.CustomerId, r.Customer.Name, r.Customer.PhoneNumber, CustomerFigures.CurrentDebt(r.Customer)),
+                new PurchaseRequestCustomerView(r.CustomerId, r.Customer.Name, r.Customer.PhoneNumber, owed[r.CustomerId]),
                 r.ProductId, r.Product.Name, r.RequestedKg, r.PickupDate, r.Note, r.SentAt,
                 r.StatusId, StatusName(r, isFulfilled), isFulfilled, Response(r), r.CancelReason, r.CancelledAt,
                 sendings[r.Id].Select(Sending).ToList(),

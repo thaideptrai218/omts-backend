@@ -853,6 +853,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ClosedBySalesInvoiceId");
+
                     b.HasIndex("CycleId");
 
                     b.HasIndex("LotCode")
@@ -2511,6 +2513,61 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             IsInitial = false,
                             Meaning = "No longer for sale; its close reason is kept. The system can reopen it.",
                             SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 3501,
+                            Code = "COMPLETED",
+                            DisplayName = "Completed",
+                            Group = "SALES_INVOICE",
+                            IsFinal = false,
+                            IsInitial = true,
+                            Meaning = "The sale is saved; only the Cooperative Owner corrects or cancels it.",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 3502,
+                            Code = "CANCELLED",
+                            DisplayName = "Cancelled",
+                            Group = "SALES_INVOICE",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "The sale did not happen; kept with its reason and counts nowhere.",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 3601,
+                            Code = "AWAITING_CONFIRMATION",
+                            DisplayName = "Awaiting confirmation",
+                            Group = "CUSTOMER_PAYMENT",
+                            IsFinal = false,
+                            IsInitial = true,
+                            Meaning = "Recorded at the port or by the system; counts in the debt until the Accountant confirms or cancels it.",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 3602,
+                            Code = "CONFIRMED",
+                            DisplayName = "Confirmed",
+                            Group = "CUSTOMER_PAYMENT",
+                            IsFinal = false,
+                            IsInitial = false,
+                            Meaning = "Checked or recorded by the Accountant.",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 3603,
+                            Code = "CANCELLED",
+                            DisplayName = "Cancelled",
+                            Group = "CUSTOMER_PAYMENT",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "Recorded by mistake or never received; no longer counts.",
+                            SortOrder = 3
                         });
                 });
 
@@ -2820,6 +2877,50 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             ToStatusId = 2902,
                             TriggerEvent = "System",
                             UseCases = "CLAIM-03, SALE-07, SALE-08"
+                        },
+                        new
+                        {
+                            Id = 200,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 3501,
+                            GuardCondition = "The invoice has no sales return that is not cancelled; a cash payment is cancelled with it only when the cash was given back.",
+                            ReasonRequired = true,
+                            ToStatusId = 3502,
+                            TriggerEvent = "Action",
+                            UseCases = "SALE-08"
+                        },
+                        new
+                        {
+                            Id = 210,
+                            AllowedPerformers = "Accountant",
+                            FromStatusId = 3601,
+                            GuardCondition = "The cash or the transfer that arrived matches the payment.",
+                            ReasonRequired = false,
+                            ToStatusId = 3602,
+                            TriggerEvent = "Action",
+                            UseCases = "DEBT-02"
+                        },
+                        new
+                        {
+                            Id = 211,
+                            AllowedPerformers = "Accountant; Cooperative Owner",
+                            FromStatusId = 3601,
+                            GuardCondition = "The customer did not pay, or the cash was given back when the invoice was cancelled.",
+                            ReasonRequired = true,
+                            ToStatusId = 3603,
+                            TriggerEvent = "Action",
+                            UseCases = "DEBT-02, SALE-08"
+                        },
+                        new
+                        {
+                            Id = 212,
+                            AllowedPerformers = "Accountant",
+                            FromStatusId = 3602,
+                            GuardCondition = "Recorded by mistake, or the money never arrived.",
+                            ReasonRequired = true,
+                            ToStatusId = 3603,
+                            TriggerEvent = "Action",
+                            UseCases = "DEBT-02"
                         });
                 });
 
@@ -3351,6 +3452,88 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("Customers");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.CustomerPayment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid?>("CollectedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("InvoiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateOnly>("PaymentDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("RecordedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("StatusId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("CollectedByAccountId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("RecordedByAccountId");
+
+                    b.HasIndex("StatusId");
+
+                    b.HasIndex("CustomerId", "StatusId");
+
+                    b.ToTable("CustomerPayments", t =>
+                        {
+                            t.HasCheckConstraint("CK_CustomerPayment_Amount", "[Amount] > 0");
+                        });
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.Product", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3493,6 +3676,219 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_PurchaseRequest_Declined_Has_Note", "[StatusId] <> 3203 OR [ResponseNote] IS NOT NULL");
 
                             t.HasCheckConstraint("CK_PurchaseRequest_RequestedKg_Positive", "[RequestedKg] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesInvoice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeduplicationKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<bool>("DiscountDecidedByOwner")
+                        .HasColumnType("bit");
+
+                    b.Property<DateOnly>("InvoiceDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("InvoicedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<decimal>("OtherCharges")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<string>("PaymentTerm")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal>("PriceCutTotal")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<Guid?>("PurchaseRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("StatusId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<bool>("TakesRequestInFull")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ZoneId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("CreatedByAccountId");
+
+                    b.HasIndex("DeduplicationKey")
+                        .IsUnique()
+                        .HasFilter("[DeduplicationKey] IS NOT NULL");
+
+                    b.HasIndex("PurchaseRequestId");
+
+                    b.HasIndex("StatusId");
+
+                    b.HasIndex("ZoneId");
+
+                    b.HasIndex("CustomerId", "StatusId");
+
+                    b.HasIndex("InvoiceDate", "ZoneId");
+
+                    b.ToTable("SalesInvoices", t =>
+                        {
+                            t.HasCheckConstraint("CK_SalesInvoice_Amounts", "[DiscountAmount] >= 0 AND [OtherCharges] >= 0 AND [Subtotal] >= 0 AND [PriceCutTotal] >= 0");
+
+                            t.HasCheckConstraint("CK_SalesInvoice_PayLater_Has_Customer", "[PaymentTerm] <> 'PayLater' OR [CustomerId] IS NOT NULL");
+
+                            t.HasCheckConstraint("CK_SalesInvoice_Request_Has_Customer", "[PurchaseRequestId] IS NULL OR [CustomerId] IS NOT NULL");
+
+                            t.HasCheckConstraint("CK_SalesInvoice_Total", "[Total] >= 0 AND [Total] = [Subtotal] - [DiscountAmount] + [OtherCharges] - [PriceCutTotal]");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesInvoiceLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<Guid>("HarvestLotId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Kg")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<int>("LineNumber")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("ListPrice")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<string>("PriceSource")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("SoldWholeLot")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HarvestLotId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("InvoiceId", "LineNumber")
+                        .IsUnique();
+
+                    b.ToTable("SalesInvoiceLines", t =>
+                        {
+                            t.HasCheckConstraint("CK_SalesInvoiceLine_Kg", "[Kg] > 0");
+
+                            t.HasCheckConstraint("CK_SalesInvoiceLine_Prices", "[UnitPrice] > 0 AND [ListPrice] > 0 AND [Amount] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesInvoicePriceCut", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<DateOnly>("CutDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("EnteredByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EnteredByAccountId");
+
+                    b.HasIndex("InvoiceId", "CutDate");
+
+                    b.ToTable("SalesInvoicePriceCuts", t =>
+                        {
+                            t.HasCheckConstraint("CK_SalesInvoicePriceCut_Amount", "[Amount] > 0");
                         });
                 });
 
@@ -3732,6 +4128,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestLot", b =>
                 {
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("ClosedBySalesInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Cultivation.CultivationCycle", "Cycle")
                         .WithMany()
                         .HasForeignKey("CycleId")
@@ -4357,6 +4758,41 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("MergedIntoCustomer");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.CustomerPayment", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("CollectedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesInvoice", "Invoice")
+                        .WithMany("Payments")
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("RecordedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
+                        .WithMany()
+                        .HasForeignKey("StatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("Invoice");
+
+                    b.Navigation("Status");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.Product", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
@@ -4398,6 +4834,89 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Product");
 
                     b.Navigation("Status");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesInvoice", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.PurchaseRequest", "PurchaseRequest")
+                        .WithMany()
+                        .HasForeignKey("PurchaseRequestId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
+                        .WithMany()
+                        .HasForeignKey("StatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Farming.FarmingZone", "Zone")
+                        .WithMany()
+                        .HasForeignKey("ZoneId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("PurchaseRequest");
+
+                    b.Navigation("Status");
+
+                    b.Navigation("Zone");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesInvoiceLine", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Harvest.HarvestLot", "HarvestLot")
+                        .WithMany()
+                        .HasForeignKey("HarvestLotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesInvoice", "Invoice")
+                        .WithMany("Lines")
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("HarvestLot");
+
+                    b.Navigation("Invoice");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesInvoicePriceCut", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("EnteredByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesInvoice", "Invoice")
+                        .WithMany("PriceCuts")
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Invoice");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationLog", b =>
@@ -4493,6 +5012,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.Supplier", b =>
                 {
                     b.Navigation("Receipts");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesInvoice", b =>
+                {
+                    b.Navigation("Lines");
+
+                    b.Navigation("Payments");
+
+                    b.Navigation("PriceCuts");
                 });
 #pragma warning restore 612, 618
         }

@@ -45,6 +45,9 @@ public static partial class RelatedRecordTypes
     /// <summary>A supplier payment or money paid back (PURCHASE-05); it has no zone and is never removed, only cancelled.</summary>
     public const string SupplierPayment = "SupplierPayment";
 
+    /// <summary>A sales invoice (SALE-05); its zone is the zone of the invoice, and the code shown is HD000123.</summary>
+    public const string SalesInvoice = "SalesInvoice";
+
     /// <summary>
     /// "FarmingZone" → "Farming zone", "ZoneLicense" → "Zone license": the {object_name} of MSG-ACCOUNT-22. A certification
     /// of the cooperative reads "Certification", not the words of its entity.

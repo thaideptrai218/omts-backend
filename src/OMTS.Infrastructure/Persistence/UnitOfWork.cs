@@ -28,6 +28,12 @@ internal sealed class UnitOfWork(OmtsDbContext db, PushOutbox outbox) : IUnitOfW
             // 2601/2627: duplicate key in a unique index or constraint.
             throw new DuplicateRecordException(exception);
         }
+        catch (DbUpdateException exception) when (exception.InnerException is SqlException { Number: 547 } sql && IsMissingReference(sql))
+        {
+            // 547 on an INSERT or UPDATE against a FOREIGN KEY: a row this save points to is not there. Not a conflict: only a caller that knows the row can be removed
+            // meanwhile catches it (SALE-05); elsewhere it stays an unexpected error. A DELETE against a key (a row still in use) and a CHECK stay DbUpdateException.
+            throw new ForeignKeyViolationException(exception);
+        }
         catch (Exception exception) when (SqlServerDeadlock.IsVictim(exception))
         {
             // The whole save was rolled back because another save got in the way, so the caller reloads and tries again.
@@ -55,4 +61,11 @@ internal sealed class UnitOfWork(OmtsDbContext db, PushOutbox outbox) : IUnitOfW
             entry.State = EntityState.Modified;
         }
     }
+
+    // Error 547 names the kind of constraint with a keyword no server language translates, and the constraint quoted: an INSERT or UPDATE says FOREIGN KEY "FK_…", a DELETE
+    // of a row still in use says REFERENCE "FK_…", a check says CHECK "CK_…" (e.g. German: Die INSERT-Anweisung steht in Konflikt mit der FOREIGN KEY-Einschränkung "FK_…").
+    private static bool IsMissingReference(SqlException exception) =>
+        exception.Errors.Cast<SqlError>().Any(error => error.Number == 547
+            && error.Message.Contains("FOREIGN KEY", StringComparison.Ordinal)
+            && error.Message.Contains("\"FK_", StringComparison.Ordinal));
 }
