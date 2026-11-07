@@ -49,14 +49,15 @@ public sealed class CustomerDebtExportService(CustomerDebtService debts, ISpread
         }
     }
 
-    private static SpreadsheetSheet ListSheet(IReadOnlyList<CustomerDebtRow> rows)
+    private static SpreadsheetSheet ListSheet(CustomerDebtRows list)
     {
-        var sheetRows = rows.Select(r => (IReadOnlyList<object?>)
+        var sheetRows = list.Rows.Select(r => (IReadOnlyList<object?>)
         [
             r.Customer.Name, r.Customer.PhoneNumber, r.Debt, r.DebtAgeDays, Day(r.OldestUnpaidDate),
         ]).ToList();
-        sheetRows.Add(["Total receivables", null, rows.Sum(r => CustomerDebtMath.Receivable(r.Debt)), null, null]);
-        sheetRows.Add(["Total money owed back", null, rows.Sum(r => CustomerDebtMath.OwedBack(r.Debt)), null, null]);
+        // The cooperative's totals, as on the screen: of every profile, whatever the search.
+        sheetRows.Add(["Total receivables", null, list.TotalReceivables, null, null]);
+        sheetRows.Add(["Total money owed back", null, list.TotalOwedBack, null, null]);
         return new SpreadsheetSheet("Customer debts", ["Customer", "Phone", "Debt", "Debt age (days)", "Oldest unpaid invoice"], sheetRows);
     }
 

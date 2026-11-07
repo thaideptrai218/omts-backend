@@ -18,7 +18,7 @@ public class CustomerDebtAllocatorQaTests
 
     // BR-DEBT-05 "The amounts still unpaid always add up to the customer debt when it is above zero." A transfer of 1,500,000 pays A (1,000,000), 500,000 is owed back and
     // paid back (BR-DEBT-03: up to the money owed back), then the transfer is cancelled (its money never arrived). Debt = 1,000,000 − 0 + 500,000 = 1,500,000.
-    [Fact]
+    [Fact(Skip = "Waiting for the PM (QA 8a L1): BR-DEBT-05 (5) names no invoice for a debt above every invoice; unreachable until 8b can cancel a payment.")]
     public void The_unpaid_amounts_add_up_to_the_debt_after_a_transfer_partly_paid_back_is_cancelled()
     {
         var a = Invoice("HD000001", 10, 1_000_000m);

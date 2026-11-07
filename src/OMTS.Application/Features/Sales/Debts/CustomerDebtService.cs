@@ -12,6 +12,9 @@ namespace OMTS.Application.Features.Sales.Debts;
 /// the figure every other screen shows); the unpaid invoices and the age come from <see cref="CustomerDebtAllocator"/> and the statement from
 /// <see cref="CustomerStatementLedger"/>. Read only. The API checks the role: no zone, Owner and Accountant (§I.4.4, BR-FARM-08).
 /// </summary>
+/// <summary>The rows of the DEBT-03 list (after the search) and the cooperative totals (every profile, whatever the search).</summary>
+public sealed record CustomerDebtRows(IReadOnlyList<CustomerDebtRow> Rows, decimal TotalReceivables, decimal TotalOwedBack);
+
 public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebtReader debts, TimeProvider timeProvider)
 {
     private const int MaxPageSize = 100;
@@ -20,32 +23,37 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
     public async Task<CustomerDebtList> ListAsync(string? search, int page, int pageSize, CancellationToken cancellationToken)
     {
         (page, pageSize) = (Math.Clamp(page, 1, int.MaxValue / MaxPageSize), Math.Clamp(pageSize, 1, MaxPageSize));
-        var rows = await RowsAsync(search, cancellationToken);
+        var (rows, totalReceivables, totalOwedBack) = await RowsAsync(search, cancellationToken);
         var empty = rows.Count == 0
             ? string.IsNullOrWhiteSpace(search) ? UserMessages.NothingToShowYet : UserMessages.NoDataForFilters("search")
             : null;
         return new CustomerDebtList(
             new Paged<CustomerDebtRow>(rows.Skip((page - 1) * pageSize).Take(pageSize).ToList(), page, pageSize, rows.Count),
-            rows.Sum(r => CustomerDebtMath.Receivable(r.Debt)),
-            rows.Sum(r => CustomerDebtMath.OwedBack(r.Debt)),
+            totalReceivables,
+            totalOwedBack,
             await queries.AwaitingConfirmationCountAsync(cancellationToken),
             empty?.Text,
             empty?.Code);
     }
 
-    /// <summary>Every profile of the list, in its order (the list pages it, the export writes it all). A fixed number of queries, whatever the number of profiles.</summary>
-    public async Task<IReadOnlyList<CustomerDebtRow>> RowsAsync(string? search, CancellationToken cancellationToken)
+    /// <summary>
+    /// Every profile of the list, in its order (the list pages it, the export writes it all), and the cooperative's totals (BR-FARM-10, BR-DEBT-02): the totals are of every profile,
+    /// whatever the search. A fixed number of queries, whatever the number of profiles.
+    /// </summary>
+    public async Task<CustomerDebtRows> RowsAsync(string? search, CancellationToken cancellationToken)
     {
         var debtOf = (await queries.AllFiguresAsync(cancellationToken)).ToDictionary(f => f.Key, f => CustomerDebtMath.Debt(f.Value));
+        var totalReceivables = debtOf.Values.Sum(CustomerDebtMath.Receivable);
+        var totalOwedBack = debtOf.Values.Sum(CustomerDebtMath.OwedBack);
         var nonZero = debtOf.Where(d => d.Value != 0).Select(d => d.Key).ToList();
         if (nonZero.Count == 0)
         {
-            return [];
+            return new CustomerDebtRows([], totalReceivables, totalOwedBack);
         }
 
         var found = await queries.CustomersAsync(nonZero, search, cancellationToken);
         var allocations = await debts.AllocationsAsync(found.Where(c => debtOf[c.Id] > 0).Select(c => c.Id).ToList(), cancellationToken);
-        return found
+        var rows = found
             .Select(c =>
             {
                 var allocation = allocations.GetValueOrDefault(c.Id) ?? CustomerDebtAllocation.None;
@@ -57,6 +65,7 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
             .ThenByDescending(r => Math.Abs(r.Debt))
             .ThenBy(r => r.Customer.Name, StringComparer.Ordinal)
             .ToList();
+        return new CustomerDebtRows(rows, totalReceivables, totalOwedBack);
     }
 
     /// <summary>Step 3: the debt at the start of the period, what happened in it, the debt at its end, and the invoices unpaid today. The period defaults to the current month.</summary>

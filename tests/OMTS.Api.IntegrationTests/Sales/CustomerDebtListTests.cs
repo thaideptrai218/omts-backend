@@ -78,7 +78,8 @@ public class CustomerDebtListTests
 
         var searched = await owner.DebtListAsync("?search=Owed%20back&pageSize=1");
         Assert.Equal([owedBack], searched.Rows().Select(r => r.GetProperty("customer").Id()).ToList());
-        Assert.Equal((0m, 50_000m), (searched.Money("receivablesTotal"), searched.Money("owedBackTotal")));
+        // The totals stay the cooperative's (BR-FARM-10, BR-DEBT-02), whatever the search.
+        Assert.Equal((3_800_000m, 50_000m), (searched.Money("receivablesTotal"), searched.Money("owedBackTotal")));
         Assert.Equal("MSG-GEN-10", (await owner.DebtListAsync("?search=nobody-at-all")).Text("messageCode"));
     }
 
