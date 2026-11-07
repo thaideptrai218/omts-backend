@@ -437,7 +437,9 @@ public sealed class BankAccountQaTests
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             base.ConfigureWebHost(builder);
-            builder.UseSetting("Payments:TimeoutSeconds", "1");
+            // Far above the test's own waits: with 1 s, a busy runner could reach the time limit before the client
+            // goes away, and the request then ended with an answer instead of being cancelled.
+            builder.UseSetting("Payments:TimeoutSeconds", "60");
             builder.ConfigureTestServices(services => services.AddSingleton(service));
         }
 
