@@ -21,10 +21,9 @@ internal sealed class CultivationCycleRepository(OmtsDbContext db) : ICultivatio
     public Task<DateOnly?> LastCloseDateAsync(Guid raftId, CancellationToken cancellationToken) =>
         db.CultivationCycles.AsNoTracking().Where(c => c.RaftId == raftId).MaxAsync(c => c.CloseDate, cancellationToken);
 
-    // SeedingEvent stands for the seeding session until C2 changes it to SeedingRecord.
     public async Task<DateOnly?> FirstRecordDateAsync(Guid cycleId, CancellationToken cancellationToken)
     {
-        var seeded = await db.SeedingEvents.AsNoTracking().Where(e => e.CycleId == cycleId).MinAsync(e => (DateOnly?)e.SeedingDate, cancellationToken);
+        var seeded = await db.SeedingRecords.AsNoTracking().Where(r => r.CycleId == cycleId).MinAsync(r => (DateOnly?)r.SeedingDate, cancellationToken);
         var visited = await db.CultivationLogs.AsNoTracking().Where(l => l.CycleId == cycleId).MinAsync(l => (DateOnly?)l.VisitDate, cancellationToken);
         return seeded is null || visited < seeded ? visited : seeded;
     }
@@ -36,10 +35,16 @@ internal sealed class CultivationCycleRepository(OmtsDbContext db) : ICultivatio
             return new HashSet<Guid>();
         }
 
-        var seeded = await db.SeedingEvents.AsNoTracking().Where(e => cycleIds.Contains(e.CycleId)).Select(e => e.CycleId).Distinct().ToListAsync(cancellationToken);
+        var seeded = await db.SeedingRecords.AsNoTracking().Where(r => cycleIds.Contains(r.CycleId)).Select(r => r.CycleId).Distinct().ToListAsync(cancellationToken);
         var logged = await db.CultivationLogs.AsNoTracking().Where(l => cycleIds.Contains(l.CycleId)).Select(l => l.CycleId).Distinct().ToListAsync(cancellationToken);
-        return seeded.Concat(logged).ToHashSet();
+        var harvested = await db.HarvestLots.AsNoTracking().Where(l => cycleIds.Contains(l.CycleId)).Select(l => l.CycleId).Distinct().ToListAsync(cancellationToken);
+        return seeded.Concat(logged).Concat(harvested).ToHashSet();
     }
+
+    public async Task<int> CountRecordsAsync(Guid cycleId, CancellationToken cancellationToken) =>
+        await db.SeedingRecords.CountAsync(r => r.CycleId == cycleId, cancellationToken)
+        + await db.CultivationLogs.CountAsync(l => l.CycleId == cycleId, cancellationToken)
+        + await db.HarvestLots.CountAsync(l => l.CycleId == cycleId, cancellationToken);
 
     public void Add(CultivationCycle cycle) => db.CultivationCycles.Add(cycle);
 

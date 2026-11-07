@@ -3,8 +3,10 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Cultivation.Closing;
 using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Cultivation.CultivationLogs;
+using OMTS.Application.Features.Cultivation.Seeding;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
@@ -20,6 +22,8 @@ public sealed class CultivationProgressService(
     RaftViews raftViews,
     CultivationCycleViews cycleViews,
     CultivationLogViews logViews,
+    SeedingReadService seeding,
+    CycleSummaryReader summaries,
     ZoneAccessGuard zoneAccess,
     TimeProvider timeProvider)
 {
@@ -76,7 +80,9 @@ public sealed class CultivationProgressService(
             cycle is null ? null : await cycleViews.ViewAsync(cycle, cancellationToken),
             lanes,
             lanes.Where(l => l.StatusId == StatusIds.Lane.InUse && l.State == LaneState.NotSeeded).Select(l => l.LaneNumber).ToList(),
-            cycle is null ? [] : await logViews.ListAsync(cycle, cancellationToken));
+            cycle is null ? [] : await seeding.LaneSeedLotsAsync(cycle.Id, shown, cancellationToken),
+            cycle is null ? [] : await logViews.ListAsync(cycle, cancellationToken),
+            cycle?.StatusId == StatusIds.CultivationCycle.Closed ? await summaries.ReadAsync(cycle, cancellationToken) : null);
     }
 
     /// <summary>

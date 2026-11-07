@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Mvc;
 using OMTS.Api.Filters;
 using OMTS.Application.Common.Exceptions;
@@ -30,4 +31,10 @@ public sealed class TestOnlyMessageQaController : ControllerBase
     /// <summary>A programming error: the handler answers 500 without details.</summary>
     [HttpGet("crash")]
     public IActionResult Crash() => throw new InvalidOperationException("secret internal detail");
+
+    /// <summary>Failures a test has caught from a real database, by the id it asks for: a <c>SqlException</c> has no public constructor.</summary>
+    public static readonly ConcurrentDictionary<Guid, Exception> Failures = new();
+
+    [HttpGet("failure/{id:guid}")]
+    public IActionResult Failure(Guid id) => throw Failures[id];
 }

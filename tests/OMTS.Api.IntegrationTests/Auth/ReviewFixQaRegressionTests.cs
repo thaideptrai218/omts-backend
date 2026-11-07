@@ -47,10 +47,7 @@ public class ReviewFixQaRegressionTests
     public async Task Ten_parallel_wrong_passwords_answer_401_or_423_and_then_lock_the_account()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await using (var db = database.CreateContext())
-        {
-            await db.Database.MigrateAsync();
-        }
+        await database.MigrateToLatestAsync();
 
         await using var api = new SqlServerApiFactory(database);
         await api.AddAccountAsync("qa-burst", Password);

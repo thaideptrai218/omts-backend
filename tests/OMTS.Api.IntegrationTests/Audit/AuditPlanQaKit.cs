@@ -53,12 +53,9 @@ internal static class AuditPlanQaKit
     /// </summary>
     public static async Task<(Guid[] Accounts, Guid[] Employees, Guid[] Zones)> SeedAsync(SqlServerTestDatabase database)
     {
-        await using (var db = database.CreateContext())
-        {
-            await db.Database.MigrateAsync();
-        }
+        await database.MigrateToLatestAsync();
 
-        var accounts = Enumerable.Range(0, 40).Select(_ => new Account { Username = NewCode(), DisplayName = "Staff", SubjectType = SubjectType.Staff }).ToList();
+        var accounts =Enumerable.Range(0, 40).Select(_ => new Account { Username = NewCode(), DisplayName = "Staff", SubjectType = SubjectType.Staff }).ToList();
         await using (var db = database.CreateContext())
         {
             db.Accounts.AddRange(accounts);
@@ -103,7 +100,9 @@ internal static class AuditPlanQaKit
 
         await using var connection = new SqlConnection(database.ConnectionString);
         await connection.OpenAsync();
-        using (var bulk = new SqlBulkCopy(connection) { DestinationTableName = "AuditEvents" })
+        // A bulk copy has its own timeout (30 s by default) and ignores the connection string's Command Timeout; on a loaded CI server the
+        // seed took longer, so it gets the same limit as every other command of the test database.
+        using (var bulk = new SqlBulkCopy(connection) { DestinationTableName = "AuditEvents", BulkCopyTimeout = connection.CommandTimeout })
         {
             foreach (DataColumn column in table.Columns)
             {

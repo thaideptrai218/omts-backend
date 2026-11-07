@@ -12,7 +12,7 @@ namespace OMTS.Api.IntegrationTests.Purchasing;
 /// Migration PurchaseReceiptsV2 on a database with receipts: down (lossy) gives each receipt a zone and a raft and each seed
 /// line of a Completed receipt its old lot, keeping the seeding events; up numbers the lines, puts the receipt raft on its
 /// Seed and Material lines, points the seeding events to the seed lines again and starts the PN counter after the highest
-/// PN code.
+/// PN code. The seeding events are the table of that time: SeedingRecords, later in the chain, replaces it.
 /// </summary>
 public class PurchaseReceiptsMigrationSqlServerTests
 {
@@ -25,17 +25,19 @@ public class PurchaseReceiptsMigrationSqlServerTests
             new LineBody(world.Other, 1, 1_000), world.MaterialForRaft(2, 50_000), new LineBody(world.Seed, 10, 9_000, "LOT-1", world.Raft.Id));
         var seedLine = receipt.LineOf(world.Seed);
         var cycle = new CultivationCycle { RaftId = world.Raft.Id, StartDate = Today };
-        await host.UseDbAsync(db =>
-        {
-            db.CultivationCycles.Add(cycle);
-            db.SeedingEvents.Add(new SeedingEvent { CycleId = cycle.Id, SeedLotId = seedLine, SeedingDate = Today, SeedQuantity = 4, RecordedByAccountId = host.Owner.Account.Id });
-        });
+        await host.UseDbAsync(db => db.CultivationCycles.Add(cycle));
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 1_000), new LineBody(null, null, null)));
         var lastNumber = long.Parse(draft.GetProperty("code").GetString()![2..], System.Globalization.CultureInfo.InvariantCulture);
 
         await using var db = host.Database.CreateContext();
         var migrator = db.GetService<IMigrator>();
         var all = db.Database.GetMigrations().ToList();
+        var beforeRecords = all[all.FindIndex(m => m.EndsWith("_SeedingRecords", StringComparison.Ordinal)) - 1];
+        await migrator.MigrateAsync(beforeRecords);
+        await db.Database.ExecuteSqlAsync($"""
+            INSERT INTO SeedingEvents (Id, CycleId, SeedingDate, SeedLotId, RecordedByAccountId, EvidenceUrls, SeedQuantity, CreatedAt)
+            VALUES (NEWID(), {cycle.Id}, {Today}, {seedLine}, {host.Owner.Account.Id}, N'[]', 4, SYSDATETIMEOFFSET())
+            """);
         await migrator.MigrateAsync(all[all.FindIndex(m => m.EndsWith("_PurchaseReceiptsV2", StringComparison.Ordinal)) - 1]);
 
         Assert.Equal(world.Raft.Id, await db.Database.SqlQuery<Guid>($"SELECT RaftId AS [Value] FROM PurchaseReceipts WHERE Id = {receipt.Id()}").SingleAsync());
@@ -46,6 +48,9 @@ public class PurchaseReceiptsMigrationSqlServerTests
         // A draft line without an item cannot exist in the old model.
         Assert.Equal(0, await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS [Value] FROM PurchaseReceiptLines WHERE ItemId IS NULL").SingleAsync());
 
+        await migrator.MigrateAsync(beforeRecords);
+        Assert.Equal(seedLine, await db.Database.SqlQuery<Guid>($"SELECT SeedLotId AS [Value] FROM SeedingEvents WHERE CycleId = {cycle.Id}").SingleAsync());
+
         await migrator.MigrateAsync();
 
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
@@ -55,7 +60,6 @@ public class PurchaseReceiptsMigrationSqlServerTests
         Assert.Equal(world.Raft.Id, lines.Single(l => l.Id == seedLine).RaftId);
         Assert.Equal(world.Raft.Id, lines.Single(l => l.ItemId == world.Material).RaftId);
         Assert.Null(lines.Single(l => l.ItemId == world.Other).RaftId);
-        Assert.Equal(seedLine, await db.SeedingEvents.Where(e => e.CycleId == cycle.Id).Select(e => e.SeedLotId).SingleAsync());
 
         // The PN counter starts again after the highest PN code on the database, so the next receipt takes the next number.
         Assert.Equal(lastNumber, await db.DocumentSequences.Where(s => s.Key == "PN").Select(s => s.LastValue).SingleAsync());

@@ -24,7 +24,7 @@ namespace OMTS.Application.Features.Cultivation.CultivationLogs;
 public sealed class CultivationLogCorrectionService(
     ICultivationLogRepository logs,
     CycleWriteGuard writes,
-    CultivationLogPhotoStore photoStore,
+    RecordPhotoStore photoStore,
     UploadedFileSaver fileSaver,
     CultivationLogViews views,
     AuditLogService audit,
@@ -58,7 +58,7 @@ public sealed class CultivationLogCorrectionService(
             return invalid;
         }
 
-        var uploaded = await photoStore.UploadAllAsync(values.NewPhotos, cancellationToken);
+        var uploaded = await photoStore.UploadAllAsync(FileCategories.CultivationLogPhotos, values.NewPhotos, cancellationToken);
         if (!uploaded.IsSuccess)
         {
             return uploaded.Error!;

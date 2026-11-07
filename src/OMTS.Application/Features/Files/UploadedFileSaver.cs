@@ -5,7 +5,7 @@ using OMTS.Application.Common.Interfaces.Storage;
 namespace OMTS.Application.Features.Files;
 
 /// <summary>
-/// Saves a change whose files were uploaded first (FARM raft photos and license files, CYCLE-04 log photos) without leaving files
+/// Saves a change whose files were uploaded first (FARM raft photos and license files, CYCLE-04 log photos, HARVEST-01 lot photos) without leaving files
 /// behind: a failed save (database error, MSG06 conflict, duplicate) removes the new uploads, and only a committed save removes
 /// the files it replaced, so a failed save never loses a current file. Removals are best effort: a failure is logged,
 /// never hides the save's own answer, and the file is left to the orphan file clean-up.
@@ -27,13 +27,15 @@ public sealed class UploadedFileSaver(
     /// <param name="uploadedKeys">The files stored for this change.</param>
     /// <param name="replacedKeys">The files the change stops pointing to.</param>
     /// <param name="cancellationToken">Cancels the save only; removals run on their own timeout.</param>
-    public async Task SaveAsync(IReadOnlyCollection<string> uploadedKeys, IReadOnlyCollection<string> replacedKeys, CancellationToken cancellationToken)
+    /// <param name="keepUploadsOn">A failure the caller will try the save again after, with the same uploads, so they stay.</param>
+    public async Task SaveAsync(
+        IReadOnlyCollection<string> uploadedKeys, IReadOnlyCollection<string> replacedKeys, CancellationToken cancellationToken, Func<Exception, bool>? keepUploadsOn = null)
     {
         try
         {
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
-        catch
+        catch (Exception exception) when (keepUploadsOn?.Invoke(exception) != true)
         {
             await RemoveAsync(uploadedKeys, "after a failed save", checkReference: true);
             throw;

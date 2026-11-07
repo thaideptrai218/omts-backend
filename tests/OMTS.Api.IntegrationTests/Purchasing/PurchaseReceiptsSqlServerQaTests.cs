@@ -67,9 +67,9 @@ public class PurchaseReceiptsSqlServerQaTests
         {
             var receipt = await world.CompletedAsync(new LineBody(world.Seed, 100, 10_000));
             var line = receipt.LineOf(world.Seed);
-            await host.UseDbAsync(db => db.SeedingEvents.Add(new SeedingEvent
+            await host.UseDbAsync(db => db.SeedingRecords.Add(new SeedingRecord
             {
-                CycleId = cycle.Id, SeedLotId = line, SeedingDate = Today, SeedQuantity = 30, RecordedByAccountId = host.Owner.Account.Id,
+                CycleId = cycle.Id, SeedLotLineId = line, SeedingDate = Today, Quantity = 30, RecordedByAccountId = host.Owner.Account.Id,
             }));
             await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(line, 10)] })).ReadAsync(HttpStatusCode.Created);
 

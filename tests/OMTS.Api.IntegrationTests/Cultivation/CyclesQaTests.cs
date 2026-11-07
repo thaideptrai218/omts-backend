@@ -247,7 +247,7 @@ public class CyclesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
     {
         var (owner, _, raft) = await OwnerWithRaftAsync();
         var cycle = await owner.StartCycleAsync(raft.Id());
-        await factory.UseDbAsync(db => db.SeedingEvents.Add(new SeedingEvent { CycleId = cycle.Id(), SeedLotId = Guid.NewGuid(), SeedingDate = Today, RecordedByAccountId = Guid.NewGuid() }));
+        await factory.UseDbAsync(db => db.SeedingRecords.Add(new SeedingRecord { CycleId = cycle.Id(), SeedLotLineId = Guid.NewGuid(), SeedingDate = Today, Quantity = 1, RecordedByAccountId = Guid.NewGuid() }));
 
         Assert.Equal("MSG-GEN-06", await (await owner.CancelCycleAsync(cycle.Id(), cycle.Text("rowVersion"))).ErrorCodeAsync());
     }

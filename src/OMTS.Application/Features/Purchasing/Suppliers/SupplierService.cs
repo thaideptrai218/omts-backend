@@ -275,7 +275,7 @@ public sealed class SupplierService(
         }
     }
 
-    // AuditEvent.RecordCode holds 100 characters; supplier names may have 200.
+    // AuditEvent.RecordCode is shorter than a supplier name, which may have 200 characters: cut to 100.
     private static string AuditCode(Supplier supplier) => supplier.Name.Length <= 100 ? supplier.Name : supplier.Name[..100];
 
     private static (Values Values, List<string> Invalid) Validate(SaveSupplierRequest request)

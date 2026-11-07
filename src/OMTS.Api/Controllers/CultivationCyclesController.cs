@@ -4,19 +4,20 @@ using OMTS.Api.Common;
 using OMTS.Api.Filters;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Cultivation.Closing;
 using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Cultivation.Progress;
 
 namespace OMTS.Api.Controllers;
 
 /// <summary>
-/// CYCLE-01 and CYCLE-05 – cultivation cycles of a raft and the lane states of a date, for a Zone Manager of the raft's zone and
+/// CYCLE-01, CYCLE-05 and CYCLE-06 – cultivation cycles of a raft and the lane states of a date, for a Zone Manager of the raft's zone and
 /// the Cooperative Owner, not for an Accountant (§I.4.4). Routes without a zone check the zone of the raft in the service.
 /// </summary>
 [ApiController]
 [Authorize]
 public sealed class CultivationCyclesController(
-    CultivationCycleReadService reads, CultivationCycleService cycles, CultivationProgressService progress) : ControllerBase
+    CultivationCycleReadService reads, CultivationCycleService cycles, CultivationProgressService progress, CycleCloseService closes) : ControllerBase
 {
     /// <summary>Every raft of the zone with its Open or last closed cycle and the commands allowed (SCR-CYCLE-01).</summary>
     [HttpGet("api/zones/{zoneId:guid}/cultivation-cycles")]
@@ -59,4 +60,25 @@ public sealed class CultivationCyclesController(
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Cancel(Guid cycleId, CancelCycleRequest request, CancellationToken cancellationToken) =>
         (await cycles.CancelAsync(cycleId, request, cancellationToken)).ToActionResult(_ => NoContent());
+
+    /// <summary>The cycle summary (BR-CYCLE-06): of a Closed cycle on its close date with the assessment, of an Open one as if it closed today (CYCLE-05.1).</summary>
+    [HttpGet("api/cultivation-cycles/{cycleId:guid}/summary")]
+    [ProducesResponseType<CycleSummary>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Summary(Guid cycleId, CancellationToken cancellationToken) =>
+        (await reads.SummaryAsync(cycleId, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>What to show before closing (CYCLE-06 steps 1, 2 and 4): the summary, whether the close is early (MSG-CYCLE-07) and the confirmation (MSG-CYCLE-05).</summary>
+    [HttpGet("api/cultivation-cycles/{cycleId:guid}/close/preview")]
+    [ProducesResponseType<CycleClosePreview>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ClosePreview(Guid cycleId, CancellationToken cancellationToken) =>
+        (await closes.PreviewAsync(cycleId, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// Closes an Open cycle today with the assessment (CYCLE-06) and notifies the Cooperative Owner (MSG-CYCLE-06). An early close by a Zone Manager needs
+    /// <c>ownerApproved: true</c>, else 409 MSG-CYCLE-07 and nothing changes. A Closed cycle answers MSG-GEN-09 and is never reopened.
+    /// </summary>
+    [HttpPost("api/cultivation-cycles/{cycleId:guid}/close")]
+    [ProducesResponseType<CycleClosed>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Close(Guid cycleId, CloseCycleRequest request, CancellationToken cancellationToken) =>
+        (await closes.CloseAsync(cycleId, request, cancellationToken)).ToActionResult(Ok);
 }

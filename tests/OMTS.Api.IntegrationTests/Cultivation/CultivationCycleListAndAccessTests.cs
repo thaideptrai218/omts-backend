@@ -25,7 +25,7 @@ public class CultivationCycleListAndAccessTests(AuthApiFactory factory) : IClass
 
         var openCycle = await owner.StartCycleAsync(open);
         var seededCycle = await owner.StartCycleAsync(seeded);
-        await factory.UseDbAsync(db => db.SeedingEvents.Add(new SeedingEvent { CycleId = seededCycle.Id(), SeedLotId = Guid.NewGuid(), SeedingDate = Today, RecordedByAccountId = Guid.NewGuid() }));
+        await factory.UseDbAsync(db => db.SeedingRecords.Add(new SeedingRecord { CycleId = seededCycle.Id(), SeedLotLineId = Guid.NewGuid(), SeedingDate = Today, Quantity = 1, RecordedByAccountId = Guid.NewGuid() }));
         await factory.AddCycleAsync(closedYesterday, Today.AddDays(-30), Today.AddDays(-20));
         var lastClosed = await factory.AddCycleAsync(closedYesterday, Today.AddDays(-10), Today.AddDays(-1));
         await factory.AddCycleAsync(closedToday, Today.AddDays(-10), Today);

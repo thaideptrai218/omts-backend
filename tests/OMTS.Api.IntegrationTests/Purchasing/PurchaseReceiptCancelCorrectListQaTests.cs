@@ -100,15 +100,15 @@ public class PurchaseReceiptCancelCorrectListQaTests(AuthApiFactory factory) : I
         Assert.Equal(preview.Money("advanceAfter"), JsonDocument.Parse(advance!).RootElement.GetProperty("advance_amount").GetDecimal());
     }
 
-    // GBR-04 / PURCHASE-06.2.E1: a seeding session without a quantity counts as the whole line seeded, so the Owner can
-    // raise the quantity but never lower it; the receipt stays impossible to cancel.
+    // GBR-04 / PURCHASE-06.2.E1: with the whole line seeded, the Owner can raise the quantity but never lower it; the
+    // receipt stays impossible to cancel.
     [Fact]
-    public async Task After_a_seeding_without_a_quantity_the_owner_can_only_raise_the_quantity_of_the_line()
+    public async Task After_the_whole_line_was_seeded_the_owner_can_only_raise_the_quantity_of_the_line()
     {
         var world = await factory.WorldAsync();
         var receipt = await world.CompletedAsync(new LineBody(world.Seed, 50, 9_000));
         var line = receipt.LineOf(world.Seed);
-        await factory.SeedAsync(world.Raft.Id, line, null);
+        await factory.SeedAsync(world.Raft.Id, line, 50);
 
         var below = await (await CorrectAsync(world.Owner, receipt.Id(), new { reason = "Counted again", lines = new[] { new { lineId = line, quantity = 49.99m } } }))
             .ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-10");
@@ -116,7 +116,7 @@ public class PurchaseReceiptCancelCorrectListQaTests(AuthApiFactory factory) : I
 
         var raised = await (await CorrectAsync(world.Owner, receipt.Id(), new { reason = "Supplier invoice", lines = new[] { new { lineId = line, quantity = 60 } } })).ReadAsync(HttpStatusCode.OK);
 
-        Assert.Equal((60m, 540_000m, 60m, 0m), (raised.LineViewOf(world.Seed).Money("quantity"), raised.LineViewOf(world.Seed).Money("lineAmount"),
+        Assert.Equal((60m, 540_000m, 50m, 10m), (raised.LineViewOf(world.Seed).Money("quantity"), raised.LineViewOf(world.Seed).Money("lineAmount"),
             raised.LineViewOf(world.Seed).Money("seeded"), raised.LineViewOf(world.Seed).Money("returnable")));
         Assert.Equal("Seeded", (await (await world.Owner.CancelAsync(receipt.Id(), "x")).ProblemAsync(HttpStatusCode.Conflict, "MSG-PURCHASE-09")).GetProperty("cause").GetString());
     }

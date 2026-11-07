@@ -50,6 +50,13 @@ public static class LaneStateRules
     /// <summary>A lane that is Harvested cannot be chosen in another lot of the cycle, nor can one with no seed (BR-HARVEST-01).</summary>
     public static bool CanBeHarvested(LaneState state) => state is LaneState.Growing or LaneState.BeingHarvested;
 
+    /// <summary>BR-CYCLE-07: at least one lane has seed and every lane with seed is Harvested. <paramref name="lanesInUse"/> holds the states of the lanes In Use only (BR-CYCLE-02).</summary>
+    public static bool EverySeededLaneHarvested(IEnumerable<LaneState> lanesInUse)
+    {
+        var seeded = lanesInUse.Where(state => state != LaneState.NotSeeded).ToList();
+        return seeded.Count > 0 && seeded.All(state => state == LaneState.Harvested);
+    }
+
     /// <summary>The lanes with a record in the cycle: a Removed one among them stays on the view of that cycle (BR-FARM-04).</summary>
     public static IReadOnlySet<Guid> LanesWithRecords(
         CycleSpan? cycle, IReadOnlyCollection<LaneSeeding> seedings, IReadOnlyCollection<LaneHarvest> harvests) =>

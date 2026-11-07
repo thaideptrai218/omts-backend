@@ -41,7 +41,7 @@ public class CultivationLogsMigrationTests
         var oldSchema = await SchemaAsync(db);
         Assert.Equal(0, await ScalarAsync(db, TablesOfLogs));
 
-        var zone = new FarmingZone { Cooperative = new Cooperative { FullName = "HTX" }, Code = "KV01", Name = "A" };
+        var zone = new FarmingZone { CooperativeId = await OldSchemaRows.CooperativeAsync(db), Code = "KV01", Name = "A" };
         var cycle = new CultivationCycle { Raft = new Raft { Zone = zone, Code = "B01", Size = "1" }, StartDate = new DateOnly(2026, 1, 1) };
         var account = new Account { Username = "owner", DisplayName = "Owner", SubjectType = SubjectType.CooperativeOwner, StatusId = StatusIds.Account.Active };
         db.AddRange(cycle, account);

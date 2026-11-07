@@ -44,7 +44,7 @@ public static class PurchaseReturnRules
     public static AppError? QuantityError(
         PurchaseReceipt receipt,
         IReadOnlyList<ReturnLineInput> lines,
-        IReadOnlyDictionary<Guid, (decimal Seeded, bool UnknownQuantity)> seeded,
+        IReadOnlyDictionary<Guid, decimal> seeded,
         IReadOnlyDictionary<Guid, decimal> returned)
     {
         for (var i = 0; i < lines.Count; i++)
@@ -57,12 +57,12 @@ public static class PurchaseReturnRules
                     ErrorKind.Validation, UserMessages.Invalid(field) with { LegacyCode = MessageCodes.Legacy.Msg59 }, new Dictionary<string, object?> { ["field"] = field });
             }
 
-            var (seededQuantity, unknown) = seeded.GetValueOrDefault(line.Id);
+            var seededQuantity = seeded.GetValueOrDefault(line.Id);
             var lineReturned = returned.GetValueOrDefault(line.Id);
-            var returnable = PurchaseReceiptViews.Returnable(line, seededQuantity, unknown, lineReturned);
+            var returnable = PurchaseReceiptViews.Returnable(line, seededQuantity, lineReturned);
             if (quantity <= 0 || quantity > returnable)
             {
-                return OutsideLimit(line, field, returnable, seededQuantity, unknown, lineReturned);
+                return OutsideLimit(line, field, returnable, seededQuantity, lineReturned);
             }
         }
 
@@ -79,13 +79,11 @@ public static class PurchaseReturnRules
             ["supplierName"] = supplierName,
         });
 
-    private static AppError OutsideLimit(PurchaseReceiptLine line, string field, decimal returnable, decimal seeded, bool unknownSeeded, decimal returned)
+    private static AppError OutsideLimit(PurchaseReceiptLine line, string field, decimal returnable, decimal seeded, decimal returned)
     {
         var received = line.Quantity ?? 0;
         var seededText = seeded > 0 ? $", seeded {Quantity(seeded)} {line.Unit}" : string.Empty;
-        var explanation = unknownSeeded
-            ? "The quantity already seeded from this line is not known."
-            : $"Received {Quantity(received)} {line.Unit}{seededText}, already returned {Quantity(returned)} {line.Unit}.";
+        var explanation = $"Received {Quantity(received)} {line.Unit}{seededText}, already returned {Quantity(returned)} {line.Unit}.";
         var itemName = line.Item?.Name ?? string.Empty;
         return new AppError(
             ErrorKind.Validation,
@@ -98,7 +96,7 @@ public static class PurchaseReturnRules
                 ["maxQuantity"] = returnable,
                 ["unit"] = line.Unit,
                 ["received"] = received,
-                ["seeded"] = unknownSeeded ? received : seeded,
+                ["seeded"] = seeded,
                 ["returned"] = returned,
             });
     }

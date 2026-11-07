@@ -107,7 +107,7 @@ public class PushDeviceSessionTests
     public async Task On_SQL_Server_logout_stops_the_push_of_that_device()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateAsync();
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         var account = await api.AddAccountAsync(AcsTestKit.NewCode(), AcsTestKit.Password);
         var phone = await LoginAndRegisterAsync(api.CreateClient(), account.Username, "phone-token");

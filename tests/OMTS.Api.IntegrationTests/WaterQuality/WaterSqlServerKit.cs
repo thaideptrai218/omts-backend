@@ -37,8 +37,8 @@ public static class WaterSqlServerKit
 {
     public static async Task<WaterSqlServerZone> SeedAsync(SqlServerTestDatabase database)
     {
+        await database.MigrateToLatestAsync();
         await using var db = database.CreateContext();
-        await db.Database.MigrateAsync();
         var zone = new FarmingZone
         {
             Cooperative = new Cooperative { FullName = "HTX Trung Nam" },

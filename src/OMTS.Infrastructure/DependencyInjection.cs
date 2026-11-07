@@ -88,6 +88,12 @@ public static class DependencyInjection
         services.AddScoped<ICultivationCycleRepository, CultivationCycleRepository>();
         services.AddScoped<ICultivationLogRepository, CultivationLogRepository>();
         services.AddScoped<IMaterialUsageRepository, MaterialUsageRepository>();
+        services.AddScoped<ISeedingRecordRepository, SeedingRecordRepository>();
+        services.AddScoped<IHarvestLotRepository, HarvestLotRepository>();
+        services.AddScoped<IHarvestLotSalesQuery, NoSalesYetHarvestLotSalesQuery>();
+        services.AddScoped<SeedLotRepository>();
+        services.AddScoped<ISeedLotRepository>(provider => provider.GetRequiredService<SeedLotRepository>());
+        services.AddScoped<ISeedLotUsageQuery>(provider => provider.GetRequiredService<SeedLotRepository>());
         services.AddScoped<ICultivationCycleQuery, CultivationCycleQuery>();
         services.AddScoped<IZoneLicenseRepository, ZoneLicenseRepository>();
         services.AddScoped<IRaftMaterialCostQuery, RaftMaterialCostQuery>();

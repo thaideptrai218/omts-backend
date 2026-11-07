@@ -29,6 +29,9 @@ public class AuditSearchSqlServerTests
         ["IX_AuditEvents_Action_OccurredAt"] = "Action,OccurredAt",
         ["IX_AuditEvents_RecordCode_OccurredAt"] = "RecordCode,OccurredAt",
         ["IX_AuditEvents_RecordType_OccurredAt"] = "RecordType,OccurredAt",
+
+        // Not a search index: HarvestLotCorrections makes each harvest lot code one Created row, so a removed code is not given again (BR-HARVEST-05).
+        ["UX_AuditEvents_HarvestLotCreatedCode"] = "RecordCode",
     };
 
     [SqlServerFact]
@@ -67,10 +70,7 @@ public class AuditSearchSqlServerTests
     public async Task Filters_paging_facets_details_and_records_work_on_sql_server()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await using (var setup = database.CreateContext())
-        {
-            await setup.Database.MigrateAsync();
-        }
+        await database.MigrateToLatestAsync();
 
         await using var api = new SqlServerApiFactory(database);
         var password = NewPassword();

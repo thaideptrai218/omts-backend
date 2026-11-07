@@ -23,7 +23,7 @@ public sealed class CultivationLogService(
     ICultivationCycleRepository cycles,
     ICultivationLogRepository logs,
     CycleWriteGuard writes,
-    CultivationLogPhotoStore photoStore,
+    RecordPhotoStore photoStore,
     UploadedFileSaver fileSaver,
     CultivationLogViews views,
     ZoneAccessGuard zoneAccess,
@@ -65,7 +65,7 @@ public sealed class CultivationLogService(
         }
 
         var recorder = currentUser.AccountId ?? throw new InvalidOperationException("A cultivation log needs an authenticated caller.");
-        var uploaded = await photoStore.UploadAllAsync(values.NewPhotos, cancellationToken);
+        var uploaded = await photoStore.UploadAllAsync(FileCategories.CultivationLogPhotos, values.NewPhotos, cancellationToken);
         if (!uploaded.IsSuccess)
         {
             return uploaded.Error!;

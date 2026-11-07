@@ -15,11 +15,7 @@ public static class FarmLabSqlServerKit
 {
     public static async Task<SqlServerApiFactory> StartAsync(SqlServerTestDatabase database)
     {
-        await using (var db = database.CreateContext())
-        {
-            await db.Database.MigrateAsync();
-        }
-
+        await database.MigrateToLatestAsync();
         return new SqlServerApiFactory(database);
     }
 

@@ -14,8 +14,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-test:
+  # The tests run in parallel shards, each on its own runner with its own SQL Server, so a pull request waits for the
+  # slowest shard instead of the sum of them. A shard is a group of test namespaces under OMTS.Api.IntegrationTests;
+  # the last one (s5) takes every namespace the others do not name, so a new namespace is never left out.
+  # Balance: the shards hold about the same number of [SqlServerFact] tests, the expensive ones. Move a namespace
+  # between shards when one of them runs clearly longer than the rest.
+  test:
+    name: test (${{ matrix.name }})
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: unit
+            sql: false
+          - name: s1
+            sql: true
+            filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Sales.|FullyQualifiedName~OMTS.Api.IntegrationTests.Notifications.'
+          - name: s2
+            sql: true
+            filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Cultivation.|FullyQualifiedName~OMTS.Api.IntegrationTests.Employees.'
+          - name: s3
+            sql: true
+            filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Purchasing.|FullyQualifiedName~OMTS.Api.IntegrationTests.Farming.'
+          - name: s4
+            sql: true
+            filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Labor.|FullyQualifiedName~OMTS.Api.IntegrationTests.WaterQuality.'
+          - name: s5
+            sql: true
+            filter: 'FullyQualifiedName!~OMTS.Api.IntegrationTests.Sales.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Notifications.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Cultivation.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Employees.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Purchasing.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Farming.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Labor.&FullyQualifiedName!~OMTS.Api.IntegrationTests.WaterQuality.'
     steps:
       - uses: actions/checkout@v7
 
@@ -26,10 +54,12 @@ jobs:
       # Database tests ([SqlServerFact]) run against a throwaway SQL Server; the sa password is generated
       # per run and never stored in the repository.
       - name: Start SQL Server for database tests
+        if: ${{ matrix.sql }}
         run: |
           password="$(openssl rand -base64 24 | tr -d '/+=')$(openssl rand -hex 8)"
           echo "::add-mask::$password"
-          docker run -d --name omts-sql -e ACCEPT_EULA=Y -e "MSSQL_SA_PASSWORD=$password" -p 127.0.0.1:1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+          # The memory cap keeps SQL Server from taking the memory that dotnet test needs on the same runner.
+          docker run -d --name omts-sql -e ACCEPT_EULA=Y -e MSSQL_MEMORY_LIMIT_MB=6144 -e "MSSQL_SA_PASSWORD=$password" -p 127.0.0.1:1433:1433 mcr.microsoft.com/mssql/server:2022-latest
           ready=false
           for i in $(seq 1 60); do
             if docker logs omts-sql 2>&1 | grep -q "SQL Server is now ready for client connections"; then ready=true; break; fi
@@ -47,6 +77,7 @@ jobs:
 
       # Blob storage tests ([AzuriteFact]) run the production storage provider against Azurite.
       - name: Start Azurite for blob storage tests
+        if: ${{ matrix.sql }}
         run: |
           docker run -d --name omts-azurite -p 127.0.0.1:10000:10000 mcr.microsoft.com/azure-storage/azurite \
             azurite-blob --blobHost 0.0.0.0 --skipApiVersionCheck
@@ -54,21 +85,64 @@ jobs:
 
       - run: dotnet restore OMTS.sln
       - run: dotnet build OMTS.sln -c Release --no-restore
-      - run: dotnet test OMTS.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./coverage
 
+      # Coverage is collected on pushes to main and develop only; a pull request does not pay for it.
+      - name: Test
+        run: |
+          coverage=()
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            coverage=(--collect:"XPlat Code Coverage" --results-directory "./coverage/${{ matrix.name }}")
+          fi
+          if [ "${{ matrix.name }}" = "unit" ]; then
+            # Both projects run even when the first fails, so one run shows every failure.
+            status=0
+            dotnet test tests/OMTS.Domain.UnitTests -c Release --no-build "${coverage[@]}" || status=1
+            dotnet test tests/OMTS.Application.UnitTests -c Release --no-build "${coverage[@]}" || status=1
+            exit $status
+          else
+            dotnet test tests/OMTS.Api.IntegrationTests -c Release --no-build --filter "${{ matrix.filter }}" "${coverage[@]}"
+          fi
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ always() && github.event_name == 'push' }}
+        with:
+          name: coverage-shard-${{ matrix.name }}
+          path: coverage/${{ matrix.name }}
+          if-no-files-found: ignore
+          # A re-run of a failed shard uploads the same name again.
+          overwrite: true
+
+  # Pushes to main and develop: one coverage summary over all shards.
+  coverage-summary:
+    needs: test
+    if: ${{ github.event_name == 'push' && needs.test.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: coverage-shard-*
+          path: coverage
       - name: Coverage summary
-        if: always()
         run: |
           dotnet tool install --global dotnet-reportgenerator-globaltool
           reportgenerator -reports:"coverage/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:"MarkdownSummaryGithub;Cobertura"
           cat coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
-
       - uses: actions/upload-artifact@v7
-        if: always()
         with:
           name: coverage-report
           path: coverage-report
           if-no-files-found: ignore
+
+  # The check the branch rules require. It keeps the name of the job it replaces and passes only when every shard did.
+  build-test:
+    needs: test
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every test shard passed
+        run: |
+          echo "Result of the test shards: ${{ needs.test.result }}"
+          [ "${{ needs.test.result }}" = "success" ]
 
   # The API image of docker-compose.yml is built (never pushed), so the Dockerfile cannot silently break.
   docker-image:
