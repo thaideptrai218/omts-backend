@@ -95,7 +95,8 @@ public static class MessageCodes
     /// notifications and the advance warning, and MSG-PURCHASE-10, the Owner's correction (OMTS-218 P2); MSG-PURCHASE-04/05/06,
     /// the transaction notification and the two payment confirmations (OMTS-218 P3); MSG-PURCHASE-02, the confirmation of the
     /// Owner's approval of a return (OMTS-218 P4); MSG-LABOR-01 and MSG-LABOR-02, the approval of a new employee and the
-    /// reminder to lock a staff account (OMTS-227); MSG-SALE-04 and MSG-SALE-05, the merge of customer profiles (SALE-04 is
+    /// reminder to lock a staff account, MSG-LABOR-04 and MSG-LABOR-36, the pay period lock and the question before saving
+    /// the payroll settings (OMTS-227); MSG-SALE-04 and MSG-SALE-05, the merge of customer profiles (SALE-04 is
     /// new); MSG-DEBT-01 and MSG-DEBT-02, the receiving bank account (DEBT-01); MSG-GEN-11, MSG-SALE-01, MSG-SALE-02 and
     /// MSG-SALE-03, the purchase requests (new in PR S4); MSG-CYCLE-01/02/03, the seeding questions and the notice (CYCLE-02);
     /// MSG-CYCLE-04, a cultivation log to review (CYCLE-04); MSG-CYCLE-08, MSG-HARVEST-01/03, the reminder to close a cycle,
