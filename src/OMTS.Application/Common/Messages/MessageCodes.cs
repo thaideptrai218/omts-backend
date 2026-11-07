@@ -24,6 +24,9 @@ public static class MessageCodes
     public const string Cycle02 = "MSG-CYCLE-02";
     public const string Cycle03 = "MSG-CYCLE-03";
     public const string Cycle04 = "MSG-CYCLE-04";
+    public const string Cycle05 = "MSG-CYCLE-05";
+    public const string Cycle06 = "MSG-CYCLE-06";
+    public const string Cycle07 = "MSG-CYCLE-07";
     public const string Cycle08 = "MSG-CYCLE-08";
 
     public const string Harvest01 = "MSG-HARVEST-01";
@@ -96,11 +99,12 @@ public static class MessageCodes
     /// new); MSG-DEBT-01 and MSG-DEBT-02, the receiving bank account (DEBT-01); MSG-GEN-11, MSG-SALE-01, MSG-SALE-02 and
     /// MSG-SALE-03, the purchase requests (new in PR S4); MSG-CYCLE-01/02/03, the seeding questions and the notice (CYCLE-02);
     /// MSG-CYCLE-04, a cultivation log to review (CYCLE-04); MSG-CYCLE-08, MSG-HARVEST-01/03, the reminder to close a cycle,
-    /// the harvest notice and the lowered days (HARVEST-01 and HARVEST-03 are new in PR H1a).
+    /// the harvest notice and the lowered days (HARVEST-01 and HARVEST-03 are new in PR H1a); MSG-CYCLE-05/06/07, the close of a
+    /// cycle, its summary notice and the early close (CYCLE-06 is new in PR C5).
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
-        Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle08, Harvest01, Harvest03, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Debt01, Debt02, Water02, Water04,
+        Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Debt01, Debt02, Water02, Water04,
     };
 
     /// <summary>

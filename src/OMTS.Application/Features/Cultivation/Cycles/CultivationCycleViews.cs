@@ -38,7 +38,7 @@ public sealed class CultivationCycleViews(ICultivationCycleRepository cycles, IH
     }
 
     public CycleListItem ListItem(CultivationCycle cycle) => new(
-        cycle.Id, cycle.StartDate, cycle.CloseDate, cycle.StatusId, statusCatalog.DisplayNameOf(cycle.StatusId), RowVersionGuard.Encode(cycle.RowVersion));
+        cycle.Id, cycle.StartDate, cycle.CloseDate, cycle.StatusId, statusCatalog.DisplayNameOf(cycle.StatusId), RowVersionGuard.Encode(cycle.RowVersion), cycle.ClosedEarly);
 
     /// <summary>CYCLE-01 PRE-3, as the writes answer it: an Open cycle, with neither its raft nor its zone Discontinued.</summary>
     public static bool CanEdit(CultivationCycle? cycle, Raft raft, bool zoneInUse) =>

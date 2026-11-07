@@ -51,6 +51,9 @@ public static class NotificationTypes
     /// <summary>MSG-CYCLE-08, every seeded lane is Harvested, to the Zone Managers of the zone or else the Owner (BR-CYCLE-07); mandatory.</summary>
     public const string CycleCloseReminder = "CYCLE_CLOSE_REMINDER";
 
+    /// <summary>MSG-CYCLE-06, the summary of a closed cycle with the figures of the close day, to the Cooperative Owner (CYCLE-06 step 6). BR-ACCOUNT-11 does not list it as mandatory.</summary>
+    public const string CycleClosed = "CYCLE_CLOSED";
+
     /// <summary>MSG-PURCHASE-01, the new purchase receipt, to the Owner when a receipt is completed (BR-PURCHASE-05); push can be turned off.</summary>
     public const string PurchaseReceiptCompleted = "PURCHASE_RECEIPT_COMPLETED";
 
@@ -93,6 +96,9 @@ public static class NotificationTypes
         new(CycleCloseReminder, "Reminder to close a cultivation cycle", AlwaysPush, [CooperativeOwner, ZoneManager],
             NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View),
             NotificationSmsRule.MessageTextTo(CooperativeOwner)),
+        // Opens the progress view of the closed cycle on its close date (CYCLE-05.2).
+        new(CycleClosed, "Cultivation cycle closed", Default, [CooperativeOwner],
+            NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
         // Purchase receipts have no zone: opening one follows the role only (BR-FARM-08). Only the transaction of the
         // Accountant (MSG-PURCHASE-04, PURCHASE-05) is mandatory in FE-08 (BR-ACCOUNT-11).
         new(PurchaseReceiptCompleted, "New purchase receipt", Default, [CooperativeOwner],

@@ -8,6 +8,7 @@ using OMTS.Application.Features.Accounts;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Cooperatives;
 using OMTS.Application.Features.Employees;
+using OMTS.Application.Features.Cultivation.Closing;
 using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Cultivation.CultivationLogs;
 using OMTS.Application.Features.Cultivation.MaterialUsages;
@@ -144,6 +145,8 @@ public static class DependencyInjection
         services.AddScoped<CultivationCycleService>();
         services.AddScoped<CultivationCycleReadService>();
         services.AddScoped<CultivationProgressService>();
+        services.AddScoped<CycleSummaryReader>();
+        services.AddScoped<CycleCloseService>();
         // HARVEST-01, HARVEST-03 and what SALE and CLAIM call on a lot
         services.AddScoped<HarvestLotViews>();
         services.AddScoped<HarvestLotNotifier>();
