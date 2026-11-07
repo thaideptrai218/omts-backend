@@ -195,7 +195,8 @@ public class PurchaseRequestAccessTests(AuthApiFactory factory) : IClassFixture<
         Assert.True(offeredToOwner[NotificationTypes.PurchaseRequestNew]);
         Assert.False(offeredToOwner[NotificationTypes.PurchaseRequestCancelled]);
         Assert.DoesNotContain(NotificationTypes.PurchaseRequestResponse, offeredToOwner.Keys);
-        var offeredToTrader = Assert.Single(traderTypes.GetProperty("types").EnumerateArray());
-        Assert.Equal((NotificationTypes.PurchaseRequestResponse, false), (offeredToTrader.Text("type"), offeredToTrader.GetProperty("mandatory").GetBoolean()));
+        // BR-ACCOUNT-11: the trader's types are the response to a request and the withdrawal of a provenance record (TRACE-04), neither mandatory.
+        var offeredToTrader = traderTypes.GetProperty("types").EnumerateArray().Select(t => (t.Text("type"), t.GetProperty("mandatory").GetBoolean())).ToList();
+        Assert.Equal([(NotificationTypes.PurchaseRequestResponse, false), (NotificationTypes.ProvenanceWithdrawn, false)], offeredToTrader);
     }
 }

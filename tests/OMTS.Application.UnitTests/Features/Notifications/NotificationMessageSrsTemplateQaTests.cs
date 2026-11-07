@@ -23,6 +23,8 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
     private const string Trace02 = "Missing data in the trace of harvest lot {lot_code}: {missing_items}. Please ask the Cooperative Owner whether the data must be corrected.";
     private const string Trace03 ="The correction is not saved: lane {lane_number} of harvest lot {lot_code} would have no seed lot. Please keep at least one seed lot for this lane.";
     private const string Trace04 = "This correction changes the origin information of harvest lots {lot_codes}. Has the Cooperative Owner agreed in person that the data is wrong?";
+    private const string Trace05 = "{cooperative_short_name}: the origin information of oyster lot {lot_code} (invoice {invoice_codes}) has been withdrawn. You do not need to return the oysters. Please call {cooperative_phone}.";
+    private const string Trace06 = "No current sales invoice sells harvest lot {lot_code}; no trader will be notified.";
     private const string Farm01 ="{document} expires on {expiry_date}, in {days} days. Please renew it and record the new one.";
     private const string Farm02 = "{document} expired on {expiry_date}. Please renew it and record the new one.";
     private const string Water03 = "Water alert {correction_note}: zone {zone_name}, raft {raft_code}, measured on {measurement_time}. {values_outside}. Please check the water.";
@@ -38,8 +40,18 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
         "farm-01", "farm-02", "farm-01-no-type", "farm-01-certification", "farm-02-certification-no-number", "water-03", "water-03-corrected", "water-04-corrected", "water-04-voided", "water-06",
         "cycle-04", "cycle-08", "harvest-01", "harvest-03", "harvest-05",
         "cycle-05", "cycle-06", "cycle-06-early", "cycle-07", "cycle-07-no-seeding",
-        "trace-01", "trace-02", "trace-03", "trace-04", "trace-04-no-lot",
+        "trace-01", "trace-02", "trace-03", "trace-04", "trace-04-no-lot", "trace-05", "trace-06",
     };
+
+    // MSG-TRACE-05 before the Owner saves a cooperative phone number (FARM-01): the trader is asked to call the cooperative.
+    [Fact]
+    public void Msg_trace_05_without_a_cooperative_phone_asks_to_call_the_cooperative()
+    {
+        var message = UserMessages.ProvenanceWithdrawnNotice("DEMO HTX", "KV01-B01-20261026", ["HD000001"], null);
+
+        Assert.EndsWith("You do not need to return the oysters. Please call the cooperative.", message.Text);
+        Assert.Null(message.Parameters!["cooperative_phone"]);
+    }
 
     // TRACE-01.2: on the Trace lot screen there is no invoice, so the sentence about it is left out; the rest is the SRS text.
     [Fact]
@@ -193,6 +205,17 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
             UserMessages.TraceCorrectionAgreement([]),
             "Has the Cooperative Owner agreed in person that the data is wrong?",
             """{"lot_codes":[]}"""),
+        // BR-TRACE-07: one notice per trader, listing their invoices, never the reason.
+        "trace-05" => (
+            "MSG-TRACE-05", Trace05,
+            UserMessages.ProvenanceWithdrawnNotice("DEMO HTX", "KV01-B01-20261026", ["HD000001", "HD000004"], "0900000099"),
+            "DEMO HTX: the origin information of oyster lot KV01-B01-20261026 (invoice HD000001, HD000004) has been withdrawn. You do not need to return the oysters. Please call 0900000099.",
+            """{"cooperative_short_name":"DEMO HTX","lot_code":"KV01-B01-20261026","invoice_codes":["HD000001","HD000004"],"cooperative_phone":"0900000099"}"""),
+        "trace-06" => (
+            "MSG-TRACE-06", Trace06,
+            UserMessages.NoTraderToNotify("KV01-B01-20261026"),
+            "No current sales invoice sells harvest lot KV01-B01-20261026; no trader will be notified.",
+            """{"lot_code":"KV01-B01-20261026"}"""),
         "water-06" => (
             "MSG-WATER-06", Water06,
             UserMessages.WaterMeasurementOverdue("Vùng A", new DateOnly(2026, 10, 1)),

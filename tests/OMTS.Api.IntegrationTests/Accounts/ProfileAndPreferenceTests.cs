@@ -129,7 +129,8 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         // GFR-05: MSG-HARVEST-05 is not among the mandatory types of BR-ACCOUNT-11.
         Assert.Equal((false, true), managerTypes["HARVEST_LOT_AUTO_CLOSE_WARNING"]);
         Assert.Equal(["PURCHASE_RECEIPT_CANCELLED_ADVANCE"], accountantTypes.Keys);
-        Assert.Equal(["PURCHASE_REQUEST_RESPONSE"], traderTypes.Keys);
+        // BR-ACCOUNT-11: a trader receives the response to a request (SALE-03) and the withdrawal of a provenance record (TRACE-04).
+        Assert.Equal(["PURCHASE_REQUEST_RESPONSE", "PROVENANCE_WITHDRAWN"], traderTypes.Keys);
         Assert.Equal((true, true), ownerTypes["WATER_ALERT"]);
         Assert.Equal((true, true), ownerTypes["ZONE_LICENSE_EXPIRY"]);
         Assert.Equal((true, true), ownerTypes["COOPERATIVE_CERTIFICATION_EXPIRY"]);

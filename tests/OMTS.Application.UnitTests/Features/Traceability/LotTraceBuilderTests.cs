@@ -158,6 +158,22 @@ public sealed class LotTraceBuilderTests
         Assert.Equal(30_000m, accountant.Invoices[0].Lines[0].UnitPrice);
     }
 
+    // TRACE-04 (BR-TRACE-06): Withdraw is the Owner's, for a Published lot only; the Zone Manager (R) sees the state but is not offered it.
+    [Fact]
+    public void Withdraw_is_offered_to_the_owner_for_a_published_lot_only()
+    {
+        var (lot, sessions) = Scenario();
+        IReadOnlyList<LotSaleLine> sold = [Line("HD000001", Zone.Id, 1, 10m)];
+        var notPublished = Build(lot, sessions, Owner(), sold).CanWithdraw;
+        lot.PublishedAt = At;
+
+        Assert.False(notPublished);
+        Assert.True(Build(lot, sessions, Owner(), sold).CanWithdraw);
+        Assert.False(Build(lot, sessions, Staff(FixedRoles.ZoneManager, Zone.Id), sold).CanWithdraw);
+        lot.WithdrawnAt = At.AddHours(1);
+        Assert.False(Build(lot, sessions, Owner(), sold).CanWithdraw);
+    }
+
     [Fact]
     public void The_export_has_one_lot_row_one_row_per_lane_and_session_and_one_row_per_invoice_line()
     {
