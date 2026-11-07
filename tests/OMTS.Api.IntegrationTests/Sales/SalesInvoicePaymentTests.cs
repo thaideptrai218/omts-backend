@@ -111,7 +111,7 @@ public class SalesInvoicePaymentTests
         var client = sale.Manager.Client;
 
         var open = await client.GetFromJsonAsync<JsonElement>($"/api/sales-invoices/open-purchase-requests?customerId={trader.Profile.Id}");
-        Assert.Equal([request.Id(), other.Id()], open.EnumerateArray().Select(r => r.Id()).Order());
+        Assert.Equal(new[] { request.Id(), other.Id() }.Order(), open.EnumerateArray().Select(r => r.Id()).Order());
         var offered = open.EnumerateArray().Single(r => r.Id() == request.Id());
         Assert.Equal((300m, true), (offered.Money("acceptedKg"), offered.GetProperty("payLaterAgreed").GetBoolean()));
 
