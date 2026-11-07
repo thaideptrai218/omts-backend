@@ -6,6 +6,10 @@
 # dotenv files
 .env
 
+# Settings of a server come from its secret store, never from a file beside the program
+**/appsettings.Staging.json
+**/appsettings.Production.json
+
 # User-specific files
 *.rsuser
 *.suo
@@ -482,3 +486,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Files stored by the Local storage provider
+**/App_Data/

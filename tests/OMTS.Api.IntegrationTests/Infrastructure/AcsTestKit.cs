@@ -1,0 +1,119 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using OMTS.Domain.Entities.Identity;
+using OMTS.Infrastructure.Messaging.Fakes;
+using OMTS.Infrastructure.Persistence;
+
+namespace OMTS.Api.IntegrationTests.Infrastructure;
+
+/// <summary>Helpers for the account and access-control flows: log in, read codes from the fake inboxes.</summary>
+public static partial class AcsTestKit
+{
+    public const string Password = "Secret123";
+
+    /// <summary>
+    /// The row version of a stale screen: no save ever issues it. SQL Server's counter never reaches 0xFF…FF, and
+    /// <c>FarmingTestKit.IssueRowVersionAsync</c> ends its versions with a byte of 1–254.
+    /// </summary>
+    public const string StaleRowVersion = "//////////8=";
+
+    // A random start plus a counter: unique for the whole test run (random numbers met about once in 10,000
+    // runs), and different between runs.
+    private static int _phoneSequence = Random.Shared.Next(0, PhoneRange);
+    private const int PhoneRange = 90_000_000;
+
+    /// <summary>A valid mobile number ("09" + 8 digits) no other call of this run returns.</summary>
+    public static string NewPhone() => $"09{10_000_000 + (int)((uint)Interlocked.Increment(ref _phoneSequence) % PhoneRange)}";
+
+    // Starts with a letter: a username needs one (about 1 hex string in 100 is all digits), and the "c" keeps it hex.
+    public static string NewCode() => "c" + Guid.NewGuid().ToString("N")[..9];
+
+    /// <summary>A client carrying the access token of a fresh login.</summary>
+    public static async Task<HttpClient> LoginAsync(this AuthApiFactory factory, string identifier, string password = Password)
+    {
+        var client = factory.CreateClient();
+        var tokens = await LoginTokensAsync(client, identifier, password);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.GetProperty("accessToken").GetString());
+        return client;
+    }
+
+    public static async Task<JsonElement> LoginTokensAsync(HttpClient client, string identifier, string password = Password)
+    {
+        var response = await client.PostAsJsonAsync("/api/auth/login", new { identifier, password });
+        Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    /// <summary>The code of the latest SMS the fake sender kept for the number.</summary>
+    public static string LastSmsCode(this AuthApiFactory factory, string phoneNumber) =>
+        CodeIn(factory.Services.GetRequiredService<FakeSmsSender>().Inbox.List(phoneNumber)[0].Text);
+
+    public static string LastEmailCode(this AuthApiFactory factory, string email) =>
+        CodeIn(factory.Services.GetRequiredService<FakeEmailSender>().Inbox.List(email)[0].Text);
+
+    /// <summary>Enters the code of a verification request and returns the verification token.</summary>
+    public static async Task<string> VerifyAsync(HttpClient client, Guid verificationId, string code)
+    {
+        var response = await client.PostAsJsonAsync($"/api/verifications/{verificationId}/verify", new { code });
+        Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("verificationToken").GetString()!;
+    }
+
+    public static async Task<Guid> VerificationIdAsync(HttpResponseMessage response)
+    {
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var started = body.TryGetProperty("verification", out var nested) ? nested : body;
+        return started.GetProperty("verificationId").GetGuid();
+    }
+
+    /// <summary>The problem's MSG code; the body is buffered so the test can read it again afterwards.</summary>
+    public static async Task<string?> ErrorCodeAsync(this HttpResponseMessage response)
+    {
+        await response.Content.LoadIntoBufferAsync();
+        var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        return body.TryGetProperty("code", out var code) ? code.GetString() : $"(no code, HTTP {(int)response.StatusCode})";
+    }
+
+    public static async Task<Cooperative> EnsureCooperativeAsync(this AuthApiFactory factory)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
+        if (await db.Cooperatives.FirstOrDefaultAsync() is { } existing)
+        {
+            return existing;
+        }
+
+        var cooperative = new Cooperative { FullName = "HTX Trung Nam" };
+        db.Cooperatives.Add(cooperative);
+        await db.SaveChangesAsync();
+        return cooperative;
+    }
+
+    public static async Task<T> QueryAsync<T>(this AuthApiFactory factory, Func<OmtsDbContext, Task<T>> query)
+    {
+        using var scope = factory.Services.CreateScope();
+        return await query(scope.ServiceProvider.GetRequiredService<OmtsDbContext>());
+    }
+
+    /// <summary>Moves a verification request into the past, as if that much time had passed since its codes were sent.</summary>
+    public static void AgeBy(this VerificationCode request, TimeSpan age)
+    {
+        request.CreatedAt -= age;
+        request.LastSentAt -= age;
+        request.SendTimes = request.SendTimes.Select(sent => sent - age).ToList();
+    }
+
+    /// <summary>A password that meets the policy (letters and a digit), new for each call.</summary>
+    public static string NewPassword() => $"Pw{Guid.NewGuid():N}"[..12] + "7";
+
+    private static string CodeIn(string text) => SixDigits().Match(text).Value;
+
+    [GeneratedRegex(@"\d{6}")]
+    private static partial Regex SixDigits();
+}
