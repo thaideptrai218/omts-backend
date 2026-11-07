@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using OMTS.Application.Common;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Features.Harvest;
 
@@ -19,6 +20,17 @@ public sealed class HarvestLotAutoCloseOptions : IDailyJobOptions
     /// date (marker <c>HarvestLot.AutoCloseWarnedFor</c>).
     /// </summary>
     public bool CatchUpOnStart { get; set; } = true;
+}
+
+/// <summary>The next check is today's until <see cref="HarvestLotAutoCloseOptions.RunAt"/> business time, then tomorrow's (HARVEST-03 counts the lots it would close).</summary>
+internal sealed class HarvestAutoCloseSchedule(IOptions<HarvestLotAutoCloseOptions> options, TimeProvider timeProvider) : IHarvestAutoCloseSchedule
+{
+    public DateOnly NextCheckDate()
+    {
+        var now = timeProvider.GetUtcNow();
+        var today = DateOnly.FromDateTime(now.ToOffset(BusinessClock.UtcOffset).DateTime);
+        return DailyJobHostedService.IsPastRunTime(now, options.Value.RunAt) ? today.AddDays(1) : today;
+    }
 }
 
 /// <summary>How many lots one run of the daily close check closed and warned.</summary>

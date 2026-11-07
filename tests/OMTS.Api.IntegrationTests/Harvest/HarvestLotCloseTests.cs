@@ -73,7 +73,7 @@ public class HarvestLotCloseTests
 
         foreach (var (leftover, reason, field) in new (decimal?, string?, string)[]
         {
-            (null, "Unsold", "Leftover kg"), (-1m, "Unsold", "Leftover kg"), (1.234m, "Unsold", "Leftover kg"), (1_000_000_001m, "Unsold", "Leftover kg"),
+            (null, "Unsold", "Leftover kg"), (-1m, "Unsold", "Leftover kg"), (1.2345m, "Unsold", "Leftover kg"), (1_000_000_001m, "Unsold", "Leftover kg"),
             (5m, null, "Close reason"), (5m, " ", "Close reason"), (5m, "SoldWholeLot", "Close reason"), (5m, "TimeLimitReached", "Close reason"), (5m, "Lost", "Close reason"),
         })
         {

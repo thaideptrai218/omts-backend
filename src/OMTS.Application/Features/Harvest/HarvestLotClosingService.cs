@@ -85,7 +85,8 @@ public sealed class HarvestLotClosingService(
         }
 
         var check = new FieldCheck();
-        check.Check(leftoverKg is >= 0m and <= PurchaseReceiptValidator.MaxQuantity && PurchaseReceiptValidator.HasAllowedDecimals(leftoverKg.Value), HarvestLotStatusService.LeftoverKgField);
+        // 3 decimals, as the sold kg (InvoiceMoney.IsKg): the proposed leftover is the remaining kg after the sales, and the column keeps 3.
+        check.Check(leftoverKg is >= 0m and <= PurchaseReceiptValidator.MaxQuantity && decimal.Round(leftoverKg.Value, 3) == leftoverKg.Value, HarvestLotStatusService.LeftoverKgField);
         HarvestLotCloseReason? chosen = null;
         if (leftoverKg > 0m)
         {
