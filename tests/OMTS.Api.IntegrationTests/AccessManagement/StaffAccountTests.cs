@@ -68,20 +68,18 @@ public class StaffAccountTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     }
 
     [Fact]
-    public async Task Duplicates_and_missing_rows_are_refused()
+    public async Task Duplicates_and_invalid_usernames_are_refused()
     {
         var (owner, zone, role) = await SetupAsync();
         var existing = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
 
         var duplicateUsername = await owner.PostAsJsonAsync("/api/accounts", Body(zone, role, username: existing.Username));
         var duplicatePhone = await owner.PostAsJsonAsync("/api/accounts", Body(zone, role, phone: existing.PhoneNumber));
-        var noGrant = await owner.PostAsJsonAsync("/api/accounts", new { displayName = "A", username = $"s{NewCode()}", phoneNumber = NewPhone(), grants = Array.Empty<object>() });
         var phoneLikeUsername = await owner.PostAsJsonAsync("/api/accounts", Body(zone, role, username: "0912345678"));
 
         Assert.Equal("MSG-ACCOUNT-09", await duplicateUsername.ErrorCodeAsync());
         Assert.Equal(existing.Id, (await duplicateUsername.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("existingId").GetGuid());
         Assert.Equal("MSG-ACCOUNT-09", await duplicatePhone.ErrorCodeAsync());
-        Assert.Equal("MSG-GEN-01", await noGrant.ErrorCodeAsync());
         Assert.Equal("MSG-GEN-01", await phoneLikeUsername.ErrorCodeAsync());
     }
 

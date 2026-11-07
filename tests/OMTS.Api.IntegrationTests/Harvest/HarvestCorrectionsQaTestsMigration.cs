@@ -11,7 +11,7 @@ namespace OMTS.Api.IntegrationTests.Harvest;
 /// <summary>QA of PR H1b: the migration on the data a database of H1a holds, and on the one it cannot take.</summary>
 public class HarvestCorrectionsQaTestsMigration
 {
-    private const string MigrationBefore = "20261104212952_HarvestLots";
+    private const string MigrationBefore = "20261107052218_HarvestLots";
     private const string IndexName = "UX_AuditEvents_HarvestLotCreatedCode";
 
     private static AuditEvent Created(string? code) => new() { OccurredAt = DateTimeOffset.UtcNow, Action = "HarvestLot.Created", RecordType = "HarvestLot", RecordCode = code };
@@ -60,7 +60,7 @@ public class HarvestCorrectionsQaTestsMigration
         Assert.Equal(1505, failure.Number);
         Assert.Contains(IndexName, failure.Message);
         Assert.Equal(0, await IndexCountAsync(db));
-        Assert.Contains("20261104221248_HarvestLotCorrections", await db.Database.GetPendingMigrationsAsync());
+        Assert.Contains("20261107055301_HarvestLotCorrections", await db.Database.GetPendingMigrationsAsync());
 
         await db.Database.ExecuteSqlRawAsync("DELETE FROM AuditEvents WHERE Id = {0}", extra.Id);
         await migrator.MigrateAsync();

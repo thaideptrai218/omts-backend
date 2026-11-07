@@ -60,6 +60,8 @@ public class HarvestLotCodeRaceSqlServerTests
         public void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion) => inner.ExpectRowVersion(entity, rowVersion);
 
         public void MarkChanged(AuditableEntity entity) => inner.MarkChanged(entity);
+
+        public void DiscardChanges() => inner.DiscardChanges();
     }
 
     private static async Task AssertAnsweredAsync(IEnumerable<HttpResponseMessage> answers)

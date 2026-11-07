@@ -102,24 +102,6 @@ public class FarmingZoneSrs2710Tests(AuthApiFactory factory) : IClassFixture<Aut
     }
 
     // BR-WATER-01: water is measured per zone with no fixed point, so the point is optional on create and edit.
-    [Fact]
-    public async Task Water_measurement_point_is_optional()
-    {
-        var owner = await factory.OwnerAsync();
-
-        var none = await owner.Client.CreateZoneAsync(NewZoneBody() with { WaterMeasurementPoint = null });
-        var blank = await owner.Client.CreateZoneAsync(NewZoneBody() with { WaterMeasurementPoint = "   " });
-        Assert.Equal(JsonValueKind.Null, none.GetProperty("waterMeasurementPoint").ValueKind);
-        Assert.Equal(JsonValueKind.Null, blank.GetProperty("waterMeasurementPoint").ValueKind);
-        Assert.Null((await factory.ZoneEntityAsync(none.Id())).WaterMeasurementPoint);
-
-        var body = NewZoneBody();
-        var zone = await owner.Client.CreateZoneAsync(body);
-        var cleared = await owner.Client.EditZoneAsync(zone.Id(), body with { WaterMeasurementPoint = null, RowVersion = zone.Text("rowVersion") });
-        Assert.Equal(JsonValueKind.Null, cleared.GetProperty("waterMeasurementPoint").ValueKind);
-        Assert.Equal(["Water measurement point"], await (await owner.Client.PostAsJsonAsync("/api/zones", NewZoneBody() with { WaterMeasurementPoint = new string('w', 201) })).InvalidFieldsAsync());
-    }
-
     private static async Task<string> NextCodeAsync(HttpClient owner) =>
         (await (await owner.GetAsync("/api/zones/next-code")).ReadAsync(HttpStatusCode.OK)).Text("code");
 }

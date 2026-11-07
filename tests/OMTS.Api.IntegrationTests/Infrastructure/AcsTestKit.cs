@@ -101,6 +101,14 @@ public static partial class AcsTestKit
         return await query(scope.ServiceProvider.GetRequiredService<OmtsDbContext>());
     }
 
+    /// <summary>Moves a verification request into the past, as if that much time had passed since its codes were sent.</summary>
+    public static void AgeBy(this VerificationCode request, TimeSpan age)
+    {
+        request.CreatedAt -= age;
+        request.LastSentAt -= age;
+        request.SendTimes = request.SendTimes.Select(sent => sent - age).ToList();
+    }
+
     /// <summary>A password that meets the policy (letters and a digit), new for each call.</summary>
     public static string NewPassword() => $"Pw{Guid.NewGuid():N}"[..12] + "7";
 

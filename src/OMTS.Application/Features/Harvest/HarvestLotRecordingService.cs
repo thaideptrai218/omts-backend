@@ -89,7 +89,8 @@ public sealed class HarvestLotRecordingService(
     {
         for (var attempt = 1; ; attempt++)
         {
-            lots.ForgetTrackedChanges();
+            // Forgets every row read or added and the pushes queued with them, so a new attempt after a lost race on the lot code reads the database again.
+            unitOfWork.DiscardChanges();
             var prepared = await photoStore.PrepareSaveAsync(keys, () => PrepareAsync(raftId, request, keys, recorder, cancellationToken));
             if (!prepared.IsSuccess)
             {

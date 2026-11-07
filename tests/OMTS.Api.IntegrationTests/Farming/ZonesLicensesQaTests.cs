@@ -172,18 +172,6 @@ public class ZonesLicensesQaTests(AuthApiFactory factory) : IClassFixture<AuthAp
     }
 
     // The point became optional: recording water in a zone without one still works and stores no point (WATER-01).
-    [Fact]
-    public async Task Water_can_be_recorded_in_a_zone_without_a_measurement_point()
-    {
-        using var api = new AuthApiFactory();
-        var water = await api.ZoneAsync();
-        await api.UpdateAsync<FarmingZone>(water.Zone.Id, z => z.WaterMeasurementPoint = null);
-
-        var recorded = await water.RecordedAsync(7.8m, 20m);
-
-        Assert.Null(await api.QueryAsync(db => db.WaterMeasurements.Where(m => m.Id == recorded.Id()).Select(m => m.MeasurementPoint).SingleAsync()));
-    }
-
     private static async Task<string> NextCodeAsync(HttpClient owner) =>
         (await (await owner.GetAsync("/api/zones/next-code")).ReadAsync(HttpStatusCode.OK)).Text("code");
 }

@@ -88,6 +88,8 @@ public class HarvestCorrectionsQaTestsSqlServer(ITestOutputHelper output)
         public void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion) => inner.ExpectRowVersion(entity, rowVersion);
 
         public void MarkChanged(AuditableEntity entity) => inner.MarkChanged(entity);
+
+        public void DiscardChanges() => inner.DiscardChanges();
     }
 
     // The unique index on a slot: the removed photo and the new photo share slot 1 in one save, so the delete must go first. Only SQL Server would refuse the other order.
@@ -586,6 +588,8 @@ public class HarvestCorrectionsQaTestsSqlServer(ITestOutputHelper output)
         public void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion) => inner.ExpectRowVersion(entity, rowVersion);
 
         public void MarkChanged(AuditableEntity entity) => inner.MarkChanged(entity);
+
+        public void DiscardChanges() => inner.DiscardChanges();
     }
 
     // A database EF Core creates, and Azure SQL, read versions of the rows. One made by hand, or restored from one, has locking reads: the same parallel work there, where a read can be

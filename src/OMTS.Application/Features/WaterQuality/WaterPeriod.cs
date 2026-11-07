@@ -5,7 +5,7 @@ using OMTS.Application.Common.Results;
 namespace OMTS.Application.Features.WaterQuality;
 
 /// <summary>
-/// A range of business dates (Asia/Ho_Chi_Minh), both ends included, as used by the ENV-03 filters
+/// A range of business dates (Asia/Ho_Chi_Minh), both ends included, as used by the WATER-03 filters
 /// (<c>from</c>/<c>to</c> in yyyy-MM-dd).
 /// </summary>
 public sealed record WaterPeriod(DateOnly From, DateOnly To)
@@ -16,13 +16,14 @@ public sealed record WaterPeriod(DateOnly From, DateOnly To)
     /// <summary>Earliest accepted <c>from</c>/<c>to</c>.</summary>
     public static readonly DateOnly Earliest = new(2000, 1, 1);
 
+    /// <summary>Start of <see cref="Earliest"/> in local time: the first instant any period can list.</summary>
+    public static readonly DateTimeOffset EarliestInstant = StartOf(Earliest);
+
     /// <summary>Start of <see cref="From"/> in local time.</summary>
     public DateTimeOffset FromInstant => StartOf(From);
 
     /// <summary>Start of the day after <see cref="To"/> in local time.</summary>
     public DateTimeOffset ToExclusive => StartOf(To.AddDays(1));
-
-    public int Days => To.DayNumber - From.DayNumber + 1;
 
     /// <summary><c>to</c> defaults to today and <c>from</c> to <paramref name="defaultFrom"/>(to); from after to is invalid (MSG-GEN-01).</summary>
     public static Result<WaterPeriod> Parse(string? from, string? to, DateOnly today, Func<DateOnly, DateOnly> defaultFrom)

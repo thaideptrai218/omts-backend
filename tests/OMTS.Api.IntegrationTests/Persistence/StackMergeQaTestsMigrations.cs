@@ -17,18 +17,25 @@ using Microsoft.Extensions.DependencyInjection;
 namespace OMTS.Api.IntegrationTests.Persistence;
 
 /// <summary>
-/// QA of the merge of the purchase stack into the raft and cycle stack: the migration chain interleaves both by timestamp. It must apply on an empty database, build the schema
+/// QA of the merge of seeding onto the cultivation stack (purchase, raft, cycle, log and material migrations). The chain must apply on an empty database, build the schema
 /// of the model, and go down to any point inside the interleave and up again, also with data in every table.
 /// </summary>
 public class StackMergeQaTestsMigrations
 {
-    /// <summary>The migrations the merge interleaves, in chain order, from the first that either side added.</summary>
+    /// <summary>
+    /// The migrations of the stack, in chain order, from the first SRS 27/10 one: the cultivation stack of develop (purchase, raft, cycle, log and material
+    /// migrations, now one linear chain), SeedingRecords on top of it, HarvestLots on top of that and HarvestLotCorrections last.
+    /// </summary>
     private static readonly string[] Interleave =
     [
-        "20261104071927_FixedRoles", "20261104072127_NotificationsV2", "20261104072225_PurchaseCatalogueV2", "20261104072358_CooperativeProfileV2", "20261104072437_ZonesLicensesV2",
-        "20261104072522_PurchaseReceiptsV2", "20261104084901_SupplierPaymentsV2", "20261104100119_PurchaseReturnsV2", "20261104103030_RaftsV2", "20261104113119_CultivationCyclesV2",
-        "20261104124405_CultivationLogs", "20261104164709_MaterialUsages", "20261104182051_SeedingRecords", "20261104212952_HarvestLots", "20261104221248_HarvestLotCorrections",
+        "20261104071927_FixedRoles", "20261104072127_NotificationsV2", "20261104072225_PurchaseCatalogueV2", "20261104072358_CooperativeProfileV2", "20261104084530_AccountRulesV2",
+        "20261104174337_SalesCatalogueV2", "20261105070947_ReceivingBankAccount", "20261105071021_ZonesLicensesV2", "20261105071646_WaterMeasurementsV2", "20261105075725_PurchaseReceiptsV2",
+        "20261105093720_AuditSearch", "20261105093736_EmployeesV2", "20261105122524_PurchaseRequests", "20261105140242_SupplierPaymentsV2", "20261105161142_RaftsV2",
+        "20261105165022_CultivationCyclesV2", "20261105170348_PurchaseReturnsV2", "20261106081809_LaborSettings", "20261106083401_CultivationLogs", "20261106084757_MaterialUsages",
+        "20261107050042_SeedingRecords", "20261107052218_HarvestLots", "20261107055301_HarvestLotCorrections",
     ];
+
+    private const string MigrationBeforeSeeding = "20261106084757_MaterialUsages";
 
     private const string BeforeTheStack = "20261028151320_RemoveLegacyScaffolding";
 
@@ -99,7 +106,7 @@ public class StackMergeQaTestsMigrations
         {
             await migrator.MigrateAsync(target);
             Assert.Equal(target, (await db.Database.GetAppliedMigrationsAsync()).Last());
-            Assert.Empty((await ReadAsync(db, CatalogQuery)).Where(l => l.Contains("|PURCHASE_RETURN|", StringComparison.Ordinal) && string.CompareOrdinal(target, "20261104100119_PurchaseReturnsV2") < 0));
+            Assert.Empty((await ReadAsync(db, CatalogQuery)).Where(l => l.Contains("|PURCHASE_RETURN|", StringComparison.Ordinal) && string.CompareOrdinal(target, "20261105170348_PurchaseReturnsV2") < 0));
         }
 
         await migrator.MigrateAsync();
@@ -167,16 +174,12 @@ public class StackMergeQaTestsMigrations
         }
     }
 
-    // Each side's chain, applied alone, then the merged code: EF runs the migrations of the other side out of timestamp order. A database made on either PR must still reach the head.
+    // The chain of the cultivation stack, applied alone as scripts, then the seeding code: a database made on that PR must still reach the head. The two
+    // interleaved sides of the earlier merge are one linear chain on develop now, so only this side is left.
     [SqlServerFact]
-    public Task A_database_made_on_the_raft_side_reaches_the_head_and_the_schema_of_the_model() => SideReachesTheHeadAsync(
-        "raft and cycle side",
-        "20261104071927_FixedRoles,20261104072127_NotificationsV2,20261104072358_CooperativeProfileV2,20261104072437_ZonesLicensesV2,20261104103030_RaftsV2,20261104113119_CultivationCyclesV2,20261104124405_CultivationLogs,20261104164709_MaterialUsages");
-
-    [SqlServerFact]
-    public Task A_database_made_on_the_purchase_side_reaches_the_head_and_the_schema_of_the_model() => SideReachesTheHeadAsync(
-        "purchase side",
-        "20261104071927_FixedRoles,20261104072127_NotificationsV2,20261104072225_PurchaseCatalogueV2,20261104072522_PurchaseReceiptsV2,20261104084901_SupplierPaymentsV2,20261104100119_PurchaseReturnsV2");
+    public Task A_database_made_on_the_cultivation_stack_reaches_the_head_and_the_schema_of_the_model() => SideReachesTheHeadAsync(
+        "cultivation stack",
+        string.Join(',', Interleave.TakeWhile(m => m != "20261107050042_SeedingRecords")));
 
     private static async Task SideReachesTheHeadAsync(string side, string migrations)
     {
@@ -256,7 +259,7 @@ public class StackMergeQaTestsMigrations
         await using var database = SqlServerTestDatabase.Create();
         await using var db = database.CreateContext();
         var migrator = db.GetService<IMigrator>();
-        await migrator.MigrateAsync("20261104164709_MaterialUsages");
+        await migrator.MigrateAsync(MigrationBeforeSeeding);
         var oldSchema = await ReadAsync(db, SchemaQuery);
         var cycle = new CultivationCycle { Raft = new Raft { Zone = new FarmingZone { CooperativeId = await OldSchemaRows.CooperativeAsync(db), Code = "KV01", Name = "A" }, Code = "B01", Size = "1" }, StartDate = new DateOnly(2026, 1, 1) };
         var account = new Account { Username = "owner", DisplayName = "Owner", SubjectType = SubjectType.CooperativeOwner, StatusId = StatusIds.Account.Active };
@@ -277,7 +280,7 @@ public class StackMergeQaTestsMigrations
         Assert.Contains("SeedingRecords", tables);
         Assert.False(db.Database.HasPendingModelChanges());
 
-        await migrator.MigrateAsync("20261104164709_MaterialUsages");
+        await migrator.MigrateAsync(MigrationBeforeSeeding);
         AssertSameLines(oldSchema, await ReadAsync(db, SchemaQuery), "schema after Down");
         Assert.Equal(0, await db.Database.SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM SeedingEvents").SingleAsync());
 

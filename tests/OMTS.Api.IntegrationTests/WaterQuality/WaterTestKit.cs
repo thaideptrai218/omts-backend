@@ -37,8 +37,8 @@ public sealed class WaterApiFactory(IReadOnlyDictionary<string, string>? setting
     }
 }
 
-/// <summary>A zone with thresholds pH 6.5–8.5 and salinity 15–30 ‰, its Owner and helpers to record measurements.</summary>
-public sealed record WaterZone(AuthApiFactory Api, FarmingZone Zone, HttpClient Owner, Account OwnerAccount)
+/// <summary>A zone with thresholds pH 6.5–8.5, salinity 15–30 ‰ and temperature 10–35 °C, a raft In Use, its Owner and helpers to record measurements.</summary>
+public sealed record WaterZone(AuthApiFactory Api, FarmingZone Zone, Raft Raft, HttpClient Owner, Account OwnerAccount)
 {
     public string Base => $"/api/zones/{Zone.Id}/water-measurements";
 }
@@ -50,16 +50,25 @@ public static class WaterTestKit
     public static async Task<WaterZone> ZoneAsync(this AuthApiFactory api, bool thresholds = true)
     {
         var zone = await api.AddZoneAsync(NewCode());
-        await api.UpdateAsync<FarmingZone>(zone.Id, z =>
+        if (thresholds)
         {
-            z.WaterMeasurementPoint = "Cọc đo số 1";
-            if (thresholds)
+            await api.UpdateAsync<FarmingZone>(zone.Id, z =>
             {
                 (z.PhMin, z.PhMax, z.SalinityMin, z.SalinityMax) = (6.5m, 8.5m, 15m, 30m);
-            }
-        });
+                (z.TemperatureMin, z.TemperatureMax) = (10m, 35m);
+            });
+        }
+
+        var raft = await api.RaftAsync(zone);
         var owner = await api.AddAccountAsync(NewCode(), Password);
-        return new WaterZone(api, zone, await api.LoginAsync(owner.Username), owner);
+        return new WaterZone(api, zone, raft, await api.LoginAsync(owner.Username), owner);
+    }
+
+    public static async Task<Raft> RaftAsync(this AuthApiFactory api, FarmingZone zone, string? code = null)
+    {
+        var raft = new Raft { ZoneId = zone.Id, Code = code ?? $"B-{NewCode()}" };
+        await api.UseDbAsync(db => db.Rafts.Add(raft));
+        return raft;
     }
 
     /// <summary>
@@ -74,60 +83,93 @@ public static class WaterTestKit
         return (await api.LoginAsync(account.Username), account);
     }
 
-    /// <summary>A PNG whose bytes carry the fake OCR markers (e.g. "ph9.1_sal20").</summary>
+    /// <summary>A PNG whose bytes carry the fake OCR markers (e.g. "ph9.1_sal20_tmp28").</summary>
     public static byte[] Photo(string marker = "") => [.. PngSignature, .. Encoding.ASCII.GetBytes(marker)];
 
-    public static MultipartFormDataContent PhotoForm(byte[] photo, Guid? clientOperationId = null, string contentType = "image/png")
+    public static MultipartFormDataContent PhotoForm(byte[] photo, string contentType = "image/png")
     {
         var form = new MultipartFormDataContent();
         var file = new ByteArrayContent(photo);
         file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
         form.Add(file, "photo", "meter.png");
-        if (clientOperationId is { } id)
-        {
-            form.Add(new StringContent(id.ToString()), "clientOperationId");
-        }
-
         return form;
     }
 
-    public static Task<HttpResponseMessage> RecognizeAsync(this WaterZone z, string marker = "", Guid? clientOperationId = null, HttpClient? client = null) =>
-        (client ?? z.Owner).PostAsync($"{z.Base}/recognize", PhotoForm(Photo(marker), clientOperationId));
+    public static Task<HttpResponseMessage> RecognizeAsync(this WaterZone z, string marker = "", HttpClient? client = null) =>
+        (client ?? z.Owner).RecognizeAsync(z.Zone.Id, marker);
 
-    public static Task<HttpResponseMessage> RecordAsync(
-        this WaterZone z, decimal? ph, decimal? salinity, bool confirm = true, Guid? clientOperationId = null, DateTimeOffset? measuredAt = null,
-        HttpClient? client = null) =>
-        (client ?? z.Owner).PostAsJsonAsync(z.Base, new
+    public static Task<HttpResponseMessage> RecognizeAsync(this HttpClient client, Guid zoneId, string marker = "") =>
+        client.PostAsync($"/api/zones/{zoneId}/water-measurements/recognize", PhotoForm(Photo(marker)));
+
+    /// <summary>The key of a new meter photo of this caller, as recognize answers it; empty when the caller is refused.</summary>
+    public static async Task<string> PhotoKeyAsync(this HttpClient client, Guid zoneId, string marker = "")
+    {
+        var response = await client.RecognizeAsync(zoneId, marker);
+        return response.StatusCode == HttpStatusCode.OK
+            ? (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("photoKey").GetString()!
+            : string.Empty;
+    }
+
+    /// <summary>Recognize, then the record request with the values the user confirmed.</summary>
+    public static async Task<HttpResponseMessage> RecordAsync(
+        this WaterZone z, decimal? ph, decimal? salinity, decimal? temperature = 25m, Guid? clientOperationId = null, DateTimeOffset? measuredAt = null,
+        HttpClient? client = null, Guid? raftId = null, string? photoKey = null)
+    {
+        var caller = client ?? z.Owner;
+        return await caller.PostAsJsonAsync(z.Base, new
         {
-            clientOperationId = clientOperationId ?? Guid.NewGuid(),
+            clientOperationId,
+            raftId = raftId ?? z.Raft.Id,
             measuredAt = measuredAt ?? DateTimeOffset.UtcNow.AddMinutes(-10),
             ph,
             salinity,
-            confirm,
+            temperature,
+            photoKey = photoKey ?? await caller.PhotoKeyAsync(z.Zone.Id),
+        });
+    }
+
+    /// <summary>The record request with a time given as text, as a client sends it.</summary>
+    public static async Task<HttpResponseMessage> RecordAtAsync(this WaterZone z, string measuredAt) =>
+        await z.Owner.PostAsJsonAsync(z.Base, new
+        {
+            raftId = z.Raft.Id,
+            measuredAt,
+            ph = 7.2m,
+            salinity = 20m,
+            temperature = 25m,
+            photoKey = await z.Owner.PhotoKeyAsync(z.Zone.Id),
         });
 
     /// <summary>Records a measurement and returns its body; fails the test unless it was created.</summary>
     public static async Task<JsonElement> RecordedAsync(
-        this WaterZone z, decimal? ph, decimal? salinity, bool confirm = true, DateTimeOffset? measuredAt = null, HttpClient? client = null)
+        this WaterZone z, decimal ph, decimal salinity, DateTimeOffset? measuredAt = null, HttpClient? client = null, decimal temperature = 25m)
     {
-        var response = await z.RecordAsync(ph, salinity, confirm, measuredAt: measuredAt, client: client);
+        var response = await z.RecordAsync(ph, salinity, temperature, measuredAt: measuredAt, client: client);
         Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
-    public static Task<HttpResponseMessage> CorrectAsync(
-        this HttpClient client, Guid id, decimal ph, decimal salinity, int recordVersion, string? reason = "Đọc nhầm số", DateTimeOffset? measuredAt = null) =>
-        client.PostAsJsonAsync($"/api/water-measurements/{id}/corrections", new
+    /// <summary>The correction request; without <paramref name="raftId"/> it names the raft the measurement has, as the caller can read it.</summary>
+    public static async Task<HttpResponseMessage> CorrectAsync(
+        this HttpClient client, Guid id, decimal ph, decimal salinity, string? reason = "Đọc nhầm số", DateTimeOffset? measuredAt = null, decimal? temperature = 25m, Guid? raftId = null) =>
+        await client.PostAsJsonAsync($"/api/water-measurements/{id}/corrections", new
         {
+            raftId = raftId ?? await CurrentRaftAsync(client, id),
             ph,
             salinity,
+            temperature,
             measuredAt = measuredAt ?? DateTimeOffset.UtcNow.AddMinutes(-10),
             reason,
-            recordVersion,
         });
 
-    public static Task<HttpResponseMessage> VoidAsync(this HttpClient client, Guid id, int recordVersion, string? reason = "Ghi nhầm vùng") =>
-        client.PostAsJsonAsync($"/api/water-measurements/{id}/void", new { reason, recordVersion });
+    private static async Task<Guid?> CurrentRaftAsync(HttpClient client, Guid id)
+    {
+        var detail = await client.GetAsync($"/api/water-measurements/{id}");
+        return detail.IsSuccessStatusCode ? (await detail.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("raftId").GetGuid() : null;
+    }
+
+    public static Task<HttpResponseMessage> VoidAsync(this HttpClient client, Guid id, string? reason = "Ghi nhầm vùng") =>
+        client.PostAsJsonAsync($"/api/water-measurements/{id}/void", new { reason });
 
     public static Guid Id(this JsonElement body) => body.GetProperty("id").GetGuid();
 
@@ -137,6 +179,12 @@ public static class WaterTestKit
     public static Task<List<Notification>> AlertsOfAsync(this AuthApiFactory api, Guid measurementId) =>
         api.QueryAsync(db => db.Notifications.AsNoTracking()
             .Where(n => n.Type == NotificationTypes.WaterAlert && n.RelatedRecordId == measurementId)
+            .ToListAsync());
+
+    /// <summary>WATER_ALERT_WITHDRAWN rows (MSG-WATER-04) of one measurement.</summary>
+    public static Task<List<Notification>> WithdrawalsOfAsync(this AuthApiFactory api, Guid measurementId) =>
+        api.QueryAsync(db => db.Notifications.AsNoTracking()
+            .Where(n => n.Type == NotificationTypes.WaterAlertWithdrawn && n.RelatedRecordId == measurementId)
             .ToListAsync());
 
     public static Task<List<AuditEvent>> AuditOfAsync(this AuthApiFactory api, Guid recordId) =>

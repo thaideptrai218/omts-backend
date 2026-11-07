@@ -1,12 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using OMTS.Application.Features.Verification;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Ocr;
+using OMTS.Application.Common.Interfaces.Payments;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Interfaces.Reports;
 using OMTS.Application.Common.Interfaces.Storage;
@@ -17,6 +19,7 @@ using OMTS.Infrastructure.Jobs;
 using OMTS.Infrastructure.Messaging;
 using OMTS.Infrastructure.Messaging.Fakes;
 using OMTS.Infrastructure.Ocr;
+using OMTS.Infrastructure.Payments;
 using OMTS.Infrastructure.Persistence;
 using OMTS.Infrastructure.Persistence.Interceptors;
 using OMTS.Infrastructure.Persistence.Queries;
@@ -61,14 +64,25 @@ public static class DependencyInjection
         services.AddScoped<IAccessGrantRepository, AccessGrantRepository>();
         services.AddScoped<IFarmingZoneRepository, FarmingZoneRepository>();
         services.AddScoped<IAuditEventRepository, AuditEventRepository>();
+        services.AddScoped<IAuditEventQuery, AuditEventQuery>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IRelatedRecordQuery, RelatedRecordQuery>();
+        services.AddScoped<ISentInvoiceQrCodeQuery, SentInvoiceQrCodeQuery>();
         services.AddScoped<IZoneRecipientQuery, ZoneRecipientQuery>();
+        services.AddScoped<IMandatorySmsRecipientQuery, MandatorySmsRecipientQuery>();
         services.AddScoped<IVerificationCodeRepository, VerificationCodeRepository>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<ICustomerReferences, CustomerReferences>();
+        services.AddScoped<IProductRepository, ProductRepository>();
+        services.AddScoped<IPurchaseRequestRepository, PurchaseRequestRepository>();
+        services.AddScoped<ICooperativeOwnerQuery, CooperativeOwnerQuery>();
         services.AddScoped<ICooperativeRepository, CooperativeRepository>();
         services.AddScoped<IPushDeviceRepository, PushDeviceRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
+        services.AddScoped<IEmployeeWorkRecords, EmployeeWorkRecords>();
+        services.AddScoped<IJobTypeRepository, JobTypeRepository>();
+        services.AddScoped<IAttendanceSettingsRepository, AttendanceSettingsRepository>();
+        services.AddScoped<IPayrollRepository, PayrollRepository>();
         services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddScoped<IRaftRepository, RaftRepository>();
         services.AddScoped<ICultivationCycleRepository, CultivationCycleRepository>();
@@ -101,6 +115,7 @@ public static class DependencyInjection
         services.AddMessaging(configuration);
         services.AddFileStorage(configuration);
         services.AddOcr(configuration);
+        services.AddPayments(configuration);
         services.AddSingleton<ISpreadsheetWriter, ClosedXmlSpreadsheetWriter>();
 
         services.AddScoped<DeploymentBootstrapper>();
@@ -113,7 +128,13 @@ public static class DependencyInjection
 
         // Overdue water measurement reminder (formerly JOB-05)
         services.AddOptions<WaterMeasurementOverdueOptions>().Bind(configuration.GetSection(WaterMeasurementOverdueOptions.SectionName));
-        services.AddHostedService<WaterMeasurementOverdueJob>();
+        services.AddSingleton<WaterMeasurementOverdueJob>();
+        services.AddHostedService<WaterMeasurementOverdueHostedService>();
+
+        // LABOR-01: Left from the day after the last working day
+        services.AddOptions<EmploymentEndOptions>().Bind(configuration.GetSection(EmploymentEndOptions.SectionName));
+        services.AddSingleton<EmploymentEndJob>();
+        services.AddHostedService<EmploymentEndHostedService>();
 
         // Raft photos, license files, cover photos and certificate files no record points to (cooperative logos are never touched)
         services.AddOptions<OrphanFileCleanupOptions>()
@@ -142,7 +163,12 @@ public static class DependencyInjection
     private static void AddMessaging(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<EmailOptions>().Bind(configuration.GetSection(EmailOptions.SectionName));
-        services.AddOptions<SmsOptions>().Bind(configuration.GetSection(SmsOptions.SectionName));
+        services.AddOptions<SmsOptions>()
+            .Bind(configuration.GetSection(SmsOptions.SectionName))
+            .Validate(
+                o => o.MandatoryTimeoutSeconds is >= SmsOptions.MinMandatoryTimeoutSeconds and <= SmsOptions.MaxMandatoryTimeoutSeconds,
+                $"{SmsOptions.SectionName}:MandatoryTimeoutSeconds must be from {SmsOptions.MinMandatoryTimeoutSeconds} to {SmsOptions.MaxMandatoryTimeoutSeconds}.")
+            .ValidateOnStart();
         services.AddOptions<PushOptions>().Bind(configuration.GetSection(PushOptions.SectionName));
 
         services.AddSingleton<FakeEmailSender>();
@@ -164,6 +190,7 @@ public static class DependencyInjection
             SmsOptions.NoneProvider => ActivatorUtilities.CreateInstance<UnconfiguredSmsSender>(provider),
             var other => throw UnknownProvider(SmsOptions.SectionName, other),
         });
+        services.AddSingleton<ITraderMessageSender, SmsTraderMessageSender>();
         services.AddSingleton<IPushSender>(provider => provider.GetRequiredService<IOptions<PushOptions>>().Value.Provider switch
         {
             PushOptions.FakeProvider => provider.GetRequiredService<FakePushSender>(),
@@ -173,6 +200,8 @@ public static class DependencyInjection
 
         services.AddScoped<PushOutbox>();
         services.AddScoped<IPushOutbox>(provider => provider.GetRequiredService<PushOutbox>());
+        services.AddScoped<IMandatorySmsOutbox>(provider => provider.GetRequiredService<PushOutbox>());
+        services.AddSingleton<MandatorySmsDelivery>();
 
         // Resolves the configured adapters at startup, so a configuration error stops the host right away.
         services.AddHostedService<ExternalServicesStartupCheck>();
@@ -206,6 +235,30 @@ public static class DependencyInjection
             return name == OcrProviderOptions.FakeProvider
                 ? provider.GetRequiredService<FakeOcrService>()
                 : provider.GetRequiredService<NotConfiguredOcrService>();
+        });
+    }
+
+    private static void AddPayments(this IServiceCollection services, IConfiguration configuration)
+    {
+        // A text that is no number already fails the binding, and ValidateOnStart brings that to startup too.
+        services.AddOptions<PaymentNotificationOptions>()
+            .Bind(configuration.GetSection(PaymentNotificationOptions.SectionName))
+            .Validate(
+                o => o.TimeoutSeconds is >= PaymentNotificationOptions.MinTimeoutSeconds and <= PaymentNotificationOptions.MaxTimeoutSeconds,
+                $"{PaymentNotificationOptions.SectionName}:TimeoutSeconds must be from {PaymentNotificationOptions.MinTimeoutSeconds} to {PaymentNotificationOptions.MaxTimeoutSeconds} seconds.")
+            .ValidateOnStart();
+        services.AddOptions<PaymentProviderOptions>().Bind(configuration.GetSection(PaymentProviderOptions.SectionName));
+        services.AddSingleton<FakePaymentNotificationService>();
+        services.AddSingleton<IPaymentNotificationService>(provider =>
+        {
+            var name = provider.GetRequiredService<IOptions<PaymentProviderOptions>>().Value.Provider;
+            return name switch
+            {
+                PaymentProviderOptions.FakeProvider when provider.GetRequiredService<IHostEnvironment>().IsDevelopment() =>
+                    provider.GetRequiredService<FakePaymentNotificationService>(),
+                PaymentProviderOptions.FakeProvider or PaymentProviderOptions.NoneProvider => new UnconfiguredPaymentNotificationService(),
+                var other => throw UnknownProvider(PaymentProviderOptions.SectionName, other),
+            };
         });
     }
 

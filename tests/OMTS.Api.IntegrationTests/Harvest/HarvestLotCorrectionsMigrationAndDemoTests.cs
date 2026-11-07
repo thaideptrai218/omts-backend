@@ -19,7 +19,7 @@ namespace OMTS.Api.IntegrationTests.Harvest;
 /// <summary>The HarvestLotCorrections migration on SQL Server: up, down and up again, with the index only on the rows it names. The demo lots after a removal.</summary>
 public class HarvestLotCorrectionsMigrationAndDemoTests
 {
-    private const string MigrationBefore = "20261104212952_HarvestLots";
+    private const string MigrationBefore = "20261107052218_HarvestLots";
     private const string IndexName = "UX_AuditEvents_HarvestLotCreatedCode";
 
     private static Task<int> IndexCountAsync(OmtsDbContext db) =>

@@ -28,7 +28,4 @@ internal static class ConfigurationHelpers
             "([Latitude] IS NULL AND [Longitude] IS NULL) OR " +
             "([Latitude] BETWEEN -90 AND 90 AND [Longitude] BETWEEN -180 AND 180)"));
     }
-
-    public static string ExactlyOneNotNull(params string[] columns) =>
-        "(" + string.Join(" + ", columns.Select(c => $"CASE WHEN [{c}] IS NULL THEN 0 ELSE 1 END")) + ") = 1";
 }

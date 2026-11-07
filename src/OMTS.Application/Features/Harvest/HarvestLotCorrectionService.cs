@@ -52,7 +52,7 @@ public sealed class HarvestLotCorrectionService(
         }
 
         var keys = uploaded.Value!;
-        lots.ForgetTrackedChanges();
+        unitOfWork.DiscardChanges();
         var applied = await photoStore.PrepareSaveAsync(keys, () => ApplyAsync(lotId, request, keep, keys, cancellationToken));
         if (!applied.IsSuccess)
         {

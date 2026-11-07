@@ -16,7 +16,7 @@ namespace OMTS.Api.IntegrationTests.Cultivation;
 /// </summary>
 public class CultivationCyclesV2MigrationTests
 {
-    private const string MigrationBefore = "20261104103030_RaftsV2";
+    private const string MigrationBefore = "20261105161142_RaftsV2";
     private const string TransitionGuard = "Every seeded lane is Harvested; any other close is an early close the Cooperative Owner approves first (BR-CYCLE-07).";
 
     [SqlServerFact]
@@ -27,7 +27,10 @@ public class CultivationCyclesV2MigrationTests
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync(MigrationBefore);
 
-        var zone = new FarmingZone { CooperativeId = await OldSchemaRows.CooperativeAsync(db), Code = "KV01", Name = "A" };
+        // Seed only columns of this historical schema; later migrations add fields to the current Cooperative model.
+        var cooperativeId = Guid.NewGuid();
+        await db.Database.ExecuteSqlAsync($"INSERT INTO Cooperatives (Id, FullName, CreatedAt) VALUES ({cooperativeId}, N'HTX', SYSDATETIMEOFFSET())");
+        var zone = new FarmingZone { CooperativeId = cooperativeId, Code = "KV01", Name = "A" };
         var (raft, raftTwo) = (new Raft { Zone = zone, Code = "B01", Size = "1" }, new Raft { Zone = zone, Code = "B02", Size = "1" });
         db.Rafts.AddRange(raft, raftTwo);
         await db.SaveChangesAsync();

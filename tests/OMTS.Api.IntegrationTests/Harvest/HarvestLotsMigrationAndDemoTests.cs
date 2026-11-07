@@ -20,7 +20,7 @@ namespace OMTS.Api.IntegrationTests.Harvest;
 /// <summary>The HarvestLots migration (PR H1a) on SQL Server: Up, Down to the schema it found, also over copies of a long lot code, Up again, the first-setup values on an existing cooperative. The demo lots and their rerun.</summary>
 public class HarvestLotsMigrationAndDemoTests
 {
-    private const string MigrationBefore = "20261104182051_SeedingRecords";
+    private const string MigrationBefore = "20261107050042_SeedingRecords";
 
     private const string SchemaQuery = """
         SELECT CONCAT('table ', t.name) AS [Value] FROM sys.tables t
@@ -81,7 +81,8 @@ public class HarvestLotsMigrationAndDemoTests
             "column HarvestLots EstimatedKg 18 3 0",
             "column HarvestLots KgPerCage 9 2 0",
             "column Cooperatives AverageKgPerCage 9 2 0",
-            "index AuditEvents IX_AuditEvents_RecordType_RecordId 0",
+            "index AuditEvents IX_AuditEvents_RecordType_OccurredAt 0",
+            "index AuditEvents IX_AuditEvents_RecordCode_OccurredAt 0",
             "index Notifications IX_Notifications_RelatedRecordType_RelatedRecordId 0",
         })
         {

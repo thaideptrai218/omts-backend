@@ -101,8 +101,6 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
 
     public void RemovePhoto(HarvestLotPhoto photo) => db.HarvestLotPhotos.Remove(photo);
 
-    public void ForgetTrackedChanges() => db.ChangeTracker.Clear();
-
     private static IQueryable<HarvestLot> ForSale(IQueryable<HarvestLot> lots) =>
         lots.Where(l => l.StatusId == StatusIds.HarvestLot.Open || l.StatusId == StatusIds.HarvestLot.Reopened);
 

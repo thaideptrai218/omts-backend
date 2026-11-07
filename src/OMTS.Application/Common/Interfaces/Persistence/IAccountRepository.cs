@@ -22,15 +22,18 @@ public interface IAccountRepository
     /// <summary>Any account using this phone number, verified or not (login phone numbers are unique system-wide).</summary>
     Task<Account?> FindByPhoneAsync(string phoneNumber, CancellationToken cancellationToken);
 
-    /// <summary>The account whose verified email is this one (verified emails are unique system-wide).</summary>
+    /// <summary>The account whose verified email is this one: only a verified email logs in and receives codes (BR-ACCOUNT-03).</summary>
     Task<Account?> FindByVerifiedEmailAsync(string email, CancellationToken cancellationToken);
+
+    /// <summary>Any account using this email, verified or not (emails are unique system-wide, BR-ACCOUNT-02).</summary>
+    Task<Account?> FindByEmailAsync(string email, CancellationToken cancellationToken);
 
     /// <summary>Staff accounts by name, username or phone (contains), optional status, ordered by display name.</summary>
     Task<(IReadOnlyList<Account> Items, int Total)> SearchStaffAsync(
         string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken);
 
-    /// <summary>Staff accounts not linked to any employee profile (LAB-01 account picker), ordered by display name.</summary>
-    Task<IReadOnlyList<Account>> ListLinkableStaffAsync(CancellationToken cancellationToken);
+    /// <summary>The Active Cooperative Owner accounts, for a notification that has no zone (BR-LABOR-04).</summary>
+    Task<IReadOnlyList<Guid>> ListActiveOwnerIdsAsync(CancellationToken cancellationToken);
 
     void Add(Account account);
 }

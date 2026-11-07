@@ -39,7 +39,11 @@ jobs:
             echo "SQL Server did not start"; docker logs omts-sql | tail -50; exit 1
           fi
           sleep 5
-          echo "OMTS_TEST_SQLSERVER=Server=localhost,1433;User Id=sa;Password=$password;TrustServerCertificate=True" >> "$GITHUB_ENV"
+          # Hundreds of database tests each create a database and run every migration, in parallel, on this one server.
+          # New databases copy model, so no commit waits for the log: these databases are thrown away anyway. A slow
+          # moment of the server then makes a test slower, not a failure at the default 30 seconds of a command.
+          docker exec omts-sql /opt/mssql-tools18/bin/sqlcmd -C -b -S localhost -U sa -P "$password" -Q "ALTER DATABASE model SET DELAYED_DURABILITY = FORCED; CREATE DATABASE omts_probe; SELECT delayed_durability_desc FROM sys.databases WHERE name = 'omts_probe'; DROP DATABASE omts_probe;"
+          echo "OMTS_TEST_SQLSERVER=Server=localhost,1433;User Id=sa;Password=$password;TrustServerCertificate=True;Command Timeout=300" >> "$GITHUB_ENV"
 
       # Blob storage tests ([AzuriteFact]) run the production storage provider against Azurite.
       - name: Start Azurite for blob storage tests

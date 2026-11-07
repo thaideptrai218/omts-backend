@@ -55,10 +55,4 @@ public interface IHarvestLotRepository
     void AddPhoto(HarvestLotPhoto photo);
 
     void RemovePhoto(HarvestLotPhoto photo);
-
-    /// <summary>
-    /// Forgets every row this request read or added, so a new attempt after a lost race on the lot code reads the database again and writes no row of the failed
-    /// one. A failed save has already dropped its queued pushes.
-    /// </summary>
-    void ForgetTrackedChanges();
 }

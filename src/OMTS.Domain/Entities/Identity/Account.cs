@@ -54,9 +54,14 @@ public class Account : AuditableEntity, IHasStatus
 
     public bool IsTemporarilyLocked(DateTimeOffset now) => LockoutEndAt > now;
 
-    /// <summary>A temporary password without an issue time is treated as expired (fail closed).</summary>
+    /// <summary>
+    /// A temporary password without an issue time is treated as expired (fail closed). The first password of the Owner
+    /// set at deployment is a forced change that does not expire; if it is lost, the deployer runs the reset command.
+    /// </summary>
     public bool IsTemporaryPasswordExpired(DateTimeOffset now) =>
-        MustChangePassword && (TemporaryPasswordIssuedAt is null || now - TemporaryPasswordIssuedAt > TemporaryPasswordLifetime);
+        MustChangePassword
+        && SubjectType != SubjectType.CooperativeOwner
+        && (TemporaryPasswordIssuedAt is null || now - TemporaryPasswordIssuedAt > TemporaryPasswordLifetime);
 
     public void RegisterFailedLogin(DateTimeOffset now)
     {

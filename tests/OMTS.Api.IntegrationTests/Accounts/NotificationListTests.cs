@@ -57,7 +57,7 @@ public class NotificationListTests(AuthApiFactory factory) : IClassFixture<AuthA
         var zone = await factory.AddZoneAsync(NewCode());
 
         await NotifyAsync([owner.Id], new NotificationContent(
-            NotificationTypes.WaterAlert, "Water quality alert", UserMessages.WaterAlert(false, zone.Name, null, DateTimeOffset.UtcNow, [new(WaterValueOutside.Ph, 9.1m, null, WaterValueDirection.High, 7.5m, 8.5m)]),
+            NotificationTypes.WaterAlert, "Water quality alert", UserMessages.WaterAlert(false, zone.Name, "BE-01", DateTimeOffset.UtcNow, [new(WaterValueOutside.Ph, 9.1m, null, WaterValueDirection.High, 7.5m, 8.5m)]),
             new RelatedRecord(RelatedRecordTypes.FarmingZone, zone.Id, zone.Code)));
         await NotifyAsync([owner.Id], new NotificationContent(
             NotificationTypes.StaffAccountLockReminder, "Lock reminder", new UserMessage("MSG-LABOR-02", "Lock the staff account."),
@@ -74,7 +74,7 @@ public class NotificationListTests(AuthApiFactory factory) : IClassFixture<AuthA
             outside.GetProperty("indicator").GetString(), outside.GetProperty("value").GetDecimal(), outside.GetProperty("direction").GetString(),
             outside.GetProperty("min").GetDecimal(), outside.GetProperty("max").GetDecimal()));
         Assert.False(pushed.MessageParams!.Value.GetProperty("corrected").GetBoolean());
-        Assert.Equal(JsonValueKind.Null, pushed.MessageParams!.Value.GetProperty("raft_code").ValueKind);
+        Assert.Equal("BE-01", pushed.MessageParams!.Value.GetProperty("raft_code").GetString());
     }
 
     [Fact]

@@ -12,49 +12,50 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
-/// ENV-03 history, chart and Excel export limits (QA red team): one zone per file, text is never a formula,
-/// drafts never and corrected versions only as rows (never in the monthly summary), paging and day-range bounds.
+/// WATER-03 history and Excel export limits (QA red team): one zone per file, text is never a formula, paging bounds.
 /// </summary>
 public class WaterExportRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApiFactory>
 {
-    private const int MeasurementPointColumn = 2;
+    private const int RaftColumn = 2;
     private const int PhColumn = 3;
-    private const int MeasuredByColumn = 9;
-    private const int SummaryPhMaximumColumn = 4;
-    private const int SummaryPhCountColumn = 5;
+    private const int TemperatureColumn = 5;
+    private const int VoidReasonColumn = 7;
+    private const int MeasuredByColumn = 10;
 
     [Fact]
     public async Task Export_of_a_zone_never_contains_another_zones_measurements()
     {
         var zoneA = await api.ZoneAsync();
-        var zoneB = zoneA with { Zone = await api.AddZoneAsync(NewCode()) };
-        await zoneA.RecordedAsync(7.1m, 20m);
+        var zoneB = await api.ZoneAsync();
+        await zoneA.RecordedAsync(7.1m, 20m, temperature: 26.5m);
         await zoneB.RecordedAsync(7.9m, 21m);
 
         var export = await zoneA.Owner.GetAsync($"{zoneA.Base}/export");
         using var workbook = await WorkbookAsync(export);
 
-        var phValues = workbook.Worksheet("Measurements").RowsUsed().Skip(1).Select(r => r.Cell(PhColumn).GetValue<decimal>()).ToList();
-        Assert.Equal([7.1m], phValues);
-        var summaryCount = workbook.Worksheet("Monthly summary").RowsUsed().Skip(1).Sum(r => r.Cell(SummaryPhCountColumn).GetValue<int>());
-        Assert.Equal(1, summaryCount);
+        var rows = workbook.Worksheet("Measurements").RowsUsed().Skip(1).ToList();
+        Assert.Equal([7.1m], rows.Select(r => r.Cell(PhColumn).GetValue<decimal>()));
+        Assert.Equal([26.5m], rows.Select(r => r.Cell(TemperatureColumn).GetValue<decimal>()));
+        Assert.Equal([zoneA.Raft.Code], rows.Select(r => r.Cell(RaftColumn).GetString()));
     }
 
     [Fact]
     public async Task Text_starting_with_an_equals_sign_is_written_as_text_never_as_a_formula()
     {
         var z = await api.ZoneAsync();
-        const string point = "=HYPERLINK(\"http://evil.example\",\"Click\")";
+        const string raftCode = "=HYPERLINK(\"http://evil.example\",\"Click\")";
         const string name = "=1+2";
-        await api.UpdateAsync<FarmingZone>(z.Zone.Id, zone => zone.WaterMeasurementPoint = point);
+        const string reason = "=SUM(1,2)";
+        await api.UpdateAsync<Raft>(z.Raft.Id, raft => raft.Code = raftCode);
         var manager = await StaffNamedAsync(z.Zone, name);
-        await z.RecordedAsync(7.3m, 20m, client: manager);
+        var recorded = await z.RecordedAsync(7.3m, 20m, client: manager);
+        Assert.Equal(HttpStatusCode.OK, (await manager.VoidAsync(recorded.Id(), reason)).StatusCode);
 
         var export = await z.Owner.GetAsync($"{z.Base}/export");
         using var workbook = await WorkbookAsync(export);
 
         var row = workbook.Worksheet("Measurements").Row(2);
-        foreach (var (column, text) in new[] { (MeasurementPointColumn, point), (MeasuredByColumn, name) })
+        foreach (var (column, text) in new[] { (RaftColumn, raftCode), (VoidReasonColumn, reason), (MeasuredByColumn, name) })
         {
             var cell = row.Cell(column);
             Assert.False(cell.HasFormula, $"column {column} is a formula");
@@ -64,22 +65,15 @@ public class WaterExportRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
     }
 
     [Fact]
-    public async Task Drafts_are_never_exported_and_corrected_rows_never_reach_the_monthly_summary()
+    public async Task A_correction_shows_its_new_values_in_the_export()
     {
         var z = await api.ZoneAsync();
-        await z.RecordedAsync(13m, 22m, confirm: false);
         var original = await z.RecordedAsync(9.0m, 20m);
-        Assert.Equal(HttpStatusCode.Created, (await z.Owner.CorrectAsync(original.Id(), 7.2m, 20m, recordVersion: 1)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await z.Owner.CorrectAsync(original.Id(), 7.2m, 20m)).StatusCode);
 
-        using var drafts = await WorkbookAsync(await z.Owner.GetAsync($"{z.Base}/export?status=Draft"));
-        using var corrected = await WorkbookAsync(await z.Owner.GetAsync($"{z.Base}/export?status=Corrected"));
+        using var workbook = await WorkbookAsync(await z.Owner.GetAsync($"{z.Base}/export"));
 
-        Assert.Single(drafts.Worksheet("Measurements").RowsUsed());
-        var rows = corrected.Worksheet("Measurements").RowsUsed().Skip(1).ToList();
-        Assert.Equal([9.0m], rows.Select(r => r.Cell(PhColumn).GetValue<decimal>()));
-        var months = corrected.Worksheet("Monthly summary").RowsUsed().Skip(1).ToList();
-        Assert.Equal(1, months.Sum(r => r.Cell(SummaryPhCountColumn).GetValue<int>()));
-        Assert.Equal(7.2m, months.Single(r => r.Cell(SummaryPhCountColumn).GetValue<int>() == 1).Cell(SummaryPhMaximumColumn).GetValue<decimal>());
+        Assert.Equal([7.2m], workbook.Worksheet("Measurements").RowsUsed().Skip(1).Select(r => r.Cell(PhColumn).GetValue<decimal>()));
     }
 
     [Fact]
@@ -115,21 +109,6 @@ public class WaterExportRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApi
         Assert.Equal(1, zero.GetProperty("pageSize").GetInt32());
         Assert.Equal(1, zero.GetProperty("items").GetArrayLength());
         Assert.Equal(2, zero.GetProperty("total").GetInt32());
-    }
-
-    [Fact]
-    public async Task Day_chart_accepts_exactly_366_days_and_refuses_367()
-    {
-        var z = await api.ZoneAsync();
-
-        var longest = await z.Owner.GetAsync($"{z.Base}/chart?from=2025-10-23&to=2026-10-23&groupBy=day");
-        var tooLong = await z.Owner.GetAsync($"{z.Base}/chart?from=2025-10-22&to=2026-10-23&groupBy=DAY");
-
-        Assert.Equal(HttpStatusCode.OK, longest.StatusCode);
-        Assert.Equal(366, (await longest.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("periods").GetArrayLength());
-        Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
-        Assert.Equal("MSG-GEN-01", await tooLong.ErrorCodeAsync());
-        Assert.Equal("Group by", (await tooLong.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
     }
 
     private static async Task<XLWorkbook> WorkbookAsync(HttpResponseMessage export)

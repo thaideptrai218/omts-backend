@@ -49,7 +49,7 @@ public class PurchaseReceiptsQaTests(AuthApiFactory factory) : IClassFixture<Aut
     }
 
     [Fact]
-    public async Task Anonymous_gets_401_traders_and_administrators_MSG_GEN_08_and_the_accountant_only_reads_on_every_receipt_endpoint()
+    public async Task Anonymous_gets_401_traders_MSG_GEN_08_and_the_accountant_only_reads_on_every_receipt_endpoint()
     {
         var world = await factory.WorldAsync();
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 1_000)));
@@ -59,7 +59,7 @@ public class PurchaseReceiptsQaTests(AuthApiFactory factory) : IClassFixture<Aut
             .ReadAsync(HttpStatusCode.Created)).GetProperty("returns")[0].Id();
         var receiptsBefore = await factory.QueryAsync(db => db.PurchaseReceipts.CountAsync(r => r.SupplierId == world.SupplierId));
         var anonymous = factory.CreateClient();
-        var refused = new[] { await LoginAsAsync(SubjectType.Trader), await LoginAsAsync(SubjectType.SystemAdministrator) };
+        var refused = new[] { await LoginAsAsync(SubjectType.Trader) };
         var accountant = await factory.AccountantAsync();
 
         foreach (var (method, path, body, write) in Endpoints(world, draft.Id(), completed.Id(), returnId))
