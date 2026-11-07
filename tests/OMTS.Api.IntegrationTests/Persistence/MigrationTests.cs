@@ -25,11 +25,11 @@ public class MigrationTests
         "PayRuleVersions", "PayLines", "LaborSettlements", "LaborPayments",
     ];
 
-    // Still read by live endpoints (open cycle of a raft, seeded quantity) or replaced by later tickets. The labor tables kept
-    // here went with EmployeesV2, LaneSegments and CultivationLogEntries with RaftsV2 (PR 0.9).
+    // Still read by live endpoints (open cycle of a raft) or replaced by later tickets. The labor tables kept here went with
+    // EmployeesV2, LaneSegments and CultivationLogEntries with RaftsV2 (PR 0.9), and SeedingEvents with SeedingRecords (PR C2).
     private static readonly string[] KeptTables =
     [
-        "CultivationCycles", "SeedingEvents",
+        "CultivationCycles",
         "Products", "Customers",
     ];
 
@@ -80,6 +80,7 @@ public class MigrationTests
 
         Assert.Empty(LegacyTables.Intersect(tables));
         Assert.Empty(KeptTables.Except(tables));
+        Assert.DoesNotContain("SeedingEvents", tables);
         // MESSAGE_DELIVERY (1601–1603, transitions 53–54) comes back with NotificationsV2: the SMS rows use it.
         Assert.False(await db.Statuses.AnyAsync(s => s.Id >= 801 && s.Id <= 1600));
         Assert.False(await db.StatusTransitions.AnyAsync(t => t.Id >= 12 && t.Id <= 52));

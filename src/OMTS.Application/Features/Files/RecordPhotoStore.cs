@@ -1,21 +1,20 @@
 using OMTS.Application.Common.Interfaces.Storage;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
-using OMTS.Application.Features.Files;
 
-namespace OMTS.Application.Features.Cultivation.CultivationLogs;
+namespace OMTS.Application.Features.Files;
 
 /// <summary>Stores the photos of one save, all or none (GFR-01): when one cannot be uploaded the ones before it are removed, and nothing is saved (MSG-GEN-03).</summary>
-public sealed class CultivationLogPhotoStore(IFileStorage storage, UploadedFileSaver fileSaver)
+public sealed class RecordPhotoStore(IFileStorage storage, UploadedFileSaver fileSaver)
 {
-    public async Task<Result<IReadOnlyList<string>>> UploadAllAsync(IReadOnlyList<ValidatedFile> files, CancellationToken cancellationToken)
+    public async Task<Result<IReadOnlyList<string>>> UploadAllAsync(string category, IReadOnlyList<ValidatedFile> files, CancellationToken cancellationToken)
     {
         var keys = new List<string>(files.Count);
         try
         {
             foreach (var file in files)
             {
-                var uploaded = await storage.UploadAsync(file, FileCategories.CultivationLogPhotos, cancellationToken);
+                var uploaded = await storage.UploadAsync(file, category, cancellationToken);
                 if (uploaded is not { Succeeded: true, Key: { } key })
                 {
                     await fileSaver.DiscardAsync(keys);

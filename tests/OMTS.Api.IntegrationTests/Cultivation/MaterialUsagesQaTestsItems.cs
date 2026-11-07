@@ -187,7 +187,7 @@ public class MaterialUsagesQaTestsItems(AuthApiFactory factory) : IClassFixture<
 
         var group = (await owner.UsageListAsync(setup.RaftId)).GetProperty("groups")[0];
         Assert.Equal(["cycle", "locked", "repairs"], group.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
-        Assert.Equal(["closeDate", "id", "rowVersion", "startDate", "status", "statusId"], group.GetProperty("cycle").EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(["closeDate", "closedEarly", "id", "rowVersion", "startDate", "status", "statusId"], group.GetProperty("cycle").EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.Equal(["records", "repairReason", "usageDate"], group.GetProperty("repairs")[0].EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
 
         // The audit values of §3: codes, with these names only.

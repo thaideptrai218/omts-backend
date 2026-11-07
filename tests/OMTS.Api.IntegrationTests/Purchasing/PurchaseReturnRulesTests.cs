@@ -126,14 +126,14 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
     }
 
     [Fact]
-    public async Task A_seed_lot_seeded_without_a_quantity_leaves_nothing_to_return()
+    public async Task A_seed_lot_seeded_in_whole_leaves_nothing_to_return()
     {
         var (world, receipt, line) = await SeedReceiptAsync();
-        await factory.SeedAsync(world.Raft.Id, line, null);
+        await factory.SeedAsync(world.Raft.Id, line, 100);
         var view = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{receipt.Id()}");
         Assert.Equal((100m, 0m), (view.LineViewOf(world.Seed).Money("seeded"), view.LineViewOf(world.Seed).Money("returnable")));
         var problem = await (await world.Owner.PostReturnAsync(receipt.Id(), Return(line, 1))).ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-03");
-        Assert.EndsWith("at most 0 kg. The quantity already seeded from this line is not known.", problem.GetProperty("detail").GetString());
+        Assert.EndsWith("at most 0 kg. Received 100 kg, seeded 100 kg, already returned 0 kg.", problem.GetProperty("detail").GetString());
     }
 
     [Fact]

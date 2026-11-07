@@ -135,7 +135,7 @@ public sealed class StaffAccountService(
 
         audit.Record(new AuditEntry("Account.OwnerRightsRefused", nameof(Account))
         {
-            // AuditEvents.RecordCode holds 100 characters.
+            // A long name typed in a refused request is cut to 100 characters for the audit log.
             RecordCode = username is { Length: > 100 } longName ? longName[..100] : username,
             After = new { RequestedSubjectType = subjectType.ToString() },
         });

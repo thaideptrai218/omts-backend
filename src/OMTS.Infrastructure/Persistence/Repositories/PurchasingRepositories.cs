@@ -128,17 +128,6 @@ internal sealed partial class PurchaseReceiptRepository(OmtsDbContext db) : IPur
             .AsSplitQuery()
             .FirstOrDefaultAsync(r => r.Id == receiptId, cancellationToken);
 
-    public async Task<IReadOnlyDictionary<Guid, (decimal Seeded, bool UnknownQuantity)>> SeededAsync(
-        IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken)
-    {
-        var rows = await db.SeedingEvents.AsNoTracking()
-            .Where(e => lineIds.Contains(e.SeedLotId))
-            .Select(e => new { e.SeedLotId, e.SeedQuantity })
-            .ToListAsync(cancellationToken);
-        return rows.GroupBy(r => r.SeedLotId)
-            .ToDictionary(g => g.Key, g => (g.Sum(r => r.SeedQuantity ?? 0), g.Any(r => r.SeedQuantity is null)));
-    }
-
     public void Add(PurchaseReceipt receipt) => db.PurchaseReceipts.Add(receipt);
 
     public void Remove(PurchaseReceipt receipt) => db.PurchaseReceipts.Remove(receipt);

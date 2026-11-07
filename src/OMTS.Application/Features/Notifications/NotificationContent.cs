@@ -33,6 +33,12 @@ public static partial class RelatedRecordTypes
     public const string CultivationLog = "CultivationLog";
     public const string PurchaseRequest = "PurchaseRequest";
 
+    /// <summary>A cultivation cycle (CYCLE-02); it has no code of its own, so the code shown is its raft's.</summary>
+    public const string CultivationCycle = "CultivationCycle";
+
+    /// <summary>A harvest lot (HARVEST-01); the code shown is its lot code.</summary>
+    public const string HarvestLot = "HarvestLot";
+
     /// <summary>A purchase receipt (PURCHASE-01, PURCHASE-06); it has no zone.</summary>
     public const string PurchaseReceipt = "PurchaseReceipt";
 

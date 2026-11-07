@@ -20,7 +20,17 @@ public static class MessageCodes
     public const string Farm01 = "MSG-FARM-01";
     public const string Farm02 = "MSG-FARM-02";
 
+    public const string Cycle01 = "MSG-CYCLE-01";
+    public const string Cycle02 = "MSG-CYCLE-02";
+    public const string Cycle03 = "MSG-CYCLE-03";
     public const string Cycle04 = "MSG-CYCLE-04";
+    public const string Cycle05 = "MSG-CYCLE-05";
+    public const string Cycle06 = "MSG-CYCLE-06";
+    public const string Cycle07 = "MSG-CYCLE-07";
+    public const string Cycle08 = "MSG-CYCLE-08";
+
+    public const string Harvest01 = "MSG-HARVEST-01";
+    public const string Harvest03 = "MSG-HARVEST-03";
 
     public const string Water01 = "MSG-WATER-01";
     public const string Water02 = "MSG-WATER-02";
@@ -85,13 +95,17 @@ public static class MessageCodes
     /// notifications and the advance warning, and MSG-PURCHASE-10, the Owner's correction (OMTS-218 P2); MSG-PURCHASE-04/05/06,
     /// the transaction notification and the two payment confirmations (OMTS-218 P3); MSG-PURCHASE-02, the confirmation of the
     /// Owner's approval of a return (OMTS-218 P4); MSG-LABOR-01 and MSG-LABOR-02, the approval of a new employee and the
-    /// reminder to lock a staff account (OMTS-227); MSG-SALE-04 and MSG-SALE-05, the merge of customer profiles (SALE-04 is
+    /// reminder to lock a staff account, MSG-LABOR-04 and MSG-LABOR-36, the pay period lock and the question before saving
+    /// the payroll settings (OMTS-227); MSG-SALE-04 and MSG-SALE-05, the merge of customer profiles (SALE-04 is
     /// new); MSG-DEBT-01 and MSG-DEBT-02, the receiving bank account (DEBT-01); MSG-GEN-11, MSG-SALE-01, MSG-SALE-02 and
-    /// MSG-SALE-03, the purchase requests (new in PR S4); MSG-CYCLE-04, a cultivation log to review (CYCLE-04).
+    /// MSG-SALE-03, the purchase requests (new in PR S4); MSG-CYCLE-01/02/03, the seeding questions and the notice (CYCLE-02);
+    /// MSG-CYCLE-04, a cultivation log to review (CYCLE-04); MSG-CYCLE-08, MSG-HARVEST-01/03, the reminder to close a cycle,
+    /// the harvest notice and the lowered days (HARVEST-01 and HARVEST-03 are new in PR H1a); MSG-CYCLE-05/06/07, the close of a
+    /// cycle, its summary notice and the early close (CYCLE-06 is new in PR C5).
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
-        Account01, Account22, Cycle04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Debt01, Debt02, Water02, Water04,
+        Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Debt01, Debt02, Water02, Water04,
     };
 
     /// <summary>

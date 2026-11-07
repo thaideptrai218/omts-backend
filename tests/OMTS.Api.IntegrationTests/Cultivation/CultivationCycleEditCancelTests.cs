@@ -19,9 +19,9 @@ public class CultivationCycleEditCancelTests(AuthApiFactory factory) : IClassFix
         return (owner, await owner.CreateRaftAsync((await owner.CreateZoneAsync()).Id()));
     }
 
-    private Task AddSeedingAsync(Guid cycleId, DateOnly date) => factory.UseDbAsync(db => db.SeedingEvents.Add(new SeedingEvent
+    private Task AddSeedingAsync(Guid cycleId, DateOnly date) => factory.UseDbAsync(db => db.SeedingRecords.Add(new SeedingRecord
     {
-        CycleId = cycleId, SeedLotId = Guid.NewGuid(), SeedingDate = date, RecordedByAccountId = Guid.NewGuid(),
+        CycleId = cycleId, SeedLotLineId = Guid.NewGuid(), SeedingDate = date, Quantity = 1, RecordedByAccountId = Guid.NewGuid(),
     }));
 
     [Fact]

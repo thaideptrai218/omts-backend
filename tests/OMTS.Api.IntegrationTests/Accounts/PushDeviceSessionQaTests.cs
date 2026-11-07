@@ -152,7 +152,7 @@ public class PushDeviceSessionQaTests
     public async Task On_SQL_Server_settings_eligibility_and_a_multi_recipient_push_follow_the_sessions()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateAsync();
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         var first = await api.AddAccountAsync(NewCode(), Password);
         var second = await api.AddAccountAsync(NewCode(), Password);

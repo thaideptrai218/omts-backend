@@ -52,7 +52,7 @@ public class NotificationSqlServerTests
     public async Task On_SQL_Server_the_list_preferences_read_and_open_work_end_to_end()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateAsync();
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         var owner = await api.AddAccountAsync(NewCode(), TestPassword);
         var client = api.CreateClient();

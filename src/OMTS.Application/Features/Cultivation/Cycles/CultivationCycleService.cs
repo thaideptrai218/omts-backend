@@ -150,9 +150,10 @@ public sealed class CultivationCycleService(
             return refused;
         }
 
-        if ((await cycles.WithRecordsAsync([cycle.Id], cancellationToken)).Count > 0)
+        var records = await cycles.CountRecordsAsync(cycle.Id, cancellationToken);
+        if (records > 0)
         {
-            return HasRecords(cycle);
+            return HasRecords(cycle, records);
         }
 
         if (await rowVersions.CheckAsync(cycle, request.RowVersion, cancellationToken) is { } conflict)
@@ -194,8 +195,8 @@ public sealed class CultivationCycleService(
     }
 
     /// <summary>MSG-GEN-06, as a cycle with records blocks the cancel the way an Open cycle blocks a start or a lane change.</summary>
-    private static AppError HasRecords(CultivationCycle cycle) => AppError.Conflict(
-        UserMessages.StillInUse(1, $"records of the cultivation cycle started {cycle.StartDate:dd/MM/yyyy}"),
+    private static AppError HasRecords(CultivationCycle cycle, int records) => AppError.Conflict(
+        UserMessages.StillInUse(records, $"records of the cultivation cycle started {cycle.StartDate:dd/MM/yyyy}"),
         new Dictionary<string, object?> { ["cycleId"] = cycle.Id });
 
     private static AuditEntry Entry(string action, CultivationCycle cycle) =>

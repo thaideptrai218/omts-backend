@@ -167,11 +167,111 @@ public static class UserMessages
     public static UserMessage MinimumNotLessThanMaximum(string indicator) => new(
         Water05, $"The minimum of {indicator} must be less than the maximum. The thresholds were not saved. Please correct the values.", Legacy.Msg28);
 
+    /// <summary>MSG-CYCLE-01 (CYCLE-02.1): the confirmation before marking the seeding complete; the second sentence appears only when some lanes have no seed yet.</summary>
+    public static UserMessage FinishSeedingQuestion(string raftCode, IReadOnlyList<int> notSeededLanes)
+    {
+        var lanes = string.Join(", ", notSeededLanes);
+        var noSeed = notSeededLanes.Count == 0 ? string.Empty : $" {notSeededLanes.Count} lane(s) have no seed yet (lanes {lanes}); you can still seed them later.";
+        return new UserMessage(Cycle01, $"Finish seeding of raft {raftCode}?{noSeed} The Cooperative Owner will be asked to review the seeding.")
+        {
+            Parameters = new Dictionary<string, object?> { ["raft_code"] = raftCode, ["count"] = notSeededLanes.Count, ["lane_numbers"] = notSeededLanes },
+        };
+    }
+
+    /// <summary>MSG-CYCLE-02 (CYCLE-02.1): notification to the Cooperative Owner when the seeding of a raft is marked complete.</summary>
+    public static UserMessage SeedingFinished(string raftCode, int seededCount, int laneCount) => new(
+        Cycle02, $"Raft {raftCode}: seeding is finished; {seededCount} of {laneCount} lanes have seed. Please review the seeding sessions.")
+    {
+        Parameters = new Dictionary<string, object?> { ["raft_code"] = raftCode, ["seeded_count"] = seededCount, ["lane_count"] = laneCount },
+    };
+
+    /// <summary>MSG-CYCLE-03 (CYCLE-02.0.E1): no seed lot can be chosen (GBR-04).</summary>
+    public static readonly UserMessage NoSeedLot = new(
+        Cycle03, "There is no seed lot to choose: no completed purchase receipt for seed exists yet. Please complete the purchase receipt for the seed first.");
+
     /// <summary>MSG-CYCLE-04 (CYCLE-04): notification to the Cooperative Owner when a cultivation log is saved.</summary>
     public static UserMessage CultivationLogRecorded(string raftCode, DateOnly visitDate) => new(
         Cycle04, $"Raft {raftCode}: a cultivation log was recorded for the visit on {Date(visitDate)}. Please review it.")
     {
         Parameters = new Dictionary<string, object?> { ["raft_code"] = raftCode, ["visit_date"] = visitDate },
+    };
+
+    /// <summary>MSG-CYCLE-05 (CYCLE-06 step 4): the confirmation before closing a cycle.</summary>
+    public static UserMessage CloseCycleQuestion(string raftCode) => new(
+        Cycle05, $"Close the cultivation cycle of raft {raftCode}? After closing, the cycle cannot be reopened and its records can no longer be changed.")
+    {
+        Parameters = new Dictionary<string, object?> { ["raft_code"] = raftCode },
+    };
+
+    /// <summary>
+    /// MSG-CYCLE-06 (CYCLE-06 step 6): the summary of a closed cycle to the Cooperative Owner, with the figures of the close day (BR-CYCLE-06). {early_note} is empty after a normal
+    /// close, with the space before it, and "early; lanes not harvested: {lane_numbers}" after an early close; "early" alone when no lane had seed. A seed quantity with no unit
+    /// (no seeding session) drops the space before the unit.
+    /// </summary>
+    public static UserMessage CycleClosedSummary(
+        string raftCode, DateOnly closeDate, bool closedEarly, IReadOnlyList<int> notHarvestedLanes, decimal seedQuantity, string seedUnit, decimal kgHarvested, int days)
+    {
+        var earlyNote = !closedEarly ? string.Empty : notHarvestedLanes.Count == 0 ? " early" : $" early; lanes not harvested: {string.Join(", ", notHarvestedLanes)}";
+        var unit = string.IsNullOrWhiteSpace(seedUnit) ? string.Empty : $" {seedUnit}";
+        return new UserMessage(
+            Cycle06,
+            $"Raft {raftCode}: the cultivation cycle was closed on {Date(closeDate)}{earlyNote}. Seed hung: {Quantity(seedQuantity)}{unit}. Harvested: about {Quantity(kgHarvested)} kg. Days of farming: {days.ToString(CultureInfo.InvariantCulture)}. Please review the summary.")
+        {
+            Parameters = new Dictionary<string, object?>
+            {
+                ["raft_code"] = raftCode,
+                ["close_date"] = closeDate,
+                ["closed_early"] = closedEarly,
+                ["lane_numbers"] = notHarvestedLanes,
+                ["seed_quantity"] = decimal.Parse(Quantity(seedQuantity), CultureInfo.InvariantCulture),
+                ["seed_unit"] = string.IsNullOrWhiteSpace(seedUnit) ? null : seedUnit,
+                ["kg_harvested"] = decimal.Parse(Quantity(kgHarvested), CultureInfo.InvariantCulture),
+                ["days"] = days,
+            },
+        };
+    }
+
+    /// <summary>
+    /// MSG-CYCLE-07 (CYCLE-06.1): an early close needs the Cooperative Owner's approval (BR-CYCLE-07). {reason} is "no seeding session is recorded" when the cycle has none, else
+    /// "lanes {lane_numbers} are not harvested".
+    /// </summary>
+    public static UserMessage EarlyCloseQuestion(IReadOnlyList<int> notHarvestedLanes)
+    {
+        var reason = notHarvestedLanes.Count == 0 ? "no seeding session is recorded" : $"lanes {string.Join(", ", notHarvestedLanes)} are not harvested";
+        return new UserMessage(
+            Cycle07,
+            $"This cycle is not finished: {reason}. Oysters left on lanes that are Growing cannot be harvested in OMTS after the close. Closing it now needs the Cooperative Owner's approval. Has the Cooperative Owner approved closing it now?")
+        {
+            Parameters = new Dictionary<string, object?> { ["no_seeding"] = notHarvestedLanes.Count == 0, ["lane_numbers"] = notHarvestedLanes },
+        };
+    }
+
+    /// <summary>MSG-CYCLE-08 (BR-CYCLE-07): reminder when every seeded lane of an Open cycle is Harvested.</summary>
+    public static UserMessage CycleCloseReminder(string raftCode) => new(Cycle08, $"Raft {raftCode}: every seeded lane is harvested. Please close its cultivation cycle.")
+    {
+        Parameters = new Dictionary<string, object?> { ["raft_code"] = raftCode },
+    };
+
+    /// <summary>MSG-HARVEST-01 (BF-03 step 7): notification to the Cooperative Owner when a harvest lot is recorded.</summary>
+    public static UserMessage HarvestLotRecorded(string raftCode, DateOnly harvestDate, string lotCode, int cageCount, decimal estimatedKg) => new(
+        Harvest01, $"Raft {raftCode}: the harvest of {Date(harvestDate)} is recorded as lot {lotCode} ({cageCount.ToString(CultureInfo.InvariantCulture)} cages, about {Quantity(estimatedKg)} kg).")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["raft_code"] = raftCode,
+            ["harvest_date"] = harvestDate,
+            ["lot_code"] = lotCode,
+            ["cage_count"] = cageCount,
+            ["estimated_kg"] = decimal.Parse(Quantity(estimatedKg), CultureInfo.InvariantCulture),
+        },
+    };
+
+    /// <summary>MSG-HARVEST-03 (HARVEST-03 step 4): the days before automatic close are lowered.</summary>
+    public static UserMessage AutoCloseDaysLowered(int days, int count) => new(
+        Harvest03,
+        $"With {days.ToString(CultureInfo.InvariantCulture)} days, the next daily close check will close {count.ToString(CultureInfo.InvariantCulture)} lots that are still for sale. Do you want to save?")
+    {
+        Parameters = new Dictionary<string, object?> { ["days"] = days, ["count"] = count },
     };
 
     /// <summary>MSG-WATER-06 (GFR-04): reminder to measure the water of a zone.</summary>

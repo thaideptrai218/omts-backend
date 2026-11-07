@@ -19,4 +19,5 @@ public static class StatusGroups
     public const string Lane = "LANE";
     public const string PurchaseRequest = "PURCHASE_REQUEST";
     public const string Payroll = "PAYROLL";
+    public const string HarvestLot = "HARVEST_LOT";
 }
