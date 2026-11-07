@@ -25,7 +25,7 @@ public interface ICultivationCycleRepository
     /// <summary>Those of the cycles that have a record, so they can no longer be cancelled (BR-CYCLE-01).</summary>
     Task<IReadOnlySet<Guid>> WithRecordsAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken);
 
-    /// <summary>How many records hold the cycle: the same seeding sessions, logs and work assignments as <see cref="WithRecordsAsync"/>.</summary>
+    /// <summary>How many records hold the cycle: the same seeding sessions and logs as <see cref="WithRecordsAsync"/>.</summary>
     Task<int> CountRecordsAsync(Guid cycleId, CancellationToken cancellationToken);
 
     void Add(CultivationCycle cycle);

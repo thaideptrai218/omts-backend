@@ -37,7 +37,7 @@ public class WaterBusinessTimeTests(AuthApiFactory api) : IClassFixture<AuthApiF
     {
         var z = await api.ZoneAsync();
 
-        var response = await z.Owner.PostAsJsonAsync(z.Base, new { clientOperationId = Guid.NewGuid(), measuredAt = Wall + suffix, ph = 7.2m, salinity = 20m, confirm = true });
+        var response = await z.RecordAtAsync(Wall + suffix);
 
         Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -52,29 +52,27 @@ public class WaterBusinessTimeTests(AuthApiFactory api) : IClassFixture<AuthApiF
     }
 
     [Fact]
-    public async Task Confirm_and_correction_read_a_time_without_offset_as_vietnam_time()
+    public async Task A_correction_reads_a_time_without_offset_as_vietnam_time()
     {
         var z = await api.ZoneAsync();
-        var draft = await z.RecordedAsync(7.1m, 20m, confirm: false);
+        var saved = await z.RecordAtAsync(Wall);
+        Assert.True(saved.StatusCode == HttpStatusCode.Created, await saved.Content.ReadAsStringAsync());
+        var id = (await saved.Content.ReadFromJsonAsync<JsonElement>()).Id();
 
-        var confirmed = await z.Owner.PostAsJsonAsync($"/api/water-measurements/{draft.Id()}/confirm", new { measuredAt = Wall, ph = 7.1m, salinity = 20m });
-        Assert.True(confirmed.StatusCode == HttpStatusCode.OK, await confirmed.Content.ReadAsStringAsync());
-        var corrected = await z.Owner.PostAsJsonAsync($"/api/water-measurements/{draft.Id()}/corrections", new
+        var corrected = await z.Owner.PostAsJsonAsync($"/api/water-measurements/{id}/corrections", new
         {
+            raftId = z.Raft.Id,
             measuredAt = $"{Yesterday:yyyy-MM-dd}T09:30:00",
             ph = 7.3m,
             salinity = 21m,
+            temperature = 25m,
             reason = "Đọc nhầm giờ đo",
-            recordVersion = 1,
         });
 
-        Assert.True(corrected.StatusCode == HttpStatusCode.Created, await corrected.Content.ReadAsStringAsync());
-        var versions = await api.QueryAsync(db => db.WaterMeasurements.AsNoTracking()
-            .Where(m => m.ZoneId == z.Zone.Id).OrderBy(m => m.RecordVersion).Select(m => m.MeasuredAt).ToListAsync());
-        Assert.Equal(
-            new[] { new DateTimeOffset(Yesterday.ToDateTime(new TimeOnly(8, 0)), Vietnam), new DateTimeOffset(Yesterday.ToDateTime(new TimeOnly(9, 30)), Vietnam) },
-            versions);
-        Assert.All(versions, v => Assert.Equal(Vietnam, v.Offset));
+        Assert.True(corrected.StatusCode == HttpStatusCode.OK, await corrected.Content.ReadAsStringAsync());
+        var stored = await api.QueryAsync(db => db.WaterMeasurements.AsNoTracking().Where(m => m.Id == id).Select(m => m.MeasuredAt).SingleAsync());
+        Assert.Equal(new DateTimeOffset(Yesterday.ToDateTime(new TimeOnly(9, 30)), Vietnam), stored);
+        Assert.Equal(Vietnam, stored.Offset);
     }
 
     [Theory]
@@ -84,7 +82,7 @@ public class WaterBusinessTimeTests(AuthApiFactory api) : IClassFixture<AuthApiF
     public async Task Time_that_is_not_iso_8601_is_MSG01_and_nothing_is_saved(string measuredAt)
     {
         var z = await api.ZoneAsync();
-        var json = $"{{\"clientOperationId\":\"{Guid.NewGuid()}\",\"ph\":7.1,\"salinity\":20,\"measuredAt\":{measuredAt},\"confirm\":true}}";
+        var json = $"{{\"ph\":7.1,\"salinity\":20,\"temperature\":25,\"measuredAt\":{measuredAt}}}";
 
         var response = await z.Owner.PostAsync(z.Base, new StringContent(json, Encoding.UTF8, "application/json"));
 
@@ -112,7 +110,7 @@ public class WaterBusinessTimeTests(AuthApiFactory api) : IClassFixture<AuthApiF
     }
 
     [Fact]
-    public async Task Swagger_documents_the_rule_on_json_and_multipart_times()
+    public async Task Swagger_documents_the_rule_on_json_times()
     {
         var swagger = await api.CreateClient().GetFromJsonAsync<JsonElement>("/swagger/v1/swagger.json");
 
@@ -120,10 +118,6 @@ public class WaterBusinessTimeTests(AuthApiFactory api) : IClassFixture<AuthApiF
             .GetProperty("RecordWaterMeasurementRequest").GetProperty("properties").GetProperty("measuredAt");
         Assert.Equal("date-time", json.GetProperty("format").GetString());
         Assert.Contains("Vietnam time (UTC+7)", json.GetProperty("description").GetString());
-        var form = swagger.GetProperty("paths").GetProperty("/api/zones/{zoneId}/water-measurements/with-photo").GetProperty("post")
-            .GetProperty("requestBody").GetProperty("content").GetProperty("multipart/form-data").GetProperty("schema")
-            .GetProperty("properties").GetProperty("MeasuredAt");
-        Assert.Contains("Vietnam time (UTC+7)", form.GetProperty("description").GetString());
     }
 
     private sealed record TimeProbe(DateTimeOffset At, DateTimeOffset? Maybe, DateTimeOffset? Utc, DateTimeOffset? West);

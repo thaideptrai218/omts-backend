@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OMTS.Api.Common;
@@ -37,7 +38,7 @@ public sealed class CultivationLogsController(
     [ProducesResponseType<CultivationLogSaved>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Record(Guid cycleId, [FromForm] CultivationLogForm form, CancellationToken cancellationToken)
     {
-        InvariantFormValues.TryDate(form.VisitDate, out var visitDate);
+        var visitDate = ParseVisitDate(form.VisitDate);
         var request = new RecordCultivationLogRequest(visitDate, form.Notes, OtherFilePart());
         return (await logs.RecordAsync(cycleId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
             .ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
@@ -59,7 +60,7 @@ public sealed class CultivationLogsController(
     [ProducesResponseType<CultivationLogSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Correct(Guid logId, [FromForm] CultivationLogForm form, CancellationToken cancellationToken)
     {
-        InvariantFormValues.TryDate(form.VisitDate, out var visitDate);
+        var visitDate = ParseVisitDate(form.VisitDate);
         var request = new CorrectCultivationLogRequest(visitDate, form.Notes, form.KeepPhotoKeys, form.Reason, OtherFilePart());
         return (await corrections.CorrectAsync(logId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken)).ToActionResult(Ok);
     }
@@ -69,6 +70,11 @@ public sealed class CultivationLogsController(
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Remove(Guid logId, RemoveCultivationLogRequest request, CancellationToken cancellationToken) =>
         (await corrections.RemoveAsync(logId, request, cancellationToken)).ToActionResult(_ => NoContent());
+
+    private static DateOnly? ParseVisitDate(string? value) =>
+        DateOnly.TryParseExact(value?.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+            ? date
+            : null;
 
     /// <summary>A file sent under another name would be dropped without a word. The service refuses it, after its access check (GFR-02), so no photo is lost.</summary>
     private bool OtherFilePart() => Request.Form.Files.HasPartOtherThan(nameof(CultivationLogForm.Photos));

@@ -14,6 +14,7 @@ internal static class StatusCatalogSeed
     private const string OwnerOrZoneManager = "Cooperative Owner; Zone Manager";
     private const string OwnerForStaffAdminForTraders =
         "Cooperative Owner (staff accounts); System Administrator (trader accounts, platform administration outside the cooperative app)";
+    private const string Trader = "Trader";
     private const string SystemActor = "System";
     private const string LotCloser = "Cooperative Owner; Zone Manager; System";
     private const string Action = "Action";
@@ -35,10 +36,8 @@ internal static class StatusCatalogSeed
         NewStatus(S.CultivationCycle.Open, G.CultivationCycle, "OPEN", "Open", "The cycle is in progress; seeding, logging and harvesting are allowed.", initial: true),
         NewStatus(S.CultivationCycle.Closed, G.CultivationCycle, "CLOSED", "Closed", "The cycle has ended; the raft can open a new cycle.", final: true),
 
-        NewStatus(S.WaterMeasurement.Draft, G.WaterMeasurement, "DRAFT", "Draft", "OCR or manually entered values not yet confirmed; not used for reports or alerts.", initial: true),
-        NewStatus(S.WaterMeasurement.Confirmed, G.WaterMeasurement, "CONFIRMED", "Confirmed", "Checked against the photo and confirmed; used for alerts and reports."),
-        NewStatus(S.WaterMeasurement.Superseded, G.WaterMeasurement, "SUPERSEDED", "Corrected", "Replaced by a new correction version; the old record is kept for reference.", final: true),
-        NewStatus(S.WaterMeasurement.Voided, G.WaterMeasurement, "VOIDED", "Voided", "Recorded by mistake and voided with a reason; excluded from charts, reports, exports and the overdue check.", final: true),
+        NewStatus(S.WaterMeasurement.Active, G.WaterMeasurement, "ACTIVE", "Active", "Counts in the charts and the water alert of the zone.", initial: true),
+        NewStatus(S.WaterMeasurement.Voided, G.WaterMeasurement, "VOIDED", "Voided", "Kept in the history with its reason; no longer counts.", final: true),
 
         // SMS and Zalo OA sendings kept as Notification rows (BR-SALE-09, GFR-06).
         NewStatus(S.MessageDelivery.Sending, G.MessageDelivery, "SENDING", "Sending", "Handed to the SMS Service or Zalo OA, no answer yet.", initial: true),
@@ -57,6 +56,17 @@ internal static class StatusCatalogSeed
 
         NewStatus(S.Lane.InUse, G.Lane, "IN_USE", "In Use", "Seeded and harvested.", initial: true),
         NewStatus(S.Lane.Removed, G.Lane, "REMOVED", "Removed", "Removed at the end of the raft; keeps its number and records."),
+        // STD-PURCHASE-REQUEST. Fulfilled is worked out from the invoices, so it has no row (BR-SALE-01).
+        NewStatus(S.PurchaseRequest.AwaitingResponse, G.PurchaseRequest, "AWAITING_RESPONSE", "Awaiting response", "Sent by the trader; not answered yet.", initial: true),
+        NewStatus(S.PurchaseRequest.Accepted, G.PurchaseRequest, "ACCEPTED", "Accepted", "Accepted by the Cooperative Owner, possibly for fewer kg; invoices may be linked to it."),
+        NewStatus(S.PurchaseRequest.Declined, G.PurchaseRequest, "DECLINED", "Declined", "Declined by the Cooperative Owner with a note.", final: true),
+        NewStatus(S.PurchaseRequest.Cancelled, G.PurchaseRequest, "CANCELLED", "Cancelled", "Cancelled by the trader; no invoice can be linked to it.", final: true),
+
+        // The transitions of a payroll come with LABOR-12 and LABOR-13, which perform them.
+        NewStatus(S.Payroll.Draft, G.Payroll, "DRAFT", "Draft", "Being prepared; its lines are calculated from the current records.", initial: true),
+        NewStatus(S.Payroll.AwaitingFinalization, G.Payroll, "AWAITING_FINALIZATION", "Awaiting finalization", "Sent to the Cooperative Owner; the records of the period are locked."),
+        NewStatus(S.Payroll.SentBack, G.Payroll, "SENT_BACK", "Sent back", "Returned with a note for correction; the records of the period can change again."),
+        NewStatus(S.Payroll.Finalized, G.Payroll, "FINALIZED", "Finalized", "The amounts are saved; never changed or reopened.", final: true),
 
         NewStatus(S.HarvestLot.Open, G.HarvestLot, "OPEN", "Open", "For sale: it can be chosen on a sales invoice.", initial: true),
         NewStatus(S.HarvestLot.Reopened, G.HarvestLot, "REOPENED", "Reopened", "Closed earlier and for sale again; the days before automatic close count from the day it was reopened."),
@@ -73,22 +83,19 @@ internal static class StatusCatalogSeed
         NewTransition(4, S.Account.Active, S.Account.Locked, "ACS-09", OwnerForStaffAdminForTraders, Action, "Lock the account.", true),
         NewTransition(5, S.Account.Locked, S.Account.Active, "ACS-09", OwnerForStaffAdminForTraders, Action, "Unlock after verification; trader accounts are unlocked only by the System Administrator.", true),
 
-        NewTransition(6, S.Employee.Working, S.Employee.Left, "UC10", Owner, Action, "The employee leaves.", false),
-        NewTransition(7, S.Employee.Left, S.Employee.Working, "UC10", Owner, Action, "The employee returns to work.", false),
+        NewTransition(6, S.Employee.Working, S.Employee.Left, "LABOR-01", $"{OwnerOrZoneManager}; {SystemActor}", Action, "The last working day has passed: at once for an earlier day, by the system on the next day for today (BR-LABOR-01).", false),
+        NewTransition(7, S.Employee.Left, S.Employee.Working, "LABOR-01", OwnerOrZoneManager, Action, "No Employed employee has the phone number; needs no new approval (BR-LABOR-01).", false),
 
         NewTransition(8, S.AccessGrant.Effective, S.AccessGrant.Revoked, "UC11", Owner, Action, "Revoke the zone–role pair; Cooperative Owner only.", true),
 
         NewTransition(9, S.CultivationCycle.Open, S.CultivationCycle.Closed, "CYCLE-06", OwnerOrZoneManager, Action, "Every seeded lane is Harvested; any other close is an early close the Cooperative Owner approves first (BR-CYCLE-07).", false),
 
-        NewTransition(10, S.WaterMeasurement.Draft, S.WaterMeasurement.Confirmed, "UC26", OwnerOrZoneManager, Action, "Check against the photo and confirm the values.", false),
-        NewTransition(11, S.WaterMeasurement.Confirmed, S.WaterMeasurement.Superseded, "UC26", OwnerOrZoneManager, Action, "Save a new correction version.", true),
-
+        // 10–11, 55–56 were the water transitions of the SRS 22/10 model (OMTS-219); their ids are not reused.
         // 12–52 were the transitions of the removed SRS 22/10 groups (OMTS-216); their ids are not reused.
         NewTransition(53, S.MessageDelivery.Sending, S.MessageDelivery.Sent, "SALE-06, SALE-03, CLAIM-02, TRACE-04", SystemActor, SystemActor, "The SMS Service or Zalo OA accepts the message.", false),
         NewTransition(54, S.MessageDelivery.Sending, S.MessageDelivery.NotSent, "SALE-06, SALE-03, CLAIM-02, TRACE-04", SystemActor, SystemActor, "The SMS Service or Zalo OA does not accept the message.", false),
 
-        NewTransition(55, S.WaterMeasurement.Draft, S.WaterMeasurement.Voided, "ENV-02", OwnerOrZoneManager, Action, "Void a wrong draft.", true),
-        NewTransition(56, S.WaterMeasurement.Confirmed, S.WaterMeasurement.Voided, "ENV-02", OwnerOrZoneManager, Action, "Void the latest version of a wrong measurement.", true),
+        NewTransition(80, S.WaterMeasurement.Active, S.WaterMeasurement.Voided, "WATER-02", "Zone Manager (own); Cooperative Owner", Action, "Void a wrong measurement with a reason.", true),
 
         // A Draft receipt is removed, never cancelled (BR-PURCHASE-09): transition 71 no longer exists.
         NewTransition(70, S.PurchaseReceipt.Draft, S.PurchaseReceipt.Completed, "PURCHASE-01", "Zone Manager (own drafts); Cooperative Owner", Action, "Supplier In Use, date received not later than today, and every line complete with an input item In Use, a quantity greater than 0 and a unit price of 0 or more.", false),
@@ -98,6 +105,10 @@ internal static class StatusCatalogSeed
 
         NewTransition(76, S.Lane.InUse, S.Lane.Removed, "FARM-04", Owner, Action, "The raft has no open cycle; the last lanes are removed first (BR-FARM-04).", false),
         NewTransition(77, S.Lane.Removed, S.Lane.InUse, "FARM-04", Owner, Action, "The raft has no open cycle; Removed lanes return in number order before new numbers (BR-FARM-04).", false),
+        NewTransition(180, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Accepted, "SALE-03", Owner, Action, "The accepted kg is above 0 and not more than the requested kg; the pickup date is not before today.", false),
+        NewTransition(181, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Declined, "SALE-03", Owner, Action, "A note gives the reason.", true),
+        NewTransition(182, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Cancelled, "SALE-02", Trader, Action, "The trader cancels; a reason is optional.", false),
+        NewTransition(183, S.PurchaseRequest.Accepted, S.PurchaseRequest.Cancelled, "SALE-02", Trader, Action, "The request is not Fulfilled; a reason is optional.", false),
 
         // BR-HARVEST-04: closed in one of four ways; only the system reopens a lot. 80–140 are taken or reserved on other branches.
         NewTransition(150, S.HarvestLot.Open, S.HarvestLot.Closed, "HARVEST-02, GFR-05, SALE-05, SALE-07, CLAIM-03", LotCloser, Action, "Sold whole lot, closed with the leftover kg, or the time limit reached.", false),

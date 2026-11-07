@@ -30,12 +30,14 @@ internal sealed class CooperativeConfiguration : IEntityTypeConfiguration<Cooper
         builder.Property(x => x.AverageKgPerCage).HasPrecision(9, 2);
         builder.ToTable(t =>
         {
+            t.HasCheckConstraint("CK_Cooperatives_PayPeriodStartDay", "[PayPeriodStartDay] BETWEEN 1 AND 28");
             t.HasCheckConstraint("CK_Cooperative_AverageKgPerCage", "[AverageKgPerCage] > 0");
             t.HasCheckConstraint("CK_Cooperative_DaysBeforeAutoClose", "[DaysBeforeAutoClose] >= 1");
         });
 
         builder.OwnsOne(x => x.BankAccount, bank =>
         {
+            bank.Property(b => b.BankBin).HasMaxLength(6);
             bank.Property(b => b.BankName).HasMaxLength(Lengths.Name);
             bank.Property(b => b.AccountNumber).HasMaxLength(Lengths.Code);
             bank.Property(b => b.AccountHolderName).HasMaxLength(Lengths.Name);

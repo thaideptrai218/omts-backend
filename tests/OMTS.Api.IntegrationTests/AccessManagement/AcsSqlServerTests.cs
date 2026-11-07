@@ -24,7 +24,8 @@ public class AcsSqlServerTests
 {
     private const string TraderPassword = "Trader2026";
 
-    // Double click on "Create staff": one account is created, the other requests answer MSG03.
+    // Double click on "Create staff": one account is created, the other requests answer MSG-ACCOUNT-09 naming the username,
+    // whether the check or the unique index stopped them.
     [SqlServerFact]
     public async Task Parallel_staff_creations_with_one_username_create_one_account()
     {
@@ -43,7 +44,8 @@ public class AcsSqlServerTests
         foreach (var refused in responses.Where(r => r.StatusCode != HttpStatusCode.Created))
         {
             Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
-            Assert.Equal("MSG-GEN-02", await refused.ErrorCodeAsync());
+            Assert.Equal("MSG-ACCOUNT-09", await refused.ErrorCodeAsync());
+            Assert.Equal("Username", (await refused.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("field").GetString());
         }
 
         Assert.Equal(1, await ReadAsync(database, db => db.Accounts.CountAsync(a => a.Username == username)));
@@ -206,8 +208,7 @@ public class AcsSqlServerTests
     {
         await using var db = database.CreateContext();
         var request = await db.VerificationCodes.SingleAsync(c => c.Id == id);
-        request.CreatedAt -= TimeSpan.FromMinutes(2);
-        request.LastSentAt -= TimeSpan.FromMinutes(2);
+        request.AgeBy(TimeSpan.FromMinutes(2));
         await db.SaveChangesAsync();
     }
 

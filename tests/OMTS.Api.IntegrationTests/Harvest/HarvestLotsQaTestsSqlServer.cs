@@ -108,6 +108,8 @@ public class HarvestLotsQaTestsSqlServer
         public void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion) => inner.ExpectRowVersion(entity, rowVersion);
 
         public void MarkChanged(AuditableEntity entity) => inner.MarkChanged(entity);
+
+        public void DiscardChanges() => inner.DiscardChanges();
     }
 
     // BR-HARVEST-04: the catalog holds three statuses and only the three moves.

@@ -8,7 +8,7 @@ namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
 /// QA of the PR #11 review fixes: OCR fails closed when the provider is unset in Production, extreme dates are MSG01 on
-/// every water endpoint that takes dates, the latest accepted date is one year ahead and the month chart stops at 10 years.
+/// every water endpoint that takes dates and the latest accepted date is one year ahead.
 /// </summary>
 public class ReviewFixQaTests
 {
@@ -24,7 +24,7 @@ public class ReviewFixQaTests
     }
 
     [Fact]
-    public async Task Production_with_the_provider_unset_reads_no_values_and_keeps_the_draft()
+    public async Task Production_with_the_provider_unset_reads_no_values_and_keeps_the_photo()
     {
         await using var api = new ProductionWaterFactory(string.Empty);
         var z = await api.ZoneAsync();
@@ -39,22 +39,20 @@ public class ReviewFixQaTests
         Assert.Equal("MSG-WATER-01", ocr.GetProperty("warning").Text("code"));
         Assert.Equal(JsonValueKind.Null, ocr.GetProperty("ph").ValueKind);
         Assert.Equal(JsonValueKind.Null, ocr.GetProperty("salinity").ValueKind);
-        var draft = body.GetProperty("measurement");
-        Assert.Equal("Draft", draft.Text("status"));
-        Assert.Equal(JsonValueKind.Null, draft.GetProperty("ph").ValueKind);
-        Assert.Equal(JsonValueKind.Null, draft.GetProperty("salinity").ValueKind);
+        Assert.Equal(JsonValueKind.Null, ocr.GetProperty("temperature").ValueKind);
+        Assert.NotNull(body.Text("photoKey"));
     }
 
     [Theory]
     [InlineData("export?to=9999-12-31", "To")]
     [InlineData("export?from=0001-01-01", "From")]
     [InlineData("chart?to=9999-12-31", "To")]
-    [InlineData("chart?from=9999-12-30&to=9999-12-31&groupBy=month", "To")]
-    [InlineData("chart?from=0001-01-01&to=0001-01-31&groupBy=day", "To")]
+    [InlineData("chart?from=9999-12-30&to=9999-12-31", "To")]
+    [InlineData("chart?from=0001-01-01&to=0001-01-31", "To")]
     [InlineData("?from=2026-10-01&to=9999-12-31", "To")]
     [InlineData("?from=0001-01-01&to=9999-12-31", "To")]
     [InlineData("?from=0001-01-01&to=2026-10-01", "From")]
-    [InlineData("chart?from=9999-12-30&groupBy=month&to=2026-10-01", "From")]
+    [InlineData("chart?from=9999-12-30&to=2026-10-01", "From")]
     public async Task Extreme_dates_are_MSG01_on_every_water_endpoint_that_takes_dates(string query, string field)
     {
         await using var api = new AuthApiFactory();
@@ -84,33 +82,17 @@ public class ReviewFixQaTests
     }
 
     [Fact]
-    public async Task The_month_chart_accepts_exactly_ten_years_and_refuses_one_day_more()
-    {
-        await using var api = new AuthApiFactory();
-        var z = await api.ZoneAsync();
-
-        var exact = await z.Owner.GetAsync($"{z.Base}/chart?from=2000-01-01&to=2010-01-01&groupBy=month");
-        var over = await z.Owner.GetAsync($"{z.Base}/chart?from=2000-01-01&to=2010-01-02&groupBy=month");
-
-        Assert.Equal(HttpStatusCode.OK, exact.StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, over.StatusCode);
-        Assert.Equal("Group by", (await over.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
-    }
-
-    [Fact]
     public async Task Clients_that_omit_from_and_to_still_get_the_defaults_on_history_chart_and_export()
     {
         await using var api = new AuthApiFactory();
         var z = await api.ZoneAsync();
 
         var history = await z.Owner.GetAsync(z.Base);
-        var monthChart = await z.Owner.GetAsync($"{z.Base}/chart");
-        var dayChart = await z.Owner.GetAsync($"{z.Base}/chart?groupBy=day");
+        var chart = await z.Owner.GetAsync($"{z.Base}/chart");
         var export = await z.Owner.GetAsync($"{z.Base}/export");
 
         Assert.Equal(HttpStatusCode.OK, history.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, monthChart.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, dayChart.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, chart.StatusCode);
         Assert.Equal(HttpStatusCode.OK, export.StatusCode);
     }
 }

@@ -65,7 +65,8 @@ public class StackMergeQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     {
         var types = typeof(RelatedRecordTypes).GetFields(BindingFlags.Public | BindingFlags.Static).Where(f => f.IsLiteral).Select(f => (string)f.GetRawConstantValue()!).ToList();
 
-        Assert.Empty(types.Except(RelatedRecordTypes.Names.Keys));
+        Assert.All(types, t => Assert.False(string.IsNullOrWhiteSpace(RelatedRecordTypes.ObjectName(t)), t));
+        Assert.Equal("Cultivation cycle", RelatedRecordTypes.ObjectName(RelatedRecordTypes.CultivationCycle));
         Assert.Contains("CultivationLog", types);
         Assert.Contains("PurchaseReceipt", types);
         Assert.Contains("SupplierPayment", types);

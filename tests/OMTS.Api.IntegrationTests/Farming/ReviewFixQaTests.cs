@@ -294,6 +294,8 @@ internal sealed class RacingUnitOfWork(OmtsDbContext db, ZoneRace race, Func<Gui
     public Task ReloadAsync(object entity, CancellationToken cancellationToken = default) =>
         db.Entry(entity).ReloadAsync(cancellationToken);
 
+    public void DiscardChanges() => db.ChangeTracker.Clear();
+
     public void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion) =>
         db.Entry(entity).Property(e => e.RowVersion).OriginalValue = rowVersion;
 
@@ -378,6 +380,8 @@ internal sealed class ZoneRaceSqlHost : IAsyncDisposable
                 DisplayName = "Owner",
                 PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher>().Hash(Password),
                 SubjectType = SubjectType.CooperativeOwner,
+                PhoneNumber = NewPhone(),
+                PhoneVerifiedAt = DateTimeOffset.UtcNow,
                 StatusId = StatusIds.Account.Active,
             };
             db.Accounts.Add(owner);

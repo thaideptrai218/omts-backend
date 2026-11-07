@@ -18,7 +18,7 @@ namespace OMTS.Api.IntegrationTests.Cultivation;
 /// <summary>Independent QA of the CultivationCyclesV2 migration and of the demo cycle step on SQL Server.</summary>
 public class CyclesQaTestsMigrationAndDemo
 {
-    private const string MigrationBefore = "20261104103030_RaftsV2";
+    private const string MigrationBefore = "20261105161142_RaftsV2";
 
     private const string SchemaQuery = """
         SELECT CONCAT('column ', c.name, ' ', t.name, ' ', c.max_length, ' ', c.precision, ' ', c.scale, ' ', c.is_nullable, ' ', c.default_object_id) AS [Value]
@@ -40,7 +40,10 @@ public class CyclesQaTestsMigrationAndDemo
         await migrator.MigrateAsync(MigrationBefore);
         var oldSchema = await SchemaAsync(db);
 
-        var zone = new FarmingZone { CooperativeId = await OldSchemaRows.CooperativeAsync(db), Code = "KV01", Name = "A" };
+        // Seed only columns of this historical schema; later migrations add fields to the current Cooperative model.
+        var cooperativeId = Guid.NewGuid();
+        await db.Database.ExecuteSqlAsync($"INSERT INTO Cooperatives (Id, FullName, CreatedAt) VALUES ({cooperativeId}, N'HTX', SYSDATETIMEOFFSET())");
+        var zone = new FarmingZone { CooperativeId = cooperativeId, Code = "KV01", Name = "A" };
         var (raft, raftTwo) = (new Raft { Zone = zone, Code = "B01", Size = "1" }, new Raft { Zone = zone, Code = "B02", Size = "1" });
         var seed = new FarmingInputItem { Code = "VT001", Name = "Seed", Group = InputItemGroup.Seed, Unit = "con" };
         db.AddRange(raft, raftTwo, seed);

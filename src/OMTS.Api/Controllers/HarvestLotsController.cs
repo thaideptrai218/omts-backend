@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OMTS.Api.Common;
@@ -38,8 +39,8 @@ public sealed class HarvestLotsController(HarvestLotReadService reads, HarvestLo
     [ProducesResponseType<HarvestLotSaved>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Record(Guid raftId, [FromForm] HarvestLotForm form, CancellationToken cancellationToken)
     {
-        InvariantFormValues.TryInt(form.CageCount, out var cageCount);
-        var estimatedIsRead = InvariantFormValues.TryDecimal(form.EstimatedKg, out var estimatedKg);
+        TryInt(form.CageCount, out var cageCount);
+        var estimatedIsRead = TryDecimal(form.EstimatedKg, out var estimatedKg);
         var request = new RecordHarvestRequest(
             Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, !estimatedIsRead, Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)));
         return (await recording.RecordAsync(raftId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
@@ -58,7 +59,7 @@ public sealed class HarvestLotsController(HarvestLotReadService reads, HarvestLo
         var numbers = new List<int>(values?.Length ?? 0);
         foreach (var value in values ?? [])
         {
-            if (string.IsNullOrWhiteSpace(value) || !InvariantFormValues.TryInt(value, out var number))
+            if (string.IsNullOrWhiteSpace(value) || !TryInt(value, out var number))
             {
                 return null;
             }
@@ -67,5 +68,44 @@ public sealed class HarvestLotsController(HarvestLotReadService reads, HarvestLo
         }
 
         return numbers;
+    }
+
+    /// <summary>An integer in the invariant culture; a blank value is read as none.</summary>
+    private static bool TryInt(string? value, out int? result)
+    {
+        result = null;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        if (!int.TryParse(value.Trim(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return false;
+        }
+
+        result = parsed;
+        return true;
+    }
+
+    /// <summary>
+    /// A number with a dot; a blank value is read as none. No thousands separator: "400,5" typed with a decimal comma would
+    /// otherwise be read as 4005, ten times too large.
+    /// </summary>
+    private static bool TryDecimal(string? value, out decimal? result)
+    {
+        result = null;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        if (!decimal.TryParse(value.Trim(), NumberStyles.Number & ~NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return false;
+        }
+
+        result = parsed;
+        return true;
     }
 }

@@ -22,6 +22,9 @@ public interface IAccessGrantRepository
     /// <summary>The Effective pairs of a fixed role of the account, with role and zone loaded, newest first.</summary>
     Task<IReadOnlyList<AccessGrant>> ListEffectiveForAccountAsync(Guid accountId, CancellationToken cancellationToken);
 
+    /// <summary>The same for a page of accounts, in one query.</summary>
+    Task<IReadOnlyList<AccessGrant>> ListEffectiveForAccountsAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken cancellationToken);
+
     Task<AccessGrant?> GetAsync(Guid grantId, Guid accountId, CancellationToken cancellationToken);
 
     /// <summary>

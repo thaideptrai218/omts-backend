@@ -7,10 +7,11 @@ using OMTS.Application.Features.Harvest;
 namespace OMTS.Application.Features.Files;
 
 /// <summary>
-/// Removes FARM, cultivation log and harvest lot files no record points to: a removal that failed after a replace or a failed save, or a host that
-/// stopped between upload and save. Only <see cref="Categories"/> are scanned. Cooperative logos never are: every
-/// logo file is kept, since published traceability versions show the logo of their publication time (FARM-01).
-/// Each environment needs a storage container (or folder) of its own: files its database does not know are deleted.
+/// Removes files no record points to: a removal that failed after a replace or a failed save, a host that stopped
+/// between upload and save, or a meter photo whose recognition was never saved as a measurement. Only
+/// <see cref="Categories"/> are scanned. Cooperative logos never are: every logo file is kept, since published
+/// traceability versions show the logo of their publication time (FARM-01). Each environment needs a storage container
+/// (or folder) of its own: files its database does not know are deleted.
 /// </summary>
 public sealed class OrphanFileCleanupService(
     IFileStorage storage,
@@ -20,13 +21,13 @@ public sealed class OrphanFileCleanupService(
     ILogger<OrphanFileCleanupService> logger)
 {
     /// <summary>
-    /// Raft photos, license files, cooperative cover photos, certificate files, cultivation log photos and harvest lot photos: each belongs to
-    /// one column, so "no record points to it" is certain.
+    /// Raft photos, license files, cooperative cover photos, certificate files, cultivation log photos, harvest lot photos and meter photos: each
+    /// belongs to one column, so "no record points to it" is certain.
     /// </summary>
     public static readonly IReadOnlyList<string> Categories =
     [
-        FileCategories.RaftPhotos, FileCategories.ZoneLicenses, FileCategories.CooperativeCoverPhotos, FileCategories.CooperativeCertifications,
-        FileCategories.CultivationLogPhotos, FileCategories.HarvestLotPhotos,
+        FileCategories.RaftPhotos, FileCategories.ZoneLicenses, FileCategories.CooperativeCoverPhotos, FileCategories.CooperativeCertifications, FileCategories.WaterMeterPhotos, FileCategories.CultivationLogPhotos,
+        FileCategories.HarvestLotPhotos,
     ];
 
     /// <summary>
@@ -68,7 +69,8 @@ public sealed class OrphanFileCleanupService(
             return 0;
         }
 
-        // Read after the listing: a record saved in between points to a file younger than the grace period.
+        // Read after the listing: a record saved in between points to a file younger than the grace period. The exception,
+        // accepted: a meter photo has no expiry, so one older than that can be recorded in the moment the daily job runs.
         var referenced = await references.ReferencedKeysAsync(category, cancellationToken);
         if (MayAllBeUnreferenced.Contains(category) && referenced.Count == 0)
         {

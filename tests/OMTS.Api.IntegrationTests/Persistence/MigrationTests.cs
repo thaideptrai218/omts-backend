@@ -25,16 +25,16 @@ public class MigrationTests
         "PayRuleVersions", "PayLines", "LaborSettlements", "LaborPayments",
     ];
 
-    // Still read by live endpoints (open cycle of a raft, end of employment) or replaced by later tickets. LaneSegments and
-    // CultivationLogEntries lived here until RaftsV2 (PR 0.9) dropped them, and SeedingEvents until SeedingRecords (PR C2).
+    // Still read by live endpoints (open cycle of a raft) or replaced by later tickets. The labor tables kept here went with
+    // EmployeesV2, LaneSegments and CultivationLogEntries with RaftsV2 (PR 0.9), and SeedingEvents with SeedingRecords (PR C2).
     private static readonly string[] KeptTables =
     [
         "CultivationCycles",
-        "Products", "Customers", "Contractors", "SeasonalWorkers", "WorkAssignments", "AttendanceRecords",
+        "Products", "Customers",
     ];
 
     private const string MigrationBeforeCleanup = "20261025175348_AddPushDeviceLoginSession";
-    private const string MigrationBeforeRaftsV2 = "20261104100119_PurchaseReturnsV2";
+    private const string MigrationBeforeRaftsV2 = "20261105140242_SupplierPaymentsV2";
 
     // OMTS-208 done criteria: a fresh database built from the migrations has the status catalog, keeps the
     // schema rules (no cascade delete) and the API starts on it.

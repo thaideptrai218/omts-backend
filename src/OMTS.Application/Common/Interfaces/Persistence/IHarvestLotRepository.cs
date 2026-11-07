@@ -31,10 +31,4 @@ public interface IHarvestLotRepository
 
     /// <summary>Adds the lot with the lanes and photos it holds.</summary>
     void Add(HarvestLot lot);
-
-    /// <summary>
-    /// Forgets every row this request read or added, so a new attempt after a lost race on the lot code reads the database again and writes no row of the failed
-    /// one. A failed save has already dropped its queued pushes.
-    /// </summary>
-    void ForgetTrackedChanges();
 }

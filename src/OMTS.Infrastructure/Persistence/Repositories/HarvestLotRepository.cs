@@ -55,8 +55,6 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
 
     public void Add(HarvestLot lot) => db.HarvestLots.Add(lot);
 
-    public void ForgetTrackedChanges() => db.ChangeTracker.Clear();
-
     private static IQueryable<HarvestLot> WithAll(IQueryable<HarvestLot> lots) =>
         lots.Include(l => l.Lanes).ThenInclude(l => l.Lane)
             .Include(l => l.Photos)
