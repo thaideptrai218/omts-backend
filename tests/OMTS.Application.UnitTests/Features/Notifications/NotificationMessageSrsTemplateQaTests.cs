@@ -18,7 +18,9 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
     private const string Cycle08 = "Raft {raft_code}: every seeded lane is harvested. Please close its cultivation cycle.";
     private const string Harvest01 = "Raft {raft_code}: the harvest of {harvest_date} is recorded as lot {lot_code} ({cage_count} cages, about {estimated_kg} kg).";
     private const string Harvest03 = "With {days} days, the next daily close check will close {count} lots that are still for sale. Do you want to save?";
-    private const string Farm01 = "{document} expires on {expiry_date}, in {days} days. Please renew it and record the new one.";
+    private const string Trace03 = "The correction is not saved: lane {lane_number} of harvest lot {lot_code} would have no seed lot. Please keep at least one seed lot for this lane.";
+    private const string Trace04 = "This correction changes the origin information of harvest lots {lot_codes}. Has the Cooperative Owner agreed in person that the data is wrong?";
+    private const string Farm01 ="{document} expires on {expiry_date}, in {days} days. Please renew it and record the new one.";
     private const string Farm02 = "{document} expired on {expiry_date}. Please renew it and record the new one.";
     private const string Water03 = "Water alert {correction_note}: zone {zone_name}, raft {raft_code}, measured on {measurement_time}. {values_outside}. Please check the water.";
     private const string Water04 = "The water alert of zone {zone_name} (measured on {measurement_time}) was withdrawn: {user_name} {corrected_or_voided} the measurement. Reason: {reason}.";
@@ -33,6 +35,7 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
         "farm-01", "farm-02", "farm-01-no-type", "farm-01-certification", "farm-02-certification-no-number", "water-03", "water-03-corrected", "water-04-corrected", "water-04-voided", "water-06",
         "cycle-04", "cycle-08", "harvest-01", "harvest-03",
         "cycle-05", "cycle-06", "cycle-06-early", "cycle-07", "cycle-07-no-seeding",
+        "trace-03", "trace-04", "trace-04-no-lot",
     };
 
     [Theory]
@@ -143,6 +146,22 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
             UserMessages.CultivationLogRecorded("KV01-B01", new DateOnly(2026, 10, 1)),
             "Raft KV01-B01: a cultivation log was recorded for the visit on 01/10/2026. Please review it.",
             """{"raft_code":"KV01-B01","visit_date":"2026-10-01"}"""),
+        "trace-03" => (
+            "MSG-TRACE-03", Trace03,
+            UserMessages.LaneWithoutSeedLot(4, "KV01-B01-20261026"),
+            "The correction is not saved: lane 4 of harvest lot KV01-B01-20261026 would have no seed lot. Please keep at least one seed lot for this lane.",
+            """{"lane_number":4,"lot_code":"KV01-B01-20261026"}"""),
+        "trace-04" => (
+            "MSG-TRACE-04", Trace04,
+            UserMessages.TraceCorrectionAgreement(["KV01-B01-20261026", "KV01-B01-20261026-2"]),
+            "This correction changes the origin information of harvest lots KV01-B01-20261026, KV01-B01-20261026-2. Has the Cooperative Owner agreed in person that the data is wrong?",
+            """{"lot_codes":["KV01-B01-20261026","KV01-B01-20261026-2"]}"""),
+        // A correction that changes no lot (a cultivation log, BR-TRACE-05) leaves out the sentence naming the lots.
+        "trace-04-no-lot" => (
+            "MSG-TRACE-04", Trace04,
+            UserMessages.TraceCorrectionAgreement([]),
+            "Has the Cooperative Owner agreed in person that the data is wrong?",
+            """{"lot_codes":[]}"""),
         "water-06" => (
             "MSG-WATER-06", Water06,
             UserMessages.WaterMeasurementOverdue("Vùng A", new DateOnly(2026, 10, 1)),
@@ -152,12 +171,14 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
     };
 
     // Each placeholder stands for some text; an empty {correction_note} also drops the space before it ("Water alert: zone …").
-    // So does an empty {early_note} of MSG-CYCLE-06 ("closed on 29/10/2026. Seed hung …").
+    // So does an empty {early_note} of MSG-CYCLE-06 ("closed on 29/10/2026. Seed hung …"), and MSG-TRACE-04 with no lot drops its first sentence.
     private static string TemplatePattern(string template) =>
         "^" + Placeholder().Replace(
             Regex.Escape(template)
                 .Replace(@"\ \{correction_note}", "( .+)?", StringComparison.Ordinal)
-                .Replace(@"\ \{early_note}", "( .+)?", StringComparison.Ordinal),
+                .Replace(@"\ \{early_note}", "( .+)?", StringComparison.Ordinal)
+                .Replace(@"\ lots\ \{lot_codes}\.\ ", @"\ lots\ .+\.\ ", StringComparison.Ordinal)
+                .Replace(@"This\ correction\ changes\ the\ origin\ information\ of\ harvest\ lots\ .+\.\ ", @"(This\ correction\ changes\ the\ origin\ information\ of\ harvest\ lots\ .+\.\ )?", StringComparison.Ordinal),
             ".+") + "$";
 
     [GeneratedRegex(@"\\\{[a-z_]+}")]

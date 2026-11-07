@@ -98,7 +98,7 @@ public sealed class CultivationLogCorrectionService(
 
         var before = CultivationLogValues.Snapshot(log);
         (log.VisitDate, log.Notes) = (values.VisitDate, values.Notes);
-        var removedKeys = ApplyPhotos(log, kept, newKeys);
+        var removedKeys = CultivationLogPhotoRows.Apply(logs, log, kept, newKeys);
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, CultivationLogValues.Snapshot(log));
         if (changedAfter is not null)
         {
@@ -143,28 +143,6 @@ public sealed class CultivationLogCorrectionService(
     /// <summary>MSG-GEN-08 when the caller may not correct this log, MSG-GEN-09 when its cycle no longer allows a change.</summary>
     private async Task<AppError?> RefusalAsync(CultivationLog log, CancellationToken cancellationToken) =>
         CultivationLogViews.MayCorrect(await views.AccessAsync(cancellationToken), log, log.Cycle.Raft.ZoneId) ? writes.Refusal(log.Cycle) : AppError.Forbidden;
-
-    /// <summary>Removes the photos not kept and adds the new ones in the free slots; kept photos stay in their slots. Returns the keys of the removed ones.</summary>
-    private List<string> ApplyPhotos(CultivationLog log, List<CultivationLogPhoto> kept, IReadOnlyList<string> newKeys)
-    {
-        var removed = log.Photos.Except(kept).ToList();
-        foreach (var photo in removed)
-        {
-            log.Photos.Remove(photo);
-            logs.RemovePhoto(photo);
-        }
-
-        var freeSlots = Enumerable.Range(1, CultivationLog.MaxPhotos).Where(slot => kept.All(p => p.SortOrder != slot)).GetEnumerator();
-        foreach (var key in newKeys)
-        {
-            freeSlots.MoveNext();
-            var photo = new CultivationLogPhoto { LogId = log.Id, SortOrder = freeSlots.Current, FileKey = key };
-            log.Photos.Add(photo);
-            logs.AddPhoto(photo);
-        }
-
-        return removed.Select(p => p.FileKey).ToList();
-    }
 
     private async Task SaveAsync(IReadOnlyList<string> uploadedKeys, List<string> removedKeys, CancellationToken cancellationToken)
     {

@@ -13,7 +13,11 @@ namespace OMTS.Application.Features.Harvest;
 internal sealed record HarvestLotFields(IReadOnlyList<Lane> Lanes, IReadOnlySet<Guid> FinishedLaneIds, int CageCount, decimal EstimatedKg);
 
 /// <summary>What a correction adds to the fields of a harvest: the reason, kept in the audit log, and why the finished lanes cannot be so.</summary>
-internal sealed record HarvestLotCorrectionInput(string? Reason, string? FinishedHint);
+/// <param name="OwnLaneIds">
+/// The lanes of the lot that stay allowed whatever their status. TRACE-03.2 passes the lot's own lanes: a lane Removed after the close keeps its records (BR-FARM-04), so only a lane
+/// the correction adds must be In Use. HARVEST-01.1 passes none, as no lane of an Open cycle can be removed.
+/// </param>
+internal sealed record HarvestLotCorrectionInput(string? Reason, string? FinishedHint, IReadOnlySet<Guid>? OwnLaneIds = null);
 
 /// <summary>HARVEST-01 step 6: at least one lane Growing or Being harvested, the finished lanes among them, cages and estimated kg above 0 (BR-HARVEST-01, BR-HARVEST-02). Every invalid field is listed (MSG-GEN-01).</summary>
 internal static class HarvestLotFieldReader
@@ -36,7 +40,7 @@ internal static class HarvestLotFieldReader
     {
         fields = null;
         var check = new FieldCheck();
-        var (lanes, laneHint) = Lanes(raft, request.LaneNumbers, states);
+        var (lanes, laneHint) = Lanes(raft, request.LaneNumbers, states, correction?.OwnLaneIds);
         check.Check(lanes is not null && laneHint is null, LanesField);
         var finished = Finished(request, lanes);
         check.Check(finished is not null && correction?.FinishedHint is null, FinishedLanesField);
@@ -90,15 +94,20 @@ internal static class HarvestLotFieldReader
         return validated.IsValid ? (validated.Files, null) : ([], validated.Problem);
     }
 
-    /// <summary>One or more lanes of the raft, each In Use and given once; a lane that is Not seeded or Harvested today is named in the hint.</summary>
-    private static (IReadOnlyList<Lane>? Lanes, string? Hint) Lanes(Raft raft, IReadOnlyList<int>? numbers, IReadOnlyDictionary<Guid, LaneState> states)
+    /// <summary>
+    /// One or more lanes of the raft, each In Use (or one of <paramref name="ownLaneIds"/>, whatever its status) and given once; a lane that is Not seeded or Harvested today is named in the hint.
+    /// </summary>
+    private static (IReadOnlyList<Lane>? Lanes, string? Hint) Lanes(
+        Raft raft, IReadOnlyList<int>? numbers, IReadOnlyDictionary<Guid, LaneState> states, IReadOnlySet<Guid>? ownLaneIds)
     {
         if (numbers is null || numbers.Count == 0 || numbers.Distinct().Count() != numbers.Count)
         {
             return (null, null);
         }
 
-        var lanes = raft.Lanes.Where(l => numbers.Contains(l.LaneNumber) && l.StatusId == StatusIds.Lane.InUse).ToList();
+        var lanes = raft.Lanes
+            .Where(l => numbers.Contains(l.LaneNumber) && (l.StatusId == StatusIds.Lane.InUse || (ownLaneIds?.Contains(l.Id) ?? false)))
+            .ToList();
         if (lanes.Count != numbers.Count)
         {
             return (null, null);

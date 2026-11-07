@@ -17,7 +17,8 @@ public sealed class HarvestLotEditReader(
         HarvestLotViews.MayCorrect(await views.AccessAsync(cancellationToken), lot, lot.Raft.ZoneId) ? writes.Refusal(lot.Cycle) : AppError.Forbidden;
 
     /// <summary>The raft with its lanes, and the lanes as the lot sees them.</summary>
-    internal async Task<(Raft Raft, HarvestLotLaneFacts Facts)> FactsAsync(HarvestLot lot, CancellationToken cancellationToken)
+    /// <param name="asOf">The day the lanes are read on: today for an Open cycle; TRACE-03.2 reads a Closed cycle on its close date, as its views do.</param>
+    internal async Task<(Raft Raft, HarvestLotLaneFacts Facts)> FactsAsync(HarvestLot lot, CancellationToken cancellationToken, DateOnly? asOf = null)
     {
         var raft = await rafts.GetForEditAsync(lot.RaftId, cancellationToken) ?? lot.Raft;
         var cycle = lot.Cycle;
@@ -27,7 +28,7 @@ public sealed class HarvestLotEditReader(
             lot,
             await seedingRecords.LaneSeedingsAsync(cycle.Id, cancellationToken),
             await lots.LaneFactsAsync(cycle.Id, cancellationToken),
-            timeProvider.Today());
+            asOf ?? timeProvider.Today());
         return (raft, facts);
     }
 }

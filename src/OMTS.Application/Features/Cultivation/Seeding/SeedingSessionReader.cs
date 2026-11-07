@@ -48,7 +48,7 @@ public sealed class SeedingSessionReader(ISeedLotRepository lots, IRaftRepositor
     }
 
     /// <summary>GBR-04: a Seed line of a Completed receipt whose whole quantity has not been returned. Lots of a discontinued item or supplier stay: GBR-01 is not cited by CYCLE-02, and the seed is already bought.</summary>
-    private async Task<PurchaseReceiptLine?> LotAsync(Guid? seedLotId, SeedingRecord? current, CancellationToken cancellationToken)
+    internal async Task<PurchaseReceiptLine?> LotAsync(Guid? seedLotId, SeedingRecord? current, CancellationToken cancellationToken)
     {
         if (seedLotId is not { } id)
         {
