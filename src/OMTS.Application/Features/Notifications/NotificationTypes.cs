@@ -48,6 +48,9 @@ public static class NotificationTypes
     /// <summary>MSG-HARVEST-01, a recorded harvest, to the Cooperative Owner to review (BF-03 step 7); not on a correction. BR-ACCOUNT-11 does not list it as mandatory.</summary>
     public const string HarvestLotRecorded = "HARVEST_LOT_RECORDED";
 
+    /// <summary>MSG-HARVEST-05, a lot for sale the next daily close check closes, to the Zone Managers of the zone or else the Owner (GFR-05); once per close date. BR-ACCOUNT-11 does not list it as mandatory.</summary>
+    public const string HarvestLotAutoCloseWarning = "HARVEST_LOT_AUTO_CLOSE_WARNING";
+
     /// <summary>MSG-CYCLE-08, every seeded lane is Harvested, to the Zone Managers of the zone or else the Owner (BR-CYCLE-07); mandatory.</summary>
     public const string CycleCloseReminder = "CYCLE_CLOSE_REMINDER";
 
@@ -94,6 +97,9 @@ public static class NotificationTypes
         new(CycleSeedingCompleted, "Seeding finished", Default, [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
         new(HarvestLotRecorded, "New harvest lot", Default, [CooperativeOwner],
+            NotificationOpenAccess.InZone(PermissionFunctions.Harvests, PermissionAction.View)),
+        // Opens the lot, where it can be closed by hand (HARVEST-02).
+        new(HarvestLotAutoCloseWarning, "Harvest lot closing automatically", Default, [CooperativeOwner, ZoneManager],
             NotificationOpenAccess.InZone(PermissionFunctions.Harvests, PermissionAction.View)),
         // Mandatory (BR-ACCOUNT-11), so it has an SMS: to the Owner only, as decided for every type but the water alert (OMTS-216, 03/11).
         new(CycleCloseReminder, "Reminder to close a cultivation cycle", AlwaysPush, [CooperativeOwner, ZoneManager],

@@ -22,6 +22,10 @@ public sealed class HarvestLotViews(
         && access.Allows(PermissionFunctions.Harvests, PermissionAction.Edit, PermissionScope.ZoneScoped, zoneId)
         && (access.IsCooperativeOwner || lot.RecordedByAccountId == access.AccountId);
 
+    /// <summary>HARVEST-02: a lot for sale, closed by a Zone Manager of the zone (whoever recorded it) or the Cooperative Owner, whatever the state of its cycle (BR-HARVEST-04).</summary>
+    public static bool MayClose(AccountAccess? access, HarvestLot lot, Guid zoneId) =>
+        lot.IsForSale && access is not null && access.Allows(PermissionFunctions.HarvestLots, PermissionAction.Edit, PermissionScope.ZoneScoped, zoneId);
+
     public async Task<AccountAccess?> AccessAsync(CancellationToken cancellationToken) =>
         currentUser.AccountId is { } accountId ? await permissions.GetAccessAsync(accountId, cancellationToken) : null;
 
@@ -30,7 +34,8 @@ public sealed class HarvestLotViews(
     {
         var names = await accounts.GetDisplayNamesAsync([lot.RecordedByAccountId], cancellationToken);
         var figures = await sales.FiguresAsync([lot.Id], cancellationToken);
-        var canCorrect = CanEdit(lot.Cycle, raft) && MayCorrect(await AccessAsync(cancellationToken), lot, raft.ZoneId);
+        var access = await AccessAsync(cancellationToken);
+        var canCorrect = CanEdit(lot.Cycle, raft) && MayCorrect(access, lot, raft.ZoneId);
         var canRemove = canCorrect && !await sales.IsOnAnyInvoiceAsync(lot.Id, cancellationToken);
         var photos = new List<HarvestLotPhotoView>(lot.Photos.Count);
         foreach (var photo in lot.Photos.OrderBy(p => p.SortOrder))
@@ -68,6 +73,7 @@ public sealed class HarvestLotViews(
             names.GetValueOrDefault(lot.RecordedByAccountId),
             canCorrect,
             canRemove,
+            MayClose(access, lot, raft.ZoneId),
             RowVersionGuard.Encode(lot.RowVersion));
     }
 
@@ -88,7 +94,7 @@ public sealed class HarvestLotViews(
                 return new HarvestLotListItem(
                     lot.Id, lot.LotCode, lot.HarvestedAt, lot.HarvestDate, LaneNumbers(lot), FinishedLaneNumbers(lot), lot.CageCount, lot.KgPerCage, lot.EstimatedKg,
                     worked.InvoicedKg, worked.RemainingKg, lot.StatusId, statusCatalog.DisplayNameOf(lot.StatusId), lot.OriginState,
-                    canCorrect, canCorrect && !onInvoice.Contains(lot.Id), RowVersionGuard.Encode(lot.RowVersion));
+                    canCorrect, canCorrect && !onInvoice.Contains(lot.Id), MayClose(access, lot, raft.ZoneId), RowVersionGuard.Encode(lot.RowVersion));
             })
             .ToList();
     }

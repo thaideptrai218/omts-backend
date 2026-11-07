@@ -15,6 +15,7 @@ public sealed class HarvestLotNotifier(IZoneRecipientQuery recipients, OwnerActo
 {
     private const string LotRecordedTitle = "New harvest lot";
     private const string CloseReminderTitle = "Reminder to close a cultivation cycle";
+    private const string AutoCloseWarningTitle = "Harvest lot closing automatically";
 
     /// <summary>MSG-HARVEST-01 to the Cooperative Owners (BF-03 step 7); not on a correction.</summary>
     public async Task LotRecordedAsync(HarvestLot lot, Raft raft, Guid recorder, CancellationToken cancellationToken)
@@ -28,6 +29,29 @@ public sealed class HarvestLotNotifier(IZoneRecipientQuery recipients, OwnerActo
                 UserMessages.HarvestLotRecorded(raft.Code, lot.HarvestDate, lot.LotCode, lot.CageCount, lot.EstimatedKg),
                 new RelatedRecord(RelatedRecordTypes.HarvestLot, lot.Id, lot.LotCode)),
             cancellationToken);
+    }
+
+    /// <summary>
+    /// MSG-HARVEST-05 to the Zone Managers of the zone, or to the Cooperative Owners when it has none (GFR-05); pushed unless turned off. The check has no actor, so nobody is left out.
+    /// False when there is nobody to tell.
+    /// </summary>
+    public async Task<bool> AutoCloseWarningAsync(HarvestLot lot, Raft raft, DateOnly closeDate, CancellationToken cancellationToken)
+    {
+        var told = await recipients.GetZoneManagersOrOwnersAsync(raft.ZoneId, cancellationToken);
+        if (told.Count == 0)
+        {
+            return false;
+        }
+
+        await notifications.NotifyAsync(
+            told,
+            new NotificationContent(
+                NotificationTypes.HarvestLotAutoCloseWarning,
+                AutoCloseWarningTitle,
+                UserMessages.HarvestLotAutoCloseWarning(lot.LotCode, raft.Code, closeDate),
+                new RelatedRecord(RelatedRecordTypes.HarvestLot, lot.Id, lot.LotCode)),
+            cancellationToken);
+        return true;
     }
 
     /// <summary>MSG-CYCLE-08 to the Zone Managers of the zone, or to the Cooperative Owners when it has none; always pushed (BR-CYCLE-07, BR-ACCOUNT-11).</summary>

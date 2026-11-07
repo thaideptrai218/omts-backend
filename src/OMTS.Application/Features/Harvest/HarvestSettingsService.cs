@@ -80,7 +80,7 @@ public sealed class HarvestSettingsService(
             return AppError.Invalid(DaysBeforeAutoCloseField);
         }
 
-        var count = await lots.CountForSaleSinceAtMostAsync(timeProvider.Today().AddDays(-days!.Value), cancellationToken);
+        var count = await lots.CountForSaleSinceAtMostAsync(HarvestLotAutoCloseRule.LatestSinceClosedOn(timeProvider.Today().AddDays(1), days!.Value), cancellationToken);
         var lowered = days < cooperative.DaysBeforeAutoClose;
         var question = lowered ? UserMessages.AutoCloseDaysLowered(days.Value, count) : null;
         return new AutoClosePreview(days.Value, count, lowered, question?.Text, question?.Code);

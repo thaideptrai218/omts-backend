@@ -160,6 +160,9 @@ public static class DependencyInjection
         services.AddScoped<HarvestLotReadService>();
         services.AddScoped<HarvestLotForSaleService>();
         services.AddScoped<HarvestLotStatusService>();
+        // HARVEST-02 close by hand (also the CLAIM-03 extension point) and GFR-05 the daily close check
+        services.AddScoped<HarvestLotClosingService>();
+        services.AddScoped<HarvestLotAutoCloseService>();
         services.AddScoped<HarvestSettingsService>();
         // TRACE-03 – correct traceability data: its own guard and services, as the cultivation screens stay locked after the close
         services.AddScoped<TraceCorrectionGuard>();

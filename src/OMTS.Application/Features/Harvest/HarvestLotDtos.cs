@@ -21,6 +21,7 @@ public sealed record HarvestLotPhotoView(string Key, int SortOrder, string Url);
 /// <summary>A lot on the Harvest lots screen (SCR-HARVEST-01).</summary>
 /// <param name="LaneNumbers">In number order.</param>
 /// <param name="FinishedLaneNumbers">The lanes this lot marked finished, in number order.</param>
+/// <param name="CanClose">Show Close lot, as on <see cref="HarvestLotView"/>.</param>
 public sealed record HarvestLotListItem(
     Guid Id,
     string LotCode,
@@ -38,12 +39,14 @@ public sealed record HarvestLotListItem(
     HarvestLotOriginState OriginState,
     bool CanCorrect,
     bool CanRemove,
+    bool CanClose,
     string RowVersion);
 
 /// <summary>A harvest lot with its figures (BR-HARVEST-07): the record a notification opens.</summary>
 /// <param name="Photos">In slot order.</param>
 /// <param name="CanCorrect">The caller may correct the lot now: its cycle is Open, its raft and zone are In Use, and the caller recorded it or is the Owner (BR-HARVEST-05).</param>
 /// <param name="CanRemove">The same, and the lot is on no sales invoice.</param>
+/// <param name="CanClose">The caller may close the lot by hand now (HARVEST-02): it is for sale and the caller is a Zone Manager of its zone or the Owner, whatever the state of the cycle.</param>
 public sealed record HarvestLotView(
     Guid Id,
     string LotCode,
@@ -74,6 +77,7 @@ public sealed record HarvestLotView(
     string? RecordedByName,
     bool CanCorrect,
     bool CanRemove,
+    bool CanClose,
     string RowVersion);
 
 /// <summary>Answer of a recorded harvest.</summary>

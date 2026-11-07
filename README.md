@@ -100,7 +100,7 @@ sets of water alerts (the demo records as the Owner, who is not told of their ow
 
 Rafts `B1-01`, `B1-02`, `B2-01`, `B2-02` have material usage inside their Open cycles, and `B1-06`, `B2-06` a repair with no cycle, recorded by the zone's manager.
 The first three rafts of each In Use zone have seeding sessions by the zone's manager: the first with a re-hung lane and its seeding marked complete (the Owner has a MSG-CYCLE-02), the second with a lane left Not seeded, the third with every lane seeded. The rafts `B1-04`, `B1-05`, `B2-04`, `B2-05` keep a cycle with no record, which can still be cancelled. Receipts with seeded lots can no longer be cancelled.
-Rafts `B1-01` and `B2-01` have two harvest lots of the seed day (the second with `-2`), one lane Being harvested and one Harvested; `B1-02` has every seeded lane finished, so `quanlyvung1` has the reminder to close its cycle (MSG-CYCLE-08), and the Owner has a MSG-HARVEST-01 for each lot. Harvest settings are at their first-setup values, 50 kg per cage and 3 days.
+Rafts `B1-01` and `B2-01` have two harvest lots of the seed day (the second with `-2`), one lane Being harvested and one Harvested; `B1-02` has every seeded lane finished, so `quanlyvung1` has the reminder to close its cycle (MSG-CYCLE-08), and the Owner has a MSG-HARVEST-01 for each lot. Harvest settings are at their first-setup values, 50 kg per cage and 3 days. The demo lots are dated the seed day, so the daily close check leaves them for sale on the first start; three days later it warns the Zone Managers (MSG-HARVEST-05) and the day after it closes them (GFR-05).
 
 Dates are set relative to the day of the first seed and are not moved afterwards:
 - After a few weeks the "expiring" license and certification have expired. `docker compose down -v` gives fresh dates.
@@ -222,6 +222,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | `CULTIVATION_LOG_RECORDED` | MSG-CYCLE-04, when a cultivation log is saved, not on a correction, not to the Owner who recorded it | unless turned off | Owner |
 | `CYCLE_SEEDING_COMPLETED` | MSG-CYCLE-02, when the seeding of a raft is marked complete (once per cycle), not to the Owner who marked it | unless turned off | Owner |
 | `HARVEST_LOT_RECORDED` | MSG-HARVEST-01, when a harvest lot is recorded, not on a correction, not to the Owner who recorded it | unless turned off | Owner |
+| `HARVEST_LOT_AUTO_CLOSE_WARNING` | MSG-HARVEST-05, from the daily close check (GFR-05), once for each close date of a lot still for sale that the next check closes: to the Zone Managers of the zone (All zones too), or to the Owners when it has none | unless turned off | Owner, Zone Manager |
 | `CYCLE_CLOSE_REMINDER` | MSG-CYCLE-08, once per cycle, when a harvest makes every seeded lane Harvested: to the Zone Managers of the zone (All zones too), or to the Owners when it has none, not to the Owner who recorded it | always (mandatory) | Owner, Zone Manager |
 | `PURCHASE_RECEIPT_COMPLETED` | MSG-PURCHASE-01, when a receipt is completed (never for a draft), also when the Owner completed it | unless turned off | Owner |
 | `PURCHASE_RECEIPT_CANCELLED_ADVANCE` | MSG-PURCHASE-08, when a cancelled receipt leaves the supplier debt below zero | unless turned off | Owner, Accountant |
@@ -245,6 +246,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   | MSG-FARM-01 / MSG-FARM-02 (`COOPERATIVE_CERTIFICATION_EXPIRY`) | `certification_name`, `certification_number` (null when none), `expiry_date`, `days` (MSG-FARM-01 only) |
   | MSG-CYCLE-02 | `raft_code`, `seeded_count`, `lane_count` (lanes In Use) |
   | MSG-CYCLE-04 | `raft_code`, `visit_date` |
+  | MSG-HARVEST-05 | `lot_code`, `raft_code`, `close_date` (the day of the check that closes the lot, at its start) |
   | MSG-PURCHASE-01 | `user_name`, `receipt_code`, `supplier_name`, `line_count`, `total_amount` (whole VND: the sum of the lines, each rounded half up to the dong) |
   | MSG-PURCHASE-04 | `user_name`, `transaction_kind` (`Payment`, `PaidBack`, `PaymentCancelled`, `PaidBackCancelled`), `payment_code`, `amount`, `supplier_name`, `debt_amount` (the debt after it; below zero: paid in advance) |
   | MSG-PURCHASE-08 | `user_name`, `receipt_code`, `supplier_name`, `advance_amount` (VND paid in advance, positive) |
@@ -328,6 +330,16 @@ the repeat still counts from the last reminder. Like the expiry reminder (07:00)
 runs it once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A second run
 on the same day sends nothing. Each zone is saved on its own: a zone saved during the run, or one with nobody to notify,
 is simply checked again the next day, and the other zones are not affected.
+
+`HarvestLotAutoCloseJob` runs every day at 00:05 (Asia/Ho_Chi_Minh), GFR-05: a harvest lot still for sale (Open or Reopened)
+counts its days before automatic close (harvest settings) from its harvest date, or from the day it was last reopened. When
+that day plus the days is before today, the lot is Closed with today as the close date, the reason `TimeLimitReached` and its
+remaining kg as the leftover kg, and the audit row has the system as the actor: with 3 days, a lot harvested on 26/10 is
+closed by the check of 30/10. The check of the day before (29/10) sends MSG-HARVEST-05 once, and the lot keeps the close date
+it announced (`AutoCloseWarnedFor`), so a second run, the catch-up at start or a second app instance sends nothing more; a
+reopen or new days give a new close date, warned once in its turn. A host down across the checks closes the overdue lots at
+its next run (catch-up at start, like the other reminders), with that day as the close date. Each lot is saved on its own: a
+lot saved meanwhile (a sale, a close by hand, the other instance) is read and checked once more at once.
 
 The expiry reminder (GFR-03, `ZoneLicenseReminderJob`, 07:00) checks the zone licenses and the cooperative certifications.
 It notifies the active Cooperative Owners only (mandatory push), once when a record becomes Expiring soon (30 days or fewer,
@@ -421,6 +433,7 @@ created by a one-time command run on the server by the deployment operator (not 
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG-ACCOUNT-13 and a critical log entry is written (BR-ACCOUNT-09: one purpose and one number or address get at most 3 codes per hour, at least 60 seconds apart; over all purposes one number or address gets at most 10) | `Verification:DailySmsLimit` (default 500) |
 | Expiry reminder of zone licenses and certifications (GFR-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
 | Overdue water measurement reminder (GFR-04, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
+| Daily close check of harvest lots (GFR-05, daily, business time zone UTC+7) | `Jobs:HarvestLotAutoClose:RunAt` (default `00:05`), `Jobs:HarvestLotAutoClose:CatchUpOnStart` (default `true`) |
 | Employment end: an employee is Left from the day after the last working day (LABOR-01, daily, business time zone UTC+7) | `Jobs:EmploymentEnd:RunAt` (default `00:01`), `Jobs:EmploymentEnd:CatchUpOnStart` (default `true`) |
 | Orphan file clean-up: raft photos, license files, cover photos, certificate files, cultivation log photos, meter photos (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
 

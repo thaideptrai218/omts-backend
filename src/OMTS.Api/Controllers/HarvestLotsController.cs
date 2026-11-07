@@ -15,7 +15,8 @@ namespace OMTS.Api.Controllers;
 [ApiController]
 [Authorize]
 public sealed class HarvestLotsController(
-    HarvestLotReadService reads, HarvestLotRecordingService recording, HarvestLotCorrectionService corrections, HarvestLotRemovalService removals, HarvestLotForSaleService forSale) : ControllerBase
+    HarvestLotReadService reads, HarvestLotRecordingService recording, HarvestLotCorrectionService corrections, HarvestLotRemovalService removals, HarvestLotClosingService closing,
+    HarvestLotForSaleService forSale) : ControllerBase
 {
     private const string PhotosField = "Photos";
 
@@ -78,6 +79,16 @@ public sealed class HarvestLotsController(
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Remove(Guid lotId, RemoveHarvestLotRequest request, CancellationToken cancellationToken) =>
         (await removals.RemoveAsync(lotId, request, cancellationToken)).ToActionResult(_ => NoContent());
+
+    /// <summary>
+    /// HARVEST-02: closes a lot still for sale (Open or Reopened) with <c>leftoverKg</c> (0 or more; propose the lot's remaining kg) and, when it is above 0, <c>reason</c> <c>Unsold</c> or
+    /// <c>Spoiled</c>, plus <c>rowVersion</c>; ask with MSG-GEN-04 first. A Zone Manager of the lot's zone or the Cooperative Owner, also after the cycle is closed. 200 with the lot and MSG-GEN-05;
+    /// 409 MSG-GEN-09 when it is no longer for sale.
+    /// </summary>
+    [HttpPost("api/harvest-lots/{lotId:guid}/close")]
+    [ProducesResponseType<HarvestLotClosed>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Close(Guid lotId, CloseHarvestLotRequest request, CancellationToken cancellationToken) =>
+        (await closing.CloseAsync(lotId, request, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>The lots for sale in the zones of the caller, the latest harvest first: what a sales invoice chooses from (SALE-05 step 1).</summary>
     [HttpGet("api/harvest-lots/for-sale")]
