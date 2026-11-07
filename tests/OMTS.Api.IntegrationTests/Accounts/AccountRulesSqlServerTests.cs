@@ -64,7 +64,7 @@ public class AccountRulesSqlServerTests
     public async Task The_send_times_of_the_codes_are_stored_and_counted_across_requests_and_accounts()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateAsync();
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         var client = api.CreateClient();
         var phone = NewPhone();
@@ -94,7 +94,7 @@ public class AccountRulesSqlServerTests
     public async Task Parallel_requests_never_send_more_than_3_codes()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateAsync();
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         var client = api.CreateClient();
         var phone = NewPhone();
@@ -124,7 +124,7 @@ public class AccountRulesSqlServerTests
     public async Task Simultaneous_first_requests_of_a_number_send_exactly_one_code()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateAsync();
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         var client = api.CreateClient();
         var phone = NewPhone();
@@ -144,7 +144,7 @@ public class AccountRulesSqlServerTests
     public async Task A_staff_create_that_loses_the_race_answers_msg_account_09_naming_the_field()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateAsync();
+        await database.MigrateToLatestAsync();
         var blind = new BlindLookups();
         await using var api = BlindApi(database, blind);
         var client = await OwnerClientAsync(api);
@@ -171,7 +171,7 @@ public class AccountRulesSqlServerTests
     public async Task A_staff_edit_that_loses_the_race_answers_msg_account_09_naming_the_field()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateAsync();
+        await database.MigrateToLatestAsync();
         var blind = new BlindLookups();
         await using var api = BlindApi(database, blind);
         var client = await OwnerClientAsync(api);
@@ -190,7 +190,7 @@ public class AccountRulesSqlServerTests
     public async Task Parallel_creates_with_one_unverified_email_create_one_account()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateAsync();
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         var client = await OwnerClientAsync(api);
         var email = $"parallel-{NewCode()}@example.com";
@@ -212,7 +212,7 @@ public class AccountRulesSqlServerTests
     public async Task An_employee_account_that_loses_the_race_answers_msg_account_09()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateAsync();
+        await database.MigrateToLatestAsync();
         var blind = new BlindLookups();
         await using var api = BlindApi(database, blind);
         var client = await OwnerClientAsync(api);
@@ -234,7 +234,7 @@ public class AccountRulesSqlServerTests
     public async Task A_contact_change_that_loses_the_race_answers_msg_account_09()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateAsync();
+        await database.MigrateToLatestAsync();
         var blind = new BlindLookups();
         await using var api = BlindApi(database, blind);
         var client = await OwnerClientAsync(api);
@@ -265,7 +265,7 @@ public class AccountRulesSqlServerTests
     public async Task A_phone_step_that_loses_the_race_answers_msg_account_09()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateAsync();
+        await database.MigrateToLatestAsync();
         var blind = new BlindLookups();
         await using var api = BlindApi(database, blind);
         var client = await LoginAsync(api, (await AddOwnerAsync(api, phoneVerified: false)).Username);

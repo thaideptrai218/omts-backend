@@ -53,12 +53,9 @@ internal static class AuditPlanQaKit
     /// </summary>
     public static async Task<(Guid[] Accounts, Guid[] Employees, Guid[] Zones)> SeedAsync(SqlServerTestDatabase database)
     {
-        await using (var db = database.CreateContext())
-        {
-            await db.Database.MigrateAsync();
-        }
+        await database.MigrateToLatestAsync();
 
-        var accounts = Enumerable.Range(0, 40).Select(_ => new Account { Username = NewCode(), DisplayName = "Staff", SubjectType = SubjectType.Staff }).ToList();
+        var accounts =Enumerable.Range(0, 40).Select(_ => new Account { Username = NewCode(), DisplayName = "Staff", SubjectType = SubjectType.Staff }).ToList();
         await using (var db = database.CreateContext())
         {
             db.Accounts.AddRange(accounts);

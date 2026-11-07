@@ -330,7 +330,7 @@ public class AccountRulesQaTestsSqlServer
     private static async Task<SqlServerTestDatabase> MigratedAsync()
     {
         var database = SqlServerTestDatabase.Create();
-        await database.MigrateAsync();
+        await database.MigrateToLatestAsync();
         return database;
     }
 
