@@ -9,7 +9,7 @@ namespace OMTS.Application.Features.Harvest;
 public sealed record LotLaneFact(Guid LotId, Guid LaneId, DateOnly Date, DateTimeOffset HarvestedAt, bool IsFinished);
 
 /// <summary>
-/// The lanes as one lot of an Open cycle sees them, for its correction or removal (HARVEST-01.1, BR-FARM-03): the states are worked out without the lot's own part, as
+/// The lanes as one lot sees them, for its correction or removal (HARVEST-01.1 in an Open cycle, read today; TRACE-03.2 in a Closed one, read on the close date; BR-FARM-03): the states are worked out without the lot's own part, as
 /// the records of the other lots still stand. Read after the cycle row, so the save fails with MSG06 if anything changed the cycle since. A pure class, so the rules can be read in one place.
 /// </summary>
 internal sealed class HarvestLotLaneFacts(
