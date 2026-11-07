@@ -101,6 +101,7 @@ sets of water alerts (the demo records as the Owner, who is not told of their ow
 Rafts `B1-01`, `B1-02`, `B2-01`, `B2-02` have material usage inside their Open cycles, and `B1-06`, `B2-06` a repair with no cycle, recorded by the zone's manager.
 The first three rafts of each In Use zone have seeding sessions by the zone's manager: the first with a re-hung lane and its seeding marked complete (the Owner has a MSG-CYCLE-02), the second with a lane left Not seeded, the third with every lane seeded. The rafts `B1-04`, `B1-05`, `B2-04`, `B2-05` keep a cycle with no record, which can still be cancelled. Receipts with seeded lots can no longer be cancelled.
 Rafts `B1-01` and `B2-01` have two harvest lots of the seed day (the second with `-2`), one lane Being harvested and one Harvested; `B1-02` has every seeded lane finished, so `quanlyvung1` has the reminder to close its cycle (MSG-CYCLE-08), and the Owner has a MSG-HARVEST-01 for each lot. Harvest settings are at their first-setup values, 50 kg per cage and 3 days. The demo lots are dated the seed day, so the daily close check leaves them for sale on the first start; three days later it warns the Zone Managers (MSG-HARVEST-05) and the day after it closes them (GFR-05).
+`quanlyvung1` sells the first lot of `B1-01` in cash (`HD000001`) and ends the sale with the QR code: that lot is Published (TRACE-01) and the invoice has its QR link (sent to the fake inbox; with a real SMS sender the sale is left unfinished). `quanlyvung2` sells the first lot of `B2-01` part in cash, pay later (`HD000002`), left unfinished so that the end of the sale can be tried. Publish one lot from the Trace lot screen with `GET`/`POST /api/harvest-lots/{id}/publish-check|publish` (a Not published lot on an invoice; a Withdrawn lot, Owner only).
 
 Dates are set relative to the day of the first seed and are not moved afterwards:
 - After a few weeks the "expiring" license and certification have expired. `docker compose down -v` gives fresh dates.
@@ -257,7 +258,9 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   sent, provider message id or error code); they are never in a list. The response to a purchase request (SALE-03) uses
   them through `ITraderMessageSender`, whose only route is SMS (`Sms:Provider`, Fake or None) until the Zalo OA templates
   are approved. The sales invoice (SALE-06, MSG-SALE-15) uses them too: `POST /api/sales-invoices/{id}/finish`
-  (`{ wantsQrCode }`, once, after the save: the QR code only when a lot is Published; called again it answers the current
+  (`{ wantsQrCode }`, once, after the save: with a Yes, TRACE-01 first publishes the lots that are Not published and have all
+  their origin information, `GET /api/sales-invoices/{id}/publish-check` shows them beforehand; the QR code only when a lot is
+  Published; called again it answers the current
   result and sends nothing) and `POST /api/sales-invoices/{id}/resend` (only after `finish`, not while the latest sending
   is Sending; a Sending row older than 2 minutes reads Not sent); a profile without a trader account gets a row with no
   recipient, and a walk-in customer or a profile without a phone gets a Not sent row with no phone (error code

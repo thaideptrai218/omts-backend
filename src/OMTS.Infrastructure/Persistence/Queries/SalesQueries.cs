@@ -4,6 +4,7 @@ using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Sales.Debts;
 using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Infrastructure.Persistence.Queries;
@@ -30,12 +31,18 @@ internal sealed class HarvestLotSalesQuery(OmtsDbContext db) : IHarvestLotSalesQ
     public Task<bool> IsOnAnyInvoiceAsync(Guid lotId, CancellationToken cancellationToken) =>
         db.SalesInvoiceLines.AsNoTracking().AnyAsync(l => l.HarvestLotId == lotId, cancellationToken);
 
-    public async Task<IReadOnlySet<Guid>> LotsOnAnyInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken)
+    public Task<IReadOnlySet<Guid>> LotsOnAnyInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) =>
+        LotsOnAsync(db.SalesInvoiceLines.AsNoTracking(), lotIds, cancellationToken);
+
+    public Task<IReadOnlySet<Guid>> LotsOnCurrentInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) =>
+        LotsOnAsync(db.SalesInvoiceLines.AsNoTracking().Where(l => l.Invoice.StatusId != StatusIds.SalesInvoice.Cancelled), lotIds, cancellationToken);
+
+    private static async Task<IReadOnlySet<Guid>> LotsOnAsync(IQueryable<SalesInvoiceLine> lines, IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken)
     {
         var ids = lotIds.Distinct().ToList();
         return ids.Count == 0
             ? new HashSet<Guid>()
-            : (await db.SalesInvoiceLines.AsNoTracking().Where(l => ids.Contains(l.HarvestLotId)).Select(l => l.HarvestLotId).Distinct().ToListAsync(cancellationToken)).ToHashSet();
+            : (await lines.Where(l => ids.Contains(l.HarvestLotId)).Select(l => l.HarvestLotId).Distinct().ToListAsync(cancellationToken)).ToHashSet();
     }
 }
 

@@ -1,5 +1,6 @@
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Harvest;
+using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Domain.Entities.Harvest;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
@@ -35,6 +36,12 @@ public interface IHarvestLotRepository
 
     /// <summary>The lots named on a sales invoice, whatever their status, with their raft and zone, tracked: the sale marks them changed or closes them (SALE-05).</summary>
     Task<IReadOnlyList<HarvestLot>> ListForInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Each lane of each lot with each seeding session of the lot's cycle on that lane, its seed lot and whether that seed lot is on a Completed receipt; a lane with no session has
+    /// one row with no seed lot. What BR-TRACE-01 checks.
+    /// </summary>
+    Task<IReadOnlyList<LotLaneSeedLot>> LaneSeedLotsAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);
 
     /// <summary>How many lots are for sale now, of one zone or of every zone (BR-FARM-10).</summary>
     Task<int> CountForSaleAsync(Guid? zoneId, CancellationToken cancellationToken);

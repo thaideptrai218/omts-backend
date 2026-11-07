@@ -1,10 +1,15 @@
 using OMTS.Application.Common;
+using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Sales.PurchaseRequests;
+using OMTS.Application.Features.Traceability.Publishing;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Sales.Invoices;
 
@@ -18,7 +23,9 @@ public sealed class SalesInvoiceReadService(
     IPurchaseRequestRepository requests,
     IPurchaseRequestFulfilment fulfilment,
     SalesInvoiceViews views,
+    IProvenancePublisher provenance,
     ZoneAccessGuard zoneAccess,
+    IStatusCatalog statusCatalog,
     TimeProvider timeProvider)
 {
     /// <summary>The invoice in a zone the caller may view invoices of (BR-SALE-08): another zone answers 403 MSG-GEN-08.</summary>
@@ -36,6 +43,33 @@ public sealed class SalesInvoiceReadService(
         }
 
         return await views.ViewAsync(invoice, cancellationToken);
+    }
+
+    /// <summary>
+    /// TRACE-01.0 steps 1-2 at the extension point "QR code requested" (SALE-05.9): the lots of the invoice with their state and what each Not published lot misses, before the
+    /// Zone Manager confirms with a Yes to MSG-SALE-07 (POST finish). For whoever may end the sale: SALES_INVOICES Create in the invoice zone. Changes nothing.
+    /// </summary>
+    public async Task<Result<InvoicePublishCheck>> PublishCheckAsync(Guid invoiceId, CancellationToken cancellationToken)
+    {
+        var invoice = await invoices.GetAsync(invoiceId, cancellationToken);
+        if (invoice is null)
+        {
+            return AppError.NotFound;
+        }
+
+        if (!await zoneAccess.AllowsAsync(PermissionFunctions.SalesInvoices, PermissionAction.Create, invoice.ZoneId, cancellationToken))
+        {
+            return AppError.Forbidden;
+        }
+
+        if (invoice.StatusId != StatusIds.SalesInvoice.Completed)
+        {
+            return AppError.Conflict(UserMessages.WrongStatus($"Sales invoice {invoice.Code}", statusCatalog.DisplayNameOf(invoice.StatusId)));
+        }
+
+        var lots = await provenance.CheckInvoiceLotsAsync(invoice.Lines.Select(l => l.HarvestLotId).Distinct().ToList(), cancellationToken);
+        var getsQrCode = lots.Any(l => l.State == HarvestLotOriginState.Published || (l.State == HarvestLotOriginState.NotPublished && l.Missing.Count == 0));
+        return new InvoicePublishCheck(invoice.Id, invoice.Code, InvoiceLotOriginView.Of(lots), getsQrCode);
     }
 
     /// <summary>The caller may view invoices of the zone of <paramref name="invoice"/> (BR-SALE-08, GFR-02): GET answers 403 MSG-GEN-08 when not, and so does a repeated save.</summary>

@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Harvest;
+using OMTS.Application.Features.Purchasing;
+using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Harvest;
 
@@ -72,6 +74,39 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
     {
         var ids = lotIds.Distinct().ToList();
         return await db.HarvestLots.Include(l => l.Raft).ThenInclude(r => r.Zone).Where(l => ids.Contains(l.Id)).ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<LotLaneSeedLot>> LaneSeedLotsAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken)
+    {
+        var ids = lotIds.Distinct().ToList();
+        var lanes = await db.HarvestLotLanes.AsNoTracking()
+            .Where(l => ids.Contains(l.LotId))
+            .Select(l => new { l.LotId, l.LaneId, l.Lane.LaneNumber, l.Lot.CycleId })
+            .ToListAsync(cancellationToken);
+        var cycleIds = lanes.Select(l => l.CycleId).Distinct().ToList();
+        var laneIds = lanes.Select(l => l.LaneId).Distinct().ToList();
+        var sessions = (await db.SeedingRecordLanes.AsNoTracking()
+                .Where(s => cycleIds.Contains(s.SeedingRecord.CycleId) && laneIds.Contains(s.LaneId))
+                .Select(s => new
+                {
+                    s.SeedingRecord.CycleId,
+                    s.LaneId,
+                    ReceiptCode = s.SeedingRecord.SeedLotLine.Receipt.Code,
+                    s.SeedingRecord.SeedLotLine.LineNumber,
+                    Completed = s.SeedingRecord.SeedLotLine.Receipt.StatusId == StatusIds.PurchaseReceipt.Completed,
+                })
+                .ToListAsync(cancellationToken))
+            .ToLookup(s => (s.CycleId, s.LaneId));
+        var rows = new List<LotLaneSeedLot>();
+        foreach (var lane in lanes)
+        {
+            var seeded = sessions[(lane.CycleId, lane.LaneId)].ToList();
+            rows.AddRange(seeded.Count == 0
+                ? [new LotLaneSeedLot(lane.LotId, lane.LaneNumber, null, false)]
+                : seeded.Select(s => new LotLaneSeedLot(lane.LotId, lane.LaneNumber, DocumentCodes.SeedLotCode(s.ReceiptCode, s.LineNumber), s.Completed)));
+        }
+
+        return rows;
     }
 
     public Task<int> CountForSaleAsync(Guid? zoneId, CancellationToken cancellationToken)

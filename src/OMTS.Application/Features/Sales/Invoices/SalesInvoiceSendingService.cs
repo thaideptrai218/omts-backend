@@ -9,6 +9,7 @@ using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Notifications;
+using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Platform;
 using OMTS.Domain.Entities.Sales;
@@ -70,9 +71,10 @@ public sealed class SalesInvoiceSendingService(
                 return AppError.Conflict(UserMessages.WantsQrCode(invoice.Code), new Dictionary<string, object?> { ["confirmationField"] = WantsQrCodeField });
             }
 
-            // SALE-05.9 and step 10: only with a Yes, and the QR code only when a lot is Published now (SALE-05.11: never later).
+            // SALE-05.9 and step 10: only with a Yes, TRACE-01 publishes the lots that are Not published and ready, in this save; the QR code only when a lot is Published now
+            // (SALE-05.11: never later).
             var lots = wantsQrCode
-                ? await provenance.PublishInvoiceLotsAsync(invoice.Lines.Select(l => l.HarvestLotId).Distinct().ToList(), cancellationToken)
+                ? await provenance.PublishInvoiceLotsAsync(invoice.Code, invoice.Lines.Select(l => l.HarvestLotId).Distinct().ToList(), cancellationToken)
                 : [];
             var now = timeProvider.GetUtcNow();
             if (lots.Any(l => l.State == HarvestLotOriginState.Published))
@@ -93,8 +95,7 @@ public sealed class SalesInvoiceSendingService(
             var (sending, notSent) = await messages.QueueAsync(invoice, corrected: false, cancellationToken);
             if (await SavedAsync(attempt, cancellationToken))
             {
-                var origins = lots.OrderBy(l => l.LotCode, StringComparer.Ordinal).Select(l => new InvoiceLotOriginView(l.HarvestLotId, l.LotCode, l.State, l.Missing)).ToList();
-                return await AnswerAsync(invoice.Id, sending, notSent, origins, cancellationToken);
+                return await AnswerAsync(invoice.Id, sending, notSent, InvoiceLotOriginView.Of(lots), cancellationToken);
             }
         }
     }
