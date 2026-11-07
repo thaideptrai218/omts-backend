@@ -12,6 +12,9 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
 {
     // SRS 27/10 Part V message table (07-v-requirement-appendix.md, rows MSG-FARM-01/02, MSG-WATER-03/04/06), copied as data.
     private const string Cycle04 = "Raft {raft_code}: a cultivation log was recorded for the visit on {visit_date}. Please review it.";
+    private const string Cycle05 = "Close the cultivation cycle of raft {raft_code}? After closing, the cycle cannot be reopened and its records can no longer be changed.";
+    private const string Cycle06 = "Raft {raft_code}: the cultivation cycle was closed on {close_date} {early_note}. Seed hung: {seed_quantity} {seed_unit}. Harvested: about {kg_harvested} kg. Days of farming: {days}. Please review the summary.";
+    private const string Cycle07 = "This cycle is not finished: {reason}. Oysters left on lanes that are Growing cannot be harvested in OMTS after the close. Closing it now needs the Cooperative Owner's approval. Has the Cooperative Owner approved closing it now?";
     private const string Cycle08 = "Raft {raft_code}: every seeded lane is harvested. Please close its cultivation cycle.";
     private const string Harvest01 = "Raft {raft_code}: the harvest of {harvest_date} is recorded as lot {lot_code} ({cage_count} cages, about {estimated_kg} kg).";
     private const string Harvest03 = "With {days} days, the next daily close check will close {count} lots that are still for sale. Do you want to save?";
@@ -29,6 +32,7 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
     {
         "farm-01", "farm-02", "farm-01-no-type", "farm-01-certification", "farm-02-certification-no-number", "water-03", "water-03-corrected", "water-04-corrected", "water-04-voided", "water-06",
         "cycle-04", "cycle-08", "harvest-01", "harvest-03",
+        "cycle-05", "cycle-06", "cycle-06-early", "cycle-07", "cycle-07-no-seeding",
     };
 
     [Theory]
@@ -93,6 +97,32 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
             UserMessages.WaterAlertWithdrawn("Vùng A", MeasuredAt, "Nguyễn Văn A", "voided", "Ghi nhầm vùng"),
             "The water alert of zone Vùng A (measured on 06:30 20/10/2026) was withdrawn: Nguyễn Văn A voided the measurement. Reason: Ghi nhầm vùng.",
             """{"zone_name":"Vùng A","measurement_time":"2026-10-20T06:30:00+07:00","user_name":"Nguyễn Văn A","corrected_or_voided":"voided","reason":"Ghi nhầm vùng"}"""),
+        "cycle-05" => (
+            "MSG-CYCLE-05", Cycle05,
+            UserMessages.CloseCycleQuestion("KV01-B01"),
+            "Close the cultivation cycle of raft KV01-B01? After closing, the cycle cannot be reopened and its records can no longer be changed.",
+            """{"raft_code":"KV01-B01"}"""),
+        // {early_note} is empty after a normal close, with the space before it.
+        "cycle-06" => (
+            "MSG-CYCLE-06", Cycle06,
+            UserMessages.CycleClosedSummary("KV01-B01", new DateOnly(2026, 10, 29), false, [], 100m, "kg", 495.500m, 27),
+            "Raft KV01-B01: the cultivation cycle was closed on 29/10/2026. Seed hung: 100 kg. Harvested: about 495.5 kg. Days of farming: 27. Please review the summary.",
+            """{"raft_code":"KV01-B01","close_date":"2026-10-29","closed_early":false,"lane_numbers":[],"seed_quantity":100,"seed_unit":"kg","kg_harvested":495.5,"days":27}"""),
+        "cycle-06-early" => (
+            "MSG-CYCLE-06", Cycle06,
+            UserMessages.CycleClosedSummary("KV01-B01", new DateOnly(2026, 10, 28), true, [9, 10], 100m, "kg", 450m, 26),
+            "Raft KV01-B01: the cultivation cycle was closed on 28/10/2026 early; lanes not harvested: 9, 10. Seed hung: 100 kg. Harvested: about 450 kg. Days of farming: 26. Please review the summary.",
+            """{"raft_code":"KV01-B01","close_date":"2026-10-28","closed_early":true,"lane_numbers":[9,10],"seed_quantity":100,"seed_unit":"kg","kg_harvested":450,"days":26}"""),
+        "cycle-07" => (
+            "MSG-CYCLE-07", Cycle07,
+            UserMessages.EarlyCloseQuestion([10]),
+            "This cycle is not finished: lanes 10 are not harvested. Oysters left on lanes that are Growing cannot be harvested in OMTS after the close. Closing it now needs the Cooperative Owner's approval. Has the Cooperative Owner approved closing it now?",
+            """{"no_seeding":false,"lane_numbers":[10]}"""),
+        "cycle-07-no-seeding" => (
+            "MSG-CYCLE-07", Cycle07,
+            UserMessages.EarlyCloseQuestion([]),
+            "This cycle is not finished: no seeding session is recorded. Oysters left on lanes that are Growing cannot be harvested in OMTS after the close. Closing it now needs the Cooperative Owner's approval. Has the Cooperative Owner approved closing it now?",
+            """{"no_seeding":true,"lane_numbers":[]}"""),
         "cycle-08" => (
             "MSG-CYCLE-08", Cycle08,
             UserMessages.CycleCloseReminder("KV01-B01"),
@@ -122,8 +152,13 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
     };
 
     // Each placeholder stands for some text; an empty {correction_note} also drops the space before it ("Water alert: zone …").
+    // So does an empty {early_note} of MSG-CYCLE-06 ("closed on 29/10/2026. Seed hung …").
     private static string TemplatePattern(string template) =>
-        "^" + Placeholder().Replace(Regex.Escape(template).Replace(@"\ \{correction_note}", "( .+)?", StringComparison.Ordinal), ".+") + "$";
+        "^" + Placeholder().Replace(
+            Regex.Escape(template)
+                .Replace(@"\ \{correction_note}", "( .+)?", StringComparison.Ordinal)
+                .Replace(@"\ \{early_note}", "( .+)?", StringComparison.Ordinal),
+            ".+") + "$";
 
     [GeneratedRegex(@"\\\{[a-z_]+}")]
     private static partial Regex Placeholder();

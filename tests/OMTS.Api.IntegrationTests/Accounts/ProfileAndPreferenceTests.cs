@@ -113,13 +113,15 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         var traderTypes = await TypesAsync(await factory.LoginAsync(trader.Username, PreferencePassword));
 
         Assert.Equal(
-            ["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "ZONE_LICENSE_EXPIRY", "COOPERATIVE_CERTIFICATION_EXPIRY", "PURCHASE_REQUEST_NEW", "PURCHASE_REQUEST_CANCELLED", "CYCLE_SEEDING_COMPLETED", "HARVEST_LOT_RECORDED", "CYCLE_CLOSE_REMINDER", "PURCHASE_RECEIPT_COMPLETED", "PURCHASE_RECEIPT_CANCELLED_ADVANCE", "SUPPLIER_TRANSACTION", "CULTIVATION_LOG_RECORDED"],
+            ["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "ZONE_LICENSE_EXPIRY", "COOPERATIVE_CERTIFICATION_EXPIRY", "PURCHASE_REQUEST_NEW", "PURCHASE_REQUEST_CANCELLED", "CYCLE_SEEDING_COMPLETED", "HARVEST_LOT_RECORDED", "CYCLE_CLOSE_REMINDER", "CYCLE_CLOSED", "PURCHASE_RECEIPT_COMPLETED", "PURCHASE_RECEIPT_CANCELLED_ADVANCE", "SUPPLIER_TRANSACTION", "CULTIVATION_LOG_RECORDED"],
             ownerTypes.Keys);
         Assert.Equal((false, true), ownerTypes["CULTIVATION_LOG_RECORDED"]);
         Assert.Equal((false, true), ownerTypes["CYCLE_SEEDING_COMPLETED"]);
         // BR-ACCOUNT-11: MSG-HARVEST-01 is not among the mandatory types; the reminder to close a cycle (BR-CYCLE-07) is, for the Owner and the Zone Manager.
         Assert.Equal((false, true), ownerTypes["HARVEST_LOT_RECORDED"]);
         Assert.Equal((true, true), ownerTypes["CYCLE_CLOSE_REMINDER"]);
+        // MSG-CYCLE-06, the summary of a closed cycle, is not mandatory either (BR-ACCOUNT-11).
+        Assert.Equal((false, true), ownerTypes["CYCLE_CLOSED"]);
         Assert.Equal(["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "CYCLE_CLOSE_REMINDER"], managerTypes.Keys);
         Assert.Equal((true, true), managerTypes["CYCLE_CLOSE_REMINDER"]);
         Assert.Equal(["PURCHASE_RECEIPT_CANCELLED_ADVANCE"], accountantTypes.Keys);
