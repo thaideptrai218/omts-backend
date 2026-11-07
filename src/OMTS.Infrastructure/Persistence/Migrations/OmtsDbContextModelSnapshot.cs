@@ -188,6 +188,65 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.MaterialUsage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<Guid>("RaftId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("RecordedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RepairReason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("UsageDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("RecordedByAccountId");
+
+                    b.HasIndex("RaftId", "UsageDate");
+
+                    b.ToTable("MaterialUsages", t =>
+                        {
+                            t.HasCheckConstraint("CK_MaterialUsage_Quantity", "[Quantity] > 0");
+                        });
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingEvent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3220,6 +3279,31 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Log");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.MaterialUsage", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.FarmingInputItem", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
+                        .WithMany()
+                        .HasForeignKey("RaftId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("RecordedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Raft");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingEvent", b =>

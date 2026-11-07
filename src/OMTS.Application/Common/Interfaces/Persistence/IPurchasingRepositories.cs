@@ -42,10 +42,10 @@ public interface IFarmingInputItemRepository
     /// <summary>By code or name (contains), optional group and status, ordered by code.</summary>
     Task<IReadOnlyList<FarmingInputItem>> ListAsync(string? search, InputItemGroup? group, int? statusId, CancellationToken cancellationToken);
 
-    /// <summary>True when the item is on a receipt line.</summary>
+    /// <summary>True when the item is on a receipt line or a material usage record: its group and unit are then fixed.</summary>
     Task<bool> IsUsedAsync(Guid itemId, CancellationToken cancellationToken);
 
-    /// <summary>Which of the items are used by a receipt line (one query for a whole list).</summary>
+    /// <summary>Which of the items are on a receipt line or a material usage record (one query for a whole list).</summary>
     Task<IReadOnlySet<Guid>> UsedAmongAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken);
 
     void Add(FarmingInputItem item);
