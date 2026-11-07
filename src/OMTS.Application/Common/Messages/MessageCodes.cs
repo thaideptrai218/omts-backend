@@ -31,6 +31,7 @@ public static class MessageCodes
 
     public const string Harvest01 = "MSG-HARVEST-01";
     public const string Harvest03 = "MSG-HARVEST-03";
+    public const string Harvest04 = "MSG-HARVEST-04";
     public const string Harvest05 = "MSG-HARVEST-05";
 
     public const string Trace03 = "MSG-TRACE-03";
@@ -117,11 +118,11 @@ public static class MessageCodes
     /// Owner's agreement to a correction (TRACE-03 is new in PR T2); MSG-SALE-06/08/10/11/12, the sales invoice: its success text, the
     /// Owner's notice and the three questions at the port (SALE-05 is new in PR 6a); MSG-SALE-07/15/16, the QR question at the end of the sale, the
     /// invoice message to the trader and the invoice not sent (SALE-06 is new in PR 6b); MSG-HARVEST-05, the warning the day before a harvest lot
-    /// closes by itself (GFR-05, new in PR H2).
+    /// closes by itself (GFR-05, new in PR H2); MSG-HARVEST-04, the yield report holds lots still for sale (HARVEST-04 is new in PR H3).
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
-        Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Harvest05, Trace03, Trace04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale15, Sale16, Debt01, Debt02, Water02, Water04,
+        Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Harvest04, Harvest05, Trace03, Trace04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale15, Sale16, Debt01, Debt02, Water02, Water04,
     };
 
     /// <summary>

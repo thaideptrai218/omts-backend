@@ -164,6 +164,8 @@ public static class DependencyInjection
         services.AddScoped<HarvestLotClosingService>();
         services.AddScoped<HarvestLotAutoCloseService>();
         services.AddScoped<HarvestSettingsService>();
+        // HARVEST-04 the yield report and its export
+        services.AddScoped<HarvestYieldService>();
         // TRACE-03 – correct traceability data: its own guard and services, as the cultivation screens stay locked after the close
         services.AddScoped<TraceCorrectionGuard>();
         services.AddScoped<TraceSeedingReader>();

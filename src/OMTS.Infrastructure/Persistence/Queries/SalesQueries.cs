@@ -24,6 +24,8 @@ internal sealed class HarvestLotSalesQuery(OmtsDbContext db) : IHarvestLotSalesQ
                 .GroupBy(l => l.HarvestLotId)
                 .Select(g => new { LotId = g.Key, Kg = g.Sum(l => l.Kg) })
                 .ToDictionaryAsync(x => x.LotId, x => x.Kg, cancellationToken);
+        // CLAIM-03 seam: the returned kg (and their back-for-sale / discarded split) of the non-cancelled sales return lines go in here. HarvestLotFigures subtracts them from the
+        // invoiced kg, so the lot views, the GFR-05 leftover and the HARVEST-04 yield (AC-09: 600 invoiced - 300 returned = 300 sold) need no change.
         return ids.ToDictionary(id => id, id => invoiced.TryGetValue(id, out var kg) ? LotSalesFigures.None with { InvoicedKg = kg } : LotSalesFigures.None);
     }
 
