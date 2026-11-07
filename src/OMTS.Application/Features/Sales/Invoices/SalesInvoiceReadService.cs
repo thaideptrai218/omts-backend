@@ -67,6 +67,12 @@ public sealed class SalesInvoiceReadService(
             return AppError.Conflict(UserMessages.WrongStatus($"Sales invoice {invoice.Code}", statusCatalog.DisplayNameOf(invoice.StatusId)));
         }
 
+        // The sale has ended (finish ran): a Yes now publishes nothing and gives no QR code (SALE-05.11, BR-TRACE-02), so the check promises neither.
+        if (invoice.QrDecidedAt is not null)
+        {
+            return AppError.Conflict(UserMessages.WrongStatus($"Sales invoice {invoice.Code}", "finished"));
+        }
+
         var lots = await provenance.CheckInvoiceLotsAsync(invoice.Lines.Select(l => l.HarvestLotId).Distinct().ToList(), cancellationToken);
         var getsQrCode = lots.Any(l => l.State == HarvestLotOriginState.Published || (l.State == HarvestLotOriginState.NotPublished && l.Missing.Count == 0));
         return new InvoicePublishCheck(invoice.Id, invoice.Code, InvoiceLotOriginView.Of(lots), getsQrCode);
