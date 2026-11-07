@@ -26,6 +26,10 @@ public static class UserMessages
     public static readonly UserMessage UploadFailed = new(
         Gen03, "The file could not be uploaded. Your other entries are kept; please try again.", Legacy.Msg05);
 
+    /// <summary>MSG-GEN-04: the confirmation of an action the audit log records, asked by the client before it sends.</summary>
+    /// <param name="action">What is done, in the words of the SRS, e.g. "correct traceability data".</param>
+    public static UserMessage ConfirmAction(string action) => new(Gen04, $"Are you sure you want to {action}? This action is recorded in the audit log.", Legacy.Msg09);
+
     /// <summary>MSG-GEN-05: a record is saved.</summary>
     public static UserMessage Saved(string what) => new(Gen05, $"{what} saved.", Legacy.Msg10);
 
@@ -273,6 +277,29 @@ public static class UserMessages
     {
         Parameters = new Dictionary<string, object?> { ["days"] = days, ["count"] = count },
     };
+
+    // ---- MSG-TRACE ----
+
+    /// <summary>MSG-TRACE-03 (TRACE-03.0.E3): the correction would leave a lane of a harvest lot with no seed lot (BR-TRACE-01). The text names the first such lane.</summary>
+    public static UserMessage LaneWithoutSeedLot(int laneNumber, string lotCode) => new(
+        Trace03,
+        $"The correction is not saved: lane {laneNumber.ToString(CultureInfo.InvariantCulture)} of harvest lot {lotCode} would have no seed lot. Please keep at least one seed lot for this lane.")
+    {
+        Parameters = new Dictionary<string, object?> { ["lane_number"] = laneNumber, ["lot_code"] = lotCode },
+    };
+
+    /// <summary>
+    /// MSG-TRACE-04 (TRACE-03 step 6): a Zone Manager confirms that the Cooperative Owner agreed in person that the data is wrong (BR-TRACE-04). With no harvest lot whose origin
+    /// information changes (a cultivation log, BR-TRACE-05), the first sentence is left out.
+    /// </summary>
+    public static UserMessage TraceCorrectionAgreement(IReadOnlyList<string> lotCodes)
+    {
+        var changes = lotCodes.Count == 0 ? string.Empty : $"This correction changes the origin information of harvest lots {string.Join(", ", lotCodes)}. ";
+        return new UserMessage(Trace04, $"{changes}Has the Cooperative Owner agreed in person that the data is wrong?")
+        {
+            Parameters = new Dictionary<string, object?> { ["lot_codes"] = lotCodes },
+        };
+    }
 
     /// <summary>MSG-WATER-06 (GFR-04): reminder to measure the water of a zone.</summary>
     /// <param name="lastDate">The business day of the latest measurement, or the start of the overdue period when there is none.</param>

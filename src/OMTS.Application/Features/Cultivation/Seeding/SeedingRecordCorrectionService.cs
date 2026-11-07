@@ -56,7 +56,7 @@ public sealed class SeedingRecordCorrectionService(
         }
 
         var before = SeedingValues.Snapshot(record);
-        Apply(record, fields!);
+        SeedingRecordRows.Apply(records, record, fields!);
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, SeedingValues.Snapshot(record));
         if (changedAfter is not null)
         {
@@ -127,25 +127,5 @@ public sealed class SeedingRecordCorrectionService(
         return record.Lanes.Any(l => states.TryGetValue(l.LaneId, out var state) && SeedingLaneRules.IsInAHarvestLot(state))
             ? AppError.Conflict(UserMessages.WrongStatus($"The seeding session of raft {record.Cycle.Raft.Code} on {record.SeedingDate:dd/MM/yyyy}", "in a harvest lot"))
             : null;
-    }
-
-    private void Apply(SeedingRecord record, SeedingFields fields)
-    {
-        (record.SeedingDate, record.Quantity) = (fields.Date, fields.Quantity);
-        (record.SeedLotLineId, record.SeedLotLine) = (fields.Lot.Id, fields.Lot);
-
-        var wanted = fields.Lanes.ToDictionary(l => l.Id);
-        foreach (var lane in record.Lanes.Where(l => !wanted.ContainsKey(l.LaneId)).ToList())
-        {
-            record.Lanes.Remove(lane);
-            records.RemoveLane(lane);
-        }
-
-        foreach (var lane in fields.Lanes.Where(l => record.Lanes.All(existing => existing.LaneId != l.Id)))
-        {
-            var added = new SeedingRecordLane { SeedingRecordId = record.Id, LaneId = lane.Id, Lane = lane };
-            record.Lanes.Add(added);
-            records.AddLane(added);
-        }
     }
 }

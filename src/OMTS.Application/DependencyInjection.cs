@@ -20,6 +20,7 @@ using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Application.Features.Farming.Zones;
 using OMTS.Application.Features.Files;
 using OMTS.Application.Features.Harvest;
+using OMTS.Application.Features.Traceability.Corrections;
 using OMTS.Application.Features.Labor;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
@@ -160,6 +161,13 @@ public static class DependencyInjection
         services.AddScoped<HarvestLotForSaleService>();
         services.AddScoped<HarvestLotStatusService>();
         services.AddScoped<HarvestSettingsService>();
+        // TRACE-03 – correct traceability data: its own guard and services, as the cultivation screens stay locked after the close
+        services.AddScoped<TraceCorrectionGuard>();
+        services.AddScoped<TraceSeedingReader>();
+        services.AddScoped<TraceSeedingCorrectionService>();
+        services.AddScoped<TraceCultivationLogCorrectionService>();
+        services.AddScoped<TraceHarvestLotCorrectionService>();
+        services.AddScoped<TraceCorrectionReadService>();
 
         services.AddScoped<UploadedFileSaver>();
         services.AddScoped<OrphanFileCleanupService>();

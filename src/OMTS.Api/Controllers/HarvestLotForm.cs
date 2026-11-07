@@ -1,7 +1,7 @@
 namespace OMTS.Api.Controllers;
 
 /// <summary>Multipart fields of a harvest (HARVEST-01). <see cref="KeepPhotoKeys"/>, <see cref="Reason"/> and <see cref="RowVersion"/> belong to a correction.</summary>
-public sealed class HarvestLotForm
+public class HarvestLotForm
 {
     /// <summary>One field per photo to keep; a photo left out is removed.</summary>
     public string?[]? KeepPhotoKeys { get; set; }
@@ -23,4 +23,11 @@ public sealed class HarvestLotForm
 
     /// <summary>One part per photo, none is fine: JPEG or PNG, at most 10 MB each.</summary>
     public List<IFormFile>? Photos { get; set; }
+}
+
+/// <summary>Multipart fields of TRACE-03.2: those of a lot correction and the Zone Manager's answer to MSG-TRACE-04.</summary>
+public sealed class TraceHarvestLotForm : HarvestLotForm
+{
+    /// <summary><c>true</c> when the Cooperative Owner agreed in person that the data is wrong; the Owner never sends it.</summary>
+    public bool OwnerApproved { get; set; }
 }

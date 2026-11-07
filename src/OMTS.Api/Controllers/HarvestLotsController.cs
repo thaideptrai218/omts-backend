@@ -1,10 +1,10 @@
-using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OMTS.Api.Common;
 using OMTS.Api.Filters;
 using OMTS.Application.Features.Files;
 using OMTS.Application.Features.Harvest;
+using static OMTS.Api.Common.FormNumbers;
 
 namespace OMTS.Api.Controllers;
 
@@ -91,60 +91,4 @@ public sealed class HarvestLotsController(
     [ProducesResponseType<HarvestLotForSaleCount>(StatusCodes.Status200OK)]
     public async Task<IActionResult> ForSaleCount([FromQuery] Guid? zoneId, CancellationToken cancellationToken) =>
         Ok(await forSale.CountAsync(zoneId, cancellationToken));
-
-    /// <summary>The numbers sent; empty when none was; null when one cannot be read, so it is refused, not dropped.</summary>
-    private static List<int>? Numbers(string?[]? values)
-    {
-        var numbers = new List<int>(values?.Length ?? 0);
-        foreach (var value in values ?? [])
-        {
-            if (string.IsNullOrWhiteSpace(value) || !TryInt(value, out var number))
-            {
-                return null;
-            }
-
-            numbers.Add(number!.Value);
-        }
-
-        return numbers;
-    }
-
-    /// <summary>An integer in the invariant culture; a blank value is read as none.</summary>
-    private static bool TryInt(string? value, out int? result)
-    {
-        result = null;
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return true;
-        }
-
-        if (!int.TryParse(value.Trim(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var parsed))
-        {
-            return false;
-        }
-
-        result = parsed;
-        return true;
-    }
-
-    /// <summary>
-    /// A number with a dot; a blank value is read as none. No thousands separator: "400,5" typed with a decimal comma would
-    /// otherwise be read as 4005, ten times too large.
-    /// </summary>
-    private static bool TryDecimal(string? value, out decimal? result)
-    {
-        result = null;
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return true;
-        }
-
-        if (!decimal.TryParse(value.Trim(), NumberStyles.Number & ~NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var parsed))
-        {
-            return false;
-        }
-
-        result = parsed;
-        return true;
-    }
 }
