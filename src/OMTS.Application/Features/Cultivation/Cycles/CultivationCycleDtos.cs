@@ -1,5 +1,6 @@
 using OMTS.Application.Features.Cultivation.CultivationLogs;
 using OMTS.Application.Features.Cultivation.Progress;
+using OMTS.Application.Features.Cultivation.Seeding;
 using OMTS.Application.Features.Farming.Rafts;
 
 namespace OMTS.Application.Features.Cultivation.Cycles;
@@ -74,6 +75,7 @@ public sealed record LaneDayView(Guid Id, int LaneNumber, int StatusId, string S
 /// <param name="Cycle">The cycle open on <paramref name="Date"/>, or null: the raft had none, so every lane is Not seeded.</param>
 /// <param name="Lanes">Lanes In Use, and Removed lanes that have records in the cycle, in number order.</param>
 /// <param name="NotSeededLanes">The numbers of the lanes on this view, In Use and Not seeded on the date (BR-CYCLE-02).</param>
+/// <param name="SeedLots">For each lane seeded on or before <paramref name="Date"/>, its seed lots and seeding dates (CYCLE-05.0); empty with no cycle.</param>
 /// <param name="Logs">Every cultivation log of <paramref name="Cycle"/>, the latest visit first (CYCLE-05.0); empty with no cycle.</param>
 public sealed record CultivationProgressView(
-    Guid RaftId, string RaftCode, DateOnly Date, CycleView? Cycle, IReadOnlyList<LaneDayView> Lanes, IReadOnlyList<int> NotSeededLanes, IReadOnlyList<CultivationLogView> Logs);
+    Guid RaftId, string RaftCode, DateOnly Date, CycleView? Cycle, IReadOnlyList<LaneDayView> Lanes, IReadOnlyList<int> NotSeededLanes, IReadOnlyList<LaneSeedLots> SeedLots, IReadOnlyList<CultivationLogView> Logs);

@@ -20,6 +20,7 @@ namespace OMTS.Application.Features.Purchasing.Receipts;
 /// </summary>
 public sealed class PurchaseReceiptCorrectionService(
     IPurchaseReceiptRepository receipts,
+    ISeedLotUsageQuery seedUsage,
     PurchaseReceiptCancellationService cancellations,
     PurchaseReceiptViews views,
     IStatusCatalog statusCatalog,
@@ -65,7 +66,7 @@ public sealed class PurchaseReceiptCorrectionService(
             return AppError.InvalidFields(invalid);
         }
 
-        var seeded = await receipts.SeededAsync(receipt.Lines.Select(l => l.Id).ToList(), cancellationToken);
+        var seeded = await seedUsage.SeededAsync(receipt.Lines.Select(l => l.Id).ToList(), cancellationToken);
         var returned = PurchaseReceiptViews.ReturnedQuantities(receipt);
         foreach (var input in inputs.OrderBy(l => lines[l.LineId!.Value].LineNumber))
         {
@@ -109,7 +110,7 @@ public sealed class PurchaseReceiptCorrectionService(
     }
 
     /// <summary>BR-PURCHASE-01 values, and a changed quantity never below seeded + returned (MSG-PURCHASE-10).</summary>
-    private static AppError? CheckLine(PurchaseReceiptLine line, CorrectionLineInput input, (decimal Seeded, bool UnknownQuantity) seeded, decimal returned)
+    private static AppError? CheckLine(PurchaseReceiptLine line, CorrectionLineInput input, decimal seededQuantity, decimal returned)
     {
         var field = $"Line {line.LineNumber}";
         var (quantity, price) = (input.Quantity ?? line.Quantity ?? 0, input.UnitPrice ?? line.UnitPrice ?? 0);
@@ -132,8 +133,6 @@ public sealed class PurchaseReceiptCorrectionService(
             return null;
         }
 
-        // A seeding without a quantity counts as the whole line seeded: its quantity cannot be lowered.
-        var seededQuantity = seeded.UnknownQuantity ? line.Quantity ?? 0 : seeded.Seeded;
         var minimum = seededQuantity + returned;
         return quantity >= minimum
             ? null

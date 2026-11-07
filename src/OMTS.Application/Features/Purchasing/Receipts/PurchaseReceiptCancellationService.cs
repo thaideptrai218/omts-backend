@@ -20,6 +20,7 @@ namespace OMTS.Application.Features.Purchasing.Receipts;
 /// </summary>
 public sealed class PurchaseReceiptCancellationService(
     IPurchaseReceiptRepository receipts,
+    ISeedLotUsageQuery seedUsage,
     PurchaseReceiptViews views,
     PurchaseReceiptAccess access,
     PurchaseReceiptNotifications notifications,
@@ -133,7 +134,7 @@ public sealed class PurchaseReceiptCancellationService(
     /// </summary>
     public async Task<CancelBlock?> BlockAsync(PurchaseReceipt receipt, CancellationToken cancellationToken)
     {
-        var seeded = await receipts.SeededAsync(receipt.Lines.Select(l => l.Id).ToList(), cancellationToken);
+        var seeded = await seedUsage.SeededAsync(receipt.Lines.Select(l => l.Id).ToList(), cancellationToken);
         if (receipt.Lines.OrderBy(l => l.LineNumber).FirstOrDefault(l => seeded.ContainsKey(l.Id)) is { } seededLine)
         {
             return Block("Seeded", DocumentCodes.SeedLotCode(receipt.Code, seededLine.LineNumber), receipt);

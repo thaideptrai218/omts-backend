@@ -247,7 +247,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingEvent", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingRecord", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -262,13 +262,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CycleId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("EvidenceUrls")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PlanDeviationReason")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
 
                     b.Property<Guid>("RecordedByAccountId")
                         .HasColumnType("uniqueidentifier");
@@ -279,12 +275,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
-                    b.Property<Guid>("SeedLotId")
+                    b.Property<Guid>("SeedLotLineId")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<decimal?>("SeedQuantity")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
 
                     b.Property<DateOnly>("SeedingDate")
                         .HasColumnType("date");
@@ -295,19 +287,33 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("Workers")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("CycleId");
 
                     b.HasIndex("RecordedByAccountId");
 
-                    b.HasIndex("SeedLotId");
+                    b.HasIndex("SeedLotLineId");
 
-                    b.ToTable("SeedingEvents");
+                    b.HasIndex("CycleId", "SeedingDate");
+
+                    b.ToTable("SeedingRecords", t =>
+                        {
+                            t.HasCheckConstraint("CK_SeedingRecord_Quantity", "[Quantity] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingRecordLane", b =>
+                {
+                    b.Property<Guid>("SeedingRecordId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("LaneId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("SeedingRecordId", "LaneId");
+
+                    b.HasIndex("LaneId");
+
+                    b.ToTable("SeedingRecordLanes");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.WaterMeasurement", b =>
@@ -3306,10 +3312,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Raft");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingEvent", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingRecord", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Cultivation.CultivationCycle", "Cycle")
-                        .WithMany("SeedingEvents")
+                        .WithMany()
                         .HasForeignKey("CycleId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -3320,15 +3326,34 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Purchasing.PurchaseReceiptLine", "SeedLot")
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.PurchaseReceiptLine", "SeedLotLine")
                         .WithMany()
-                        .HasForeignKey("SeedLotId")
+                        .HasForeignKey("SeedLotLineId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Cycle");
 
-                    b.Navigation("SeedLot");
+                    b.Navigation("SeedLotLine");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingRecordLane", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Farming.Lane", "Lane")
+                        .WithMany()
+                        .HasForeignKey("LaneId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.SeedingRecord", "SeedingRecord")
+                        .WithMany("Lanes")
+                        .HasForeignKey("SeedingRecordId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Lane");
+
+                    b.Navigation("SeedingRecord");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.WaterMeasurement", b =>
@@ -4056,14 +4081,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationCycle", b =>
-                {
-                    b.Navigation("SeedingEvents");
-                });
-
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationLog", b =>
                 {
                     b.Navigation("Photos");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingRecord", b =>
+                {
+                    b.Navigation("Lanes");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Farming.FarmingZone", b =>

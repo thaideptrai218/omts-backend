@@ -44,6 +44,4 @@ public class CultivationCycle : AuditableEntity, IHasStatus
 
     public int StatusId { get; set; } = StatusIds.CultivationCycle.Open;
     public Status Status { get; set; } = null!;
-
-    public ICollection<SeedingEvent> SeedingEvents { get; set; } = [];
 }

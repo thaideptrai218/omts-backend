@@ -217,19 +217,16 @@ public static class PurchasingTestKit
     public static async Task<string?> FieldAsync(this HttpResponseMessage response, HttpStatusCode status, string code) =>
         (await response.ProblemAsync(status, code)).TryGetProperty("field", out var field) ? field.GetString() : null;
 
-    /// <summary>
-    /// Seeds <paramref name="quantity"/> (null: a session without a quantity) of the seed lot that is the receipt line
-    /// (GBR-04), as CYCLE-02 will (it does not exist yet).
-    /// </summary>
-    public static async Task SeedAsync(this AuthApiFactory factory, Guid raftId, Guid receiptLineId, decimal? quantity)
+    /// <summary>Seeds <paramref name="quantity"/> of the seed lot that is the receipt line (GBR-04), straight in the database, on a new cycle of the raft.</summary>
+    public static async Task SeedAsync(this AuthApiFactory factory, Guid raftId, Guid receiptLineId, decimal quantity)
     {
         var cycle = new CultivationCycle { RaftId = raftId, StartDate = Today };
         await factory.UseDbAsync(db =>
         {
             db.CultivationCycles.Add(cycle);
-            db.SeedingEvents.Add(new SeedingEvent
+            db.SeedingRecords.Add(new SeedingRecord
             {
-                CycleId = cycle.Id, SeedLotId = receiptLineId, SeedingDate = Today, SeedQuantity = quantity, RecordedByAccountId = db.Accounts.First().Id,
+                CycleId = cycle.Id, SeedLotLineId = receiptLineId, SeedingDate = Today, Quantity = quantity, RecordedByAccountId = db.Accounts.First().Id,
             });
         });
     }
