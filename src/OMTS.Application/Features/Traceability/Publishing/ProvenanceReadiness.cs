@@ -37,4 +37,24 @@ public sealed class ProvenanceReadiness(IHarvestLotRepository lots)
             return codes.Count == 0 ? OriginGap.NoSeedingSession(lane.Key) : OriginGap.SeedLotNotOnCompletedReceipt(lane.Key, codes);
         })
         .ToList();
+
+    /// <summary>
+    /// TRACE-02.1 / BR-TRACE-03 (the {missing_items} of MSG-TRACE-02): every seed lot of a lane is traced, so a seed lot not on a completed receipt is named even when the lane has
+    /// another valid one (stricter than <see cref="Missing"/>, which only decides whether the lot can be published).
+    /// </summary>
+    public static IReadOnlyList<OriginGap> MissingInTrace(IEnumerable<LotLaneSeedLot> rowsOfOneLot) => rowsOfOneLot
+        .GroupBy(r => r.LaneNumber)
+        .OrderBy(g => g.Key)
+        .Select(lane =>
+        {
+            if (!lane.Any(r => r.SeedLotCode is not null))
+            {
+                return OriginGap.NoSeedingSession(lane.Key);
+            }
+
+            var broken = lane.Where(r => r.SeedLotCode is not null && !r.OnCompletedReceipt).Select(r => r.SeedLotCode!).Distinct().Order(StringComparer.Ordinal).ToList();
+            return broken.Count == 0 ? null : OriginGap.SeedLotNotOnCompletedReceipt(lane.Key, broken);
+        })
+        .OfType<OriginGap>()
+        .ToList();
 }

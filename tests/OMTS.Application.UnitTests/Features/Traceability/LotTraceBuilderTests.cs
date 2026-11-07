@@ -79,15 +79,15 @@ public sealed class LotTraceBuilderTests
 
         Assert.Equal([1, 2, 3], trace.Lanes.Select(l => l.LaneNumber));
         Assert.Equal(["PN000001-1"], trace.Lanes[0].Seedings.Select(s => s.SeedLot.Code));
-        // BR-CYCLE-02: lane 2 hung again shows both seed lots, the earliest first; one on a cancelled receipt is not enough to be missing.
+        // BR-CYCLE-02: lane 2 hung again shows both seed lots, the earliest first. BR-TRACE-03: every seed lot is traced, so the one on a cancelled receipt is named
+        // although lane 2 has a valid one (publishing only needs one, TRACE-01).
         Assert.Equal([("PN000001-1", true), ("PN000002-1", false)], trace.Lanes[1].Seedings.Select(s => (s.SeedLot.Code, s.OnCompletedReceipt)));
         Assert.Empty(trace.Lanes[2].Seedings);
         Assert.Equal(("DEMO seed farm", "PN000001"), (trace.Lanes[0].Seedings[0].SeedLot.SupplierName, trace.Lanes[0].Seedings[0].SeedLot.ReceiptCode));
-        var gap = Assert.Single(trace.Missing);
-        Assert.Equal((OriginGapKind.NoSeedingSession, (int?)3), (gap.Kind, gap.LaneNumber));
-        Assert.Equal(("MSG-TRACE-02",
-            "Missing data in the trace of harvest lot KV01-B01-20261108: lane 3 has no seeding session in the cycle of the lot. Please ask the Cooperative Owner whether the data must be corrected."),
-            (trace.MessageCode, trace.Message));
+        Assert.Equal([(OriginGapKind.SeedLotNotOnCompletedReceipt, (int?)2), (OriginGapKind.NoSeedingSession, (int?)3)], trace.Missing.Select(g => (g.Kind, g.LaneNumber)));
+        Assert.Equal("MSG-TRACE-02", trace.MessageCode);
+        Assert.Contains("lane 3 has no seeding session in the cycle of the lot", trace.Message);
+        Assert.Contains("PN000002-1", trace.Message);
     }
 
     [Fact]

@@ -77,9 +77,12 @@ public class LotTraceTests
             session.GetProperty("seedLot").GetProperty("receiptId").GetGuid(), session.GetProperty("onCompletedReceipt").GetBoolean(), session.Text("receiptStatus")));
         Assert.Equal((raft.RaftId, raft.ZoneId, raft.CycleId, "Open"), (trace.GetProperty("raftId").GetGuid(), trace.GetProperty("zoneId").GetGuid(),
             trace.GetProperty("cycleId").GetGuid(), trace.Text("cycleStatus")));
-        Assert.Equal(["NoSeedingSession 3"], trace.Missing());
-        Assert.Equal(("MSG-TRACE-02", $"Missing data in the trace of harvest lot {lot.Text("lotCode")}: lane 3 has no seeding session in the cycle of the lot. " +
-            "Please ask the Cooperative Owner whether the data must be corrected."), (trace.Text("messageCode"), trace.Text("message")));
+        // Every seed lot of a lane is traced (BR-TRACE-03): the re-hung seed lot on a cancelled receipt is named although lane 2 has a valid one.
+        Assert.Equal([$"SeedLotNotOnCompletedReceipt 2 {again.Code}", "NoSeedingSession 3"], trace.Missing());
+        Assert.Equal("MSG-TRACE-02", trace.Text("messageCode"));
+        Assert.StartsWith($"Missing data in the trace of harvest lot {lot.Text("lotCode")}: ", trace.Text("message"));
+        Assert.Contains("lane 3 has no seeding session in the cycle of the lot", trace.Text("message"));
+        Assert.Contains(again.Code, trace.Text("message"));
         Assert.Empty(trace.GetProperty("invoices").EnumerateArray());
         Assert.False(trace.GetProperty("canPublish").GetBoolean());
 

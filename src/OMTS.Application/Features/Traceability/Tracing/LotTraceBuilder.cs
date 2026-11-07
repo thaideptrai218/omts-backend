@@ -45,7 +45,7 @@ public static class LotTraceBuilder
                     .Select(s => Seeding(s, marks[s.Id].ToList(), statusCatalog))
                     .ToList()))
             .ToList();
-        var missing = ProvenanceReadiness.Missing(lanes.SelectMany(LaneRows(lot.Id)));
+        var missing = ProvenanceReadiness.MissingInTrace(lanes.SelectMany(LaneRows(lot.Id)));
         var message = missing.Count == 0 ? null : UserMessages.TraceIncomplete(lot.LotCode, missing);
         var invoices = Invoices(source.SaleLines, access);
 
