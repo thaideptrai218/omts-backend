@@ -618,6 +618,112 @@ public static class UserMessages
         Sale05,
         $"{mergedName} cannot be merged into {keptName}: {(bothLinked ? "both have a trader account" : $"keep {mergedName} instead, so that its trader account keeps its data")}.");
 
+    // ---- MSG-SALE: the sales invoice (SALE-05) ----
+
+    /// <summary>
+    /// MSG-SALE-06 (SALE-05.6 to SALE-05.8): the invoice is completed. {payment_text} lists the payments joined by "; ": the cash recorded (the part subtracted from the debt included)
+    /// and the part added to the debt. An invoice of 0 VND reads "0 VND collected in cash".
+    /// </summary>
+    public static UserMessage SaleCompleted(string invoiceCode, decimal cashAmount, decimal laterAmount, string customerName)
+    {
+        var parts = new List<string>();
+        if (cashAmount > 0 || laterAmount == 0)
+        {
+            parts.Add($"{Vnd(cashAmount)} VND collected in cash");
+        }
+
+        if (laterAmount > 0)
+        {
+            parts.Add($"{Vnd(laterAmount)} VND added to the debt of {customerName}");
+        }
+
+        var paymentText = string.Join("; ", parts);
+        return new UserMessage(Sale06, $"Invoice {invoiceCode} is completed: {paymentText}.")
+        {
+            Parameters = new Dictionary<string, object?>
+            {
+                ["invoice_code"] = invoiceCode,
+                ["payment_text"] = paymentText,
+                ["cash_amount"] = cashAmount,
+                ["later_amount"] = laterAmount,
+                ["customer_name"] = customerName,
+            },
+        };
+    }
+
+    /// <summary>MSG-SALE-08 (BR-SALE-03): a new sale, to the Cooperative Owner. {customer_name} is "a walk-in customer" without a profile; {price_text} is empty or starts with a space.</summary>
+    /// <param name="paymentTerm">"Pay now" or "Pay later".</param>
+    public static UserMessage SaleNotice(string userName, decimal totalKg, string customerName, decimal totalAmount, string invoiceCode, string paymentTerm, string priceText) => new(
+        Sale08, $"{userName} sold {Kg(totalKg)} kg to {customerName} for {Vnd(totalAmount)} VND (invoice {invoiceCode}, {paymentTerm}).{priceText}")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["user_name"] = userName,
+            ["total_kg"] = KgValue(totalKg),
+            ["customer_name"] = customerName,
+            ["total_amount"] = totalAmount,
+            ["invoice_code"] = invoiceCode,
+            ["payment_term"] = paymentTerm,
+            ["price_text"] = priceText,
+        },
+    };
+
+    /// <summary>
+    /// {price_text} of MSG-SALE-08: empty, or the prices the Cooperative Owner decided and the discount, e.g. " Price decided by the Cooperative Owner: 55,000 VND/kg (list price 60,000);
+    /// discount 200,000 VND.". Not a message of its own.
+    /// </summary>
+    public static string SalePriceText(IReadOnlyList<(decimal UnitPrice, decimal ListPrice)> decidedPrices, decimal discount)
+    {
+        var parts = new List<string>();
+        if (decidedPrices.Count > 0)
+        {
+            parts.Add("Price decided by the Cooperative Owner: " + string.Join(", ", decidedPrices.Distinct().Select(p => $"{Vnd(p.UnitPrice)} VND/kg (list price {Vnd(p.ListPrice)})")));
+        }
+
+        if (discount > 0)
+        {
+            parts.Add($"discount {Vnd(discount)} VND");
+        }
+
+        return parts.Count == 0 ? string.Empty : $" {Capitalized(string.Join("; ", parts))}.";
+    }
+
+    /// <summary>MSG-SALE-10 (SALE-05.5): a unit price other than the list price, entered by a Zone Manager.</summary>
+    public static UserMessage PriceNeedsOwnerDecision(string productName, decimal listPrice, decimal unitPrice) => new(
+        Sale10, $"{productName}: the list price is {Vnd(listPrice)} VND/kg, and you entered {Vnd(unitPrice)} VND/kg. Has the Cooperative Owner decided this price?")
+    {
+        Parameters = new Dictionary<string, object?> { ["product_name"] = productName, ["list_price"] = listPrice, ["unit_price"] = unitPrice },
+    };
+
+    /// <summary>MSG-SALE-10 (SALE-05.5), the content the SRS gives for a discount.</summary>
+    public static UserMessage DiscountNeedsOwnerDecision(decimal discountAmount) => new(
+        Sale10, $"Has the Cooperative Owner decided a discount of {Vnd(discountAmount)} VND on this invoice?")
+    {
+        Parameters = new Dictionary<string, object?> { ["discount_amount"] = discountAmount },
+    };
+
+    /// <summary>MSG-SALE-11 (SALE-05.6 step 3): cash above the total, for a customer who has a debt. {subtract_amount} is the extra but at most the debt; {change_amount} the rest.</summary>
+    public static UserMessage CashAboveTotal(decimal excessAmount, string customerName, decimal debtAmount, decimal subtractAmount, decimal changeAmount) => new(
+        Sale11,
+        $"The trader paid {Vnd(excessAmount)} VND more than the total. {customerName} owes {Vnd(debtAmount)} VND. Subtract {Vnd(subtractAmount)} VND from this debt and give back {Vnd(changeAmount)} VND as change?")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["excess_amount"] = excessAmount,
+            ["customer_name"] = customerName,
+            ["debt_amount"] = debtAmount,
+            ["subtract_amount"] = subtractAmount,
+            ["change_amount"] = changeAmount,
+        },
+    };
+
+    /// <summary>MSG-SALE-12 (SALE-05.8 step 2): Pay later without a linked request that agrees to it. {later_amount} is the total, or the rest after the cash part.</summary>
+    public static UserMessage PayLaterNeedsOwnerAgreement(string customerName, decimal laterAmount, decimal debtAmount) => new(
+        Sale12, $"Has the Cooperative Owner agreed that {customerName} pays {Vnd(laterAmount)} VND of this invoice later? {customerName} owes {Vnd(debtAmount)} VND now.")
+    {
+        Parameters = new Dictionary<string, object?> { ["customer_name"] = customerName, ["later_amount"] = laterAmount, ["debt_amount"] = debtAmount },
+    };
+
     // ---- Old codes still sent as the code (Legacy.KeptAsCode) ----
 
     /// <summary>MSG05: an export file could not be generated, or a stored file could not be read.</summary>

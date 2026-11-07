@@ -7,6 +7,7 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.Sales.Debts;
 using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Application.Features.Sales.Customers;
@@ -20,6 +21,7 @@ namespace OMTS.Application.Features.Sales.Customers;
 public sealed class CustomerMergeService(
     ICustomerRepository customers,
     ICustomerReferences references,
+    CustomerDebtReader debts,
     ICurrentUser currentUser,
     PermissionService permissions,
     RowVersionGuard rowVersions,
@@ -37,9 +39,10 @@ public sealed class CustomerMergeService(
 
         var (kept, merged) = pair.Value;
         var needsApproval = !await IsOwnerAsync(cancellationToken);
+        var owed = await debts.DebtsAsync([kept.Id, merged.Id], cancellationToken);
         return new CustomerMergePreview(
-            Party(kept), Party(merged), await references.CountAsync(merged.Id, cancellationToken), needsApproval,
-            needsApproval ? AskOwnerAgreed(kept, merged).Text : null);
+            Party(kept, owed), Party(merged, owed), await references.CountAsync(merged.Id, cancellationToken), needsApproval,
+            needsApproval ? AskOwnerAgreed(kept, merged, owed).Text : null);
     }
 
     public async Task<Result<CustomerView>> MergeAsync(Guid keptId, MergeCustomerRequest request, CancellationToken cancellationToken)
@@ -63,10 +66,11 @@ public sealed class CustomerMergeService(
 
         if (!request.OwnerApproved && !await IsOwnerAsync(cancellationToken))
         {
-            return AppError.Conflict(AskOwnerAgreed(kept, merged), new Dictionary<string, object?>
+            var owed = await debts.DebtsAsync([kept.Id, merged.Id], cancellationToken);
+            return AppError.Conflict(AskOwnerAgreed(kept, merged, owed), new Dictionary<string, object?>
             {
-                ["kept"] = Party(kept),
-                ["merged"] = Party(merged),
+                ["kept"] = Party(kept, owed),
+                ["merged"] = Party(merged, owed),
                 ["countedWithKept"] = await references.CountAsync(merged.Id, cancellationToken),
             });
         }
@@ -83,7 +87,8 @@ public sealed class CustomerMergeService(
             After = new { MergedIntoCustomerId = kept.Id, KeptName = kept.Name, KeptPhoneNumber = kept.PhoneNumber, OwnerApproved = true, Moved = moved },
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return CustomerService.View(kept);
+        // The merged profile's invoices and payments now count with the kept one (BR-SALE-04).
+        return CustomerService.View(kept, await debts.DebtAsync(kept.Id, cancellationToken));
     }
 
     private async Task<Result<(Customer Kept, Customer Merged)>> LoadPairAsync(Guid keptId, Guid? mergedId, CancellationToken cancellationToken)
@@ -122,12 +127,12 @@ public sealed class CustomerMergeService(
     private async Task<bool> IsOwnerAsync(CancellationToken cancellationToken) =>
         currentUser.AccountId is { } accountId && await permissions.GetAccessAsync(accountId, cancellationToken) is { IsCooperativeOwner: true };
 
-    private static UserMessage AskOwnerAgreed(Customer kept, Customer merged) => UserMessages.CustomerMergeNeedsOwnerAgreement(
-        merged.Name, merged.PhoneNumber ?? "–", Money(CustomerFigures.CurrentDebt(merged)),
-        kept.Name, kept.PhoneNumber ?? "–", Money(CustomerFigures.CurrentDebt(kept)));
+    private static UserMessage AskOwnerAgreed(Customer kept, Customer merged, IReadOnlyDictionary<Guid, decimal> debts) => UserMessages.CustomerMergeNeedsOwnerAgreement(
+        merged.Name, merged.PhoneNumber ?? "–", Money(debts[merged.Id]),
+        kept.Name, kept.PhoneNumber ?? "–", Money(debts[kept.Id]));
 
-    private static CustomerMergeParty Party(Customer c) =>
-        new(c.Id, c.Name, c.PhoneNumber, CustomerFigures.CurrentDebt(c), c.AccountId is not null, RowVersionGuard.Encode(c.RowVersion));
+    private static CustomerMergeParty Party(Customer c, IReadOnlyDictionary<Guid, decimal> debts) =>
+        new(c.Id, c.Name, c.PhoneNumber, debts[c.Id], c.AccountId is not null, RowVersionGuard.Encode(c.RowVersion));
 
     private static string Money(decimal amount) => amount.ToString("#,##0", CultureInfo.InvariantCulture);
 }

@@ -87,6 +87,11 @@ public static class MessageCodes
     public const string Sale03 = "MSG-SALE-03";
     public const string Sale04 = "MSG-SALE-04";
     public const string Sale05 = "MSG-SALE-05";
+    public const string Sale06 = "MSG-SALE-06";
+    public const string Sale08 = "MSG-SALE-08";
+    public const string Sale10 = "MSG-SALE-10";
+    public const string Sale11 = "MSG-SALE-11";
+    public const string Sale12 = "MSG-SALE-12";
 
     /// <summary>
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-01, the
@@ -101,11 +106,12 @@ public static class MessageCodes
     /// MSG-SALE-03, the purchase requests (new in PR S4); MSG-CYCLE-01/02/03, the seeding questions and the notice (CYCLE-02);
     /// MSG-CYCLE-04, a cultivation log to review (CYCLE-04); MSG-CYCLE-08, MSG-HARVEST-01/03, the reminder to close a cycle,
     /// the harvest notice and the lowered days (HARVEST-01 and HARVEST-03 are new in PR H1a); MSG-CYCLE-05/06/07, the close of a
-    /// cycle, its summary notice and the early close (CYCLE-06 is new in PR C5).
+    /// cycle, its summary notice and the early close (CYCLE-06 is new in PR C5); MSG-SALE-06/08/10/11/12, the sales invoice: its success text, the
+    /// Owner's notice and the three questions at the port (SALE-05 is new in PR 6a).
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
-        Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Debt01, Debt02, Water02, Water04,
+        Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale08, Sale10, Sale11, Sale12, Debt01, Debt02, Water02, Water04,
     };
 
     /// <summary>

@@ -17,6 +17,7 @@ internal static class StatusCatalogSeed
     private const string Trader = "Trader";
     private const string SystemActor = "System";
     private const string LotCloser = "Cooperative Owner; Zone Manager; System";
+    private const string Accountant = "Accountant";
     private const string Action = "Action";
 
     public static readonly Status[] Statuses =
@@ -71,6 +72,15 @@ internal static class StatusCatalogSeed
         NewStatus(S.HarvestLot.Open, G.HarvestLot, "OPEN", "Open", "For sale: it can be chosen on a sales invoice.", initial: true),
         NewStatus(S.HarvestLot.Reopened, G.HarvestLot, "REOPENED", "Reopened", "Closed earlier and for sale again; the days before automatic close count from the day it was reopened."),
         NewStatus(S.HarvestLot.Closed, G.HarvestLot, "CLOSED", "Closed", "No longer for sale; its close reason is kept. The system can reopen it."),
+
+        // STD-SALES-INVOICE: no draft, as an invoice is saved only when paid or put on the debt (BR-SALE-08).
+        NewStatus(S.SalesInvoice.Completed, G.SalesInvoice, "COMPLETED", "Completed", "The sale is saved; only the Cooperative Owner corrects or cancels it.", initial: true),
+        NewStatus(S.SalesInvoice.Cancelled, G.SalesInvoice, "CANCELLED", "Cancelled", "The sale did not happen; kept with its reason and counts nowhere.", final: true),
+
+        // STD-CUSTOMER-PAYMENT (BR-DEBT-03): a payment counts in the debt from its recording.
+        NewStatus(S.CustomerPayment.AwaitingConfirmation, G.CustomerPayment, "AWAITING_CONFIRMATION", "Awaiting confirmation", "Recorded at the port or by the system; counts in the debt until the Accountant confirms or cancels it.", initial: true),
+        NewStatus(S.CustomerPayment.Confirmed, G.CustomerPayment, "CONFIRMED", "Confirmed", "Checked or recorded by the Accountant."),
+        NewStatus(S.CustomerPayment.Cancelled, G.CustomerPayment, "CANCELLED", "Cancelled", "Recorded by mistake or never received; no longer counts.", final: true),
     ];
 
     public static readonly StatusTransition[] Transitions =
@@ -114,6 +124,12 @@ internal static class StatusCatalogSeed
         NewTransition(150, S.HarvestLot.Open, S.HarvestLot.Closed, "HARVEST-02, GFR-05, SALE-05, SALE-07, CLAIM-03", LotCloser, Action, "Sold whole lot, closed with the leftover kg, or the time limit reached.", false),
         NewTransition(151, S.HarvestLot.Reopened, S.HarvestLot.Closed, "HARVEST-02, GFR-05, SALE-05, SALE-07, CLAIM-03", LotCloser, Action, "Closed again in the same four ways.", false),
         NewTransition(152, S.HarvestLot.Closed, S.HarvestLot.Reopened, "CLAIM-03, SALE-07, SALE-08", SystemActor, SystemActor, "A sales return puts oysters back, or the invoice that closed the lot is cancelled or loses its tick.", false),
+
+        // STD-SALES-INVOICE and STD-CUSTOMER-PAYMENT; the creation of each is SALE-05 (and GFR-08 for a VietQR payment).
+        NewTransition(200, S.SalesInvoice.Completed, S.SalesInvoice.Cancelled, "SALE-08", Owner, Action, "The invoice has no sales return that is not cancelled; a cash payment is cancelled with it only when the cash was given back.", true),
+        NewTransition(210, S.CustomerPayment.AwaitingConfirmation, S.CustomerPayment.Confirmed, "DEBT-02", Accountant, Action, "The cash or the transfer that arrived matches the payment.", false),
+        NewTransition(211, S.CustomerPayment.AwaitingConfirmation, S.CustomerPayment.Cancelled, "DEBT-02, SALE-08", $"{Accountant}; {Owner}", Action, "The customer did not pay, or the cash was given back when the invoice was cancelled.", true),
+        NewTransition(212, S.CustomerPayment.Confirmed, S.CustomerPayment.Cancelled, "DEBT-02", Accountant, Action, "Recorded by mistake, or the money never arrived.", true),
     ];
 
     private static Status NewStatus(int id, string group, string code, string displayName, string meaning, bool initial = false, bool final = false) =>

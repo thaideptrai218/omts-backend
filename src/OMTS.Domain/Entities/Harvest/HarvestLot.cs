@@ -53,7 +53,7 @@ public class HarvestLot : AuditableEntity, IHasStatus
     public decimal? LeftoverKg { get; set; }
     public HarvestLotCloseReason? CloseReason { get; set; }
 
-    /// <summary>The invoice whose "sold the whole lot" tick closed the lot, so that invoice alone reopens it (SALE-07, SALE-08). It becomes a foreign key with the invoices.</summary>
+    /// <summary>The invoice whose "sold the whole lot" tick closed the lot, so that invoice alone reopens it (SALE-07, SALE-08); a foreign key to the sales invoices.</summary>
     public Guid? ClosedBySalesInvoiceId { get; set; }
 
     public DateTimeOffset? PublishedAt { get; set; }

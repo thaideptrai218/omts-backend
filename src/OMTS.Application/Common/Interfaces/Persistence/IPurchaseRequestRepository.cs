@@ -19,6 +19,9 @@ public interface IPurchaseRequestRepository
     /// <summary>One page of the requests: those Awaiting response first, then newest first (SCR-SALE-02), with profiles and products.</summary>
     Task<(IReadOnlyList<PurchaseRequest> Items, int Total)> SearchAsync(int? statusId, Guid? customerId, int page, int pageSize, CancellationToken cancellationToken);
 
+    /// <summary>The Accepted requests of a profile whose agreed pickup date is not before <paramref name="earliestPickup"/>, with their products, the earliest pickup first (SALE-05.3).</summary>
+    Task<IReadOnlyList<PurchaseRequest>> ListAcceptedOfCustomerAsync(Guid customerId, DateOnly earliestPickup, CancellationToken cancellationToken);
+
     /// <summary>The sendings kept for these requests, oldest first.</summary>
     Task<IReadOnlyList<PurchaseRequestSending>> ListSendingsAsync(IReadOnlyCollection<Guid> requestIds, CancellationToken cancellationToken);
 }

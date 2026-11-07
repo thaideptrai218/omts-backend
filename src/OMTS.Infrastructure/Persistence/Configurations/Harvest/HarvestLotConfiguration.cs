@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using OMTS.Domain.Entities.Harvest;
+using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Infrastructure.Persistence.Configurations.Harvest;
 
@@ -13,6 +14,8 @@ internal sealed class HarvestLotConfiguration : IEntityTypeConfiguration<Harvest
         builder.HasOne(x => x.Cycle).WithMany().HasForeignKey(x => x.CycleId);
         builder.HasOne(x => x.Status).WithMany().HasForeignKey(x => x.StatusId);
         builder.ReferencesAccount(nameof(HarvestLot.RecordedByAccountId));
+        // The invoice whose "sold the whole lot" tick closed the lot (SALE-05); only that invoice reopens it (SALE-07, SALE-08).
+        builder.HasOne<SalesInvoice>().WithMany().HasForeignKey(x => x.ClosedBySalesInvoiceId);
         builder.Property(x => x.KgPerCage).HasPrecision(9, 2);
         builder.Property(x => x.EstimatedKg).HasPrecision(18, 3);
         builder.Property(x => x.LeftoverKg).HasPrecision(18, 3);
