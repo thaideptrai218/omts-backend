@@ -355,14 +355,17 @@ public sealed class BankAccountQaTests
 
     // The token's timer and WaitAsync's timer are due at once. When WaitAsync goes first, the method leaves and disposes the
     // token before its timer fires, so that call is never told. Off the runner's context, as a request runs on a server.
+    // "Told" is read from the token the service holds. A callback registered on it is not a sound counter: the cancel of
+    // Task.Delay can resume the service inline, whose using then removes that callback before the cancel reaches it (39 of
+    // 40 once on CI, with every token cancelled).
     [Fact]
     public async Task M2_the_call_to_the_service_is_told_to_stop_at_the_time_limit_each_time()
     {
         const int calls = 40;
-        var stopped = 0;
+        var tokens = new System.Collections.Concurrent.ConcurrentBag<CancellationToken>();
         var service = new ScriptedPaymentService(async (_, token) =>
         {
-            using var registration = token.Register(() => Interlocked.Increment(ref stopped));
+            tokens.Add(token);
             await Task.Delay(Timeout.Infinite, token);
             return AccountAcceptanceResult.Accepted;
         });
@@ -377,7 +380,8 @@ public sealed class BankAccountQaTests
         await Task.Delay(TimeSpan.FromSeconds(2));
 
         Assert.All(answers, a => Assert.Equal(AccountAcceptanceOutcome.Unavailable, a.Outcome));
-        Assert.Equal(calls, Volatile.Read(ref stopped));
+        Assert.Equal(calls, tokens.Count);
+        Assert.All(tokens, t => Assert.True(t.IsCancellationRequested, "the service was not told to stop at the time limit"));
     }
 
     // Observation, no defect: the limit covers the task the provider returns. An adapter that blocks before its first await
