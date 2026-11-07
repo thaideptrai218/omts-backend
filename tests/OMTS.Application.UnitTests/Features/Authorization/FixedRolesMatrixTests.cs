@@ -44,7 +44,8 @@ public class FixedRolesMatrixTests
         { "HARVEST-02", Full, No, HarvestLots, [View, Create, Edit] },
         { "HARVEST-04", Full, No, HarvestLots, [View, Export] },
         { "TRACE-01", Full, No, Provenance, [View, Create, Publish] },
-        { "TRACE-02", Full, R, LotTracing, [View] },
+        // TRACE-02.2 Export to a file: the Accountant (R) views the trace and does not export it.
+        { "TRACE-02", Full, R, LotTracing, [View, Export] },
         { "TRACE-03", Full, No, Provenance, [Edit] },
         // Withdrawing is an Owner-only action with no catalog action: R = View of the provenance records.
         { "TRACE-04", R, No, Provenance, [] },

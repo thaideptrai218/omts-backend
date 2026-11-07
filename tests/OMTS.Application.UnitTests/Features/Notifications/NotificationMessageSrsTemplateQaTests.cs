@@ -20,7 +20,8 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
     private const string Harvest03 = "With {days} days, the next daily close check will close {count} lots that are still for sale. Do you want to save?";
     private const string Harvest05 = "Lot {lot_code} (raft {raft_code}) will be closed automatically at the start of {close_date}. Please sell it before then or close it yourself.";
     private const string Trace01 = "Harvest lot {lot_code} cannot be published yet: {missing_items}. The invoice is saved; the other lots are not affected.";
-    private const string Trace03 = "The correction is not saved: lane {lane_number} of harvest lot {lot_code} would have no seed lot. Please keep at least one seed lot for this lane.";
+    private const string Trace02 = "Missing data in the trace of harvest lot {lot_code}: {missing_items}. Please ask the Cooperative Owner whether the data must be corrected.";
+    private const string Trace03 ="The correction is not saved: lane {lane_number} of harvest lot {lot_code} would have no seed lot. Please keep at least one seed lot for this lane.";
     private const string Trace04 = "This correction changes the origin information of harvest lots {lot_codes}. Has the Cooperative Owner agreed in person that the data is wrong?";
     private const string Farm01 ="{document} expires on {expiry_date}, in {days} days. Please renew it and record the new one.";
     private const string Farm02 = "{document} expired on {expiry_date}. Please renew it and record the new one.";
@@ -37,7 +38,7 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
         "farm-01", "farm-02", "farm-01-no-type", "farm-01-certification", "farm-02-certification-no-number", "water-03", "water-03-corrected", "water-04-corrected", "water-04-voided", "water-06",
         "cycle-04", "cycle-08", "harvest-01", "harvest-03", "harvest-05",
         "cycle-05", "cycle-06", "cycle-06-early", "cycle-07", "cycle-07-no-seeding",
-        "trace-01", "trace-03", "trace-04", "trace-04-no-lot",
+        "trace-01", "trace-02", "trace-03", "trace-04", "trace-04-no-lot",
     };
 
     // TRACE-01.2: on the Trace lot screen there is no invoice, so the sentence about it is left out; the rest is the SRS text.
@@ -175,6 +176,12 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
                 "KV01-B01-20261026-2", [OriginGap.NoSeedingSession(2), OriginGap.SeedLotNotOnCompletedReceipt(3, ["PN000004-1"]), OriginGap.NotPublisherOfZone("KV02")], atEndOfSale: true),
             "Harvest lot KV01-B01-20261026-2 cannot be published yet: lane 2 has no seeding session in the cycle of the lot; the seed lot PN000004-1 of lane 3 is not on a completed purchase receipt; only a Zone Manager of zone KV02 or the Cooperative Owner can publish it. The invoice is saved; the other lots are not affected.",
             """{"lot_code":"KV01-B01-20261026-2","missing_items":[{"kind":"NoSeedingSession","lane_number":2,"seed_lot_codes":[],"zone_code":null},{"kind":"SeedLotNotOnCompletedReceipt","lane_number":3,"seed_lot_codes":["PN000004-1"],"zone_code":null},{"kind":"NotPublisherOfZone","lane_number":null,"seed_lot_codes":[],"zone_code":"KV02"}]}"""),
+        // TRACE-02.1: the same items as MSG-TRACE-01 (BR-TRACE-01), never filled in (BR-TRACE-03).
+        "trace-02" => (
+            "MSG-TRACE-02", Trace02,
+            UserMessages.TraceIncomplete("KV01-B01-20261026", [OriginGap.NoSeedingSession(2), OriginGap.SeedLotNotOnCompletedReceipt(3, ["PN000004-1"])]),
+            "Missing data in the trace of harvest lot KV01-B01-20261026: lane 2 has no seeding session in the cycle of the lot; the seed lot PN000004-1 of lane 3 is not on a completed purchase receipt. Please ask the Cooperative Owner whether the data must be corrected.",
+            """{"lot_code":"KV01-B01-20261026","missing_items":[{"kind":"NoSeedingSession","lane_number":2,"seed_lot_codes":[],"zone_code":null},{"kind":"SeedLotNotOnCompletedReceipt","lane_number":3,"seed_lot_codes":["PN000004-1"],"zone_code":null}]}"""),
         "trace-04" => (
             "MSG-TRACE-04", Trace04,
             UserMessages.TraceCorrectionAgreement(["KV01-B01-20261026", "KV01-B01-20261026-2"]),
