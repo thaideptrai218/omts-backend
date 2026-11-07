@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using OMTS.Domain.Common;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
+using OMTS.Domain.Entities.Harvest;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Labor;
 using OMTS.Domain.Entities.Platform;
@@ -46,6 +47,9 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<SeedingRecord> SeedingRecords => Set<SeedingRecord>();
     public DbSet<SeedingRecordLane> SeedingRecordLanes => Set<SeedingRecordLane>();
     public DbSet<WaterMeasurement> WaterMeasurements => Set<WaterMeasurement>();
+    public DbSet<HarvestLot> HarvestLots => Set<HarvestLot>();
+    public DbSet<HarvestLotLane> HarvestLotLanes => Set<HarvestLotLane>();
+    public DbSet<HarvestLotPhoto> HarvestLotPhotos => Set<HarvestLotPhoto>();
 
     // Products and customers
     public DbSet<Product> Products => Set<Product>();

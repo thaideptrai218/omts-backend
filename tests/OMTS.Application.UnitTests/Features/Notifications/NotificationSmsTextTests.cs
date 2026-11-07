@@ -21,7 +21,7 @@ public class NotificationSmsTextTests
     private static readonly string[] TypesSendingTheMessageText =
     [
         NotificationTypes.WaterAlert, NotificationTypes.WaterAlertWithdrawn, NotificationTypes.ZoneLicenseExpiry,
-        NotificationTypes.CooperativeCertificationExpiry, NotificationTypes.PurchaseRequestNew,
+        NotificationTypes.CooperativeCertificationExpiry, NotificationTypes.PurchaseRequestNew, NotificationTypes.CycleCloseReminder,
     ];
 
     private static readonly NotificationTypeDefinition MoneyType = new(

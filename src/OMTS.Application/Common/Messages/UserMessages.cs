@@ -196,6 +196,34 @@ public static class UserMessages
         Parameters = new Dictionary<string, object?> { ["raft_code"] = raftCode, ["visit_date"] = visitDate },
     };
 
+    /// <summary>MSG-CYCLE-08 (BR-CYCLE-07): reminder when every seeded lane of an Open cycle is Harvested.</summary>
+    public static UserMessage CycleCloseReminder(string raftCode) => new(Cycle08, $"Raft {raftCode}: every seeded lane is harvested. Please close its cultivation cycle.")
+    {
+        Parameters = new Dictionary<string, object?> { ["raft_code"] = raftCode },
+    };
+
+    /// <summary>MSG-HARVEST-01 (BF-03 step 7): notification to the Cooperative Owner when a harvest lot is recorded.</summary>
+    public static UserMessage HarvestLotRecorded(string raftCode, DateOnly harvestDate, string lotCode, int cageCount, decimal estimatedKg) => new(
+        Harvest01, $"Raft {raftCode}: the harvest of {Date(harvestDate)} is recorded as lot {lotCode} ({cageCount.ToString(CultureInfo.InvariantCulture)} cages, about {Quantity(estimatedKg)} kg).")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["raft_code"] = raftCode,
+            ["harvest_date"] = harvestDate,
+            ["lot_code"] = lotCode,
+            ["cage_count"] = cageCount,
+            ["estimated_kg"] = decimal.Parse(Quantity(estimatedKg), CultureInfo.InvariantCulture),
+        },
+    };
+
+    /// <summary>MSG-HARVEST-03 (HARVEST-03 step 4): the days before automatic close are lowered.</summary>
+    public static UserMessage AutoCloseDaysLowered(int days, int count) => new(
+        Harvest03,
+        $"With {days.ToString(CultureInfo.InvariantCulture)} days, the next daily close check will close {count.ToString(CultureInfo.InvariantCulture)} lots that are still for sale. Do you want to save?")
+    {
+        Parameters = new Dictionary<string, object?> { ["days"] = days, ["count"] = count },
+    };
+
     /// <summary>MSG-WATER-06 (GFR-04): reminder to measure the water of a zone.</summary>
     /// <param name="lastDate">The business day of the latest measurement, or the start of the overdue period when there is none.</param>
     public static UserMessage WaterMeasurementOverdue(string zoneName, DateOnly lastDate) => new(

@@ -18,7 +18,7 @@ internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notif
         builder.Property(x => x.MessageCode).HasMaxLength(Lengths.Code);
         builder.Property(x => x.MessageParams).HasMaxLength(Lengths.LongText);
         builder.Property(x => x.RelatedRecordType).HasMaxLength(Lengths.ShortText);
-        builder.Property(x => x.RelatedRecordCode).HasMaxLength(Lengths.ShortText);
+        builder.Property(x => x.RelatedRecordCode).HasMaxLength(Lengths.LotCode);
         builder.Property(x => x.PhoneNumber).HasMaxLength(Lengths.Phone);
         builder.Property(x => x.ProviderMessageId).HasMaxLength(Lengths.ShortText);
         builder.Property(x => x.ProviderErrorCode).HasMaxLength(Lengths.ShortText);

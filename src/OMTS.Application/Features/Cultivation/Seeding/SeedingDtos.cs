@@ -104,12 +104,17 @@ public sealed record SeedingCompleted(CycleView Cycle, int LaneCount, int Seeded
 /// <param name="Quantity">The total of the session: no quantity per lane is ever worked out.</param>
 public sealed record LaneSeedingSession(Guid Id, DateOnly SeedingDate, SeedLotRef SeedLot, decimal Quantity);
 
-/// <summary>One lane in the cycle shown (CYCLE-05.0 step 3). The harvest lots that include the lane come with the harvest lots (H1a).</summary>
+/// <summary>A harvest lot that includes a lane (CYCLE-05.0 step 3). It holds no kg: none is worked out per lane (AC-03).</summary>
+/// <param name="IsFinished">This lot marked the lane finished.</param>
+public sealed record LaneHarvestLot(Guid Id, string LotCode, DateOnly HarvestDate, bool IsFinished, int StatusId, string Status);
+
+/// <summary>One lane in the cycle shown (CYCLE-05.0 step 3).</summary>
 /// <param name="Cycle">The cycle shown, or null: the raft has no cycle yet.</param>
 /// <param name="State">The state today, or on the close date of a closed cycle.</param>
 /// <param name="Sessions">The latest date first.</param>
+/// <param name="HarvestLots">The latest harvest first.</param>
 public sealed record LaneProgressView(
-    Guid RaftId, string RaftCode, Guid LaneId, int LaneNumber, int StatusId, string Status, LaneState State, CycleListItem? Cycle, IReadOnlyList<LaneSeedingSession> Sessions);
+    Guid RaftId, string RaftCode, Guid LaneId, int LaneNumber, int StatusId, string Status, LaneState State, CycleListItem? Cycle, IReadOnlyList<LaneSeedingSession> Sessions, IReadOnlyList<LaneHarvestLot> HarvestLots);
 
 /// <summary>A seed lot hung on a lane, with its seeding dates, the earliest first (CYCLE-05.0 step 1).</summary>
 public sealed record LaneSeedLot(Guid SeedLotId, string Code, string? ItemName, IReadOnlyList<DateOnly> Dates);

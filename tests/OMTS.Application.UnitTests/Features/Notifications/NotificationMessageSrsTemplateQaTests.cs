@@ -12,6 +12,9 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
 {
     // SRS 27/10 Part V message table (07-v-requirement-appendix.md, rows MSG-FARM-01/02, MSG-WATER-03/04/06), copied as data.
     private const string Cycle04 = "Raft {raft_code}: a cultivation log was recorded for the visit on {visit_date}. Please review it.";
+    private const string Cycle08 = "Raft {raft_code}: every seeded lane is harvested. Please close its cultivation cycle.";
+    private const string Harvest01 = "Raft {raft_code}: the harvest of {harvest_date} is recorded as lot {lot_code} ({cage_count} cages, about {estimated_kg} kg).";
+    private const string Harvest03 = "With {days} days, the next daily close check will close {count} lots that are still for sale. Do you want to save?";
     private const string Farm01 = "{document} expires on {expiry_date}, in {days} days. Please renew it and record the new one.";
     private const string Farm02 = "{document} expired on {expiry_date}. Please renew it and record the new one.";
     private const string Water03 = "Water alert {correction_note}: zone {zone_name}, raft {raft_code}, measured on {measurement_time}. {values_outside}. Please check the water.";
@@ -25,7 +28,7 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
     public static TheoryData<string> Cases => new()
     {
         "farm-01", "farm-02", "farm-01-no-type", "farm-01-certification", "farm-02-certification-no-number", "water-03", "water-03-corrected", "water-04-corrected", "water-04-voided", "water-06",
-        "cycle-04",
+        "cycle-04", "cycle-08", "harvest-01", "harvest-03",
     };
 
     [Theory]
@@ -90,6 +93,21 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
             UserMessages.WaterAlertWithdrawn("Vùng A", MeasuredAt, "Nguyễn Văn A", "voided", "Ghi nhầm vùng"),
             "The water alert of zone Vùng A (measured on 06:30 20/10/2026) was withdrawn: Nguyễn Văn A voided the measurement. Reason: Ghi nhầm vùng.",
             """{"zone_name":"Vùng A","measurement_time":"2026-10-20T06:30:00+07:00","user_name":"Nguyễn Văn A","corrected_or_voided":"voided","reason":"Ghi nhầm vùng"}"""),
+        "cycle-08" => (
+            "MSG-CYCLE-08", Cycle08,
+            UserMessages.CycleCloseReminder("KV01-B01"),
+            "Raft KV01-B01: every seeded lane is harvested. Please close its cultivation cycle.",
+            """{"raft_code":"KV01-B01"}"""),
+        "harvest-01" => (
+            "MSG-HARVEST-01", Harvest01,
+            UserMessages.HarvestLotRecorded("KV01-B01", new DateOnly(2026, 10, 26), "KV01-B01-20261026", 8, 400.000m),
+            "Raft KV01-B01: the harvest of 26/10/2026 is recorded as lot KV01-B01-20261026 (8 cages, about 400 kg).",
+            """{"raft_code":"KV01-B01","harvest_date":"2026-10-26","lot_code":"KV01-B01-20261026","cage_count":8,"estimated_kg":400}"""),
+        "harvest-03" => (
+            "MSG-HARVEST-03", Harvest03,
+            UserMessages.AutoCloseDaysLowered(2, 5),
+            "With 2 days, the next daily close check will close 5 lots that are still for sale. Do you want to save?",
+            """{"days":2,"count":5}"""),
         "cycle-04" => (
             "MSG-CYCLE-04", Cycle04,
             UserMessages.CultivationLogRecorded("KV01-B01", new DateOnly(2026, 10, 1)),

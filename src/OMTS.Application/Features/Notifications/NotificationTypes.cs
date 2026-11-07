@@ -45,6 +45,12 @@ public static class NotificationTypes
     /// <summary>MSG-CYCLE-02, the seeding of a raft is finished, to the Cooperative Owner to review it (CYCLE-02.1); once per cycle.</summary>
     public const string CycleSeedingCompleted = "CYCLE_SEEDING_COMPLETED";
 
+    /// <summary>MSG-HARVEST-01, a recorded harvest, to the Cooperative Owner to review (BF-03 step 7); not on a correction. BR-ACCOUNT-11 does not list it as mandatory.</summary>
+    public const string HarvestLotRecorded = "HARVEST_LOT_RECORDED";
+
+    /// <summary>MSG-CYCLE-08, every seeded lane is Harvested, to the Zone Managers of the zone or else the Owner (BR-CYCLE-07); mandatory.</summary>
+    public const string CycleCloseReminder = "CYCLE_CLOSE_REMINDER";
+
     /// <summary>MSG-PURCHASE-01, the new purchase receipt, to the Owner when a receipt is completed (BR-PURCHASE-05); push can be turned off.</summary>
     public const string PurchaseReceiptCompleted = "PURCHASE_RECEIPT_COMPLETED";
 
@@ -81,6 +87,12 @@ public static class NotificationTypes
         new(PurchaseRequestResponse, "Response to a purchase request", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
         new(CycleSeedingCompleted, "Seeding finished", Default, [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
+        new(HarvestLotRecorded, "New harvest lot", Default, [CooperativeOwner],
+            NotificationOpenAccess.InZone(PermissionFunctions.Harvests, PermissionAction.View)),
+        // Mandatory (BR-ACCOUNT-11), so it has an SMS: to the Owner only, as decided for every type but the water alert (OMTS-216, 03/11).
+        new(CycleCloseReminder, "Reminder to close a cultivation cycle", AlwaysPush, [CooperativeOwner, ZoneManager],
+            NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View),
+            NotificationSmsRule.MessageTextTo(CooperativeOwner)),
         // Purchase receipts have no zone: opening one follows the role only (BR-FARM-08). Only the transaction of the
         // Accountant (MSG-PURCHASE-04, PURCHASE-05) is mandatory in FE-08 (BR-ACCOUNT-11).
         new(PurchaseReceiptCompleted, "New purchase receipt", Default, [CooperativeOwner],

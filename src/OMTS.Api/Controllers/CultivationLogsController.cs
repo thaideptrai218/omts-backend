@@ -40,7 +40,7 @@ public sealed class CultivationLogsController(
     {
         var visitDate = ParseVisitDate(form.VisitDate);
         var request = new RecordCultivationLogRequest(visitDate, form.Notes, OtherFilePart());
-        return (await logs.RecordAsync(cycleId, request, await PhotosAsync(form, cancellationToken), cancellationToken))
+        return (await logs.RecordAsync(cycleId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
             .ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
     }
 
@@ -62,7 +62,7 @@ public sealed class CultivationLogsController(
     {
         var visitDate = ParseVisitDate(form.VisitDate);
         var request = new CorrectCultivationLogRequest(visitDate, form.Notes, form.KeepPhotoKeys, form.Reason, OtherFilePart());
-        return (await corrections.CorrectAsync(logId, request, await PhotosAsync(form, cancellationToken), cancellationToken)).ToActionResult(Ok);
+        return (await corrections.CorrectAsync(logId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken)).ToActionResult(Ok);
     }
 
     /// <summary>Removes a log and its photos while the cycle is Open; ask with MSG-GEN-04 first. 204; the audit log keeps it with the reason.</summary>
@@ -77,17 +77,5 @@ public sealed class CultivationLogsController(
             : null;
 
     /// <summary>A file sent under another name would be dropped without a word. The service refuses it, after its access check (GFR-02), so no photo is lost.</summary>
-    private bool OtherFilePart() =>
-        Request.Form.Files.Any(f => !f.Name.Equals(nameof(CultivationLogForm.Photos), StringComparison.OrdinalIgnoreCase));
-
-    private static async Task<IReadOnlyList<IncomingFile>> PhotosAsync(CultivationLogForm form, CancellationToken cancellationToken)
-    {
-        var incoming = new List<IncomingFile>();
-        foreach (var photo in form.Photos ?? [])
-        {
-            incoming.Add(await photo.ToIncomingFileAsync(cancellationToken));
-        }
-
-        return incoming;
-    }
+    private bool OtherFilePart() => Request.Form.Files.HasPartOtherThan(nameof(CultivationLogForm.Photos));
 }

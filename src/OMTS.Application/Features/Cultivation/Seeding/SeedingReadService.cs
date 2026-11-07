@@ -21,6 +21,7 @@ public sealed class SeedingReadService(
     ISeedingRecordRepository records,
     ISeedLotRepository lots,
     IRaftRepository rafts,
+    IHarvestLotRepository harvestLots,
     LaneStateReader laneStates,
     SeedingViews views,
     ZoneAccessGuard zoneAccess,
@@ -137,10 +138,14 @@ public sealed class SeedingReadService(
             .Where(r => r.Lanes.Any(l => l.LaneId == lane.Id))
             .Select(r => new LaneSeedingSession(r.Id, r.SeedingDate, SeedingViews.LotRef(r.SeedLotLine), r.Quantity))
             .ToList();
+        var lots = cycle is null ? [] : (await harvestLots.ListOfLaneAsync(cycle.Id, lane.Id, cancellationToken))
+            .Select(l => new LaneHarvestLot(l.LotId, l.Lot.LotCode, l.Lot.HarvestDate, l.IsFinished, l.Lot.StatusId, statusCatalog.DisplayNameOf(l.Lot.StatusId)))
+            .ToList();
         return new LaneProgressView(
             raft.Id, raft.Code, lane.Id, lane.LaneNumber, lane.StatusId, statusCatalog.DisplayNameOf(lane.StatusId), state,
             cycle is null ? null : new CycleListItem(cycle.Id, cycle.StartDate, cycle.CloseDate, cycle.StatusId, statusCatalog.DisplayNameOf(cycle.StatusId), RowVersionGuard.Encode(cycle.RowVersion)),
-            sessions);
+            sessions,
+            lots);
     }
 
     /// <summary>CYCLE-05.0 step 1: for each seeded lane on the date, its seed lots and seeding dates.</summary>

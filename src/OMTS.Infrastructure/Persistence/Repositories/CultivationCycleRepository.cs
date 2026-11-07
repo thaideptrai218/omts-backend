@@ -37,12 +37,14 @@ internal sealed class CultivationCycleRepository(OmtsDbContext db) : ICultivatio
 
         var seeded = await db.SeedingRecords.AsNoTracking().Where(r => cycleIds.Contains(r.CycleId)).Select(r => r.CycleId).Distinct().ToListAsync(cancellationToken);
         var logged = await db.CultivationLogs.AsNoTracking().Where(l => cycleIds.Contains(l.CycleId)).Select(l => l.CycleId).Distinct().ToListAsync(cancellationToken);
-        return seeded.Concat(logged).ToHashSet();
+        var harvested = await db.HarvestLots.AsNoTracking().Where(l => cycleIds.Contains(l.CycleId)).Select(l => l.CycleId).Distinct().ToListAsync(cancellationToken);
+        return seeded.Concat(logged).Concat(harvested).ToHashSet();
     }
 
     public async Task<int> CountRecordsAsync(Guid cycleId, CancellationToken cancellationToken) =>
         await db.SeedingRecords.CountAsync(r => r.CycleId == cycleId, cancellationToken)
-        + await db.CultivationLogs.CountAsync(l => l.CycleId == cycleId, cancellationToken);
+        + await db.CultivationLogs.CountAsync(l => l.CycleId == cycleId, cancellationToken)
+        + await db.HarvestLots.CountAsync(l => l.CycleId == cycleId, cancellationToken);
 
     public void Add(CultivationCycle cycle) => db.CultivationCycles.Add(cycle);
 

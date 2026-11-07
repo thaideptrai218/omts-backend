@@ -117,6 +117,9 @@ public class CyclesQaTestsMigrationAndDemo
         {
             await db.CultivationLogPhotos.ExecuteDeleteAsync();
             await db.CultivationLogs.ExecuteDeleteAsync();
+            await db.HarvestLotPhotos.ExecuteDeleteAsync();
+            await db.HarvestLotLanes.ExecuteDeleteAsync();
+            await db.HarvestLots.ExecuteDeleteAsync();
             await db.SeedingRecordLanes.ExecuteDeleteAsync();
             await db.SeedingRecords.ExecuteDeleteAsync();
             await db.CultivationCycles.ExecuteDeleteAsync();

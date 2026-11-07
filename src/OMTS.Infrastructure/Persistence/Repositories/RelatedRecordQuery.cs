@@ -50,6 +50,12 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
             return FindCultivationCycleAsync(recordId, cancellationToken);
         }
 
+        // A harvest lot's zone is its raft's (HARVEST-01 notice).
+        if (recordType == RelatedRecordTypes.HarvestLot)
+        {
+            return FindHarvestLotAsync(recordId, cancellationToken);
+        }
+
         var entity = Aliases.TryGetValue(recordType, out var alias)
             ? db.Model.FindEntityType(alias)
             : db.Model.GetEntityTypes().FirstOrDefault(t =>
@@ -77,6 +83,13 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
     {
         var zones = await db.CultivationCycles.AsNoTracking().Where(c => c.Id == id)
             .Select(c => c.Raft.ZoneId).ToListAsync(cancellationToken);
+        return zones.Count == 0 ? null : new RelatedRecordLocation(zones[0]);
+    }
+
+    private async Task<RelatedRecordLocation?> FindHarvestLotAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var zones = await db.HarvestLots.AsNoTracking().Where(l => l.Id == id)
+            .Select(l => l.Raft.ZoneId).ToListAsync(cancellationToken);
         return zones.Count == 0 ? null : new RelatedRecordLocation(zones[0]);
     }
 

@@ -14,7 +14,7 @@ public sealed record EditCycleRequest(DateOnly? StartDate, decimal? ExpectedSeed
 /// <summary>CYCLE-01.2.</summary>
 public sealed record CancelCycleRequest(string? RowVersion);
 
-/// <param name="DaysOfFarming">Both the first and the last day count; the last day of an Open cycle is today.</param>
+/// <param name="DaysOfFarming">Both the first and the last day count; the last day of an Open cycle is today, of a closed one its last harvest lot, or else the close date.</param>
 /// <param name="CanEdit">The cycle is Open on a raft In Use in a zone In Use (CYCLE-01 PRE-3).</param>
 /// <param name="CanCancel">The cycle can be edited and has no record yet (CYCLE-01 PRE-3).</param>
 public sealed record CycleView(
