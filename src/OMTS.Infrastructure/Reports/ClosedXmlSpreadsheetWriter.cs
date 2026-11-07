@@ -8,6 +8,7 @@ namespace OMTS.Infrastructure.Reports;
 internal sealed class ClosedXmlSpreadsheetWriter : ISpreadsheetWriter
 {
     private const string DateTimeFormat = "dd/MM/yyyy HH:mm";
+    private const string DateFormat = "dd/MM/yyyy";
     private const double MaxColumnWidth = 60;
 
     /// <summary>
@@ -60,6 +61,14 @@ internal sealed class ClosedXmlSpreadsheetWriter : ISpreadsheetWriter
             case DateTime dateTime:
                 cell.Value = dateTime;
                 cell.Style.DateFormat.Format = DateTimeFormat;
+                break;
+            // A business date (no time of day): shown as a date only.
+            case DateOnly date when date.ToDateTime(TimeOnly.MinValue) < FirstExcelDate:
+                cell.Value = date.ToString(DateFormat, CultureInfo.InvariantCulture);
+                break;
+            case DateOnly date:
+                cell.Value = date.ToDateTime(TimeOnly.MinValue);
+                cell.Style.DateFormat.Format = DateFormat;
                 break;
             case decimal number:
                 cell.Value = number;

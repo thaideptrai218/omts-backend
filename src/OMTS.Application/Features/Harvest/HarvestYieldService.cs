@@ -52,12 +52,19 @@ public sealed class HarvestYieldService(
             return AppError.Forbidden;
         }
 
-        if (ParseGrouping(query.GroupBy) is not { } groupBy)
+        var grouping = ParseGrouping(query.GroupBy);
+        var period = PurchasePeriod.Resolve(query.From, query.To, timeProvider.Today());
+        // MSG-GEN-01 points out every field to fix: a wrong grouping and a wrong period together are named in one answer.
+        if (grouping is null && !period.IsSuccess && period.Error!.Details?.GetValueOrDefault("field") is string periodField)
+        {
+            return AppError.InvalidFields([GroupingField, periodField]);
+        }
+
+        if (grouping is not { } groupBy)
         {
             return AppError.Invalid(GroupingField, "Use raft, zone or cycle.");
         }
 
-        var period = PurchasePeriod.Resolve(query.From, query.To, timeProvider.Today());
         if (!period.IsSuccess)
         {
             return period.Error!;

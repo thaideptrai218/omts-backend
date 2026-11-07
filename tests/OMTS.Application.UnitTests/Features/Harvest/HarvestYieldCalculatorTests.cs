@@ -159,7 +159,7 @@ public class HarvestYieldCalculatorTests
             },
             sheets[0].Rows.Select(r => r.ToArray()));
         Assert.Equal(
-            new object?[] { "KV01-B01", "KV01-B01-20261026", "KV01", "KV01-B01", new DateTime(2026, 10, 26), "Open", 400m, 120m, 0m, 120m, 0m, 280m, "Not final" },
+            new object?[] { "KV01-B01", "KV01-B01-20261026", "KV01", "KV01-B01", new DateOnly(2026, 10, 26), "Open", 400m, 120m, 0m, 120m, 0m, 280m, "Not final", "Yes" },
             Assert.Single(sheets[1].Rows));
         Assert.Equal(sheets[0].Headers.Count, sheets[0].Rows[0].Count);
         Assert.Equal(sheets[1].Headers.Count, sheets[1].Rows[0].Count);
