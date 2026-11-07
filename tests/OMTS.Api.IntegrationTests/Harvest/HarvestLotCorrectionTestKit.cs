@@ -38,7 +38,7 @@ public sealed record HarvestCorrection(HarvestFields Fields, string? Reason = "W
     }
 }
 
-/// <summary>The sales side a test sets: 6a comes later, so this says which lots are on an invoice and what is sold of them.</summary>
+/// <summary>The sales side a test sets without making invoices: which lots are on an invoice and what is sold of them (the real port is HarvestLotSalesQuery since PR 6a).</summary>
 public sealed class SalesDouble : IHarvestLotSalesQuery
 {
     public HashSet<Guid> OnInvoice { get; } = [];
