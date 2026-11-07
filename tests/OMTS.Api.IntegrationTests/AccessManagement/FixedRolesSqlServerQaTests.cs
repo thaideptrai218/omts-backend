@@ -203,10 +203,7 @@ public class FixedRolesSqlServerQaTests
     private static async Task<(SqlServerTestDatabase Database, SqlServerApiFactory Api, HttpClient Owner, Guid ZoneId)> HostAsync()
     {
         var database = SqlServerTestDatabase.Create();
-        await using (var db = database.CreateContext())
-        {
-            await db.Database.MigrateAsync();
-        }
+        await database.MigrateToLatestAsync();
 
         var api = new SqlServerApiFactory(database);
         await api.EnsureFixedRolesAsync();
