@@ -80,9 +80,13 @@ public static class DependencyInjection
         services.AddScoped<IPushDeviceRepository, PushDeviceRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
         services.AddScoped<IEmployeeWorkRecords, EmployeeWorkRecords>();
+        services.AddScoped<IJobTypeRepository, JobTypeRepository>();
+        services.AddScoped<IAttendanceSettingsRepository, AttendanceSettingsRepository>();
+        services.AddScoped<IPayrollRepository, PayrollRepository>();
         services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddScoped<IRaftRepository, RaftRepository>();
         services.AddScoped<ICultivationCycleRepository, CultivationCycleRepository>();
+        services.AddScoped<ICultivationLogRepository, CultivationLogRepository>();
         services.AddScoped<ICultivationCycleQuery, CultivationCycleQuery>();
         services.AddScoped<IZoneLicenseRepository, ZoneLicenseRepository>();
         services.AddScoped<IRaftMaterialCostQuery, RaftMaterialCostQuery>();
@@ -117,7 +121,8 @@ public static class DependencyInjection
 
         // Overdue water measurement reminder (formerly JOB-05)
         services.AddOptions<WaterMeasurementOverdueOptions>().Bind(configuration.GetSection(WaterMeasurementOverdueOptions.SectionName));
-        services.AddHostedService<WaterMeasurementOverdueJob>();
+        services.AddSingleton<WaterMeasurementOverdueJob>();
+        services.AddHostedService<WaterMeasurementOverdueHostedService>();
 
         // LABOR-01: Left from the day after the last working day
         services.AddOptions<EmploymentEndOptions>().Bind(configuration.GetSection(EmploymentEndOptions.SectionName));

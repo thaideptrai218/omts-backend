@@ -36,6 +36,8 @@ public class DemoDataSeedTests
         ("Rafts", db => db.Rafts.CountAsync()),
         ("Lanes", db => db.Lanes.CountAsync()),
         ("CultivationCycles", db => db.CultivationCycles.CountAsync()),
+        ("CultivationLogs", db => db.CultivationLogs.CountAsync()),
+        ("CultivationLogPhotos", db => db.CultivationLogPhotos.CountAsync()),
         ("Suppliers", db => db.Suppliers.CountAsync()),
         ("FarmingInputItems", db => db.FarmingInputItems.CountAsync()),
         ("PurchaseReceipts", db => db.PurchaseReceipts.CountAsync()),
@@ -43,6 +45,11 @@ public class DemoDataSeedTests
         ("SupplierPayments", db => db.SupplierPayments.CountAsync()),
         ("PurchaseReturns", db => db.PurchaseReturns.CountAsync()),
         ("WaterMeasurements", db => db.WaterMeasurements.CountAsync()),
+        ("JobTypes", db => db.JobTypes.CountAsync()),
+        ("PayRates", db => db.PayRates.CountAsync()),
+        ("EmployeeJobTypes", db => db.EmployeeJobTypes.CountAsync()),
+        ("AttendanceSettingsVersions", db => db.AttendanceSettingsVersions.CountAsync()),
+        ("Payrolls", db => db.Payrolls.CountAsync()),
         ("Notifications", db => db.Notifications.CountAsync()),
         ("AuditEvents", db => db.AuditEvents.CountAsync()),
     ];
@@ -194,6 +201,32 @@ public class DemoDataSeedTests
         Assert.True(await db.PurchaseReceipts.AllAsync(r => r.ReceiptDate <= today && r.ReceiptDate >= today.AddDays(-90)));
 
         await AssertWaterDataAsync(db, today);
+        await AssertLaborSettingsAsync(db, today);
+    }
+
+    // LABOR-11, LABOR-15, LABOR-16 (OMTS-227): job types with rates, one discontinued, the seasonal workers' profiles naming
+    // them, two versions of the settings, and last month locked. A rerun moves none of it, whichever day it runs.
+    private static async Task AssertLaborSettingsAsync(OmtsDbContext db, DateOnly today)
+    {
+        Assert.Equal(4, await db.JobTypes.CountAsync());
+        Assert.Equal(1, await db.JobTypes.CountAsync(j => j.StatusId == StatusIds.Usage.Discontinued));
+        Assert.True(await db.JobTypes.AllAsync(j => j.Rates.Any()));
+        Assert.Equal(6, await db.PayRates.CountAsync());
+        Assert.Equal(4, await db.EmployeeJobTypes.CountAsync());
+        var seasonal = await db.EmployeeTypePeriods.Where(p => p.Type == OMTS.Domain.Enums.EmployeeType.SeasonalWorker).Select(p => p.EmployeeId).ToListAsync();
+        Assert.True(await db.EmployeeJobTypes.AllAsync(j => seasonal.Contains(j.EmployeeId)));
+        Assert.Equal(2, await db.AttendanceSettingsVersions.CountAsync());
+
+        var cooperative = await db.Cooperatives.SingleAsync();
+        Assert.Equal((1, false), (cooperative.PayPeriodStartDay, cooperative.AutomaticPayroll));
+
+        var payrolls = await db.Payrolls.OrderBy(p => p.PeriodStart).ToListAsync();
+        Assert.Equal([StatusIds.Payroll.Finalized, StatusIds.Payroll.AwaitingFinalization], payrolls.Select(p => p.StatusId));
+        Assert.Equal(payrolls[0].PeriodEnd.AddDays(1), payrolls[1].PeriodStart);
+        // The test may run just after midnight of the first of a month, later than the seed: last month is then the one before.
+        Assert.InRange(payrolls[1].PeriodEnd, today.AddMonths(-1).AddDays(-1), today);
+        Assert.True(payrolls.All(p => p.PeriodStart.Day == 1));
+        Assert.True(await db.PayRates.Where(r => r.HourlyRate == 36_000).AllAsync(r => r.EffectiveFrom > payrolls[1].PeriodEnd));
     }
 
     // WATER (OMTS-219): thresholds and 30 days of readings per In Use zone, at its rafts, each with a temperature and a photo:

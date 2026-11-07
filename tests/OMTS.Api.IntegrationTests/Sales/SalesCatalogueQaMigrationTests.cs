@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Domain.Constants;
-using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Sales;
 using OMTS.Infrastructure.Persistence;
 
@@ -43,10 +42,10 @@ public class SalesCatalogueQaMigrationTests
         var db = database.CreateContext();
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync(MigrationBefore);
-        var cooperative = new Cooperative { FullName = "HTX" };
-        db.Cooperatives.Add(cooperative);
-        await db.SaveChangesAsync();
-        return (db, migrator, cooperative.Id);
+        // By SQL: later migrations add columns of the model that this one does not have yet.
+        var cooperative = Guid.NewGuid();
+        await db.Database.ExecuteSqlAsync($"INSERT INTO Cooperatives (Id, FullName, CreatedAt) VALUES ({cooperative}, N'HTX', SYSDATETIMEOFFSET())");
+        return (db, migrator, cooperative);
     }
 
     // The unique index compares with the collation: every spelling that collides gets its code, and a name at the limit still fits.

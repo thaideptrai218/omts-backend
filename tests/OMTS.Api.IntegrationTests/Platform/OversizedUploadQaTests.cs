@@ -24,6 +24,7 @@ public class OversizedUploadQaTests(KestrelApiFactory api) : IClassFixture<Kestr
     [InlineData("api/rafts/{0}/photos", "file", "Photo", 12)]
     [InlineData("api/zone-licenses/{0}/replace", "file", "File", 12)]
     [InlineData("api/suppliers/{0}/certificates", "files", "Certificate", 106)]
+    [InlineData("api/cultivation-cycles/{0}/cultivation-logs", "photos", "Photos", 106)]
     public async Task Every_upload_endpoint_answers_400_MSG01_on_its_file_field(string path, string multipartName, string field, int megabytes)
     {
         using var client = await OwnerOnKestrelAsync();

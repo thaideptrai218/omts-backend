@@ -2,8 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OMTS.Api.Common;
 using OMTS.Api.Filters;
-using OMTS.Application.Common.Results;
-using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.WaterQuality;
@@ -56,25 +54,25 @@ public sealed class ZoneWaterMeasurementsController(
             .ToActionResult(r => r.Replayed ? Ok(r.Measurement) : StatusCode(StatusCodes.Status201Created, r.Measurement));
 
     /// <summary>
-    /// History: <c>from</c>/<c>to</c> local dates (yyyy-MM-dd, default the last 3 months), <c>status</c> (default
-    /// Active; Voided or All when asked), newest first, 20 per page (at most 100).
+    /// History: <c>from</c>/<c>to</c> local dates (yyyy-MM-dd, default the last 3 months), <c>status</c> (default both;
+    /// Active, Voided or All when asked), newest first, 20 per page (at most 100). MSG-GEN-10 in <c>message</c> when empty.
     /// </summary>
     [HttpGet]
     [RequirePermission(PermissionFunctions.WaterMeasurements, PermissionAction.View)]
-    [ProducesResponseType<Paged<WaterMeasurementListItem>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<WaterHistoryPage>(StatusCodes.Status200OK)]
     public async Task<IActionResult> History(
         Guid zoneId, string? from, string? to, [FromQuery] string[]? status, int page = 1, int pageSize = 20,
         CancellationToken cancellationToken = default) =>
         (await queries.SearchAsync(zoneId, new WaterHistoryQuery(from, to, status, page, pageSize), cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Chart of the active values: <c>groupBy</c> = month (default, last 12 months) or day (at most 366 days).</summary>
+    /// <summary>Chart of the active measurements of the period as raw points (pH, salinity, temperature); aggregates stay on the client.</summary>
     [HttpGet("chart")]
     [RequirePermission(PermissionFunctions.WaterMeasurements, PermissionAction.View)]
     [ProducesResponseType<WaterChart>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Chart(Guid zoneId, string? from, string? to, string? groupBy, CancellationToken cancellationToken) =>
-        (await queries.ChartAsync(zoneId, from, to, groupBy, cancellationToken)).ToActionResult(Ok);
+    public async Task<IActionResult> Chart(Guid zoneId, string? from, string? to, CancellationToken cancellationToken) =>
+        (await queries.ChartAsync(zoneId, from, to, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Excel file (sheets "Measurements" and "Monthly summary") with the history filters; voided records are not exported.</summary>
+    /// <summary>Excel file (sheet "Measurements") with the history filters: voided ones with their reason, each row with its own thresholds.</summary>
     [HttpGet("export")]
     [RequirePermission(PermissionFunctions.WaterMeasurements, PermissionAction.View)]
     [RequirePermission(PermissionFunctions.WaterMeasurements, PermissionAction.Export)]

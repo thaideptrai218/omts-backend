@@ -27,6 +27,7 @@ internal sealed class CooperativeConfiguration : IEntityTypeConfiguration<Cooper
         builder.Property(x => x.CoverPhotoUrl).HasMaxLength(Lengths.Url);
         builder.Property(x => x.IntroductionVi).HasMaxLength(Introduction);
         builder.Property(x => x.IntroductionEn).HasMaxLength(Introduction);
+        builder.ToTable(t => t.HasCheckConstraint("CK_Cooperatives_PayPeriodStartDay", "[PayPeriodStartDay] BETWEEN 1 AND 28"));
 
         builder.OwnsOne(x => x.BankAccount, bank =>
         {

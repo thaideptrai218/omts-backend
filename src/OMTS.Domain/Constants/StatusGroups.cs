@@ -18,4 +18,5 @@ public static class StatusGroups
     public const string PurchaseReturn = "PURCHASE_RETURN";
     public const string Lane = "LANE";
     public const string PurchaseRequest = "PURCHASE_REQUEST";
+    public const string Payroll = "PAYROLL";
 }

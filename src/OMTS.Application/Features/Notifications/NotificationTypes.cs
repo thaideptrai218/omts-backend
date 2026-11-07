@@ -50,6 +50,8 @@ public static class NotificationTypes
 
     /// <summary>MSG-PURCHASE-04, a supplier payment, money paid back or a cancelled payment, to the Owner (BR-PURCHASE-05); mandatory.</summary>
     public const string SupplierTransaction = "SUPPLIER_TRANSACTION";
+    /// <summary>MSG-CYCLE-04, a new cultivation log to review, to the Cooperative Owner (CYCLE-04); not on a correction.</summary>
+    public const string CultivationLogRecorded = "CULTIVATION_LOG_RECORDED";
 
     public static readonly IReadOnlyList<NotificationTypeDefinition> All =
     [
@@ -82,6 +84,8 @@ public static class NotificationTypes
             NotificationOpenAccess.InZone(PermissionFunctions.PurchaseReceipts, PermissionAction.View)),
         new(SupplierTransaction, "Supplier payment transaction", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
             NotificationSmsRule.MoneyToOwner("amount")),
+        new(CultivationLogRecorded, "New cultivation log", Default, [CooperativeOwner],
+            NotificationOpenAccess.InZone(PermissionFunctions.CultivationLogs, PermissionAction.View)),
     ];
 
     private static readonly Dictionary<string, NotificationTypeDefinition> ByCode = All.ToDictionary(t => t.Code, StringComparer.Ordinal);

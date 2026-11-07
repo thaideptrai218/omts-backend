@@ -167,6 +167,13 @@ public static class UserMessages
     public static UserMessage MinimumNotLessThanMaximum(string indicator) => new(
         Water05, $"The minimum of {indicator} must be less than the maximum. The thresholds were not saved. Please correct the values.", Legacy.Msg28);
 
+    /// <summary>MSG-CYCLE-04 (CYCLE-04): notification to the Cooperative Owner when a cultivation log is saved.</summary>
+    public static UserMessage CultivationLogRecorded(string raftCode, DateOnly visitDate) => new(
+        Cycle04, $"Raft {raftCode}: a cultivation log was recorded for the visit on {Date(visitDate)}. Please review it.")
+    {
+        Parameters = new Dictionary<string, object?> { ["raft_code"] = raftCode, ["visit_date"] = visitDate },
+    };
+
     /// <summary>MSG-WATER-06 (GFR-04): reminder to measure the water of a zone.</summary>
     /// <param name="lastDate">The business day of the latest measurement, or the start of the overdue period when there is none.</param>
     public static UserMessage WaterMeasurementOverdue(string zoneName, DateOnly lastDate) => new(
@@ -399,6 +406,34 @@ public static class UserMessages
         Labor03,
         $"This phone number belongs to {employeeName}. Each employee needs their own phone number for the employee app: enter another number, or leave it empty.",
         Legacy.Msg03);
+
+    /// <summary>MSG-LABOR-04 (BR-LABOR-13): a change is dated in a pay period whose payroll, or a later one, is Awaiting finalization or Finalized.</summary>
+    /// <param name="period">The name of the payroll's period, e.g. "10/2026".</param>
+    /// <param name="payrollStatus">The display name of its status.</param>
+    /// <param name="lockedUntil">The change can be dated after it: the last day of the latest locked payroll, or the employee's first type date when that is later.</param>
+    /// <param name="canBeSentBack">Every locked payroll in the way is Awaiting finalization, so the Owner can send it back (LABOR-13.1).</param>
+    public static UserMessage PayrollLocksDate(string period, string payrollStatus, DateOnly date, DateOnly lockedUntil, bool canBeSentBack)
+    {
+        var nextStep = canBeSentBack
+            ? $"Choose a date after {Date(lockedUntil)}, or ask the Cooperative Owner to send the payroll back first."
+            : $"Choose a date after {Date(lockedUntil)}.";
+        return new UserMessage(Labor04, $"The payroll of {period} is {payrollStatus}, so this change cannot apply to {Date(date)}. {nextStep}")
+        {
+            Parameters = new Dictionary<string, object?> { ["period"] = period, ["payroll_status"] = payrollStatus, ["date"] = date, ["next_step"] = nextStep },
+        };
+    }
+
+    /// <summary>MSG-LABOR-36 (LABOR-16 step 3): asked before saving the payroll settings.</summary>
+    /// <param name="period1">The next pay period as shown to the user.</param>
+    /// <param name="automatic">Automatic payroll is on: the note about it is added.</param>
+    public static UserMessage NextPayPeriods(string period1, string period2, bool automatic)
+    {
+        var autoNote = automatic ? ", and OMTS creates the payroll of each new pay period at its start" : string.Empty;
+        return new UserMessage(Labor36, $"With these settings, the next pay periods are {period1} and {period2}{autoNote}. Do you want to save?")
+        {
+            Parameters = new Dictionary<string, object?> { ["period_1"] = period1, ["period_2"] = period2, ["auto_note"] = autoNote },
+        };
+    }
 
     // ---- MSG-SALE ----
 

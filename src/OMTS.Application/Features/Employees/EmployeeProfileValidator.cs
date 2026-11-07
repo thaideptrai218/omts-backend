@@ -2,6 +2,7 @@ using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Features.Labor;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Labor;
@@ -12,7 +13,7 @@ namespace OMTS.Application.Features.Employees;
 /// LABOR-01 step 4: the fields, then what they point to. A zone or job type is checked only when it is new on the profile,
 /// so one discontinued later does not stop other edits (GBR-01).
 /// </summary>
-public sealed class EmployeeProfileValidator(IEmployeeRepository employees, IFarmingZoneRepository zones, TimeProvider timeProvider)
+public sealed class EmployeeProfileValidator(IEmployeeRepository employees, IFarmingZoneRepository zones, PayPeriodLock payPeriods, TimeProvider timeProvider)
 {
     /// <param name="employee">The profile being edited; null when adding.</param>
     public async Task<Result<EmployeeInput>> ValidateAsync(
@@ -48,7 +49,30 @@ public sealed class EmployeeProfileValidator(IEmployeeRepository employees, IFar
             return refused;
         }
 
+        if (employee is not null && await TypeDateRefusalAsync(employee, input, cancellationToken) is { } locked)
+        {
+            return locked;
+        }
+
         return await PhoneRefusalAsync(input.PhoneNumber, employee?.Id, cancellationToken) is { } taken ? taken : input;
+    }
+
+    /// <summary>
+    /// LABOR-01.1.E1: a new type takes effect after every pay period that is sent or finalized (MSG-LABOR-04). Only on an edit:
+    /// the first type of a new employee changes no day, as the days before it have that same type and no attendance. A new
+    /// earliest type, or another type on the first date, moves the days before it too (the first-row rule).
+    /// </summary>
+    private async Task<AppError?> TypeDateRefusalAsync(Employee employee, EmployeeInput input, CancellationToken cancellationToken)
+    {
+        if (input is not { Type: { } type, TypeFrom: { } from } || !EmployeeProfileChanges.IsTypeChange(employee, type, from))
+        {
+            return null;
+        }
+
+        var first = employee.TypePeriods.Min(p => (DateOnly?)p.EffectiveFrom);
+        return from <= first
+            ? await payPeriods.CheckFirstTypeChangeAsync(from, first.Value, cancellationToken)
+            : await payPeriods.CheckAsync(from, cancellationToken);
     }
 
     /// <summary>

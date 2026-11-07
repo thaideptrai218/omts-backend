@@ -264,7 +264,10 @@ public class RaftsV2QaTestsSqlServer
         await using var db = database.CreateContext();
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync(MigrationBefore);
-        var zone = new FarmingZone { Cooperative = new Cooperative { FullName = "HTX" }, Code = "KV01", Name = "A" };
+        // By SQL: later migrations add columns of the model that this one does not have yet.
+        var cooperative = Guid.NewGuid();
+        await db.Database.ExecuteSqlAsync($"INSERT INTO Cooperatives (Id, FullName, CreatedAt) VALUES ({cooperative}, N'HTX', SYSDATETIMEOFFSET())");
+        var zone = new FarmingZone { CooperativeId = cooperative, Code = "KV01", Name = "A" };
         db.FarmingZones.Add(zone);
         await db.SaveChangesAsync();
         var (spaces, secondOnly) = (Guid.NewGuid(), Guid.NewGuid());

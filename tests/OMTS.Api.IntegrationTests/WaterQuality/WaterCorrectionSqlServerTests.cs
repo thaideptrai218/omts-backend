@@ -97,22 +97,14 @@ public class WaterCorrectionSqlServerTests
         Assert.Equal(new Values(stored.Ph, stored.Salinity, stored.Temperature, stored.RaftId, stored.MeasuredAt), chain[^1].After);
     }
 
-    // The overdue marker makes each correction change the zone row too, while each new record reads it for its foreign key.
     [SqlServerFact]
-    public async Task Parallel_corrections_that_change_the_zone_and_new_records_of_the_zone_all_save()
+    public async Task Parallel_corrections_and_new_records_of_the_zone_all_save()
     {
         await using var database = SqlServerTestDatabase.Create();
         var seeded = await WaterSqlServerKit.SeedAsync(database);
         await using var api = new SqlServerApiFactory(database);
         var owner = await LoginAsync(api, await NewOwnerAsync(api));
-        // Measured before every corrected time: each correction moves the latest measurement past a reminder, which clears it.
         var id = await seeded.RecordAsync(owner, 7m, 20m, measuredAt: DateTimeOffset.UtcNow.AddHours(-3));
-        await using (var setup = database.CreateContext())
-        {
-            var zone = await setup.FarmingZones.SingleAsync(z => z.Id == seeded.Zone.Id);
-            zone.WaterOverdueRemindedAt = DateTimeOffset.UtcNow.AddMonths(-3);
-            await setup.SaveChangesAsync();
-        }
 
         var corrections = Enumerable.Range(0, 6).Select(i => owner.PostAsJsonAsync($"/api/water-measurements/{id}/corrections", Body(i, seeded.Raft.Id).Json));
         var records = Enumerable.Range(0, 4).Select(i => seeded.PostAsync(owner, 7m, 20m, measuredAt: DateTimeOffset.UtcNow.AddDays(-2 - i)));

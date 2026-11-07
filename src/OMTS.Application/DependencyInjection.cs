@@ -9,12 +9,14 @@ using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Cooperatives;
 using OMTS.Application.Features.Employees;
 using OMTS.Application.Features.Cultivation.Cycles;
+using OMTS.Application.Features.Cultivation.CultivationLogs;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Farming.Licenses;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Application.Features.Farming.Zones;
 using OMTS.Application.Features.Files;
+using OMTS.Application.Features.Labor;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
@@ -95,6 +97,14 @@ public static class DependencyInjection
         services.AddScoped<ReceivingAccountAcceptance>();
         services.AddScoped<ReceivingBankAccountService>();
 
+        // LABOR-11 job types and rates, LABOR-15 attendance settings, LABOR-16 payroll settings, the pay period lock (BR-LABOR-13)
+        services.AddScoped<PayPeriodLock>();
+        services.AddScoped<JobTypeQueryService>();
+        services.AddScoped<JobTypeService>();
+        services.AddScoped<PayRateService>();
+        services.AddScoped<AttendanceSettingsService>();
+        services.AddScoped<PayrollSettingsService>();
+
         // FARM-02 zones, FARM-03 zone licenses, FARM-04 rafts
         services.AddScoped<FarmingLookupAccess>();
         services.AddScoped<FarmingZoneService>();
@@ -111,6 +121,12 @@ public static class DependencyInjection
         // CYCLE – cultivation cycles and the lane states derived from their records
         services.AddScoped<LaneStateReader>();
         services.AddScoped<CultivationCycleViews>();
+        services.AddScoped<CycleWriteGuard>();
+        services.AddScoped<CultivationLogViews>();
+        services.AddScoped<CultivationLogPhotoStore>();
+        services.AddScoped<CultivationLogService>();
+        services.AddScoped<CultivationLogCorrectionService>();
+        services.AddScoped<CultivationLogReadService>();
         services.AddScoped<CultivationCycleService>();
         services.AddScoped<CultivationCycleReadService>();
         services.AddScoped<CultivationProgressService>();
@@ -161,7 +177,7 @@ public static class DependencyInjection
         services.AddScoped<WaterMeasurementQueryService>();
         services.AddScoped<WaterThresholdService>();
         services.AddScoped<WaterMeasurementOverdueReminder>();
-        services.AddScoped<WaterOverdueRearm>();
+        services.AddScoped<WaterZoneOverviewService>();
 
         return services;
     }

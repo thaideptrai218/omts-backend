@@ -40,6 +40,8 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<PurchaseReturnLine> PurchaseReturnLines => Set<PurchaseReturnLine>();
     public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
     public DbSet<CultivationCycle> CultivationCycles => Set<CultivationCycle>();
+    public DbSet<CultivationLog> CultivationLogs => Set<CultivationLog>();
+    public DbSet<CultivationLogPhoto> CultivationLogPhotos => Set<CultivationLogPhoto>();
     public DbSet<SeedingEvent> SeedingEvents => Set<SeedingEvent>();
     public DbSet<WaterMeasurement> WaterMeasurements => Set<WaterMeasurement>();
 
@@ -48,10 +50,13 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<PurchaseRequest> PurchaseRequests => Set<PurchaseRequest>();
 
-    // Labor (LABOR-01; the attendance and work assignment tables come with LABOR-04 and LABOR-02)
+    // Labor (LABOR-01, LABOR-11, LABOR-15; the attendance and work assignment tables come with LABOR-04 and LABOR-02)
     public DbSet<EmployeeTypePeriod> EmployeeTypePeriods => Set<EmployeeTypePeriod>();
     public DbSet<JobType> JobTypes => Set<JobType>();
     public DbSet<EmployeeJobType> EmployeeJobTypes => Set<EmployeeJobType>();
+    public DbSet<PayRate> PayRates => Set<PayRate>();
+    public DbSet<AttendanceSettingsVersion> AttendanceSettingsVersions => Set<AttendanceSettingsVersion>();
+    public DbSet<Payroll> Payrolls => Set<Payroll>();
 
     // System
     public DbSet<Notification> Notifications => Set<Notification>();

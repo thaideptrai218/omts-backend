@@ -245,7 +245,7 @@ public class WaterCorrectionQaTestsRaces
         Assert.True(codes.Count == 0, string.Join(", ", codes));
     }
 
-    // Parallel changes of the zone row, next to new records of the zone: nothing answers 500, and water never answers MSG06.
+    // Parallel changes of the records, next to new records of the zone: nothing answers 500, and water never answers MSG06.
     [SqlServerFact]
     public async Task Rounds_of_parallel_corrections_voids_and_records_never_answer_500_or_MSG06()
     {
@@ -260,7 +260,6 @@ public class WaterCorrectionQaTestsRaces
                 ids.Add(await race.Seeded.RecordAsync(owner, 7m, 20m, measuredAt: DateTimeOffset.UtcNow.AddHours(-3 - i)));
             }
 
-            await race.ChangeAsync(async db => (await db.FarmingZones.SingleAsync(z => z.Id == race.Seeded.Zone.Id)).WaterOverdueRemindedAt = DateTimeOffset.UtcNow.AddMonths(-3));
             var calls = ids.SelectMany(id => Enumerable.Range(0, 4).Select(i => owner.PostAsJsonAsync(race.Corrections(id), race.Body(7m + i / 10m, 20m))))
                 .Concat(Enumerable.Range(0, 2).Select(_ => owner.VoidAsync(ids[0])))
                 .Concat(Enumerable.Range(0, 4).Select(i => race.Seeded.PostAsync(owner, 7m, 20m, measuredAt: DateTimeOffset.UtcNow.AddDays(-2 - i))));

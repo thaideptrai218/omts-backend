@@ -78,7 +78,9 @@ bootstrap temporary password. To get every demo login back, reset the environmen
 
 The demo data also holds the cooperative profile (with a logo, a cover photo and two certifications: one Valid, one
 expiring within 30 days), a fictional receiving bank account (`DEMO00000001`; skipped with a message when `Payments:Provider` does not accept it, as `None` does not), the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued), zone licenses (`DEMO-01`:
-an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid license and an older expired one), about 10 rafts with lanes per zone (the first five of each In Use zone with an Open cultivation cycle), 9 employees (one Left, one without a phone number),
+an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid license and an older expired one), about 10 rafts with lanes per zone (the first five of each In Use zone with an Open cultivation cycle, the first three with cultivation logs by the zone manager), 4 job types with hourly rates (one with a rate still
+to come, one Discontinued), two versions of the attendance settings, 9 employees (one Left, one without a phone number; the 3 seasonal workers have job types),
+payroll headers of the last two months without lines (Finalized, Awaiting finalization: a date up to the end of last month answers `MSG-LABOR-04`),
 5 suppliers, 15 farming input items (codes VT001–VT015, every seed item counted in `con`) and 20 purchase receipts of the last 3 months
 (16 Completed, 2 Cancelled, 2 Draft): Material lines and two seed receipts name the raft they were bought for, one line has a
 fractional quantity (its amount is not a whole thousand), with a return and a return the Owner cancelled (`TH` codes). Payments to the
@@ -210,7 +212,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 |---|---|---|---|
 | `WATER_ALERT` | MSG-WATER-03 | always (mandatory) | Owner, Zone Manager |
 | `WATER_ALERT_WITHDRAWN` | MSG-WATER-04 | always (mandatory) | Owner, Zone Manager |
-| `WATER_MEASUREMENT_OVERDUE` | MSG-WATER-06 | unless turned off | Owner, Zone Manager |
+| `WATER_MEASUREMENT_OVERDUE` | MSG-WATER-06 | unless turned off | Zone Manager; Owner when the zone has none |
 | `ZONE_LICENSE_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
 | `COOPERATIVE_CERTIFICATION_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
 | `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (LABOR-01.3) | never: list only | Owner |
@@ -309,11 +311,14 @@ Every daily job runs on one base (`DailyJobHostedService`): a run time in busine
 when the host starts after it, and a failed run logged without stopping the next day's.
 
 
-`WaterMeasurementOverdueJob` runs every day at 06:00 (Asia/Ho_Chi_Minh): each In Use zone without an Active water
-measurement for more than one calendar month gets one MSG-WATER-06 reminder per overdue period (Owners and the zone's staff
-with View on `WATER_MEASUREMENTS`). Like the expiry reminder (07:00), a host started after the run time runs it
-once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A reminder already
-sent is never sent again.
+`WaterMeasurementOverdueJob` runs every day at 06:00 (Asia/Ho_Chi_Minh), GFR-04: each In Use zone with a raft that has an
+Open cycle counts from the later of its latest Active water measurement and its earliest Open cycle start. More than one
+calendar month after that date it gets MSG-WATER-06, sent to the Zone Managers of the zone, or to the Owners when it has
+none, and sent again a month after the last reminder while no new measurement moves the date. A void moves the date back;
+the repeat still counts from the last reminder. Like the expiry reminder (07:00), a host started after the run time
+runs it once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A second run
+on the same day sends nothing. Each zone is saved on its own: a zone saved during the run, or one with nobody to notify,
+is simply checked again the next day, and the other zones are not affected.
 
 The expiry reminder (GFR-03, `ZoneLicenseReminderJob`, 07:00) checks the zone licenses and the cooperative certifications.
 It notifies the active Cooperative Owners only (mandatory push), once when a record becomes Expiring soon (30 days or fewer,
@@ -323,10 +328,10 @@ license and the licenses of a Discontinued zone are not. After a resume, each of
 current state at the next check if that notice was not sent yet; nothing is sent twice. A new expiry date re-arms both
 notices.
 
-A replaced raft photo, license file, cooperative cover photo or certificate file is removed right after the save (a removed
-certification or cover photo too), and the upload of a failed save right away. `OrphanFileCleanupJob` runs every day at
+A replaced raft photo, license file, cooperative cover photo, certificate file or cultivation log photo is removed right after the save (a removed
+certification, cover photo or cultivation log too), and the upload of a failed save right away. `OrphanFileCleanupJob` runs every day at
 03:00 (Asia/Ho_Chi_Minh), with no catch-up at start unless `CatchUpOnStart` is set, and deletes what such a removal left behind: raft photos (`raft-photos/`), license files
-(`zone-licenses/`), cover photos (`cooperative-covers/`), certificate files (`cooperative-certifications/`) and water meter
+(`zone-licenses/`), cover photos (`cooperative-covers/`), certificate files (`cooperative-certifications/`), cultivation log photos (`cultivation-log-photos/`) and water meter
 photos (`water-meter-photos/`, a recognition that was never saved as a measurement) that no record points to and that were
 written more than the grace period (24 hours) ago. No other storage folder is scanned, so cooperative logos are kept for ever.
 
@@ -335,7 +340,9 @@ written more than the grace period (24 hours) ago. No other storage folder is sc
 point to, so on a shared storage it would delete the files of the other environment. As a safeguard only, a raft photo or
 license folder in which not one stored file (old or new) is referenced by the database is skipped: nothing is deleted
 there and a warning is logged. Cover photos and certificate files may all be unreferenced in a real database (cover
-removed, last certification removed), so their folders are skipped only when the database holds no cooperative.
+removed, last certification removed), so their folders are skipped only when the database holds no cooperative. Every
+cultivation log may be removed too, so its folder is skipped when the database holds no cooperative or has no
+`CultivationLog` audit row: it never held a log, while those rows stay after the last log is removed.
 
 ## Deployment
 
@@ -404,9 +411,9 @@ created by a one-time command run on the server by the deployment operator (not 
 | Reverse proxy: X-Forwarded-For is trusted only from these addresses (and loopback), so the limits see the real client | `ForwardedHeaders:KnownProxies` (e.g. `10.0.0.4`), `ForwardedHeaders:KnownNetworks` (e.g. `10.0.0.0/24`) |
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG-ACCOUNT-13 and a critical log entry is written (BR-ACCOUNT-09: one purpose and one number or address get at most 3 codes per hour, at least 60 seconds apart; over all purposes one number or address gets at most 10) | `Verification:DailySmsLimit` (default 500) |
 | Expiry reminder of zone licenses and certifications (GFR-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
-| Overdue water measurement reminder (ENV-01, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
+| Overdue water measurement reminder (GFR-04, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
 | Employment end: an employee is Left from the day after the last working day (LABOR-01, daily, business time zone UTC+7) | `Jobs:EmploymentEnd:RunAt` (default `00:01`), `Jobs:EmploymentEnd:CatchUpOnStart` (default `true`) |
-| Orphan file clean-up: raft photos, license files, cover photos, certificate files, meter photos (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
+| Orphan file clean-up: raft photos, license files, cover photos, certificate files, cultivation log photos, meter photos (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
 
 ## Demo on a shared server
 
