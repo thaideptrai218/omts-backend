@@ -30,7 +30,7 @@ public class AcsSqlServerTests
     public async Task Parallel_staff_creations_with_one_username_create_one_account()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await MigrateAsync(database);
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         var owner = await api.AddAccountAsync(NewCode(), Password);
         var client = await LoginAsync(api, owner.Username);
@@ -56,7 +56,7 @@ public class AcsSqlServerTests
     public async Task Parallel_registrations_with_one_phone_create_one_trader()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await MigrateAsync(database);
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         await SeedCooperativeAsync(database);
         var phone = NewPhone();
@@ -82,7 +82,7 @@ public class AcsSqlServerTests
     public async Task Parallel_code_requests_of_one_subject_send_one_sms()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await MigrateAsync(database);
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         var phone = NewPhone();
         var anonymous = api.CreateClient();
@@ -103,7 +103,7 @@ public class AcsSqlServerTests
     public async Task Parallel_use_of_one_verification_token_registers_once()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await MigrateAsync(database);
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         await SeedCooperativeAsync(database);
         var phone = NewPhone();
@@ -126,7 +126,7 @@ public class AcsSqlServerTests
     public async Task Stale_staff_edit_is_refused_with_msg06_at_database_level()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await MigrateAsync(database);
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         var owner = await api.AddAccountAsync(NewCode(), Password);
         var client = await LoginAsync(api, owner.Username);
@@ -236,12 +236,6 @@ public class AcsSqlServerTests
         await db.SaveChangesAsync();
     }
 
-    private static async Task MigrateAsync(SqlServerTestDatabase database)
-    {
-        await using var db = database.CreateContext();
-        await db.Database.MigrateAsync();
-    }
-
     private static async Task<T> ReadAsync<T>(SqlServerTestDatabase database, Func<OmtsDbContext, Task<T>> query)
     {
         await using var db = database.CreateContext();
@@ -255,7 +249,7 @@ public class AcsSqlServerTests
     public async Task Parallel_wrong_entries_are_not_lost_and_lock_the_request()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await MigrateAsync(database);
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         var anonymous = api.CreateClient();
         var phone = NewPhone();
@@ -278,7 +272,7 @@ public class AcsSqlServerTests
     public async Task Parallel_staff_creations_do_not_log_the_duplicate_username()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await MigrateAsync(database);
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         var owner = await api.AddAccountAsync(NewCode(), Password);
         var client = await LoginAsync(api, owner.Username);
@@ -296,7 +290,7 @@ public class AcsSqlServerTests
     public async Task Parallel_registrations_do_not_log_the_duplicate_phone()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await MigrateAsync(database);
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         await SeedCooperativeAsync(database);
         var phone = NewPhone();

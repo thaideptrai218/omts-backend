@@ -55,10 +55,7 @@ public class DeploymentDatabaseTests
     public async Task Failed_save_leaves_no_audit_row()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await using (var db = database.CreateContext())
-        {
-            await db.Database.MigrateAsync();
-        }
+        await database.MigrateToLatestAsync();
 
         await using var api = new SqlServerApiFactory(database);
         var saved = await AddRoleWithAuditAsync(api, "Harvest team");

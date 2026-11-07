@@ -15,9 +15,9 @@ public class UnitOfWorkDeadlockTests
     public async Task A_deadlock_victim_gets_the_edit_conflict_not_a_server_error()
     {
         await using var database = SqlServerTestDatabase.Create();
+        await database.MigrateToLatestAsync();
         await using var victim = database.CreateContext();
         await using var other = database.CreateContext();
-        await victim.Database.MigrateAsync();
         var (first, second) = (StatusIds.WaterMeasurement.Active, StatusIds.WaterMeasurement.Voided);
         var status = await victim.Statuses.SingleAsync(s => s.Id == first);
         status.Meaning += " (changed)";
