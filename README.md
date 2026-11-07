@@ -103,8 +103,7 @@ Dates are set relative to the day of the first seed and are not moved afterwards
 - Receipt codes follow one sequence in the order they were seeded (`PN000001`…`PN000020`), not the receipt date, and so do
   payment codes (`TT000001`…) and return codes (`TH000001`…).
 - The debt age and the current-month statement of a supplier move with the calendar; pass `from`/`to` to the statement.
-- The last water measurement is from the day before the seed: a month later without new ones, the zones are overdue and
-  get the 06:00 reminder (MSG-WATER-06).
+- The demo has no Open cycle yet, so GFR-04 sends no reminder (MSG-WATER-06) in the demo until the cycle demo data arrives.
 - The receipt list shows the current month by default (PURCHASE-03): pass `from`/`to` to see the older demo receipts.
 
 **Verification codes.** SMS, email and push use the fake providers: nothing leaves the machine. What would have been
