@@ -18,7 +18,7 @@ public class ReviewFixQaRegressionTests
     public async Task Parallel_wrong_current_passwords_all_answer_msg17_or_msg69_and_lock()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateAsync();
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         var owner = await api.AddAccountAsync(NewCode(), Password);
         var client = await LoginAsync(api, owner.Username);
@@ -44,7 +44,7 @@ public class ReviewFixQaRegressionTests
     public async Task Parallel_phone_verification_starts_from_many_accounts_respect_the_per_number_cap()
     {
         await using var database = SqlServerTestDatabase.Create();
-        await database.MigrateAsync();
+        await database.MigrateToLatestAsync();
         await using var api = new SqlServerApiFactory(database);
         var victim = NewPhone();
         var clients = new List<HttpClient>();
@@ -95,12 +95,6 @@ public class ReviewFixQaRegressionTests
 
 internal static class ReviewFixQaSqlExtensions
 {
-    public static async Task MigrateAsync(this SqlServerTestDatabase database)
-    {
-        await using var db = database.CreateContext();
-        await db.Database.MigrateAsync();
-    }
-
     public static async Task<T> ReadAsync<T>(this SqlServerTestDatabase database, Func<OMTS.Infrastructure.Persistence.OmtsDbContext, Task<T>> query)
     {
         await using var db = database.CreateContext();

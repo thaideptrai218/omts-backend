@@ -115,8 +115,8 @@ public class MandatorySmsSqlServerTests
 
     private static async Task<FarmingZone> SeedZoneAsync(SqlServerTestDatabase database)
     {
+        await database.MigrateToLatestAsync();
         await using var db = database.CreateContext();
-        await db.Database.MigrateAsync();
         var cooperative = await db.Cooperatives.FirstOrDefaultAsync() ?? new Cooperative { FullName = "HTX Trung Nam" };
         var zone = new FarmingZone { Cooperative = cooperative, Code = NewCode(), Name = "Vùng SQL", PhMin = 6.5m, PhMax = 8.5m };
         db.FarmingZones.Add(zone);
