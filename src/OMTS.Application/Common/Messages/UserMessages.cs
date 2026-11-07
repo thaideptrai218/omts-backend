@@ -759,6 +759,78 @@ public static class UserMessages
         Parameters = new Dictionary<string, object?> { ["customer_name"] = customerName, ["later_amount"] = laterAmount, ["debt_amount"] = debtAmount },
     };
 
+    // ---- MSG-SALE: sending the sales invoice (SALE-05 end, SALE-06) ----
+
+    /// <summary>MSG-SALE-07 (SALE-05 step 9): the question at the end of the sale, answered by <c>wantsQrCode</c>.</summary>
+    public static UserMessage WantsQrCode(string invoiceCode) => new(
+        Sale07, $"Does the trader want the QR code of invoice {invoiceCode}, to see where the oysters come from?")
+    {
+        Parameters = new Dictionary<string, object?> { ["invoice_code"] = invoiceCode },
+    };
+
+    /// <summary>
+    /// MSG-SALE-15 (BR-SALE-09): the invoice message to the trader, at the latest values of the invoice. {to_pay_text} is empty when nothing is left to pay; it names the receiving
+    /// bank account when one is set up, else only the amount (no VietQR can be paid without it). {origin_text} is empty without a QR code. The parameters are atomic values;
+    /// <c>bank_account</c> and <c>bank_name</c> are present only when the text names the account, which is how DEBT-01 counts the codes already sent (BR-DEBT-01).
+    /// </summary>
+    /// <param name="corrected">Sent again after a correction (SALE-07): " (corrected)".</param>
+    /// <param name="paidAmount">The part of the total that the payments of the invoice which are not Cancelled cover.</param>
+    /// <param name="toPayAmount">Total − paid, 0 or more.</param>
+    /// <param name="bankAccountNumber">The receiving bank account (DEBT-01), null when none is set up.</param>
+    /// <param name="provenanceLink">The link of the QR code of the invoice, null when it has none.</param>
+    public static UserMessage InvoiceMessage(
+        string cooperativeShortName, string invoiceCode, bool corrected, DateOnly invoiceDate, decimal totalKg, decimal totalAmount, decimal paidAmount, decimal toPayAmount,
+        string? bankAccountNumber, string? bankName, string? provenanceLink)
+    {
+        var namesAccount = toPayAmount > 0m && bankAccountNumber is not null;
+        var toPayText = toPayAmount <= 0m
+            ? string.Empty
+            : namesAccount
+                ? $"; to pay {Vnd(toPayAmount)} VND to account {bankAccountNumber} ({bankName}), transfer content {invoiceCode}"
+                : $"; to pay {Vnd(toPayAmount)} VND";
+        var originText = provenanceLink is null ? string.Empty : $" Origin: {provenanceLink}";
+        var correctedText = corrected ? " (corrected)" : string.Empty;
+        var parameters = new Dictionary<string, object?>
+        {
+            ["cooperative_short_name"] = cooperativeShortName,
+            ["invoice_code"] = invoiceCode,
+            ["corrected"] = corrected,
+            ["invoice_date"] = invoiceDate,
+            ["total_kg"] = KgValue(totalKg),
+            ["total_amount"] = totalAmount,
+            ["paid_amount"] = paidAmount,
+            ["to_pay_amount"] = toPayAmount,
+            ["provenance_link"] = provenanceLink,
+        };
+        if (namesAccount)
+        {
+            parameters[InvoiceMessageBankAccountParameter] = bankAccountNumber;
+            parameters[InvoiceMessageBankNameParameter] = bankName;
+        }
+
+        return new UserMessage(
+            Sale15,
+            $"{cooperativeShortName}: invoice {invoiceCode}{correctedText} of {Date(invoiceDate)}: {Kg(totalKg)} kg, {Vnd(totalAmount)} VND, paid {Vnd(paidAmount)} VND{toPayText}.{originText}")
+        {
+            Parameters = parameters,
+        };
+    }
+
+    /// <summary>The parameter of MSG-SALE-15 that names the receiving account, read back by the DEBT-01 count of the codes already sent.</summary>
+    public const string InvoiceMessageBankAccountParameter = "bank_account";
+
+    public const string InvoiceMessageBankNameParameter = "bank_name";
+
+    /// <summary>MSG-SALE-16 (SALE-06.0.E1): nothing is sent to a walk-in customer or to a profile without a phone number.</summary>
+    public static UserMessage InvoiceNotSent(string invoiceCode, bool hasCustomerProfile)
+    {
+        var cause = hasCustomerProfile ? "the customer profile has no phone number" : "it has no customer profile";
+        return new UserMessage(Sale16, $"Invoice {invoiceCode} is not sent: {cause}. Please show the invoice to the trader on your screen.")
+        {
+            Parameters = new Dictionary<string, object?> { ["invoice_code"] = invoiceCode, ["cause"] = hasCustomerProfile ? "NoPhoneNumber" : "NoCustomerProfile" },
+        };
+    }
+
     // ---- Old codes still sent as the code (Legacy.KeptAsCode) ----
 
     /// <summary>MSG05: an export file could not be generated, or a stored file could not be read.</summary>

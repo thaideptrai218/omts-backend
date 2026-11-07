@@ -108,7 +108,7 @@ public class SupplierDebtSqlServerTests
         var saved = Assert.Single(ids);
         Assert.Equal(1, await host.QueryAsync(db => db.SupplierPayments.CountAsync(p => p.DeduplicationKey == key)));
         // The Owner hears of it once, whatever the retries.
-        var told = await host.QueryAsync(db => db.Notifications.Where(n => n.RelatedRecordId == saved).Select(n => n.RecipientAccountId).ToListAsync());
+        var told = await host.QueryAsync(db => db.Notifications.Where(n => n.RelatedRecordId == saved).Select(n => n.RecipientAccountId!.Value).ToListAsync());
         Assert.Equal(told.Distinct().Count(), told.Count);
 
         var cancels = await InParallelAsync(4, _ => accountant.CancelPaymentAsync(saved, "Mistake"));

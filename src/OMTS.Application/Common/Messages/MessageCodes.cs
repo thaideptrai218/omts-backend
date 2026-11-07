@@ -92,10 +92,13 @@ public static class MessageCodes
     public const string Sale04 = "MSG-SALE-04";
     public const string Sale05 = "MSG-SALE-05";
     public const string Sale06 = "MSG-SALE-06";
+    public const string Sale07 = "MSG-SALE-07";
     public const string Sale08 = "MSG-SALE-08";
     public const string Sale10 = "MSG-SALE-10";
     public const string Sale11 = "MSG-SALE-11";
     public const string Sale12 = "MSG-SALE-12";
+    public const string Sale15 = "MSG-SALE-15";
+    public const string Sale16 = "MSG-SALE-16";
 
     /// <summary>
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-01, the
@@ -112,11 +115,13 @@ public static class MessageCodes
     /// the harvest notice and the lowered days (HARVEST-01 and HARVEST-03 are new in PR H1a); MSG-CYCLE-05/06/07, the close of a
     /// cycle, its summary notice and the early close (CYCLE-06 is new in PR C5); MSG-TRACE-03/04, a lane left with no seed lot and the
     /// Owner's agreement to a correction (TRACE-03 is new in PR T2); MSG-SALE-06/08/10/11/12, the sales invoice: its success text, the
-    /// Owner's notice and the three questions at the port (SALE-05 is new in PR 6a).
+    /// Owner's notice and the three questions at the port (SALE-05 is new in PR 6a); MSG-SALE-07/15/16, the QR question at the end of the sale, the
+    /// invoice message to the trader and the invoice not sent (SALE-06 is new in PR 6b); MSG-HARVEST-05, the warning the day before a harvest lot
+    /// closes by itself (GFR-05, new in PR H2).
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
-        Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Harvest05, Trace03, Trace04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale08, Sale10, Sale11, Sale12, Debt01, Debt02, Water02, Water04,
+        Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Harvest05, Trace03, Trace04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale15, Sale16, Debt01, Debt02, Water02, Water04,
     };
 
     /// <summary>

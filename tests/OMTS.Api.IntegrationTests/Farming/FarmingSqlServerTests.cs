@@ -181,7 +181,7 @@ public class FarmingSqlServerTests
             .Where(n => n.RelatedRecordId == olderExpiredId).Select(n => n.MessageCode).SingleAsync()));
         var licenseId = license.Id();
         var recipients = await host.QueryAsync(db => db.Notifications
-            .Where(n => n.Type == NotificationTypes.ZoneLicenseExpiry && n.RelatedRecordId == licenseId).Select(n => n.RecipientAccountId).ToListAsync());
+            .Where(n => n.Type == NotificationTypes.ZoneLicenseExpiry && n.RelatedRecordId == licenseId).Select(n => n.RecipientAccountId!.Value).ToListAsync());
         // The Cooperative Owner only (GFR-03): the Zone Manager of the zone is not told.
         Assert.Equal([host.Owner.Account.Id], recipients);
     }

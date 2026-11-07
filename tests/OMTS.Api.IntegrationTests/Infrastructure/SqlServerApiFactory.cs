@@ -38,6 +38,7 @@ public sealed class SqlServerApiFactory(SqlServerTestDatabase database, IReadOnl
             ["Jobs:EmploymentEnd:CatchUpOnStart"] = "false",
             ["Jobs:HarvestLotAutoClose:CatchUpOnStart"] = "false",
             ["Jobs:OrphanFileCleanup:Enabled"] = "false",
+            [AuthApiFactory.PublicBaseUrlKey] = AuthApiFactory.PublicBaseUrl,
         }.Concat(settings ?? new Dictionary<string, string?>())));
         builder.ConfigureLogging(logging => logging.AddProvider(Logs));
     }

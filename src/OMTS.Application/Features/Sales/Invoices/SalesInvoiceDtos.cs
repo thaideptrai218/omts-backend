@@ -55,13 +55,35 @@ public sealed record SalesInvoiceLineView(
 public sealed record CustomerPaymentView(
     Guid Id, string Code, CustomerPaymentKind Kind, CustomerPaymentMethod Method, decimal Amount, DateOnly PaymentDate, int StatusId, string Status, AccountRef? CollectedBy);
 
+/// <summary>One sending of the invoice message (BR-SALE-09). A Sending row left by a server stop reads Not sent.</summary>
+/// <param name="Channel">Sms, or ZaloOa once its templates are approved.</param>
+public sealed record SalesInvoiceSendingView(string Channel, string? PhoneNumber, int DeliveryStatusId, string DeliveryStatus, DateTimeOffset? DeliveryStatusAt);
+
 /// <param name="Customer">Null for a walk-in customer.</param>
 /// <param name="PriceCutTotal">The price cuts of SALE-07, 0 until one is entered.</param>
+/// <param name="QrUrl">The link of the QR code of the invoice (its provenance page), null when it has none.</param>
+/// <param name="QrDecidedAt">When the end of the sale answered the QR question: null until then (POST finish).</param>
+/// <param name="DeliveryStatusId">The status of the latest sending, Not sent when there is none (BR-SALE-09).</param>
 public sealed record SalesInvoiceView(
     Guid Id, string Code, DateTimeOffset InvoicedAt, DateOnly InvoiceDate, SalesInvoiceZoneView Zone, SalesInvoiceCustomerView? Customer, bool WalkInCustomer,
     Guid? PurchaseRequestId, bool TakesRequestInFull, IReadOnlyList<SalesInvoiceLineView> Lines, decimal TotalKg, decimal Subtotal, decimal Discount, bool DiscountDecidedByOwner,
     decimal OtherCharges, decimal PriceCutTotal, decimal Total, SalesPaymentTerm PaymentTerm, int StatusId, string Status, IReadOnlyList<CustomerPaymentView> Payments,
-    AccountRef CreatedBy, string RowVersion);
+    AccountRef CreatedBy, string? QrToken, string? QrUrl, DateTimeOffset? QrDecidedAt, int DeliveryStatusId, string DeliveryStatus,
+    IReadOnlyList<SalesInvoiceSendingView> Sendings, string RowVersion);
+
+/// <summary>The end of the sale (SALE-05 steps 9-11).</summary>
+/// <param name="WantsQrCode">The answer to MSG-SALE-07; null asks it (409 with <c>confirmationField</c>).</param>
+public sealed record FinishSalesInvoiceRequest(bool? WantsQrCode);
+
+/// <summary>The origin state of a lot of the invoice at the end of the sale: the provenance page lists the Published and Withdrawn ones (BR-ORIGIN-05).</summary>
+/// <param name="Missing">What a lot left Not published misses (MSG-TRACE-01, filled once TRACE-01 publishes here).</param>
+public sealed record InvoiceLotOriginView(Guid HarvestLotId, string LotCode, HarvestLotOriginState OriginState, IReadOnlyList<string> Missing);
+
+/// <summary>The answer of the end of the sale and of Resend: the result of SALE-06 (Sent or Not sent) and the invoice as it now is.</summary>
+/// <param name="Lots">At the end of the sale with a Yes to MSG-SALE-07: the origin state of each lot; otherwise empty.</param>
+/// <param name="Message">MSG-SALE-16 when nothing could be sent (walk-in customer, no phone number); null otherwise.</param>
+public sealed record SalesInvoiceSent(
+    SalesInvoiceView Invoice, int DeliveryStatusId, string DeliveryStatus, string? QrUrl, IReadOnlyList<InvoiceLotOriginView> Lots, string? Message, string? MessageCode);
 
 /// <summary>The answer of SALE-05: the invoice, the change to give back (SALE-05.6 step 2) and MSG-SALE-06.</summary>
 /// <param name="SubtractedFromDebt">The cash above the total that lowered the customer debt (MSG-SALE-11).</param>

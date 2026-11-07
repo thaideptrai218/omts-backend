@@ -83,6 +83,7 @@ public sealed class StagingDemoQaProcessKit : IDisposable
         ["Jwt__SigningKey"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)),
         ["Storage__Local__SigningKey"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)),
         ["Storage__Local__RootPath"] = StorageRoot,
+        [EnvKey(AuthApiFactory.PublicBaseUrlKey)] = AuthApiFactory.PublicBaseUrl,
         [EnvKey(BootstrapSettings.CooperativeFullNameKey)] = "HTX QA",
         [EnvKey(BootstrapSettings.OwnerDisplayNameKey)] = "Owner QA",
         [EnvKey(BootstrapSettings.OwnerUsernameKey)] = "owner",

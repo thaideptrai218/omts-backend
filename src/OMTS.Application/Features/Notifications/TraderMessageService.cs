@@ -12,8 +12,9 @@ namespace OMTS.Application.Features.Notifications;
 /// A message to a trader's phone, kept as a Notification row with its channel and delivery status (BR-SALE-09), never in a
 /// list. <see cref="Queue"/> adds the row as Sending to the caller's save; <see cref="DeliverAsync"/>, after that save
 /// commits, hands the message to the service and saves Sent or Not sent. Nothing that was saved is undone, and the
-/// caller's answer does not change, whatever the service does (GFR-06). A row left Sending by a server stop stays so: the
-/// SRS has no timer and a response has no Resend, so it blocks nothing.
+/// caller's answer does not change, whatever the service does (GFR-06). A row left Sending by a server stop stays so in
+/// the database (the SRS has no timer); <see cref="EffectiveStatus"/> reads it as Not sent once it is older than any send
+/// can take, so it never blocks the Resend of an invoice (BR-SALE-09).
 /// </summary>
 public sealed class TraderMessageService(
     INotificationRepository notifications,
@@ -28,8 +29,20 @@ public sealed class TraderMessageService(
     private const int MaxProviderTextLength = 100;
     private const string SendFailed = "SEND_FAILED";
 
-    /// <summary>The row to pass to <see cref="DeliverAsync"/>. <paramref name="recipientAccountId"/> is the account the profile is linked to.</summary>
-    public Notification Queue(Guid recipientAccountId, string phoneNumber, NotificationContent content)
+    /// <summary>A Sending row older than this was left by a stop between the save and the answer of the service: well past <see cref="SendTimeout"/>.</summary>
+    public static readonly TimeSpan StaleSendingAfter = TimeSpan.FromMinutes(2);
+
+    /// <summary>The delivery status as shown and as the Resend guard reads it: a stale Sending row is Not sent (it was never answered).</summary>
+    public static int EffectiveStatus(int? deliveryStatusId, DateTimeOffset? deliveryStatusAt, DateTimeOffset now) =>
+        deliveryStatusId == StatusIds.MessageDelivery.Sending && deliveryStatusAt < now - StaleSendingAfter
+            ? StatusIds.MessageDelivery.NotSent
+            : deliveryStatusId ?? StatusIds.MessageDelivery.NotSent;
+
+    /// <summary>
+    /// The row to pass to <see cref="DeliverAsync"/>. <paramref name="recipientAccountId"/> is the account the profile is linked to, or null for a profile
+    /// without a trader account (an invoice, BR-SALE-09).
+    /// </summary>
+    public Notification Queue(Guid? recipientAccountId, string phoneNumber, NotificationContent content)
     {
         var now = timeProvider.GetUtcNow();
         var row = new Notification
@@ -50,6 +63,19 @@ public sealed class TraderMessageService(
             DeliveryStatusAt = now,
         };
         notifications.Add(row);
+        return row;
+    }
+
+    /// <summary>
+    /// A sending that could not be handed to any service (no phone number), added to the caller's save already Not sent with <paramref name="cause"/> as its error code, so
+    /// the latest sending of the record says Not sent (BR-SALE-09). It has no phone and is never delivered; like every row of this service it is in no list.
+    /// </summary>
+    public Notification NotSent(Guid? recipientAccountId, NotificationContent content, string cause)
+    {
+        var row = Queue(recipientAccountId, string.Empty, content);
+        row.PhoneNumber = null;
+        row.DeliveryStatusId = StatusIds.MessageDelivery.NotSent;
+        row.ProviderErrorCode = FitColumn(cause);
         return row;
     }
 

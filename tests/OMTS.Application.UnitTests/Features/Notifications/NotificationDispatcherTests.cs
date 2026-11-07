@@ -32,7 +32,7 @@ public class NotificationDispatcherTests
 
         await NotifyAsync([pushOff, pushOn, defaults], NotificationTypes.WaterMeasurementOverdue);
 
-        Assert.Equal([pushOff, pushOn, defaults], _notifications.Added.Select(n => n.RecipientAccountId));
+        Assert.Equal([pushOff, pushOn, defaults], _notifications.Added.Select(n => n.RecipientAccountId!.Value));
         Assert.Equal([pushOn, defaults], _outbox.Messages.Select(m => m.RecipientAccountId));
         Assert.All(_notifications.Added, n => Assert.False(n.IsMandatory));
     }

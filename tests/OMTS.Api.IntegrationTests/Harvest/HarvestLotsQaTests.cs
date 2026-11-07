@@ -76,7 +76,7 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
 
         Assert.True(last.Flag("everySeededLaneHarvested"));
         var rows = await factory.NoticesAsync(ReminderType, cycleId);
-        Assert.Equal(new[] { manager.Account.Id, allZones.Account.Id }.Order(), rows.Select(n => n.RecipientAccountId).Order());
+        Assert.Equal(new[] { manager.Account.Id, allZones.Account.Id }.Order(), rows.Select(n => n.RecipientAccountId!.Value).Order());
         Assert.All(rows, n => Assert.Equal(("MSG-CYCLE-08", true), (n.MessageCode, n.IsMandatory)));
         Assert.DoesNotContain(rows, n => n.RecipientAccountId == elsewhere.Account.Id || n.RecipientAccountId == accountant.Account.Id || n.RecipientAccountId == owner.Account.Id);
         var pushes = factory.Services.GetRequiredService<FakePushSender>().Inbox.List(manager.Account.Id.ToString());
@@ -118,7 +118,7 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal(manager.Account.DisplayName, (await raft.Owner.Client.GetHarvestLotAsync(lot.Id())).Text("recordedByName"));
 
         await colleague.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1).FinishedLanes(1));
-        var told = (await factory.NoticesAsync(ReminderType, raft.CycleId)).Select(n => n.RecipientAccountId).ToList();
+        var told = (await factory.NoticesAsync(ReminderType, raft.CycleId)).Select(n => n.RecipientAccountId!.Value).ToList();
         Assert.Contains(colleague.Account.Id, told);
         Assert.DoesNotContain(manager.Account.Id, told);
 
@@ -523,7 +523,7 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
 
         await (await factory.LoginAsync(twice.Username)).HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1).FinishedLanes(1));
 
-        Assert.Equal([twice.Id], (await factory.NoticesAsync(ReminderType, raft.CycleId)).Select(n => n.RecipientAccountId));
+        Assert.Equal([twice.Id], (await factory.NoticesAsync(ReminderType, raft.CycleId)).Select(n => n.RecipientAccountId!.Value));
     }
     // BR-HARVEST-03: "never changes". A raft code that is changed later leaves the code of the lot, and the code of a new lot follows the new raft code.
     [Fact]

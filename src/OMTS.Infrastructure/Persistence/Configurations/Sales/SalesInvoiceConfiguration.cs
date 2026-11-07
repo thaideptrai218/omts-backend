@@ -24,6 +24,9 @@ internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<Sales
         builder.Property(x => x.Total).HasPrecision(18, 0);
         builder.Property(x => x.DeduplicationKey).HasMaxLength(Lengths.ShortText);
         builder.HasIndex(x => x.DeduplicationKey).IsUnique();
+        // One QR code per invoice, and a token opens one page (BR-ORIGIN-01): 22 base64url characters.
+        builder.Property(x => x.QrToken).HasMaxLength(Lengths.Code);
+        builder.HasIndex(x => x.QrToken).IsUnique();
 
         // SALE-09 by period and zone, the customer debt (BR-DEBT-02) and Fulfilled (BR-SALE-01).
         builder.HasIndex(x => new { x.InvoiceDate, x.ZoneId });
