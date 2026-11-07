@@ -36,6 +36,7 @@ public sealed class CycleCloseService(
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
+    IStatusCatalog statusCatalog,
     TimeProvider timeProvider)
 {
     public const string ClosedAction = "CultivationCycle.Closed";
@@ -96,6 +97,8 @@ public sealed class CycleCloseService(
         }
 
         var today = timeProvider.Today();
+        // GBR-02: the values before and after the close, with the status code, as other closes record them.
+        var before = CloseFacts(cycle!);
         cycle!.StatusId = StatusIds.CultivationCycle.Closed;
         cycle.CloseDate = today;
         cycle.Assessment = assessment;
@@ -107,8 +110,10 @@ public sealed class CycleCloseService(
             RecordId = cycle.Id,
             RecordCode = cycle.Raft.Code,
             ZoneId = cycle.Raft.ZoneId,
+            Before = before,
             After = new
             {
+                Status = statusCatalog.CodeOf(cycle.StatusId),
                 cycle.CloseDate,
                 cycle.Assessment,
                 cycle.ClosedEarly,
@@ -143,6 +148,12 @@ public sealed class CycleCloseService(
 
         return (cycle, writes.Refusal(cycle));
     }
+
+    /// <summary>The close fields of a cycle with its status code, for the audit row of the close.</summary>
+    private object CloseFacts(CultivationCycle cycle) => new
+    {
+        Status = statusCatalog.CodeOf(cycle.StatusId), cycle.CloseDate, cycle.Assessment, cycle.ClosedEarly,
+    };
 
     /// <summary>MSG-CYCLE-07: nothing is saved until the same request comes back with the flag (CYCLE-06.1.E1).</summary>
     private static AppError EarlyCloseConfirmation(CycleSummary summary) => AppError.Conflict(
