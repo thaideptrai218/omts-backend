@@ -188,7 +188,7 @@ public class WaterOverdueJobScheduleQaTests
 
         var hosted = api.Services.GetServices<IHostedService>().ToList();
 
-        Assert.Single(hosted, h => h is WaterMeasurementOverdueJob);
+        Assert.Single(hosted, h => h is WaterMeasurementOverdueHostedService);
         Assert.Single(hosted, h => h is ZoneLicenseReminderHostedService);
         var water = new WaterMeasurementOverdueOptions();
         var license = new ZoneLicenseReminderOptions();

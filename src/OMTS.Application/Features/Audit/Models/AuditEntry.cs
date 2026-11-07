@@ -30,4 +30,10 @@ public sealed record AuditEntry(string Action, string RecordType)
     /// Defaults to the current user; empty for system or background job actions.
     /// </summary>
     public Guid? ActorAccountId { get; init; }
+
+    /// <summary>
+    /// The employee who acted in the employee app (GBR-02). When set, the actor account is only
+    /// <see cref="ActorAccountId"/>, never the current user.
+    /// </summary>
+    public Guid? ActorEmployeeId { get; init; }
 }

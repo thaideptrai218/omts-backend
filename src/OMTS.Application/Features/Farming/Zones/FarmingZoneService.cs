@@ -149,7 +149,7 @@ public sealed class FarmingZoneService(
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, Snapshot(zone));
         if (changedAfter is not null)
         {
-            // Old water measurements keep the measurement point stored on them; only the zone changes.
+            // Only the zone changes: a water measurement points to it and keeps no copy of these values.
             audit.Record(new AuditEntry("FarmingZone.Updated", RecordType)
             {
                 RecordId = zone.Id, RecordCode = zone.Code, ZoneId = zone.Id, Before = changedBefore, After = changedAfter,
@@ -266,7 +266,7 @@ public sealed class FarmingZoneService(
         var badges = await BadgesAsync([zone.Id], await lookupAccess.VisibleZonesAsync(cancellationToken), cancellationToken);
         var rafts = await zones.InUseRaftCodesAsync(zone.Id, cancellationToken);
         return new FarmingZoneView(
-            zone.Id, zone.Code, zone.Name, zone.Location, zone.Latitude, zone.Longitude, zone.Area, zone.WaterMeasurementPoint,
+            zone.Id, zone.Code, zone.Name, zone.Location, zone.Latitude, zone.Longitude, zone.Area,
             zone.StatusId, statusCatalog.DisplayNameOf(zone.StatusId), rafts.Count, badges.GetValueOrDefault(zone.Id),
             RowVersionGuard.Encode(zone.RowVersion));
     }
@@ -279,9 +279,7 @@ public sealed class FarmingZoneService(
         var location = check.Required(request.Location, "Location", 500);
         var (latitude, longitude) = check.Coordinates(request.Latitude, request.Longitude, required: true);
         check.Check(request.Area is > 0 and < 100_000_000_000_000m, "Area");
-        // Optional since SRS 27/10: water is measured per zone with no fixed point (BR-WATER-01).
-        var point = check.Optional(request.WaterMeasurementPoint, "Water measurement point", 200);
-        values = new ZoneValues(code, name, location, latitude, longitude, request.Area, point);
+        values = new ZoneValues(code, name, location, latitude, longitude, request.Area);
         return check;
     }
 
@@ -293,11 +291,9 @@ public sealed class FarmingZoneService(
         zone.Latitude = values.Latitude;
         zone.Longitude = values.Longitude;
         zone.Area = values.Area;
-        zone.WaterMeasurementPoint = values.WaterMeasurementPoint;
     }
 
-    private static object Snapshot(FarmingZone z) => new { z.Code, z.Name, z.Location, z.Latitude, z.Longitude, z.Area, z.WaterMeasurementPoint };
+    private static object Snapshot(FarmingZone z) => new { z.Code, z.Name, z.Location, z.Latitude, z.Longitude, z.Area };
 
-    private sealed record ZoneValues(
-        string Code, string Name, string Location, decimal? Latitude, decimal? Longitude, decimal? Area, string? WaterMeasurementPoint);
+    private sealed record ZoneValues(string Code, string Name, string Location, decimal? Latitude, decimal? Longitude, decimal? Area);
 }

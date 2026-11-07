@@ -15,8 +15,6 @@ namespace OMTS.Api.IntegrationTests.Cultivation;
 /// <summary>The MaterialUsages migration (PR C3) on SQL Server: Up adds the table, Down gives back the schema it found, and Up runs again.</summary>
 public class MaterialUsagesMigrationTests
 {
-    private const string MigrationBefore = "20261104124405_CultivationLogs";
-
     private const string SchemaQuery = """
         SELECT CONCAT('table ', t.name) AS [Value] FROM sys.tables t
         UNION ALL SELECT CONCAT('index ', OBJECT_NAME(i.object_id), ' ', i.name) FROM sys.indexes i JOIN sys.tables t ON t.object_id = i.object_id WHERE i.type > 0
@@ -33,7 +31,10 @@ public class MaterialUsagesMigrationTests
         await using var database = SqlServerTestDatabase.Create();
         await using var db = database.CreateContext();
         var migrator = db.GetService<IMigrator>();
-        await migrator.MigrateAsync(MigrationBefore);
+        var migrations = db.Database.GetMigrations().ToList();
+        var own = migrations.Single(m => m.EndsWith("_MaterialUsages", StringComparison.Ordinal));
+        var previous = migrations[migrations.IndexOf(own) - 1];
+        await migrator.MigrateAsync(previous);
         var oldSchema = await SchemaAsync(db);
         Assert.DoesNotContain("table MaterialUsages", oldSchema);
 
@@ -61,7 +62,7 @@ public class MaterialUsagesMigrationTests
         await db.SaveChangesAsync();
 
         // Dev and demo data only: Down drops the usage with its table; the raft and the item stay.
-        await migrator.MigrateAsync(MigrationBefore);
+        await migrator.MigrateAsync(previous);
 
         Assert.Equal(oldSchema, await SchemaAsync(db));
         db.ChangeTracker.Clear();

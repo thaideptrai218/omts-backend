@@ -48,8 +48,14 @@ public class Cooperative : AuditableEntity
     /// <summary>Introduction in English; the page shows the Vietnamese one when it is empty (BR-ORIGIN-02).</summary>
     public string? IntroductionEn { get; set; }
 
-    /// <summary>Used to build the VietQR payment QR (UC48); never shown on the traceability page.</summary>
-    public BankAccountInfo? BankAccount { get; set; }
+    /// <summary>The receiving bank account (DEBT-01); null until one is accepted and saved.</summary>
+    public ReceivingBankAccount? BankAccount { get; set; }
+
+    /// <summary>The day of the month a pay period starts, 1 to 28 (LABOR-16, BR-LABOR-13).</summary>
+    public int PayPeriodStartDay { get; set; } = 1;
+
+    /// <summary>The daily check creates the payroll of each new pay period (LABOR-16, GFR-07).</summary>
+    public bool AutomaticPayroll { get; set; }
 
     public ICollection<FarmingZone> FarmingZones { get; set; } = [];
     public ICollection<Employee> Employees { get; set; } = [];

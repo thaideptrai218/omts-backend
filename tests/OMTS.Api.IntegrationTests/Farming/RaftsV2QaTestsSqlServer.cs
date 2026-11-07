@@ -18,7 +18,7 @@ namespace OMTS.Api.IntegrationTests.Farming;
 /// <summary>Independent QA of FARM-04 on SQL Server: parallel saves with real row versions, and more of the migration.</summary>
 public class RaftsV2QaTestsSqlServer
 {
-    private const string MigrationBefore = "20261104100119_PurchaseReturnsV2";
+    private const string MigrationBefore = "20261105140242_SupplierPaymentsV2";
 
     private static async Task<string> Show(HttpResponseMessage[] answers)
     {
@@ -256,7 +256,7 @@ public class RaftsV2QaTestsSqlServer
         await owner.EditRaftAsync(raft.Id(), body with { RowVersion = withPhoto.Text("rowVersion") });
     }
 
-    // Down keeps the lowest slot, also when slot 1 is free; a blank PhotoUrl makes no photo; SeedingEvents stays (PurchaseReceiptsV2 dropped SeedReceiptLots before it); the model has no pending change.
+    // Down keeps the lowest slot, also when slot 1 is free; a blank PhotoUrl makes no photo; SeedingEvents stays; the model has no pending change.
     [SqlServerFact]
     public async Task The_migration_keeps_the_lowest_slot_ignores_blanks_and_leaves_seed_tables_alone()
     {
@@ -264,7 +264,10 @@ public class RaftsV2QaTestsSqlServer
         await using var db = database.CreateContext();
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync(MigrationBefore);
-        var zone = new FarmingZone { Cooperative = new Cooperative { FullName = "HTX" }, Code = "KV01", Name = "A" };
+        // By SQL: later migrations add columns of the model that this one does not have yet.
+        var cooperative = Guid.NewGuid();
+        await db.Database.ExecuteSqlAsync($"INSERT INTO Cooperatives (Id, FullName, CreatedAt) VALUES ({cooperative}, N'HTX', SYSDATETIMEOFFSET())");
+        var zone = new FarmingZone { CooperativeId = cooperative, Code = "KV01", Name = "A" };
         db.FarmingZones.Add(zone);
         await db.SaveChangesAsync();
         var (spaces, secondOnly) = (Guid.NewGuid(), Guid.NewGuid());
@@ -275,7 +278,7 @@ public class RaftsV2QaTestsSqlServer
             """);
 
         // RaftsV2 itself leaves the seeding table alone; SeedingRecords replaces it later.
-        await migrator.MigrateAsync("20261104103030_RaftsV2");
+        await migrator.MigrateAsync("20261105161142_RaftsV2");
         Assert.Equal(1, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.tables WHERE name = 'SeedingEvents'"));
 
         await migrator.MigrateAsync();

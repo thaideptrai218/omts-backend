@@ -4,67 +4,52 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
-using OMTS.Domain.Constants;
 
 namespace OMTS.Api.IntegrationTests.WaterQuality;
 
 /// <summary>
-/// ENV-01 OCR and meter photo (QA red team): an OCR failure never blocks or loses the draft, unreadable or
-/// impossible readings are never used, the uncertainty threshold is strict, JPEG/PNG up to exactly 10 MB pass,
-/// anything else is refused before it is stored, and a lost photo is MSG05 without touching the draft.
+/// WATER-01 OCR and meter photo (QA red team): impossible readings are never used, the uncertainty threshold is strict,
+/// JPEG/PNG up to exactly 10 MB pass, anything else is refused before it is stored, and a recognition saves no row.
 /// </summary>
 public class WaterOcrPhotoRedTeamTests(AuthApiFactory api) : IClassFixture<AuthApiFactory>
 {
     private static readonly byte[] JpegSignature = [0xFF, 0xD8, 0xFF, 0xE0, 0, 0x10, (byte)'J', (byte)'F', (byte)'I', (byte)'F', 0];
 
     [Fact]
-    public async Task Re_recognition_while_ocr_still_fails_keeps_the_draft_and_confirming_without_values_is_MSG01()
-    {
-        var z = await api.ZoneAsync();
-        var draftId = (await (await z.RecognizeAsync("ocr-fail")).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("measurement").Id();
-
-        var again = await z.Owner.PostAsync($"/api/water-measurements/{draftId}/recognize", null);
-        var againBody = await again.Content.ReadFromJsonAsync<JsonElement>();
-        var confirm = await z.Owner.PostAsJsonAsync($"/api/water-measurements/{draftId}/confirm", new { });
-        var problem = await confirm.Content.ReadFromJsonAsync<JsonElement>();
-
-        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
-        Assert.Equal("Failed", againBody.GetProperty("ocr").Text("status"));
-        Assert.Equal("MSG-WATER-01", againBody.GetProperty("ocr").GetProperty("warning").Text("code"));
-        Assert.Equal("Draft", againBody.GetProperty("measurement").Text("status"));
-        Assert.Equal(HttpStatusCode.BadRequest, confirm.StatusCode);
-        Assert.Equal("MSG-GEN-01", problem.Text("code"));
-        Assert.Equal(["pH", "Salinity"], problem.GetProperty("fields").EnumerateArray().Select(f => f.GetString()));
-        var stored = await api.QueryAsync(db => db.WaterMeasurements.AsNoTracking().SingleAsync(m => m.Id == draftId));
-        Assert.Equal(StatusIds.WaterMeasurement.Draft, stored.StatusId);
-        Assert.Null(stored.OcrPh);
-        Assert.NotNull(stored.PhotoUrl);
-        Assert.Empty(await api.AlertsOfAsync(draftId));
-    }
-
-    [Fact]
-    public async Task Impossible_or_future_readings_are_not_used_and_the_draft_takes_the_time_the_photo_was_sent()
+    public async Task Impossible_or_future_readings_are_not_used_and_the_suggested_time_is_now()
     {
         var z = await api.ZoneAsync();
         var sentFrom = DateTimeOffset.UtcNow;
 
-        var response = await z.RecognizeAsync("ph99_sal150 at2099-01-01T08:00");
+        var response = await z.RecognizeAsync("ph99_sal150_tmp80 at2099-01-01T08:00");
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         var sentTo = DateTimeOffset.UtcNow;
 
         var ocr = body.GetProperty("ocr");
-        var draft = body.GetProperty("measurement");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        foreach (var field in new[] { "ph", "salinity", "measuredAt" })
+        foreach (var field in new[] { "ph", "salinity", "temperature", "measuredAt" })
         {
             Assert.Equal(JsonValueKind.Null, ocr.GetProperty(field).ValueKind);
         }
 
-        Assert.Equal(JsonValueKind.Null, draft.GetProperty("ph").ValueKind);
-        Assert.Equal(JsonValueKind.Null, draft.GetProperty("ocrDraft").GetProperty("salinity").ValueKind);
-        Assert.Equal("Manual", draft.Text("inputSource"));
-        var measuredAt = draft.GetProperty("measuredAt").GetDateTimeOffset();
-        Assert.InRange(measuredAt, sentFrom.AddSeconds(-1), sentTo.AddSeconds(1));
+        Assert.Equal(["PH", "SALINITY", "TEMPERATURE"], ocr.GetProperty("unread").EnumerateArray().Select(v => v.GetString()));
+        Assert.StartsWith("OMTS could not read pH, salinity and temperature from the photo.", ocr.GetProperty("warning").Text("text"));
+        Assert.InRange(body.GetProperty("measuredAt").GetDateTimeOffset(), sentFrom.AddSeconds(-1), sentTo.AddSeconds(1));
+    }
+
+    [Theory]
+    [InlineData("ph7.2_sal20_tmp46", "temperature", "TEMPERATURE")]
+    [InlineData("ph7.2_sal51_tmp28", "salinity", "SALINITY")]
+    [InlineData("ph15_sal51_tmp28", "pH and salinity", "PH,SALINITY")]
+    public async Task A_value_above_its_allowed_range_counts_as_not_read(string marker, string indicators, string unread)
+    {
+        var z = await api.ZoneAsync();
+
+        var ocr = (await (await z.RecognizeAsync(marker)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("ocr");
+
+        Assert.Equal("Success", ocr.Text("status"));
+        Assert.Equal(unread.Split(','), ocr.GetProperty("unread").EnumerateArray().Select(v => v.GetString()));
+        Assert.Equal($"OMTS could not read {indicators} from the photo. Please look at the meter and type in the missing values.", ocr.GetProperty("warning").Text("text"));
     }
 
     [Theory]
@@ -74,10 +59,12 @@ public class WaterOcrPhotoRedTeamTests(AuthApiFactory api) : IClassFixture<AuthA
     {
         var z = await api.ZoneAsync();
 
-        var body = await (await z.RecognizeAsync($"ph7.8_sal25.5 {confidence}")).Content.ReadFromJsonAsync<JsonElement>();
+        var body = await (await z.RecognizeAsync($"ph7.8_sal25.5_tmp28 {confidence}")).Content.ReadFromJsonAsync<JsonElement>();
 
-        Assert.Equal(uncertain, body.GetProperty("ocr").GetProperty("ph").GetProperty("uncertain").GetBoolean());
-        Assert.Equal(uncertain, body.GetProperty("ocr").GetProperty("salinity").GetProperty("uncertain").GetBoolean());
+        foreach (var field in new[] { "ph", "salinity", "temperature" })
+        {
+            Assert.Equal(uncertain, body.GetProperty("ocr").GetProperty(field).GetProperty("uncertain").GetBoolean());
+        }
     }
 
     [Fact]
@@ -94,49 +81,43 @@ public class WaterOcrPhotoRedTeamTests(AuthApiFactory api) : IClassFixture<AuthA
         var webpResponse = await z.Owner.PostAsync($"{z.Base}/recognize", WaterTestKit.PhotoForm(webp, contentType: "image/webp"));
 
         Assert.Equal(HttpStatusCode.OK, jpegResponse.StatusCode);
-        Assert.Equal(7.2m, (await jpegResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("measurement").GetProperty("ph").GetDecimal());
+        Assert.Equal(7.2m, (await jpegResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("ocr").GetProperty("ph").GetProperty("value").GetDecimal());
         Assert.True(largest.StatusCode == HttpStatusCode.OK, await largest.Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.BadRequest, webpResponse.StatusCode);
         Assert.Equal("Photo", (await webpResponse.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
-        Assert.Equal(2, await api.QueryAsync(db => db.WaterMeasurements.CountAsync(m => m.ZoneId == z.Zone.Id)));
+        Assert.Equal(0, await api.QueryAsync(db => db.WaterMeasurements.CountAsync(m => m.ZoneId == z.Zone.Id)));
     }
 
     [Fact]
-    public async Task Manual_entry_with_a_photo_that_is_not_jpeg_or_png_saves_and_stores_nothing()
+    public async Task Photo_missing_not_jpeg_or_png_or_over_10_mb_is_refused_and_nothing_is_stored()
     {
         await using var own = new WaterApiFactory();
         var z = await own.ZoneAsync();
-        var form = WaterTestKit.PhotoForm("GIF89a not a meter photo"u8.ToArray(), contentType: "image/png");
-        form.Add(new StringContent(Guid.NewGuid().ToString()), "clientOperationId");
-        form.Add(new StringContent("7.1"), "ph");
-        form.Add(new StringContent("20"), "salinity");
-        form.Add(new StringContent(DateTimeOffset.UtcNow.AddMinutes(-5).ToString("O")), "measuredAt");
-        form.Add(new StringContent("true"), "confirm");
+        var missing = await z.Owner.PostAsync($"{z.Base}/recognize", new MultipartFormDataContent { { new StringContent("x"), "other" } });
+        var pdf = await z.Owner.PostAsync($"{z.Base}/recognize", WaterTestKit.PhotoForm("%PDF-1.7 renamed"u8.ToArray(), contentType: "image/png"));
+        var gif = await z.Owner.PostAsync($"{z.Base}/recognize", WaterTestKit.PhotoForm("GIF89a not a meter photo"u8.ToArray(), contentType: "image/png"));
+        var huge = await z.Owner.PostAsync($"{z.Base}/recognize", WaterTestKit.PhotoForm([.. WaterTestKit.PngSignature, .. new byte[10 * 1024 * 1024]]));
 
-        var response = await z.Owner.PostAsync($"{z.Base}/with-photo", form);
+        foreach (var response in new[] { missing, pdf, gif, huge })
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
+            Assert.Equal("Photo", (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
+        }
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("MSG-GEN-01", await response.ErrorCodeAsync());
-        Assert.Equal("Photo", (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
-        Assert.Equal(0, await own.QueryAsync(db => db.WaterMeasurements.CountAsync()));
         Assert.False(Directory.Exists(own.StorageRoot) && Directory.EnumerateFiles(own.StorageRoot, "*", SearchOption.AllDirectories).Any());
     }
 
     [Fact]
-    public async Task Re_recognition_of_a_draft_whose_photo_is_gone_is_MSG05_and_leaves_the_draft_unchanged()
+    public async Task A_photo_gone_from_the_storage_is_refused_when_recording()
     {
         var z = await api.ZoneAsync();
-        var draftId = (await (await z.RecognizeAsync("ocr-fail")).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("measurement").Id();
-        var key = await api.QueryAsync(db => db.WaterMeasurements.Where(m => m.Id == draftId).Select(m => m.PhotoUrl!).SingleAsync());
+        var key = await z.Owner.PhotoKeyAsync(z.Zone.Id);
         File.Delete(Path.Combine(api.StorageRoot, key));
 
-        var response = await z.Owner.PostAsync($"/api/water-measurements/{draftId}/recognize", null);
+        var response = await z.RecordAsync(7m, 20m, photoKey: key);
 
-        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
-        Assert.Equal("MSG05", await response.ErrorCodeAsync());
-        var stored = await api.QueryAsync(db => db.WaterMeasurements.AsNoTracking().SingleAsync(m => m.Id == draftId));
-        Assert.Equal(StatusIds.WaterMeasurement.Draft, stored.StatusId);
-        Assert.Equal(key, stored.PhotoUrl);
-        Assert.Null(stored.OcrPh);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("Photo", (await response.Content.ReadFromJsonAsync<JsonElement>()).Text("field"));
     }
 }

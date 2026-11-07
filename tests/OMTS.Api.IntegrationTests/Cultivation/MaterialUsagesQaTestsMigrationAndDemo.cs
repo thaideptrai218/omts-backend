@@ -20,8 +20,6 @@ namespace OMTS.Api.IntegrationTests.Cultivation;
 /// <summary>QA of the migration and of the demo step on SQL Server through the real bootstrap: reruns, changed data on an older database, and the shared actor helper.</summary>
 public class MaterialUsagesQaTestsMigrationAndDemo
 {
-    private const string MigrationBefore = "20261104124405_CultivationLogs";
-
     /// <summary>The constraint comes back with the table: Up, Down, Up, then the table refuses what it refused the first time.</summary>
     [SqlServerFact]
     public async Task After_up_down_up_the_check_constraint_and_the_foreign_keys_work_again()
@@ -29,8 +27,11 @@ public class MaterialUsagesQaTestsMigrationAndDemo
         await using var database = SqlServerTestDatabase.Create();
         await using var db = database.CreateContext();
         var migrator = db.GetService<IMigrator>();
+        var migrations = db.Database.GetMigrations().ToList();
+        var own = migrations.Single(m => m.EndsWith("_MaterialUsages", StringComparison.Ordinal));
+        var previous = migrations[migrations.IndexOf(own) - 1];
         await migrator.MigrateAsync();
-        await migrator.MigrateAsync(MigrationBefore);
+        await migrator.MigrateAsync(previous);
         await migrator.MigrateAsync();
         Assert.False(db.Database.HasPendingModelChanges());
 

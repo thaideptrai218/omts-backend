@@ -109,7 +109,6 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
             return new HashSet<Guid>();
         }
 
-        // A cycle no longer plans a seed type (C1), so an item is in use through its receipt lines and usage records only.
         var onReceipts = db.PurchaseReceiptLines.Where(l => l.ItemId != null && itemIds.Contains(l.ItemId.Value)).Select(l => l.ItemId!.Value);
         var onUsages = db.MaterialUsages.Where(u => itemIds.Contains(u.ItemId)).Select(u => u.ItemId);
         return (await onReceipts.Union(onUsages).ToListAsync(cancellationToken)).ToHashSet();

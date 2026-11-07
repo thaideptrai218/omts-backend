@@ -59,6 +59,19 @@ public class AuditLogServiceTests
     }
 
     [Fact]
+    public void Record_names_the_employee_of_an_employee_app_action_and_not_the_caller()
+    {
+        // GBR-02: an action in the employee app is written with the employee as the person.
+        var employeeId = Guid.NewGuid();
+
+        var auditEvent = CreateService(CallerId).Record(new AuditEntry("Attendance.Recorded", "AttendanceRecord") { ActorEmployeeId = employeeId });
+
+        Assert.Equal(employeeId, auditEvent.ActorEmployeeId);
+        Assert.Null(auditEvent.ActorAccountId);
+        Assert.Null(CreateService(CallerId).Record(new AuditEntry("Account.Updated", "Account")).ActorEmployeeId);
+    }
+
+    [Fact]
     public void Record_leaves_actor_empty_for_system_actions()
     {
         var auditEvent = CreateService(callerId: null).Record(new AuditEntry("Account.Unlocked", "Account"));

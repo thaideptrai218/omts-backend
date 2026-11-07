@@ -1,96 +1,81 @@
 using OMTS.Application.Common.Messages;
-using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.WaterQuality.Dtos;
 
-/// <summary>
-/// Derived alert state (no column): Active = Confirmed and exceeded, Corrected = replaced by a correction
-/// version, Voided = voided; None when the values were within the thresholds (or not confirmed yet).
-/// </summary>
+/// <summary>Derived alert state of a measurement (no column): Active = Active and outside, Voided = voided while outside; None otherwise.</summary>
 public enum WaterAlertState
 {
     None,
     Active,
-    Corrected,
     Voided,
 }
 
 public sealed record AccountRef(Guid Id, string Name);
 
-/// <summary>One row of the ENV-03 history list.</summary>
+/// <summary>One row of the WATER-03 history list.</summary>
+/// <param name="ThresholdsUsed">The thresholds saved with this measurement (BR-WATER-04).</param>
+/// <param name="ValuesOutside">The values outside those thresholds, to mark; also on a voided measurement.</param>
+/// <param name="VoidReason">Why it was voided; null when it is Active.</param>
 public sealed record WaterMeasurementListItem(
     Guid Id,
     DateTimeOffset MeasuredAt,
-    decimal? Ph,
-    decimal? Salinity,
-    string? MeasurementPoint,
+    Guid RaftId,
+    string RaftCode,
+    decimal Ph,
+    decimal Salinity,
+    decimal Temperature,
     string Status,
     string StatusCode,
-    MeasurementInputSource InputSource,
     WaterAlertState AlertState,
     string? ViolatedValues,
     AccountRef? MeasuredBy,
-    AccountRef? ConfirmedBy,
-    int RecordVersion,
-    bool HasPhoto);
+    WaterThresholds ThresholdsUsed,
+    IReadOnlyList<WaterValueOutside> ValuesOutside,
+    string? VoidReason);
 
-/// <summary>A version of the correction chain (oldest first in <see cref="WaterMeasurementDetail.Versions"/>).</summary>
-public sealed record WaterMeasurementVersion(
-    Guid Id,
-    int RecordVersion,
-    string Status,
-    string StatusCode,
-    DateTimeOffset MeasuredAt,
-    decimal? Ph,
-    decimal? Salinity,
-    WaterAlertState AlertState,
-    string? ViolatedValues,
-    string? CorrectionReason,
-    string? VoidReason,
-    AccountRef? ConfirmedBy,
-    DateTimeOffset? ConfirmedAt,
-    DateTimeOffset CreatedAt);
+/// <summary>A page of the WATER-03 history of a zone and the period it covers.</summary>
+/// <param name="Message">MSG-GEN-10 when no measurement matches (WATER-03.4).</param>
+/// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
+public sealed record WaterHistoryPage(
+    IReadOnlyList<WaterMeasurementListItem> Items, int Page, int PageSize, int Total, DateOnly From, DateOnly To, string? Message, string? MessageCode);
 
-/// <summary>The first OCR draft, kept unchanged for comparison with the confirmed values.</summary>
-public sealed record OcrDraftValues(decimal? Ph, decimal? Salinity, DateTimeOffset? MeasuredAt);
+/// <summary>One zone on the WATER-03 overview.</summary>
+/// <param name="LatestMeasuredAt">The measurement time of its latest active measurement; null when it has none.</param>
+/// <param name="HasWaterAlert">BR-WATER-04: the zone is In Use and that measurement is outside its own thresholds.</param>
+/// <param name="ValuesOutside">Those values, with their allowed range; empty without a water alert.</param>
+public sealed record WaterZoneOverviewItem(
+    Guid ZoneId,
+    string ZoneCode,
+    string ZoneName,
+    string ZoneStatus,
+    string ZoneStatusCode,
+    DateTimeOffset? LatestMeasuredAt,
+    bool HasWaterAlert,
+    IReadOnlyList<WaterValueOutside> ValuesOutside);
 
-/// <summary>Someone with the edit form open (NFR-13); the record is never locked.</summary>
-public sealed record RecordEditorView(Guid AccountId, string Name, DateTimeOffset StartedAt);
-
-/// <summary>ENV-03 detail: all fields, a short-lived photo URL, the thresholds used, the version chain and the current editors.</summary>
+/// <summary>WATER-03.2 detail: all fields, a short-lived photo URL and the thresholds of the measurement.</summary>
+/// <param name="AlertedAt">When the last water alert of this measurement was sent; null when none is standing or none was sent.</param>
 public sealed record WaterMeasurementDetail(
     Guid Id,
     Guid ZoneId,
     string ZoneCode,
     string ZoneName,
-    string? MeasurementPoint,
+    Guid RaftId,
+    string RaftCode,
     DateTimeOffset MeasuredAt,
-    decimal? Ph,
-    decimal? Salinity,
+    decimal Ph,
+    decimal Salinity,
+    decimal Temperature,
     string Status,
     string StatusCode,
-    MeasurementInputSource InputSource,
-    string? PhotoUrl,
-    OcrDraftValues OcrDraft,
-    WaterThresholds? ThresholdsUsed,
+    string PhotoUrl,
+    WaterThresholds ThresholdsUsed,
     WaterAlertState AlertState,
     bool ThresholdExceeded,
     string? ViolatedValues,
     DateTimeOffset? AlertedAt,
     AccountRef? MeasuredBy,
-    AccountRef? ConfirmedBy,
-    DateTimeOffset? ConfirmedAt,
-    int RecordVersion,
-    Guid? CorrectedFromMeasurementId,
-    string? CorrectionReason,
-    string? VoidReason,
-    bool IsLatestVersion,
-    IReadOnlyList<WaterMeasurementVersion> Versions,
-    IReadOnlyList<RecordEditorView> CurrentEditors,
-    UserMessage? EditingNotice);
+    string? VoidReason);
 
-/// <summary>Result of ENV-01 create: <see cref="Replayed"/> when the client operation was already saved (answered 200, not 201).</summary>
+/// <summary>Result of WATER-01: <see cref="Replayed"/> when the client operation was already saved (answered 200, not 201).</summary>
 public sealed record RecordedWaterMeasurement(WaterMeasurementDetail Measurement, bool Replayed);
-
-/// <summary>Other people editing the record, with MSG58 for the first of them.</summary>
-public sealed record EditingStatus(IReadOnlyList<RecordEditorView> OtherEditors, UserMessage? Notice);

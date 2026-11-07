@@ -14,7 +14,11 @@ namespace OMTS.Api.IntegrationTests.Farming;
 /// </summary>
 public class ZonesLicensesV2MigrationTests
 {
-    private const string MigrationBefore = "20261104072358_CooperativeProfileV2";
+    private static string MigrationBefore(DbContext db)
+    {
+        var migrations = db.Database.GetMigrations().ToList();
+        return migrations[migrations.FindIndex(m => m.EndsWith("_ZonesLicensesV2", StringComparison.Ordinal)) - 1];
+    }
 
     [SqlServerFact]
     public async Task Up_keeps_one_zone_per_license_and_down_restores_one_scope_row_each()
@@ -22,14 +26,12 @@ public class ZonesLicensesV2MigrationTests
         await using var database = SqlServerTestDatabase.Create();
         await using var db = database.CreateContext();
         var migrator = db.GetService<IMigrator>();
-        await migrator.MigrateAsync(MigrationBefore);
+        await migrator.MigrateAsync(MigrationBefore(db));
 
-        // Cooperatives and zones are unchanged by the migration, so the current model writes them.
-        var cooperative = new Cooperative { FullName = "HTX" };
-        var zoneB = new FarmingZone { Cooperative = cooperative, Code = "KV-B", Name = "B" };
-        var zoneA = new FarmingZone { Cooperative = cooperative, Code = "KV-A", Name = "A" };
-        db.FarmingZones.AddRange(zoneB, zoneA);
-        await db.SaveChangesAsync();
+        // Later migrations add columns to the zone table, so the rows are written with the columns of this schema only.
+        var cooperativeId = await ZoneRowsAtOlderSchema.AddCooperativeAsync(db);
+        var zoneB = new { Id = await ZoneRowsAtOlderSchema.AddZoneAsync(db, cooperativeId, "KV-B", "B") };
+        var zoneA = new { Id = await ZoneRowsAtOlderSchema.AddZoneAsync(db, cooperativeId, "KV-A", "A") };
         var (shared, single) = (Guid.NewGuid(), Guid.NewGuid());
         await db.Database.ExecuteSqlAsync($"""
             INSERT INTO ZoneComplianceDocuments (Id, DocumentType, DocumentNumber, EffectiveDate, ExpiryDate, CreatedAt)
@@ -49,7 +51,7 @@ public class ZonesLicensesV2MigrationTests
         await db.Database.ExecuteSqlAsync(
             $"INSERT INTO ZoneComplianceDocuments (Id, ZoneId, DocumentNumber, EffectiveDate, ExpiryDate, CreatedAt) VALUES ({untyped}, {zoneA.Id}, N'GP-3', '2025-01-01', '2027-01-01', SYSDATETIMEOFFSET())");
 
-        await migrator.MigrateAsync(MigrationBefore);
+        await migrator.MigrateAsync(MigrationBefore(db));
 
         var scopes = await db.Database.SqlQuery<Guid>($"SELECT ZoneId AS [Value] FROM DocumentZoneScopes WHERE DocumentId = {shared}").ToListAsync();
         Assert.Equal([zoneA.Id], scopes);

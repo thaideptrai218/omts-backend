@@ -2,7 +2,7 @@ using OMTS.Application.Features.Farming.Licenses;
 
 namespace OMTS.Application.Features.Farming.Zones;
 
-/// <summary>FARM-02 create/edit body; <see cref="WaterMeasurementPoint"/> is optional; <see cref="RowVersion"/> is required on edit only.</summary>
+/// <summary>FARM-02 create/edit body; <see cref="RowVersion"/> is required on edit only.</summary>
 public sealed record SaveFarmingZoneRequest(
     string? Code,
     string? Name,
@@ -10,7 +10,6 @@ public sealed record SaveFarmingZoneRequest(
     decimal? Latitude,
     decimal? Longitude,
     decimal? Area,
-    string? WaterMeasurementPoint,
     string? RowVersion = null);
 
 /// <summary>Discontinue / resume body; the reason is optional and goes to the audit log.</summary>
@@ -43,7 +42,6 @@ public sealed record FarmingZoneView(
     decimal? Latitude,
     decimal? Longitude,
     decimal? Area,
-    string? WaterMeasurementPoint,
     int StatusId,
     string Status,
     int InUseRaftCount,

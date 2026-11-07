@@ -81,15 +81,17 @@ public sealed class NotificationInboxService(
 
         if (await records.FindAsync(recordType, recordId, cancellationToken) is not { } location)
         {
-            var objectName = RelatedRecordTypes.Names.GetValueOrDefault(recordType, recordType);
+            var objectName = RelatedRecordTypes.ObjectName(recordType);
             return new AppError(ErrorKind.NotFound, UserMessages.RecordNoLongerExists(objectName, notification.RelatedRecordCode ?? ""));
         }
 
         var rule = NotificationTypes.Find(notification.Type)?.Open ?? NotificationOpenAccess.OwnerOnly;
         var access = await permissions.GetAccessAsync(accountId, cancellationToken);
-        var allowed = access is not null && (rule.Function is { } function
-            ? access.Allows(function, rule.Action, PermissionScope.ZoneScoped, location.ZoneId)
-            : access.IsCooperativeOwner);
+        var allowed = access is not null && (rule.OwnTraderRecord
+            ? location.TraderAccountId == accountId
+            : rule.Function is { } function
+                ? access.Allows(function, rule.Action, PermissionScope.ZoneScoped, location.ZoneId)
+                : access.IsCooperativeOwner);
         return allowed
             ? new OpenedNotificationRecord(notification.Id, recordType, recordId, notification.RelatedRecordCode, location.ZoneId)
             : AppError.Forbidden;

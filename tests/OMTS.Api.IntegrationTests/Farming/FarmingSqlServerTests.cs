@@ -76,12 +76,11 @@ public class FarmingSqlServerTests
         var owner = host.Owner.Client;
         var zoneCode = NewCode() + new string('Đ', 40);
         var zone = await owner.CreateZoneAsync(new ZoneBody(
-            zoneCode, new string('ữ', 200), new string('ả', 500), -89.999999m, 179.999999m, 99_999_999_999_999.9999m, new string('ơ', 200)));
+            zoneCode, new string('ữ', 200), new string('ả', 500), -89.999999m, 179.999999m, 99_999_999_999_999.9999m));
         var savedZone = await owner.GetFromJsonAsync<JsonElement>($"/api/zones/{zone.Id()}");
         Assert.Equal(zoneCode, savedZone.Text("code"));
         Assert.Equal(new string('ữ', 200), savedZone.Text("name"));
         Assert.Equal(new string('ả', 500), savedZone.Text("location"));
-        Assert.Equal(new string('ơ', 200), savedZone.Text("waterMeasurementPoint"));
         Assert.Equal(-89.999999m, savedZone.GetProperty("latitude").GetDecimal());
 
         var raftCode = NewCode() + string.Concat(Enumerable.Repeat("Bè", 20));

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Api.IntegrationTests.WaterQuality;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Authorization;
@@ -22,8 +23,8 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Api.IntegrationTests.Platform;
 
 /// <summary>
-/// QA of OMTS-214 item 4 (ENV demo step) on SQL Server: it goes through the services (alerts and their notifications
-/// to the zone's recipients, audit rows by the Owner, thresholds used), the overdue reminder promise of the README,
+/// QA of the water demo step on SQL Server: it goes through the services (alerts and their notifications
+/// to the zone's recipients, audit rows by the Owner, thresholds used), the reminder as the README describes it,
 /// Owner changes kept by a rerun, and an interrupted first run completed later on the same days.
 /// </summary>
 public class DemoWaterSeedQaTests
@@ -37,7 +38,7 @@ public class DemoWaterSeedQaTests
         await using var host = new DemoWaterHost();
         var run = await host.RunAsync();
         Assert.Equal(DeploymentBootstrapper.Success, run.ExitCode);
-        Assert.Contains("Demo water measurements: 61 created.", run.Messages);
+        Assert.Contains("Demo water measurements: 60 created.", run.Messages);
 
         using var scope = host.App.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
@@ -45,9 +46,9 @@ public class DemoWaterSeedQaTests
         var ownerId = await db.Accounts.Where(a => a.Username == "owner").Select(a => a.Id).SingleAsync();
         var water = await db.WaterMeasurements.AsNoTracking().Include(m => m.Zone).ToListAsync();
 
-        // Four alerts: the three planned readings outside the thresholds and the mistyped salinity (2.6 ‰) before its fix.
+        // Three readings stay outside the thresholds; the mistyped salinity (2.6 ‰) alerted too, before its fix, so four sets of alerts.
         var alerted = water.Where(m => m.AlertedAt is not null).ToList();
-        Assert.Equal(4, alerted.Count);
+        Assert.Equal(3, alerted.Count);
         Assert.All(alerted, m => Assert.True(m.ThresholdExceeded && m.ViolatedValues is { Length: > 0 }, m.Zone.Code));
         foreach (var measurement in alerted)
         {
@@ -63,24 +64,21 @@ public class DemoWaterSeedQaTests
 
         // Only alerts: no reminder, no other water notification.
         Assert.Equal(
-            alerted.Count,
+            4,
             await db.Notifications.Where(n => n.Type == NotificationTypes.WaterAlert).Select(n => n.RelatedRecordId).Distinct().CountAsync());
         Assert.False(await db.Notifications.AnyAsync(n => n.Type == NotificationTypes.WaterMeasurementOverdue));
 
-        // The correction is the ENV-02 version chain: same day and pH, salinity 26.0, a reason, no alert.
-        var correction = Assert.Single(water, m => m.CorrectedFromMeasurementId is not null);
-        var typo = Assert.Single(water, m => m.Id == correction.CorrectedFromMeasurementId);
-        Assert.Equal((StatusIds.WaterMeasurement.Superseded, 2.6m), (typo.StatusId, typo.Salinity));
-        Assert.Equal((StatusIds.WaterMeasurement.Confirmed, 26.0m, typo.Ph, typo.MeasuredAt), (correction.StatusId, correction.Salinity, correction.Ph, correction.MeasuredAt));
-        Assert.Equal(2, correction.RecordVersion);
-        Assert.False(string.IsNullOrWhiteSpace(correction.CorrectionReason));
+        // The correction changes the same record: salinity 26.0, a reason in the audit log, its alert no longer current.
+        var correctedId = await db.AuditEvents.Where(e => e.Action == WaterMeasurementAudit.Corrected).Select(e => e.RecordId).SingleAsync();
+        var correction = Assert.Single(water, m => m.Id == correctedId);
+        Assert.Equal((StatusIds.WaterMeasurement.Active, 26.0m), (correction.StatusId, correction.Salinity));
         Assert.Null(correction.AlertedAt);
         Assert.Equal("DEMO-01", correction.Zone.Code);
         var voided = Assert.Single(water, m => m.StatusId == StatusIds.WaterMeasurement.Voided);
         Assert.Equal("DEMO-02", voided.Zone.Code);
 
         // Every reading used the demo thresholds and was measured in the early morning, Vietnam time.
-        Assert.All(water, m => Assert.Equal((7.5m, 8.5m, 18m, 32m), (m.PhMinUsed!.Value, m.PhMaxUsed!.Value, m.SalinityMinUsed!.Value, m.SalinityMaxUsed!.Value)));
+        Assert.All(water, m => Assert.Equal((7.5m, 8.5m, 18m, 32m, 15m, 32m), (m.PhMinUsed!.Value, m.PhMaxUsed!.Value, m.SalinityMinUsed!.Value, m.SalinityMaxUsed!.Value, m.TemperatureMinUsed!.Value, m.TemperatureMaxUsed!.Value)));
         Assert.All(water, m => Assert.InRange(m.MeasuredAt.ToOffset(BusinessClock.UtcOffset).TimeOfDay, TimeSpan.FromHours(6.5), TimeSpan.FromHours(7)));
         Assert.All(water, m => Assert.Equal(ownerId, m.MeasuredByAccountId));
 
@@ -88,38 +86,63 @@ public class DemoWaterSeedQaTests
         var audit = await db.AuditEvents.AsNoTracking()
             .Where(e => e.Action.StartsWith("WaterMeasurement.") || e.Action == WaterMeasurementAudit.ThresholdUpdated)
             .ToListAsync();
-        Assert.Equal(60, audit.Count(e => e.Action == WaterMeasurementAudit.Confirmed));
-        Assert.Equal(1, audit.Count(e => e.Action == WaterMeasurementAudit.Corrected && e.RecordId == typo.Id));
+        Assert.Equal(60, audit.Count(e => e.Action == WaterMeasurementAudit.Created));
+        var corrected = Assert.Single(audit, e => e.Action == WaterMeasurementAudit.Corrected && e.RecordId == correction.Id);
+        Assert.False(string.IsNullOrWhiteSpace(corrected.Reason));
+        Assert.Contains("\"Salinity\":2.6", corrected.Before);
         Assert.Equal(1, audit.Count(e => e.Action == WaterMeasurementAudit.Voided && e.RecordId == voided.Id));
         Assert.Equal(2, audit.Count(e => e.Action == WaterMeasurementAudit.ThresholdUpdated));
         Assert.All(audit, e => Assert.Equal(ownerId, e.ActorAccountId));
     }
 
-    // README: "The last water measurement is from the day before the seed: a month later without new ones, the zones
-    // are overdue and get the 06:00 reminder (MSG-WATER-06)."
+    // The demo now seeds Open cycles. Close them in this disposable database to exercise the no-open-cycle case, then
+    // add one back: the zone is on time until a month after its last reading, then it is reminded.
     [SqlServerFact]
-    public async Task Demo_zones_are_on_time_until_a_month_after_the_last_reading_then_reminded_once()
+    public async Task Demo_sends_no_reminder_without_an_open_cycle_and_a_zone_with_one_is_reminded_a_month_after_its_last_reading()
     {
         await using var host = new DemoWaterHost();
         await host.RunAsync();
-        var today = TimeProvider.System.Today();
-        // Counted from the last seeded reading, not from today: at a month end both reach the same day
-        // (on 31/10 the last reading is 30/10, and 30/10 + 1 month = 31/10 + 1 month = 30/11).
-        var lastReading = await host.QueryAsync(db => db.WaterMeasurements.AsNoTracking()
-            .Where(m => m.StatusId == StatusIds.WaterMeasurement.Confirmed)
-            .MaxAsync(m => m.MeasuredAt));
+        var (zoneId, raftId, lastReading) = await host.QueryAsync(async db =>
+        {
+            var zone = await db.FarmingZones.SingleAsync(z => z.Code == "DEMO-01");
+            var raft = await db.Rafts
+                .Where(r => r.ZoneId == zone.Id && r.StatusId == StatusIds.Usage.InUse
+                    && !db.CultivationCycles.Any(c => c.RaftId == r.Id))
+                .OrderBy(r => r.Code).Select(r => r.Id).FirstAsync();
+            var last = await db.WaterMeasurements.AsNoTracking()
+                .Where(m => m.ZoneId == zone.Id && m.StatusId == StatusIds.WaterMeasurement.Active)
+                .MaxAsync(m => m.MeasuredAt);
+            return (zone.Id, raft, last);
+        });
         var lastDayOnTime = BusinessClock.ToBusinessDate(lastReading).AddMonths(1);
 
-        Assert.Equal(0, await RemindAsync(host.App, today));
-        Assert.Equal(0, await RemindAsync(host.App, lastDayOnTime));
-        Assert.Equal(2, await RemindAsync(host.App, lastDayOnTime.AddDays(1)));
-        Assert.Equal(0, await RemindAsync(host.App, lastDayOnTime.AddDays(2)));
+        await host.QueryAsync(async db =>
+        {
+            var seededCycles = await db.CultivationCycles.ToListAsync();
+            Assert.NotEmpty(seededCycles);
+            foreach (var cycle in seededCycles)
+            {
+                cycle.StatusId = StatusIds.CultivationCycle.Closed;
+                cycle.CloseDate = TimeProvider.System.Today();
+            }
+            return await db.SaveChangesAsync();
+        });
+        Assert.False(await host.QueryAsync(db => db.CultivationCycles.AnyAsync(c => c.StatusId == StatusIds.CultivationCycle.Open)));
+        Assert.Equal(0, await host.App.RemindOnAsync(lastDayOnTime.AddMonths(6)));
 
-        using var scope = host.App.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
-        var reminded = await db.Notifications.Where(n => n.Type == NotificationTypes.WaterMeasurementOverdue)
-            .Select(n => n.RelatedRecordCode).Distinct().OrderBy(c => c).ToListAsync();
-        Assert.Equal(InUseZones, reminded);
+        await host.QueryAsync(async db =>
+        {
+            db.CultivationCycles.Add(WaterOverdueTestKit.OpenCycle(raftId, lastDayOnTime.AddMonths(-3)));
+            return await db.SaveChangesAsync();
+        });
+
+        Assert.Equal(0, await host.App.RemindOnAsync(lastDayOnTime));
+        Assert.Equal(1, await host.App.RemindOnAsync(lastDayOnTime.AddDays(1)));
+        Assert.Equal(0, await host.App.RemindOnAsync(lastDayOnTime.AddDays(2)));
+
+        var reminded = await host.QueryAsync(db => db.Notifications.Where(n => n.Type == NotificationTypes.WaterMeasurementOverdue)
+            .Select(n => n.RelatedRecordId).Distinct().ToListAsync());
+        Assert.Equal([zoneId], reminded.Select(id => id!.Value));
     }
 
     // Real use after the seed: the Owner changes DEMO-01's thresholds and voids one of its readings. A rerun keeps both.
@@ -133,14 +156,14 @@ public class DemoWaterSeedQaTests
         {
             var zone = await db.FarmingZones.SingleAsync(z => z.Code == "DEMO-01");
             var reading = await db.WaterMeasurements
-                .Where(m => m.ZoneId == zone.Id && m.StatusId == StatusIds.WaterMeasurement.Confirmed && m.CorrectedFromMeasurementId == null)
+                .Where(m => m.ZoneId == zone.Id && m.StatusId == StatusIds.WaterMeasurement.Active)
                 .OrderByDescending(m => m.MeasuredAt).FirstAsync();
             return (zone.Id, reading.Id);
         });
 
-        var thresholds = await owner.PutAsJsonAsync($"/api/zones/{zoneId}/water-thresholds", new { phMin = 7.0m, phMax = 9.0m, salinityMin = 15m, salinityMax = 35m });
+        var thresholds = await owner.PutAsJsonAsync($"/api/zones/{zoneId}/water-thresholds", new { phMin = 7.0m, phMax = 9.0m, salinityMin = 15m, salinityMax = 35m, temperatureMin = 10m, temperatureMax = 35m });
         Assert.True(thresholds.StatusCode == HttpStatusCode.OK, await thresholds.Content.ReadAsStringAsync());
-        var voided = await owner.PostAsJsonAsync($"/api/water-measurements/{readingId}/void", new { reason = "Ghi nhầm", recordVersion = 1 });
+        var voided = await owner.PostAsJsonAsync($"/api/water-measurements/{readingId}/void", new { reason = "Ghi nhầm" });
         Assert.True(voided.StatusCode == HttpStatusCode.OK, await voided.Content.ReadAsStringAsync());
         var before = await host.QueryAsync(db => db.WaterMeasurements.AsNoTracking().OrderBy(m => m.Id).Select(m => new { m.Id, m.StatusId, m.MeasuredAt }).ToListAsync());
 
@@ -180,23 +203,17 @@ public class DemoWaterSeedQaTests
 
         Assert.Equal(DeploymentBootstrapper.Success, rerun.ExitCode);
         var water = await host.QueryAsync(db => db.WaterMeasurements.AsNoTracking().Include(m => m.Zone).ToListAsync());
-        Assert.Equal(61, water.Count);
-        Assert.Single(water, m => m.CorrectedFromMeasurementId is not null);
+        Assert.Equal(60, water.Count);
+        Assert.DoesNotContain(water, m => m.Salinity == 2.6m);
         Assert.Single(water, m => m.StatusId == StatusIds.WaterMeasurement.Voided);
         var expected = Enumerable.Range(1, 30).Select(d => firstDay.AddDays(-d)).Order().ToList();
         var moved = InUseZones
-            .Select(code => (Code: code, Days: water.Where(m => m.Zone.Code == code && m.CorrectedFromMeasurementId is null)
+            .Select(code => (Code: code, Days: water.Where(m => m.Zone.Code == code)
                 .Select(m => BusinessClock.ToBusinessDate(m.MeasuredAt)).Order().ToList()))
             .Where(zone => !zone.Days.SequenceEqual(expected))
             .Select(zone => $"{zone.Code}: {zone.Days[0]:yyyy-MM-dd}..{zone.Days[^1]:yyyy-MM-dd}")
             .ToList();
         Assert.True(moved.Count == 0, $"Expected {expected[0]:yyyy-MM-dd}..{expected[^1]:yyyy-MM-dd} for every zone; moved: {string.Join(", ", moved)}");
-    }
-
-    private static async Task<int> RemindAsync(WebApplicationFactory<Program> app, DateOnly today)
-    {
-        using var scope = app.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<WaterMeasurementOverdueReminder>().RunOnceAsync(today, CancellationToken.None);
     }
 
     /// <summary>The system clock moved forward by <see cref="Shift"/>, for a run "on a later day".</summary>
@@ -221,7 +238,7 @@ public class DemoWaterSeedQaTests
     /// <summary>The production unit of work (SaveChanges with the same exception mapping) plus the armed crash.</summary>
     private sealed class CrashingUnitOfWork(OmtsDbContext db, CrashAfterWaterSaves crash) : IUnitOfWork
     {
-        private readonly UnitOfWork _inner = new(db);
+        private readonly UnitOfWork _inner = new(db, new OMTS.Infrastructure.Messaging.PushOutbox());
 
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
@@ -235,6 +252,8 @@ public class DemoWaterSeedQaTests
         }
 
         public Task ReloadAsync(object entity, CancellationToken cancellationToken = default) => _inner.ReloadAsync(entity, cancellationToken);
+
+        public void DiscardChanges() => _inner.DiscardChanges();
 
         public void ExpectRowVersion(AuditableEntity entity, byte[] rowVersion) => _inner.ExpectRowVersion(entity, rowVersion);
 

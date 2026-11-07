@@ -168,7 +168,11 @@ public class MaterialUsagesQaTestsSqlServer
         await host.UseDbAsync(db => db.MaterialUsages.Add(new MaterialUsage { RaftId = raftId, ItemId = item, UsageDate = Today, RepairReason = "x", Quantity = 0.001m, RecordedByAccountId = recorder }));
 
         var raftDelete = await Assert.ThrowsAsync<SqlException>(() => host.QueryAsync(db => db.Rafts.Where(r => r.Id == raftId).ExecuteDeleteAsync()));
-        Assert.Contains("FK_MaterialUsages_Rafts_RaftId", raftDelete.Message);
+
+        // A raft has other references too, and SQL Server names whichever it checks first: read this one from the catalog.
+        Assert.Contains("REFERENCE constraint", raftDelete.Message);
+        Assert.Equal(1, await host.QueryAsync(db => db.Database.SqlQueryRaw<int>(
+            "SELECT COUNT(*) AS [Value] FROM sys.foreign_keys WHERE name = 'FK_MaterialUsages_Rafts_RaftId' AND delete_referential_action = 0").SingleAsync()));
     }
 
     // BR-CYCLE-01: a cancel may run beside a record; the cycle row decides, and no answer is a 500.

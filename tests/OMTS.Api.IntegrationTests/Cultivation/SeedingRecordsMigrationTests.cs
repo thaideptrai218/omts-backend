@@ -15,7 +15,7 @@ namespace OMTS.Api.IntegrationTests.Cultivation;
 /// <summary>The SeedingRecords migration (PR C2) on SQL Server: Up replaces the seeding events, Down gives back the schema it found, and Up runs again.</summary>
 public class SeedingRecordsMigrationTests
 {
-    private const string MigrationBefore = "20261104164709_MaterialUsages";
+    private const string MigrationBefore = "20261106084757_MaterialUsages";
 
     private const string Tables = "SELECT COUNT(*) AS [Value] FROM sys.tables WHERE name IN ('SeedingRecords', 'SeedingRecordLanes')";
 
