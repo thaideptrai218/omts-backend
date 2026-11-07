@@ -71,6 +71,9 @@ public static class NotificationTypes
     /// <summary>MSG-SALE-08, a new sales invoice, to the Cooperative Owner, also for the Owner's own sale (BR-SALE-03). BR-ACCOUNT-11 does not list it as mandatory.</summary>
     public const string SaleCompleted = "SALE_COMPLETED";
 
+    /// <summary>MSG-TRACE-05, the withdrawal of the origin information of a lot the trader bought, to the trader account (TRACE-04.1, BR-TRACE-07); not mandatory (BR-ACCOUNT-11).</summary>
+    public const string ProvenanceWithdrawn = "PROVENANCE_WITHDRAWN";
+
     public static readonly IReadOnlyList<NotificationTypeDefinition> All =
     [
         new(WaterAlert, "Water alert", AlwaysPush, [CooperativeOwner, ZoneManager],
@@ -121,6 +124,8 @@ public static class NotificationTypes
         // Opens the invoice (SALE-09), in the zone of the invoice (BR-SALE-08).
         new(SaleCompleted, "New sale", Default, [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.SalesInvoices, PermissionAction.View)),
+        // Opens nothing: the trader is asked to call the cooperative, and the list row has no related record (a lot is not the trader's record).
+        new(ProvenanceWithdrawn, "Origin information withdrawn", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
     ];
 
     private static readonly Dictionary<string, NotificationTypeDefinition> ByCode = All.ToDictionary(t => t.Code, StringComparer.Ordinal);

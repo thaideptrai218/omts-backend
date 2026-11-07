@@ -16,7 +16,8 @@ namespace OMTS.Application.Features.Traceability.Publishing;
 /// publishes it, cannot both save on the same version: the loser reads again.
 /// </summary>
 public sealed class ProvenancePublisher(
-    IHarvestLotRepository lots, ProvenanceReadiness readiness, ZoneAccessGuard zoneAccess, AuditLogService audit, TimeProvider timeProvider) : IProvenancePublisher
+    IHarvestLotRepository lots, ProvenanceReadiness readiness, ZoneAccessGuard zoneAccess, AuditLogService audit, IUnitOfWork unitOfWork, TimeProvider timeProvider)
+    : IProvenancePublisher
 {
     public const string PublishedAction = "HarvestLot.Published";
     public const string RepublishedAction = "HarvestLot.Republished";
@@ -57,6 +58,12 @@ public sealed class ProvenancePublisher(
         {
             if (lot.OriginState != HarvestLotOriginState.NotPublished)
             {
+                if (publishFor is not null && lot.OriginState == HarvestLotOriginState.Published)
+                {
+                    // The QR code relies on it being Published: a withdrawal in the same moment (TRACE-04) makes one of the two saves fail, and the loser reads the lot again.
+                    unitOfWork.MarkChanged(lot);
+                }
+
                 origins.Add(new InvoiceLotOrigin(lot.Id, lot.LotCode, lot.OriginState, []));
                 continue;
             }
