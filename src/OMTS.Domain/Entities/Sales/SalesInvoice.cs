@@ -62,6 +62,16 @@ public class SalesInvoice : AuditableEntity, IHasStatus
     public int StatusId { get; set; } = StatusIds.SalesInvoice.Completed;
     public Status Status { get; set; } = null!;
 
+    /// <summary>
+    /// The QR code of the invoice (BR-TRACE-02, BR-ORIGIN-01): 128 random bits, base64url, that cannot be guessed. Created at the end of the sale only when the trader wanted it
+    /// and at least one lot of the invoice was Published; never created later, kept on a correction and after a cancellation.
+    /// </summary>
+    public string? QrToken { get; set; }
+    public DateTimeOffset? QrCreatedAt { get; set; }
+
+    /// <summary>When the end of the sale answered the QR question (SALE-05 step 9) and sent the invoice the first time: it happens once, with or without a QR code.</summary>
+    public DateTimeOffset? QrDecidedAt { get; set; }
+
     public ICollection<SalesInvoiceLine> Lines { get; set; } = [];
     public ICollection<SalesInvoicePriceCut> PriceCuts { get; set; } = [];
     public ICollection<CustomerPayment> Payments { get; set; } = [];

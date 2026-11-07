@@ -49,7 +49,7 @@ public sealed class NotificationDispatcher(
         var preferences = await notifications.GetPreferencesAsync(recipients, cancellationToken);
         var now = timeProvider.GetUtcNow();
         var parameters = MessageParameterJson.Serialize(content.Message.Parameters);
-        var pushed = new List<Notification>();
+        var pushed = new List<(Guid AccountId, Notification Row)>();
 
         foreach (var accountId in recipients)
         {
@@ -77,7 +77,7 @@ public sealed class NotificationDispatcher(
 
             if (IsPushed(definition, accountPreferences))
             {
-                pushed.Add(notification);
+                pushed.Add((accountId, notification));
             }
         }
 
@@ -89,18 +89,18 @@ public sealed class NotificationDispatcher(
         }
 
         // One query for every recipient: the devices still logged in with the session that registered them.
-        var tokens = (await devices.ListDeliverableAsync(pushed.Select(n => n.RecipientAccountId).ToList(), now, cancellationToken))
+        var tokens = (await devices.ListDeliverableAsync(pushed.Select(p => p.AccountId).ToList(), now, cancellationToken))
             .ToLookup(d => d.AccountId, d => d.Token);
-        foreach (var notification in pushed)
+        foreach (var (accountId, notification) in pushed)
         {
             pushOutbox.Enqueue(new PushMessage(
-                notification.RecipientAccountId,
+                accountId,
                 notification.Type,
                 content.Title,
                 content.Message.Text,
                 notification.RelatedRecordType,
                 notification.RelatedRecordCode,
-                tokens[notification.RecipientAccountId].ToList(),
+                tokens[accountId].ToList(),
                 notification.Id,
                 notification.MessageCode,
                 notification.RelatedRecordId,

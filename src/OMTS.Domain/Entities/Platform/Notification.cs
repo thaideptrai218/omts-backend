@@ -12,8 +12,9 @@ namespace OMTS.Domain.Entities.Platform;
 /// </summary>
 public class Notification : Entity
 {
-    public Guid RecipientAccountId { get; set; }
-    public Account RecipientAccount { get; set; } = null!;
+    /// <summary>Always set for a list row. A sending to a phone may have none: an invoice goes to the phone of a customer profile that has no trader account (BR-SALE-09).</summary>
+    public Guid? RecipientAccountId { get; set; }
+    public Account? RecipientAccount { get; set; }
 
     public NotificationChannel Channel { get; set; } = NotificationChannel.InApp;
 

@@ -1,5 +1,6 @@
 using OMTS.Application.Features.Sales.Debts;
 using OMTS.Domain.Entities.Sales;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
@@ -15,7 +16,16 @@ public interface ISalesInvoiceRepository
 
     /// <summary>The invoice with its zone, customer, lines (product and lot) and payments, read only.</summary>
     Task<SalesInvoice?> GetAsync(Guid invoiceId, CancellationToken cancellationToken);
+
+    /// <summary>The invoice with its customer, lines and payments, tracked: what sending it (SALE-06) and the end of the sale change and read.</summary>
+    Task<SalesInvoice?> GetForSendingAsync(Guid invoiceId, CancellationToken cancellationToken);
+
+    /// <summary>The sendings of the invoice message (BR-SALE-09), oldest first.</summary>
+    Task<IReadOnlyList<SalesInvoiceSending>> ListSendingsAsync(Guid invoiceId, CancellationToken cancellationToken);
 }
+
+/// <summary>One sending of an invoice to the trader's phone, as its Notification row keeps it.</summary>
+public sealed record SalesInvoiceSending(NotificationChannel Channel, string? PhoneNumber, int? DeliveryStatusId, DateTimeOffset? DeliveryStatusAt, DateTimeOffset CreatedAt);
 
 /// <summary>The sums of the customer debt formula (BR-DEBT-02), read from the database each time.</summary>
 public interface ICustomerDebtQuery

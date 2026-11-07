@@ -11,7 +11,8 @@ namespace OMTS.Application.Features.Sales.Invoices;
 
 /// <summary>
 /// SALE-05 – the Zone Manager (or the Owner) creates an invoice at the port, paid in cash, part in cash and the rest on Pay later, or all on Pay later; a walk-in customer pays in full in
-/// cash. VietQR (steps 7-8, the pending sale) comes with PR 7 and the sending of SALE-06 with PR 6b. The API checks the role (SALES_INVOICES Create); this checks every zone.
+/// cash. VietQR (steps 7-8, the pending sale) comes with PR 7. Steps 9-11 (the QR question, the QR code and SALE-06) follow the save as their own call,
+/// <see cref="SalesInvoiceSendingService.FinishAsync"/>. The API checks the role (SALES_INVOICES Create); this checks every zone.
 /// </summary>
 /// <remarks>
 /// A parallel save that wins on a row this one also writes (a lot, the profile, the request), or removes a row it points to (a lot, a product), makes the save fail; the whole use

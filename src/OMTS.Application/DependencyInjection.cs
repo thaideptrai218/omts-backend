@@ -194,6 +194,9 @@ public static class DependencyInjection
         services.AddScoped<SalesInvoiceViews>();
         services.AddScoped<SalesInvoiceService>();
         services.AddScoped<SalesInvoiceReadService>();
+        // SALE-06 sending the invoice, and the end of the sale with the QR code
+        services.AddScoped<SalesInvoiceMessages>();
+        services.AddScoped<SalesInvoiceSendingService>();
         services.AddScoped<PurchaseReceiptAccess>();
         services.AddScoped<PurchaseReceiptValidator>();
         services.AddScoped<PurchaseReceiptViews>();
