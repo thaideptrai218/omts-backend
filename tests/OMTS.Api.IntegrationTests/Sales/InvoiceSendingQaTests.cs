@@ -14,23 +14,22 @@ namespace OMTS.Api.IntegrationTests.Sales;
 /// <summary>QA of PR 6b (OMTS-224): the end of the sale and SALE-06 against the SRS 27/10.</summary>
 public class InvoiceSendingQaTests
 {
-    // BR-ORIGIN-01, MSG-SALE-15, AC-12: the QR code and the SMS carry the link of the public provenance page. appsettings.json ships "Provenance:PublicBaseUrl" empty and nothing
-    // refuses it at start, so every environment that forgets it prints QR codes and sends SMS with "/origin/{token}", which no trader can open. Either the host refuses to start
-    // or the link is an absolute http(s) URL.
+    // BR-ORIGIN-01, MSG-SALE-15, AC-12: the QR code and the SMS carry the link of the public provenance page. appsettings.json ships "Provenance:PublicBaseUrl" empty, so every
+    // environment that forgets it would print QR codes and send SMS with "/origin/{token}", which no trader can open. Fixed (M1): the host refuses to start without an absolute
+    // http(s) URL, and a host that starts gives absolute links to both.
     [Fact]
     public async Task An_empty_public_base_url_never_gives_a_relative_origin_link_to_the_qr_code_or_the_sms()
     {
-        using var api = new EmptyProvenanceBaseApi();
-        SaleSetup sale;
-        try
+        foreach (var value in new[] { string.Empty, "/web", "localhost:3000", "ftp://web.example" })
         {
-            sale = await api.SaleSetupAsync();
-        }
-        catch (Exception exception) when (exception.GetBaseException() is OptionsValidationException)
-        {
-            return;
+            using var refused = new ProvenanceBaseApi(value);
+            var error = Record.Exception(() => refused.Services);
+            var validation = Assert.IsType<OptionsValidationException>(error?.GetBaseException());
+            Assert.Contains("Provenance:PublicBaseUrl", validation.Message);
         }
 
+        using var api = new AuthApiFactory();
+        var sale = await api.SaleSetupAsync();
         await api.PublishAsync(sale.LotId);
         var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
 
@@ -52,6 +51,7 @@ public class InvoiceSendingQaTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var phone = invoice.GetProperty("customer").Text("phoneNumber")!;
         Assert.Equal("Sent", (await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: false)).Text("deliveryStatus"));
         await api.UpdateAsync<Customer>(sale.CustomerId, c => c.PhoneNumber = null);
 
@@ -61,6 +61,11 @@ public class InvoiceSendingQaTests
         Assert.Equal("Not sent", resent.GetProperty("invoice").Text("deliveryStatus"));
         var read = await (await sale.Owner.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("Not sent", read.Text("deliveryStatus"));
+        Assert.Equal(["Sent", "Not sent"], read.GetProperty("sendings").EnumerateArray().Select(s => s.Text("deliveryStatus")).ToList());
+
+        // Fixed (M2) with a Not sent row: it reached no service and no list (nothing pushed or listed as a notification).
+        Assert.Single(api.SmsTo(phone));
+        Assert.Equal(0, await api.QueryAsync(db => db.Notifications.CountAsync(n => n.Type == SalesInvoiceMessages.MessageType && n.Channel == NotificationChannel.InApp)));
     }
 
     // Guard (passes today). RecipientAccountId is now nullable: the sendings of an invoice, with the trader account or with none, never reach a notification list (BR-SALE-09,
@@ -98,13 +103,13 @@ public class InvoiceSendingQaTests
     private static bool IsWebLink(string link) =>
         Uri.TryCreate(link, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp) && uri.Host.Length > 0;
 
-    /// <summary>The API as deployed with the appsettings.json default: no public base URL of the web app.</summary>
-    private sealed class EmptyProvenanceBaseApi : AuthApiFactory
+    /// <summary>The API with this public base URL of the web app; empty is the appsettings.json default.</summary>
+    private sealed class ProvenanceBaseApi(string publicBaseUrl) : AuthApiFactory
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             base.ConfigureWebHost(builder);
-            builder.UseSetting("Provenance:PublicBaseUrl", string.Empty);
+            builder.UseSetting(PublicBaseUrlKey, publicBaseUrl);
         }
     }
 }

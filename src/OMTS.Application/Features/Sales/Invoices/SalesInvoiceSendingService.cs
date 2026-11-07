@@ -24,7 +24,8 @@ namespace OMTS.Application.Features.Sales.Invoices;
 /// <remarks>
 /// Each sending marks the invoice changed, so two parallel Resends (or a Resend and the end of the sale) cannot both pass the "latest sending is not Sending" check: the
 /// loser reads again and is refused, or, for the end of the sale, saves on the fresh reads. Two parallel ends of the sale both set the decision: one wins, the other reads
-/// it and answers MSG-GEN-09.
+/// it and answers the current result. The end of the sale happens once: called again (a mobile retry after a lost answer), it answers the current result and sends
+/// nothing. Resend needs the end of the sale first (BR-SALE-08: the QR code is decided at the end of the sale, before any sending).
 /// </remarks>
 public sealed class SalesInvoiceSendingService(
     ISalesInvoiceRepository invoices,
@@ -40,6 +41,9 @@ public sealed class SalesInvoiceSendingService(
 {
     public const string FinishedAction = "SalesInvoice.SaleFinished";
     public const string WantsQrCodeField = "wantsQrCode";
+
+    // MSG-GEN-09 "{record} is {status} and cannot be used for this action." for a Resend before the end of the sale.
+    private const string NotFinished = "not finished";
     private const int MaxAttempts = 3;
 
     // BR-ORIGIN-01: 128 random bits cannot be guessed; base64url gives 22 characters.
@@ -55,9 +59,10 @@ public sealed class SalesInvoiceSendingService(
                 return refused;
             }
 
-            if (invoice!.QrDecidedAt is { } decidedAt)
+            // Once only: an end of the sale already made (also by a parallel call) answers its result again, whatever the answer given now; nothing is sent again.
+            if (invoice!.QrDecidedAt is not null)
             {
-                return AppError.Conflict(UserMessages.WrongStatus($"Sales invoice {invoice.Code}", "already finished"), new Dictionary<string, object?> { ["qrDecidedAt"] = decidedAt });
+                return await CurrentAsync(invoice.Id, cancellationToken);
             }
 
             if (request.WantsQrCode is not { } wantsQrCode)
@@ -104,22 +109,24 @@ public sealed class SalesInvoiceSendingService(
                 return refused;
             }
 
+            // The first sending is part of the end of the sale, after the QR question: a Resend before it would send an invoice whose QR code is not decided yet.
+            if (invoice!.QrDecidedAt is null)
+            {
+                return AppError.Conflict(UserMessages.WrongStatus($"Sales invoice {invoice.Code}", NotFinished));
+            }
+
             // PRE-2: not while the latest sending is still being handed to the service.
-            if (SalesInvoiceViews.LatestStatus(await views.SendingsAsync(invoice!.Id, cancellationToken)) == StatusIds.MessageDelivery.Sending)
+            if (SalesInvoiceViews.LatestStatus(await views.SendingsAsync(invoice.Id, cancellationToken)) == StatusIds.MessageDelivery.Sending)
             {
                 return AppError.Conflict(UserMessages.WrongStatus($"Sales invoice {invoice.Code}", statusCatalog.DisplayNameOf(StatusIds.MessageDelivery.Sending)));
             }
 
+            // Nothing to send (walk-in, no phone) still writes the sending, Not sent, so the invoice no longer shows an older Sent (SALE-06 POST-1).
             var (sending, notSent) = await messages.QueueAsync(invoice, corrected: false, cancellationToken);
-            if (sending is null)
-            {
-                return await AnswerAsync(invoice.Id, null, notSent, [], cancellationToken);
-            }
-
             unitOfWork.MarkChanged(invoice);
             if (await SavedAsync(attempt, cancellationToken))
             {
-                return await AnswerAsync(invoice.Id, sending, null, [], cancellationToken);
+                return await AnswerAsync(invoice.Id, sending, notSent, [], cancellationToken);
             }
         }
     }
@@ -157,19 +164,34 @@ public sealed class SalesInvoiceSendingService(
         }
     }
 
-    // SALE-06 steps 4-5: the result given back is that of this sending; the invoice is read again as saved.
+    // SALE-06 steps 4-5: the result given back is that of this sending; the invoice is read again as saved. A row that had nothing to send is already Not sent.
     private async Task<SalesInvoiceSent> AnswerAsync(
-        Guid invoiceId, Notification? sending, UserMessage? notSent, IReadOnlyList<InvoiceLotOriginView> lots, CancellationToken cancellationToken)
+        Guid invoiceId, Notification sending, UserMessage? notSent, IReadOnlyList<InvoiceLotOriginView> lots, CancellationToken cancellationToken)
     {
-        if (sending is not null)
+        if (notSent is null)
         {
             await traderMessages.DeliverAsync(sending);
         }
 
-        var status = sending?.DeliveryStatusId ?? StatusIds.MessageDelivery.NotSent;
-        var invoice = await invoices.GetAsync(invoiceId, cancellationToken) ?? throw new InvalidOperationException($"Sales invoice {invoiceId} was just saved and cannot be read.");
-        var view = await views.ViewAsync(invoice, cancellationToken);
+        var status = sending.DeliveryStatusId ?? StatusIds.MessageDelivery.NotSent;
+        var view = await ViewOfAsync(invoiceId, cancellationToken);
         return new SalesInvoiceSent(view, status, statusCatalog.DisplayNameOf(status), view.QrUrl, lots, notSent?.Text, notSent?.Code);
+    }
+
+    // The end of the sale called again: its decision, the QR code and the status of the latest sending as they are now (Sending while a parallel call still delivers it);
+    // MSG-SALE-16 again when that sending had nothing to send. The origin states of the lots are not kept, so the lots are empty.
+    private async Task<SalesInvoiceSent> CurrentAsync(Guid invoiceId, CancellationToken cancellationToken)
+    {
+        var view = await ViewOfAsync(invoiceId, cancellationToken);
+        var nothingSent = view.Sendings.Count > 0 && view.Sendings[^1].PhoneNumber is null && view.DeliveryStatusId == StatusIds.MessageDelivery.NotSent;
+        var notSent = nothingSent ? UserMessages.InvoiceNotSent(view.Code, hasCustomerProfile: view.Customer is not null) : null;
+        return new SalesInvoiceSent(view, view.DeliveryStatusId, view.DeliveryStatus, view.QrUrl, [], notSent?.Text, notSent?.Code);
+    }
+
+    private async Task<SalesInvoiceView> ViewOfAsync(Guid invoiceId, CancellationToken cancellationToken)
+    {
+        var invoice = await invoices.GetAsync(invoiceId, cancellationToken) ?? throw new InvalidOperationException($"Sales invoice {invoiceId} was just saved and cannot be read.");
+        return await views.ViewAsync(invoice, cancellationToken);
     }
 
     private static string Base64Url(byte[] bytes) => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');

@@ -93,6 +93,27 @@ public class SalesInvoiceResendTests
         Assert.Equal("Sent", (await (await sale.Manager.Client.ResendAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK)).Text("deliveryStatus"));
     }
 
+    // Another message to the trader's phone about the invoice (the SALE-08 cancellation notice of PR 10) is not one of its sendings: neither the latest status nor the guard.
+    [Fact]
+    public async Task Another_phone_message_about_the_invoice_is_not_one_of_its_sendings()
+    {
+        using var api = new AuthApiFactory();
+        var sale = await api.SaleSetupAsync();
+        var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
+        await api.UseDbAsync(db => db.Notifications.Add(new Notification
+        {
+            Channel = NotificationChannel.Sms, Type = "SALES_INVOICE_CANCELLED", Title = "Sales invoice cancelled", RelatedRecordType = RelatedRecordTypes.SalesInvoice,
+            RelatedRecordId = invoice.Id(), CreatedAt = DateTimeOffset.UtcNow, PhoneNumber = "999900000002", DeliveryStatusId = StatusIds.MessageDelivery.Sending,
+            DeliveryStatusAt = DateTimeOffset.UtcNow,
+        }));
+
+        var view = await (await sale.Manager.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK);
+
+        Assert.Equal(("Sent", 1), (view.Text("deliveryStatus"), view.GetProperty("sendings").GetArrayLength()));
+        Assert.Equal("Sent", (await (await sale.Manager.Client.ResendAsync(invoice.Id())).ReadAsync(HttpStatusCode.OK)).Text("deliveryStatus"));
+    }
+
     // BR-SALE-08, BR-SALE-09, §I.4.4: the Zone Manager of the zone and the Owner; another zone and the Accountant get MSG-GEN-08 and nothing is sent.
     [Fact]
     public async Task Only_the_zone_manager_of_the_zone_and_the_owner_finish_or_resend_and_a_cancelled_invoice_is_not_sent()
@@ -113,13 +134,22 @@ public class SalesInvoiceResendTests
         Assert.Empty(await api.InvoiceSendingsAsync(invoice.Id()));
         Assert.Null(await api.QueryAsync(db => db.SalesInvoices.Where(i => i.Id == invoice.Id()).Select(i => i.QrDecidedAt).SingleAsync()));
         Assert.Equal(HttpStatusCode.NotFound, (await sale.Owner.Client.ResendAsync(Guid.NewGuid())).StatusCode);
+
+        // BR-SALE-08: the QR code is decided at the end of the sale, so nothing is sent before it; finish itself stays open (PM question).
+        var rowVersion = await api.QueryAsync(db => db.SalesInvoices.Where(i => i.Id == invoice.Id()).Select(i => i.RowVersion).SingleAsync());
+        var early = await (await sale.Owner.Client.ResendAsync(invoice.Id())).ReadAsync(HttpStatusCode.Conflict);
+        Assert.Equal(("MSG-GEN-09", $"Sales invoice {invoice.Text("code")} is not finished and cannot be used for this action."), (early.Text("code"), early.Text("detail")));
+        Assert.Empty(await api.InvoiceSendingsAsync(invoice.Id()));
+        Assert.Empty(api.SmsTo(invoice.GetProperty("customer").Text("phoneNumber")!));
+        Assert.Equal(rowVersion, await api.QueryAsync(db => db.SalesInvoices.Where(i => i.Id == invoice.Id()).Select(i => i.RowVersion).SingleAsync()));
+        await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: false);
         Assert.Equal(HttpStatusCode.OK, (await sale.Owner.Client.ResendAsync(invoice.Id())).StatusCode);
 
         // PRE-1: a Cancelled invoice (SALE-08, PR 10) is never sent again.
         await api.UpdateAsync<SalesInvoice>(invoice.Id(), i => i.StatusId = StatusIds.SalesInvoice.Cancelled);
         var cancelled = await (await sale.Owner.Client.ResendAsync(invoice.Id())).ReadAsync(HttpStatusCode.Conflict);
         Assert.Equal(("MSG-GEN-09", $"Sales invoice {invoice.Text("code")} is Cancelled and cannot be used for this action."), (cancelled.Text("code"), cancelled.Text("detail")));
-        Assert.Single(await api.InvoiceSendingsAsync(invoice.Id()));
+        Assert.Equal(2, (await api.InvoiceSendingsAsync(invoice.Id())).Count);
     }
 
     private const System.Text.Json.JsonValueKind JsonNull = System.Text.Json.JsonValueKind.Null;

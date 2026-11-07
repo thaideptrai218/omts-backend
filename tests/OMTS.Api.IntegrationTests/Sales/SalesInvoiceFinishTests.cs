@@ -76,11 +76,22 @@ public class SalesInvoiceFinishTests
         await api.PublishAsync(sale.LotId);
         await AssertNoQrCodeAsync(await sale.Manager.Client.SoldAsync(sale, sale.LotId), wants: false);
 
-        // Once only: the lot of the first invoice is Published now, but a second end of the sale is refused and creates no QR code.
-        var again = await (await sale.Owner.Client.FinishAsync(notPublished.Id(), true)).ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal(("MSG-GEN-09", $"Sales invoice {notPublished.Text("code")} is already finished and cannot be used for this action."), (again.Text("code"), again.Text("detail")));
+        // Once only: the lot of the first invoice is Published now, but a second end of the sale (a mobile retry after a lost answer) answers the current result, with or
+        // without an answer to MSG-SALE-07, creates no QR code and sends nothing again.
+        var decidedAt = await api.QueryAsync(db => db.SalesInvoices.Where(i => i.Id == notPublished.Id()).Select(i => i.QrDecidedAt).SingleAsync());
+        foreach (bool? wants in new bool?[] { true, null })
+        {
+            var again = await (await sale.Owner.Client.FinishAsync(notPublished.Id(), wants)).ReadAsync(HttpStatusCode.OK);
+            Assert.Equal(("Sent", JsonValueKind.Null, JsonValueKind.Null, 0), (again.Text("deliveryStatus"), again.GetProperty("qrUrl").ValueKind, again.GetProperty("messageCode").ValueKind,
+                again.GetProperty("lots").GetArrayLength()));
+            Assert.Equal(1, again.GetProperty("invoice").GetProperty("sendings").GetArrayLength());
+        }
+
         Assert.Equal(0, await api.QueryAsync(db => db.SalesInvoices.CountAsync(i => i.QrToken != null)));
+        Assert.Equal(decidedAt, await api.QueryAsync(db => db.SalesInvoices.Where(i => i.Id == notPublished.Id()).Select(i => i.QrDecidedAt).SingleAsync()));
         Assert.Single(await api.InvoiceSendingsAsync(notPublished.Id()));
+        Assert.Single(api.SmsTo(Phone(notPublished)), m => m.Text.Contains(notPublished.Text("code")!, StringComparison.Ordinal));
+        Assert.Equal(1, await api.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == notPublished.Id() && e.Action == "SalesInvoice.SaleFinished")));
 
         async Task AssertNoQrCodeAsync(JsonElement invoice, bool wants)
         {
@@ -111,12 +122,24 @@ public class SalesInvoiceFinishTests
         Assert.NotNull(walkInAnswer.Text("qrUrl"));
         Assert.Equal(("Not sent", "MSG-SALE-16", $"Invoice {noPhone.Text("code")} is not sent: the customer profile has no phone number. Please show the invoice to the trader on your screen."),
             (noPhoneAnswer.Text("deliveryStatus"), noPhoneAnswer.Text("messageCode"), noPhoneAnswer.Text("message")));
-        // BR-SALE-09: nothing was sent, so no row; the invoice shows Not sent, as one with no sending at all.
-        Assert.Empty(await api.InvoiceSendingsAsync(walkIn.Id()));
-        Assert.Empty(await api.InvoiceSendingsAsync(noPhone.Id()));
-        Assert.Equal(("Not sent", 0), (walkInAnswer.GetProperty("invoice").Text("deliveryStatus"), walkInAnswer.GetProperty("invoice").GetProperty("sendings").GetArrayLength()));
+        // BR-SALE-09, SALE-06 POST-1: the attempt is kept as a sending, Not sent, with no phone and the cause as its error code; nothing reached any service.
+        var walkInRow = Assert.Single(await api.InvoiceSendingsAsync(walkIn.Id()));
+        var noPhoneRow = Assert.Single(await api.InvoiceSendingsAsync(noPhone.Id()));
+        Assert.Equal(((int?)StatusIds.MessageDelivery.NotSent, (string?)null, (string?)"NO_CUSTOMER_PROFILE", (string?)"MSG-SALE-16", (Guid?)null),
+            (walkInRow.DeliveryStatusId, walkInRow.PhoneNumber, walkInRow.ProviderErrorCode, walkInRow.MessageCode, walkInRow.RecipientAccountId));
+        Assert.Equal(((int?)StatusIds.MessageDelivery.NotSent, (string?)null, (string?)"NO_PHONE_NUMBER", Domain.Enums.NotificationChannel.Sms),
+            (noPhoneRow.DeliveryStatusId, noPhoneRow.PhoneNumber, noPhoneRow.ProviderErrorCode, noPhoneRow.Channel));
+        Assert.All(new[] { walkInRow, noPhoneRow }, r => Assert.DoesNotContain("bank_account", r.MessageParams ?? string.Empty));
+        var shown = walkInAnswer.GetProperty("invoice");
+        Assert.Equal(("Not sent", 1, JsonValueKind.Null), (shown.Text("deliveryStatus"), shown.GetProperty("sendings").GetArrayLength(), shown.GetProperty("sendings")[0].GetProperty("phoneNumber").ValueKind));
+
+        // A retry of the end of the sale tells MSG-SALE-16 again and writes nothing; Resend keeps one more Not sent attempt.
+        var retried = await sale.Manager.Client.FinishedAsync(walkIn.Id(), wantsQrCode: false);
+        Assert.Equal(("Not sent", "MSG-SALE-16", walkInAnswer.Text("qrUrl")), (retried.Text("deliveryStatus"), retried.Text("messageCode"), retried.Text("qrUrl")));
+        Assert.Single(await api.InvoiceSendingsAsync(walkIn.Id()));
         var resent = await (await sale.Owner.Client.ResendAsync(walkIn.Id())).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(("Not sent", "MSG-SALE-16"), (resent.Text("deliveryStatus"), resent.Text("messageCode")));
+        Assert.Equal(("Not sent", "MSG-SALE-16", "Not sent"), (resent.Text("deliveryStatus"), resent.Text("messageCode"), resent.GetProperty("invoice").Text("deliveryStatus")));
+        Assert.Equal(2, (await api.InvoiceSendingsAsync(walkIn.Id())).Count);
     }
 
     // The trader of a linked profile is the recipient of the row; the part to pay names the receiving account (MSG-SALE-15).

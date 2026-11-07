@@ -20,13 +20,25 @@ public sealed class SalesInvoiceMessages(ICooperativeRepository cooperatives, Tr
 
     public const string Title = "Sales invoice";
 
-    /// <summary>The sending row, or MSG-SALE-16 when nothing can be sent: a walk-in customer, or a profile without a phone number (SALE-06.0.E1).</summary>
+    /// <summary>Error code of the Not sent row of a walk-in customer (MSG-SALE-16 cause).</summary>
+    public const string NoCustomerProfile = "NO_CUSTOMER_PROFILE";
+
+    /// <summary>Error code of the Not sent row of a customer profile without a phone number (MSG-SALE-16 cause).</summary>
+    public const string NoPhoneNumber = "NO_PHONE_NUMBER";
+
+    /// <summary>
+    /// The sending row, Sending, to deliver after the save. When nothing can be sent (a walk-in customer, or a profile without a phone number, SALE-06.0.E1) the row is
+    /// already Not sent, has no phone and keeps MSG-SALE-16 with its cause as the error code, and <c>NotSent</c> is MSG-SALE-16: the invoice then shows Not sent even after
+    /// an earlier Sent (SALE-06 POST-1). That row names no receiving account, so the DEBT-01 count never sees it.
+    /// </summary>
     /// <param name="corrected">Sent again after a correction (SALE-07, PR 10).</param>
-    public async Task<(Notification? Sending, UserMessage? NotSent)> QueueAsync(SalesInvoice invoice, bool corrected, CancellationToken cancellationToken)
+    public async Task<(Notification Sending, UserMessage? NotSent)> QueueAsync(SalesInvoice invoice, bool corrected, CancellationToken cancellationToken)
     {
         if (invoice.Customer is not { } customer || string.IsNullOrWhiteSpace(customer.PhoneNumber))
         {
-            return (null, UserMessages.InvoiceNotSent(invoice.Code, hasCustomerProfile: invoice.Customer is not null));
+            var notSent = UserMessages.InvoiceNotSent(invoice.Code, hasCustomerProfile: invoice.Customer is not null);
+            var record = new NotificationContent(MessageType, Title, notSent, new RelatedRecord(RelatedRecordTypes.SalesInvoice, invoice.Id, invoice.Code));
+            return (traderMessages.NotSent(invoice.Customer?.AccountId, record, invoice.Customer is null ? NoCustomerProfile : NoPhoneNumber), notSent);
         }
 
         var cooperative = await cooperatives.GetCurrentAsync(cancellationToken)

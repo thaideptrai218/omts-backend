@@ -327,6 +327,7 @@ internal sealed class ZoneRaceApiFactory(SqlServerTestDatabase database) : WebAp
             ["Jobs:ZoneLicenseReminder:CatchUpOnStart"] = "false",
             ["Jobs:WaterMeasurementOverdue:CatchUpOnStart"] = "false",
             ["Jobs:OrphanFileCleanup:Enabled"] = "false",
+            [AuthApiFactory.PublicBaseUrlKey] = AuthApiFactory.PublicBaseUrl,
         }));
         builder.ConfigureTestServices(services =>
         {

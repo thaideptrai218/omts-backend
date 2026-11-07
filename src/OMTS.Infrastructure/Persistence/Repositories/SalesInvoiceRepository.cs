@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Notifications;
+using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
 
@@ -33,7 +34,9 @@ internal sealed class SalesInvoiceRepository(OmtsDbContext db) : ISalesInvoiceRe
 
     public async Task<IReadOnlyList<SalesInvoiceSending>> ListSendingsAsync(Guid invoiceId, CancellationToken cancellationToken) =>
         await db.Notifications.AsNoTracking()
-            .Where(n => n.RelatedRecordType == RelatedRecordTypes.SalesInvoice && n.RelatedRecordId == invoiceId && n.Channel != NotificationChannel.InApp)
+            // The invoice message only: another message to the trader's phone about the invoice (the cancellation notice of SALE-08, PR 10) is not one of its sendings.
+            .Where(n => n.RelatedRecordType == RelatedRecordTypes.SalesInvoice && n.RelatedRecordId == invoiceId && n.Type == SalesInvoiceMessages.MessageType
+                && n.Channel != NotificationChannel.InApp)
             .OrderBy(n => n.CreatedAt)
             .Select(n => new SalesInvoiceSending(n.Channel, n.PhoneNumber, n.DeliveryStatusId, n.DeliveryStatusAt, n.CreatedAt))
             .ToListAsync(cancellationToken);

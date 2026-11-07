@@ -56,7 +56,8 @@ public class SalesInvoiceSendingSqlServerTests
     private static Task<List<Notification>> SendingsAsync(FarmingSqlServerHost host, Guid invoiceId) =>
         host.QueryAsync(db => db.Notifications.AsNoTracking().Where(n => n.RelatedRecordId == invoiceId && n.Channel != NotificationChannel.InApp).ToListAsync());
 
-    // Once only (QrDecidedAt): the Zone Manager and the Owner end the same sale at once; one is answered, the other told it is already finished, and one message goes out.
+    // Once only (QrDecidedAt): the Zone Manager and the Owner end the same sale at once; both are answered 200 with the one decision (the second end of the sale answers the
+    // current result), and one message goes out.
     [SqlServerFact]
     public async Task Two_parallel_ends_of_one_sale_finish_it_once_and_send_it_once()
     {
@@ -69,9 +70,8 @@ public class SalesInvoiceSendingSqlServerTests
 
             var answers = await Task.WhenAll(setup.Manager.FinishAsync(invoice.Id(), true), setup.Owner.FinishAsync(invoice.Id(), false));
 
-            Assert.Single(answers, a => a.StatusCode == HttpStatusCode.OK);
-            var lost = await Assert.Single(answers, a => a.StatusCode != HttpStatusCode.OK).ReadAsync(HttpStatusCode.Conflict);
-            Assert.Equal("MSG-GEN-09", lost.Text("code"));
+            var bodies = await Task.WhenAll(answers.Select(a => a.ReadAsync(HttpStatusCode.OK)));
+            Assert.Single(bodies.Select(b => b.GetProperty("invoice").Text("qrDecidedAt")).Distinct());
             Assert.Single(await SendingsAsync(setup.Host, invoice.Id()));
             Assert.Equal(1, await setup.Host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == invoice.Id() && e.Action == "SalesInvoice.SaleFinished")));
         }
@@ -126,14 +126,20 @@ public class SalesInvoiceSendingSqlServerTests
         var paid = await SellAsync(setup, debtor.Id());
         var notAccepted = await SellAsync(setup, refused.Id(), cash: 0m, rest: "PayLater");
         var notSentYet = await SellAsync(setup, debtor.Id(), cash: 0m, rest: "PayLater");
+        // Nothing to send (no phone): the Not sent row names no account and is not counted.
+        var noPhone = await setup.Owner.CreateCustomerAsync();
+        var nothingSent = await SellAsync(setup, noPhone.Id(), cash: 0m, rest: "PayLater");
+        await setup.Host.UseDbAsync(db => db.Customers.Single(c => c.Id == noPhone.Id()).PhoneNumber = null);
         setup.Host.Api.RefuseSmsTo(refused.Text("phoneNumber")!);
-        foreach (var invoice in new[] { unpaid, paid, notAccepted })
+        foreach (var invoice in new[] { unpaid, paid, notAccepted, nothingSent })
         {
             await setup.Manager.FinishedAsync(invoice.Id(), wantsQrCode: false);
         }
 
         Assert.Equal(1, await CountAsync(setup.Host));
         Assert.NotNull(notSentYet.Text("code"));
+        var nothingSentRow = Assert.Single(await SendingsAsync(setup.Host, nothingSent.Id()));
+        Assert.Equal(((int?)StatusIds.MessageDelivery.NotSent, (string?)null),(nothingSentRow.DeliveryStatusId, nothingSentRow.PhoneNumber));
 
         // A message sent with another account does not count for the current one.
         await setup.Host.UseDbAsync(db => db.Cooperatives.Single().BankAccount!.AccountNumber = "999900000009");

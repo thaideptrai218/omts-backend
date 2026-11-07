@@ -66,6 +66,19 @@ public sealed class TraderMessageService(
         return row;
     }
 
+    /// <summary>
+    /// A sending that could not be handed to any service (no phone number), added to the caller's save already Not sent with <paramref name="cause"/> as its error code, so
+    /// the latest sending of the record says Not sent (BR-SALE-09). It has no phone and is never delivered; like every row of this service it is in no list.
+    /// </summary>
+    public Notification NotSent(Guid? recipientAccountId, NotificationContent content, string cause)
+    {
+        var row = Queue(recipientAccountId, string.Empty, content);
+        row.PhoneNumber = null;
+        row.DeliveryStatusId = StatusIds.MessageDelivery.NotSent;
+        row.ProviderErrorCode = FitColumn(cause);
+        return row;
+    }
+
     /// <summary>Never throws. Sends with its own limit: the data is committed, so the request's cancellation must not leave the row Sending.</summary>
     public async Task DeliverAsync(Notification row)
     {

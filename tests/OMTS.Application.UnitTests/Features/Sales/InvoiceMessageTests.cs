@@ -15,6 +15,26 @@ public class InvoiceMessageTests
     private static UserMessage Message(decimal paid, decimal toPay, string? account = "999900000001", string? link = null, bool corrected = false) =>
         UserMessages.InvoiceMessage("HTX Trung Nam", "HD000012", corrected, Day, 200.5m, 6_015_000m, paid, toPay, account, account is null ? null : "DEMOBANK", link);
 
+    // BR-ORIGIN-01: the start-up check of Provenance:PublicBaseUrl accepts only an absolute http(s) URL, so no QR code or SMS gets a relative link.
+    [Theory]
+    [InlineData("https://web.example", true)]
+    [InlineData("http://localhost:3000/", true)]
+    [InlineData("", false)]
+    [InlineData("   ", false)]
+    [InlineData("/web", false)]
+    [InlineData("localhost:3000", false)]
+    [InlineData("ftp://web.example", false)]
+    public void The_public_base_url_must_be_an_absolute_web_address(string value, bool accepted)
+    {
+        var options = new ProvenanceOptions { PublicBaseUrl = value };
+
+        Assert.Equal(accepted, options.HasWebAddress());
+        if (accepted)
+        {
+            Assert.StartsWith(value.TrimEnd('/') + "/origin/", options.LinkOf("token"));
+        }
+    }
+
     [Fact]
     public void A_paid_invoice_without_a_qr_code_names_neither_an_account_nor_a_link()
     {
