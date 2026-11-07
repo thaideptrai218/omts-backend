@@ -98,8 +98,9 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
         return await query.OrderBy(i => i.Code).ToListAsync(cancellationToken);
     }
 
-    public Task<bool> IsUsedAsync(Guid itemId, CancellationToken cancellationToken) =>
-        db.PurchaseReceiptLines.AnyAsync(l => l.ItemId == itemId, cancellationToken);
+    public async Task<bool> IsUsedAsync(Guid itemId, CancellationToken cancellationToken) =>
+        await db.PurchaseReceiptLines.AnyAsync(l => l.ItemId == itemId, cancellationToken)
+        || await db.MaterialUsages.AnyAsync(u => u.ItemId == itemId, cancellationToken);
 
     public async Task<IReadOnlySet<Guid>> UsedAmongAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken)
     {
@@ -108,8 +109,9 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
             return new HashSet<Guid>();
         }
 
-        return (await db.PurchaseReceiptLines.Where(l => l.ItemId != null && itemIds.Contains(l.ItemId.Value))
-            .Select(l => l.ItemId!.Value).Distinct().ToListAsync(cancellationToken)).ToHashSet();
+        var onReceipts = db.PurchaseReceiptLines.Where(l => l.ItemId != null && itemIds.Contains(l.ItemId.Value)).Select(l => l.ItemId!.Value);
+        var onUsages = db.MaterialUsages.Where(u => itemIds.Contains(u.ItemId)).Select(u => u.ItemId);
+        return (await onReceipts.Union(onUsages).ToListAsync(cancellationToken)).ToHashSet();
     }
 
     public void Add(FarmingInputItem item) => db.FarmingInputItems.Add(item);

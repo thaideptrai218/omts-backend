@@ -64,7 +64,8 @@ public class CultivationLogRecordTests(AuthApiFactory factory) : IClassFixture<A
         { "Visit date", new LogFields { VisitDate = null, VisitDateText = "not a date" } },
         { "Visit date", new LogFields { VisitDate = null, VisitDateText = "01/02/2026" } },
         { "Visit date", new LogFields { VisitDate = Today.AddDays(-11) } },
-        { "Visit date", new LogFields { VisitDate = Today.AddDays(1) } },
+        // Two days ahead: this list is built when the tests are discovered, and a run may cross midnight in UTC+7.
+        { "Visit date", new LogFields { VisitDate = Today.AddDays(2) } },
         { "Notes", new LogFields { Notes = new string('x', 2001) } },
         { "Photos", new LogFields { Photos = [] } },
         { "Photos", new LogFields { Photos = Enumerable.Repeat(Jpeg, 11).ToList() } },

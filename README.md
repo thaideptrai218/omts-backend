@@ -98,6 +98,8 @@ and a placeholder meter photo: three readings outside the thresholds, one correc
 sets of water alerts (the demo records as the Owner, who is not told of their own action). Phone numbers are fake
 (`0900 000 0xx`).
 
+Rafts `B1-01`, `B1-02`, `B2-01`, `B2-02` have material usage inside their Open cycles, and `B1-06`, `B2-06` a repair with no cycle, recorded by the zone's manager.
+
 Dates are set relative to the day of the first seed and are not moved afterwards:
 - After a few weeks the "expiring" license and certification have expired. `docker compose down -v` gives fresh dates.
 - Receipt codes follow one sequence in the order they were seeded (`PN000001`…`PN000020`), not the receipt date, and so do

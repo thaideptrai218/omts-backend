@@ -87,6 +87,7 @@ public static class DependencyInjection
         services.AddScoped<IRaftRepository, RaftRepository>();
         services.AddScoped<ICultivationCycleRepository, CultivationCycleRepository>();
         services.AddScoped<ICultivationLogRepository, CultivationLogRepository>();
+        services.AddScoped<IMaterialUsageRepository, MaterialUsageRepository>();
         services.AddScoped<ICultivationCycleQuery, CultivationCycleQuery>();
         services.AddScoped<IZoneLicenseRepository, ZoneLicenseRepository>();
         services.AddScoped<IRaftMaterialCostQuery, RaftMaterialCostQuery>();
