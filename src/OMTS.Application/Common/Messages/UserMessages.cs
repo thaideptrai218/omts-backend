@@ -808,13 +808,18 @@ public static class UserMessages
     // ---- MSG-SALE: the sales invoice (SALE-05) ----
 
     /// <summary>
-    /// MSG-SALE-06 (SALE-05.6 to SALE-05.8): the invoice is completed. {payment_text} lists the payments joined by "; ": the cash recorded (the part subtracted from the debt included)
-    /// and the part added to the debt. An invoice of 0 VND reads "0 VND collected in cash".
+    /// MSG-SALE-06 (SALE-05 step 8, SALE-05.6 to SALE-05.8): the invoice is completed. {payment_text} lists the payments joined by "; ": the transfer received with its VietQR code, the
+    /// cash recorded (the part subtracted from the debt included) and the part added to the debt. An invoice of 0 VND reads "0 VND collected in cash".
     /// </summary>
-    public static UserMessage SaleCompleted(string invoiceCode, decimal cashAmount, decimal laterAmount, string customerName)
+    public static UserMessage SaleCompleted(string invoiceCode, decimal cashAmount, decimal laterAmount, string customerName, decimal vietQrAmount = 0m)
     {
         var parts = new List<string>();
-        if (cashAmount > 0 || laterAmount == 0)
+        if (vietQrAmount > 0)
+        {
+            parts.Add($"{Vnd(vietQrAmount)} VND received by VietQR");
+        }
+
+        if (cashAmount > 0 || (laterAmount == 0 && vietQrAmount == 0))
         {
             parts.Add($"{Vnd(cashAmount)} VND collected in cash");
         }
@@ -831,12 +836,26 @@ public static class UserMessages
             {
                 ["invoice_code"] = invoiceCode,
                 ["payment_text"] = paymentText,
+                ["vietqr_amount"] = vietQrAmount,
                 ["cash_amount"] = cashAmount,
                 ["later_amount"] = laterAmount,
                 ["customer_name"] = customerName,
             },
         };
     }
+
+    /// <summary>MSG-SALE-13 (SALE-05.0.E3): VietQR is chosen, but the cooperative has no receiving bank account (BR-DEBT-01).</summary>
+    public static readonly UserMessage VietQrNeedsReceivingAccount = new(
+        Sale13,
+        "VietQR cannot be used yet: the cooperative has no receiving bank account. Please choose another payment method, and ask the Cooperative Owner to set up the account.");
+
+    /// <summary>MSG-SALE-14 (SALE-05.0.E4 step 3): Stop sale while the transfer has not arrived, answered by <c>confirmed</c>.</summary>
+    public static UserMessage StopSaleQuestion(string invoiceCode) => new(
+        Sale14,
+        $"The transfer for invoice {invoiceCode} has not arrived. Stop this sale? Nothing is saved, and code {invoiceCode} is kept in the audit log. Give back any cash and keep the oysters. If the transfer still arrives, the Accountant pays it back.")
+    {
+        Parameters = new Dictionary<string, object?> { ["invoice_code"] = invoiceCode },
+    };
 
     /// <summary>MSG-SALE-08 (BR-SALE-03): a new sale, to the Cooperative Owner. {customer_name} is "a walk-in customer" without a profile; {price_text} is empty or starts with a space.</summary>
     /// <param name="paymentTerm">"Pay now" or "Pay later".</param>

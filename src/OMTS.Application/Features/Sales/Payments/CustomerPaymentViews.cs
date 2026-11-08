@@ -36,6 +36,6 @@ public sealed class CustomerPaymentViews(IAccountRepository accounts, IStatusCat
             p.Id, p.Code, p.Customer is { } c ? new CustomerDebtCustomer(c.Id, c.Name, c.PhoneNumber) : null, p.Kind, p.Amount, p.PaymentDate, p.Method,
             p.BankReference, p.Invoice is { } i ? new CustomerPaymentInvoiceRef(i.Id, i.Code) : null, Ref(p.CollectedByAccountId), Ref(p.RecordedByAccountId), p.Note,
             p.StatusId, statusCatalog.DisplayNameOf(p.StatusId), Ref(p.ConfirmedByAccountId), p.ConfirmedAt, Ref(p.CancelledByAccountId), p.CancelledAt, p.CancelReason,
-            RowVersionGuard.Encode(p.RowVersion))).ToList();
+            RowVersionGuard.Encode(p.RowVersion), p.TransferInvoiceCode, p.TransferredAt)).ToList();
     }
 }

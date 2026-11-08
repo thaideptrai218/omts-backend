@@ -22,6 +22,8 @@ internal sealed class CustomerReferences(OmtsDbContext db) : ICustomerReferences
         new Reference<PurchaseRequest>("Purchase requests", r => r.CustomerId),
         new Reference<SalesInvoice>("Sales invoices", i => i.CustomerId),
         new Reference<CustomerPayment>("Customer payments", p => p.CustomerId),
+        // The invoice the transfer saves then names the kept profile.
+        new Reference<PendingSale>("Sales awaiting their transfer", s => s.CustomerId),
     ];
 
     public IReadOnlyList<CustomerReferenceColumn> Columns { get; } = References.Select(r => r.Describe()).ToList();

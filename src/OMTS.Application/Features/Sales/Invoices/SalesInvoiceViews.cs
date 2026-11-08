@@ -2,10 +2,12 @@ using Microsoft.Extensions.Options;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.Notifications;
 using OMTS.Application.Features.WaterQuality.Dtos;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Sales.Invoices;
 
@@ -17,6 +19,24 @@ public sealed class SalesInvoiceViews(
     IOptions<ProvenanceOptions> provenance,
     TimeProvider timeProvider)
 {
+    /// <summary>
+    /// The answer of a save, read back as saved: MSG-SALE-06 names the transfer received with the VietQR code, the cash recorded and the part added to the debt. Only the cash of the
+    /// port names an invoice (BR-SALE-07 (3)); of the transfers, only the one that completed the sale counts, not a later one for the same invoice.
+    /// </summary>
+    /// <param name="savedOnTransfer">The bank notification saved the invoice (GFR-08): its first VietQR payment, the lowest code, is the transfer of the sale.</param>
+    public async Task<SalesInvoiceSaved> SavedAsync(SalesInvoice invoice, decimal change, bool savedOnTransfer, CancellationToken cancellationToken)
+    {
+        var payments = invoice.Payments.Where(p => p.Kind == CustomerPaymentKind.Payment).ToList();
+        var cash = payments.Where(p => p.Method == CustomerPaymentMethod.Cash).Sum(p => p.Amount);
+        var vietQr = savedOnTransfer
+            ? payments.Where(p => p.Method == CustomerPaymentMethod.VietQrInvoice).OrderBy(p => p.Code, StringComparer.Ordinal).Select(p => p.Amount).FirstOrDefault()
+            : 0m;
+        var subtracted = Math.Max(0m, cash - invoice.Total);
+        var later = invoice.PaymentTerm == SalesPaymentTerm.PayLater ? invoice.Total - (cash - subtracted) : 0m;
+        var message = UserMessages.SaleCompleted(invoice.Code, cash, later, invoice.Customer?.Name ?? SalesInvoiceNotifications.WalkInCustomerName, vietQr);
+        return new SalesInvoiceSaved(await ViewAsync(invoice, cancellationToken), change, subtracted, message.Text, message.Code);
+    }
+
     public async Task<SalesInvoiceView> ViewAsync(SalesInvoice invoice, CancellationToken cancellationToken)
     {
         var people = invoice.Payments.Select(p => p.CollectedByAccountId).OfType<Guid>().Append(invoice.CreatedByAccountId).Distinct().ToList();

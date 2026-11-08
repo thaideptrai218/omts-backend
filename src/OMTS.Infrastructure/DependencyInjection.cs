@@ -98,6 +98,7 @@ public static class DependencyInjection
         services.AddScoped<IPurchaseRequestFulfilment, PurchaseRequestFulfilmentQuery>();
         services.AddScoped<ISalesInvoiceRepository, SalesInvoiceRepository>();
         services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();
+        services.AddScoped<IPendingSaleRepository, PendingSaleRepository>();
         services.AddOptions<ProvenanceOptions>()
             .Bind(configuration.GetSection(ProvenanceOptions.SectionName))
             .Validate(o => o.HasWebAddress(), ProvenanceOptions.InvalidPublicBaseUrl)
@@ -276,6 +277,19 @@ public static class DependencyInjection
                 PaymentProviderOptions.FakeProvider when provider.GetRequiredService<IHostEnvironment>().IsDevelopment() =>
                     provider.GetRequiredService<FakePaymentNotificationService>(),
                 PaymentProviderOptions.FakeProvider or PaymentProviderOptions.NoneProvider => new UnconfiguredPaymentNotificationService(),
+                var other => throw UnknownProvider(PaymentProviderOptions.SectionName, other),
+            };
+        });
+        // API-13: the same provider reads the incoming notifications; no real provider yet.
+        services.AddSingleton<FakeBankNotificationParser>();
+        services.AddSingleton<IBankNotificationParser>(provider =>
+        {
+            var name = provider.GetRequiredService<IOptions<PaymentProviderOptions>>().Value.Provider;
+            return name switch
+            {
+                PaymentProviderOptions.FakeProvider when provider.GetRequiredService<IHostEnvironment>().IsDevelopment() =>
+                    provider.GetRequiredService<FakeBankNotificationParser>(),
+                PaymentProviderOptions.FakeProvider or PaymentProviderOptions.NoneProvider => new UnconfiguredBankNotificationParser(),
                 var other => throw UnknownProvider(PaymentProviderOptions.SectionName, other),
             };
         });

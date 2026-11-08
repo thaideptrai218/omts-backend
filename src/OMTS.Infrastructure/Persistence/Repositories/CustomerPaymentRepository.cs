@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Infrastructure.Persistence.Repositories;
 
@@ -31,6 +32,14 @@ internal sealed class CustomerPaymentRepository(OmtsDbContext db) : ICustomerPay
             .Where(p => p.BankReference == bankReference && p.StatusId != StatusIds.CustomerPayment.Cancelled)
             .OrderByDescending(p => p.PaymentDate).ThenByDescending(p => p.Code)
             .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<CustomerPayment?> FindVietQrByBankReferenceAsync(string bankReference, CancellationToken cancellationToken) =>
+        db.CustomerPayments.AsNoTracking().FirstOrDefaultAsync(p => p.Method == CustomerPaymentMethod.VietQrInvoice && p.BankReference == bankReference, cancellationToken);
+
+    public async Task<decimal> ReceivedWithoutInvoiceAsync(string invoiceCode, CancellationToken cancellationToken) =>
+        await db.CustomerPayments.AsNoTracking()
+            .Where(p => p.TransferInvoiceCode == invoiceCode && p.InvoiceId == null && p.StatusId != StatusIds.CustomerPayment.Cancelled)
+            .SumAsync(p => (decimal?)p.Amount, cancellationToken) ?? 0m;
 
     public async Task<(IReadOnlyList<CustomerPayment> Items, int Total, decimal TotalAmount)> AwaitingConfirmationAsync(
         int page, int pageSize, CancellationToken cancellationToken)

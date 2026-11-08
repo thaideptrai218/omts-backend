@@ -97,6 +97,6 @@ internal sealed class DemoSalesInvoiceStep : IDemoSeedStep
     {
         var actor = await DemoCultivationLogStep.ActorAsync(context, PermissionFunctions.SalesInvoices, manager, request.ZoneId!.Value, cancellationToken);
         using var acting = context.Get<AmbientActor>().Use(actor);
-        return DemoSeedContext.Ensure(await context.Get<SalesInvoiceService>().CreateAsync(request, cancellationToken), $"sales invoice of zone {zoneCode}").Invoice.Id;
+        return DemoSeedContext.Ensure(await context.Get<SalesInvoiceService>().CreateAsync(request, cancellationToken), $"sales invoice of zone {zoneCode}").Saved!.Invoice.Id;
     }
 }
