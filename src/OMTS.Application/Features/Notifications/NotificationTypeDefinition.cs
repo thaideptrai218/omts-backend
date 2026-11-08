@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Features.Authorization.Models;
 
 namespace OMTS.Application.Features.Notifications;
@@ -20,11 +21,12 @@ public sealed record NotificationTypeDefinition(
 /// the zone of the record, or the Cooperative Owner only when <see cref="Function"/> is null (Owner-only use cases
 /// such as FARM-03 and ACCOUNT-09). With <see cref="OwnTraderRecord"/>, the trader the record belongs to (§I.4.4 †).
 /// </summary>
-public sealed record NotificationOpenAccess(string? Function, PermissionAction Action, bool OwnTraderRecord = false)
+public sealed record NotificationOpenAccess(string? Function, PermissionAction Action, bool OwnTraderRecord = false, bool OwnEmployeeRecord = false)
 {
     public static readonly NotificationOpenAccess OwnerOnly = new(null, PermissionAction.View);
 
     public static readonly NotificationOpenAccess TraderOfTheRecord = new(null, PermissionAction.View, OwnTraderRecord: true);
+    public static readonly NotificationOpenAccess EmployeeOfTheRecord = new(null, PermissionAction.View, OwnEmployeeRecord: true);
 
     public static NotificationOpenAccess InZone(string function, PermissionAction action) => new(function, action);
 }

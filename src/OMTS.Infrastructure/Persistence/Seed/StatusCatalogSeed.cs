@@ -84,6 +84,9 @@ internal static class StatusCatalogSeed
         NewStatus(S.CustomerPayment.AwaitingConfirmation, G.CustomerPayment, "AWAITING_CONFIRMATION", "Awaiting confirmation", "Recorded at the port or by the system; counts in the debt until the Accountant confirms or cancels it.", initial: true),
         NewStatus(S.CustomerPayment.Confirmed, G.CustomerPayment, "CONFIRMED", "Confirmed", "Checked or recorded by the Accountant."),
         NewStatus(S.CustomerPayment.Cancelled, G.CustomerPayment, "CANCELLED", "Cancelled", "Recorded by mistake or never received; no longer counts.", final: true),
+        NewStatus(S.PurchaseRequest.AwaitingStaff, G.PurchaseRequest, "AWAITING_STAFF", "Awaiting staff confirmation", "User decision 31/10/2026: employees approve their shift before the Owner accepts the request."),
+        NewStatus(S.Account.PendingApproval, G.Account, "PENDING_APPROVAL", "Pending approval", "A trader asked for an account from the Zalo Mini App; cannot log in until the Cooperative Owner approves.", initial: true),
+        NewStatus(S.Account.Rejected, G.Account, "REJECTED", "Rejected", "The Cooperative Owner refused the request; the trader may ask again."),
     ];
 
     public static readonly StatusTransition[] Transitions =
@@ -133,6 +136,10 @@ internal static class StatusCatalogSeed
         NewTransition(210, S.CustomerPayment.AwaitingConfirmation, S.CustomerPayment.Confirmed, "DEBT-02", Accountant, Action, "The cash or the transfer that arrived matches the payment.", false),
         NewTransition(211, S.CustomerPayment.AwaitingConfirmation, S.CustomerPayment.Cancelled, "DEBT-02, SALE-08", $"{Accountant}; {Owner}", Action, "The customer did not pay, or the cash was given back when the invoice was cancelled.", true),
         NewTransition(212, S.CustomerPayment.Confirmed, S.CustomerPayment.Cancelled, "DEBT-02", Accountant, Action, "Recorded by mistake, or the money never arrived.", true),
+        NewTransition(30081, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.AwaitingStaff, "SALE-03", Owner, Action, "The Owner sends dated shift invitations with a cage capacity.", false),
+        NewTransition(30082, S.PurchaseRequest.AwaitingStaff, S.PurchaseRequest.Declined, "SALE-03", Owner, Action, "The Owner declines with a reason.", true),
+        NewTransition(30083, S.PurchaseRequest.AwaitingStaff, S.PurchaseRequest.Cancelled, "SALE-02", "Trader", Action, "Only the requesting customer may cancel; release shift reservations.", false),
+        NewTransition(30084, S.PurchaseRequest.AwaitingStaff, S.PurchaseRequest.Accepted, "SALE-03", Owner, Action, "Enough distinct employees have approved the dated shift; cages and pickup match the staffing plan.", false),
 
         // Trader accounts requested from the Zalo Mini App (not in the SRS table yet, decision of 28/10/2026).
         NewTransition(30074, S.Account.PendingApproval, S.Account.Active, "ACS-01 (Zalo)", Owner, Action, "Approve the trader's request.", false),

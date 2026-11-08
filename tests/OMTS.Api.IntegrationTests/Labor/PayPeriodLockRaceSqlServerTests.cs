@@ -74,12 +74,12 @@ public class PayPeriodLockRaceSqlServerTests
             jobTypes.Add(await AddJobTypeAsync(owner));
         }
 
-        var version = (await owner.GetFromJsonAsync<JsonElement>(AttendanceSettings)).VersionOf();
+        var version = (await owner.GetFromJsonAsync<JsonElement>(LaborSettingsTestKit.AttendanceSettings)).VersionOf();
         var payroll = DraftOfOctober();
         await ChangeAsync(api, db => db.Payrolls.Add(payroll));
 
         var saves = jobTypes.Select((j, i) => owner.PostRateAsync(j, 50_000 + i, "2020-10-15"))
-            .Append(owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = "2020-10-15", rowVersion = version }))
+            .Append(owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = "2020-10-15", rowVersion = version }))
             .ToList();
         var send = Task.Run(() => SendWithRetriesAsync(api, payroll.Id));
         var responses = await Task.WhenAll(saves);

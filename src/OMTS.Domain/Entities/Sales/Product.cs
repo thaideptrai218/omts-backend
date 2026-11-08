@@ -10,6 +10,11 @@ namespace OMTS.Domain.Entities.Sales;
 /// </summary>
 public class Product : AuditableEntity, IHasStatus
 {
+    /// <summary>Optional catalogue metadata retained for existing Mini App products.</summary>
+    public string Code { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public DateOnly? ValidFrom { get; set; }
+    public DateOnly? ValidTo { get; set; }
     public string Name { get; set; } = string.Empty;
 
     /// <summary>List price per kg, in whole VND, above 0. Past prices are kept only in the audit log (BR-SALE-05).</summary>

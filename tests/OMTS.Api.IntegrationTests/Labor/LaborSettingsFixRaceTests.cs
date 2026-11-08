@@ -10,6 +10,7 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Domain.Entities.Labor;
 using OMTS.Infrastructure.Persistence;
 using OMTS.Infrastructure.Persistence.Repositories;
+using OMTS.Infrastructure.Persistence.Repositories.Sales;
 using static OMTS.Api.IntegrationTests.Infrastructure.FarmLabSqlServerKit;
 using static OMTS.Api.IntegrationTests.Labor.LaborSettingsQaKit;
 using static OMTS.Api.IntegrationTests.Labor.LaborSettingsTestKit;
@@ -50,14 +51,14 @@ public class LaborSettingsFixRaceTests
 
         for (var round = 0; round < Rounds; round++)
         {
-            var version = (await owner.GetFromJsonAsync<JsonElement>(AttendanceSettings)).VersionOf();
+            var version = (await owner.GetFromJsonAsync<JsonElement>(LaborSettingsTestKit.AttendanceSettings)).VersionOf();
             var date = $"202{round}-03-01";
 
-            var responses = await InParallelAsync(Parallel, _ => owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = date, rowVersion = version }));
+            var responses = await InParallelAsync(Parallel, _ => owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = date, rowVersion = version }));
 
             await AssertOneWinnerAsync(responses, HttpStatusCode.OK, "MSG06");
             var winner = await responses.Single(r => r.StatusCode == HttpStatusCode.OK).BodyAsync(HttpStatusCode.OK);
-            Assert.Equal((await owner.GetFromJsonAsync<JsonElement>(AttendanceSettings)).VersionOf(), winner.GetProperty("settings").VersionOf());
+            Assert.Equal((await owner.GetFromJsonAsync<JsonElement>(LaborSettingsTestKit.AttendanceSettings)).VersionOf(), winner.GetProperty("settings").VersionOf());
             Assert.Equal(round + 1, await QueryAsync(api, db => db.AttendanceSettingsVersions.CountAsync()));
         }
     }

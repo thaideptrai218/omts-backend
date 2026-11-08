@@ -1,3 +1,4 @@
+using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
 
@@ -24,4 +25,13 @@ public interface IPurchaseRequestRepository
 
     /// <summary>The sendings kept for these requests, oldest first.</summary>
     Task<IReadOnlyList<PurchaseRequestSending>> ListSendingsAsync(IReadOnlyCollection<Guid> requestIds, CancellationToken cancellationToken);
+
+    Task<PurchaseRequest?> GetAsync(Guid id, CancellationToken ct);
+    Task<PurchaseRequest?> FindOperationAsync(Guid customerId, Guid operationId, CancellationToken ct);
+    Task<(IReadOnlyList<PurchaseRequest> Items, int Total)> SearchAsync(Guid? customerId, int? statusId, int page, int pageSize, CancellationToken ct);
+    Task<IReadOnlyList<Employee>> StaffingEmployeesAsync(CancellationToken ct);
+    Task<IReadOnlyList<PurchaseShiftInvitation>> EmployeeInvitationsAsync(Guid employeeId, DateOnly from, DateOnly to, CancellationToken ct);
+    Task<PurchaseShiftInvitation?> InvitationAsync(Guid id, CancellationToken ct);
+    Task<bool> HasShiftReservationAsync(Guid employeeId, DateOnly day, Guid? exceptRequestId, CancellationToken ct);
+    void AddInvitation(PurchaseShiftInvitation invitation);
 }
