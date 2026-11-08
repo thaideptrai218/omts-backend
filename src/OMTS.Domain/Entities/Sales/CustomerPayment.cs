@@ -39,6 +39,23 @@ public class CustomerPayment : AuditableEntity, IHasStatus
     /// <summary>The person who recorded it; null when the system did (GFR-08).</summary>
     public Guid? RecordedByAccountId { get; set; }
 
+    /// <summary>Required for a transfer the Accountant records (BR-DEBT-03); a second payment with the same one needs a confirmation (MSG-DEBT-05).</summary>
+    public string? BankReference { get; set; }
+
+    public string? Note { get; set; }
+
+    /// <summary>A repeated key returns the first payment and creates nothing (NFR-04).</summary>
+    public string? DeduplicationKey { get; set; }
+
     public int StatusId { get; set; } = StatusIds.CustomerPayment.AwaitingConfirmation;
     public Status Status { get; set; } = null!;
+
+    /// <summary>Who confirmed it and when: the Accountant at confirmation (DEBT-02.2), or the recorder when it is saved Confirmed (DEBT-02, DEBT-02.3).</summary>
+    public Guid? ConfirmedByAccountId { get; set; }
+    public DateTimeOffset? ConfirmedAt { get; set; }
+
+    /// <summary>A cancelled payment stays on its own date in the statement, with this date, and counts 0 (BR-DEBT-04).</summary>
+    public DateTimeOffset? CancelledAt { get; set; }
+    public Guid? CancelledByAccountId { get; set; }
+    public string? CancelReason { get; set; }
 }

@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Validation;
 using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Sales.Debts;
 using OMTS.Application.Features.Sales.PurchaseRequests;
+using OMTS.Application.Features.WaterQuality.Dtos;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
@@ -25,6 +27,8 @@ internal sealed class HarvestLotSalesQuery(OmtsDbContext db) : IHarvestLotSalesQ
                 .GroupBy(l => l.HarvestLotId)
                 .Select(g => new { LotId = g.Key, Kg = g.Sum(l => l.Kg) })
                 .ToDictionaryAsync(x => x.LotId, x => x.Kg, cancellationToken);
+        // CLAIM-03 seam: the returned kg (and their back-for-sale / discarded split) of the non-cancelled sales return lines go in here. HarvestLotFigures subtracts them from the
+        // invoiced kg, so the lot views, the GFR-05 leftover and the HARVEST-04 yield (AC-09: 600 invoiced - 300 returned = 300 sold) need no change.
         return ids.ToDictionary(id => id, id => invoiced.TryGetValue(id, out var kg) ? LotSalesFigures.None with { InvoicedKg = kg } : LotSalesFigures.None);
     }
 
@@ -75,20 +79,111 @@ internal sealed class CustomerDebtQuery(OmtsDbContext db) : ICustomerDebtQuery
     public async Task<IReadOnlyDictionary<Guid, CustomerDebtFigures>> FiguresAsync(IReadOnlyCollection<Guid> customerIds, CancellationToken cancellationToken)
     {
         var ids = customerIds.Distinct().ToList();
-        var invoices = await db.SalesInvoices.AsNoTracking()
-            .Where(i => i.CustomerId != null && ids.Contains(i.CustomerId.Value) && i.StatusId != StatusIds.SalesInvoice.Cancelled)
+        var figures = await SumsAsync(ids, cancellationToken);
+        return ids.ToDictionary(id => id, id => figures.GetValueOrDefault(id, CustomerDebtFigures.None));
+    }
+
+    public Task<IReadOnlyDictionary<Guid, CustomerDebtFigures>> AllFiguresAsync(CancellationToken cancellationToken) => SumsAsync(null, cancellationToken);
+
+    public async Task<IReadOnlyList<DebtCustomerRow>> CustomersAsync(IReadOnlyCollection<Guid> customerIds, string? search, CancellationToken cancellationToken)
+    {
+        var ids = customerIds.Distinct().ToList();
+        var query = db.Customers.AsNoTracking().Where(c => ids.Contains(c.Id));
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var text = search.Trim();
+            // As SALE-04 step 2: a number typed as +84…, with spaces or dots, is also looked up as stored.
+            var phone = PhoneNumbers.Normalize(text) ?? text;
+            query = query.Where(c => c.Name.Contains(text) || (c.PhoneNumber != null && (c.PhoneNumber.Contains(text) || c.PhoneNumber.Contains(phone))));
+        }
+
+        return await query.Select(c => new DebtCustomerRow(c.Id, c.Name, c.PhoneNumber)).ToListAsync(cancellationToken);
+    }
+
+    public async Task<(IReadOnlyList<CustomerLedgerInvoice> Invoices, IReadOnlyList<CustomerLedgerPayment> Payments)> LedgerAsync(
+        IReadOnlyCollection<Guid> customerIds, CancellationToken cancellationToken)
+    {
+        var ids = customerIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return ([], []);
+        }
+
+        var invoices = await InvoicesOf(ids, cancellationToken);
+        var payments = await PaymentsOf(ids)
+            .Select(p => new CustomerLedgerPayment(
+                p.CustomerId!.Value, p.Id, p.Code, p.Kind, p.PaymentDate, p.Amount, p.Method, p.InvoiceId, p.Invoice == null ? null : p.Invoice.Code, p.StatusId, p.CancelledAt, null))
+            .ToListAsync(cancellationToken);
+        return (invoices, payments);
+    }
+
+    public async Task<(IReadOnlyList<CustomerLedgerInvoice> Invoices, IReadOnlyList<CustomerLedgerPayment> Payments)> StatementLedgerAsync(
+        Guid customerId, CancellationToken cancellationToken)
+    {
+        List<Guid> ids = [customerId];
+        var invoices = await InvoicesOf(ids, cancellationToken);
+        // The display names are scalar subqueries of the same command (no query per payment, no extra command).
+        var rows = await PaymentsOf(ids)
+            .Select(p => new
+            {
+                Ledger = new CustomerLedgerPayment(
+                    p.CustomerId!.Value, p.Id, p.Code, p.Kind, p.PaymentDate, p.Amount, p.Method, p.InvoiceId, p.Invoice == null ? null : p.Invoice.Code, p.StatusId, p.CancelledAt, null),
+                p.Note,
+                p.CancelReason,
+                p.RecordedByAccountId,
+                RecordedByName = db.Accounts.Where(a => a.Id == p.RecordedByAccountId).Select(a => a.DisplayName).FirstOrDefault(),
+                p.ConfirmedByAccountId,
+                ConfirmedByName = db.Accounts.Where(a => a.Id == p.ConfirmedByAccountId).Select(a => a.DisplayName).FirstOrDefault(),
+                p.CollectedByAccountId,
+                CollectedByName = db.Accounts.Where(a => a.Id == p.CollectedByAccountId).Select(a => a.DisplayName).FirstOrDefault(),
+            })
+            .ToListAsync(cancellationToken);
+        static AccountRef? Ref(Guid? id, string? name) => id is { } value ? new AccountRef(value, name ?? string.Empty) : null;
+        var payments = rows
+            .Select(r => r.Ledger with
+            {
+                Internals = new CustomerPaymentInternals(
+                    Ref(r.RecordedByAccountId, r.RecordedByName), Ref(r.ConfirmedByAccountId, r.ConfirmedByName), Ref(r.CollectedByAccountId, r.CollectedByName),
+                    r.Note, r.CancelReason),
+            })
+            .ToList();
+        return (invoices, payments);
+    }
+
+    private async Task<IReadOnlyList<CustomerLedgerInvoice>> InvoicesOf(List<Guid> ids, CancellationToken cancellationToken) =>
+        await db.SalesInvoices.AsNoTracking()
+            .Where(i => i.CustomerId != null && ids.Contains(i.CustomerId.Value))
+            .Select(i => new CustomerLedgerInvoice(i.CustomerId!.Value, i.Id, i.Code, i.InvoicedAt, i.InvoiceDate, i.Total, i.StatusId == StatusIds.SalesInvoice.Cancelled))
+            .ToListAsync(cancellationToken);
+
+    private IQueryable<CustomerPayment> PaymentsOf(List<Guid> ids) =>
+        db.CustomerPayments.AsNoTracking().Where(p => p.CustomerId != null && ids.Contains(p.CustomerId.Value));
+
+    public Task<int> AwaitingConfirmationCountAsync(CancellationToken cancellationToken) =>
+        db.CustomerPayments.AsNoTracking().CountAsync(p => p.StatusId == StatusIds.CustomerPayment.AwaitingConfirmation, cancellationToken);
+
+    /// <summary>One grouped sum of invoices and one of payments, for the profiles asked for or for every profile; a profile with no row has no entry.</summary>
+    private async Task<IReadOnlyDictionary<Guid, CustomerDebtFigures>> SumsAsync(List<Guid>? ids, CancellationToken cancellationToken)
+    {
+        var invoiceRows = db.SalesInvoices.AsNoTracking().Where(i => i.CustomerId != null && i.StatusId != StatusIds.SalesInvoice.Cancelled);
+        var paymentRows = db.CustomerPayments.AsNoTracking().Where(p => p.CustomerId != null && p.StatusId != StatusIds.CustomerPayment.Cancelled);
+        if (ids is not null)
+        {
+            invoiceRows = invoiceRows.Where(i => ids.Contains(i.CustomerId!.Value));
+            paymentRows = paymentRows.Where(p => ids.Contains(p.CustomerId!.Value));
+        }
+
+        var invoices = await invoiceRows
             .GroupBy(i => i.CustomerId!.Value)
             .Select(g => new { CustomerId = g.Key, Total = g.Sum(i => i.Total) })
             .ToDictionaryAsync(x => x.CustomerId, x => x.Total, cancellationToken);
-        var payments = await db.CustomerPayments.AsNoTracking()
-            .Where(p => p.CustomerId != null && ids.Contains(p.CustomerId.Value) && p.StatusId != StatusIds.CustomerPayment.Cancelled)
+        var payments = await paymentRows
             .GroupBy(p => new { CustomerId = p.CustomerId!.Value, p.Kind })
             .Select(g => new { g.Key.CustomerId, g.Key.Kind, Amount = g.Sum(p => p.Amount) })
             .ToListAsync(cancellationToken);
-        return ids.ToDictionary(id => id, id => new CustomerDebtFigures(
-            invoices.GetValueOrDefault(id),
-            0m,
-            payments.Where(p => p.CustomerId == id && p.Kind == CustomerPaymentKind.Payment).Sum(p => p.Amount),
-            payments.Where(p => p.CustomerId == id && p.Kind == CustomerPaymentKind.PaidBack).Sum(p => p.Amount)));
+        var paid = payments.Where(p => p.Kind == CustomerPaymentKind.Payment).ToDictionary(p => p.CustomerId, p => p.Amount);
+        var paidBack = payments.Where(p => p.Kind == CustomerPaymentKind.PaidBack).ToDictionary(p => p.CustomerId, p => p.Amount);
+        return invoices.Keys.Union(paid.Keys).Union(paidBack.Keys).ToDictionary(id => id, id => new CustomerDebtFigures(
+            invoices.GetValueOrDefault(id), 0m, paid.GetValueOrDefault(id), paidBack.GetValueOrDefault(id)));
     }
 }
