@@ -1,7 +1,8 @@
 namespace OMTS.Api.Extensions;
 
 /// <summary>
-/// "Cors:AllowedOrigins": the browser origins (e.g. the Next.js web app) allowed to call the API. Empty, the
+/// "Cors:AllowedOrigins": the browser origins (the Next.js web app, and https://h5.zdn.vn where Zalo serves every
+/// deployed version of the Zalo Mini App) allowed to call the API. Empty, the
 /// default, means no CORS policy at all, so browsers keep refusing cross-origin calls. Tokens travel in headers
 /// and bodies, never in cookies, so credentials are not allowed.
 /// </summary>

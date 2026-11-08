@@ -195,7 +195,7 @@ public class PurchaseRequestAccessTests(AuthApiFactory factory) : IClassFixture<
         Assert.True(offeredToOwner[NotificationTypes.PurchaseRequestNew]);
         Assert.False(offeredToOwner[NotificationTypes.PurchaseRequestCancelled]);
         Assert.DoesNotContain(NotificationTypes.PurchaseRequestResponse, offeredToOwner.Keys);
-        var offeredToTrader = Assert.Single(traderTypes.GetProperty("types").EnumerateArray());
+        var offeredToTrader = traderTypes.GetProperty("types").EnumerateArray().Single(t => t.Text("type") == NotificationTypes.PurchaseRequestResponse);
         Assert.Equal((NotificationTypes.PurchaseRequestResponse, false), (offeredToTrader.Text("type"), offeredToTrader.GetProperty("mandatory").GetBoolean()));
     }
 }

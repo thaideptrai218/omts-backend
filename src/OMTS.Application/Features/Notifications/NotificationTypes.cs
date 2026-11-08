@@ -30,6 +30,12 @@ public static class NotificationTypes
     /// </summary>
     public const string CooperativeCertificationExpiry = "COOPERATIVE_CERTIFICATION_EXPIRY";
 
+    /// <summary>To the Cooperative Owner: a trader asked for an account from the Zalo Mini App.</summary>
+    public const string TraderAccessRequested = "TRADER_ACCESS_REQUESTED";
+
+    /// <summary>To the trader: the Cooperative Owner approved the request.</summary>
+    public const string TraderAccessApproved = "TRADER_ACCESS_APPROVED";
+
     /// <summary>MSG-LABOR-02, the reminder to lock a staff account after an end of employment: kept, never pushed (BR-LABOR-04).</summary>
     public const string StaffAccountLockReminder = "STAFF_ACCOUNT_LOCK_REMINDER";
 
@@ -130,6 +136,9 @@ public static class NotificationTypes
         // Customer payments have no zone (BR-FARM-08); a money type, so its SMS carries the code and the amount only.
         new(CustomerPaymentTransaction, "Customer payment transaction", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
             NotificationSmsRule.MoneyToOwner("amount")),
+        // A trader asked for an account from the Zalo Mini App, and the Owner's approval (ACS-01, decision of 28/10/2026).
+        new(TraderAccessRequested, "Trader access requested", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new(TraderAccessApproved, "Trader access approved", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
     ];
 
     private static readonly Dictionary<string, NotificationTypeDefinition> ByCode = All.ToDictionary(t => t.Code, StringComparer.Ordinal);

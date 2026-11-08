@@ -301,6 +301,9 @@ All routes are JSON over HTTPS. Errors are `application/problem+json` with `code
 | POST /api/auth/recovery, /api/auth/recovery/reset | anonymous, per-IP limit | ACS-03 |
 | POST /api/me/password; POST /api/me/password/code (per-IP limit) | signed in | ACS-04 |
 | POST /api/me/phone-verification (per-IP limit, unverified phone only), /confirm | signed in | ACS-02 branch, ACS-06 |
+| POST /api/auth/zalo/link, /zalo/login, /zalo/trader-requests (login rate limit) | anonymous, proven by the Zalo tokens | ACS-01 (Zalo Mini App) |
+| DELETE /api/me/zalo-link | signed in | ACS-01 (Zalo Mini App) |
+| GET /api/trader-requests; POST …/{id}/approve, …/{id}/reject | Cooperative Owner | ACS-01 (Zalo Mini App) |
 | GET/PUT /api/me/profile; POST /api/me/contact-changes (current password, per-IP limit), /confirm | signed in | ACS-05 |
 | GET/PUT /api/me/notification-preferences; POST/DELETE /api/me/devices | signed in | ACS-07 |
 | GET /api/me/permissions | signed in | menus, dashboard tiles |

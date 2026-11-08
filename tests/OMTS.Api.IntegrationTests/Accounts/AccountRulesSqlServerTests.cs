@@ -331,6 +331,12 @@ public class AccountRulesSqlServerTests
 
         public Task<IReadOnlyList<Guid>> ListActiveOwnerIdsAsync(CancellationToken cancellationToken) => inner.ListActiveOwnerIdsAsync(cancellationToken);
 
+        public Task<IReadOnlyList<Account>> ListTraderRequestsAsync(int statusId, CancellationToken cancellationToken) =>
+            inner.ListTraderRequestsAsync(statusId, cancellationToken);
+
+        public Task<Account?> FindByZaloAccountIdAsync(string zaloAccountId, CancellationToken cancellationToken) =>
+            inner.FindByZaloAccountIdAsync(zaloAccountId, cancellationToken);
+
         public void Add(Account account) => inner.Add(account);
     }
 
