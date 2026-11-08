@@ -18,6 +18,15 @@ internal sealed class PendingSaleRepository(OmtsDbContext db) : IPendingSaleRepo
     public Task<string?> FindCodeByDeduplicationKeyAsync(string key, CancellationToken cancellationToken) =>
         db.PendingSales.AsNoTracking().Where(s => s.DeduplicationKey == key).Select(s => s.Code).FirstOrDefaultAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<PendingSale>> ListAwaitingNamingLotAsync(Guid lotId, CancellationToken cancellationToken)
+    {
+        // The sale is JSON with the lot ids in their "D" form; few sales await at once, so a search of their text is enough.
+        var text = lotId.ToString("D");
+        return await db.PendingSales.AsNoTracking()
+            .Where(s => s.Status == PendingSaleStatus.Awaiting && s.SaleJson.Contains(text))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<PendingSale>> ListAwaitingAsync(IReadOnlySet<Guid>? zoneIds, CancellationToken cancellationToken)
     {
         var awaiting = db.PendingSales.AsNoTracking().Include(s => s.Zone).Include(s => s.Customer).Where(s => s.Status == PendingSaleStatus.Awaiting);

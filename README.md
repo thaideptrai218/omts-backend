@@ -353,18 +353,24 @@ same `bankReference` again to replay it.
   = `confirmed`); with it, status `Stopped`, nothing saved but the audit row `SalesInvoice.SaleStopped` (record code = the code,
   reason "Stop sale").
 - These need SALES_INVOICES Create in the zone of the sale (the Zone Managers of the zone and the Owner; others 403). A sale that
-  already ended answers 409 MSG-GEN-09 with `status` and `invoiceId`. A pending sale has no time limit.
+  already ended answers 409 MSG-GEN-09 with `status` and `invoiceId`. A pending sale has no time limit. Its harvest lots cannot be
+  removed meanwhile (HARVEST-01.1: 409 MSG-GEN-09 "… is on a sale awaiting its transfer"), and the daily close (GFR-05) leaves its kg out of
+  the leftover kg it records, because the transfer invoices them on the closed lot.
 - `POST /api/integrations/payment-notifications` (API-13) is anonymous and rate limited (`RateLimits:PaymentNotificationsPerMinute`,
   256 KB): a notification the adapter does not find authentic answers 401. The fake adapter's format is
   `{ "transactions": [ { "bankReference", "accountNumber", "amount", "content", "occurredAt", "direction": "In" | "Out" } ] }`,
   signed as `X-Omts-Signature: sha256=<hex of HMAC-SHA256(raw body, Payments:Fake:WebhookSecret)>`. 200 lists for each transfer
   `{ bankReference, outcome, paymentCode, invoiceCode, reason }`; 400 for a body it cannot read; 5xx when the save failed, so the
   service retries. Each transfer is recorded once per bank reference (unique index on the reference of VietQR payments, so also
-  when the service reports it twice at once): `AlreadyRecorded` names the payment already recorded.
+  when the service reports it twice at once), and not at all when the Accountant already recorded a payment with that reference
+  that is not cancelled (the reference trimmed, as MSG-DEBT-05 compares it): `AlreadyRecorded` names the payment already recorded.
+  A transfer time before 2000 or more than a day ahead is `Invalid`. A sale that can no longer be saved when its transfer arrives
+  (a record it names is gone) never fails the notification: it is stopped by the system (audit `SalesInvoice.SaleStopped`, the
+  reason says why) and the transfer is kept `WithoutCustomer`.
 - What a transfer becomes (GFR-08), a customer payment with the method VietQR code of the invoice, Awaiting confirmation,
   recorded by the system (audit actor: the system), with the amount, bank reference and time reported:
   - `Ignored` (nothing recorded): `Outgoing`, `NotTheReceivingAccount` (another account, or the account before a change,
-    BR-DEBT-01), `NoInvoiceCode` (no `HD` + 6 or more digits in the content; case and a separator after HD are tolerated),
+    BR-DEBT-01), `NoInvoiceCode` (no `HD` + 6 to 12 digits in the content, not glued to letters before it; case and a separator after HD are tolerated),
     `Invalid`.
   - `PaidInvoice`: a saved invoice has the code (a later payment of a Pay later invoice, a sale whose payment method was changed,
     a cancelled invoice): a payment of its customer (none for a walk-in invoice) that covers it first.
@@ -373,7 +379,9 @@ same `bankReference` again to replay it.
     as it is) and MSG-SALE-08 to the Owners; the invoice and its cash are the Zone Manager's (creator, collector, audit actor).
   - `WithoutCustomer`: no saved invoice has the code (Stop sale, an unknown code, or less than the sale awaits, which then keeps
     waiting and shows it in `receivedAmount`): no customer and no invoice, the code kept in `transferInvoiceCode` of the
-    payment, listed Awaiting confirmation for the Accountant (DEBT-02.6).
+    payment, listed Awaiting confirmation for the Accountant (DEBT-02.6). Until DEBT-02.6 (settle: attach to a profile, or pay it
+    back) ships in PR 7b, such a payment cannot be confirmed (409 MSG-GEN-09 "Customer payment PT… is without a customer profile …",
+    `needsSettlement: true`), so it stays in the list; it can be cancelled.
 
 ### Background jobs
 

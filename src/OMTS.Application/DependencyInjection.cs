@@ -226,6 +226,7 @@ public static class DependencyInjection
         services.AddScoped<PendingSaleViews>();
         services.AddScoped<PendingSaleService>();
         services.AddScoped<PendingSaleCompletion>();
+        services.AddScoped<PendingSaleLotQuery>();
         services.AddScoped<TransferPaymentWriter>();
         services.AddScoped<BankTransferNoticeService>();
         // SALE-06 sending the invoice, and the end of the sale with the QR code

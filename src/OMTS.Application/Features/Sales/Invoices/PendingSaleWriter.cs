@@ -50,14 +50,23 @@ public sealed class PendingSaleWriter(IPendingSaleRepository sales, AuditLogServ
     }
 
     /// <summary>SALE-05.0.E4 step 3, BR-SALE-08: nothing is saved but the code, written to the audit log with the reason Stop sale.</summary>
-    public void Stop(PendingSale sale)
+    public void Stop(PendingSale sale) => Stop(sale, currentUser.AccountId, StopReason);
+
+    /// <summary>
+    /// The transfer arrived but the invoice can no longer be saved: the sale is stopped by the system, its code written to the audit log with why, and the transfer is kept
+    /// without a customer by the caller (GFR-08).
+    /// </summary>
+    public void StopOnTransfer(PendingSale sale, string why) =>
+        Stop(sale, by: null, $"{StopReason}: the transfer arrived, but the sale could not be saved: {why}");
+
+    private void Stop(PendingSale sale, Guid? by, string reason)
     {
-        End(sale, PendingSaleStatus.Stopped, invoiceId: null, currentUser.AccountId);
+        End(sale, PendingSaleStatus.Stopped, invoiceId: null, by);
         audit.Record(new AuditEntry(StoppedAction, SalesInvoiceWriter.RecordType)
         {
             RecordCode = sale.Code,
             ZoneId = sale.ZoneId,
-            Reason = StopReason,
+            Reason = reason,
             After = new { InvoiceCode = sale.Code, sale.CustomerId, sale.Total, sale.CashAmount, sale.ToPayAmount, sale.CreatedByAccountId },
         });
     }

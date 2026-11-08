@@ -41,11 +41,14 @@ public sealed class PendingSaleViews(
 
         var account = sales.Any(s => s.Status == PendingSaleStatus.Awaiting) ? (await cooperatives.GetCurrentAsync(cancellationToken))?.BankAccount : null;
         var names = await accounts.GetDisplayNamesAsync(sales.Select(s => s.CreatedByAccountId).Distinct().ToList(), cancellationToken);
+        // One query for the money received of every sale still awaiting, whatever their number.
+        var awaitingCodes = sales.Where(s => s.Status == PendingSaleStatus.Awaiting).Select(s => s.Code).ToList();
+        IReadOnlyDictionary<string, decimal> receivedByCode = awaitingCodes.Count == 0 ? new Dictionary<string, decimal>() : await payments.ReceivedWithoutInvoiceAsync(awaitingCodes, cancellationToken);
         var views = new List<PendingSaleView>(sales.Count);
         foreach (var sale in sales)
         {
             var awaiting = sale.Status == PendingSaleStatus.Awaiting;
-            var received = awaiting ? await payments.ReceivedWithoutInvoiceAsync(sale.Code, cancellationToken) : 0m;
+            var received = awaiting ? receivedByCode.GetValueOrDefault(sale.Code) : 0m;
             SalesInvoiceSaved? saved = null;
             if (sale.InvoiceId is { } invoiceId && await invoices.GetAsync(invoiceId, cancellationToken) is { } invoice)
             {

@@ -48,10 +48,16 @@ public sealed class PendingSaleCompletion(
         foreach (var productId in entries.Lines.Select(l => l.ProductId).Distinct())
         {
             lineProducts[productId] = await products.GetForEditAsync(productId, cancellationToken)
-                ?? throw new InvalidOperationException($"Product {productId} of pending sale {sale.Code} no longer exists.");
+                ?? throw new PendingSaleNotSavableException($"product {productId} no longer exists.");
         }
 
         var byId = (await lots.ListForInvoiceAsync(entries.LotIds, cancellationToken)).ToDictionary(l => l.Id);
+        if (entries.LotIds.FirstOrDefault(id => !byId.ContainsKey(id)) is var missing && missing != Guid.Empty)
+        {
+            // HARVEST-01.1 refuses to remove a lot of a sale awaiting its transfer; one removed before that rule, or by hand, still never makes the transfer fail.
+            throw new PendingSaleNotSavableException($"harvest lot {missing} no longer exists.");
+        }
+
         var lineLots = entries.LotIds.Select(id => byId[id]).ToList();
         // A parallel close or sale of one of these lots makes one of the two saves fail, as at the port.
         lineLots.ForEach(unitOfWork.MarkChanged);
@@ -81,7 +87,7 @@ public sealed class PendingSaleCompletion(
             return null;
         }
 
-        var customer = await customers.GetForEditAsync(id, cancellationToken) ?? throw new InvalidOperationException($"Customer {id} of a pending sale no longer exists.");
+        var customer = await customers.GetForEditAsync(id, cancellationToken) ?? throw new PendingSaleNotSavableException($"customer profile {id} no longer exists.");
         for (var step = 0; customer.MergedIntoCustomerId is { } kept && step < MaxMergeSteps; step++)
         {
             customer = await customers.GetForEditAsync(kept, cancellationToken) ?? customer;

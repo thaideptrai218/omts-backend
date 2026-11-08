@@ -68,11 +68,11 @@ public class CustomerPaymentSqlServerTests
         public Task<(IReadOnlyList<CustomerPayment> Items, int Total, decimal TotalAmount)> AwaitingConfirmationAsync(int page, int pageSize, CancellationToken cancellationToken) =>
             inner.AwaitingConfirmationAsync(page, pageSize, cancellationToken);
 
-        public Task<CustomerPayment?> FindVietQrByBankReferenceAsync(string bankReference, CancellationToken cancellationToken) =>
-            inner.FindVietQrByBankReferenceAsync(bankReference, cancellationToken);
+        public Task<CustomerPayment?> FindRecordedTransferAsync(string bankReference, CancellationToken cancellationToken) =>
+            inner.FindRecordedTransferAsync(bankReference, cancellationToken);
 
-        public Task<decimal> ReceivedWithoutInvoiceAsync(string invoiceCode, CancellationToken cancellationToken) =>
-            inner.ReceivedWithoutInvoiceAsync(invoiceCode, cancellationToken);
+        public Task<IReadOnlyDictionary<string, decimal>> ReceivedWithoutInvoiceAsync(IReadOnlyCollection<string> invoiceCodes, CancellationToken cancellationToken) =>
+            inner.ReceivedWithoutInvoiceAsync(invoiceCodes, cancellationToken);
 
         private async Task<T> HoldAsync<T>(T value)
         {

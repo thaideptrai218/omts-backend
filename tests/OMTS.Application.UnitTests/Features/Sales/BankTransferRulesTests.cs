@@ -43,6 +43,20 @@ public class BankTransferRulesTests
         Assert.Equal(BankTransferIgnoredReason.Invalid, BankTransferRules.Ignored(notice with { Amount = 1000.5m }, Account));
     }
 
+    // API-13 never fails on a transfer time: one no date can be made of, or far outside a bank's clock, is a malformed field like the others.
+    [Fact]
+    public void A_transfer_time_outside_what_a_bank_can_report_is_invalid()
+    {
+        var now = new DateTimeOffset(2026, 11, 9, 3, 0, 0, TimeSpan.Zero);
+        var notice = new BankTransferNotice("FT-DEMO-2", Account, 300_000m, "HD000123", now, BankTransferDirection.In);
+
+        Assert.Null(BankTransferRules.Ignored(notice with { OccurredAt = now.AddHours(23) }, Account, now));
+        Assert.Null(BankTransferRules.Ignored(notice with { OccurredAt = BankTransferRules.EarliestTransferTime }, Account, now));
+        Assert.Equal(BankTransferIgnoredReason.Invalid, BankTransferRules.Ignored(notice with { OccurredAt = now.AddDays(2) }, Account, now));
+        Assert.Equal(BankTransferIgnoredReason.Invalid, BankTransferRules.Ignored(notice with { OccurredAt = BankTransferRules.EarliestTransferTime.AddTicks(-1) }, Account, now));
+        Assert.Equal(BankTransferIgnoredReason.Invalid, BankTransferRules.Ignored(notice with { OccurredAt = DateTimeOffset.MaxValue }, Account));
+    }
+
     // MSG-SALE-06 for SALE-05 step 8: the transfer first, then the cash part (AC-07); MSG-SALE-14 names the code twice.
     [Fact]
     public void The_texts_of_a_vietqr_sale_name_the_transfer_and_the_stopped_code()

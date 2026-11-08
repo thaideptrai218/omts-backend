@@ -16,6 +16,9 @@ public interface IPendingSaleRepository
     /// <summary>The code of the sale created with this key, if any.</summary>
     Task<string?> FindCodeByDeduplicationKeyAsync(string key, CancellationToken cancellationToken);
 
+    /// <summary>The sales still Awaiting whose sale may name this harvest lot (a text search of the sale; the caller reads each one to be sure), read only.</summary>
+    Task<IReadOnlyList<PendingSale>> ListAwaitingNamingLotAsync(Guid lotId, CancellationToken cancellationToken);
+
     /// <summary>The sales still Awaiting in these zones (every zone when null), oldest first, read only with their zone and customer.</summary>
     Task<IReadOnlyList<PendingSale>> ListAwaitingAsync(IReadOnlySet<Guid>? zoneIds, CancellationToken cancellationToken);
 }

@@ -27,7 +27,7 @@ public sealed class FakeBankNotificationParser(IOptions<PaymentProviderOptions> 
     public bool IsAuthentic(BankNotificationRequest request)
     {
         var secret = options.Value.Fake.WebhookSecret;
-        if (string.IsNullOrEmpty(secret) || !request.Headers.TryGetValue(SignatureHeader, out var sent) || !sent.StartsWith(SignaturePrefix, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(secret) || !request.Headers.TryGetValue(SignatureHeader, out var sent) || !sent.StartsWith(SignaturePrefix, StringComparison.Ordinal))
         {
             return false;
         }

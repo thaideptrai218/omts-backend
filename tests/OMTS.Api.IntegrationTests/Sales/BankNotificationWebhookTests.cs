@@ -99,6 +99,43 @@ public class BankNotificationWebhookTests
         Assert.Equal($"Invoice {code} is completed: 350,000 VND received by VietQR.", (await client.PolledAsync(code)).GetProperty("invoice").Text("message"));
     }
 
+    // GFR-08: a sale that can no longer be saved never fails the notification; it is stopped, its transfer kept without a customer, and the next transfer is still read.
+    [Fact]
+    public async Task A_sale_that_can_no_longer_be_saved_is_stopped_and_the_other_transfers_of_the_notification_are_still_recorded()
+    {
+        using var api = new AuthApiFactory();
+        var sale = await api.SaleSetupAsync();
+        await api.UseReceivingAccountAsync();
+        var broken = (await sale.Manager.Client.AwaitTransferAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], VietQr()))).Code();
+        var fine = (await sale.Manager.Client.AwaitTransferAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.OtherLotId, 10m)], VietQr()))).Code();
+        await api.UseDbAsync(db => db.HarvestLots.Remove(db.HarvestLots.Single(l => l.Id == sale.LotId)));
+        var secret = NewSecret();
+        using var hooked = api.WithWebhookSecret(secret);
+        using var bank = hooked.CreateClient();
+        var body = Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(new
+        {
+            transactions = new[] { broken, fine }.Select(code => new
+            {
+                bankReference = NewReference(), accountNumber = AccountNumber, amount = 300_000m, content = code, occurredAt = DateTimeOffset.UtcNow, direction = "In",
+            }),
+        }));
+
+        var results = (await (await bank.NotifyAsync(body, secret)).ReadAsync(HttpStatusCode.OK)).GetProperty("transactions").EnumerateArray().Select(r => r.Outcome()).ToList();
+
+        Assert.Equal(["WithoutCustomer", "CompletedSale"], results);
+        Assert.Equal(Domain.Enums.PendingSaleStatus.Stopped, (await api.PendingRowAsync(broken)).Status);
+        var stop = await api.QueryAsync(db => db.AuditEvents.AsNoTracking().SingleAsync(e => e.Action == "SalesInvoice.SaleStopped" && e.RecordCode == broken));
+        Assert.Equal((Guid?)null, stop.ActorAccountId);
+        Assert.StartsWith("Stop sale: the transfer arrived, but the sale could not be saved: harvest lot", stop.Reason);
+
+        // M3 until DEBT-02.6: the transfer without a customer is not confirmed plainly, but it can be cancelled.
+        var accountant = await api.AllZonesAccountantAsync();
+        var orphan = Assert.Single(await api.QueryAsync(db => db.CustomerPayments.AsNoTracking().Where(p => p.TransferInvoiceCode == broken).ToListAsync()));
+        var refused = await (await accountant.Client.ConfirmAsync([orphan.Id])).ReadAsync(HttpStatusCode.Conflict);
+        Assert.Equal(("MSG-GEN-09", $"Customer payment {orphan.Code} is without a customer profile and cannot be used for this action."), (refused.Text("code"), refused.Text("detail")));
+        Assert.Equal(HttpStatusCode.OK, (await accountant.Client.ConfirmAsync([], (orphan.Id, "Recorded twice by the bank"))).StatusCode);
+    }
+
     // BR-SALE-07 (7): a Pay later invoice is paid later with its VietQR code; the payment is of its customer and lowers the debt (BR-DEBT-02).
     [Fact]
     public async Task A_later_transfer_with_the_code_of_a_pay_later_invoice_pays_it()

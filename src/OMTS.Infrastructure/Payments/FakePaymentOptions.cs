@@ -10,8 +10,8 @@ public sealed class FakePaymentOptions
     public List<string> TimeoutAccounts { get; set; } = [];
 
     /// <summary>
-    /// The secret that signs the notifications of the fake service (API-13, header <see cref="FakeBankNotificationParser.SignatureHeader"/>). Empty, the default, accepts no
-    /// notification. A secret: set it in user-secrets or the environment, never in a committed file.
+    /// The secret that signs the notifications of the fake service (API-13, header <see cref="FakeBankNotificationParser.SignatureHeader"/>). Empty or blank (the default) accepts
+    /// no notification. A secret: set it in user-secrets or the environment, never in a committed file.
     /// </summary>
     public string WebhookSecret { get; set; } = string.Empty;
 }

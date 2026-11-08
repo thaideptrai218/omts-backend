@@ -40,11 +40,19 @@ public static partial class BankTransferRules
         return match.Success ? $"HD{match.Groups["digits"].Value}" : null;
     }
 
+    /// <summary>No transfer of the cooperative is older; a time before it is a malformed field.</summary>
+    public static readonly DateTimeOffset EarliestTransferTime = new(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+    /// <summary>Bank clocks run a little ahead at most; a time further in the future is a malformed field.</summary>
+    public static readonly TimeSpan MaxClockAhead = TimeSpan.FromDays(1);
+
     /// <summary>The reason a transfer is not recorded, or null when it is (before the invoice code is looked up).</summary>
-    public static BankTransferIgnoredReason? Ignored(BankTransferNotice notice, string? receivingAccountNumber)
+    /// <param name="now">The time of the check: a transfer time more than <see cref="MaxClockAhead"/> after it is <see cref="BankTransferIgnoredReason.Invalid"/>.</param>
+    public static BankTransferIgnoredReason? Ignored(BankTransferNotice notice, string? receivingAccountNumber, DateTimeOffset? now = null)
     {
         if (string.IsNullOrWhiteSpace(notice.BankReference) || notice.BankReference.Trim().Length > MaxBankReferenceLength
-            || !InvoiceMoney.IsWholeAmount(notice.Amount) || notice.Amount <= 0m || string.IsNullOrWhiteSpace(notice.AccountNumber))
+            || !InvoiceMoney.IsWholeAmount(notice.Amount) || notice.Amount <= 0m || string.IsNullOrWhiteSpace(notice.AccountNumber)
+            || !IsTransferTime(notice.OccurredAt, now))
         {
             return BankTransferIgnoredReason.Invalid;
         }
@@ -65,6 +73,12 @@ public static partial class BankTransferRules
     /// <summary>Account numbers compared as banks print them: spaces ignored, letters in any case.</summary>
     public static bool SameAccount(string reported, string receiving) =>
         string.Equals(Plain(reported), Plain(receiving), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>A time the business clock (UTC+7) can hold and a transfer can have: never the end of the calendar, which no date can be made of (API-13 must not fail on it).</summary>
+    private static bool IsTransferTime(DateTimeOffset occurredAt, DateTimeOffset? now) =>
+        occurredAt >= EarliestTransferTime
+        && occurredAt.UtcDateTime < DateTime.MaxValue.AddDays(-2)
+        && (now is null || occurredAt <= now.Value + MaxClockAhead);
 
     private static string Plain(string accountNumber) => string.Concat(accountNumber.Where(c => !char.IsWhiteSpace(c)));
 

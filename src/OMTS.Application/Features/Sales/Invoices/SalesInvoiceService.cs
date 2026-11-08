@@ -83,7 +83,8 @@ public sealed class SalesInvoiceService(
             return AppError.Invalid("Payment", "The VietQR code of this sale is already shown: choose Cash or Pay later.");
         }
 
-        var request = PendingSaleSnapshot.Read(sale).Request with { Payment = body.Payment, DeduplicationKey = null };
+        // The profile the sale names now: a merge while the transfer was awaited moved the sale (and its purchase request) to the kept profile (SALE-04.3).
+        var request = PendingSaleSnapshot.Read(sale).Request with { CustomerId = sale.CustomerId, Payment = body.Payment, DeduplicationKey = null };
         var (entries, invalid) = SalesInvoiceEntryReader.Read(request);
         return invalid.Count > 0 ? AppError.InvalidFields(invalid) : await SaveAsync(request, entries!, key: null, sale.Code, cancellationToken);
     }

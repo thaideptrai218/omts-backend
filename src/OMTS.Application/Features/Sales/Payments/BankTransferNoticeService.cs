@@ -4,6 +4,7 @@ using OMTS.Application.Common.Interfaces.Payments;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Sales.Invoices;
+using Microsoft.Extensions.Logging;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Sales.Payments;
@@ -27,8 +28,10 @@ public sealed class BankTransferNoticeService(
     PendingSaleCompletion completion,
     TransferPaymentWriter transferWriter,
     IDocumentNumberAllocator numbers,
+    PendingSaleWriter pendingWriter,
     IUnitOfWork unitOfWork,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    ILogger<BankTransferNoticeService> logger)
 {
     public const int MaxAttempts = 5;
 
@@ -84,7 +87,7 @@ public sealed class BankTransferNoticeService(
         unitOfWork.DiscardChanges();
         var reference = notice.BankReference?.Trim();
         var account = (await cooperatives.GetCurrentAsync(cancellationToken))?.BankAccount;
-        if (BankTransferRules.Ignored(notice, account?.AccountNumber) is { } reason)
+        if (BankTransferRules.Ignored(notice, account?.AccountNumber, timeProvider.GetUtcNow()) is { } reason)
         {
             return new BankTransferResult(reference, BankTransferOutcome.Ignored, null, BankTransferRules.InvoiceCodeIn(notice.Content), reason);
         }
@@ -93,7 +96,7 @@ public sealed class BankTransferNoticeService(
         string? paymentCode = null;
         for (var attempt = 1; ; attempt++)
         {
-            if (await payments.FindVietQrByBankReferenceAsync(reference!, cancellationToken) is { } recorded)
+            if (await payments.FindRecordedTransferAsync(reference!, cancellationToken) is { } recorded)
             {
                 return new BankTransferResult(reference, BankTransferOutcome.AlreadyRecorded, recorded.Code, code, null);
             }
@@ -130,9 +133,22 @@ public sealed class BankTransferNoticeService(
 
         if (await pendingSales.GetForEditAsync(code, cancellationToken) is { Status: PendingSaleStatus.Awaiting } sale && notice.Amount >= sale.ToPayAmount)
         {
-            var saved = await completion.CompleteAsync(sale, cancellationToken);
-            transferWriter.Record(notice, paymentCode, saved.Id, saved.CustomerId, code);
-            return BankTransferOutcome.CompletedSale;
+            try
+            {
+                var saved = await completion.CompleteAsync(sale, cancellationToken);
+                transferWriter.Record(notice, paymentCode, saved.Id, saved.CustomerId, code);
+                return BankTransferOutcome.CompletedSale;
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // Money that arrived is never refused: a sale that can no longer be saved ends, and its transfer waits for the Accountant without a customer (DEBT-02.6).
+                logger.LogWarning(exception, "The transfer for pending sale {Code} arrived, but the sale could not be saved; recorded without a customer", code);
+                unitOfWork.DiscardChanges();
+                if (await pendingSales.GetForEditAsync(code, cancellationToken) is { Status: PendingSaleStatus.Awaiting } unsaved)
+                {
+                    pendingWriter.StopOnTransfer(unsaved, exception is PendingSaleNotSavableException refused ? refused.Message : "the sale could not be saved.");
+                }
+            }
         }
 
         transferWriter.Record(notice, paymentCode, invoiceId: null, customerId: null, code);

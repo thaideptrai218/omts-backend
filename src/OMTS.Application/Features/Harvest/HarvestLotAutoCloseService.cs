@@ -1,4 +1,5 @@
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Harvest;
@@ -24,6 +25,7 @@ public sealed class HarvestLotAutoCloseService(
     IHarvestLotRepository lots,
     ICooperativeRepository cooperatives,
     IHarvestLotSalesQuery sales,
+    PendingSaleLotQuery pendingSales,
     HarvestLotStatusService statuses,
     HarvestLotNotifier notifier,
     IUnitOfWork unitOfWork)
@@ -50,7 +52,9 @@ public sealed class HarvestLotAutoCloseService(
         if (HarvestLotAutoCloseRule.ClosesAt(since, days, today))
         {
             var figures = await sales.FiguresAsync([lot.Id], cancellationToken);
-            var remainingKg = HarvestLotFigures.Of(lot, figures[lot.Id]).RemainingKg;
+            // The kg of a sale awaiting its VietQR transfer are not leftover: the transfer invoices them on the closed lot (SALE-05 step 8), so they are never both lost and sold.
+            var awaitingKg = (await pendingSales.AwaitingAsync(lot.Id, cancellationToken)).Kg;
+            var remainingKg = Math.Max(0m, HarvestLotFigures.Of(lot, figures[lot.Id]).RemainingKg - awaitingKg);
             if (statuses.Close(lot, today, remainingKg, HarvestLotCloseReason.TimeLimitReached) is { } refused)
             {
                 throw new InvalidOperationException($"The daily close check could not close lot {lot.LotCode}: {refused.Message.Text}");

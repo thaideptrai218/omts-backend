@@ -23,7 +23,7 @@ namespace OMTS.Api.IntegrationTests.Sales;
 
 /// <summary>
 /// QA of PR 7 (SALE-05 steps 7-8, SALE-05.0.E4, GFR-08, API-13): the webhook's way in, what a transfer becomes at the edges of the amount, and the states a sale can be
-/// left in while its transfer is awaited. Tests named Defect_ show a defect and fail until it is fixed.
+/// left in while its transfer is awaited. Tests that were named Defect_ showed a defect; they pass since the fixes and keep their assertions.
 /// </summary>
 public class VietQrWebhookQaTests
 {
@@ -192,14 +192,17 @@ public class VietQrWebhookQaTests
         Assert.Equal(("Awaiting", 300_000m, 300_000m), (polled.Text("status"), polled.Money("receivedAmount"), polled.Money("toPayAmount")));
     }
 
-    // H1 – GFR-08 "the system records a customer payment": the lot of a sale awaiting its transfer can be removed (HARVEST-01.1 checks invoices only); the transfer that then
-    // arrives must still be recorded, not answered 500 (the service retries it for ever and the money is in no list).
+    // H1 – GFR-08 "the system records a customer payment": the lot of a sale awaiting its transfer cannot be removed (HARVEST-01.1, fix (a)); a lot gone anyway (removed before
+    // that rule, by hand) must still let the transfer be recorded, not answered 500 (the service retries it for ever and the money is in no list) (fix (b)).
+    // Changed with the fix: the removal through the API is now refused, so the lot is removed in the database to reach fix (b); the original assertions are kept.
     [Fact]
-    public async Task Defect_A_transfer_for_a_sale_whose_lot_was_removed_meanwhile_is_still_recorded()
+    public async Task A_lot_of_a_sale_awaiting_its_transfer_is_not_removed_and_a_transfer_for_a_sale_that_can_no_longer_be_saved_is_still_recorded()
     {
         using var api = new AuthApiFactory();
         var (sale, code) = await AwaitingSaleAsync(api);
-        await api.RemoveLotAsync(sale.Owner.Client, sale.LotId);
+        var refused = await (await api.SendRemovalAsync(sale.Owner.Client, sale.LotId)).ReadAsync(HttpStatusCode.Conflict);
+        Assert.Equal("MSG-GEN-09", refused.Text("code"));
+        await api.UseDbAsync(db => db.HarvestLots.Remove(db.HarvestLots.Single(l => l.Id == sale.LotId)));
         var reference = NewReference();
 
         using var client = api.CreateClient();
@@ -207,12 +210,16 @@ public class VietQrWebhookQaTests
 
         Assert.True(response.StatusCode == HttpStatusCode.OK, $"the notification answered {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
         Assert.Single(await api.VietQrPaymentsAsync(reference));
+        var payment = Assert.Single(await api.VietQrPaymentsAsync(reference));
+        Assert.Equal(((Guid?)null, (Guid?)null, code, 300_000m), (payment.CustomerId, payment.InvoiceId, payment.TransferInvoiceCode, payment.Amount));
+        Assert.Equal(PendingSaleStatus.Stopped, (await api.PendingRowAsync(code)).Status);
+        Assert.Equal(0, await api.QueryAsync(db => db.SalesInvoices.CountAsync()));
     }
 
     // M1 – GFR-08 "A transfer whose bank reference is already recorded is not recorded again": the Accountant recorded the transfer from the bank statement (BR-DEBT-01/03,
     // e.g. while the service was down); the late notification of the same transfer must not lower the debt a second time.
     [Fact]
-    public async Task Defect_A_transfer_already_recorded_by_the_accountant_with_its_bank_reference_is_not_recorded_again()
+    public async Task A_transfer_already_recorded_by_the_accountant_with_its_bank_reference_is_not_recorded_again()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
@@ -233,7 +240,7 @@ public class VietQrWebhookQaTests
     // M2 – SALE-05.0.E4 step 2: the profile of a sale awaiting its transfer is merged (SALE-04.3 moves the sale to the kept profile); the Zone Manager must still be able to
     // change the payment method. The snapshot keeps the merged profile, so the change is refused with MSG-GEN-09 and only Stop sale is left.
     [Fact]
-    public async Task Defect_Changing_the_payment_of_a_sale_whose_customer_was_merged_meanwhile_saves_the_invoice_on_the_kept_profile()
+    public async Task Changing_the_payment_of_a_sale_whose_customer_was_merged_meanwhile_saves_the_invoice_on_the_kept_profile()
     {
         using var api = new AuthApiFactory();
         var (sale, code) = await AwaitingSaleAsync(api);
@@ -250,7 +257,7 @@ public class VietQrWebhookQaTests
     // M3 – DEBT-02.2 step 3 "A marked payment is settled (see DEBT-02.6)": a transfer whose code matches no saved invoice must be settled (attached to a profile or paid back),
     // which sets it Confirmed. Confirming it plainly takes it out of the list it is settled from and leaves it Confirmed in no customer debt.
     [Fact]
-    public async Task Defect_A_transfer_without_a_customer_is_not_confirmed_without_being_settled()
+    public async Task A_transfer_without_a_customer_is_not_confirmed_without_being_settled()
     {
         using var api = new AuthApiFactory();
         var (sale, code) = await AwaitingSaleAsync(api);
@@ -269,7 +276,7 @@ public class VietQrWebhookQaTests
     // M4 – BR-HARVEST-07 / GFR-05 with a pending sale (no time limit): the daily close check counts the kg of the sale awaiting its transfer as leftover; the transfer that then
     // arrives invoices the same kg, so they are both lost and sold.
     [Fact]
-    public async Task Defect_The_kg_of_a_sale_awaiting_its_transfer_overnight_are_not_both_leftover_and_invoiced_after_the_daily_close()
+    public async Task The_kg_of_a_sale_awaiting_its_transfer_overnight_are_not_both_leftover_and_invoiced_after_the_daily_close()
     {
         using var api = new AuthApiFactory();
         var (sale, code) = await AwaitingSaleAsync(api);
@@ -291,7 +298,7 @@ public class VietQrWebhookQaTests
 
     // L – API-13 answers 5xx only when a save failed: a transfer time the business clock cannot convert (year 9999) is refused or ignored, not a 500 retried for ever.
     [Fact]
-    public async Task Defect_A_transfer_time_at_the_end_of_the_calendar_does_not_make_the_notification_fail()
+    public async Task A_transfer_time_at_the_end_of_the_calendar_does_not_make_the_notification_fail()
     {
         using var api = new AuthApiFactory();
         var (_, code) = await AwaitingSaleAsync(api);
@@ -323,13 +330,13 @@ public class VietQrWebhookQaTests
         public Task<CustomerPayment?> FindNotCancelledByBankReferenceAsync(string bankReference, CancellationToken cancellationToken) =>
             inner.FindNotCancelledByBankReferenceAsync(bankReference, cancellationToken);
 
-        public Task<CustomerPayment?> FindVietQrByBankReferenceAsync(string bankReference, CancellationToken cancellationToken) =>
-            inner.FindVietQrByBankReferenceAsync(bankReference, cancellationToken);
+        public Task<CustomerPayment?> FindRecordedTransferAsync(string bankReference, CancellationToken cancellationToken) =>
+            inner.FindRecordedTransferAsync(bankReference, cancellationToken);
 
-        public Task<decimal> ReceivedWithoutInvoiceAsync(string invoiceCode, CancellationToken cancellationToken)
+        public Task<IReadOnlyDictionary<string, decimal>> ReceivedWithoutInvoiceAsync(IReadOnlyCollection<string> invoiceCodes, CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref ReceivedReads);
-            return inner.ReceivedWithoutInvoiceAsync(invoiceCode, cancellationToken);
+            return inner.ReceivedWithoutInvoiceAsync(invoiceCodes, cancellationToken);
         }
 
         public Task<(IReadOnlyList<CustomerPayment> Items, int Total, decimal TotalAmount)> AwaitingConfirmationAsync(int page, int pageSize, CancellationToken cancellationToken) =>
@@ -338,7 +345,7 @@ public class VietQrWebhookQaTests
 
     // L – N+1: GET pending reads the money received of each sale with its own query; the list of a zone should not cost a query per sale.
     [Fact]
-    public async Task Defect_The_list_of_sales_awaiting_their_transfer_does_not_query_per_sale()
+    public async Task The_list_of_sales_awaiting_their_transfer_does_not_query_per_sale()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();

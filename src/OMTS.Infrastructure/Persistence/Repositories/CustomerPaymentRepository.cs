@@ -33,13 +33,31 @@ internal sealed class CustomerPaymentRepository(OmtsDbContext db) : ICustomerPay
             .OrderByDescending(p => p.PaymentDate).ThenByDescending(p => p.Code)
             .FirstOrDefaultAsync(cancellationToken);
 
-    public Task<CustomerPayment?> FindVietQrByBankReferenceAsync(string bankReference, CancellationToken cancellationToken) =>
-        db.CustomerPayments.AsNoTracking().FirstOrDefaultAsync(p => p.Method == CustomerPaymentMethod.VietQrInvoice && p.BankReference == bankReference, cancellationToken);
+    public Task<CustomerPayment?> FindRecordedTransferAsync(string bankReference, CancellationToken cancellationToken)
+    {
+        var reference = bankReference.Trim();
+        return db.CustomerPayments.AsNoTracking()
+            .Where(p => p.Kind == CustomerPaymentKind.Payment && p.BankReference == reference
+                && (p.Method == CustomerPaymentMethod.VietQrInvoice || p.StatusId != StatusIds.CustomerPayment.Cancelled))
+            // The VietQR one first: it is what the service reported before.
+            .OrderBy(p => p.Method == CustomerPaymentMethod.VietQrInvoice ? 0 : 1).ThenBy(p => p.Code)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
 
-    public async Task<decimal> ReceivedWithoutInvoiceAsync(string invoiceCode, CancellationToken cancellationToken) =>
-        await db.CustomerPayments.AsNoTracking()
-            .Where(p => p.TransferInvoiceCode == invoiceCode && p.InvoiceId == null && p.StatusId != StatusIds.CustomerPayment.Cancelled)
-            .SumAsync(p => (decimal?)p.Amount, cancellationToken) ?? 0m;
+    public async Task<IReadOnlyDictionary<string, decimal>> ReceivedWithoutInvoiceAsync(IReadOnlyCollection<string> invoiceCodes, CancellationToken cancellationToken)
+    {
+        var codes = invoiceCodes.Distinct().ToList();
+        if (codes.Count == 0)
+        {
+            return new Dictionary<string, decimal>();
+        }
+
+        return await db.CustomerPayments.AsNoTracking()
+            .Where(p => p.TransferInvoiceCode != null && codes.Contains(p.TransferInvoiceCode) && p.InvoiceId == null && p.StatusId != StatusIds.CustomerPayment.Cancelled)
+            .GroupBy(p => p.TransferInvoiceCode!)
+            .Select(g => new { Code = g.Key, Amount = g.Sum(p => p.Amount) })
+            .ToDictionaryAsync(g => g.Code, g => g.Amount, StringComparer.OrdinalIgnoreCase, cancellationToken);
+    }
 
     public async Task<(IReadOnlyList<CustomerPayment> Items, int Total, decimal TotalAmount)> AwaitingConfirmationAsync(
         int page, int pageSize, CancellationToken cancellationToken)
