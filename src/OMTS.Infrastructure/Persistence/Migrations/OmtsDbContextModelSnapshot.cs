@@ -2610,6 +2610,28 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
+                            Id = 303,
+                            Code = "PENDING_APPROVAL",
+                            DisplayName = "Pending approval",
+                            Group = "ACCOUNT",
+                            IsFinal = false,
+                            IsInitial = false,
+                            Meaning = "A trader asked for an account from the Zalo Mini App; cannot log in until the Cooperative Owner approves.",
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 304,
+                            Code = "REJECTED",
+                            DisplayName = "Rejected",
+                            Group = "ACCOUNT",
+                            IsFinal = false,
+                            IsInitial = false,
+                            Meaning = "The Cooperative Owner refused the request; the trader may ask again.",
+                            SortOrder = 4
+                        },
+                        new
+                        {
                             Id = 401,
                             Code = "WORKING",
                             DisplayName = "Employed",
@@ -2847,7 +2869,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Group = "PURCHASE_REQUEST",
                             IsFinal = false,
                             IsInitial = false,
-                            Meaning = "Accepted by the Cooperative Owner, possibly for fewer kg; invoices may be linked to it.",
+                            Meaning = "Accepted by the Cooperative Owner, possibly for fewer cages; invoices may be linked to it.",
                             SortOrder = 2
                         },
                         new
@@ -3014,28 +3036,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             IsInitial = false,
                             Meaning = "User decision 31/10/2026: employees approve their shift before the Owner accepts the request.",
                             SortOrder = 5
-                        },
-                        new
-                        {
-                            Id = 303,
-                            Code = "PENDING_APPROVAL",
-                            DisplayName = "Pending approval",
-                            Group = "ACCOUNT",
-                            IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "A trader asked for an account from the Zalo Mini App; cannot log in until the Cooperative Owner approves.",
-                            SortOrder = 3
-                        },
-                        new
-                        {
-                            Id = 304,
-                            Code = "REJECTED",
-                            DisplayName = "Rejected",
-                            Group = "ACCOUNT",
-                            IsFinal = false,
-                            IsInitial = false,
-                            Meaning = "The Cooperative Owner refused the request; the trader may ask again.",
-                            SortOrder = 4
                         });
                 });
 
@@ -3274,7 +3274,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Id = 180,
                             AllowedPerformers = "Cooperative Owner",
                             FromStatusId = 3201,
-                            GuardCondition = "The accepted kg is above 0 and not more than the requested kg; the pickup date is not before today.",
+                            GuardCondition = "The accepted cages are above 0 and not more than the requested cages; the pickup date is not before today.",
                             ReasonRequired = false,
                             ToStatusId = 3202,
                             TriggerEvent = "Action",
@@ -4194,27 +4194,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<int?>("AcceptedCages")
                         .HasColumnType("int");
 
-                    b.Property<decimal?>("AcceptedKg")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<DateOnly?>("AcceptedPickupDate")
-                        .HasColumnType("date");
-
                     b.Property<DateOnly?>("AgreedPickupDate")
                         .HasColumnType("date");
-
-                    b.Property<bool>("AllowPayLater")
-                        .HasColumnType("bit");
 
                     b.Property<int?>("CagesPerEmployeePerDay")
                         .HasColumnType("int");
 
                     b.Property<string>("CancelReason")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("CancellationReason")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
@@ -4264,10 +4250,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("RequestedCages")
                         .HasColumnType("int");
-
-                    b.Property<decimal>("RequestedKg")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
 
                     b.Property<DateTimeOffset?>("RespondedAt")
                         .HasColumnType("datetimeoffset");
@@ -4328,15 +4310,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.ToTable("PurchaseRequests", t =>
                         {
-                            t.HasCheckConstraint("CK_PurchaseRequest_AcceptedKg_Range", "[AcceptedKg] IS NULL OR ([RequestedCages] = 0 AND [AcceptedKg] > 0 AND [AcceptedKg] <= [RequestedKg])");
+                            t.HasCheckConstraint("CK_PurchaseRequest_Accepted_Has_Response", "[StatusId] <> 3202 OR ([AcceptedCages] IS NOT NULL AND [AgreedPickupDate] IS NOT NULL AND [PayLaterAgreed] IS NOT NULL)");
 
-                            t.HasCheckConstraint("CK_PurchaseRequest_Accepted_Has_Response", "[StatusId] <> 3202 OR ([RequestedCages] > 0 AND [AcceptedCages] IS NOT NULL AND [AcceptedPickupDate] IS NOT NULL) OR ([RequestedCages] = 0 AND [AcceptedKg] IS NOT NULL AND [AgreedPickupDate] IS NOT NULL AND [PayLaterAgreed] IS NOT NULL)");
-
-                            t.HasCheckConstraint("CK_PurchaseRequest_Cages", "(([RequestedCages] > 0 AND [RequestedKg] = 0) OR ([RequestedCages] = 0 AND [RequestedKg] > 0)) AND ([AcceptedCages] IS NULL OR ([AcceptedCages] > 0 AND [AcceptedCages] <= [RequestedCages]))");
+                            t.HasCheckConstraint("CK_PurchaseRequest_Cages", "[RequestedCages] > 0 AND ([AcceptedCages] IS NULL OR ([AcceptedCages] > 0 AND [AcceptedCages] <= [RequestedCages]))");
 
                             t.HasCheckConstraint("CK_PurchaseRequest_Declined_Has_Note", "[StatusId] <> 3203 OR [ResponseNote] IS NOT NULL");
-
-                            t.HasCheckConstraint("CK_PurchaseRequest_RequestedKg_Positive", "[RequestedCages] > 0 OR [RequestedKg] > 0");
 
                             t.HasCheckConstraint("CK_PurchaseRequest_Staffing", "([PlannedCages] IS NULL AND [WorkDate] IS NULL AND [PlannedPickupDate] IS NULL AND [CagesPerEmployeePerDay] IS NULL) OR ([PlannedCages] IS NOT NULL AND [PlannedCages] > 0 AND [PlannedCages] <= [RequestedCages] AND [WorkDate] IS NOT NULL AND [PlannedPickupDate] IS NOT NULL AND [WorkDate] <= [PlannedPickupDate] AND [CagesPerEmployeePerDay] IS NOT NULL AND [CagesPerEmployeePerDay] > 0)");
                         });

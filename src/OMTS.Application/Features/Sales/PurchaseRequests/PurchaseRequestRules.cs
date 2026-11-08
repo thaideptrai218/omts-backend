@@ -18,12 +18,6 @@ internal static class PurchaseRequestRules
     // PM default: the SRS gives no limit for the note and the reason.
     public const int MaxTextLength = 1000;
 
-    // decimal(18,3).
-    private const decimal MaxKg = 999_999_999_999_999.999m;
-
-    /// <summary>Above 0 and at most 3 decimals: more would be rounded by the column, possibly to 0.</summary>
-    public static bool IsKg(decimal? kg) => kg is > 0 and <= MaxKg && decimal.Round(kg.Value, 3) == kg.Value;
-
     /// <summary>The text without its ends; null when it shows nothing, so a note of invisible characters is no note.</summary>
     public static string? CleanText(string? text) => DisplayNames.Normalize(text).Length == 0 ? null : text!.Trim();
 

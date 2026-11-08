@@ -11,14 +11,14 @@ namespace OMTS.Infrastructure.Persistence.Repositories;
 internal sealed class PurchaseRequestRepository(OmtsDbContext db) : IPurchaseRequestRepository
 {
     public Task<PurchaseRequest?> GetAsync(Guid id, CancellationToken ct) =>
-        db.Set<PurchaseRequest>().Include(r => r.Customer).Include(r => r.ShiftInvitations).ThenInclude(i => i.Employee).ThenInclude(e => e.Account)
+        db.Set<PurchaseRequest>().Include(r => r.Customer).Include(r => r.Product).Include(r => r.ShiftInvitations).ThenInclude(i => i.Employee).ThenInclude(e => e.Account)
             .FirstOrDefaultAsync(r => r.Id == id, ct);
     public Task<PurchaseRequest?> FindOperationAsync(Guid customerId, Guid operationId, CancellationToken ct) =>
-        db.Set<PurchaseRequest>().Include(r => r.Customer).Include(r => r.ShiftInvitations)
+        db.Set<PurchaseRequest>().Include(r => r.Customer).Include(r => r.Product).Include(r => r.ShiftInvitations)
             .FirstOrDefaultAsync(r => r.CustomerId == customerId && r.ClientOperationId == operationId, ct);
     public async Task<(IReadOnlyList<PurchaseRequest> Items, int Total)> SearchAsync(Guid? customerId, int? statusId, int page, int pageSize, CancellationToken ct)
     {
-        var q = db.Set<PurchaseRequest>().AsNoTracking().Include(r => r.Customer).Include(r => r.ShiftInvitations).Where(r => r.RequestedCages > 0);
+        IQueryable<PurchaseRequest> q = db.Set<PurchaseRequest>().AsNoTracking().Include(r => r.Customer).Include(r => r.ShiftInvitations);
         if (customerId is { } c) q = q.Where(r => r.CustomerId == c);
         if (statusId is { } s) q = q.Where(r => r.StatusId == s);
         var total = await q.CountAsync(ct);
@@ -47,49 +47,9 @@ internal sealed class PurchaseRequestRepository(OmtsDbContext db) : IPurchaseReq
     public Task<PurchaseRequest?> GetForEditAsync(Guid requestId, CancellationToken cancellationToken) =>
         db.PurchaseRequests.Include(r => r.Customer).Include(r => r.Product).FirstOrDefaultAsync(r => r.Id == requestId, cancellationToken);
 
-    public async Task<(IReadOnlyList<PurchaseRequest> Items, int Total)> ListOfCustomerAsync(Guid customerId, int page, int pageSize, CancellationToken cancellationToken)
-    {
-        var query = db.PurchaseRequests.AsNoTracking().Where(r => r.CustomerId == customerId);
-        var total = await query.CountAsync(cancellationToken);
-        var items = await query.Include(r => r.Product)
-            .OrderByDescending(r => r.SentAt).ThenBy(r => r.Id)
-            .Skip((page - 1) * pageSize).Take(pageSize)
-            .ToListAsync(cancellationToken);
-        return (items, total);
-    }
-
-    public async Task<(IReadOnlyList<PurchaseRequest> Items, int Total)> SearchAsync(int? statusId, Guid? customerId, int page, int pageSize, CancellationToken cancellationToken)
-    {
-        var query = db.PurchaseRequests.AsNoTracking();
-        if (statusId is not null)
-        {
-            query = query.Where(r => r.StatusId == statusId);
-        }
-
-        if (customerId is not null)
-        {
-            query = query.Where(r => r.CustomerId == customerId);
-        }
-
-        var total = await query.CountAsync(cancellationToken);
-        var items = await query.Include(r => r.Customer).Include(r => r.Product)
-            .OrderBy(r => r.StatusId == StatusIds.PurchaseRequest.AwaitingResponse ? 0 : 1).ThenByDescending(r => r.SentAt).ThenBy(r => r.Id)
-            .Skip((page - 1) * pageSize).Take(pageSize)
-            .ToListAsync(cancellationToken);
-        return (items, total);
-    }
-
     public async Task<IReadOnlyList<PurchaseRequest>> ListAcceptedOfCustomerAsync(Guid customerId, DateOnly earliestPickup, CancellationToken cancellationToken) =>
         await db.PurchaseRequests.AsNoTracking().Include(r => r.Product)
             .Where(r => r.CustomerId == customerId && r.StatusId == StatusIds.PurchaseRequest.Accepted && r.AgreedPickupDate >= earliestPickup)
             .OrderBy(r => r.AgreedPickupDate).ThenBy(r => r.SentAt)
-            .ToListAsync(cancellationToken);
-
-    public async Task<IReadOnlyList<PurchaseRequestSending>> ListSendingsAsync(IReadOnlyCollection<Guid> requestIds, CancellationToken cancellationToken) =>
-        await db.Notifications.AsNoTracking()
-            .Where(n => n.RelatedRecordType == RelatedRecordTypes.PurchaseRequest && n.RelatedRecordId != null && requestIds.Contains(n.RelatedRecordId.Value)
-                && n.Channel != NotificationChannel.InApp)
-            .OrderBy(n => n.CreatedAt)
-            .Select(n => new PurchaseRequestSending(n.RelatedRecordId!.Value, n.Channel, n.PhoneNumber, n.DeliveryStatusId, n.DeliveryStatusAt))
             .ToListAsync(cancellationToken);
 }

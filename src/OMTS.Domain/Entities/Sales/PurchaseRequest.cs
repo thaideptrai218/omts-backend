@@ -5,8 +5,11 @@ using OMTS.Domain.Entities.Platform;
 
 namespace OMTS.Domain.Entities.Sales;
 
-/// <summary>SALE-01/02/03. The user changed purchase quantities to whole cages on 31/10/2026.
-/// This is a request, independent of the old kg-based SalesOrder and of later port weighing.</summary>
+/// <summary>
+/// A notification that a trader sends in the app, not an order (SALE-01, BR-SALE-01): one product, how many whole cages and the
+/// pickup date (decision of 08/11/2026: requests are in cages; the kg of each cage is entered when it is weighed at the port). It
+/// has no price and reserves no oysters. "Fulfilled" is not a status: it is worked out from the invoices linked to the request.
+/// </summary>
 public class PurchaseRequest : AuditableEntity, IHasStatus
 {
     public string Code { get; set; } = string.Empty;
@@ -22,13 +25,16 @@ public class PurchaseRequest : AuditableEntity, IHasStatus
     public int StatusId { get; set; } = StatusIds.PurchaseRequest.AwaitingResponse;
     public Status Status { get; set; } = null!;
     public int? AcceptedCages { get; set; }
-    public DateOnly? AcceptedPickupDate { get; set; }
-    public bool AllowPayLater { get; set; }
+    /// <summary>The date the Owner agreed; the trader's date is <see cref="PickupDate"/>.</summary>
+    public DateOnly? AgreedPickupDate { get; set; }
+    /// <summary>Lets the Zone Manager save the linked invoices as Pay later (BR-SALE-07).</summary>
+    public bool? PayLaterAgreed { get; set; }
     public string? ResponseNote { get; set; }
     public DateTimeOffset? RespondedAt { get; set; }
     public Guid? RespondedByAccountId { get; set; }
     public DateTimeOffset? CancelledAt { get; set; }
-    public string? CancellationReason { get; set; }
+    public string? CancelReason { get; set; }
+    public DateTimeOffset SentAt { get; set; }
     public int? PlannedCages { get; set; }
     public DateOnly? WorkDate { get; set; }
     public DateOnly? PlannedPickupDate { get; set; }
@@ -36,12 +42,4 @@ public class PurchaseRequest : AuditableEntity, IHasStatus
     public string? StaffingNote { get; set; }
     public ICollection<PurchaseShiftInvitation> ShiftInvitations { get; set; } = [];
     public WorkDayPlan? WorkDayPlan { get; set; }
-
-    // Weight requests already stored by the web API retain their explicit unit; cages are never converted to kg.
-    public decimal RequestedKg { get; set; }
-    public decimal? AcceptedKg { get; set; }
-    public DateTimeOffset SentAt { get; set; }
-    public DateOnly? AgreedPickupDate { get; set; }
-    public bool? PayLaterAgreed { get; set; }
-    public string? CancelReason { get; set; }
 }

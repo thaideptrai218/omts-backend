@@ -9,8 +9,6 @@ internal sealed class PurchaseRequestConfiguration : IEntityTypeConfiguration<Pu
 {
     public void Configure(EntityTypeBuilder<PurchaseRequest> b)
     {
-        b.Property(x => x.RequestedKg).HasPrecision(18, 3);
-        b.Property(x => x.AcceptedKg).HasPrecision(18, 3);
         b.Property(x => x.CancelReason).HasMaxLength(Lengths.Reason);
         b.HasIndex(x => new { x.CustomerId, x.SentAt });
         b.HasIndex(x => new { x.StatusId, x.SentAt });
@@ -18,7 +16,6 @@ internal sealed class PurchaseRequestConfiguration : IEntityTypeConfiguration<Pu
         b.Property(x => x.ProductName).HasMaxLength(Lengths.Name);
         b.Property(x => x.Note).HasMaxLength(Lengths.Reason);
         b.Property(x => x.ResponseNote).HasMaxLength(Lengths.Reason);
-        b.Property(x => x.CancellationReason).HasMaxLength(Lengths.Reason);
         b.Property(x => x.StaffingNote).HasMaxLength(500);
         b.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId);
         b.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId);
@@ -30,16 +27,12 @@ internal sealed class PurchaseRequestConfiguration : IEntityTypeConfiguration<Pu
         b.HasIndex(x => new { x.CustomerId, x.CreatedAt });
         b.ToTable(t =>
         {
-            t.HasCheckConstraint("CK_PurchaseRequest_RequestedKg_Positive", "[RequestedCages] > 0 OR [RequestedKg] > 0");
-            t.HasCheckConstraint("CK_PurchaseRequest_AcceptedKg_Range", "[AcceptedKg] IS NULL OR ([RequestedCages] = 0 AND [AcceptedKg] > 0 AND [AcceptedKg] <= [RequestedKg])");
             t.HasCheckConstraint("CK_PurchaseRequest_Accepted_Has_Response",
-                $"[StatusId] <> {StatusIds.PurchaseRequest.Accepted} OR " +
-                "([RequestedCages] > 0 AND [AcceptedCages] IS NOT NULL AND [AcceptedPickupDate] IS NOT NULL) OR " +
-                "([RequestedCages] = 0 AND [AcceptedKg] IS NOT NULL AND [AgreedPickupDate] IS NOT NULL AND [PayLaterAgreed] IS NOT NULL)");
+                $"[StatusId] <> {StatusIds.PurchaseRequest.Accepted} OR ([AcceptedCages] IS NOT NULL AND [AgreedPickupDate] IS NOT NULL AND [PayLaterAgreed] IS NOT NULL)");
             t.HasCheckConstraint("CK_PurchaseRequest_Declined_Has_Note", $"[StatusId] <> {StatusIds.PurchaseRequest.Declined} OR [ResponseNote] IS NOT NULL");
         });
         b.ToTable(t => t.HasCheckConstraint("CK_PurchaseRequest_Cages",
-            "(([RequestedCages] > 0 AND [RequestedKg] = 0) OR ([RequestedCages] = 0 AND [RequestedKg] > 0)) AND ([AcceptedCages] IS NULL OR ([AcceptedCages] > 0 AND [AcceptedCages] <= [RequestedCages]))"));
+            "[RequestedCages] > 0 AND ([AcceptedCages] IS NULL OR ([AcceptedCages] > 0 AND [AcceptedCages] <= [RequestedCages]))"));
         b.ToTable(t => t.HasCheckConstraint("CK_PurchaseRequest_Staffing",
             "([PlannedCages] IS NULL AND [WorkDate] IS NULL AND [PlannedPickupDate] IS NULL AND [CagesPerEmployeePerDay] IS NULL) OR " +
             "([PlannedCages] IS NOT NULL AND [PlannedCages] > 0 AND [PlannedCages] <= [RequestedCages] AND " +

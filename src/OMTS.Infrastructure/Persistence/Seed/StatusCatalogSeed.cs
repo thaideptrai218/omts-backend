@@ -62,7 +62,7 @@ internal static class StatusCatalogSeed
         NewStatus(S.Lane.Removed, G.Lane, "REMOVED", "Removed", "Removed at the end of the raft; keeps its number and records."),
         // STD-PURCHASE-REQUEST. Fulfilled is worked out from the invoices, so it has no row (BR-SALE-01).
         NewStatus(S.PurchaseRequest.AwaitingResponse, G.PurchaseRequest, "AWAITING_RESPONSE", "Awaiting response", "Sent by the trader; not answered yet.", initial: true),
-        NewStatus(S.PurchaseRequest.Accepted, G.PurchaseRequest, "ACCEPTED", "Accepted", "Accepted by the Cooperative Owner, possibly for fewer kg; invoices may be linked to it."),
+        NewStatus(S.PurchaseRequest.Accepted, G.PurchaseRequest, "ACCEPTED", "Accepted", "Accepted by the Cooperative Owner, possibly for fewer cages; invoices may be linked to it."),
         NewStatus(S.PurchaseRequest.Declined, G.PurchaseRequest, "DECLINED", "Declined", "Declined by the Cooperative Owner with a note.", final: true),
         NewStatus(S.PurchaseRequest.Cancelled, G.PurchaseRequest, "CANCELLED", "Cancelled", "Cancelled by the trader; no invoice can be linked to it.", final: true),
 
@@ -85,8 +85,6 @@ internal static class StatusCatalogSeed
         NewStatus(S.CustomerPayment.Confirmed, G.CustomerPayment, "CONFIRMED", "Confirmed", "Checked or recorded by the Accountant."),
         NewStatus(S.CustomerPayment.Cancelled, G.CustomerPayment, "CANCELLED", "Cancelled", "Recorded by mistake or never received; no longer counts.", final: true),
         NewStatus(S.PurchaseRequest.AwaitingStaff, G.PurchaseRequest, "AWAITING_STAFF", "Awaiting staff confirmation", "User decision 31/10/2026: employees approve their shift before the Owner accepts the request."),
-        NewStatus(S.Account.PendingApproval, G.Account, "PENDING_APPROVAL", "Pending approval", "A trader asked for an account from the Zalo Mini App; cannot log in until the Cooperative Owner approves.", initial: true),
-        NewStatus(S.Account.Rejected, G.Account, "REJECTED", "Rejected", "The Cooperative Owner refused the request; the trader may ask again."),
     ];
 
     public static readonly StatusTransition[] Transitions =
@@ -121,7 +119,7 @@ internal static class StatusCatalogSeed
 
         NewTransition(76, S.Lane.InUse, S.Lane.Removed, "FARM-04", Owner, Action, "The raft has no open cycle; the last lanes are removed first (BR-FARM-04).", false),
         NewTransition(77, S.Lane.Removed, S.Lane.InUse, "FARM-04", Owner, Action, "The raft has no open cycle; Removed lanes return in number order before new numbers (BR-FARM-04).", false),
-        NewTransition(180, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Accepted, "SALE-03", Owner, Action, "The accepted kg is above 0 and not more than the requested kg; the pickup date is not before today.", false),
+        NewTransition(180, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Accepted, "SALE-03", Owner, Action, "The accepted cages are above 0 and not more than the requested cages; the pickup date is not before today.", false),
         NewTransition(181, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Declined, "SALE-03", Owner, Action, "A note gives the reason.", true),
         NewTransition(182, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Cancelled, "SALE-02", Trader, Action, "The trader cancels; a reason is optional.", false),
         NewTransition(183, S.PurchaseRequest.Accepted, S.PurchaseRequest.Cancelled, "SALE-02", Trader, Action, "The request is not Fulfilled; a reason is optional.", false),

@@ -9,6 +9,7 @@ using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Notifications;
 using OMTS.Application.Features.Sales.Products;
+using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Application.Features.Sales.Requests.Dtos;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
@@ -17,17 +18,15 @@ using S = OMTS.Domain.Constants.StatusIds.PurchaseRequest;
 
 namespace OMTS.Application.Features.Sales.Requests;
 
-/// <summary>SALE-01/02/03 with whole-cage quantities per the user's 31/10/2026 correction.
-/// No price, stock reservation, weight conversion, invoice or payment is created by a request.</summary>
+/// <summary>SALE-01/02/03 in whole cages (decision of 08/11/2026). No price, stock reservation, weight conversion, invoice or
+/// payment is created by a request. The notices and the SMS are those of BR-SALE-03, sent after the save (GFR-06).</summary>
 public sealed class PurchaseRequestService(
     IPurchaseRequestRepository requests, ISalesProductRepository products, ICustomerRepository customers,
-    IAccountRepository accounts, ICurrentUser user, PermissionService permissions,
+    ICurrentUser user, PermissionService permissions,
     RowVersionGuard versions, IStatusCatalog statuses, AuditLogService audit,
-    INotificationDispatcher notifications, IUnitOfWork uow, TimeProvider clock, PurchaseStaffingService staffing)
+    INotificationDispatcher notifications, PurchaseRequestNotifications messages, TraderMessageService traderMessages,
+    IPurchaseRequestFulfilment fulfilment, IUnitOfWork uow, TimeProvider clock, PurchaseStaffingService staffing)
 {
-    public async Task<bool> IsCageRequestAsync(Guid id, CancellationToken ct) =>
-        await requests.GetAsync(id, ct) is { RequestedCages: > 0 };
-
     private DateOnly Today => DateOnly.FromDateTime(clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime);
 
     public async Task<Result<PurchaseRequestPage>> ListAsync(bool mine, string? status, int page, int pageSize, CancellationToken ct)
@@ -92,17 +91,16 @@ public sealed class PurchaseRequestService(
         if (!SalesProductService.Available(product, Today)) return AppError.Invalid("Product unavailable");
         var row = new PurchaseRequest
         {
-            CustomerId = customer.Id, Customer = customer, ProductId = product.Id, ProductName = product.Name,
+            CustomerId = customer.Id, Customer = customer, ProductId = product.Id, Product = product, ProductName = product.Name,
             RequestedCages = input.RequestedCages, PickupDate = input.PickupDate,
-            Note = note, ClientOperationId = input.ClientOperationId,
+            Note = string.IsNullOrEmpty(note) ? null : note, ClientOperationId = input.ClientOperationId, SentAt = clock.GetUtcNow(),
         };
         row.Code = "YC-" + Today.ToString("yyyyMMdd") + "-" + row.Id.ToString("N")[..12].ToUpperInvariant();
         requests.Add(row);
+        uow.MarkChanged(customer);
         audit.Record(new AuditEntry("PurchaseRequest.Submitted", nameof(PurchaseRequest))
         { RecordId = row.Id, RecordCode = row.Code, After = new { row.ProductId, row.RequestedCages, row.PickupDate, row.Note } });
-        await notifications.NotifyAsync(await accounts.ListActiveOwnerIdsAsync(ct), NotificationTypes.NewOrder,
-            "Yêu cầu mua mới", $"{customer.Name} đặt {row.RequestedCages} lồng {row.ProductName}, nhận {row.PickupDate:dd/MM/yyyy}.",
-            nameof(PurchaseRequest), row.Code, true, ct, row.Id);
+        await messages.NewRequestAsync(row, ct);
         await uow.SaveChangesAsync(ct);
         return new SubmittedPurchaseRequest(View(row), false);
     }
@@ -123,18 +121,13 @@ public sealed class PurchaseRequestService(
         var before = row.StatusId;
         row.StatusId = input.Accept ? S.Accepted : S.Declined;
         row.AcceptedCages = input.Accept ? input.AcceptedCages : null;
-        row.AcceptedPickupDate = input.Accept ? input.PickupDate : null;
-        row.AllowPayLater = input.Accept && input.AllowPayLater;
-        row.AgreedPickupDate = row.AcceptedPickupDate;
+        row.AgreedPickupDate = input.Accept ? input.PickupDate : null;
         row.PayLaterAgreed = input.Accept ? input.AllowPayLater : null;
         row.ResponseNote = input.Note?.Trim(); row.RespondedAt = clock.GetUtcNow(); row.RespondedByAccountId = who.AccountId;
         audit.Record(new AuditEntry("PurchaseRequest.Responded", nameof(PurchaseRequest))
         { RecordId = row.Id, RecordCode = row.Code, Before = new { StatusId = before },
-            After = new { row.StatusId, row.AcceptedCages, row.AcceptedPickupDate, row.AllowPayLater, row.ResponseNote } });
-        if (row.Customer.AccountId is { } trader)
-            await notifications.NotifyAsync([trader], "PURCHASE_REQUEST_RESPONDED", "HTX phản hồi yêu cầu mua",
-                input.Accept ? $"{row.Code}: chấp nhận {row.AcceptedCages} lồng, nhận {row.AcceptedPickupDate:dd/MM/yyyy}."
-                    : $"{row.Code}: từ chối. {row.ResponseNote}", nameof(PurchaseRequest), row.Code, true, ct, row.Id);
+            After = new { row.StatusId, row.AcceptedCages, row.AgreedPickupDate, row.PayLaterAgreed, row.ResponseNote } });
+        var sending = await messages.ResponseAsync(row, ct);
         if (!input.Accept) await staffing.ReleaseAsync(row, ct);
         else
         {
@@ -145,6 +138,7 @@ public sealed class PurchaseRequestService(
                 nameof(PurchaseRequest), row.Code, false, ct, row.Id);
         }
         await uow.SaveChangesAsync(ct);
+        if (sending is not null) await traderMessages.DeliverAsync(sending);
         return View(row);
     }
 
@@ -157,16 +151,16 @@ public sealed class PurchaseRequestService(
         if (row.Customer.AccountId != who.AccountId) return AppError.Forbidden;
         if (row.StatusId == S.Cancelled) return View(row);
         if (row.StatusId is not (S.AwaitingResponse or S.AwaitingStaff or S.Accepted)) return AppError.Invalid("Purchase request status");
+        if ((await fulfilment.FulfilledAmongAsync([row.Id], ct)).Contains(row.Id)) return PurchaseRequestRules.WrongStatus(PurchaseRequestRules.FulfilledStatus);
         if (await versions.CheckAsync(row, input.RowVersion, ct) is { } stale) return stale;
         if (input.Reason?.Length > 500) return AppError.Invalid("Reason");
         if (await staffing.CanReleaseAsync(row, ct) is { } cannotRelease) return cannotRelease;
         var before = row.StatusId;
-        row.StatusId = S.Cancelled; row.CancelledAt = clock.GetUtcNow(); row.CancellationReason = input.Reason?.Trim();
+        row.StatusId = S.Cancelled; row.CancelledAt = clock.GetUtcNow(); row.CancelReason = input.Reason?.Trim();
         await staffing.ReleaseAsync(row, ct);
         audit.Record(new AuditEntry("PurchaseRequest.Cancelled", nameof(PurchaseRequest))
-        { RecordId = row.Id, RecordCode = row.Code, Before = new { StatusId = before }, After = new { row.StatusId }, Reason = row.CancellationReason });
-        await notifications.NotifyAsync(await accounts.ListActiveOwnerIdsAsync(ct), "PURCHASE_REQUEST_CANCELLED",
-            "Thương lái hủy yêu cầu mua", $"{row.Customer.Name} đã hủy {row.Code}.", nameof(PurchaseRequest), row.Code, false, ct, row.Id);
+        { RecordId = row.Id, RecordCode = row.Code, Before = new { StatusId = before }, After = new { row.StatusId }, Reason = row.CancelReason });
+        await messages.CancelledAsync(row, ct);
         await uow.SaveChangesAsync(ct);
         return View(row);
     }
@@ -175,6 +169,6 @@ public sealed class PurchaseRequestService(
         ? permissions.GetAccessAsync(id, ct) : Task.FromResult<AccountAccess?>(null);
     private PurchaseRequestView View(PurchaseRequest r) => new(
         r.Id, r.Code, r.ProductId, r.ProductName, "Cage", r.RequestedCages, r.PickupDate, r.Note,
-        statuses.CodeOf(r.StatusId), r.AcceptedCages, r.AcceptedPickupDate, r.AllowPayLater,
-        r.ResponseNote, r.RespondedAt, r.CancelledAt, r.CancellationReason, r.CreatedAt, r.Customer.Name, RowVersionGuard.Encode(r.RowVersion), PurchaseStaffingService.Summary(r));
+        statuses.CodeOf(r.StatusId), r.AcceptedCages, r.AgreedPickupDate, r.PayLaterAgreed == true,
+        r.ResponseNote, r.RespondedAt, r.CancelledAt, r.CancelReason, r.CreatedAt, r.Customer.Name, RowVersionGuard.Encode(r.RowVersion), PurchaseStaffingService.Summary(r));
 }

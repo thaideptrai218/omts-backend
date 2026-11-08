@@ -215,11 +215,7 @@ public static class DependencyInjection
         services.AddScoped<ProductReadService>();
         services.AddScoped<CustomerService>();
         services.AddScoped<CustomerMergeService>();
-        services.AddScoped<PurchaseRequestViews>();
         services.AddScoped<PurchaseRequestNotifications>();
-        services.AddScoped<PurchaseRequestReadService>();
-        services.AddScoped<TraderPurchaseRequestService>();
-        services.AddScoped<PurchaseRequestResponseService>();
         services.AddScoped<TraderMessageService>();
         // SALE-05 sales invoices and the customer debt (BR-DEBT-02)
         services.AddScoped<CustomerDebtReader>();

@@ -114,4 +114,4 @@ public sealed record SalesInvoiceSent(
 public sealed record SalesInvoiceSaved(SalesInvoiceView Invoice, decimal Change, decimal SubtractedFromDebt, string Message, string MessageCode);
 
 /// <summary>A purchase request the invoice can be linked to (SALE-05.3): Accepted, not Fulfilled, pickup not more than 3 days ago.</summary>
-public sealed record OpenPurchaseRequestView(Guid Id, Guid ProductId, string ProductName, decimal RequestedKg, decimal AcceptedKg, DateOnly PickupDate, bool PayLaterAgreed, string? ResponseNote);
+public sealed record OpenPurchaseRequestView(Guid Id, Guid ProductId, string ProductName, int RequestedCages, int AcceptedCages, DateOnly PickupDate, bool PayLaterAgreed, string? ResponseNote);
