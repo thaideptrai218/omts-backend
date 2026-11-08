@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using ClosedXML.Excel;
+using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Farming;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Domain.Constants;
@@ -122,5 +123,30 @@ public class CustomerDebtStatementTests
         using var listOnly = new XLWorkbook(await (await accountant.Client.ExportDebtsAsync()).Content.ReadAsStreamAsync());
         Assert.Equal(["Customer debts"], listOnly.Worksheets.Select(w => w.Name).ToList());
         Assert.Equal("MSG-GEN-01", await (await accountant.Client.ExportDebtsAsync(sale.CustomerId, Today, Today.AddDays(-1))).ErrorCodeAsync());
+    }
+
+    // BR-DEBT-04 / DEBT-03.2: the exported staff statement carries the internal data of a payment as the screen shows it; an invoice leaves those columns empty.
+    [Fact]
+    public async Task The_exported_statement_shows_who_recorded_confirmed_and_collected_a_payment_its_note_and_its_cancel_reason()
+    {
+        using var api = new AuthApiFactory();
+        var sale = await api.SaleSetupAsync();
+        await sale.Manager.Client.SellAsync(PayLater(sale.CustomerId, sale, 10m));
+        var accountant = await api.AllZonesAccountantAsync();
+        var cash = (await accountant.Client.PaidAsync(
+            CustomerPaymentTestKit.MoneyBody(sale.CustomerId, 100_000m, "Cash", sale.Manager.Account.Id).With("note", "Handed over at the office"))).Payment();
+        (await accountant.Client.CancelAsync(cash.Id(), "Counted twice")).EnsureSuccessStatusCode();
+        var names = await api.QueryAsync(db => db.Accounts.Where(a => a.Id == accountant.Account.Id || a.Id == sale.Manager.Account.Id).ToDictionaryAsync(a => a.Id, a => a.DisplayName));
+
+        using var workbook = new XLWorkbook(await (await accountant.Client.ExportDebtsAsync(sale.CustomerId)).Content.ReadAsStreamAsync());
+
+        var sheet = workbook.Worksheet("Statement");
+        Assert.Equal(["Recorded by", "Confirmed by", "Collected by", "Note", "Cancel reason"], Enumerable.Range(9, 5).Select(c => sheet.Cell(1, c).GetString()).ToList());
+        var payment = sheet.RowsUsed().Single(r => r.Cell(3).GetString() == cash.Text("code"));
+        Assert.Equal(
+            [names[accountant.Account.Id], names[accountant.Account.Id], names[sale.Manager.Account.Id], "Handed over at the office", "Counted twice"],
+            Enumerable.Range(9, 5).Select(c => payment.Cell(c).GetString()).ToList());
+        var invoice = sheet.RowsUsed().Single(r => r.Cell(2).GetString() == "Sales invoice");
+        Assert.All(Enumerable.Range(9, 5), c => Assert.True(invoice.Cell(c).IsEmpty()));
     }
 }

@@ -4,7 +4,9 @@ using OMTS.Application.Common.Validation;
 using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Sales.Debts;
 using OMTS.Application.Features.Sales.PurchaseRequests;
+using OMTS.Application.Features.WaterQuality.Dtos;
 using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Infrastructure.Persistence.Queries;
@@ -99,17 +101,55 @@ internal sealed class CustomerDebtQuery(OmtsDbContext db) : ICustomerDebtQuery
             return ([], []);
         }
 
-        var invoices = await db.SalesInvoices.AsNoTracking()
-            .Where(i => i.CustomerId != null && ids.Contains(i.CustomerId.Value))
-            .Select(i => new CustomerLedgerInvoice(i.CustomerId!.Value, i.Id, i.Code, i.InvoicedAt, i.InvoiceDate, i.Total, i.StatusId == StatusIds.SalesInvoice.Cancelled))
-            .ToListAsync(cancellationToken);
-        var payments = await db.CustomerPayments.AsNoTracking()
-            .Where(p => p.CustomerId != null && ids.Contains(p.CustomerId.Value))
+        var invoices = await InvoicesOf(ids, cancellationToken);
+        var payments = await PaymentsOf(ids)
             .Select(p => new CustomerLedgerPayment(
-                p.CustomerId!.Value, p.Id, p.Code, p.Kind, p.PaymentDate, p.Amount, p.Method, p.InvoiceId, p.Invoice == null ? null : p.Invoice.Code, p.StatusId, p.CancelledAt))
+                p.CustomerId!.Value, p.Id, p.Code, p.Kind, p.PaymentDate, p.Amount, p.Method, p.InvoiceId, p.Invoice == null ? null : p.Invoice.Code, p.StatusId, p.CancelledAt, null))
             .ToListAsync(cancellationToken);
         return (invoices, payments);
     }
+
+    public async Task<(IReadOnlyList<CustomerLedgerInvoice> Invoices, IReadOnlyList<CustomerLedgerPayment> Payments)> StatementLedgerAsync(
+        Guid customerId, CancellationToken cancellationToken)
+    {
+        List<Guid> ids = [customerId];
+        var invoices = await InvoicesOf(ids, cancellationToken);
+        // The display names are scalar subqueries of the same command (no query per payment, no extra command).
+        var rows = await PaymentsOf(ids)
+            .Select(p => new
+            {
+                Ledger = new CustomerLedgerPayment(
+                    p.CustomerId!.Value, p.Id, p.Code, p.Kind, p.PaymentDate, p.Amount, p.Method, p.InvoiceId, p.Invoice == null ? null : p.Invoice.Code, p.StatusId, p.CancelledAt, null),
+                p.Note,
+                p.CancelReason,
+                p.RecordedByAccountId,
+                RecordedByName = db.Accounts.Where(a => a.Id == p.RecordedByAccountId).Select(a => a.DisplayName).FirstOrDefault(),
+                p.ConfirmedByAccountId,
+                ConfirmedByName = db.Accounts.Where(a => a.Id == p.ConfirmedByAccountId).Select(a => a.DisplayName).FirstOrDefault(),
+                p.CollectedByAccountId,
+                CollectedByName = db.Accounts.Where(a => a.Id == p.CollectedByAccountId).Select(a => a.DisplayName).FirstOrDefault(),
+            })
+            .ToListAsync(cancellationToken);
+        static AccountRef? Ref(Guid? id, string? name) => id is { } value ? new AccountRef(value, name ?? string.Empty) : null;
+        var payments = rows
+            .Select(r => r.Ledger with
+            {
+                Internals = new CustomerPaymentInternals(
+                    Ref(r.RecordedByAccountId, r.RecordedByName), Ref(r.ConfirmedByAccountId, r.ConfirmedByName), Ref(r.CollectedByAccountId, r.CollectedByName),
+                    r.Note, r.CancelReason),
+            })
+            .ToList();
+        return (invoices, payments);
+    }
+
+    private async Task<IReadOnlyList<CustomerLedgerInvoice>> InvoicesOf(List<Guid> ids, CancellationToken cancellationToken) =>
+        await db.SalesInvoices.AsNoTracking()
+            .Where(i => i.CustomerId != null && ids.Contains(i.CustomerId.Value))
+            .Select(i => new CustomerLedgerInvoice(i.CustomerId!.Value, i.Id, i.Code, i.InvoicedAt, i.InvoiceDate, i.Total, i.StatusId == StatusIds.SalesInvoice.Cancelled))
+            .ToListAsync(cancellationToken);
+
+    private IQueryable<CustomerPayment> PaymentsOf(List<Guid> ids) =>
+        db.CustomerPayments.AsNoTracking().Where(p => p.CustomerId != null && ids.Contains(p.CustomerId.Value));
 
     public Task<int> AwaitingConfirmationCountAsync(CancellationToken cancellationToken) =>
         db.CustomerPayments.AsNoTracking().CountAsync(p => p.StatusId == StatusIds.CustomerPayment.AwaitingConfirmation, cancellationToken);

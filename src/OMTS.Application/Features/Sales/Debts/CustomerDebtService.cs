@@ -84,7 +84,8 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
         }
 
         var (start, end) = period.Value;
-        var (invoices, payments) = await queries.LedgerAsync([customerId], cancellationToken);
+        // The staff statement: payments with who recorded, confirmed and collected them, their note and cancel reason (BR-DEBT-04).
+        var (invoices, payments) = await queries.StatementLedgerAsync(customerId, cancellationToken);
         var lines = CustomerStatementLedger.Build(invoices, payments, start, end);
         var now = CustomerDebtAllocator.Allocate(invoices, payments, today);
         return new CustomerDebtStatement(

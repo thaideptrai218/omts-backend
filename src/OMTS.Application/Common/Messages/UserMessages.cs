@@ -144,17 +144,30 @@ public static class UserMessages
         };
     }
 
+    /// <summary>The codes MSG-DEBT-03 names for each part of one list of confirmations; the others are "and N more" (the audit rows keep every code).</summary>
+    public const int BatchCodesNamed = 10;
+
+    /// <summary>The customer debts MSG-DEBT-03 names for one list of confirmations; the others are counted.</summary>
+    public const int BatchDebtsNamed = 5;
+
     /// <summary>
     /// MSG-DEBT-03 for one list of payments Awaiting confirmation (DEBT-02.2 step 6): one notice names the payments confirmed and cancelled. Confirmations change no debt
-    /// (BR-DEBT-02); the debt text names the debt after each cancellation of a profile's payment.
+    /// (BR-DEBT-02); the debt text names the debt after each cancellation of a profile's payment. A list may hold up to 200 payments (CustomerPaymentRules.MaxBatchSize),
+    /// so the notice names the first <see cref="BatchCodesNamed"/> codes of each part and the first <see cref="BatchDebtsNamed"/> debts and counts the rest: its text and
+    /// parameters always fit the Notification row (2000 characters each), which would otherwise cut the text and drop the parameters.
     /// </summary>
     /// <param name="debts">The debt after the save of each profile a cancelled payment belonged to.</param>
     public static UserMessage CustomerPaymentsBatch(
         string userName, IReadOnlyList<(string Code, decimal Amount)> confirmed, IReadOnlyList<(string Code, decimal Amount)> cancelled,
         IReadOnlyList<(string CustomerName, decimal Debt)> debts)
     {
+        static string Codes(IReadOnlyList<(string Code, decimal Amount)> payments) =>
+            string.Join(", ", payments.Take(BatchCodesNamed).Select(p => p.Code)) + (payments.Count > BatchCodesNamed ? $" and {payments.Count - BatchCodesNamed} more" : "");
+
         static string Part(string verb, IReadOnlyList<(string Code, decimal Amount)> payments) =>
-            $"{verb} {payments.Count} payment{(payments.Count == 1 ? "" : "s")} ({string.Join(", ", payments.Select(p => p.Code))}) of {Vnd(payments.Sum(p => p.Amount))} VND";
+            $"{verb} {payments.Count} payment{(payments.Count == 1 ? "" : "s")} ({Codes(payments)}) of {Vnd(payments.Sum(p => p.Amount))} VND";
+
+        static int More(int count, int named) => Math.Max(0, count - named);
 
         var parts = new List<string>();
         if (confirmed.Count > 0)
@@ -167,21 +180,29 @@ public static class UserMessages
             parts.Add(Part("cancelled", cancelled));
         }
 
+        var namedDebts = debts.Take(BatchDebtsNamed).ToList();
+        var moreDebts = More(debts.Count, BatchDebtsNamed);
         var debtText = cancelled.Count == 0
             ? "The customer debts have not changed."
-            : string.Join(' ', debts.Select(d => CustomerDebtAfterText(d.CustomerName, d.Debt)));
+            : string.Join(' ', namedDebts.Select(d => CustomerDebtAfterText(d.CustomerName, d.Debt)))
+                + (moreDebts == 0 ? "" : moreDebts == 1 ? " The debt of 1 more customer has changed." : $" The debts of {moreDebts} more customers have changed.");
         return new UserMessage(Debt03, $"{userName} {string.Join(" and ", parts)}. {debtText}".TrimEnd())
         {
             Parameters = new Dictionary<string, object?>
             {
                 ["user_name"] = userName,
                 ["transaction_kind"] = "Confirmations",
-                ["confirmed_codes"] = confirmed.Select(p => p.Code).ToList(),
+                ["confirmed_codes"] = confirmed.Take(BatchCodesNamed).Select(p => p.Code).ToList(),
+                ["confirmed_count"] = confirmed.Count,
+                ["confirmed_more_count"] = More(confirmed.Count, BatchCodesNamed),
                 ["confirmed_amount"] = confirmed.Sum(p => p.Amount),
-                ["cancelled_codes"] = cancelled.Select(p => p.Code).ToList(),
+                ["cancelled_codes"] = cancelled.Take(BatchCodesNamed).Select(p => p.Code).ToList(),
+                ["cancelled_count"] = cancelled.Count,
+                ["cancelled_more_count"] = More(cancelled.Count, BatchCodesNamed),
                 ["cancelled_amount"] = cancelled.Sum(p => p.Amount),
                 ["amount"] = confirmed.Sum(p => p.Amount) + cancelled.Sum(p => p.Amount),
-                ["debts"] = debts.Select(d => new Dictionary<string, object?> { ["customer_name"] = d.CustomerName, ["debt_amount"] = d.Debt }).ToList(),
+                ["debts"] = namedDebts.Select(d => new Dictionary<string, object?> { ["customer_name"] = d.CustomerName, ["debt_amount"] = d.Debt }).ToList(),
+                ["debts_more_count"] = moreDebts,
             },
         };
     }

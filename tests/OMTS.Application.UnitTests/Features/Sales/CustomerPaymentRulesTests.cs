@@ -117,6 +117,27 @@ public class CustomerPaymentRulesTests
         Assert.Equal("Customer payment transaction: 5,300,000 VND.", NotificationSmsText.Render(type, type.Sms!, new NotificationContent(type.Code, "t", batch)));
     }
 
+    // A long list names the first 10 codes of each part and the first 5 debts, and counts the rest, in the text and in the parameters (the row holds 2000 characters).
+    [Fact]
+    public void A_long_list_names_the_first_codes_and_debts_and_counts_the_rest()
+    {
+        var confirmed = Enumerable.Range(1, 12).Select(i => ($"PT{i:D6}", 1_000m)).ToList();
+        var debts = Enumerable.Range(1, 7).Select(i => ($"Khách {i}", i * 1_000m)).ToList();
+
+        var batch = UserMessages.CustomerPaymentsBatch("Kế toán Hà", confirmed, [("PT000100", 500m)], debts);
+
+        Assert.StartsWith(
+            "Kế toán Hà confirmed 12 payments (PT000001, PT000002, PT000003, PT000004, PT000005, PT000006, PT000007, PT000008, PT000009, PT000010 and 2 more) of 12,000 VND"
+            + " and cancelled 1 payment (PT000100) of 500 VND. Khách 1 now owes the cooperative 1,000 VND.",
+            batch.Text);
+        Assert.EndsWith("Khách 5 now owes the cooperative 5,000 VND. The debts of 2 more customers have changed.", batch.Text);
+        var parameters = batch.Parameters!;
+        Assert.Equal(10, ((IReadOnlyCollection<string>)parameters["confirmed_codes"]!).Count);
+        Assert.Equal((12, 2, 1, 0, 2), ((int)parameters["confirmed_count"]!, (int)parameters["confirmed_more_count"]!, (int)parameters["cancelled_count"]!,
+            (int)parameters["cancelled_more_count"]!, (int)parameters["debts_more_count"]!));
+        Assert.Equal(5, ((System.Collections.ICollection)parameters["debts"]!).Count);
+    }
+
     // BR-DEBT-04: a cancelled payment stays on its own date, counts 0 and carries its cancel date.
     [Fact]
     public void A_cancelled_payment_stays_in_the_statement_with_its_cancel_date()

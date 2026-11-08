@@ -46,6 +46,13 @@ public interface ICustomerDebtQuery
     Task<(IReadOnlyList<CustomerLedgerInvoice> Invoices, IReadOnlyList<CustomerLedgerPayment> Payments)> LedgerAsync(
         IReadOnlyCollection<Guid> customerIds, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The rows of <see cref="LedgerAsync"/> for the staff statement of one profile (DEBT-03): the payments also carry their internal data (BR-DEBT-04), the names of the
+    /// people read in the same query, so the statement sends the same commands whatever the number of payments.
+    /// </summary>
+    Task<(IReadOnlyList<CustomerLedgerInvoice> Invoices, IReadOnlyList<CustomerLedgerPayment> Payments)> StatementLedgerAsync(
+        Guid customerId, CancellationToken cancellationToken);
+
     /// <summary>The customer payments Awaiting confirmation, those without a customer included (SCR-DEBT-02 tab).</summary>
     Task<int> AwaitingConfirmationCountAsync(CancellationToken cancellationToken);
 }
