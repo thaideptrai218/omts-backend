@@ -81,7 +81,10 @@ public class HarvestLotCloseQaTestsSqlServer
         await using var database = SqlServerTestDatabase.Create();
         await using var db = database.CreateContext();
         var all = db.Database.GetMigrations().ToArray();
-        Assert.Equal([MigrationBefore, Migration], all[^2..]);
+        // Later migrations (CustomerPayments, PR 8b) may follow; this one comes right after the sending one.
+        var at = Array.IndexOf(all, Migration);
+        Assert.True(at > 0);
+        Assert.Equal(MigrationBefore, all[at - 1]);
         var migrator = db.GetService<IMigrator>();
 
         await migrator.MigrateAsync();

@@ -113,7 +113,7 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         var traderTypes = await TypesAsync(await factory.LoginAsync(trader.Username, PreferencePassword));
 
         Assert.Equal(
-            ["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "ZONE_LICENSE_EXPIRY", "COOPERATIVE_CERTIFICATION_EXPIRY", "PURCHASE_REQUEST_NEW", "PURCHASE_REQUEST_CANCELLED", "CYCLE_SEEDING_COMPLETED", "HARVEST_LOT_RECORDED", "HARVEST_LOT_AUTO_CLOSE_WARNING", "CYCLE_CLOSE_REMINDER", "CYCLE_CLOSED", "PURCHASE_RECEIPT_COMPLETED", "PURCHASE_RECEIPT_CANCELLED_ADVANCE", "SUPPLIER_TRANSACTION", "CULTIVATION_LOG_RECORDED", "SALE_COMPLETED"],
+            ["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "ZONE_LICENSE_EXPIRY", "COOPERATIVE_CERTIFICATION_EXPIRY", "PURCHASE_REQUEST_NEW", "PURCHASE_REQUEST_CANCELLED", "CYCLE_SEEDING_COMPLETED", "HARVEST_LOT_RECORDED", "HARVEST_LOT_AUTO_CLOSE_WARNING", "CYCLE_CLOSE_REMINDER", "CYCLE_CLOSED", "PURCHASE_RECEIPT_COMPLETED", "PURCHASE_RECEIPT_CANCELLED_ADVANCE", "SUPPLIER_TRANSACTION", "CULTIVATION_LOG_RECORDED", "SALE_COMPLETED", "CUSTOMER_PAYMENT_TRANSACTION"],
             ownerTypes.Keys);
         Assert.Equal((false, true), ownerTypes["CULTIVATION_LOG_RECORDED"]);
         // BR-SALE-03: the sale notice is not among the mandatory types of BR-ACCOUNT-11.
@@ -137,6 +137,8 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Equal((false, true), ownerTypes["PURCHASE_RECEIPT_COMPLETED"]);
         // BR-PURCHASE-05: the transaction of the Accountant is always pushed.
         Assert.Equal((true, true), ownerTypes["SUPPLIER_TRANSACTION"]);
+        // BR-DEBT-06: so is each transaction of the Accountant on customer payments (DEBT-02).
+        Assert.Equal((true, true), ownerTypes["CUSTOMER_PAYMENT_TRANSACTION"]);
     }
 
     [Fact]
