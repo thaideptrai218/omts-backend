@@ -109,6 +109,21 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
         return rows;
     }
 
+    public async Task<IReadOnlyList<HarvestLot>> ListForYieldAsync(IReadOnlyCollection<Guid>? zoneIds, DateOnly from, DateOnly to, bool wholeCycles, CancellationToken cancellationToken)
+    {
+        var inZones = db.HarvestLots.AsNoTracking();
+        if (zoneIds is not null)
+        {
+            var ids = zoneIds.ToList();
+            inZones = inZones.Where(l => ids.Contains(l.Raft.ZoneId));
+        }
+
+        var inPeriod = inZones.Where(l => l.HarvestDate >= from && l.HarvestDate <= to);
+        // A cycle belongs to one raft, so all of its lots are in the zones of the lot found in the period.
+        var chosen = wholeCycles ? inZones.Where(l => inPeriod.Select(p => p.CycleId).Contains(l.CycleId)) : inPeriod;
+        return await chosen.Include(l => l.Raft).ThenInclude(r => r.Zone).Include(l => l.Cycle).ToListAsync(cancellationToken);
+    }
+
     public Task<int> CountForSaleAsync(Guid? zoneId, CancellationToken cancellationToken)
     {
         var forSale = ForSale(db.HarvestLots.AsNoTracking());

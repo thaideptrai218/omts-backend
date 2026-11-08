@@ -43,6 +43,12 @@ public interface IHarvestLotRepository
     /// </summary>
     Task<IReadOnlyList<LotLaneSeedLot>> LaneSeedLotsAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The lots of the yield report (BR-HARVEST-07) with their raft, zone and cycle, read only: those harvested from <paramref name="from"/> to <paramref name="to"/> on rafts of the zones,
+    /// or with <paramref name="wholeCycles"/> every lot of each cycle that has such a lot. Null zones: every zone.
+    /// </summary>
+    Task<IReadOnlyList<HarvestLot>> ListForYieldAsync(IReadOnlyCollection<Guid>? zoneIds, DateOnly from, DateOnly to, bool wholeCycles, CancellationToken cancellationToken);
+
     /// <summary>How many lots are for sale now, of one zone or of every zone (BR-FARM-10).</summary>
     Task<int> CountForSaleAsync(Guid? zoneId, CancellationToken cancellationToken);
 

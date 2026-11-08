@@ -278,6 +278,9 @@ public static class UserMessages
         Parameters = new Dictionary<string, object?> { ["days"] = days, ["count"] = count },
     };
 
+    /// <summary>MSG-HARVEST-04 (HARVEST-04 step 3): the yield report holds lots still for sale (Open or Reopened), whose figures can still change (BR-HARVEST-07).</summary>
+    public static readonly UserMessage YieldNotFinal = new(Harvest04, "Some lots are still for sale, so their figures may still change.");
+
     /// <summary>MSG-HARVEST-05 (GFR-05): the next daily close check closes this lot still for sale.</summary>
     /// <param name="closeDate">The day of that check: the lot is closed at its start.</param>
     public static UserMessage HarvestLotAutoCloseWarning(string lotCode, string raftCode, DateOnly closeDate) => new(
