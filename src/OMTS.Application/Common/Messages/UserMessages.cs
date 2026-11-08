@@ -429,6 +429,17 @@ public static class UserMessages
         };
     }
 
+    /// <summary>
+    /// MSG-TRACE-02 (TRACE-02.1): the backward trace of the lot finds missing data. The system names it and never chooses a seed lot or a raft by itself (BR-TRACE-03); the items are
+    /// those of MSG-TRACE-01 (BR-TRACE-01).
+    /// </summary>
+    public static UserMessage TraceIncomplete(string lotCode, IReadOnlyList<OriginGap> missingItems) => new(
+        Trace02,
+        $"Missing data in the trace of harvest lot {lotCode}: {string.Join("; ", missingItems.Select(m => m.Describe()))}. Please ask the Cooperative Owner whether the data must be corrected.")
+    {
+        Parameters = new Dictionary<string, object?> { ["lot_code"] = lotCode, ["missing_items"] = missingItems },
+    };
+
     /// <summary>MSG-TRACE-03 (TRACE-03.0.E3): the correction would leave a lane of a harvest lot with no seed lot (BR-TRACE-01). The text names the first such lane.</summary>
     public static UserMessage LaneWithoutSeedLot(int laneNumber, string lotCode) => new(
         Trace03,

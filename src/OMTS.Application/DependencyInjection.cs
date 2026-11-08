@@ -22,6 +22,7 @@ using OMTS.Application.Features.Files;
 using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Traceability.Corrections;
 using OMTS.Application.Features.Traceability.Publishing;
+using OMTS.Application.Features.Traceability.Tracing;
 using OMTS.Application.Features.Labor;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
@@ -180,6 +181,8 @@ public static class DependencyInjection
         services.AddScoped<ProvenancePublisher>();
         services.AddScoped<IProvenancePublisher>(provider => provider.GetRequiredService<ProvenancePublisher>());
         services.AddScoped<LotPublishService>();
+        // TRACE-02 – trace a lot backward and forward, and export the trace
+        services.AddScoped<LotTraceService>();
 
         services.AddScoped<UploadedFileSaver>();
         services.AddScoped<OrphanFileCleanupService>();

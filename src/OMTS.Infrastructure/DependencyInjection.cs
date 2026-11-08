@@ -93,6 +93,7 @@ public static class DependencyInjection
         services.AddScoped<ISeedingRecordRepository, SeedingRecordRepository>();
         services.AddScoped<IHarvestLotRepository, HarvestLotRepository>();
         services.AddScoped<IHarvestLotSalesQuery, HarvestLotSalesQuery>();
+        services.AddScoped<ILotTraceQuery, LotTraceQuery>();
         services.AddScoped<IPurchaseRequestFulfilment, PurchaseRequestFulfilmentQuery>();
         services.AddScoped<ISalesInvoiceRepository, SalesInvoiceRepository>();
         services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();
