@@ -30,6 +30,7 @@ using OMTS.Application.Features.Purchasing.Suppliers;
 using OMTS.Application.Features.ReceivingBankAccounts;
 using OMTS.Application.Features.Sales.Customers;
 using OMTS.Application.Features.Sales.Debts;
+using OMTS.Application.Features.Sales.Payments;
 using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Application.Features.Sales.Products;
 using OMTS.Application.Features.Sales.PurchaseRequests;
@@ -202,6 +203,12 @@ public static class DependencyInjection
         // DEBT-03 customer debts, statement and export (read only)
         services.AddScoped<CustomerDebtService>();
         services.AddScoped<CustomerDebtExportService>();
+        // DEBT-02 customer payments, money paid back, confirmations and cancellations
+        services.AddScoped<CustomerPaymentViews>();
+        services.AddScoped<CustomerPaymentStatusChanges>();
+        services.AddScoped<CustomerPaymentNotifications>();
+        services.AddScoped<CustomerPaymentService>();
+        services.AddScoped<CustomerPaymentStatusService>();
         services.AddScoped<SalesInvoiceFactsReader>();
         services.AddScoped<SalesInvoiceWriter>();
         services.AddScoped<SalesInvoiceNotifications>();

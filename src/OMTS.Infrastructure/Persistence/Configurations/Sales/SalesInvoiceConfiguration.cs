@@ -88,11 +88,21 @@ internal sealed class CustomerPaymentConfiguration : IEntityTypeConfiguration<Cu
         builder.HasOne(x => x.Status).WithMany().HasForeignKey(x => x.StatusId);
         builder.ReferencesAccount(nameof(CustomerPayment.CollectedByAccountId));
         builder.ReferencesAccount(nameof(CustomerPayment.RecordedByAccountId));
+        builder.ReferencesAccount(nameof(CustomerPayment.ConfirmedByAccountId));
+        builder.ReferencesAccount(nameof(CustomerPayment.CancelledByAccountId));
         builder.Property(x => x.Amount).HasPrecision(18, 0);
+        builder.Property(x => x.BankReference).HasMaxLength(Lengths.ShortText);
+        // Not unique: the Accountant may save a second payment with the same reference after MSG-DEBT-05 (BR-DEBT-03).
+        builder.HasIndex(x => x.BankReference);
+        builder.Property(x => x.Note).HasMaxLength(Lengths.Reason);
+        builder.Property(x => x.DeduplicationKey).HasMaxLength(Lengths.ShortText);
+        builder.HasIndex(x => x.DeduplicationKey).IsUnique();
+        builder.Property(x => x.CancelReason).HasMaxLength(Lengths.Reason);
 
-        // The customer debt (BR-DEBT-02) and the payments of an invoice.
+        // The customer debt (BR-DEBT-02), the payments of an invoice and the payments Awaiting confirmation, oldest first (DEBT-02.2).
         builder.HasIndex(x => new { x.CustomerId, x.StatusId });
         builder.HasIndex(x => x.InvoiceId);
+        builder.HasIndex(x => new { x.StatusId, x.PaymentDate });
         builder.ToTable(t => t.HasCheckConstraint("CK_CustomerPayment_Amount", "[Amount] > 0"));
     }
 }

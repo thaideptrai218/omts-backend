@@ -1,3 +1,4 @@
+using System.Globalization;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Reports;
 using OMTS.Application.Common.Messages;
@@ -67,12 +68,17 @@ public sealed class CustomerDebtExportService(CustomerDebtService debts, ISpread
         {
             new object?[] { Day(statement.From), "Debt at the start", statement.Customer.Name, null, null, null, null, statement.OpeningDebt },
         };
+        // The internal data of the payments, as the staff statement shows it (BR-DEBT-04); empty for invoices.
         sheetRows.AddRange(statement.Entries.Select(e => (IReadOnlyList<object?>)
         [
             Day(e.Date), KindText(e.Kind), e.Code, e.InvoiceCode, e.Method?.ToString(), Status(e), e.Amount, e.DebtAfter,
+            e.RecordedBy?.Name, e.ConfirmedBy?.Name, e.CollectedBy?.Name, e.Note, e.CancelReason,
         ]));
         sheetRows.Add(new object?[] { Day(statement.To), "Debt at the end", statement.Customer.Name, null, null, null, null, statement.ClosingDebt });
-        return new SpreadsheetSheet("Statement", ["Date", "Entry", "Code", "Invoice", "Method", "Status", "Amount", "Debt after"], sheetRows);
+        return new SpreadsheetSheet(
+            "Statement",
+            ["Date", "Entry", "Code", "Invoice", "Method", "Status", "Amount", "Debt after", "Recorded by", "Confirmed by", "Collected by", "Note", "Cancel reason"],
+            sheetRows);
     }
 
     private static SpreadsheetSheet UnpaidSheet(CustomerDebtStatement statement) => new(
@@ -82,7 +88,10 @@ public sealed class CustomerDebtExportService(CustomerDebtService debts, ISpread
 
     private static DateTime? Day(DateOnly? date) => date?.ToDateTime(TimeOnly.MinValue);
 
-    private static string? Status(CustomerStatementEntry e) => e.Cancelled ? "Cancelled" : e.AwaitingConfirmation ? "Awaiting confirmation" : null;
+    /// <summary>BR-DEBT-04: a cancelled entry with its cancel date (business date) when it has one.</summary>
+    private static string? Status(CustomerStatementEntry e) => e.Cancelled
+        ? e.CancelledAt is { } at ? "Cancelled " + BusinessClock.ToBusinessDate(at).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) : "Cancelled"
+        : e.AwaitingConfirmation ? "Awaiting confirmation" : null;
 
     private static string KindText(CustomerStatementEntryKind kind) => kind switch
     {
