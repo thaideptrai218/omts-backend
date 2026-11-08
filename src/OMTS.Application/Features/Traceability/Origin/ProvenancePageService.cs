@@ -48,11 +48,14 @@ public sealed partial class ProvenancePageService(
         var photoUrls = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var key in published.SelectMany(l => l.HarvestPhotoKeys.Concat(l.RaftPhotoKeys)).Distinct())
         {
-            photoUrls[key] = await storage.GetReadUrlAsync(key, cancellationToken: cancellationToken);
+            photoUrls[key] = await storage.GetReadUrlAsync(key, PhotoLinkLifetime, cancellationToken);
         }
 
         return ProvenancePageBuilder.Build(invoice, lots, seedings, photoUrls, block, language);
     }
+
+    // The page is never cached, but a photo the browser loads later (a gallery opened, a lazy image) must still open: links live as long as the page is read (design §3).
+    private static readonly TimeSpan PhotoLinkLifetime = TimeSpan.FromHours(1);
 
     // The shape of every QR code SALE-05 gives: 128 random bits in base64url, 22 characters (BR-TRACE-02). Anything else is not looked up.
     [GeneratedRegex(@"\A[A-Za-z0-9_-]{22}\z")]

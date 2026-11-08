@@ -233,7 +233,7 @@ public class PublicProvenanceQaTests
     // DEFECT (Low, design §3 "Photo URLs: … Expiry ≥ page lifetime (e.g. 1 h)"): the page is never cached (no-store) and holds no way to refresh one photo, so a photo the
     // browser loads later (a gallery opened, a lazy image scrolled to) must still open an hour after the page; the links expire after 10 minutes.
     [Fact]
-    public async Task Defect_photo_links_expire_before_the_one_hour_page_lifetime_the_design_asks_for()
+    public async Task Photo_links_last_the_one_hour_page_lifetime_the_design_asks_for()
     {
         using var api = new AuthApiFactory();
         var (token, before) = await PageWithPhotosAsync(api);

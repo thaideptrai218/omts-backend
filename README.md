@@ -298,7 +298,7 @@ SALE-05 gave the invoice (22 characters); only the exact code opens the page.
   - `status` `Ok`: `lots` holds the lots of the invoice that are Published or Withdrawn, in line order, each `{ lotCode, products
     (names sold from the lot on this invoice), originState, withdrawalDate, message, messageCode, messageParams, origin }`. A
     Published lot has `origin { harvestDate, raftCode, zoneName, map { latitude, longitude, source: Raft | Zone } | null,
-    seedings[{ seedingDate, seedItemName }], daysOfFarming, harvestPhotoUrls[], raftPhotoUrls[] }` (signed URLs, 10 minutes); a
+    seedings[{ seedingDate, seedItemName }], daysOfFarming, harvestPhotoUrls[], raftPhotoUrls[] }` (signed URLs, 1 hour); a
     Withdrawn lot has `withdrawalDate` and MSG-ORIGIN-01, never the reason, and `origin: null`. Not published lots are not listed.
   - `NoLots`: no lot is Published or Withdrawn, MSG-ORIGIN-02. `Cancelled`: the cooperative block only (`invoice: null`), MSG-ORIGIN-04.
   - `cooperative` is the FARM-01 public block (BR-FARM-09): `fullName, shortName, yearEstablished, officeAddress, phoneNumber, email,
