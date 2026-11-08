@@ -31,6 +31,7 @@ public static class MessageCodes
 
     public const string Harvest01 = "MSG-HARVEST-01";
     public const string Harvest03 = "MSG-HARVEST-03";
+    public const string Harvest04 = "MSG-HARVEST-04";
     public const string Harvest05 = "MSG-HARVEST-05";
 
     public const string Trace01 = "MSG-TRACE-01";
@@ -89,6 +90,10 @@ public static class MessageCodes
 
     public const string Debt01 = "MSG-DEBT-01";
     public const string Debt02 = "MSG-DEBT-02";
+    public const string Debt03 = "MSG-DEBT-03";
+    public const string Debt04 = "MSG-DEBT-04";
+    public const string Debt05 = "MSG-DEBT-05";
+    public const string Debt06 = "MSG-DEBT-06";
 
     public const string Sale01 = "MSG-SALE-01";
     public const string Sale02 = "MSG-SALE-02";
@@ -121,12 +126,13 @@ public static class MessageCodes
     /// Owner's agreement to a correction (TRACE-03 is new in PR T2); MSG-SALE-06/08/10/11/12, the sales invoice: its success text, the
     /// Owner's notice and the three questions at the port (SALE-05 is new in PR 6a); MSG-SALE-07/15/16, the QR question at the end of the sale, the
     /// invoice message to the trader and the invoice not sent (SALE-06 is new in PR 6b); MSG-HARVEST-05, the warning the day before a harvest lot
-    /// closes by itself (GFR-05, new in PR H2); MSG-TRACE-01, a harvest lot that cannot be published yet (TRACE-01 is new in PR T1a); MSG-TRACE-02, missing data in the trace of a harvest lot (TRACE-02 is new in PR T1b); MSG-TRACE-05/06, the withdrawal notice
+    /// closes by itself (GFR-05, new in PR H2); MSG-HARVEST-04, the yield report holds lots still for sale (HARVEST-04 is new in PR H3); MSG-TRACE-01, a harvest lot that cannot be published yet (TRACE-01 is new in PR T1a); MSG-DEBT-03/04/05/06, the Owner's notice of a transaction of the Accountant, the payment above the debt, the bank
+    /// reference already recorded and the money paid back above the money owed back (DEBT-02 is new in PR 8b); MSG-TRACE-02, missing data in the trace of a harvest lot (TRACE-02 is new in PR T1b); MSG-TRACE-05/06, the withdrawal notice
     /// to a trader and a withdrawal with no trader to notify (TRACE-04 is new in PR T3).
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
-        Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Harvest05, Trace01, Trace02, Trace03, Trace04, Trace05, Trace06, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale15, Sale16, Debt01, Debt02, Water02, Water04,
+        Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Harvest04, Harvest05, Trace01, Trace02, Trace03, Trace04, Trace05, Trace06, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04,
     };
 
     /// <summary>

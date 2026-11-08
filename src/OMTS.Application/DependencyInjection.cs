@@ -32,6 +32,7 @@ using OMTS.Application.Features.Purchasing.Suppliers;
 using OMTS.Application.Features.ReceivingBankAccounts;
 using OMTS.Application.Features.Sales.Customers;
 using OMTS.Application.Features.Sales.Debts;
+using OMTS.Application.Features.Sales.Payments;
 using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Application.Features.Sales.Products;
 using OMTS.Application.Features.Sales.PurchaseRequests;
@@ -167,6 +168,8 @@ public static class DependencyInjection
         services.AddScoped<HarvestLotClosingService>();
         services.AddScoped<HarvestLotAutoCloseService>();
         services.AddScoped<HarvestSettingsService>();
+        // HARVEST-04 the yield report and its export
+        services.AddScoped<HarvestYieldService>();
         // TRACE-03 – correct traceability data: its own guard and services, as the cultivation screens stay locked after the close
         services.AddScoped<TraceCorrectionGuard>();
         services.AddScoped<TraceSeedingReader>();
@@ -204,6 +207,15 @@ public static class DependencyInjection
         services.AddScoped<TraderMessageService>();
         // SALE-05 sales invoices and the customer debt (BR-DEBT-02)
         services.AddScoped<CustomerDebtReader>();
+        // DEBT-03 customer debts, statement and export (read only)
+        services.AddScoped<CustomerDebtService>();
+        services.AddScoped<CustomerDebtExportService>();
+        // DEBT-02 customer payments, money paid back, confirmations and cancellations
+        services.AddScoped<CustomerPaymentViews>();
+        services.AddScoped<CustomerPaymentStatusChanges>();
+        services.AddScoped<CustomerPaymentNotifications>();
+        services.AddScoped<CustomerPaymentService>();
+        services.AddScoped<CustomerPaymentStatusService>();
         services.AddScoped<SalesInvoiceFactsReader>();
         services.AddScoped<SalesInvoiceWriter>();
         services.AddScoped<SalesInvoiceNotifications>();

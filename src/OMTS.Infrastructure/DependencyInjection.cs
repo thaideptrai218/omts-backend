@@ -97,6 +97,7 @@ public static class DependencyInjection
         services.AddScoped<IWithdrawalNoticeQuery, WithdrawalNoticeQuery>();
         services.AddScoped<IPurchaseRequestFulfilment, PurchaseRequestFulfilmentQuery>();
         services.AddScoped<ISalesInvoiceRepository, SalesInvoiceRepository>();
+        services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();
         services.AddOptions<ProvenanceOptions>()
             .Bind(configuration.GetSection(ProvenanceOptions.SectionName))
             .Validate(o => o.HasWebAddress(), ProvenanceOptions.InvalidPublicBaseUrl)
