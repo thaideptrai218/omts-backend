@@ -10,9 +10,10 @@ public sealed record CustomerLedgerInvoice(Guid CustomerId, Guid Id, string Code
 /// <summary>A customer payment or money paid back of a profile, cancelled ones included.</summary>
 /// <param name="InvoiceId">The invoice the money came with (cash at the port, VietQR code of the invoice): it covers that invoice first.</param>
 /// <param name="InvoiceCode">The code of that invoice, for the statement.</param>
+/// <param name="CancelledAt">When it was cancelled (DEBT-02.4), shown in the statement (BR-DEBT-04).</param>
 public sealed record CustomerLedgerPayment(
     Guid CustomerId, Guid Id, string Code, CustomerPaymentKind Kind, DateOnly PaymentDate, decimal Amount, CustomerPaymentMethod Method,
-    Guid? InvoiceId, string? InvoiceCode, int StatusId)
+    Guid? InvoiceId, string? InvoiceCode, int StatusId, DateTimeOffset? CancelledAt = null)
 {
     public bool Cancelled => StatusId == StatusIds.CustomerPayment.Cancelled;
 

@@ -71,6 +71,12 @@ public static class NotificationTypes
     /// <summary>MSG-SALE-08, a new sales invoice, to the Cooperative Owner, also for the Owner's own sale (BR-SALE-03). BR-ACCOUNT-11 does not list it as mandatory.</summary>
     public const string SaleCompleted = "SALE_COMPLETED";
 
+    /// <summary>
+    /// MSG-DEBT-03, a customer payment, money paid back or a cancellation saved in DEBT-02, or one list of confirmations, to the Owner, also for the Owner's own action
+    /// (BR-DEBT-06); mandatory (BR-ACCOUNT-11).
+    /// </summary>
+    public const string CustomerPaymentTransaction = "CUSTOMER_PAYMENT_TRANSACTION";
+
     public static readonly IReadOnlyList<NotificationTypeDefinition> All =
     [
         new(WaterAlert, "Water alert", AlwaysPush, [CooperativeOwner, ZoneManager],
@@ -121,6 +127,9 @@ public static class NotificationTypes
         // Opens the invoice (SALE-09), in the zone of the invoice (BR-SALE-08).
         new(SaleCompleted, "New sale", Default, [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.SalesInvoices, PermissionAction.View)),
+        // Customer payments have no zone (BR-FARM-08); a money type, so its SMS carries the code and the amount only.
+        new(CustomerPaymentTransaction, "Customer payment transaction", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
+            NotificationSmsRule.MoneyToOwner("amount")),
     ];
 
     private static readonly Dictionary<string, NotificationTypeDefinition> ByCode = All.ToDictionary(t => t.Code, StringComparer.Ordinal);

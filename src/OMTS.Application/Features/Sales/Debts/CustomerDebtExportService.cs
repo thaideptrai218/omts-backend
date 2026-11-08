@@ -1,3 +1,4 @@
+using System.Globalization;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Reports;
 using OMTS.Application.Common.Messages;
@@ -82,7 +83,10 @@ public sealed class CustomerDebtExportService(CustomerDebtService debts, ISpread
 
     private static DateTime? Day(DateOnly? date) => date?.ToDateTime(TimeOnly.MinValue);
 
-    private static string? Status(CustomerStatementEntry e) => e.Cancelled ? "Cancelled" : e.AwaitingConfirmation ? "Awaiting confirmation" : null;
+    /// <summary>BR-DEBT-04: a cancelled entry with its cancel date (business date) when it has one.</summary>
+    private static string? Status(CustomerStatementEntry e) => e.Cancelled
+        ? e.CancelledAt is { } at ? "Cancelled " + BusinessClock.ToBusinessDate(at).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) : "Cancelled"
+        : e.AwaitingConfirmation ? "Awaiting confirmation" : null;
 
     private static string KindText(CustomerStatementEntryKind kind) => kind switch
     {

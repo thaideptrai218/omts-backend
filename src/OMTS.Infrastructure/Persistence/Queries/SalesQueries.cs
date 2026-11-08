@@ -106,7 +106,7 @@ internal sealed class CustomerDebtQuery(OmtsDbContext db) : ICustomerDebtQuery
         var payments = await db.CustomerPayments.AsNoTracking()
             .Where(p => p.CustomerId != null && ids.Contains(p.CustomerId.Value))
             .Select(p => new CustomerLedgerPayment(
-                p.CustomerId!.Value, p.Id, p.Code, p.Kind, p.PaymentDate, p.Amount, p.Method, p.InvoiceId, p.Invoice == null ? null : p.Invoice.Code, p.StatusId))
+                p.CustomerId!.Value, p.Id, p.Code, p.Kind, p.PaymentDate, p.Amount, p.Method, p.InvoiceId, p.Invoice == null ? null : p.Invoice.Code, p.StatusId, p.CancelledAt))
             .ToListAsync(cancellationToken);
         return (invoices, payments);
     }

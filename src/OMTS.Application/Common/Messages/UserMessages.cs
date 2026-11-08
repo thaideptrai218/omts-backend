@@ -115,6 +115,108 @@ public static class UserMessages
         Debt02,
         $"The payment notification service did not accept account {accountNumber} at {bankName}. The receiving bank account has not been changed. Please check the account, or try again later.");
 
+    /// <summary>
+    /// MSG-DEBT-03 (BR-DEBT-06): the Owner's notice of one transaction of the Accountant, "{user_name} {transaction_text}. {debt_text}"; always pushed. The SRS gives the
+    /// placeholders only: the transaction names the code, the amount and the customer, the debt text the customer debt after it.
+    /// </summary>
+    /// <param name="transactionKind">Payment, PaidBack, PaymentCancelled or PaidBackCancelled: the atomic parameter clients word it from.</param>
+    /// <param name="customerName">Null for a payment without a customer profile (BR-DEBT-03).</param>
+    /// <param name="debtAmount">The customer debt after it; null without a profile.</param>
+    public static UserMessage CustomerTransaction(
+        string userName, string transactionKind, string paymentCode, decimal amount, string? customerName, decimal? debtAmount)
+    {
+        var paidBack = transactionKind.StartsWith("PaidBack", StringComparison.Ordinal);
+        var verb = transactionKind.EndsWith("Cancelled", StringComparison.Ordinal) ? "cancelled" : "recorded";
+        var who = customerName is null ? "with no customer profile" : $"{(paidBack ? "to" : "from")} {customerName}";
+        var transaction = $"{verb} {(paidBack ? "money paid back" : "payment")} {paymentCode} of {Vnd(amount)} VND {who}";
+        var debtText = customerName is not null && debtAmount is { } debt ? " " + CustomerDebtAfterText(customerName, debt) : string.Empty;
+        return new UserMessage(Debt03, $"{userName} {transaction}.{debtText}")
+        {
+            Parameters = new Dictionary<string, object?>
+            {
+                ["user_name"] = userName,
+                ["transaction_kind"] = transactionKind,
+                ["payment_code"] = paymentCode,
+                ["amount"] = amount,
+                ["customer_name"] = customerName,
+                ["debt_amount"] = debtAmount,
+            },
+        };
+    }
+
+    /// <summary>
+    /// MSG-DEBT-03 for one list of payments Awaiting confirmation (DEBT-02.2 step 6): one notice names the payments confirmed and cancelled. Confirmations change no debt
+    /// (BR-DEBT-02); the debt text names the debt after each cancellation of a profile's payment.
+    /// </summary>
+    /// <param name="debts">The debt after the save of each profile a cancelled payment belonged to.</param>
+    public static UserMessage CustomerPaymentsBatch(
+        string userName, IReadOnlyList<(string Code, decimal Amount)> confirmed, IReadOnlyList<(string Code, decimal Amount)> cancelled,
+        IReadOnlyList<(string CustomerName, decimal Debt)> debts)
+    {
+        static string Part(string verb, IReadOnlyList<(string Code, decimal Amount)> payments) =>
+            $"{verb} {payments.Count} payment{(payments.Count == 1 ? "" : "s")} ({string.Join(", ", payments.Select(p => p.Code))}) of {Vnd(payments.Sum(p => p.Amount))} VND";
+
+        var parts = new List<string>();
+        if (confirmed.Count > 0)
+        {
+            parts.Add(Part("confirmed", confirmed));
+        }
+
+        if (cancelled.Count > 0)
+        {
+            parts.Add(Part("cancelled", cancelled));
+        }
+
+        var debtText = cancelled.Count == 0
+            ? "The customer debts have not changed."
+            : string.Join(' ', debts.Select(d => CustomerDebtAfterText(d.CustomerName, d.Debt)));
+        return new UserMessage(Debt03, $"{userName} {string.Join(" and ", parts)}. {debtText}".TrimEnd())
+        {
+            Parameters = new Dictionary<string, object?>
+            {
+                ["user_name"] = userName,
+                ["transaction_kind"] = "Confirmations",
+                ["confirmed_codes"] = confirmed.Select(p => p.Code).ToList(),
+                ["confirmed_amount"] = confirmed.Sum(p => p.Amount),
+                ["cancelled_codes"] = cancelled.Select(p => p.Code).ToList(),
+                ["cancelled_amount"] = cancelled.Sum(p => p.Amount),
+                ["amount"] = confirmed.Sum(p => p.Amount) + cancelled.Sum(p => p.Amount),
+                ["debts"] = debts.Select(d => new Dictionary<string, object?> { ["customer_name"] = d.CustomerName, ["debt_amount"] = d.Debt }).ToList(),
+            },
+        };
+    }
+
+    /// <summary>MSG-DEBT-04 (DEBT-02.1): a payment larger than the customer debt, or received when the debt is zero or below; a confirmation.</summary>
+    /// <param name="debtAmount">The debt before the payment; below 0 it is already money owed back.</param>
+    /// <param name="owedBackAmount">What the cooperative will owe the customer after it (positive).</param>
+    public static UserMessage CustomerPaymentAboveDebt(string customerName, decimal debtAmount, decimal amount, decimal owedBackAmount)
+    {
+        var debtText = debtAmount > 0
+            ? $"{customerName} owes the cooperative {Vnd(debtAmount)} VND."
+            : debtAmount == 0
+                ? $"{customerName} owes the cooperative nothing."
+                : $"The cooperative already owes {customerName} {Vnd(-debtAmount)} VND.";
+        return new UserMessage(
+            Debt04,
+            $"{debtText} After this payment of {Vnd(amount)} VND, the cooperative will owe {customerName} {Vnd(owedBackAmount)} VND. Do you want to save the payment?");
+    }
+
+    /// <summary>MSG-DEBT-05 (DEBT-02.5): a customer payment that is not cancelled already has the bank reference; a confirmation.</summary>
+    /// <param name="customerName">Null for a payment without a customer profile: then no customer is named.</param>
+    public static UserMessage CustomerBankReferenceAlreadyRecorded(string paymentCode, decimal amount, DateOnly paymentDate, string? customerName, string bankReference) => new(
+        Debt05,
+        $"Payment {paymentCode} ({Vnd(amount)} VND, {Date(paymentDate)}{(customerName is null ? "" : ", " + customerName)}) already has bank reference {bankReference}. Do you want to save this one as well?");
+
+    /// <summary>MSG-DEBT-06 (DEBT-02.3.E1): the money paid back is more than the money owed back to the customer.</summary>
+    /// <param name="owedBackAmount">The money owed back now, 0 when the customer owes the cooperative.</param>
+    public static UserMessage PaidBackAboveOwedBack(string customerName, decimal owedBackAmount) => new(
+        Debt06, $"The cooperative owes {customerName} {Vnd(owedBackAmount)} VND. The money paid back cannot be more than this amount.");
+
+    /// <summary>The {debt_text} of MSG-DEBT-03: the customer debt after the transaction, or the money owed back when it is below zero.</summary>
+    private static string CustomerDebtAfterText(string customerName, decimal debt) => debt >= 0
+        ? $"{customerName} now owes the cooperative {Vnd(debt)} VND."
+        : $"The cooperative now owes {customerName} {Vnd(-debt)} VND.";
+
     // ---- MSG-WATER ----
 
     /// <summary>MSG-WATER-01 (WATER-01.2): the OCR Service could not read one or more values, or did not answer.</summary>

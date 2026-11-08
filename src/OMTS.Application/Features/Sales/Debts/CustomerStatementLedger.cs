@@ -15,9 +15,10 @@ public enum CustomerStatementEntryKind
 /// <param name="DebtChange">What it changes in the debt: above 0 raises it, below 0 lowers it, 0 when cancelled.</param>
 /// <param name="InvoiceCode">The invoice a payment came with.</param>
 /// <param name="Method">Payments and money paid back only.</param>
+/// <param name="CancelledAt">When a cancelled payment was cancelled (BR-DEBT-04); invoices get theirs with SALE-08 (PR 10).</param>
 public sealed record CustomerStatementEntry(
     DateOnly Date, CustomerStatementEntryKind Kind, Guid Id, string Code, decimal Amount, decimal DebtChange, string? InvoiceCode,
-    CustomerPaymentMethod? Method, bool AwaitingConfirmation, bool Cancelled, decimal DebtAfter);
+    CustomerPaymentMethod? Method, bool AwaitingConfirmation, bool Cancelled, decimal DebtAfter, DateTimeOffset? CancelledAt = null);
 
 /// <summary>The debt at the start of a period, its entries in date order and the debt at its end (BR-DEBT-04).</summary>
 public sealed record CustomerStatementLines(decimal OpeningDebt, IReadOnlyList<CustomerStatementEntry> Entries, decimal ClosingDebt);
@@ -39,7 +40,7 @@ public static class CustomerStatementLedger
                 p.PaymentDate,
                 p.Kind == CustomerPaymentKind.Payment ? CustomerStatementEntryKind.Payment : CustomerStatementEntryKind.PaidBack,
                 p.Id, p.Code, p.Amount, p.Cancelled ? 0m : p.Kind == CustomerPaymentKind.Payment ? -p.Amount : p.Amount,
-                p.InvoiceCode, p.Method, p.AwaitingConfirmation, p.Cancelled, 0m)))
+                p.InvoiceCode, p.Method, p.AwaitingConfirmation, p.Cancelled, 0m, p.CancelledAt)))
             .ToList();
 
         var opening = all.Where(e => e.Date < from).Sum(e => e.DebtChange);
