@@ -72,6 +72,12 @@ public class CustomerPaymentQaTestsSqlServer
 
         public Task<(IReadOnlyList<CustomerPayment> Items, int Total, decimal TotalAmount)> AwaitingConfirmationAsync(int page, int pageSize, CancellationToken cancellationToken) =>
             inner.AwaitingConfirmationAsync(page, pageSize, cancellationToken);
+
+        public Task<CustomerPayment?> FindVietQrByBankReferenceAsync(string bankReference, CancellationToken cancellationToken) =>
+            inner.FindVietQrByBankReferenceAsync(bankReference, cancellationToken);
+
+        public Task<decimal> ReceivedWithoutInvoiceAsync(string invoiceCode, CancellationToken cancellationToken) =>
+            inner.ReceivedWithoutInvoiceAsync(invoiceCode, cancellationToken);
     }
 
     // DEBT-02.3.E1 / BR-DEBT-03 "Money paid back ... only up to the money owed back": 200,000 VND owed back, two Accountants pay back 150,000 VND each at the same moment.
