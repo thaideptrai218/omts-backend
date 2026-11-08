@@ -115,7 +115,7 @@ public class NotificationSmsTextTests
     [Fact]
     public void A_new_purchase_request_goes_to_the_owner_and_reads_as_its_message()
     {
-        var text = RenderRequest("Chị Lan", 300.5m, "Hàu sữa", "Lấy sớm");
+        var text = RenderRequest("Chị Lan", 301, "Hàu sữa", "Lấy sớm");
 
         Assert.Equal([NotificationRole.CooperativeOwner], NotificationTypes.Find(NotificationTypes.PurchaseRequestNew)!.Sms!.To);
         Assert.Equal("Chi Lan asks to buy about 300.5 kg of Hau sua, pickup on 07/11/2026. Lay som Please ask the Zone Manager to check the oysters, then respond.", text);
@@ -127,7 +127,7 @@ public class NotificationSmsTextTests
     [InlineData(200, 200, 2000)]
     public void A_long_new_purchase_request_keeps_the_kg_and_the_date_and_fits_one_sms(int customerLength, int productLength, int noteLength)
     {
-        var text = RenderRequest(new string('Ư', customerLength), 123456789012345.125m, new string('à', productLength), noteLength == 0 ? null : new string('Đ', noteLength));
+        var text = RenderRequest(new string('Ư', customerLength), 2147483647, new string('à', productLength), noteLength == 0 ? null : new string('Đ', noteLength));
 
         Assert.True(text.Length <= NotificationSmsText.MaxLength, text);
         Assert.All(text, c => Assert.Contains(c, NotificationSmsText.Alphabet));
@@ -139,7 +139,7 @@ public class NotificationSmsTextTests
     [Fact]
     public void A_long_note_gives_way_before_the_customer_the_product_and_the_closing_sentence()
     {
-        var text = RenderRequest("Chị Lan", 300.5m, "Hàu sữa", string.Join(' ', Enumerable.Repeat("lấy sớm ở cảng", 20)));
+        var text = RenderRequest("Chị Lan", 301, "Hàu sữa", string.Join(' ', Enumerable.Repeat("lấy sớm ở cảng", 20)));
 
         Assert.True(text.Length <= NotificationSmsText.MaxLength, text);
         Assert.Contains("Chi Lan asks to buy about 300.5 kg of Hau sua, pickup on 07/11/2026.", text);
@@ -152,7 +152,7 @@ public class NotificationSmsTextTests
     [Fact]
     public void The_closing_sentence_goes_when_the_free_text_at_its_minimum_does_not_fit_with_it()
     {
-        var text = RenderRequest(new string('C', 200), 123456789012345.125m, new string('P', 200), new string('N', 400));
+        var text = RenderRequest(new string('C', 200), 2147483647, new string('P', 200), new string('N', 400));
 
         Assert.True(text.Length <= NotificationSmsText.MaxLength, text);
         Assert.DoesNotContain("Please ask", text);
@@ -163,7 +163,7 @@ public class NotificationSmsTextTests
     [Fact]
     public void A_new_purchase_request_without_a_note_shortens_the_customer_before_the_product()
     {
-        var text = RenderRequest(new string('C', 200), 300m, new string('P', 20), null);
+        var text = RenderRequest(new string('C', 200), 300, new string('P', 20), null);
 
         Assert.True(text.Length <= NotificationSmsText.MaxLength, text);
         Assert.Contains("C... asks to buy about 300 kg of " + new string('P', 20) + ", pickup on 07/11/2026.", text);
@@ -219,9 +219,9 @@ public class NotificationSmsTextTests
     private static string Render(NotificationTypeDefinition definition, NotificationContent content) =>
         NotificationSmsText.Render(definition, definition.Sms!, content);
 
-    private static string RenderRequest(string customer, decimal kg, string product, string? note) => Render(
+    private static string RenderRequest(string customer, int cages, string product, string? note) => Render(
         NotificationTypes.Find(NotificationTypes.PurchaseRequestNew)!,
-        new NotificationContent(NotificationTypes.PurchaseRequestNew, "New purchase request", UserMessages.PurchaseRequestNew(customer, kg, product, new DateOnly(2026, 11, 7), note)));
+        new NotificationContent(NotificationTypes.PurchaseRequestNew, "New purchase request", UserMessages.PurchaseRequestNew(customer, cages, product, new DateOnly(2026, 11, 7), note)));
 
     private static string Digits(string text) => new(text.Where(char.IsAsciiDigit).ToArray());
 

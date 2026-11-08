@@ -123,13 +123,13 @@ public class PurchaseRequestRulesSqlServerTests
     {
         await using var host = await FarmingHost.StartAsync();
         var (owner, trader, productId) = await PurchaseRequestSqlServerTests.WorldAsync(host);
-        var request = await trader.Client.PlaceAsync(productId, 999_999_999_999_999.999m);
-        Assert.Equal(999_999_999_999_999.999m, request.GetProperty("requestedKg").GetDecimal());
+        var request = await trader.Client.PlaceAsync(productId, 2147483647);
+        Assert.Equal(999_999_999_999_999.999m, request.GetProperty("requestedCages").GetDecimal());
 
-        var small = await trader.Client.PlaceAsync(productId, 0.002m);
-        var answer = await (await owner.AcceptAsync(small, 0.001m)).ReadAsync(HttpStatusCode.OK);
+        var small = await trader.Client.PlaceAsync(productId, 1);
+        var answer = await (await owner.AcceptAsync(small, 1)).ReadAsync(HttpStatusCode.OK);
 
-        Assert.Equal(0.001m, answer.GetProperty("response").GetProperty("acceptedKg").GetDecimal());
+        Assert.Equal(0.001m, answer.GetProperty("response").GetProperty("acceptedCages").GetDecimal());
         Assert.NotEqual(small.RowVersion(), answer.RowVersion());
         Assert.Equal(StatusIds.MessageDelivery.Sent, answer.GetProperty("sendings")[0].GetProperty("deliveryStatusId").GetInt32());
     }
@@ -142,7 +142,7 @@ public class PurchaseRequestRulesSqlServerTests
 
         PurchaseRequest Row(Action<PurchaseRequest> change)
         {
-            var row = new PurchaseRequest { CustomerId = trader.Profile.Id, ProductId = productId, RequestedKg = 10, PickupDate = PurchaseRequestTestKit.Today, SentAt = DateTimeOffset.UtcNow };
+            var row = new PurchaseRequest { CustomerId = trader.Profile.Id, ProductId = productId, RequestedCages = 10, PickupDate = PurchaseRequestTestKit.Today, SentAt = DateTimeOffset.UtcNow };
             change(row);
             return row;
         }
@@ -150,9 +150,9 @@ public class PurchaseRequestRulesSqlServerTests
         await host.UseDbAsync(db => db.PurchaseRequests.Add(Row(_ => { })));
         foreach (var bad in new Action<PurchaseRequest>[]
         {
-            r => r.RequestedKg = 0,
-            r => r.AcceptedKg = 10.001m,
-            r => r.AcceptedKg = 0,
+            r => r.RequestedCages = 0,
+            r => r.AcceptedCages = 11,
+            r => r.AcceptedCages = 0,
             r => r.StatusId = StatusIds.PurchaseRequest.Accepted,
             r => r.StatusId = StatusIds.PurchaseRequest.Declined,
         })

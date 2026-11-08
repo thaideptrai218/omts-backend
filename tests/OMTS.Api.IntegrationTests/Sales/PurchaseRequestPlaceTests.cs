@@ -22,14 +22,14 @@ public class PurchaseRequestPlaceTests(AuthApiFactory factory) : IClassFixture<A
         var trader = await factory.TraderAsync();
         var pickup = Today.AddDays(3);
 
-        var response = await trader.Client.PostRequestAsync(product.Id(), 150.5m, pickup, "  Sáng sớm  ");
+        var response = await trader.Client.PostRequestAsync(product.Id(), 151, pickup, "  Sáng sớm  ");
 
         var body = await response.ReadAsync(HttpStatusCode.Created);
         Assert.Equal(("Purchase request saved.", "MSG-GEN-05"), (body.Text("message"), body.Text("messageCode")));
         var request = body.GetProperty("request");
         Assert.Equal(StatusIds.PurchaseRequest.AwaitingResponse, request.GetProperty("statusId").GetInt32());
         Assert.Equal("Awaiting response", request.Text("status"));
-        Assert.Equal(150.5m, request.GetProperty("requestedKg").GetDecimal());
+        Assert.Equal(150.5m, request.GetProperty("requestedCages").GetDecimal());
         Assert.Equal(pickup, request.GetProperty("pickupDate").GetFromJson<DateOnly>());
         Assert.Equal("Sáng sớm", request.Text("note"));
         Assert.True(request.GetProperty("canCancel").GetBoolean());
@@ -52,7 +52,7 @@ public class PurchaseRequestPlaceTests(AuthApiFactory factory) : IClassFixture<A
 
         var response = await trader.Client.PostAsJsonAsync("/api/me/purchase-requests", new
         {
-            productId = product.Id(), requestedKg = 10, pickupDate = Today, customerId = victim.Profile.Id, unitPrice = 1, statusId = StatusIds.PurchaseRequest.Accepted,
+            productId = product.Id(), requestedCages = 10, pickupDate = Today, customerId = victim.Profile.Id, unitPrice = 1, statusId = StatusIds.PurchaseRequest.Accepted,
         });
 
         var request = (await response.ReadAsync(HttpStatusCode.Created)).GetProperty("request");
@@ -65,14 +65,14 @@ public class PurchaseRequestPlaceTests(AuthApiFactory factory) : IClassFixture<A
     [InlineData(0.001)]
     [InlineData(1500.125)]
     [InlineData(999999999999.999)]
-    public async Task Any_weight_above_zero_with_three_decimals_is_a_requested_kg(double kg)
+    public async Task Any_weight_above_zero_with_three_decimals_is_a_requested_cages(double kg)
     {
         var product = await (await factory.PurchasingOwnerAsync()).CreateProductAsync();
         var trader = await factory.TraderAsync();
 
-        var request = await trader.Client.PlaceAsync(product.Id(), (decimal)kg);
+        var request = await trader.Client.PlaceAsync(product.Id(), (int)kg);
 
-        Assert.Equal((decimal)kg, request.GetProperty("requestedKg").GetDecimal());
+        Assert.Equal((decimal)kg, request.GetProperty("requestedCages").GetDecimal());
     }
 
     [Theory]
@@ -88,11 +88,11 @@ public class PurchaseRequestPlaceTests(AuthApiFactory factory) : IClassFixture<A
         var trader = await factory.TraderAsync();
 
         var response = await trader.Client.PostAsync("/api/me/purchase-requests", new StringContent(
-            $$"""{ "productId": "{{product.Id()}}", "requestedKg": {{kg}}, "pickupDate": "{{Today.AddDays(1):yyyy-MM-dd}}" }""",
+            $$"""{ "productId": "{{product.Id()}}", "requestedCages": {{kg}}, "pickupDate": "{{Today.AddDays(1):yyyy-MM-dd}}" }""",
             System.Text.Encoding.UTF8,
             "application/json"));
 
-        Assert.Equal(["Requested kg"], await response.InvalidFieldsAsync());
+        Assert.Equal(["Requested cages"], await response.InvalidFieldsAsync());
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public class PurchaseRequestPlaceTests(AuthApiFactory factory) : IClassFixture<A
         foreach (var kg in new[] { "\"abc\"", "1e400", "[1]", "true" })
         {
             var response = await trader.Client.PostAsync("/api/me/purchase-requests", new StringContent(
-                $$"""{ "productId": "{{product.Id()}}", "requestedKg": {{kg}}, "pickupDate": "{{Today.AddDays(1):yyyy-MM-dd}}" }""",
+                $$"""{ "productId": "{{product.Id()}}", "requestedCages": {{kg}}, "pickupDate": "{{Today.AddDays(1):yyyy-MM-dd}}" }""",
                 System.Text.Encoding.UTF8,
                 "application/json"));
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -121,7 +121,7 @@ public class PurchaseRequestPlaceTests(AuthApiFactory factory) : IClassFixture<A
         await trader.Client.PlaceAsync(product.Id(), pickupDate: Today);
 
         Assert.Equal(["Pickup date"], await (await trader.Client.PostRequestAsync(product.Id(), pickupDate: Today.AddDays(-1))).InvalidFieldsAsync());
-        var missing = await trader.Client.PostAsJsonAsync("/api/me/purchase-requests", new { productId = product.Id(), requestedKg = 10 });
+        var missing = await trader.Client.PostAsJsonAsync("/api/me/purchase-requests", new { productId = product.Id(), requestedCages = 10 });
         Assert.Equal(["Pickup date"], await missing.InvalidFieldsAsync());
     }
 
@@ -130,9 +130,9 @@ public class PurchaseRequestPlaceTests(AuthApiFactory factory) : IClassFixture<A
     {
         var trader = await factory.TraderAsync();
 
-        var response = await trader.Client.PostAsJsonAsync("/api/me/purchase-requests", new { requestedKg = 0, pickupDate = Today.AddDays(-1), note = new string('x', 1001) });
+        var response = await trader.Client.PostAsJsonAsync("/api/me/purchase-requests", new { requestedCages = 0, pickupDate = Today.AddDays(-1), note = new string('x', 1001) });
 
-        Assert.Equal(["Product", "Requested kg", "Pickup date", "Note"], await response.InvalidFieldsAsync());
+        Assert.Equal(["Product", "Requested cages", "Pickup date", "Note"], await response.InvalidFieldsAsync());
         Assert.Equal(["Product"], await (await trader.Client.PostRequestAsync(Guid.NewGuid())).InvalidFieldsAsync());
     }
 
@@ -163,7 +163,7 @@ public class PurchaseRequestPlaceTests(AuthApiFactory factory) : IClassFixture<A
         (await owner.PostAsync($"/api/products/{product.Id()}/discontinue", null)).EnsureSuccessStatusCode();
         var trader = await factory.TraderAsync();
 
-        Assert.Equal(["Requested kg"], await (await trader.Client.PostRequestAsync(product.Id(), 0)).InvalidFieldsAsync());
+        Assert.Equal(["Requested cages"], await (await trader.Client.PostRequestAsync(product.Id(), 0)).InvalidFieldsAsync());
     }
 
     [Theory]

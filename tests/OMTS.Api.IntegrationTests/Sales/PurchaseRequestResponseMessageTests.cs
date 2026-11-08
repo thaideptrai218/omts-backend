@@ -26,10 +26,10 @@ public class PurchaseRequestResponseMessageTests(AuthApiFactory factory) : IClas
     public async Task The_response_reaches_the_trader_by_push_and_sms_and_each_sending_is_kept()
     {
         var (owner, trader, productId, productName) = await WorldAsync();
-        var request = await trader.Client.PlaceAsync(productId, 300m);
+        var request = await trader.Client.PlaceAsync(productId, 300);
         var pickup = Today.AddDays(4);
 
-        var view = await (await owner.AcceptAsync(request, 250m, pickup, payLater: true, note: "Trả sau")).ReadAsync(HttpStatusCode.OK);
+        var view = await (await owner.AcceptAsync(request, 250, pickup, payLater: true, note: "Trả sau")).ReadAsync(HttpStatusCode.OK);
 
         var expected = $"HTX Trung Nam: your request for 300 kg of {productName} is accepted for 250 kg, pickup on {pickup:dd/MM/yyyy}; you may pay later. Trả sau";
         var rows = (await factory.NotificationRowsAsync(request.Id())).OfType(NotificationTypes.PurchaseRequestResponse).ToList();
@@ -54,9 +54,9 @@ public class PurchaseRequestResponseMessageTests(AuthApiFactory factory) : IClas
     public async Task A_decline_says_declined_with_the_note_and_no_pay_later_text_is_sent_without_the_agreement()
     {
         var (owner, trader, productId, productName) = await WorldAsync();
-        var declined = await trader.Client.PlaceAsync(productId, 120.5m);
+        var declined = await trader.Client.PlaceAsync(productId, 121);
         (await owner.DeclineAsync(declined, "Chưa đủ hàu")).EnsureSuccessStatusCode();
-        var accepted = await trader.Client.PlaceAsync(productId, 80m);
+        var accepted = await trader.Client.PlaceAsync(productId, 80);
         var pickup = Today.AddDays(1);
         (await owner.AcceptAsync(accepted, pickupDate: pickup)).EnsureSuccessStatusCode();
 

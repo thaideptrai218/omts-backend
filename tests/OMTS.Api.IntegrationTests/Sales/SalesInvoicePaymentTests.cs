@@ -104,16 +104,16 @@ public class SalesInvoicePaymentTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var trader = await api.TraderAsync();
-        var request = await trader.Client.PlaceAsync(sale.ProductId, 300m);
+        var request = await trader.Client.PlaceAsync(sale.ProductId, 300);
         (await sale.Owner.Client.AcceptAsync(request, payLater: true)).EnsureSuccessStatusCode();
-        var other = await trader.Client.PlaceAsync(sale.ProductId, 50m);
+        var other = await trader.Client.PlaceAsync(sale.ProductId, 50);
         (await sale.Owner.Client.AcceptAsync(other, payLater: false)).EnsureSuccessStatusCode();
         var client = sale.Manager.Client;
 
         var open = await client.GetFromJsonAsync<JsonElement>($"/api/sales-invoices/open-purchase-requests?customerId={trader.Profile.Id}");
         Assert.Equal(new[] { request.Id(), other.Id() }.Order(), open.EnumerateArray().Select(r => r.Id()).Order());
         var offered = open.EnumerateArray().Single(r => r.Id() == request.Id());
-        Assert.Equal((300m, true), (offered.Money("acceptedKg"), offered.GetProperty("payLaterAgreed").GetBoolean()));
+        Assert.Equal((300m, true), (offered.Money("acceptedCages"), offered.GetProperty("payLaterAgreed").GetBoolean()));
 
         // Taken in part: the request stays Accepted and offered.
         var part = (await client.SellAsync(Invoice(trader.Profile.Id, [Line(sale.ProductId, sale.LotId, 100m)], Cash(0m, "PayLater"), sale.LotId)

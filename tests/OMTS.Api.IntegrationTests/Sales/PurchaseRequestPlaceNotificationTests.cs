@@ -24,13 +24,13 @@ public class PurchaseRequestPlaceNotificationTests(AuthApiFactory factory) : ICl
         var trader = await factory.TraderAsync("Chị Lan");
         var pickup = Today.AddDays(2);
 
-        var request = await trader.Client.PlaceAsync(product.Id(), 300.5m, pickup, "Lấy sớm");
+        var request = await trader.Client.PlaceAsync(product.Id(), 301, pickup, "Lấy sớm");
 
         var expected = $"Chị Lan asks to buy about 300.5 kg of {product.Text("name")}, pickup on {pickup:dd/MM/yyyy}. Lấy sớm Please ask the Zone Manager to check the oysters, then respond.";
         var rows = (await factory.NotificationRowsAsync(request.Id())).Where(n => n.RecipientAccountId == owner.Id).ToList();
         var row = Assert.Single(rows);
         Assert.Equal((NotificationTypes.PurchaseRequestNew, "MSG-SALE-01", expected, true), (row.Type, row.MessageCode, row.Body, row.IsMandatory));
-        Assert.Contains("\"requested_kg\":300.5", row.MessageParams);
+        Assert.Contains("\"requested_cages\":300.5", row.MessageParams);
         var push = factory.Services.GetRequiredService<FakePushSender>().Inbox.List(owner.Id.ToString()).Single(m => m.NotificationId == row.Id);
         Assert.Equal("MSG-SALE-01", push.MessageCode);
 

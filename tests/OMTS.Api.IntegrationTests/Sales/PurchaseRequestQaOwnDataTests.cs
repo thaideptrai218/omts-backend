@@ -49,7 +49,7 @@ public class PurchaseRequestQaOwnDataTests(AuthApiFactory factory) : IClassFixtu
 
         Assert.Equal(StatusIds.PurchaseRequest.AwaitingResponse, (await trader.Client.MineAsync(request.Id())).GetProperty("statusId").GetInt32());
         Assert.DoesNotContain(await factory.AuditRowsAsync(request.Id()), e => e.Action == "PurchaseRequest.Cancelled");
-        Assert.Equal(0, (await (await other.Client.GetAsync("/api/me/purchases")).ReadAsync(HttpStatusCode.OK)).GetProperty("total").GetInt32());
+        Assert.Equal(0, (await (await other.Client.GetAsync("/api/me/purchase-requests")).ReadAsync(HttpStatusCode.OK)).GetProperty("total").GetInt32());
     }
 
     // BR-ACCOUNT-04: an account with no linked profile has nothing, and cannot send.
@@ -61,7 +61,7 @@ public class PurchaseRequestQaOwnDataTests(AuthApiFactory factory) : IClassFixtu
         var bare = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
         var client = await factory.LoginAsync(bare.Username);
 
-        var list = await (await client.GetAsync("/api/me/purchases")).ReadAsync(HttpStatusCode.OK);
+        var list = await (await client.GetAsync("/api/me/purchase-requests")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(("MSG-GEN-11", 0), (list.Text("messageCode"), list.GetProperty("total").GetInt32()));
         await (await client.PostRequestAsync(productId)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/me/purchase-requests/{request.Id()}")).StatusCode);
@@ -79,7 +79,7 @@ public class PurchaseRequestQaOwnDataTests(AuthApiFactory factory) : IClassFixtu
 
         foreach (var call in new[]
         {
-            trader.Client.GetAsync("/api/me/purchases"),
+            trader.Client.GetAsync("/api/me/purchase-requests"),
             trader.Client.GetAsync($"/api/me/purchase-requests/{request.Id()}"),
             trader.Client.PostRequestAsync(productId),
             trader.Client.CancelAsync(request),
@@ -100,7 +100,7 @@ public class PurchaseRequestQaOwnDataTests(AuthApiFactory factory) : IClassFixtu
 
         foreach (var call in new[]
         {
-            trader.Client.GetAsync("/api/me/purchases"),
+            trader.Client.GetAsync("/api/me/purchase-requests"),
             trader.Client.GetAsync($"/api/me/purchase-requests/{request.Id()}"),
             trader.Client.PostRequestAsync(productId),
             trader.Client.CancelAsync(request),
@@ -121,10 +121,10 @@ public class PurchaseRequestQaOwnDataTests(AuthApiFactory factory) : IClassFixtu
         var other = await factory.TraderAsync();
         var request = await trader.Client.PlaceAsync(productId, note: "Sáng sớm");
         await other.Client.PlaceAsync(productId);
-        (await owner.AcceptAsync(request, 60m, payLater: true, note: "Còn 60 kg")).EnsureSuccessStatusCode();
+        (await owner.AcceptAsync(request, 60, payLater: true, note: "Còn 60 kg")).EnsureSuccessStatusCode();
 
         var single = await trader.Client.GetAsync($"/api/me/purchase-requests/{request.Id()}");
-        var list = await trader.Client.GetAsync("/api/me/purchases");
+        var list = await trader.Client.GetAsync("/api/me/purchase-requests");
         foreach (var text in new[] { await single.Content.ReadAsStringAsync(), await list.Content.ReadAsStringAsync() })
         {
             Assert.Contains("Còn 60 kg", text);
@@ -136,7 +136,7 @@ public class PurchaseRequestQaOwnDataTests(AuthApiFactory factory) : IClassFixtu
 
         var names = (await single.ReadAsync(HttpStatusCode.OK)).EnumerateObject().Select(p => p.Name).Order().ToList();
         Assert.Equal(
-            new[] { "cancelReason", "cancelledAt", "canCancel", "fulfilled", "id", "note", "pickupDate", "productId", "productName", "requestedKg", "response", "rowVersion", "sentAt", "status", "statusId" }.Order().ToList(),
+            new[] { "cancelReason", "cancelledAt", "canCancel", "fulfilled", "id", "note", "pickupDate", "productId", "productName", "requestedCages", "response", "rowVersion", "sentAt", "status", "statusId" }.Order().ToList(),
             names);
     }
 

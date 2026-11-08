@@ -90,7 +90,7 @@ public sealed class MiniAppSchemaMergeSqlTests
         await current.Database.MigrateAsync();
         var saved = await current.PurchaseRequests.SingleAsync(r => r.Id == request);
         Assert.Equal(20, saved.RequestedCages);
-        Assert.Equal(0, saved.RequestedKg);
+        Assert.Equal(0, saved.RequestedCages);
         Assert.Equal(StatusIds.PurchaseRequest.AwaitingStaff, saved.StatusId);
         Assert.Equal(plan, (await current.WorkAssignments.SingleAsync(a => a.Id == assignment)).WorkDayPlanId);
         Assert.Equal(1, await current.Set<AttendanceJobPeriod>().CountAsync(p => p.AttendanceId == attendance));

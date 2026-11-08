@@ -20,7 +20,7 @@ public class PurchaseRequestCancelTests(PurchaseRequestStubsFactory factory) : I
     public async Task An_awaiting_request_is_cancelled_with_its_reason_and_time_and_the_owner_hears_of_it()
     {
         var (_, trader, productId) = await WorldAsync();
-        var request = await trader.Client.PlaceAsync(productId, 200m);
+        var request = await trader.Client.PlaceAsync(productId, 200);
 
         var cancelled = await (await trader.Client.CancelAsync(request, "  Khách đổi lịch ")).ReadAsync(HttpStatusCode.OK);
 
@@ -65,14 +65,14 @@ public class PurchaseRequestCancelTests(PurchaseRequestStubsFactory factory) : I
     {
         var (owner, trader, productId) = await WorldAsync();
         var request = await trader.Client.PlaceAsync(productId);
-        (await owner.AcceptAsync(request, kg: 50m, payLater: true)).EnsureSuccessStatusCode();
+        (await owner.AcceptAsync(request, cages: 50, payLater: true)).EnsureSuccessStatusCode();
         var accepted = await trader.Client.MineAsync(request.Id());
         Assert.True(accepted.GetProperty("canCancel").GetBoolean());
 
         var cancelled = await (await trader.Client.CancelAsync(accepted)).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal(StatusIds.PurchaseRequest.Cancelled, cancelled.GetProperty("statusId").GetInt32());
-        Assert.Equal(50m, cancelled.GetProperty("response").GetProperty("acceptedKg").GetDecimal());
+        Assert.Equal(50m, cancelled.GetProperty("response").GetProperty("acceptedCages").GetDecimal());
     }
 
     // SALE-02.0.E1.

@@ -18,7 +18,7 @@ public class PurchaseRequestReadTests(AuthApiFactory factory) : IClassFixture<Au
     {
         var trader = await factory.TraderAsync();
 
-        var page = await (await trader.Client.GetAsync("/api/me/purchases")).ReadAsync(HttpStatusCode.OK);
+        var page = await (await trader.Client.GetAsync("/api/me/purchase-requests")).ReadAsync(HttpStatusCode.OK);
 
         Assert.Empty(page.GetProperty("requests").EnumerateArray());
         Assert.Equal((0, "MSG-GEN-11", "There is nothing to show yet."), (page.GetProperty("total").GetInt32(), page.Text("messageCode"), page.Text("message")));
@@ -37,14 +37,14 @@ public class PurchaseRequestReadTests(AuthApiFactory factory) : IClassFixture<Au
         var third = await trader.Client.PlaceAsync(product.Id());
         await (await factory.TraderAsync()).Client.PlaceAsync(product.Id());
 
-        var page = await (await trader.Client.GetAsync("/api/me/purchases?page=1&pageSize=2")).ReadAsync(HttpStatusCode.OK);
+        var page = await (await trader.Client.GetAsync("/api/me/purchase-requests?page=1&pageSize=2")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal([third.Id(), second.Id()], RequestIds(page));
         Assert.Equal((3, 2), (page.GetProperty("total").GetInt32(), page.GetProperty("pageSize").GetInt32()));
         Assert.Equal(System.Text.Json.JsonValueKind.Null, page.GetProperty("messageCode").ValueKind);
 
-        var last = await (await trader.Client.GetAsync("/api/me/purchases?page=2&pageSize=2")).ReadAsync(HttpStatusCode.OK);
+        var last = await (await trader.Client.GetAsync("/api/me/purchase-requests?page=2&pageSize=2")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal([first.Id()], RequestIds(last));
-        Assert.Equal(HttpStatusCode.OK, (await trader.Client.GetAsync("/api/me/purchases?page=2147483647&pageSize=2147483647")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await trader.Client.GetAsync("/api/me/purchase-requests?page=2147483647&pageSize=2147483647")).StatusCode);
     }
 
     // BR-ACCOUNT-04: no other customer's data, no internal field, no price.
@@ -60,10 +60,10 @@ public class PurchaseRequestReadTests(AuthApiFactory factory) : IClassFixture<Au
         var view = await trader.Client.MineAsync(request.Id());
 
         Assert.Equal(
-            new[] { "cancelReason", "cancelledAt", "canCancel", "fulfilled", "id", "note", "pickupDate", "productId", "productName", "requestedKg", "response", "rowVersion", "sentAt", "status", "statusId" }.Order(),
+            new[] { "cancelReason", "cancelledAt", "canCancel", "fulfilled", "id", "note", "pickupDate", "productId", "productName", "requestedCages", "response", "rowVersion", "sentAt", "status", "statusId" }.Order(),
             view.EnumerateObject().Select(p => p.Name).Order());
         Assert.Equal(
-            new[] { "acceptedKg", "note", "payLaterAgreed", "pickupDate", "respondedAt" }.Order(),
+            new[] { "acceptedCages", "note", "payLaterAgreed", "pickupDate", "respondedAt" }.Order(),
             view.GetProperty("response").EnumerateObject().Select(p => p.Name).Order());
     }
 
@@ -109,7 +109,7 @@ public class PurchaseRequestReadTests(AuthApiFactory factory) : IClassFixture<Au
         var product = await owner.CreateProductAsync();
         var trader = await factory.TraderAsync();
         var offline = await owner.CreateCustomerAsync();
-        var row = new PurchaseRequest { CustomerId = offline.Id(), ProductId = product.Id(), RequestedKg = 10, PickupDate = PurchaseRequestTestKit.Today, SentAt = DateTimeOffset.UtcNow };
+        var row = new PurchaseRequest { CustomerId = offline.Id(), ProductId = product.Id(), RequestedCages = 10, PickupDate = PurchaseRequestTestKit.Today, SentAt = DateTimeOffset.UtcNow };
         await factory.UseDbAsync(db => db.PurchaseRequests.Add(row));
 
         var preview = await (await owner.GetAsync($"/api/customers/{trader.Profile.Id}/merge-preview?mergedCustomerId={offline.Id()}")).ReadAsync(HttpStatusCode.OK);
@@ -117,7 +117,7 @@ public class PurchaseRequestReadTests(AuthApiFactory factory) : IClassFixture<Au
 
         (await owner.MergeAsync(trader.Profile.Id, offline.Id())).EnsureSuccessStatusCode();
 
-        var mine = await (await trader.Client.GetAsync("/api/me/purchases")).ReadAsync(HttpStatusCode.OK);
+        var mine = await (await trader.Client.GetAsync("/api/me/purchase-requests")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal([row.Id], RequestIds(mine));
         var view = await trader.Client.MineAsync(row.Id);
         (await trader.Client.CancelAsync(view)).EnsureSuccessStatusCode();

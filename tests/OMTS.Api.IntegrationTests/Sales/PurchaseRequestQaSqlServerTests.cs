@@ -90,17 +90,17 @@ public class PurchaseRequestQaSqlServerTests
         await using var host = await FarmingHost.StartAsync();
         var (owner, trader, productId) = await PurchaseRequestSqlServerTests.WorldAsync(host);
         var offline = await owner.CreateCustomerAsync();
-        var moved = new PurchaseRequest { CustomerId = offline.Id(), ProductId = productId, RequestedKg = 10, PickupDate = PurchaseRequestTestKit.Today, SentAt = DateTimeOffset.UtcNow };
+        var moved = new PurchaseRequest { CustomerId = offline.Id(), ProductId = productId, RequestedCages = 10, PickupDate = PurchaseRequestTestKit.Today, SentAt = DateTimeOffset.UtcNow };
         await host.UseDbAsync(db => db.PurchaseRequests.Add(moved));
         var form = await owner.ViewedByStaffAsync(moved.Id);
 
         (await owner.MergeAsync(trader.Profile.Id, offline.Id())).EnsureSuccessStatusCode();
 
-        var conflict = await (await owner.AcceptAsync(form, 5m)).ProblemAsync(HttpStatusCode.Conflict, "MSG06");
+        var conflict = await (await owner.AcceptAsync(form, 5)).ProblemAsync(HttpStatusCode.Conflict, "MSG06");
         var current = await owner.ViewedByStaffAsync(moved.Id);
         Assert.Equal(current.RowVersion(), conflict.GetProperty("currentRowVersion").GetString());
         Assert.Equal(trader.Profile.Id, current.GetProperty("customer").GetProperty("id").GetGuid());
-        (await owner.AcceptAsync(current, 5m)).EnsureSuccessStatusCode();
+        (await owner.AcceptAsync(current, 5)).EnsureSuccessStatusCode();
     }
 
     // TraderMessageService bounds the error code to its column and not the id the service gives: the save of the status fails and Sent is lost.
@@ -153,7 +153,7 @@ public class PurchaseRequestQaSqlServerTests
         var (owner, trader, productId) = await PurchaseRequestSqlServerTests.WorldAsync(host);
         var note = "Sáng\u0000 sớm\n😀 <b>\"x\"</b>";
 
-        var request = await trader.Client.PlaceAsync(productId, 999_999_999_999_999.999m, DateOnly.MaxValue, note);
+        var request = await trader.Client.PlaceAsync(productId, 2147483647, DateOnly.MaxValue, note);
 
         Assert.Equal(note, (await trader.Client.MineAsync(request.Id())).Text("note"));
         var answer = await (await owner.AcceptAsync(request, pickupDate: DateOnly.MaxValue, note: note)).ReadAsync(HttpStatusCode.OK);

@@ -29,21 +29,21 @@ public class PurchaseRequestQaResponseValuesTests(PurchaseRequestStubsFactory fa
     [InlineData("1.2345", false)]
     [InlineData("0.0004", false)]
     [InlineData(null, false)]
-    public async Task The_accepted_kg_is_above_0_at_most_3_decimals_and_not_above_the_requested_kg(string? kg, bool valid)
+    public async Task The_accepted_cages_is_above_0_at_most_3_decimals_and_not_above_the_requested_cages(string? kg, bool valid)
     {
         var (owner, trader, productId) = await WorldAsync();
-        var request = await trader.Client.PlaceAsync(productId, 100m);
-        var body = $$"""{ "acceptedKg": {{kg ?? "null"}}, "pickupDate": "{{PurchaseRequestTestKit.Today:yyyy-MM-dd}}", "payLaterAgreed": false, "rowVersion": {{JsonSerializer.Serialize(request.RowVersion())}} }""";
+        var request = await trader.Client.PlaceAsync(productId, 100);
+        var body = $$"""{ "acceptedCages": {{kg ?? "null"}}, "pickupDate": "{{PurchaseRequestTestKit.Today:yyyy-MM-dd}}", "payLaterAgreed": false, "rowVersion": {{JsonSerializer.Serialize(request.RowVersion())}} }""";
 
         var response = await owner.PostAsJsonRawAsync($"/api/purchase-requests/{request.Id()}/accept", body);
 
         if (valid)
         {
-            Assert.Equal(decimal.Parse(kg!, System.Globalization.CultureInfo.InvariantCulture), (await response.ReadAsync(HttpStatusCode.OK)).GetProperty("response").GetProperty("acceptedKg").GetDecimal());
+            Assert.Equal(decimal.Parse(kg!, System.Globalization.CultureInfo.InvariantCulture), (await response.ReadAsync(HttpStatusCode.OK)).GetProperty("response").GetProperty("acceptedCages").GetDecimal());
         }
         else
         {
-            Assert.Equal(["Accepted kg"], await response.InvalidFieldsAsync());
+            Assert.Equal(["Accepted cages"], await response.InvalidFieldsAsync());
             Assert.Equal(StatusIds.PurchaseRequest.AwaitingResponse, (await trader.Client.MineAsync(request.Id())).GetProperty("statusId").GetInt32());
         }
     }
@@ -65,8 +65,8 @@ public class PurchaseRequestQaResponseValuesTests(PurchaseRequestStubsFactory fa
     }
 
     [Theory]
-    [InlineData("""{ "acceptedKg": 1, "pickupDate": "2099-01-01", "rowVersion": "AA==" }""")]
-    [InlineData("""{ "acceptedKg": 1, "pickupDate": "2099-01-01", "payLaterAgreed": null, "rowVersion": "AA==" }""")]
+    [InlineData("""{ "acceptedCages": 1, "pickupDate": "2099-01-01", "rowVersion": "AA==" }""")]
+    [InlineData("""{ "acceptedCages": 1, "pickupDate": "2099-01-01", "payLaterAgreed": null, "rowVersion": "AA==" }""")]
     public async Task Pay_later_must_be_chosen(string body)
     {
         var (owner, trader, productId) = await WorldAsync();
@@ -87,7 +87,7 @@ public class PurchaseRequestQaResponseValuesTests(PurchaseRequestStubsFactory fa
         var response = (await (await owner.DeclineAsync(request, "  Chưa đủ cỡ  ")).ReadAsync(HttpStatusCode.OK)).GetProperty("response");
 
         Assert.Equal("Chưa đủ cỡ", response.Text("note"));
-        Assert.Equal(JsonValueKind.Null, response.GetProperty("acceptedKg").ValueKind);
+        Assert.Equal(JsonValueKind.Null, response.GetProperty("acceptedCages").ValueKind);
         Assert.Equal(JsonValueKind.Null, response.GetProperty("pickupDate").ValueKind);
         Assert.Equal(JsonValueKind.Null, response.GetProperty("payLaterAgreed").ValueKind);
     }

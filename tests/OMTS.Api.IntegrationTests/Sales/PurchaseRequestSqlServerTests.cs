@@ -169,7 +169,7 @@ public class PurchaseRequestSqlServerTests
         for (var round = 0; round < Rounds; round++)
         {
             var offline = await owner.CreateCustomerAsync();
-            var moved = new PurchaseRequest { CustomerId = offline.Id(), ProductId = productId, RequestedKg = 10, PickupDate = PurchaseRequestTestKit.Today, SentAt = DateTimeOffset.UtcNow };
+            var moved = new PurchaseRequest { CustomerId = offline.Id(), ProductId = productId, RequestedCages = 10, PickupDate = PurchaseRequestTestKit.Today, SentAt = DateTimeOffset.UtcNow };
             await host.UseDbAsync(db => db.PurchaseRequests.Add(moved));
             var kept = await owner.CustomerAsync(trader.Profile.Id);
             var merged = await owner.CustomerAsync(offline.Id());

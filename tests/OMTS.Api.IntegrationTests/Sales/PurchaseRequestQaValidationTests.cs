@@ -31,10 +31,10 @@ public class PurchaseRequestQaValidationTests(AuthApiFactory factory) : IClassFi
     [InlineData("0.0005", false)]
     [InlineData("1000000000000000", false)]
     [InlineData("null", false)]
-    public async Task The_requested_kg_is_above_0_with_at_most_3_decimals_and_fits_its_column(string kg, bool valid)
+    public async Task The_requested_cages_is_above_0_with_at_most_3_decimals_and_fits_its_column(string kg, bool valid)
     {
         var (_, trader, productId) = await WorldAsync();
-        var body = $$"""{ "productId": "{{productId}}", "requestedKg": {{kg}}, "pickupDate": "{{Date(PurchaseRequestTestKit.Today)}}" }""";
+        var body = $$"""{ "productId": "{{productId}}", "requestedCages": {{kg}}, "pickupDate": "{{Date(PurchaseRequestTestKit.Today)}}" }""";
 
         var response = await trader.Client.PostAsJsonRawAsync("/api/me/purchase-requests", body);
 
@@ -44,7 +44,7 @@ public class PurchaseRequestQaValidationTests(AuthApiFactory factory) : IClassFi
         }
         else
         {
-            Assert.Equal(["Requested kg"], await response.InvalidFieldsAsync());
+            Assert.Equal(["Requested cages"], await response.InvalidFieldsAsync());
         }
     }
 
@@ -54,7 +54,7 @@ public class PurchaseRequestQaValidationTests(AuthApiFactory factory) : IClassFi
         var (owner, trader, productId) = await WorldAsync();
 
         Assert.Equal(["Pickup date"], await (await trader.Client.PostRequestAsync(productId, pickupDate: PurchaseRequestTestKit.Today.AddDays(-1))).InvalidFieldsAsync());
-        var missing = await trader.Client.PostAsJsonAsync("/api/me/purchase-requests", new { productId, requestedKg = 1m });
+        var missing = await trader.Client.PostAsJsonAsync("/api/me/purchase-requests", new { productId, requestedCages = 1m });
         Assert.Equal(["Pickup date"], await missing.InvalidFieldsAsync());
         await (await trader.Client.PostRequestAsync(productId, pickupDate: PurchaseRequestTestKit.Today)).ReadAsync(HttpStatusCode.Created);
 
@@ -68,9 +68,9 @@ public class PurchaseRequestQaValidationTests(AuthApiFactory factory) : IClassFi
     {
         var (_, trader, _) = await WorldAsync();
 
-        var fields = await (await trader.Client.PostAsJsonAsync("/api/me/purchase-requests", new { productId = Guid.NewGuid(), requestedKg = 0m, pickupDate = "2000-01-01", note = new string('a', 1001) })).InvalidFieldsAsync();
+        var fields = await (await trader.Client.PostAsJsonAsync("/api/me/purchase-requests", new { productId = Guid.NewGuid(), requestedCages = 0m, pickupDate = "2000-01-01", note = new string('a', 1001) })).InvalidFieldsAsync();
 
-        Assert.Equal(["Product", "Requested kg", "Pickup date", "Note"], fields);
+        Assert.Equal(["Product", "Requested cages", "Pickup date", "Note"], fields);
     }
 
     // SALE-01.0.E2: MSG-GEN-09, the entries are kept; another wrong field comes first so the form points at it.
@@ -83,8 +83,8 @@ public class PurchaseRequestQaValidationTests(AuthApiFactory factory) : IClassFi
 
         var refused = await (await trader.Client.PostRequestAsync(productId)).ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-09");
         Assert.Equal(($"Product {name} is Discontinued and cannot be used for this action.", "Product"), (refused.GetProperty("detail").GetString(), refused.Text("field")));
-        Assert.Equal(["Requested kg"], await (await trader.Client.PostRequestAsync(productId, kg: 0m)).InvalidFieldsAsync());
-        Assert.Equal(0, (await (await trader.Client.GetAsync("/api/me/purchases")).ReadAsync(HttpStatusCode.OK)).GetProperty("total").GetInt32());
+        Assert.Equal(["Requested cages"], await (await trader.Client.PostRequestAsync(productId, cages: 0)).InvalidFieldsAsync());
+        Assert.Equal(0, (await (await trader.Client.GetAsync("/api/me/purchase-requests")).ReadAsync(HttpStatusCode.OK)).GetProperty("total").GetInt32());
 
         (await owner.PostAsync($"/api/products/{productId}/resume", null)).EnsureSuccessStatusCode();
         await (await trader.Client.PostRequestAsync(productId)).ReadAsync(HttpStatusCode.Created);

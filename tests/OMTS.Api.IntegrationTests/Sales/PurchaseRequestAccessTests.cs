@@ -35,9 +35,9 @@ public class PurchaseRequestAccessTests(AuthApiFactory factory) : IClassFixture<
 
     private static IEnumerable<Task<HttpResponseMessage>> TraderRoutes(HttpClient client, System.Text.Json.JsonElement request)
     {
-        yield return client.GetAsync("/api/me/purchases");
+        yield return client.GetAsync("/api/me/purchase-requests");
         yield return client.GetAsync($"/api/me/purchase-requests/{request.Id()}");
-        yield return client.PostAsJsonAsync("/api/me/purchase-requests", new { productId = Guid.NewGuid(), requestedKg = 1, pickupDate = "2030-01-01" });
+        yield return client.PostAsJsonAsync("/api/me/purchase-requests", new { productId = Guid.NewGuid(), requestedCages = 1, pickupDate = "2030-01-01" });
         yield return client.CancelAsync(request);
     }
 
@@ -138,7 +138,7 @@ public class PurchaseRequestAccessTests(AuthApiFactory factory) : IClassFixture<
 
         Assert.Equal(HttpStatusCode.NotFound, (await other.Client.GetAsync($"/api/me/purchase-requests/{request.Id()}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await other.Client.CancelAsync(request)).StatusCode);
-        var list = await (await other.Client.GetAsync("/api/me/purchases")).ReadAsync(HttpStatusCode.OK);
+        var list = await (await other.Client.GetAsync("/api/me/purchase-requests")).ReadAsync(HttpStatusCode.OK);
         Assert.Empty(list.GetProperty("requests").EnumerateArray());
         Assert.Equal(request.Id(), (await trader.Client.MineAsync(request.Id())).Id());
     }

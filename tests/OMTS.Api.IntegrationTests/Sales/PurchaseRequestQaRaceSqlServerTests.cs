@@ -87,12 +87,12 @@ public class PurchaseRequestQaRaceSqlServerTests
         {
             var request = await trader.Client.PlaceAsync(productId);
 
-            var answers = await InParallelAsync(3, i => owner.AcceptAsync(request, 10m + i));
+            var answers = await InParallelAsync(3, i => owner.AcceptAsync(request, 10 + i));
 
             await AssertAnswersAsync(answers, "200", "409 MSG-GEN-09", "409 MSG06");
             var winner = Assert.Single(answers, a => a.StatusCode == HttpStatusCode.OK);
             var stored = await host.Api.DbAsync(db => db.PurchaseRequests.AsNoTracking().SingleAsync(r => r.Id == request.Id()));
-            Assert.Equal(10m + Array.IndexOf(answers, winner), stored.AcceptedKg);
+            Assert.Equal(10 + Array.IndexOf(answers, winner), stored.AcceptedCages);
             await AssertOneResponseAsync(host, trader, request.Id(), StatusIds.PurchaseRequest.Accepted);
         }
     }

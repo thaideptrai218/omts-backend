@@ -142,7 +142,7 @@ public class PurchaseRequestQaSmsTests(PurchaseRequestQaSendFactory factory) : I
             return DeliveryResult.Sent("after-abort");
         };
         using var abort = new CancellationTokenSource();
-        var call = owner.PostAsJsonAsync($"/api/purchase-requests/{request.Id()}/accept", new { acceptedKg = 100m, pickupDate = PurchaseRequestTestKit.Today, payLaterAgreed = false, rowVersion = request.RowVersion() }, abort.Token);
+        var call = owner.PostAsJsonAsync($"/api/purchase-requests/{request.Id()}/accept", new { acceptedCages = 100m, pickupDate = PurchaseRequestTestKit.Today, payLaterAgreed = false, rowVersion = request.RowVersion() }, abort.Token);
 
         await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
         abort.Cancel();

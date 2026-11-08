@@ -25,18 +25,18 @@ public class PurchaseRequestResponseTests(AuthApiFactory factory) : IClassFixtur
     public async Task Accept_saves_fewer_kg_another_date_pay_later_and_the_note_with_an_audit_row()
     {
         var (owner, trader, productId, _) = await WorldAsync();
-        var request = await trader.Client.PlaceAsync(productId, 300m);
+        var request = await trader.Client.PlaceAsync(productId, 300);
         var pickup = Today.AddDays(5);
 
-        var view = await (await owner.AcceptAsync(request, 250.5m, pickup, payLater: true, note: "  Đủ 250 kg ")).ReadAsync(HttpStatusCode.OK);
+        var view = await (await owner.AcceptAsync(request, 251, pickup, payLater: true, note: "  Đủ 250 kg ")).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal(StatusIds.PurchaseRequest.Accepted, view.GetProperty("statusId").GetInt32());
         var response = view.GetProperty("response");
-        Assert.Equal(250.5m, response.GetProperty("acceptedKg").GetDecimal());
+        Assert.Equal(250.5m, response.GetProperty("acceptedCages").GetDecimal());
         Assert.Equal(pickup, response.GetProperty("pickupDate").GetFromJson<DateOnly>());
         Assert.True(response.GetProperty("payLaterAgreed").GetBoolean());
         Assert.Equal("Đủ 250 kg", response.Text("note"));
-        Assert.Equal(300m, view.GetProperty("requestedKg").GetDecimal());
+        Assert.Equal(300m, view.GetProperty("requestedCages").GetDecimal());
         var audit = (await factory.AuditRowsAsync(request.Id())).Single(e => e.Action == "PurchaseRequest.Accepted");
         Assert.Contains("250.5", audit.After);
         Assert.Contains("ACCEPTED", audit.After);
@@ -46,38 +46,38 @@ public class PurchaseRequestResponseTests(AuthApiFactory factory) : IClassFixtur
     }
 
     [Fact]
-    public async Task The_requested_kg_itself_may_be_accepted_and_a_kg_above_it_never()
+    public async Task The_requested_cages_itself_may_be_accepted_and_a_kg_above_it_never()
     {
         var (owner, trader, productId, _) = await WorldAsync();
-        var request = await trader.Client.PlaceAsync(productId, 100m);
+        var request = await trader.Client.PlaceAsync(productId, 100);
 
         foreach (var kg in new[] { 100.001m, 0m, -1m, 0.0001m })
         {
-            Assert.Equal(["Accepted kg"], await (await owner.AcceptAsync(request, kg)).InvalidFieldsAsync());
+            Assert.Equal(["Accepted cages"], await (await owner.AcceptAsync(request, (int)kg)).InvalidFieldsAsync());
         }
 
         Assert.Equal(StatusIds.PurchaseRequest.AwaitingResponse, (await owner.ViewedByStaffAsync(request.Id())).GetProperty("statusId").GetInt32());
-        (await owner.AcceptAsync(request, 100m)).EnsureSuccessStatusCode();
+        (await owner.AcceptAsync(request, 100)).EnsureSuccessStatusCode();
     }
 
     [Fact]
     public async Task The_date_is_not_before_today_and_every_field_to_fix_is_pointed_out()
     {
         var (owner, trader, productId, _) = await WorldAsync();
-        var request = await trader.Client.PlaceAsync(productId, 100m, Today);
+        var request = await trader.Client.PlaceAsync(productId, 100, Today);
 
-        Assert.Equal(["Pickup date"], await (await owner.AcceptAsync(request, 10m, Today.AddDays(-1))).InvalidFieldsAsync());
+        Assert.Equal(["Pickup date"], await (await owner.AcceptAsync(request, 10, Today.AddDays(-1))).InvalidFieldsAsync());
         var nothing = await owner.PostAsJsonRawAsync($"/api/purchase-requests/{request.Id()}/accept", $$"""{ "note": "{{new string('x', 1001)}}", "rowVersion": "{{request.RowVersion()}}" }""");
-        Assert.Equal(["Accepted kg", "Pickup date", "Pay later", "Note"], await nothing.InvalidFieldsAsync());
+        Assert.Equal(["Accepted cages", "Pickup date", "Pay later", "Note"], await nothing.InvalidFieldsAsync());
 
-        (await owner.AcceptAsync(request, 10m, Today)).EnsureSuccessStatusCode();
+        (await owner.AcceptAsync(request, 10, Today)).EnsureSuccessStatusCode();
     }
 
     [Fact]
     public async Task Decline_needs_a_note_that_shows_something_and_checks_nothing_else()
     {
         var (owner, trader, productId, _) = await WorldAsync();
-        var request = await trader.Client.PlaceAsync(productId, 100m, Today);
+        var request = await trader.Client.PlaceAsync(productId, 100, Today);
 
         foreach (var note in new[] { null, "", "   ", "​", new string('x', 1001) })
         {
@@ -89,7 +89,7 @@ public class PurchaseRequestResponseTests(AuthApiFactory factory) : IClassFixtur
         Assert.Equal(StatusIds.PurchaseRequest.Declined, view.GetProperty("statusId").GetInt32());
         var response = view.GetProperty("response");
         Assert.Equal("Chưa đủ hàu", response.Text("note"));
-        Assert.Equal(System.Text.Json.JsonValueKind.Null, response.GetProperty("acceptedKg").ValueKind);
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, response.GetProperty("acceptedCages").ValueKind);
         Assert.Single(await factory.AuditRowsAsync(request.Id()), e => e.Action == "PurchaseRequest.Declined");
     }
 
