@@ -104,6 +104,12 @@ public sealed class PurchaseRequestTests(AuthApiFactory factory) : IClassFixture
         var employeeAccount = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff, configure: a => a.ZaloAccountId = NewCode());
         var employee = new Employee { CooperativeId = (await factory.EnsureCooperativeAsync()).Id, AccountId = employeeAccount.Id, FullName = NewCode() };
         await factory.UseDbAsync(db => db.Employees.Add(employee));
+        var workZone = await factory.AddZoneAsync(NewCode());
+        var workRaft = new OMTS.Domain.Entities.Farming.Raft { ZoneId = workZone.Id, Code = NewCode() };
+        var workJob = new OMTS.Domain.Entities.Labor.JobType { Name = NewCode() };
+        await factory.UseDbAsync(db => { db.Rafts.Add(workRaft); db.Set<OMTS.Domain.Entities.Labor.JobType>().Add(workJob); });
+        await WorkPlanTestKit.SelfPlanAsync(owner, workRaft.Id, workJob.Id, Today.AddDays(1), row.Id, 8, 20, Today.AddDays(2));
+        row = (await owner.GetFromJsonAsync<PurchaseRequestView>($"/api/purchase-requests/{row.Id}"))!;
         var plan = await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/staffing",
             new PlanPurchaseStaffing(8, Today.AddDays(1), Today.AddDays(2), 20, [employee.Id], null, row.RowVersion));
         Assert.True(plan.IsSuccessStatusCode, await plan.Content.ReadAsStringAsync());

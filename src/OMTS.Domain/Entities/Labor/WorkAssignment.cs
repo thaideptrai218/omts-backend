@@ -12,6 +12,8 @@ namespace OMTS.Domain.Entities.Labor;
 /// </summary>
 public class WorkAssignment : AuditableEntity
 {
+    public Guid? WorkDayPlanId { get; set; }
+    public WorkDayPlan? WorkDayPlan { get; set; }
     public Guid ZoneId { get; set; }
     public FarmingZone Zone { get; set; } = null!;
 

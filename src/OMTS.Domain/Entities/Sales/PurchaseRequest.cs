@@ -1,6 +1,7 @@
 using OMTS.Domain.Common;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Platform;
+using OMTS.Domain.Entities.Labor;
 
 namespace OMTS.Domain.Entities.Sales;
 
@@ -34,4 +35,5 @@ public class PurchaseRequest : AuditableEntity, IHasStatus
     public int? CagesPerEmployeePerDay { get; set; }
     public string? StaffingNote { get; set; }
     public ICollection<PurchaseShiftInvitation> ShiftInvitations { get; set; } = [];
+    public WorkDayPlan? WorkDayPlan { get; set; }
 }

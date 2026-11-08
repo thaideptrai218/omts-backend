@@ -29,7 +29,7 @@ public sealed class WorkforceTests(AuthApiFactory factory) : IClassFixture<AuthA
     public async Task Linked_employee_without_management_grants_reads_only_their_own_records()
     {
         var (owner, _, employee, raft, job) = await SetupAsync();
-        var assigned = await owner.PostAsJsonAsync("/api/workforce/assignments", new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } });
+        var assigned = await WorkPlanTestKit.AssignAsync(owner, new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } });
         await Success(assigned);
         var client = await factory.LoginAsync(employee.Account!.Username);
         var mine = await client.GetFromJsonAsync<JsonElement>($"/api/me/workforce?from={Today:yyyy-MM-dd}&to={Today:yyyy-MM-dd}");
@@ -54,10 +54,10 @@ public sealed class WorkforceTests(AuthApiFactory factory) : IClassFixture<AuthA
         var role = await factory.AddRoleAsync(NewCode(), (PermissionFunctions.WorkAssignments, true, true, true), (PermissionFunctions.Attendance, true, true, true));
         await factory.GrantAsync(manager, role, zone);
         var client = await factory.LoginAsync(manager.Username);
-        var response = await client.PostAsJsonAsync("/api/workforce/assignments", new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } });
+        var response = await WorkPlanTestKit.AssignAsync(client, new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } });
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         var owner = await factory.LoginAsync(ownerAccount.Username);
-        var added = await owner.PostAsJsonAsync("/api/workforce/assignments", new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } });
+        var added = await WorkPlanTestKit.AssignAsync(owner, new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } });
         await Success(added);
         var id = (await added.Content.ReadFromJsonAsync<JsonElement>())[0].GetProperty("id").GetGuid();
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync($"/api/workforce/assignments/{id}/check-in", new { })).StatusCode);
@@ -71,15 +71,14 @@ public sealed class WorkforceTests(AuthApiFactory factory) : IClassFixture<AuthA
     {
         var (client, _, employee, raft, job) = await SetupAsync();
         var body = new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } };
-        var first = await client.PostAsJsonAsync("/api/workforce/assignments", body);
+        var first = await WorkPlanTestKit.AssignAsync(client, body);
         await Success(first);
         var id = (await first.Content.ReadFromJsonAsync<JsonElement>())[0].GetProperty("id").GetGuid();
-        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync("/api/workforce/assignments", body)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await WorkPlanTestKit.AssignAsync(client, body)).StatusCode);
         await Success(await client.PostAsJsonAsync($"/api/workforce/assignments/{id}/check-in", new { }));
         Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync($"/api/workforce/assignments/{id}/check-in", new { })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.DeleteAsync($"/api/workforce/assignments/{id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/workforce/assignments",
-            new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id }, moveExisting = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await WorkPlanTestKit.AssignAsync(client, new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id }, moveExisting = true })).StatusCode);
         await Success(await client.PostAsJsonAsync($"/api/workforce/assignments/{id}/check-out", new { }));
         var records = await factory.QueryAsync(db => db.AttendanceRecords.Where(a => a.EmployeeId == employee.Id).Include(a => a.JobPeriods).ToListAsync());
         Assert.Single(records);
@@ -90,7 +89,7 @@ public sealed class WorkforceTests(AuthApiFactory factory) : IClassFixture<AuthA
     public async Task Checkout_without_checkin_is_incomplete_and_has_no_hours()
     {
         var (client, _, employee, raft, job) = await SetupAsync();
-        var assigned = await client.PostAsJsonAsync("/api/workforce/assignments", new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } });
+        var assigned = await WorkPlanTestKit.AssignAsync(client, new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } });
         await Success(assigned);
         var id = (await assigned.Content.ReadFromJsonAsync<JsonElement>())[0].GetProperty("id").GetGuid();
         await Success(await client.PostAsJsonAsync($"/api/workforce/assignments/{id}/check-out", new { }));
@@ -112,7 +111,7 @@ public sealed class WorkforceTests(AuthApiFactory factory) : IClassFixture<AuthA
         var code = qr.GetProperty("code").GetString()!;
         var stored = await factory.QueryAsync(db => db.Set<AttendanceQr>().SingleAsync(q => q.EmployeeId == employee.Id));
         Assert.DoesNotContain(code, stored.TokenHash);
-        var assigned = await client.PostAsJsonAsync("/api/workforce/assignments", new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } });
+        var assigned = await WorkPlanTestKit.AssignAsync(client, new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } });
         await Success(assigned);
         var id = (await assigned.Content.ReadFromJsonAsync<JsonElement>())[0].GetProperty("id").GetGuid();
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync($"/api/workforce/assignments/{id}/check-in", new { qrCode = "invalid" })).StatusCode);
@@ -140,7 +139,7 @@ public sealed class WorkforceTests(AuthApiFactory factory) : IClassFixture<AuthA
         await Success(await owner.PostAsJsonAsync($"/api/workforce/leave-requests/{id}/review", new { approved = true, response = "Đồng ý", rowVersion = row.GetProperty("rowVersion").GetString() }));
         var lookups = await owner.GetFromJsonAsync<JsonElement>($"/api/workforce/lookups?day={Today.AddDays(1):yyyy-MM-dd}");
         Assert.True(lookups.GetProperty("employees").EnumerateArray().Single(e => e.GetProperty("id").GetGuid() == employee.Id).GetProperty("onLeave").GetBoolean());
-        await Success(await owner.PostAsJsonAsync("/api/workforce/assignments", new { date = Today.AddDays(1), raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } }));
+        await Success(await WorkPlanTestKit.AssignAsync(owner, new { date = Today.AddDays(1), raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } }));
         Assert.True(await factory.QueryAsync(db => db.Notifications.AnyAsync(n => n.RecipientAccountId == employee.AccountId && n.Type == "EMPLOYEE_LEAVE_REVIEWED")));
     }
 
@@ -165,7 +164,7 @@ public sealed class WorkforceTests(AuthApiFactory factory) : IClassFixture<AuthA
     public async Task Crew_change_splits_periods_and_keeps_prior_job_and_raft()
     {
         var (client, _, employee, raft, job) = await SetupAsync();
-        var assigned = await client.PostAsJsonAsync("/api/workforce/assignments", new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } });
+        var assigned = await WorkPlanTestKit.AssignAsync(client, new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } });
         await Success(assigned);
         var id = (await assigned.Content.ReadFromJsonAsync<JsonElement>())[0].GetProperty("id").GetGuid();
         await Success(await client.PostAsJsonAsync($"/api/workforce/assignments/{id}/check-in", new { }));
@@ -184,7 +183,7 @@ public sealed class WorkforceTests(AuthApiFactory factory) : IClassFixture<AuthA
     public async Task Attendance_only_grant_can_read_roster_but_cannot_assign_work()
     {
         var (owner, _, employee, raft, job) = await SetupAsync();
-        await Success(await owner.PostAsJsonAsync("/api/workforce/assignments", new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } }));
+        await Success(await WorkPlanTestKit.AssignAsync(owner, new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } }));
         var staff = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff);
         var role = await factory.AddRoleAsync(NewCode(), (PermissionFunctions.Attendance, true, true, false));
         var zone = await factory.QueryAsync(db => db.FarmingZones.SingleAsync(z => z.Id == raft.ZoneId));
@@ -193,8 +192,7 @@ public sealed class WorkforceTests(AuthApiFactory factory) : IClassFixture<AuthA
         await Success(await client.GetAsync("/api/workforce/lookups"));
         var rows = await client.GetFromJsonAsync<JsonElement>($"/api/workforce/assignments?day={Today:yyyy-MM-dd}");
         Assert.Single(rows.EnumerateArray());
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/workforce/assignments",
-            new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await WorkPlanTestKit.AssignAsync(client, new { date = Today, raftId = raft.Id, jobTypeId = job.Id, employeeIds = new[] { employee.Id } })).StatusCode);
     }
 
     [Fact]

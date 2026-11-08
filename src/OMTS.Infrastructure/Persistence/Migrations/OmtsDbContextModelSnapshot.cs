@@ -2836,6 +2836,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly>("WorkDate")
                         .HasColumnType("date");
 
+                    b.Property<Guid?>("WorkDayPlanId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid?>("WorkerId")
                         .HasColumnType("uniqueidentifier");
 
@@ -2854,6 +2857,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RaftId");
 
+                    b.HasIndex("WorkDayPlanId");
+
                     b.HasIndex("WorkerId");
 
                     b.HasIndex("EmployeeId", "WorkDate")
@@ -2865,6 +2870,86 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("WorkAssignments", t =>
                         {
                             t.HasCheckConstraint("CK_WorkAssignment_PaymentType", "([PaymentType] = N'DailyWage' AND (CASE WHEN [EmployeeId] IS NULL THEN 0 ELSE 1 END + CASE WHEN [WorkerId] IS NULL THEN 0 ELSE 1 END) = 1) OR ([PaymentType] = N'TaskContract' AND [ContractorId] IS NOT NULL AND [ContractAmount] IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.WorkDayPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool?>("Approved")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("ClientOperationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatorAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("JobTypeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid?>("PurchaseRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("RaftId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("RespondedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ResponseReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("ResponsibleAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("WorkDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JobTypeId");
+
+                    b.HasIndex("PurchaseRequestId")
+                        .IsUnique()
+                        .HasFilter("[PurchaseRequestId] IS NOT NULL");
+
+                    b.HasIndex("RaftId");
+
+                    b.HasIndex("CreatorAccountId", "ClientOperationId")
+                        .IsUnique();
+
+                    b.HasIndex("ResponsibleAccountId", "WorkDate");
+
+                    b.ToTable("WorkDayPlan", t =>
+                        {
+                            t.HasCheckConstraint("CK_WorkDayPlan_Response", "([Approved] IS NULL AND [RespondedAt] IS NULL) OR ([Approved] IS NOT NULL AND [RespondedAt] IS NOT NULL AND ([Approved] = 1 OR ([ResponseReason] IS NOT NULL AND LEN(LTRIM(RTRIM([ResponseReason]))) > 0)))");
                         });
                 });
 
@@ -7119,6 +7204,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("RaftId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("OMTS.Domain.Entities.Labor.WorkDayPlan", "WorkDayPlan")
+                        .WithMany("Assignments")
+                        .HasForeignKey("WorkDayPlanId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Labor.SeasonalWorker", "Worker")
                         .WithMany()
                         .HasForeignKey("WorkerId")
@@ -7140,9 +7230,53 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.Navigation("Raft");
 
+                    b.Navigation("WorkDayPlan");
+
                     b.Navigation("Worker");
 
                     b.Navigation("Zone");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.WorkDayPlan", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", "CreatorAccount")
+                        .WithMany()
+                        .HasForeignKey("CreatorAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Labor.JobType", "JobType")
+                        .WithMany()
+                        .HasForeignKey("JobTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.PurchaseRequest", "PurchaseRequest")
+                        .WithOne("WorkDayPlan")
+                        .HasForeignKey("OMTS.Domain.Entities.Labor.WorkDayPlan", "PurchaseRequestId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
+                        .WithMany()
+                        .HasForeignKey("RaftId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", "ResponsibleAccount")
+                        .WithMany()
+                        .HasForeignKey("ResponsibleAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatorAccount");
+
+                    b.Navigation("JobType");
+
+                    b.Navigation("PurchaseRequest");
+
+                    b.Navigation("Raft");
+
+                    b.Navigation("ResponsibleAccount");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Platform.AuditEvent", b =>
@@ -7841,6 +7975,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Payments");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.WorkDayPlan", b =>
+                {
+                    b.Navigation("Assignments");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.PurchaseReceipt", b =>
                 {
                     b.Navigation("Lines");
@@ -7873,6 +8012,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.PurchaseRequest", b =>
                 {
                     b.Navigation("ShiftInvitations");
+
+                    b.Navigation("WorkDayPlan");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.SaleTransaction", b =>

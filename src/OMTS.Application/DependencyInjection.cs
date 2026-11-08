@@ -44,6 +44,8 @@ public static class DependencyInjection
         services.AddOptions<OMTS.Application.Features.Testing.Options.TestRoleOptions>();
         services.AddScoped<OMTS.Application.Features.Testing.TestRoleService>();
         services.AddScoped<OMTS.Application.Features.Workforce.WorkforceService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.WorkPlanAccessService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.WorkDayPlanService>();
         services.AddScoped<OMTS.Application.Features.Workforce.LeaveService>();
         services.AddScoped<OMTS.Application.Features.Workforce.WorkforceSettingsService>();
 

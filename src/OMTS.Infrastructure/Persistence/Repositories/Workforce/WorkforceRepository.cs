@@ -19,14 +19,14 @@ internal sealed class WorkforceRepository(OmtsDbContext db) : IWorkforceReposito
     public Task<Employee?> MyEmployeeAsync(Guid accountId, CancellationToken ct) =>
         db.Employees.FirstOrDefaultAsync(e => e.AccountId == accountId && e.StatusId == StatusIds.Employee.Working, ct);
     public async Task<IReadOnlyList<WorkAssignment>> AssignmentsAsync(DateOnly from, DateOnly to, PermittedZones zones, Guid? employeeId, CancellationToken ct) =>
-        await db.WorkAssignments.Include(a => a.Employee).Include(a => a.Raft).Include(a => a.JobType)
+        await db.WorkAssignments.Include(a => a.WorkDayPlan).Include(a => a.Employee).Include(a => a.Raft).Include(a => a.JobType)
             .Where(a => a.CancelledAt == null && a.WorkDate >= from && a.WorkDate <= to &&
                 (employeeId == null || a.EmployeeId == employeeId) && (zones.AllZones || zones.ZoneIds.Contains(a.ZoneId)))
             .OrderBy(a => a.WorkDate).ThenBy(a => a.Employee!.FullName).ToListAsync(ct);
     public Task<WorkAssignment?> AssignmentAsync(Guid id, CancellationToken ct) =>
-        db.WorkAssignments.Include(a => a.Employee).Include(a => a.Raft).Include(a => a.JobType).FirstOrDefaultAsync(a => a.Id == id, ct);
+        db.WorkAssignments.Include(a => a.WorkDayPlan).Include(a => a.Employee).Include(a => a.Raft).Include(a => a.JobType).FirstOrDefaultAsync(a => a.Id == id, ct);
     public Task<WorkAssignment?> EmployeeAssignmentAsync(Guid employeeId, DateOnly date, CancellationToken ct) =>
-        db.WorkAssignments.Include(a => a.Employee).Include(a => a.Raft).Include(a => a.JobType)
+        db.WorkAssignments.Include(a => a.WorkDayPlan).Include(a => a.Employee).Include(a => a.Raft).Include(a => a.JobType)
             .FirstOrDefaultAsync(a => a.EmployeeId == employeeId && a.WorkDate == date && a.CancelledAt == null, ct);
     public Task<AttendanceRecord?> AttendanceAsync(Guid employeeId, DateOnly date, CancellationToken ct) =>
         db.AttendanceRecords.Include(a => a.JobPeriods).ThenInclude(p => p.JobType)

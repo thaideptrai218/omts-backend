@@ -20,7 +20,8 @@ namespace OMTS.Application.Features.Workforce;
 public sealed class WorkforceService(
     IWorkforceRepository repository, IEmployeeRepository employees, IRaftRepository rafts,
     ICurrentUser user, ZoneAccessGuard access, AuditLogService audit, IUnitOfWork uow,
-    INotificationDispatcher notifications, TimeProvider clock)
+    INotificationDispatcher notifications, TimeProvider clock, IWorkDayPlanRepository plans,
+    WorkPlanAccessService planAccess, IPurchaseRequestRepository purchases)
 {
     private DateTimeOffset Now => clock.GetUtcNow();
     private DateOnly Today => DateOnly.FromDateTime(Now.ToOffset(TimeSpan.FromHours(7)).DateTime);
@@ -64,6 +65,12 @@ public sealed class WorkforceService(
         var raft = await rafts.GetForEditAsync(input.RaftId, ct);
         if (raft is null) return AppError.NotFound;
         if (!await access.AllowsAsync(PermissionFunctions.WorkAssignments, PermissionAction.Create, raft.ZoneId, ct)) return AppError.Forbidden;
+        if (input.WorkDayPlanId is not { } planId) return AppError.Invalid("Work plan required");
+        var plan = await plans.GetAsync(planId, ct);
+        if (plan is null) return AppError.NotFound;
+        if (!await planAccess.CanAssignAsync(plan, ct)) return AppError.Forbidden;
+        if (plan.RaftId != input.RaftId || plan.JobTypeId != input.JobTypeId || plan.WorkDate != input.Date || plan.PurchaseRequestId is not null)
+            return AppError.Invalid("Work plan mismatch");
         var job = await repository.JobAsync(input.JobTypeId, ct);
         if (job?.StatusId != StatusIds.Usage.InUse || raft.StatusId != StatusIds.Usage.InUse || raft.Zone.StatusId != StatusIds.Usage.InUse)
             return AppError.Invalid("Job type");
@@ -72,11 +79,15 @@ public sealed class WorkforceService(
         {
             var employee = await employees.GetForEditAsync(employeeId, ct);
             if (employee?.StatusId != StatusIds.Employee.Working) return AppError.Invalid("Employee");
+            if (await purchases.HasShiftReservationAsync(employeeId, input.Date, null, ct))
+                return AppError.Invalid("Employee unavailable");
             var attendance = await repository.AttendanceAsync(employeeId, input.Date, ct);
             if (attendance?.CheckedInAt is not null || attendance?.CheckedOutAt is not null) return AppError.Invalid("Attendance already recorded");
             var existing = await repository.EmployeeAssignmentAsync(employeeId, input.Date, ct);
             if (existing is not null)
             {
+                if (existing.WorkDayPlanId is { } oldPlanId &&
+                    (await plans.GetAsync(oldPlanId, ct) is not { } oldPlan || !await planAccess.CanAssignAsync(oldPlan, ct))) return AppError.Forbidden;
                 if (!await access.AllowsAsync(PermissionFunctions.WorkAssignments, PermissionAction.Edit, existing.ZoneId, ct)) return AppError.Forbidden;
                 if (!input.MoveExisting) return AppError.AlreadyExists("Work assignment", existing.Id);
             }
@@ -85,10 +96,13 @@ public sealed class WorkforceService(
         var rows = new List<WorkAssignment>();
         foreach (var (employee, existing) in changes)
         {
+            // Cùng tranh chấp phiên bản nhân viên với phản hồi giữ ca, tránh hai bảng giữ trùng ngày đồng thời.
+            uow.MarkChanged(employee);
             var row = existing ?? new WorkAssignment { EmployeeId = employee.Id, Employee = employee, WorkDate = input.Date, PaymentType = WorkPaymentType.DailyWage };
             var before = new { row.RaftId, row.JobTypeId };
             row.RaftId = raft.Id; row.Raft = raft; row.ZoneId = raft.ZoneId;
             row.JobTypeId = job.Id; row.JobType = job; row.Task = job.Name;
+            row.WorkDayPlanId = plan.Id; row.WorkDayPlan = plan;
             if (existing is null) repository.AddAssignment(row);
             if (!employee.WorkingZones.Any(z => z.ZoneId == raft.ZoneId))
                 employees.AddWorkingZone(new EmployeeWorkingZone { EmployeeId = employee.Id, ZoneId = raft.ZoneId });
@@ -98,6 +112,7 @@ public sealed class WorkforceService(
                     $"{input.Date:dd/MM/yyyy}: {job.Name}, bè {raft.Code}", "WorkAssignment", row.Id.ToString(), false, ct);
             rows.Add(row);
         }
+        uow.MarkChanged(plan);
         await uow.SaveChangesAsync(ct);
         return Result<IReadOnlyList<WorkAssignmentView>>.Success(await ViewsAsync(rows, ct));
     }
@@ -107,6 +122,7 @@ public sealed class WorkforceService(
         var row = await repository.AssignmentAsync(id, ct);
         if (row is null || row.CancelledAt is not null) return AppError.NotFound;
         if (!await access.AllowsAsync(PermissionFunctions.WorkAssignments, PermissionAction.Delete, row.ZoneId, ct)) return AppError.Forbidden;
+        if (row.WorkDayPlanId is { } planId && (await plans.GetAsync(planId, ct) is not { } plan || !await planAccess.CanAssignAsync(plan, ct))) return AppError.Forbidden;
         var attendance = await repository.AttendanceAsync(row.EmployeeId!.Value, row.WorkDate, ct);
         if (row.WorkDate < Today || attendance?.CheckedInAt is not null || attendance?.CheckedOutAt is not null) return AppError.Invalid("Attendance already recorded");
         row.CancelledAt = Now; row.CancelledByAccountId = user.AccountId; row.CancellationReason = "Removed before attendance";
@@ -176,6 +192,7 @@ public sealed class WorkforceService(
             if (row is null) return AppError.NotFound;
             if (row.Employee?.StatusId != StatusIds.Employee.Working) return AppError.Invalid("Employee");
             if (!await access.AllowsAsync(PermissionFunctions.WorkAssignments, PermissionAction.Edit, row.ZoneId, ct)) return AppError.Forbidden;
+            if (row.WorkDayPlanId is { } planId && (await plans.GetAsync(planId, ct) is not { } plan || !await planAccess.CanAssignAsync(plan, ct))) return AppError.Forbidden;
             var a = await repository.AttendanceAsync(employeeId, Today, ct);
             if (a?.CheckedOutAt is not null) return AppError.Invalid("Attendance already recorded");
             changes.Add((row, a));
@@ -223,7 +240,7 @@ public sealed class WorkforceService(
     }
     private static WorkAssignmentView View(WorkAssignment a, AttendanceRecord? attendance) =>
         new(a.Id, a.EmployeeId!.Value, a.Employee?.FullName ?? "", a.ZoneId, a.RaftId, a.Raft?.Code, a.JobTypeId,
-            a.JobType?.Name ?? a.Task, a.WorkDate, attendance?.CheckedInAt, attendance?.CheckedOutAt);
+            a.JobType?.Name ?? a.Task, a.WorkDate, attendance?.CheckedInAt, attendance?.CheckedOutAt, a.WorkDayPlanId, a.WorkDayPlan?.ResponsibleAccountId);
     private static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
     private async Task<PermittedZones> VisibleZonesAsync(CancellationToken ct)
     {

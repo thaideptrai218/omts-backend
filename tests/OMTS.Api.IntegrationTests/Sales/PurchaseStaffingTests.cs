@@ -178,8 +178,16 @@ public sealed class PurchaseStaffingTests(AuthApiFactory factory) : IClassFixtur
         return result;
     }
     private static PlanPurchaseStaffing Plan(PurchaseRequestView row, Guid[] ids, int cages = 100, int capacity = 20) => new(cages, Day, Day, capacity, ids, null, row.RowVersion);
-    private static async Task PlanAsync(HttpClient owner, PurchaseRequestView row, Guid[] ids, int cages = 100, int capacity = 20) =>
+    private async Task PlanAsync(HttpClient owner, PurchaseRequestView row, Guid[] ids, int cages = 100, int capacity = 20)
+    {
+        var zone = await factory.AddZoneAsync(NewCode());
+        var raft = new OMTS.Domain.Entities.Farming.Raft { ZoneId = zone.Id, Code = NewCode() };
+        var job = new JobType { Name = NewCode() };
+        await factory.UseDbAsync(db => { db.Rafts.Add(raft); db.Set<JobType>().Add(job); });
+        await WorkPlanTestKit.SelfPlanAsync(owner, raft.Id, job.Id, Day, row.Id, cages, capacity, Day);
+        row = await GetAsync(owner, row.Id);
         await Success(await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/staffing", Plan(row, ids, cages, capacity)));
+    }
     private static async Task<PurchaseRequestView> GetAsync(HttpClient owner, Guid id) => (await owner.GetFromJsonAsync<PurchaseRequestView>($"/api/purchase-requests/{id}"))!;
     private static Task<HttpResponseMessage> AcceptAsync(HttpClient owner, PurchaseRequestView row) => owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/response", new RespondPurchaseRequest(true, row.Staffing?.Cages ?? row.RequestedCages, Day, false, null, row.RowVersion));
     private static async Task<MyPurchaseShiftView> InvitationAsync(HttpClient client) => Assert.Single((await client.GetFromJsonAsync<List<MyPurchaseShiftView>>(Range))!);

@@ -133,6 +133,7 @@ public sealed class PurchaseRequestService(
         if (!input.Accept) await staffing.ReleaseAsync(row, ct);
         else
         {
+            await staffing.ActivateAssignmentsAsync(row, ct);
             var recipients = row.ShiftInvitations.Select(i => i.Employee.AccountId).OfType<Guid>().Distinct().ToList();
             await notifications.NotifyAsync(recipients, "PURCHASE_SHIFT_CONFIRMED", "HTX đã nhận đơn",
                 $"{row.Code}: HTX đã nhận đơn. Xem trạng thái ca ngày {row.WorkDate:dd/MM/yyyy} trong Công việc của tôi.",
@@ -153,6 +154,7 @@ public sealed class PurchaseRequestService(
         if (row.StatusId is not (S.AwaitingResponse or S.AwaitingStaff or S.Accepted)) return AppError.Invalid("Purchase request status");
         if (await versions.CheckAsync(row, input.RowVersion, ct) is { } stale) return stale;
         if (input.Reason?.Length > 500) return AppError.Invalid("Reason");
+        if (await staffing.CanReleaseAsync(row, ct) is { } cannotRelease) return cannotRelease;
         var before = row.StatusId;
         row.StatusId = S.Cancelled; row.CancelledAt = clock.GetUtcNow(); row.CancellationReason = input.Reason?.Trim();
         await staffing.ReleaseAsync(row, ct);

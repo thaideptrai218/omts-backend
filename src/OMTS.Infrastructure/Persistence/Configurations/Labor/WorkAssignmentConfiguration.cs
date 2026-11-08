@@ -8,6 +8,7 @@ internal sealed class WorkAssignmentConfiguration : IEntityTypeConfiguration<Wor
 {
     public void Configure(EntityTypeBuilder<WorkAssignment> builder)
     {
+        builder.HasOne(x => x.WorkDayPlan).WithMany(x => x.Assignments).HasForeignKey(x => x.WorkDayPlanId);
         builder.HasOne(x => x.Zone).WithMany().HasForeignKey(x => x.ZoneId);
         builder.HasOne(x => x.Raft).WithMany().HasForeignKey(x => x.RaftId);
         builder.HasOne(x => x.Cycle).WithMany().HasForeignKey(x => x.CycleId);

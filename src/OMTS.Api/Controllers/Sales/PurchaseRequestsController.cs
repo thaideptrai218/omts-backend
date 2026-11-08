@@ -31,17 +31,17 @@ public sealed class PurchaseRequestsController(PurchaseRequestService requests, 
         (await requests.RespondAsync(id, input, ct)).ToActionResult(Ok);
 
     [HttpGet("staffing-employees")]
-    [RequireCooperativeOwner]
-    public async Task<IActionResult> Employees(DateOnly day, CancellationToken ct) =>
-        (await staffing.EmployeesAsync(day, ct)).ToActionResult(Ok);
+    [RequirePermission(PermissionFunctions.WorkAssignments, PermissionAction.Create, PermissionScope.AnyZone)]
+    public async Task<IActionResult> Employees(DateOnly day, Guid? purchaseRequestId, CancellationToken ct) =>
+        (await staffing.EmployeesAsync(day, ct, purchaseRequestId)).ToActionResult(Ok);
 
     [HttpGet("{id:guid}/staffing")]
-    [RequireCooperativeOwner]
+    [RequirePermission(PermissionFunctions.WorkAssignments, PermissionAction.View, PermissionScope.AnyZone)]
     public async Task<IActionResult> Staffing(Guid id, CancellationToken ct) =>
         (await staffing.InvitationsAsync(id, ct)).ToActionResult(Ok);
 
     [HttpPost("{id:guid}/staffing")]
-    [RequireCooperativeOwner]
+    [RequirePermission(PermissionFunctions.WorkAssignments, PermissionAction.Create, PermissionScope.AnyZone)]
     public async Task<IActionResult> Plan(Guid id, PlanPurchaseStaffing input, CancellationToken ct) =>
         (await staffing.PlanAsync(id, input, ct)).ToActionResult(Ok);
 }

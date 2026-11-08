@@ -6,9 +6,12 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Sales.Requests.Dtos;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Entities.Labor;
+using OMTS.Application.Features.Workforce;
 using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
 using S = OMTS.Domain.Constants.StatusIds.PurchaseRequest;
@@ -19,20 +22,26 @@ namespace OMTS.Application.Features.Sales.Requests;
 public sealed class PurchaseStaffingService(
     IPurchaseRequestRepository requests, IWorkforceRepository workforce, IAccountRepository accounts,
     ICurrentUser user, PermissionService permissions, RowVersionGuard versions, IStatusCatalog statuses,
-    AuditLogService audit, INotificationDispatcher notifications, IUnitOfWork uow, TimeProvider clock)
+    AuditLogService audit, INotificationDispatcher notifications, IUnitOfWork uow, TimeProvider clock,
+    IWorkDayPlanRepository plans, WorkPlanAccessService planAccess, IEmployeeRepository employeeProfiles)
 {
     private DateOnly Today => DateOnly.FromDateTime(clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime);
     private async Task<bool> IsOwnerAsync(CancellationToken ct) => user.AccountId is { } id &&
         (await permissions.GetAccessAsync(id, ct))?.IsCooperativeOwner == true;
 
-    public async Task<Result<IReadOnlyList<StaffingEmployeeOption>>> EmployeesAsync(DateOnly day, CancellationToken ct)
+    public async Task<Result<IReadOnlyList<StaffingEmployeeOption>>> EmployeesAsync(DateOnly day, CancellationToken ct, Guid? purchaseRequestId = null)
     {
-        if (!await IsOwnerAsync(ct)) return AppError.Forbidden;
+        if (purchaseRequestId is { } orderId)
+        {
+            var plan = await plans.ForPurchaseAsync(orderId, ct);
+            if (plan is null || !await planAccess.CanAssignAsync(plan, ct) || plan.WorkDate != day) return AppError.Forbidden;
+        }
+        else if (!await IsOwnerAsync(ct)) return AppError.Forbidden;
         if (day == default || day < Today) return AppError.Invalid("Work date");
         var result = new List<StaffingEmployeeOption>();
         foreach (var e in await requests.StaffingEmployeesAsync(ct))
         {
-            var reason = await UnavailableAsync(e, day, null, ct);
+            var reason = await UnavailableAsync(e, day, purchaseRequestId, ct);
             result.Add(new(e.Id, e.FullName, reason is null, reason));
         }
         return Result<IReadOnlyList<StaffingEmployeeOption>>.Success(result);
@@ -40,7 +49,8 @@ public sealed class PurchaseStaffingService(
 
     public async Task<Result<IReadOnlyList<PurchaseShiftInvitationView>>> InvitationsAsync(Guid id, CancellationToken ct)
     {
-        if (!await IsOwnerAsync(ct)) return AppError.Forbidden;
+        var plan = await plans.ForPurchaseAsync(id, ct);
+        if (!await IsOwnerAsync(ct) && (plan is null || !await planAccess.CanViewAsync(plan, ct))) return AppError.Forbidden;
         var row = await requests.GetAsync(id, ct);
         if (row is null) return AppError.NotFound;
         return Result<IReadOnlyList<PurchaseShiftInvitationView>>.Success(row.ShiftInvitations.OrderBy(i => i.CreatedAt)
@@ -49,7 +59,11 @@ public sealed class PurchaseStaffingService(
 
     public async Task<Result<PurchaseStaffingView>> PlanAsync(Guid id, PlanPurchaseStaffing input, CancellationToken ct)
     {
-        if (!await IsOwnerAsync(ct)) return AppError.Forbidden;
+        var plan = await plans.ForPurchaseAsync(id, ct);
+        if (plan is null) return AppError.Invalid("Work plan required");
+        if (!await planAccess.CanAssignAsync(plan, ct)) return AppError.Forbidden;
+        if (plan.Raft.StatusId != StatusIds.Usage.InUse || plan.Raft.Zone.StatusId != StatusIds.Usage.InUse || plan.JobType.StatusId != StatusIds.Usage.InUse)
+            return AppError.Invalid("Work plan");
         var row = await requests.GetAsync(id, ct);
         if (row is null) return AppError.NotFound;
         if (row.StatusId is not (S.AwaitingResponse or S.AwaitingStaff)) return AppError.Invalid("Purchase request status");
@@ -87,6 +101,7 @@ public sealed class PurchaseStaffingService(
         }
         if (employees.Count > 0)
         {
+            uow.MarkChanged(plan);
             uow.MarkChanged(row);
             audit.Record(new AuditEntry("PurchaseRequest.StaffInvited", nameof(PurchaseRequest))
             { RecordId = row.Id, RecordCode = row.Code, After = new { row.PlannedCages, row.WorkDate, row.CagesPerEmployeePerDay, EmployeeIds = newIds } });
@@ -125,14 +140,20 @@ public sealed class PurchaseStaffingService(
         }
         invite.Approved = input.Approved; invite.Reason = input.Reason?.Trim(); invite.RespondedAt = clock.GetUtcNow();
         invite.ReservedWorkDate = input.Approved ? row.WorkDate : null;
+        if (input.Approved) uow.MarkChanged(invite.Employee);
         // Cùng sửa parent để hai phản hồi cuối/nhận đơn/hủy không vượt qua nhau với dữ liệu cũ.
         uow.MarkChanged(row);
         audit.Record(new AuditEntry("PurchaseShift.Responded", nameof(PurchaseShiftInvitation))
         { RecordId = invite.Id, RecordCode = row.Code, After = new { invite.Approved, invite.Reason, row.WorkDate } });
         var summary = Summary(row)!;
-        await notifications.NotifyAsync(await accounts.ListActiveOwnerIdsAsync(ct), "PURCHASE_SHIFT_RESPONDED", "Nhân viên phản hồi ca làm",
-            $"{row.Code}: {invite.Employee.FullName} {(input.Approved ? "đồng ý" : "từ chối")}. Đã đủ {summary.ApprovedEmployees}/{summary.RequiredEmployees} người. {invite.Reason}",
+        var body = $"{row.Code}: {invite.Employee.FullName} {(input.Approved ? "đồng ý" : "từ chối")}. Đã đủ {summary.ApprovedEmployees}/{summary.RequiredEmployees} người. {invite.Reason}";
+        var ownerIds = await accounts.ListActiveOwnerIdsAsync(ct);
+        await notifications.NotifyAsync(ownerIds, "PURCHASE_SHIFT_RESPONDED", "Nhân viên phản hồi ca làm", body,
             nameof(PurchaseRequest), row.Code, false, ct);
+        var plan = await plans.ForPurchaseAsync(row.Id, ct);
+        if (plan is not null && !ownerIds.Contains(plan.ResponsibleAccountId))
+            await notifications.NotifyAsync([plan.ResponsibleAccountId], "WORK_PLAN_STAFF_RESPONDED", "Nhân viên phản hồi ca làm", body,
+                nameof(WorkDayPlan), plan.Id.ToString(), false, ct);
         await uow.SaveChangesAsync(ct);
         return MyView(invite);
     }
@@ -142,13 +163,58 @@ public sealed class PurchaseStaffingService(
         var summary = Summary(row);
         if (row.StatusId != S.AwaitingStaff || summary?.HasEnoughStaff != true) return AppError.Invalid("Insufficient approved staff");
         if (row.PlannedCages != cages || row.PlannedPickupDate != pickup || row.WorkDate < Today) return AppError.Invalid("Staffing plan mismatch");
+        var plan = await plans.ForPurchaseAsync(row.Id, ct);
+        if (plan?.Approved != true || plan.WorkDate != row.WorkDate || plan.ResponsibleAccount.StatusId != StatusIds.Account.Active)
+            return AppError.Invalid("Plan responsible");
+        var responsibleAccess = await permissions.GetAccessAsync(plan.ResponsibleAccountId, ct);
+        if (responsibleAccess is null ||
+            !responsibleAccess.Allows(PermissionFunctions.WorkAssignments, PermissionAction.Create, PermissionScope.ZoneScoped, plan.Raft.ZoneId) ||
+            !responsibleAccess.Allows(PermissionFunctions.WorkAssignments, PermissionAction.View, PermissionScope.ZoneScoped, plan.Raft.ZoneId))
+            return AppError.Invalid("Plan responsible");
+        if (plan.Raft.StatusId != StatusIds.Usage.InUse || plan.Raft.Zone.StatusId != StatusIds.Usage.InUse || plan.JobType.StatusId != StatusIds.Usage.InUse)
+            return AppError.Invalid("Work plan");
         foreach (var invite in row.ShiftInvitations.Where(i => i.Approved == true && i.ReservedWorkDate == row.WorkDate))
             if (await UnavailableAsync(invite.Employee, row.WorkDate!.Value, row.Id, ct) is not null) return AppError.Invalid("Employee unavailable");
         return null;
     }
 
+    public async Task ActivateAssignmentsAsync(PurchaseRequest row, CancellationToken ct)
+    {
+        var plan = (await plans.ForPurchaseAsync(row.Id, ct))!;
+        foreach (var invite in row.ShiftInvitations.Where(i => i.Approved == true && i.ReservedWorkDate == row.WorkDate))
+        {
+            var assignment = new WorkAssignment { WorkDayPlanId = plan.Id, WorkDayPlan = plan,
+                ZoneId = plan.Raft.ZoneId, RaftId = plan.RaftId, Raft = plan.Raft, JobTypeId = plan.JobTypeId, JobType = plan.JobType,
+                EmployeeId = invite.EmployeeId, Employee = invite.Employee, WorkDate = plan.WorkDate, Task = plan.JobType.Name,
+                PaymentType = WorkPaymentType.DailyWage };
+            workforce.AddAssignment(assignment);
+            var profile = (await employeeProfiles.GetForEditAsync(invite.EmployeeId, ct))!;
+            if (!profile.WorkingZones.Any(w => w.ZoneId == plan.Raft.ZoneId))
+                employeeProfiles.AddWorkingZone(new EmployeeWorkingZone { EmployeeId = invite.EmployeeId, ZoneId = plan.Raft.ZoneId });
+            audit.Record(new AuditEntry("WorkAssignment.Saved", nameof(WorkAssignment))
+            { RecordId = assignment.Id, ZoneId = assignment.ZoneId, After = new { assignment.WorkDayPlanId, assignment.EmployeeId, assignment.WorkDate } });
+        }
+        uow.MarkChanged(plan);
+    }
+    public async Task<AppError?> CanReleaseAsync(PurchaseRequest row, CancellationToken ct)
+    {
+        var plan = await plans.ForPurchaseAsync(row.Id, ct);
+        if (plan is null) return null;
+        foreach (var assignment in plan.Assignments.Where(a => a.CancelledAt is null))
+            if (await workforce.AttendanceAsync(assignment.EmployeeId!.Value, assignment.WorkDate, ct) is { CheckedInAt: not null } or { CheckedOutAt: not null })
+                return AppError.Invalid("Attendance already recorded");
+        return null;
+    }
+
     public async Task ReleaseAsync(PurchaseRequest row, CancellationToken ct)
     {
+        var plan = await plans.ForPurchaseAsync(row.Id, ct);
+        if (plan is not null)
+        {
+            foreach (var assignment in plan.Assignments.Where(a => a.CancelledAt is null))
+            { assignment.CancelledAt = clock.GetUtcNow(); assignment.CancelledByAccountId = user.AccountId; assignment.CancellationReason = "Purchase request closed"; }
+            uow.MarkChanged(plan);
+        }
         foreach (var i in row.ShiftInvitations) i.ReservedWorkDate = null;
         var recipients = row.ShiftInvitations.Select(i => i.Employee.AccountId).OfType<Guid>().Distinct().ToList();
         if (recipients.Count > 0)

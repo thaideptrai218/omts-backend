@@ -65,6 +65,7 @@ public static class DependencyInjection
         });
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IAccountRepository, AccountRepository>();
+        services.AddScoped<IWorkDayPlanRepository, WorkDayPlanRepository>();
         services.AddScoped<ILoginSessionRepository, LoginSessionRepository>();
         services.AddScoped<IAccessGrantRepository, AccessGrantRepository>();
         services.AddScoped<IFarmingZoneRepository, FarmingZoneRepository>();
