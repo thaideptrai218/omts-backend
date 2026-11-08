@@ -193,6 +193,9 @@ public static class DependencyInjection
         services.AddScoped<TraderMessageService>();
         // SALE-05 sales invoices and the customer debt (BR-DEBT-02)
         services.AddScoped<CustomerDebtReader>();
+        // DEBT-03 customer debts, statement and export (read only)
+        services.AddScoped<CustomerDebtService>();
+        services.AddScoped<CustomerDebtExportService>();
         services.AddScoped<SalesInvoiceFactsReader>();
         services.AddScoped<SalesInvoiceWriter>();
         services.AddScoped<SalesInvoiceNotifications>();

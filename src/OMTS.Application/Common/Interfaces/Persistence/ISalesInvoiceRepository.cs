@@ -27,9 +27,25 @@ public interface ISalesInvoiceRepository
 /// <summary>One sending of an invoice to the trader's phone, as its Notification row keeps it.</summary>
 public sealed record SalesInvoiceSending(NotificationChannel Channel, string? PhoneNumber, int? DeliveryStatusId, DateTimeOffset? DeliveryStatusAt, DateTimeOffset CreatedAt);
 
-/// <summary>The sums of the customer debt formula (BR-DEBT-02), read from the database each time.</summary>
+/// <summary>A customer profile on the debt screens (DEBT-03), merged ones included.</summary>
+public sealed record DebtCustomerRow(Guid Id, string Name, string? PhoneNumber);
+
+/// <summary>The sums of the customer debt formula (BR-DEBT-02) and the rows of the allocation and the statement (BR-DEBT-04/05), read from the database each time.</summary>
 public interface ICustomerDebtQuery
 {
     /// <summary>The figures of each profile asked for; every id has an entry, <see cref="CustomerDebtFigures.None"/> when it has nothing.</summary>
     Task<IReadOnlyDictionary<Guid, CustomerDebtFigures>> FiguresAsync(IReadOnlyCollection<Guid> customerIds, CancellationToken cancellationToken);
+
+    /// <summary>The figures of every profile with an invoice or a payment (DEBT-03 step 1): one grouped sum per kind, whatever the number of profiles.</summary>
+    Task<IReadOnlyDictionary<Guid, CustomerDebtFigures>> AllFiguresAsync(CancellationToken cancellationToken);
+
+    /// <summary>Those of the profiles whose name or phone number contains <paramref name="search"/> (all of them when null).</summary>
+    Task<IReadOnlyList<DebtCustomerRow>> CustomersAsync(IReadOnlyCollection<Guid> customerIds, string? search, CancellationToken cancellationToken);
+
+    /// <summary>Every invoice and payment of the profiles, cancelled ones included, in two queries whatever the number of profiles.</summary>
+    Task<(IReadOnlyList<CustomerLedgerInvoice> Invoices, IReadOnlyList<CustomerLedgerPayment> Payments)> LedgerAsync(
+        IReadOnlyCollection<Guid> customerIds, CancellationToken cancellationToken);
+
+    /// <summary>The customer payments Awaiting confirmation, those without a customer included (SCR-DEBT-02 tab).</summary>
+    Task<int> AwaitingConfirmationCountAsync(CancellationToken cancellationToken);
 }

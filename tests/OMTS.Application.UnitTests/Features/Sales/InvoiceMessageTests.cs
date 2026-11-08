@@ -2,12 +2,10 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.Notifications;
 using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Domain.Constants;
-using OMTS.Domain.Entities.Sales;
-using OMTS.Domain.Enums;
 
 namespace OMTS.Application.UnitTests.Features.Sales;
 
-/// <summary>MSG-SALE-15/16/07 (SALE-06, SALE-05 step 9), the paid part of an invoice and the stale Sending row (BR-SALE-09).</summary>
+/// <summary>MSG-SALE-15/16/07 (SALE-06, SALE-05 step 9) and the stale Sending row (BR-SALE-09). The paid part of an invoice is BR-DEBT-05 (CustomerDebtAllocatorTests).</summary>
 public class InvoiceMessageTests
 {
     private static readonly DateOnly Day = new(2026, 11, 7);
@@ -83,19 +81,6 @@ public class InvoiceMessageTests
         Assert.Contains(MessageCodes.Sale15, MessageCodes.NewWithoutLegacyCode);
         Assert.Contains(MessageCodes.Sale16, MessageCodes.NewWithoutLegacyCode);
         Assert.Contains(MessageCodes.Sale07, MessageCodes.NewWithoutLegacyCode);
-    }
-
-    [Fact]
-    public void The_paid_part_counts_the_payments_not_cancelled_up_to_the_total()
-    {
-        var invoice = new SalesInvoice { Total = 6_000_000m };
-        invoice.Payments.Add(new CustomerPayment { Kind = CustomerPaymentKind.Payment, Amount = 1_000_000m });
-        invoice.Payments.Add(new CustomerPayment { Kind = CustomerPaymentKind.Payment, Amount = 900_000m, StatusId = StatusIds.CustomerPayment.Cancelled });
-        Assert.Equal(1_000_000m, SalesInvoiceMessages.PaidAmount(invoice));
-
-        // MSG-SALE-11: the cash subtracted from the debt is above the total and does not pay the invoice twice.
-        invoice.Payments.Add(new CustomerPayment { Kind = CustomerPaymentKind.Payment, Amount = 5_500_000m });
-        Assert.Equal(6_000_000m, SalesInvoiceMessages.PaidAmount(invoice));
     }
 
     [Fact]
