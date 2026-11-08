@@ -52,6 +52,9 @@ public sealed class SalesDouble : IHarvestLotSalesQuery
 
     public Task<IReadOnlySet<Guid>> LotsOnAnyInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlySet<Guid>>(lotIds.Where(OnInvoice.Contains).ToHashSet());
+
+    // The double has no cancelled invoice: a lot on an invoice is on a current one.
+    public Task<IReadOnlySet<Guid>> LotsOnCurrentInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) => LotsOnAnyInvoiceAsync(lotIds, cancellationToken);
 }
 
 /// <summary>The API whose sales port is <see cref="SalesDouble"/>.</summary>

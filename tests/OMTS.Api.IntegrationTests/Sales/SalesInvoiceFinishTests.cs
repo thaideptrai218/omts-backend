@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Farming;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Api.IntegrationTests.Traceability;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
 using static OMTS.Api.IntegrationTests.Sales.SalesInvoiceTestKit;
@@ -21,6 +22,8 @@ public class SalesInvoiceFinishTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.PublishAsync(sale.LotId);
+        // TRACE-01 would publish the other lot at the Yes: its lane loses its seed lot, so it misses origin information and stays Not published (BR-TRACE-01).
+        await api.LeaveLaneWithoutSeedLotAsync(sale.RaftId, 2);
         var invoice = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m), Line(sale.ProductId, sale.OtherLotId, 5m)], Cash(450_000m))))
             .GetProperty("invoice");
 
@@ -69,6 +72,8 @@ public class SalesInvoiceFinishTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         await api.WithdrawAsync(sale.OtherLotId);
+        // The Not published lot misses origin information, so the Yes cannot publish it (TRACE-01.0.E1).
+        await api.LeaveLaneWithoutSeedLotAsync(sale.RaftId, 1);
         var notPublished = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
         var withdrawn = await sale.Manager.Client.SoldAsync(sale, sale.OtherLotId);
         await AssertNoQrCodeAsync(notPublished, wants: true);

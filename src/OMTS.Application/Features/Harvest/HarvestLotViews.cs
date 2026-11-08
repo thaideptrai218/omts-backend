@@ -5,6 +5,7 @@ using OMTS.Application.Common.Interfaces.Storage;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Cultivation.Cycles;
+using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
@@ -14,7 +15,13 @@ namespace OMTS.Application.Features.Harvest;
 
 /// <summary>The lot answers, with signed photo links, the figures of the sales port and the commands the caller has. Every caller has already passed the zone check on the record.</summary>
 public sealed class HarvestLotViews(
-    IHarvestLotSalesQuery sales, IAccountRepository accounts, IFileStorage storage, IStatusCatalog statusCatalog, PermissionService permissions, ICurrentUser currentUser)
+    IHarvestLotSalesQuery sales,
+    ProvenanceReadiness readiness,
+    IAccountRepository accounts,
+    IFileStorage storage,
+    IStatusCatalog statusCatalog,
+    PermissionService permissions,
+    ICurrentUser currentUser)
 {
     /// <summary>BR-HARVEST-05: the Cooperative Owner corrects or removes any lot, a Zone Manager of the zone only a lot they recorded. Whether the cycle still allows it is asked apart.</summary>
     public static bool MayCorrect(AccountAccess? access, HarvestLot lot, Guid zoneId) =>
@@ -37,6 +44,8 @@ public sealed class HarvestLotViews(
         var access = await AccessAsync(cancellationToken);
         var canCorrect = CanEdit(lot.Cycle, raft) && MayCorrect(access, lot, raft.ZoneId);
         var canRemove = canCorrect && !await sales.IsOnAnyInvoiceAsync(lot.Id, cancellationToken);
+        var missing = (await readiness.MissingAsync([lot.Id], cancellationToken))[lot.Id];
+        var onCurrentInvoice = (await sales.LotsOnCurrentInvoiceAsync([lot.Id], cancellationToken)).Contains(lot.Id);
         var photos = new List<HarvestLotPhotoView>(lot.Photos.Count);
         foreach (var photo in lot.Photos.OrderBy(p => p.SortOrder))
         {
@@ -68,6 +77,8 @@ public sealed class HarvestLotViews(
             lot.OriginState,
             lot.PublishedAt,
             lot.WithdrawnAt,
+            missing,
+            LotPublishRules.Block(access, lot, raft.ZoneId, onCurrentInvoice) is null,
             photos,
             lot.RecordedByAccountId,
             names.GetValueOrDefault(lot.RecordedByAccountId),
@@ -83,6 +94,8 @@ public sealed class HarvestLotViews(
         var ids = lots.Select(l => l.Id).ToList();
         var figures = await sales.FiguresAsync(ids, cancellationToken);
         var onInvoice = await sales.LotsOnAnyInvoiceAsync(ids, cancellationToken);
+        var onCurrentInvoice = await sales.LotsOnCurrentInvoiceAsync(ids, cancellationToken);
+        var missing = await readiness.MissingAsync(ids, cancellationToken);
         var editable = CanEdit(cycle, raft);
         var access = await AccessAsync(cancellationToken);
         return lots
@@ -94,6 +107,7 @@ public sealed class HarvestLotViews(
                 return new HarvestLotListItem(
                     lot.Id, lot.LotCode, lot.HarvestedAt, lot.HarvestDate, LaneNumbers(lot), FinishedLaneNumbers(lot), lot.CageCount, lot.KgPerCage, lot.EstimatedKg,
                     worked.InvoicedKg, worked.RemainingKg, lot.StatusId, statusCatalog.DisplayNameOf(lot.StatusId), lot.OriginState,
+                    missing[lot.Id], LotPublishRules.Block(access, lot, raft.ZoneId, onCurrentInvoice.Contains(lot.Id)) is null,
                     canCorrect, canCorrect && !onInvoice.Contains(lot.Id), MayClose(access, lot, raft.ZoneId), RowVersionGuard.Encode(lot.RowVersion));
             })
             .ToList();

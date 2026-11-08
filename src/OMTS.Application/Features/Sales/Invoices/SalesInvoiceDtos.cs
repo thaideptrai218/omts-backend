@@ -1,3 +1,5 @@
+using OMTS.Application.Common.Messages;
+using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Application.Features.WaterQuality.Dtos;
 using OMTS.Domain.Enums;
 
@@ -76,8 +78,26 @@ public sealed record SalesInvoiceView(
 public sealed record FinishSalesInvoiceRequest(bool? WantsQrCode);
 
 /// <summary>The origin state of a lot of the invoice at the end of the sale: the provenance page lists the Published and Withdrawn ones (BR-ORIGIN-05).</summary>
-/// <param name="Missing">What a lot left Not published misses (MSG-TRACE-01, filled once TRACE-01 publishes here).</param>
-public sealed record InvoiceLotOriginView(Guid HarvestLotId, string LotCode, HarvestLotOriginState OriginState, IReadOnlyList<string> Missing);
+/// <param name="Missing">What a lot that is Not published misses (BR-TRACE-01); empty for a lot that is ready or in another state.</param>
+/// <param name="Message">MSG-TRACE-01 naming <paramref name="Missing"/>; null when nothing is missing.</param>
+/// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
+public sealed record InvoiceLotOriginView(Guid HarvestLotId, string LotCode, HarvestLotOriginState OriginState, IReadOnlyList<OriginGap> Missing, string? Message, string? MessageCode)
+{
+    /// <summary>In lot code order.</summary>
+    public static IReadOnlyList<InvoiceLotOriginView> Of(IEnumerable<InvoiceLotOrigin> lots) =>
+        lots.OrderBy(l => l.LotCode, StringComparer.Ordinal).Select(View).ToList();
+
+    private static InvoiceLotOriginView View(InvoiceLotOrigin lot)
+    {
+        var notReady = lot.Missing.Count == 0 ? null : UserMessages.ProvenanceNotReady(lot.LotCode, lot.Missing, atEndOfSale: true);
+        return new InvoiceLotOriginView(lot.HarvestLotId, lot.LotCode, lot.State, lot.Missing, notReady?.Text, notReady?.Code);
+    }
+}
+
+/// <summary>TRACE-01.0 steps 1-2 before the end of the sale: what a Yes to MSG-SALE-07 would publish, changing nothing.</summary>
+/// <param name="Lots">Each lot of the invoice: a Not published lot with nothing missing is published by the Yes.</param>
+/// <param name="GetsQrCode">A Yes now gives the invoice its QR code: a lot is Published or ready to publish.</param>
+public sealed record InvoicePublishCheck(Guid InvoiceId, string InvoiceCode, IReadOnlyList<InvoiceLotOriginView> Lots, bool GetsQrCode);
 
 /// <summary>The answer of the end of the sale and of Resend: the result of SALE-06 (Sent or Not sent) and the invoice as it now is.</summary>
 /// <param name="Lots">At the end of the sale with a Yes to MSG-SALE-07: the origin state of each lot; otherwise empty.</param>

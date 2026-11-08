@@ -19,6 +19,7 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
     private const string Harvest01 = "Raft {raft_code}: the harvest of {harvest_date} is recorded as lot {lot_code} ({cage_count} cages, about {estimated_kg} kg).";
     private const string Harvest03 = "With {days} days, the next daily close check will close {count} lots that are still for sale. Do you want to save?";
     private const string Harvest05 = "Lot {lot_code} (raft {raft_code}) will be closed automatically at the start of {close_date}. Please sell it before then or close it yourself.";
+    private const string Trace01 = "Harvest lot {lot_code} cannot be published yet: {missing_items}. The invoice is saved; the other lots are not affected.";
     private const string Trace03 = "The correction is not saved: lane {lane_number} of harvest lot {lot_code} would have no seed lot. Please keep at least one seed lot for this lane.";
     private const string Trace04 = "This correction changes the origin information of harvest lots {lot_codes}. Has the Cooperative Owner agreed in person that the data is wrong?";
     private const string Farm01 ="{document} expires on {expiry_date}, in {days} days. Please renew it and record the new one.";
@@ -36,8 +37,17 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
         "farm-01", "farm-02", "farm-01-no-type", "farm-01-certification", "farm-02-certification-no-number", "water-03", "water-03-corrected", "water-04-corrected", "water-04-voided", "water-06",
         "cycle-04", "cycle-08", "harvest-01", "harvest-03", "harvest-05",
         "cycle-05", "cycle-06", "cycle-06-early", "cycle-07", "cycle-07-no-seeding",
-        "trace-03", "trace-04", "trace-04-no-lot",
+        "trace-01", "trace-03", "trace-04", "trace-04-no-lot",
     };
+
+    // TRACE-01.2: on the Trace lot screen there is no invoice, so the sentence about it is left out; the rest is the SRS text.
+    [Fact]
+    public void Msg_trace_01_on_the_trace_lot_screen_leaves_out_the_invoice_sentence()
+    {
+        var message = UserMessages.ProvenanceNotReady("KV01-B01-20261026", [OriginGap.NoSeedingSession(2)], atEndOfSale: false);
+
+        Assert.Equal(("MSG-TRACE-01", "Harvest lot KV01-B01-20261026 cannot be published yet: lane 2 has no seeding session in the cycle of the lot."), (message.Code, message.Text));
+    }
 
     [Theory]
     [MemberData(nameof(Cases))]
@@ -158,6 +168,13 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
             UserMessages.LaneWithoutSeedLot(4, "KV01-B01-20261026"),
             "The correction is not saved: lane 4 of harvest lot KV01-B01-20261026 would have no seed lot. Please keep at least one seed lot for this lane.",
             """{"lane_number":4,"lot_code":"KV01-B01-20261026"}"""),
+        // {missing_items}: each lane without a seed lot, joined with "; " (BR-TRACE-01); the parameter keeps the kind, lane, seed lots and zone.
+        "trace-01" => (
+            "MSG-TRACE-01", Trace01,
+            UserMessages.ProvenanceNotReady(
+                "KV01-B01-20261026-2", [OriginGap.NoSeedingSession(2), OriginGap.SeedLotNotOnCompletedReceipt(3, ["PN000004-1"]), OriginGap.NotPublisherOfZone("KV02")], atEndOfSale: true),
+            "Harvest lot KV01-B01-20261026-2 cannot be published yet: lane 2 has no seeding session in the cycle of the lot; the seed lot PN000004-1 of lane 3 is not on a completed purchase receipt; only a Zone Manager of zone KV02 or the Cooperative Owner can publish it. The invoice is saved; the other lots are not affected.",
+            """{"lot_code":"KV01-B01-20261026-2","missing_items":[{"kind":"NoSeedingSession","lane_number":2,"seed_lot_codes":[],"zone_code":null},{"kind":"SeedLotNotOnCompletedReceipt","lane_number":3,"seed_lot_codes":["PN000004-1"],"zone_code":null},{"kind":"NotPublisherOfZone","lane_number":null,"seed_lot_codes":[],"zone_code":"KV02"}]}"""),
         "trace-04" => (
             "MSG-TRACE-04", Trace04,
             UserMessages.TraceCorrectionAgreement(["KV01-B01-20261026", "KV01-B01-20261026-2"]),

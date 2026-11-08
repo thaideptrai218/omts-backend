@@ -79,7 +79,9 @@ public class PurchaseRequestQaDemoSqlServerTests
     }
 
     private static Task<List<OMTS.Domain.Entities.Platform.Notification>> SendingsAsync(WebApplicationFactory<Program> api) =>
-        api.DbAsync(db => db.Notifications.AsNoTracking().Where(n => n.Channel == NotificationChannel.Sms).ToListAsync());
+        // The answers to the requests; the demo cash sale also sends its invoice (MSG-SALE-15, PR T1a).
+        api.DbAsync(db => db.Notifications.AsNoTracking()
+            .Where(n => n.Channel == NotificationChannel.Sms && n.Type != OMTS.Application.Features.Sales.Invoices.SalesInvoiceMessages.MessageType).ToListAsync());
 
     private static Task<(int Requests, int Notifications, int Audit)> CountsAsync(WebApplicationFactory<Program> api) =>
         api.DbAsync(async db => (await db.PurchaseRequests.CountAsync(), await db.Notifications.CountAsync(), await db.AuditEvents.CountAsync()));

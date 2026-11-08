@@ -16,4 +16,7 @@ public interface IHarvestLotSalesQuery
 
     /// <summary>Those of the lots that are on a sales invoice, by the same rule: what the commands of a list of lots are worked out from.</summary>
     Task<IReadOnlySet<Guid>> LotsOnAnyInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);
+
+    /// <summary>Those of the lots that are on a sales invoice that is not cancelled: the sale happened, so the Trace lot screen may publish the lot (TRACE-01 PRE-2, PM default).</summary>
+    Task<IReadOnlySet<Guid>> LotsOnCurrentInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);
 }

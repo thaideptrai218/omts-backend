@@ -414,6 +414,21 @@ public static class UserMessages
 
     // ---- MSG-TRACE ----
 
+    /// <summary>
+    /// MSG-TRACE-01 (TRACE-01.1, TRACE-01.0.E1): the lot misses origin information that the provenance page needs (BR-TRACE-01) and stays Not published. On the Trace lot screen
+    /// (TRACE-01.2) there is no invoice, so the sentence about the invoice is left out.
+    /// </summary>
+    /// <param name="missingItems">What the lot misses, each named (lanes without a seed lot).</param>
+    /// <param name="atEndOfSale">The check ran at the end of a sale (SALE-05.9).</param>
+    public static UserMessage ProvenanceNotReady(string lotCode, IReadOnlyList<OriginGap> missingItems, bool atEndOfSale)
+    {
+        var invoice = atEndOfSale ? " The invoice is saved; the other lots are not affected." : string.Empty;
+        return new UserMessage(Trace01, $"Harvest lot {lotCode} cannot be published yet: {string.Join("; ", missingItems.Select(m => m.Describe()))}.{invoice}")
+        {
+            Parameters = new Dictionary<string, object?> { ["lot_code"] = lotCode, ["missing_items"] = missingItems },
+        };
+    }
+
     /// <summary>MSG-TRACE-03 (TRACE-03.0.E3): the correction would leave a lane of a harvest lot with no seed lot (BR-TRACE-01). The text names the first such lane.</summary>
     public static UserMessage LaneWithoutSeedLot(int laneNumber, string lotCode) => new(
         Trace03,
