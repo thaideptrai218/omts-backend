@@ -21,6 +21,7 @@ using OMTS.Application.Features.Farming.Zones;
 using OMTS.Application.Features.Files;
 using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Traceability.Corrections;
+using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Application.Features.Labor;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
@@ -173,6 +174,11 @@ public static class DependencyInjection
         services.AddScoped<TraceCultivationLogCorrectionService>();
         services.AddScoped<TraceHarvestLotCorrectionService>();
         services.AddScoped<TraceCorrectionReadService>();
+        // TRACE-01 – publish the origin information of a lot: at the end of a sale (SALE-05.9) and from the Trace lot screen
+        services.AddScoped<ProvenanceReadiness>();
+        services.AddScoped<ProvenancePublisher>();
+        services.AddScoped<IProvenancePublisher>(provider => provider.GetRequiredService<ProvenancePublisher>());
+        services.AddScoped<LotPublishService>();
 
         services.AddScoped<UploadedFileSaver>();
         services.AddScoped<OrphanFileCleanupService>();

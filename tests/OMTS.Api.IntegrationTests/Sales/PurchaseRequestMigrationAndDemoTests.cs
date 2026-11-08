@@ -72,7 +72,9 @@ public class PurchaseRequestMigrationAndDemoTests
                 Assert.Equal(
                     [StatusIds.PurchaseRequest.AwaitingResponse, StatusIds.PurchaseRequest.Accepted, StatusIds.PurchaseRequest.Declined, StatusIds.PurchaseRequest.Cancelled],
                     statuses);
-                var sendings = await db.Notifications.AsNoTracking().CountAsync(n => n.Channel == NotificationChannel.Sms);
+                // The answers to the requests; the demo cash sale also sends its invoice (MSG-SALE-15, PR T1a).
+                var sendings = await db.Notifications.AsNoTracking()
+                    .CountAsync(n => n.Channel == NotificationChannel.Sms && n.Type != OMTS.Application.Features.Sales.Invoices.SalesInvoiceMessages.MessageType);
                 Assert.Equal(2, sendings);
                 Assert.Equal(4, await db.Notifications.AsNoTracking().CountAsync(n => n.Type == NotificationTypes.PurchaseRequestNew));
             }

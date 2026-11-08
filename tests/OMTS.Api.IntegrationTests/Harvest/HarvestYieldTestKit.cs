@@ -46,6 +46,9 @@ public sealed class ReturnsSeamApiFactory : AuthApiFactory
 
         public Task<IReadOnlySet<Guid>> LotsOnAnyInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) =>
             real.LotsOnAnyInvoiceAsync(lotIds, cancellationToken);
+
+        public Task<IReadOnlySet<Guid>> LotsOnCurrentInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) =>
+            real.LotsOnCurrentInvoiceAsync(lotIds, cancellationToken);
     }
 }
 

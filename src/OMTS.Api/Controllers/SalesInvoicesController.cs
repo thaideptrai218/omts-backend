@@ -35,8 +35,19 @@ public sealed class SalesInvoicesController(SalesInvoiceService invoices, SalesI
         (await reads.GetAsync(id, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>
-    /// SALE-05 steps 9-11, once per invoice after the save: 409 MSG-SALE-07 asks the QR question (<c>confirmationField</c> = <c>wantsQrCode</c>); with the answer, the QR code is created
-    /// when a lot is Published and the invoice is sent (SALE-06). 200 with the delivery status, MSG-SALE-16 when nothing could be sent; 409 MSG-GEN-09 when already finished.
+    /// TRACE-01.0 steps 1-2 before the end of the sale: each lot with its origin state, and for a Not published lot what it misses (MSG-TRACE-01); <c>getsQrCode</c> says whether a Yes
+    /// to MSG-SALE-07 now gives the QR code. Changes nothing.
+    /// </summary>
+    [HttpGet("{id:guid}/publish-check")]
+    [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Create, PermissionScope.AnyZone)]
+    [ProducesResponseType<InvoicePublishCheck>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> PublishCheck(Guid id, CancellationToken cancellationToken) =>
+        (await reads.PublishCheckAsync(id, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// SALE-05 steps 9-11, once per invoice after the save: 409 MSG-SALE-07 asks the QR question (<c>confirmationField</c> = <c>wantsQrCode</c>); with a Yes, TRACE-01 publishes the lots
+    /// that are Not published and have all their origin information (the others are listed with MSG-TRACE-01), the QR code is created when a lot is Published, and the invoice is sent
+    /// (SALE-06). 200 with the delivery status, MSG-SALE-16 when nothing could be sent; called again, 200 with the current result.
     /// </summary>
     [HttpPost("{id:guid}/finish")]
     [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Create, PermissionScope.AnyZone)]

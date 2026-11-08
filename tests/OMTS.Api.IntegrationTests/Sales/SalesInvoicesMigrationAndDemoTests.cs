@@ -128,6 +128,12 @@ public class SalesInvoicesMigrationAndDemoTests
             Assert.Equal(0, await UseDbAsync(api, db => db.HarvestLots.CountAsync(l => l.StatusId == StatusIds.HarvestLot.Closed)));
             Assert.Equal(2, await UseDbAsync(api, db => db.Notifications.CountAsync(n => n.Type == "SALE_COMPLETED")));
             Assert.Equal(["PT000001", "PT000002"], await UseDbAsync(api, db => db.CustomerPayments.OrderBy(p => p.Code).Select(p => p.Code).ToListAsync()));
+            // TRACE-01 at the end of the cash sale: its lot is the one Published lot and the invoice has its QR code; the pay-later sale is left unfinished.
+            var qr = await UseDbAsync(api, db => db.SalesInvoices.OrderBy(i => i.Code).Select(i => new { i.QrToken, i.QrDecidedAt, LotId = i.Lines.Select(l => l.HarvestLotId).First() }).ToListAsync());
+            Assert.Equal((true, true, false, false), (qr[0].QrToken is not null, qr[0].QrDecidedAt is not null, qr[1].QrToken is not null, qr[1].QrDecidedAt is not null));
+            var published = await UseDbAsync(api, db => db.HarvestLots.Where(l => l.PublishedAt != null).Select(l => l.Id).ToListAsync());
+            Assert.Equal([qr[0].LotId], published);
+            Assert.Equal(1, await UseDbAsync(api, db => db.AuditEvents.CountAsync(e => e.Action == "HarvestLot.Published" && e.RecordId == qr[0].LotId)));
 
             var rerun = await RunAsync(api);
 
@@ -135,6 +141,7 @@ public class SalesInvoicesMigrationAndDemoTests
             Assert.Contains(rerun.Messages, m => m == "Demo sales invoices: already there.");
             Assert.Equal(2, await UseDbAsync(api, db => db.SalesInvoices.CountAsync()));
             Assert.Equal(2, await UseDbAsync(api, db => db.Set<CustomerPayment>().CountAsync()));
+            Assert.Equal(1, await UseDbAsync(api, db => db.SalesInvoices.CountAsync(i => i.QrToken != null)));
         }
         finally
         {

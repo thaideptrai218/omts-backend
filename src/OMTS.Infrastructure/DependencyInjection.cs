@@ -95,8 +95,6 @@ public static class DependencyInjection
         services.AddScoped<IHarvestLotSalesQuery, HarvestLotSalesQuery>();
         services.AddScoped<IPurchaseRequestFulfilment, PurchaseRequestFulfilmentQuery>();
         services.AddScoped<ISalesInvoiceRepository, SalesInvoiceRepository>();
-        // TRACE-01 registers the publisher that also publishes the ready lots at the end of a sale.
-        services.AddScoped<IProvenancePublisher, SavedOriginStateProvenancePublisher>();
         services.AddOptions<ProvenanceOptions>()
             .Bind(configuration.GetSection(ProvenanceOptions.SectionName))
             .Validate(o => o.HasWebAddress(), ProvenanceOptions.InvalidPublicBaseUrl)

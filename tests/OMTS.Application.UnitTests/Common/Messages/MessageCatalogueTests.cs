@@ -114,6 +114,7 @@ public sealed class MessageCatalogueTests
         { ParameterType: var t } when t == typeof(IReadOnlyList<int>) => new[] { 3, 5 },
         { ParameterType: var t } when t == typeof(IReadOnlyList<WaterValueOutside>) =>
             new[] { new WaterValueOutside(WaterValueOutside.Ph, 9.1m, null, WaterValueDirection.High, 7.5m, 8.5m) },
+        { ParameterType: var t } when t == typeof(IReadOnlyList<OriginGap>) => new[] { OriginGap.NoSeedingSession(2) },
         _ => throw new InvalidOperationException($"No sample value for parameter {parameter.Name} ({parameter.ParameterType.Name})."),
     };
 }
