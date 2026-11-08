@@ -12,7 +12,7 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(OmtsDbContext))]
-    [Migration("20261108151525_AddZaloAccountLinking")]
+    [Migration("20261028101302_AddZaloAccountLinking")]
     partial class AddZaloAccountLinking
     {
         /// <inheritdoc />
@@ -2205,7 +2205,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Pending approval",
                             Group = "ACCOUNT",
                             IsFinal = false,
-                            IsInitial = true,
+                            IsInitial = false,
                             Meaning = "A trader asked for an account from the Zalo Mini App; cannot log in until the Cooperative Owner approves.",
                             SortOrder = 3
                         },

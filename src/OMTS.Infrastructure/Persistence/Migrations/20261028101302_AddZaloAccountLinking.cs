@@ -45,7 +45,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 columns: new[] { "Id", "Code", "DisplayColor", "DisplayName", "Group", "IsFinal", "IsInitial", "Meaning", "SortOrder" },
                 values: new object[,]
                 {
-                    { 303, "PENDING_APPROVAL", null, "Pending approval", "ACCOUNT", false, true, "A trader asked for an account from the Zalo Mini App; cannot log in until the Cooperative Owner approves.", 3 },
+                    { 303, "PENDING_APPROVAL", null, "Pending approval", "ACCOUNT", false, false, "A trader asked for an account from the Zalo Mini App; cannot log in until the Cooperative Owner approves.", 3 },
                     { 304, "REJECTED", null, "Rejected", "ACCOUNT", false, false, "The Cooperative Owner refused the request; the trader may ask again.", 4 }
                 });
 

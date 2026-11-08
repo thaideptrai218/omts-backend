@@ -2202,7 +2202,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             DisplayName = "Pending approval",
                             Group = "ACCOUNT",
                             IsFinal = false,
-                            IsInitial = true,
+                            IsInitial = false,
                             Meaning = "A trader asked for an account from the Zalo Mini App; cannot log in until the Cooperative Owner approves.",
                             SortOrder = 3
                         },
