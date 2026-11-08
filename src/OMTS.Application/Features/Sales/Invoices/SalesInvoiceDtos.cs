@@ -66,12 +66,16 @@ public sealed record SalesInvoiceSendingView(string Channel, string? PhoneNumber
 /// <param name="QrUrl">The link of the QR code of the invoice (its provenance page), null when it has none.</param>
 /// <param name="QrDecidedAt">When the end of the sale answered the QR question: null until then (POST finish).</param>
 /// <param name="DeliveryStatusId">The status of the latest sending, Not sent when there is none (BR-SALE-09).</param>
+/// <param name="PriceCuts">The price cuts of SALE-07, oldest first.</param>
+/// <param name="DebtEffect">Whether it is paid and what it does to the customer debt (BR-DEBT-05).</param>
+/// <param name="AllowedActions">The commands the caller is offered on this invoice now (SALE-09.1 step 3).</param>
 public sealed record SalesInvoiceView(
     Guid Id, string Code, DateTimeOffset InvoicedAt, DateOnly InvoiceDate, SalesInvoiceZoneView Zone, SalesInvoiceCustomerView? Customer, bool WalkInCustomer,
     Guid? PurchaseRequestId, bool TakesRequestInFull, IReadOnlyList<SalesInvoiceLineView> Lines, decimal TotalKg, decimal Subtotal, decimal Discount, bool DiscountDecidedByOwner,
     decimal OtherCharges, decimal PriceCutTotal, decimal Total, SalesPaymentTerm PaymentTerm, int StatusId, string Status, IReadOnlyList<CustomerPaymentView> Payments,
     AccountRef CreatedBy, string? QrToken, string? QrUrl, DateTimeOffset? QrDecidedAt, int DeliveryStatusId, string DeliveryStatus,
-    IReadOnlyList<SalesInvoiceSendingView> Sendings, string RowVersion);
+    IReadOnlyList<SalesInvoiceSendingView> Sendings, string RowVersion, IReadOnlyList<SalesInvoicePriceCutView> PriceCuts, SalesInvoiceDebtEffect DebtEffect,
+    IReadOnlyList<SalesInvoiceAction> AllowedActions);
 
 /// <summary>The end of the sale (SALE-05 steps 9-11).</summary>
 /// <param name="WantsQrCode">The answer to MSG-SALE-07; null asks it (409 with <c>confirmationField</c>).</param>

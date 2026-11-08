@@ -16,8 +16,28 @@ namespace OMTS.Api.Controllers;
 [ApiController]
 [Route("api/sales-invoices")]
 [Authorize]
-public sealed class SalesInvoicesController(SalesInvoiceService invoices, SalesInvoiceReadService reads, SalesInvoiceSendingService sending) : ControllerBase
+public sealed class SalesInvoicesController(
+    SalesInvoiceService invoices, SalesInvoiceReadService reads, SalesInvoiceSendingService sending, SalesInvoiceSearchService search, SalesInvoiceExportService exports) : ControllerBase
 {
+    /// <summary>SALE-09 steps 1-3: the invoices of the zones the caller may view, today by default, with the total of the Completed ones; 200 with MSG-GEN-10 when nothing matches; 400 MSG-GEN-01 for a wrong period.</summary>
+    [HttpGet]
+    [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.View, PermissionScope.AnyZone)]
+    [ProducesResponseType<SalesInvoiceSearchResult>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Search([FromQuery] SalesInvoiceSearchQuery query, CancellationToken cancellationToken) =>
+        (await search.SearchAsync(query, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>SALE-09.2: the matches of the same filters and their total, every page, as an .xlsx file.</summary>
+    [HttpGet("export")]
+    [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Export, PermissionScope.AnyZone)]
+    public async Task<IActionResult> Export([FromQuery] SalesInvoiceSearchQuery query, CancellationToken cancellationToken) =>
+        (await exports.ExportListAsync(query, cancellationToken)).ToActionResult(f => File(f.Content, f.ContentType, f.FileName));
+
+    /// <summary>SALE-09.2: one invoice as an .xlsx file; 403 MSG-GEN-08 outside the zones where the caller may export.</summary>
+    [HttpGet("{id:guid}/print")]
+    [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Export, PermissionScope.AnyZone)]
+    public async Task<IActionResult> Print(Guid id, CancellationToken cancellationToken) =>
+        (await exports.PrintAsync(id, cancellationToken)).ToActionResult(f => File(f.Content, f.ContentType, f.FileName));
+
     /// <summary>
     /// 201 with the Completed invoice, the change and MSG-SALE-06; 409 MSG-SALE-10/11/12 asks a question, answered by the flag named in <c>confirmationField</c> in the same request;
     /// 409 MSG-GEN-09 names a lot no longer for sale or a request no longer open.
