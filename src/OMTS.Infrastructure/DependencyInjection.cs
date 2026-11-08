@@ -29,6 +29,7 @@ using OMTS.Infrastructure.Persistence.Repositories;
 using OMTS.Infrastructure.Persistence.Seed;
 using OMTS.Infrastructure.Reports;
 using OMTS.Infrastructure.Storage;
+using OMTS.Infrastructure.Zalo;
 
 namespace OMTS.Infrastructure;
 
@@ -128,6 +129,7 @@ public static class DependencyInjection
         services.AddFileStorage(configuration);
         services.AddOcr(configuration);
         services.AddPayments(configuration);
+        services.AddZalo(configuration);
         services.AddSingleton<ISpreadsheetWriter, ClosedXmlSpreadsheetWriter>();
 
         services.AddScoped<DeploymentBootstrapper>();
@@ -277,6 +279,30 @@ public static class DependencyInjection
                 PaymentProviderOptions.FakeProvider or PaymentProviderOptions.NoneProvider => new UnconfiguredPaymentNotificationService(),
                 var other => throw UnknownProvider(PaymentProviderOptions.SectionName, other),
             };
+        });
+    }
+
+    private static void AddZalo(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<ZaloOptions>().Bind(configuration.GetSection(ZaloOptions.SectionName));
+        services.AddHttpClient<GraphZaloOpenApi>((provider, http) =>
+        {
+            var zalo = provider.GetRequiredService<IOptions<ZaloOptions>>().Value;
+            http.BaseAddress = new Uri(zalo.BaseUrl);
+            http.Timeout = TimeSpan.FromSeconds(zalo.TimeoutSeconds);
+        });
+        services.AddSingleton<FakeZaloOpenApi>();
+        services.AddSingleton<NotConfiguredZaloOpenApi>();
+        // Unset fails closed (MSG04, nobody is linked) instead of trusting tokens nobody checked.
+        services.AddTransient<IZaloOpenApi>(provider => provider.GetRequiredService<IOptions<ZaloOptions>>().Value switch
+        {
+            { Provider: ZaloOptions.GraphProvider, AppSecret: var secret } when string.IsNullOrWhiteSpace(secret) =>
+                throw new InvalidOperationException(
+                    $"{ZaloOptions.SectionName}:AppSecret is required when {ZaloOptions.SectionName}:Provider is Graph (user-secrets or environment variable)."),
+            { Provider: ZaloOptions.GraphProvider } => provider.GetRequiredService<GraphZaloOpenApi>(),
+            { Provider: ZaloOptions.FakeProvider } => provider.GetRequiredService<FakeZaloOpenApi>(),
+            { Provider: "" } => provider.GetRequiredService<NotConfiguredZaloOpenApi>(),
+            var other => throw UnknownProvider(ZaloOptions.SectionName, other.Provider),
         });
     }
 

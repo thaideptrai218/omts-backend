@@ -9,6 +9,7 @@ namespace OMTS.Api.IntegrationTests.Platform;
 public class LocalEnvironmentTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
     private const string WebOrigin = "http://localhost:3000";
+    private const string ZaloMiniAppOrigin = "https://h5.zdn.vn";
     private static readonly WebApplicationFactoryClientOptions NoRedirects = new() { AllowAutoRedirect = false };
 
     // The image listens on plain HTTP only: without an HTTPS port nothing is redirected.
@@ -42,6 +43,17 @@ public class LocalEnvironmentTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(WebOrigin, Header(response, "Access-Control-Allow-Origin"));
         Assert.Contains("authorization", Header(response, "Access-Control-Allow-Headers"), StringComparison.OrdinalIgnoreCase);
         Assert.Null(Header(response, "Access-Control-Allow-Credentials"));
+    }
+
+    // Zalo serves every deployed version of the Mini App from h5.zdn.vn; the answer names that one origin only.
+    [Fact]
+    public async Task The_zalo_mini_app_origin_passes_the_cors_preflight_in_development()
+    {
+        var response = await factory.CreateClient().SendAsync(Preflight(ZaloMiniAppOrigin));
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(ZaloMiniAppOrigin, Header(response, "Access-Control-Allow-Origin"));
+        Assert.Contains("authorization", Header(response, "Access-Control-Allow-Headers"), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

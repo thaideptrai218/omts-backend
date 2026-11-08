@@ -1040,6 +1040,50 @@ public static class UserMessages
     public static readonly UserMessage PasswordChangeRequired = new(
         Legacy.PasswordChangeRequired, "Please change your temporary password before using other functions.");
 
+    /// <summary>Not in the SRS list: a notice of the Zalo Mini App flows, whose text is built by the module.</summary>
+    public static UserMessage MiniAppNotification(string text) => new(Legacy.MiniAppNotification, text);
+
+    public static UserMessage ServiceNotResponding(string service) => new(
+        Legacy.Msg04, $"The {service} service is not responding. The action has not been completed and the data in OMTS is unchanged; please try again later.");
+
+    public static readonly UserMessage OldDocumentsHidden = new(
+        Legacy.Msg57, "Old documents are temporarily hidden until identity verification is complete.");
+
+    /// <summary>Not in the SRS list: the Zalo access token of the Mini App could not be checked with Zalo.</summary>
+    public static readonly UserMessage ZaloTokenInvalid = new(
+        Legacy.ZaloTokenInvalid, "The Zalo account could not be verified. Please open OMTS from Zalo and try again.");
+
+    /// <summary>Not in the SRS list: the phone token of the Mini App was refused (used, expired or forged).</summary>
+    public static readonly UserMessage ZaloPhoneTokenInvalid = new(
+        Legacy.ZaloPhoneTokenInvalid, "The phone number could not be read from Zalo. Please try again.");
+
+    /// <summary>Not in the SRS list: no account uses the Zalo phone number; the person may ask the cooperative for one.</summary>
+    public static readonly UserMessage ZaloPhoneNotFound = new(
+        Legacy.ZaloPhoneNotFound, "No OMTS account uses this phone number. Traders can send a request to the cooperative.");
+
+    /// <summary>Not in the SRS list: the trader's request waits for the Cooperative Owner.</summary>
+    public static readonly UserMessage ZaloApprovalPending = new(
+        Legacy.ZaloApprovalPending, "Your request has been sent. Please wait until the cooperative approves it.");
+
+    /// <summary>Not in the SRS list: the Cooperative Owner refused the trader's request (the reason is a separate field).</summary>
+    public static readonly UserMessage ZaloRequestRejected = new(
+        Legacy.ZaloRequestRejected, "The cooperative did not approve your request. You can contact the cooperative or send a new request.");
+
+    /// <summary>Not in the SRS list: the phone number already has an account, which is linked instead of requested.</summary>
+    public static readonly UserMessage ZaloAccountExists = new(
+        Legacy.ZaloAccountExists, "This phone number already has an OMTS account. Please link it instead.");
+
+    /// <summary>Not in the SRS list: the Zalo phone number is not a Vietnamese number, so no account can use it.</summary>
+    public static readonly UserMessage ZaloPhoneUnsupported = new(
+        Legacy.ZaloPhoneUnsupported, "OMTS accounts use Vietnamese phone numbers only. Please use a Zalo account with a Vietnamese phone number.");
+
+    /// <summary>Not in the SRS list: the Zalo user is already linked to another OMTS account.</summary>
+    public static readonly UserMessage ZaloAlreadyLinked = new(
+        Legacy.ZaloAlreadyLinked, "This Zalo account is already linked to another OMTS account.");
+
+    /// <summary>Not in the SRS list: the Zalo user has not linked an account yet (the Mini App stays a guest).</summary>
+    public static readonly UserMessage ZaloNotLinked = new(Legacy.ZaloNotLinked, "This Zalo account is not linked to OMTS yet.");
+
     private static string Capitalized(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
 
     /// <summary>A date as shown in messages, e.g. "29/11/2026".</summary>

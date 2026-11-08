@@ -54,6 +54,8 @@ public static class DependencyInjection
 
         services.AddSingleton(provider => new UnknownLoginCounter(timeProvider: provider.GetRequiredService<TimeProvider>()));
         services.AddScoped<AuthService>();
+        services.AddScoped<ZaloLinkService>();
+        services.AddScoped<ZaloLocationService>();
 
         services.AddSingleton<PermissionCache>();
         services.AddSingleton<IPermissionCacheInvalidator>(provider => provider.GetRequiredService<PermissionCache>());
@@ -89,6 +91,7 @@ public static class DependencyInjection
         services.AddScoped<AccessGrantService>();
         services.AddScoped<StaffAccountService>();
         services.AddScoped<RoleService>();
+        services.AddScoped<TraderRequestService>();
 
         // FARM-01 cooperative profile, LABOR-01 employees
         services.AddScoped<CooperativeProfileViews>();

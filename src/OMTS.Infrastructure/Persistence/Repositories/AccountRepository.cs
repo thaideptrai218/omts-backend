@@ -34,6 +34,15 @@ internal sealed class AccountRepository(OmtsDbContext db) : IAccountRepository
     public Task<Account?> FindByPhoneAsync(string phoneNumber, CancellationToken cancellationToken) =>
         db.Accounts.FirstOrDefaultAsync(a => a.PhoneNumber == phoneNumber, cancellationToken);
 
+    public async Task<IReadOnlyList<Account>> ListTraderRequestsAsync(int statusId, CancellationToken cancellationToken) =>
+        await db.Accounts.AsNoTracking()
+            .Where(a => a.SubjectType == SubjectType.Trader && a.StatusId == statusId)
+            .OrderBy(a => a.AccessRequestedAt)
+            .ToListAsync(cancellationToken);
+
+    public Task<Account?> FindByZaloAccountIdAsync(string zaloAccountId, CancellationToken cancellationToken) =>
+        db.Accounts.FirstOrDefaultAsync(a => a.ZaloAccountId == zaloAccountId, cancellationToken);
+
     public Task<Account?> FindByVerifiedEmailAsync(string email, CancellationToken cancellationToken) =>
         db.Accounts.FirstOrDefaultAsync(a => a.Email == email && a.EmailVerifiedAt != null, cancellationToken);
 
