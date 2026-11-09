@@ -43,7 +43,7 @@ public sealed class SalesReturnViews(
             return new SalesReturnLineView(l.InvoiceLineId, line?.LineNumber, line?.Product.Name, l.HarvestLotId, l.HarvestLot.LotCode, l.ReturnedKg, l.Outcome, l.DiscardedKg);
         }).ToList();
 
-        var backForSale = found.Lines.Where(l => l.Outcome == SalesReturnOutcome.BackForSale).GroupBy(l => l.HarvestLot).Select(g => (Lot: g.Key, Kg: g.Sum(l => l.ReturnedKg))).ToList();
+        var backForSale = found.Lines.Where(l => l.Outcome == SalesReturnOutcome.BackForSale).GroupBy(l => l.HarvestLotId).Select(g => (Lot: g.First().HarvestLot, Kg: g.Sum(l => l.ReturnedKg))).ToList();
         var figures = await lotSales.FiguresAsync(backForSale.Select(l => l.Lot.Id).ToList(), cancellationToken);
         var lots = backForSale.Select(l =>
         {

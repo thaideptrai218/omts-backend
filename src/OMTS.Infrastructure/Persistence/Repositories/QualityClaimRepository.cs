@@ -15,6 +15,9 @@ internal sealed class QualityClaimRepository(OmtsDbContext db) : IQualityClaimRe
     public Task<bool> HasAwaitingAsync(Guid invoiceId, CancellationToken cancellationToken) =>
         db.QualityClaims.AnyAsync(c => c.InvoiceId == invoiceId && c.StatusId == StatusIds.QualityClaim.AwaitingResponse, cancellationToken);
 
+    public Task<QualityClaim?> GetAwaitingForUpdateAsync(Guid invoiceId, CancellationToken cancellationToken) =>
+        db.QualityClaims.FirstOrDefaultAsync(c => c.InvoiceId == invoiceId && c.StatusId == StatusIds.QualityClaim.AwaitingResponse, cancellationToken);
+
     public Task<QualityClaim?> GetForEditAsync(Guid claimId, CancellationToken cancellationToken) =>
         db.QualityClaims.Include(c => c.Customer).Include(c => c.Invoice).FirstOrDefaultAsync(c => c.Id == claimId, cancellationToken);
 

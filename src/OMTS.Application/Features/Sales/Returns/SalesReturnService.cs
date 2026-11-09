@@ -28,6 +28,7 @@ public sealed class SalesReturnService(
     ISalesInvoiceRepository invoices,
     ISalesReturnRepository salesReturns,
     IInvoiceSalesReturnCheck returnsOfInvoices,
+    IQualityClaimRepository claims,
     ICustomerPaymentRepository payments,
     SalesReturnGuard guard,
     SalesReturnLots lots,
@@ -105,6 +106,12 @@ public sealed class SalesReturnService(
             },
         });
         await notifications.NotifyAsync(invoice, salesReturn, debtAfter, cancellationToken);
+
+        // The return changes nothing on the claim (BR-CLAIM-02), but an Accept in flight must not save on a returned invoice (CLAIM-02.0.E2): the row version makes one of the two fail with MSG06.
+        if (await claims.GetAwaitingForUpdateAsync(invoiceId, cancellationToken) is { } awaiting)
+        {
+            unitOfWork.MarkChanged(awaiting);
+        }
 
         try
         {

@@ -14,6 +14,9 @@ public interface IQualityClaimRepository
     /// <summary>Whether the invoice has a claim Awaiting response (BR-CLAIM-01).</summary>
     Task<bool> HasAwaitingAsync(Guid invoiceId, CancellationToken cancellationToken);
 
+    /// <summary>The claim Awaiting response of the invoice, tracked; at most one (BR-CLAIM-01).</summary>
+    Task<QualityClaim?> GetAwaitingForUpdateAsync(Guid invoiceId, CancellationToken cancellationToken);
+
     /// <summary>The claim with its customer profile and invoice, tracked, to respond to it.</summary>
     Task<QualityClaim?> GetForEditAsync(Guid claimId, CancellationToken cancellationToken);
 

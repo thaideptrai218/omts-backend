@@ -34,7 +34,7 @@ public sealed record SalesReturnLotFigures(Guid HarvestLotId, string LotCode, de
 /// <param name="Value">The total of the invoice when the return was recorded (BR-CLAIM-03).</param>
 public sealed record SalesReturnView(
     Guid Id, string Code, Guid InvoiceId, string InvoiceCode, DateOnly ReturnDate, string Reason, decimal Value, int StatusId, string Status, AccountRef RecordedBy,
-    DateTimeOffset? CancelledAt, string? CancelReason, IReadOnlyList<SalesReturnLineView> Lines, IReadOnlyList<SalesReturnLotFigures> Lots, string RowVersion);
+    DateTimeOffset? CancelledAt, string? CancelReason, IReadOnlyList<SalesReturnLineView> Lines, IReadOnlyList<SalesReturnLotFigures> Lots, string RowVersion, string? Message = null, string? MessageCode = null);
 
 /// <param name="DebtAfter">The customer debt after the return; below 0 it is money owed back (DEBT-02).</param>
 /// <param name="OwedBack">The money owed back, 0 when none.</param>

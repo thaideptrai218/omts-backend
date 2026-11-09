@@ -93,13 +93,15 @@ public sealed class SalesReturnCancellationService(
             After = new { Status = statusCatalog.CodeOf(salesReturn.StatusId), salesReturn.InvoiceId, salesReturn.Value },
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return await views.ViewAsync(salesReturn.Id, cancellationToken);
+        var view = await views.ViewAsync(salesReturn.Id, cancellationToken);
+        var saved = UserMessages.Saved(SalesReturnRules.ObjectName);
+        return view with { Message = saved.Text, MessageCode = saved.Code };
     }
 
     // MSG-CLAIM-06: only a lot whose oysters this return put back loses kg by the cancellation (BR-CLAIM-03); the discarded kg is not taken back in.
     private async Task<AppError?> NegativeRemainingAsync(SalesReturn salesReturn, CancellationToken cancellationToken)
     {
-        var backForSale = salesReturn.Lines.Where(l => l.Outcome == SalesReturnOutcome.BackForSale).GroupBy(l => l.HarvestLot).Select(g => (Lot: g.Key, Kg: g.Sum(l => l.ReturnedKg))).ToList();
+        var backForSale = salesReturn.Lines.Where(l => l.Outcome == SalesReturnOutcome.BackForSale).GroupBy(l => l.HarvestLotId).Select(g => (Lot: g.First().HarvestLot, Kg: g.Sum(l => l.ReturnedKg))).ToList();
         if (backForSale.Count == 0)
         {
             return null;

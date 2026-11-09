@@ -24,7 +24,7 @@ public sealed class StubSalesReturnCheck : IInvoiceSalesReturnCheck
     public Task<bool> HasSalesReturnAsync(Guid invoiceId, CancellationToken cancellationToken) => Task.FromResult(Returned.Contains(invoiceId));
 }
 
-/// <summary>The host with the sales return seam filled in: CLAIM-03 is not built yet.</summary>
+/// <summary>The host with the sales return check stubbed, so a test can mark an invoice returned without recording a return.</summary>
 public sealed class QualityClaimApiFactory : AuthApiFactory
 {
     public StubSalesReturnCheck Returns { get; } = new();
