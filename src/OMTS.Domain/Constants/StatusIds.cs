@@ -110,6 +110,14 @@ public static class StatusIds
         public const int Cancelled = 3204;
     }
 
+    /// <summary>STD-QUALITY-CLAIM (BR-CLAIM-02): a response cannot be changed.</summary>
+    public static class QualityClaim
+    {
+        public const int AwaitingResponse = 3701;
+        public const int Rejected = 3702;
+        public const int Accepted = 3703;
+    }
+
     /// <summary>STD-SALES-INVOICE (BR-SALE-08): saved only when paid or put on the debt, so no draft; Paid and the delivery status are worked out.</summary>
     public static class SalesInvoice
     {

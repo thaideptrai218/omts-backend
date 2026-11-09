@@ -20,6 +20,7 @@ internal sealed class CustomerReferences(OmtsDbContext db) : ICustomerReferences
         // A profile merged earlier into the one being merged now: it follows, so a merged profile always points at a kept one.
         new Reference<Customer>("Merged customer profiles", c => c.MergedIntoCustomerId),
         new Reference<PurchaseRequest>("Purchase requests", r => r.CustomerId),
+        new Reference<QualityClaim>("Quality claims", c => c.CustomerId),
         new Reference<SalesInvoice>("Sales invoices", i => i.CustomerId),
         new Reference<CustomerPayment>("Customer payments", p => p.CustomerId),
         // The invoice the transfer saves then names the kept profile.

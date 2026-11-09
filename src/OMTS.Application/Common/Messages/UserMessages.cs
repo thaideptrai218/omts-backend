@@ -1057,6 +1057,46 @@ public static class UserMessages
         };
     }
 
+    // ---- MSG-CLAIM ----
+
+    /// <summary>MSG-CLAIM-01 (CLAIM-01, BR-CLAIM-01): a new quality claim, to the Cooperative Owner.</summary>
+    public static UserMessage QualityClaimNew(string customerName, string invoiceCode, string descriptionStart) => new(
+        Claim01,
+        $"{customerName} reported a quality problem with invoice {invoiceCode}: {descriptionStart}. Please ask the Zone Manager to check it, then respond.")
+    {
+        Parameters = new Dictionary<string, object?> { ["customer_name"] = customerName, ["invoice_code"] = invoiceCode, ["description_start"] = descriptionStart },
+    };
+
+    /// <summary>MSG-CLAIM-02 (CLAIM-02, BR-CLAIM-02): the response, to the trader account and the phone number of the profile. <paramref name="note"/> is the Owner's note, cut for SMS by the caller.</summary>
+    /// <param name="offer">The offer when accepted: <c>ReturnAllGoods</c> or <c>PriceCutWholeInvoice</c>; null when rejected.</param>
+    public static UserMessage QualityClaimResponse(string cooperativeShortName, string invoiceCode, bool accepted, string? offer, string? note, string? cooperativePhone)
+    {
+        var result = !accepted
+            ? "not accepted"
+            : offer == "ReturnAllGoods" ? "accepted: the cooperative offers a return of all the goods" : "accepted: the cooperative offers a price cut of the whole invoice";
+        var callText = $"Please call {cooperativePhone ?? "the cooperative"}.";
+        return new UserMessage(Claim02, $"{cooperativeShortName}: your quality claim on invoice {invoiceCode} is {result}.{(note is null ? "" : " " + note)} {callText}")
+        {
+            Parameters = new Dictionary<string, object?>
+            {
+                ["cooperative_short_name"] = cooperativeShortName,
+                ["invoice_code"] = invoiceCode,
+                ["result"] = accepted ? "Accepted" : "Rejected",
+                ["offer"] = offer,
+                ["note"] = note,
+                ["cooperative_phone"] = cooperativePhone,
+            },
+        };
+    }
+
+    /// <summary>MSG-CLAIM-03 (CLAIM-02.0.E2): the invoice was cancelled or has a sales return, so the claim cannot be accepted; it can still be rejected.</summary>
+    /// <param name="cause">"was cancelled" or "has a sales return".</param>
+    public static UserMessage QualityClaimCannotBeAccepted(string invoiceCode, string cause) => new(
+        Claim03, $"Invoice {invoiceCode} {cause}, so the claim cannot be accepted. You can still reject it with a note.")
+    {
+        Parameters = new Dictionary<string, object?> { ["invoice_code"] = invoiceCode, ["cause"] = cause },
+    };
+
     // ---- Old codes still sent as the code (Legacy.KeptAsCode) ----
 
     /// <summary>MSG05: an export file could not be generated, or a stored file could not be read.</summary>

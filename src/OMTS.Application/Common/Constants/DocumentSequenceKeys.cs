@@ -20,4 +20,7 @@ public static class DocumentSequenceKeys
 
     /// <summary>Customer payments and money paid back, PT000123 (BR-DEBT-03 gives no prefix: PM default).</summary>
     public const string CustomerPayment = "PT";
+
+    /// <summary>Quality claims, KN000123 (BR-CLAIM-01 gives no prefix: PM default).</summary>
+    public const string QualityClaim = "KN";
 }

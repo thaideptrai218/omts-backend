@@ -14,6 +14,7 @@ using OMTS.Application.Common.Interfaces.Reports;
 using OMTS.Application.Common.Interfaces.Storage;
 using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Application.Features.Sales.PurchaseRequests;
+using OMTS.Application.Features.Sales.QualityClaims;
 using OMTS.Infrastructure.Bootstrap;
 using OMTS.Infrastructure.HealthChecks;
 using OMTS.Infrastructure.Identity;
@@ -98,6 +99,8 @@ public static class DependencyInjection
         services.AddScoped<IProvenancePageQuery, ProvenancePageQuery>();
         services.AddScoped<IWithdrawalNoticeQuery, WithdrawalNoticeQuery>();
         services.AddScoped<IPurchaseRequestFulfilment, PurchaseRequestFulfilmentQuery>();
+        services.AddScoped<IQualityClaimRepository, QualityClaimRepository>();
+        services.AddScoped<IInvoiceSalesReturnCheck, NoSalesReturnsYetCheck>();
         services.AddScoped<ISalesInvoiceRepository, SalesInvoiceRepository>();
         services.AddScoped<ISalesInvoiceSearchReader, SalesInvoiceSearchReader>();
         services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();

@@ -15,12 +15,12 @@ namespace OMTS.Api.IntegrationTests.Persistence;
 
 public class MigrationTests
 {
-    // Tables of the SRS 22/10 order, harvest, traceability, claim, finance and pay model (OMTS-216).
+    // Tables of the SRS 22/10 order, harvest, traceability, claim, finance and pay model (OMTS-216). QualityClaims came back with the claims of SRS 27/10 (a new table of the same name).
     private static readonly string[] LegacyTables =
     [
         "SalesOrders", "SaleTransactions", "PortWeighings", "PortHandovers",
         "CustomerReceipts", "ReceiptAllocations", "CustomerCredits", "CustomerRefunds",
-        "QualityClaims", "PhysicalReturns", "SaleAdjustments", "MessageDeliveryAttempts",
+        "PhysicalReturns", "SaleAdjustments", "MessageDeliveryAttempts",
         "HarvestEvents", "TraceabilityLots", "TracePublicationVersions", "TraceCorrections",
         "PayRuleVersions", "PayLines", "LaborSettlements", "LaborPayments",
     ];

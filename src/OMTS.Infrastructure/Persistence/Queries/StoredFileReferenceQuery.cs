@@ -22,6 +22,7 @@ internal sealed class StoredFileReferenceQuery(OmtsDbContext db) : IStoredFileRe
         FileCategories.WaterMeterPhotos => db.WaterMeasurements.Select(m => m.PhotoUrl),
         FileCategories.CultivationLogPhotos => db.CultivationLogPhotos.Select(p => p.FileKey),
         FileCategories.HarvestLotPhotos => db.HarvestLotPhotos.Select(p => p.FileKey),
+        FileCategories.QualityClaimPhotos => db.QualityClaimPhotos.Select(p => p.FileKey),
         _ => throw new ArgumentOutOfRangeException(nameof(category), category, "No record column is known for this file category."),
     };
 }
