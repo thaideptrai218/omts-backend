@@ -461,6 +461,26 @@ public static class UserMessages
         };
     }
 
+    /// <summary>
+    /// MSG-TRACE-05 (TRACE-04 step 6, BR-TRACE-07): the withdrawal notice to one trader, listing their invoices; never the reason. Without a cooperative phone number yet (FARM-01)
+    /// the trader is asked to call the cooperative.
+    /// </summary>
+    public static UserMessage ProvenanceWithdrawnNotice(string cooperativeShortName, string lotCode, IReadOnlyList<string> invoiceCodes, string? cooperativePhone) => new(
+        Trace05,
+        $"{cooperativeShortName}: the origin information of oyster lot {lotCode} (invoice {string.Join(", ", invoiceCodes)}) has been withdrawn. You do not need to return the oysters. Please call {cooperativePhone ?? "the cooperative"}.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["cooperative_short_name"] = cooperativeShortName, ["lot_code"] = lotCode, ["invoice_codes"] = invoiceCodes, ["cooperative_phone"] = cooperativePhone,
+        },
+    };
+
+    /// <summary>MSG-TRACE-06 (TRACE-04.2): no current sales invoice sells the lot, so the withdrawal notifies nobody.</summary>
+    public static UserMessage NoTraderToNotify(string lotCode) => new(Trace06, $"No current sales invoice sells harvest lot {lotCode}; no trader will be notified.")
+    {
+        Parameters = new Dictionary<string, object?> { ["lot_code"] = lotCode },
+    };
+
     // ---- MSG-ORIGIN ----
 
     /// <summary>

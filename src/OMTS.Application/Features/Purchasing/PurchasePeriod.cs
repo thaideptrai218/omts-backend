@@ -16,6 +16,12 @@ public static class PurchasePeriod
     {
         var from = requestedFrom ?? FirstOfMonth(requestedTo ?? today);
         var to = requestedTo ?? FirstOfMonth(today).AddMonths(1).AddDays(-1);
+        return Check(from, to);
+    }
+
+    /// <summary>At most five years; a start after the end is MSG-GEN-01. Used by every list whose period has a default of its own (SALE-09: today).</summary>
+    public static Result<(DateOnly From, DateOnly To)> Check(DateOnly from, DateOnly to)
+    {
         if (from > to)
         {
             return AppError.Invalid("From date");

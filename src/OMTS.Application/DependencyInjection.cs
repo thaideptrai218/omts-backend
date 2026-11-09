@@ -24,6 +24,7 @@ using OMTS.Application.Features.Traceability.Corrections;
 using OMTS.Application.Features.Traceability.Origin;
 using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Application.Features.Traceability.Tracing;
+using OMTS.Application.Features.Traceability.Withdrawal;
 using OMTS.Application.Features.Labor;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
@@ -189,6 +190,9 @@ public static class DependencyInjection
         services.AddScoped<LotTraceService>();
         // ORIGIN-01 – the public provenance page of an invoice QR code (anonymous)
         services.AddScoped<ProvenancePageService>();
+        // TRACE-04 – withdraw the origin information of a lot and tell its traders
+        services.AddScoped<WithdrawalNotices>();
+        services.AddScoped<LotWithdrawalService>();
 
         services.AddScoped<UploadedFileSaver>();
         services.AddScoped<OrphanFileCleanupService>();
@@ -224,6 +228,8 @@ public static class DependencyInjection
         services.AddScoped<SalesInvoiceViews>();
         services.AddScoped<SalesInvoiceService>();
         services.AddScoped<SalesInvoiceReadService>();
+        services.AddScoped<SalesInvoiceSearchService>();
+        services.AddScoped<SalesInvoiceExportService>();
         // SALE-06 sending the invoice, and the end of the sale with the QR code
         services.AddScoped<SalesInvoiceMessages>();
         services.AddScoped<SalesInvoiceSendingService>();

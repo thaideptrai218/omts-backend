@@ -96,8 +96,10 @@ public static class DependencyInjection
         services.AddScoped<IHarvestLotSalesQuery, HarvestLotSalesQuery>();
         services.AddScoped<ILotTraceQuery, LotTraceQuery>();
         services.AddScoped<IProvenancePageQuery, ProvenancePageQuery>();
+        services.AddScoped<IWithdrawalNoticeQuery, WithdrawalNoticeQuery>();
         services.AddScoped<IPurchaseRequestFulfilment, PurchaseRequestFulfilmentQuery>();
         services.AddScoped<ISalesInvoiceRepository, SalesInvoiceRepository>();
+        services.AddScoped<ISalesInvoiceSearchReader, SalesInvoiceSearchReader>();
         services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();
         services.AddOptions<ProvenanceOptions>()
             .Bind(configuration.GetSection(ProvenanceOptions.SectionName))

@@ -14,8 +14,8 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Sales.Invoices;
 
 /// <summary>
-/// What SALE-05 reads besides the products and the lots for sale: one invoice (opened from the sale notice or after the save; the search of SALE-09 comes with PR 9), and the requests of a
-/// profile the invoice can be linked to (SALE-05.3).
+/// One invoice (SALE-09.1, also opened from the sale notice or after the save; the list is <see cref="SalesInvoiceSearchService"/>), and what SALE-05 reads besides the products and the lots
+/// for sale: the requests of a profile the invoice can be linked to (SALE-05.3).
 /// </summary>
 public sealed class SalesInvoiceReadService(
     ISalesInvoiceRepository invoices,

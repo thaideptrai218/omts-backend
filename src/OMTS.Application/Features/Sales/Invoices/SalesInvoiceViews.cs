@@ -2,17 +2,26 @@ using Microsoft.Extensions.Options;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Notifications;
+using OMTS.Application.Features.Sales.Debts;
 using OMTS.Application.Features.WaterQuality.Dtos;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Sales.Invoices;
 
-/// <summary>The invoice as the API shows it, from <see cref="ISalesInvoiceRepository.GetAsync"/> (zone, customer, lines and payments loaded), with its sendings (SALE-06 step 5).</summary>
+/// <summary>
+/// The invoice as the API shows it, from <see cref="ISalesInvoiceRepository.GetAsync"/> (zone, customer, lines, price cuts and payments loaded), with its sendings (SALE-06 step 5), what it
+/// does to the customer debt and the commands offered to the caller (SALE-09.1 steps 2-3).
+/// </summary>
 public sealed class SalesInvoiceViews(
     IAccountRepository accounts,
     ISalesInvoiceRepository invoices,
+    CustomerDebtReader debts,
+    ZoneAccessGuard zoneAccess,
     IStatusCatalog statusCatalog,
     IOptions<ProvenanceOptions> provenance,
     TimeProvider timeProvider)
@@ -24,10 +33,15 @@ public sealed class SalesInvoiceViews(
         var lines = invoice.Lines.OrderBy(l => l.LineNumber).Select(l => new SalesInvoiceLineView(
             l.Id, l.LineNumber, l.ProductId, l.Product.Name, l.HarvestLotId, l.HarvestLot.LotCode, l.Kg, l.UnitPrice, l.ListPrice, l.PriceSource, l.Amount, l.SoldWholeLot)).ToList();
         var payments = invoice.Payments.OrderBy(p => p.CreatedAt).ThenBy(p => p.Code).Select(p => new CustomerPaymentView(
-            p.Id, p.Code, p.Kind, p.Method, p.Amount, p.PaymentDate, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId),
+            p.Id, p.Code, p.Kind, p.Method, p.Amount, p.PaymentDate, p.CreatedAt, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId),
             p.CollectedByAccountId is { } collector ? Person(collector, names) : null)).ToList();
         var sendings = await SendingsAsync(invoice.Id, cancellationToken);
         var latest = LatestStatus(sendings);
+        var debtEffect = await DebtEffectAsync(invoice, cancellationToken);
+        var allowedActions = SalesInvoiceAllowedActions.Of(
+            // CLAIM-03 seam: a sales return that is not cancelled goes in here when returns exist; none can exist yet.
+            new SalesInvoiceActionFacts(invoice.StatusId, latest, SaleFinished: invoice.QrDecidedAt is not null, HasSalesReturn: false),
+            await RightsAsync(invoice.ZoneId, cancellationToken));
         return new SalesInvoiceView(
             invoice.Id,
             invoice.Code,
@@ -57,8 +71,27 @@ public sealed class SalesInvoiceViews(
             latest,
             statusCatalog.DisplayNameOf(latest),
             sendings,
-            RowVersionGuard.Encode(invoice.RowVersion));
+            RowVersionGuard.Encode(invoice.RowVersion),
+            invoice.PriceCuts.OrderBy(c => c.CutDate).ThenBy(c => c.Id).Select(c => new SalesInvoicePriceCutView(c.Amount, c.CutDate, c.Reason)).ToList(),
+            debtEffect,
+            allowedActions);
     }
+
+    /// <summary>The paid state of the invoice (BR-DEBT-05) and the debt of its profile now (BR-DEBT-02).</summary>
+    private async Task<SalesInvoiceDebtEffect> DebtEffectAsync(SalesInvoice invoice, CancellationToken cancellationToken)
+    {
+        var allocation = invoice.CustomerId is { } customerId ? await debts.AllocationAsync(customerId, cancellationToken) : null;
+        var ownPayments = invoice.Payments.Where(p => p.Kind == CustomerPaymentKind.Payment && p.StatusId != StatusIds.CustomerPayment.Cancelled).Sum(p => p.Amount);
+        var state = SalesInvoicePaidState.Of(invoice.Id, invoice.StatusId, invoice.Total, invoice.CustomerId, ownPayments, allocation);
+        return new SalesInvoiceDebtEffect(
+            state.IsPaid, state.Covered, state.Unpaid, invoice.CustomerId is not null && invoice.StatusId != StatusIds.SalesInvoice.Cancelled, allocation?.Debt);
+    }
+
+    private async Task<SalesInvoiceCallerRights> RightsAsync(Guid zoneId, CancellationToken cancellationToken) =>
+        new(await zoneAccess.IsCooperativeOwnerAsync(cancellationToken),
+            await zoneAccess.AllowsAsync(PermissionFunctions.SalesInvoices, PermissionAction.Create, zoneId, cancellationToken),
+            await zoneAccess.AllowsAsync(PermissionFunctions.SalesReturns, PermissionAction.Create, zoneId, cancellationToken),
+            await zoneAccess.AllowsAsync(PermissionFunctions.SalesInvoices, PermissionAction.Export, zoneId, cancellationToken));
 
     /// <summary>The link of the QR code of the invoice, or null when it has none.</summary>
     public string? QrUrlOf(SalesInvoice invoice) => invoice.QrToken is { } token ? provenance.Value.LinkOf(token) : null;
