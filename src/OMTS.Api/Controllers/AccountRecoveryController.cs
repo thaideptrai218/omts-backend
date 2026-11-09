@@ -16,13 +16,13 @@ namespace OMTS.Api.Controllers;
 [AllowAnonymous]
 public sealed class AccountRecoveryController(RegistrationService registration, PasswordRecoveryService recovery) : ControllerBase
 {
-    /// <summary>ACS-01 – creates a trader account from a verified phone number or email.</summary>
+    /// <summary>ACS-01 – creates a trader account from a verified phone number (<c>channel</c> must be Sms; an email cannot register).</summary>
     [HttpPost("register")]
     [ProducesResponseType<TraderRegistered>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Register(RegisterTraderRequest request, CancellationToken cancellationToken) =>
         (await registration.RegisterAsync(request, cancellationToken)).ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
 
-    /// <summary>ACS-03 – always 202 with MSG-ACCOUNT-20; a code is sent only to a verified identifier of an Active account.</summary>
+    /// <summary>ACS-03 – always 202 with MSG-ACCOUNT-20; an SMS code is sent only to the verified phone number of an Active account. An email identifier gets the same answer and no code.</summary>
     [HttpPost("recovery")]
     [ProducesResponseType<RecoveryStarted>(StatusCodes.Status202Accepted)]
     public async Task<IActionResult> StartRecovery(StartRecoveryRequest request, CancellationToken cancellationToken) =>

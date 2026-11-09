@@ -308,8 +308,8 @@ public class AccountRulesSqlServerTests
         public Task<IReadOnlyDictionary<Guid, string>> GetDisplayNamesAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken cancellationToken) =>
             inner.GetDisplayNamesAsync(accountIds, cancellationToken);
 
-        public Task<Account?> FindByLoginIdentifierAsync(string username, string? phoneNumber, string? email, CancellationToken cancellationToken) =>
-            inner.FindByLoginIdentifierAsync(username, phoneNumber, email, cancellationToken);
+        public Task<Account?> FindByLoginIdentifierAsync(string username, string? phoneNumber, CancellationToken cancellationToken) =>
+            inner.FindByLoginIdentifierAsync(username, phoneNumber, cancellationToken);
 
         public Task<bool> UsernameExistsAsync(string username, Guid? exceptAccountId, CancellationToken cancellationToken) =>
             inner.UsernameExistsAsync(username, exceptAccountId, cancellationToken);
@@ -319,9 +319,6 @@ public class AccountRulesSqlServerTests
 
         public Task<Account?> FindByPhoneAsync(string phoneNumber, CancellationToken cancellationToken) =>
             blind.Blind() ? Task.FromResult<Account?>(null) : inner.FindByPhoneAsync(phoneNumber, cancellationToken);
-
-        public Task<Account?> FindByVerifiedEmailAsync(string email, CancellationToken cancellationToken) =>
-            inner.FindByVerifiedEmailAsync(email, cancellationToken);
 
         public Task<Account?> FindByEmailAsync(string email, CancellationToken cancellationToken) =>
             blind.Blind() ? Task.FromResult<Account?>(null) : inner.FindByEmailAsync(email, cancellationToken);

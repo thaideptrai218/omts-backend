@@ -16,7 +16,10 @@ namespace OMTS.Api.Controllers;
 [Route("api/auth")]
 public sealed class AuthController(AuthService authService, ZaloLinkService zaloLinks, ICurrentUser currentUser) : ControllerBase
 {
-    /// <summary>UC02 – log in with username, verified phone number or verified email.</summary>
+    /// <summary>
+    /// UC02 – log in with a phone number (verified or not) or a username, and the password. An email address is not an
+    /// identifier. <c>deviceId</c> optionally names this browser or app install (base64url, at most 128 characters).
+    /// </summary>
     [EnableRateLimiting(RateLimitingExtensions.Logins)]
     [HttpPost("login")]
     [AllowAnonymous]
@@ -26,8 +29,7 @@ public sealed class AuthController(AuthService authService, ZaloLinkService zalo
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status423Locked)]
     public async Task<IActionResult> Login(LoginRequest request, CancellationToken cancellationToken)
     {
-        var client = new ClientInfo(Request.Headers.UserAgent.ToString(), HttpContext.Connection.RemoteIpAddress?.ToString());
-        return ToResponse(await authService.LoginAsync(request, client, cancellationToken));
+        return ToResponse(await authService.LoginAsync(request, HttpContext.ClientInfo(), cancellationToken));
     }
 
     /// <summary>
@@ -63,7 +65,11 @@ public sealed class AuthController(AuthService authService, ZaloLinkService zalo
     public async Task<IActionResult> RequestTraderAccess(ZaloTraderRequest request, CancellationToken cancellationToken) =>
         (await zaloLinks.RequestTraderAccessAsync(request, cancellationToken)).ToActionResult(sent => StatusCode(StatusCodes.Status202Accepted, sent));
 
-    /// <summary>A session for the account already linked to this Zalo user; 404 ZALO_NOT_LINKED otherwise.</summary>
+    /// <summary>
+    /// A session for the account already linked to this Zalo user; 404 ZALO_NOT_LINKED otherwise. 403 ZALO_DEVICE_REVOKED when
+    /// <c>deviceId</c> names a device whose newest session of the account a user or administrator ended: only <c>zalo/link</c>
+    /// opens it again.
+    /// </summary>
     [EnableRateLimiting(RateLimitingExtensions.Logins)]
     [HttpPost("zalo/login")]
     [AllowAnonymous]
@@ -75,11 +81,19 @@ public sealed class AuthController(AuthService authService, ZaloLinkService zalo
     public async Task<IActionResult> LoginWithZalo(ZaloLoginRequest request, CancellationToken cancellationToken) =>
         (await zaloLinks.LoginAsync(request, HttpContext.ClientInfo(), cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Exchanges a refresh token for new tokens; the old refresh token stops working.</summary>
+    /// <summary>
+    /// Exchanges a refresh token for new tokens; the old refresh token stops working (<c>refreshTokenRotated</c> true).
+    /// The token the previous refresh just replaced is answered for 30 seconds with a new access token and itself, echoed
+    /// back, with <c>refreshTokenRotated</c> false: the client keeps the token it holds and must not store another.
+    /// A refusal (401, or 403 when the account may no longer log in) carries the problem extension <c>reason</c>:
+    /// <c>expired</c> (lifetime ended or session gone), <c>reuse</c> (a replaced token was presented again) or <c>revoked</c>
+    /// (a user or administrator ended the session).
+    /// </summary>
     [HttpPost("refresh")]
     [AllowAnonymous]
     [ProducesResponseType<AuthTokens>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> Refresh(RefreshRequest request, CancellationToken cancellationToken) =>
         ToResponse(await authService.RefreshAsync(request, cancellationToken));
 
@@ -102,7 +116,7 @@ public sealed class AuthController(AuthService authService, ZaloLinkService zalo
             return Ok(result.Tokens);
         }
 
-        return result.Error switch
+        var problem = result.Error switch
         {
             AuthError.InvalidCredentials => ProblemResults.Create(StatusCodes.Status401Unauthorized, UserMessages.LoginIncorrect),
             AuthError.TemporarilyLocked => AppError.LoginPaused(result.PauseLeft!.Value).ToProblem(),
@@ -110,5 +124,16 @@ public sealed class AuthController(AuthService authService, ZaloLinkService zalo
             AuthError.TemporaryPasswordExpired => ProblemResults.Create(StatusCodes.Status403Forbidden, UserMessages.TemporaryPasswordExpired),
             _ => ProblemResults.Create(StatusCodes.Status401Unauthorized, UserMessages.SessionExpired),
         };
+        if (result.RefreshReason is { } reason && problem.Value is ProblemDetails details)
+        {
+            details.Extensions["reason"] = reason switch
+            {
+                RefreshFailureReason.Reuse => "reuse",
+                RefreshFailureReason.Revoked => "revoked",
+                _ => "expired",
+            };
+        }
+
+        return problem;
     }
 }

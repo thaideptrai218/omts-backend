@@ -10,10 +10,11 @@ public interface IAccountRepository
     Task<IReadOnlyDictionary<Guid, string>> GetDisplayNamesAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Account whose username is <paramref name="username"/>, or whose verified phone number / verified
-    /// email equals the normalised <paramref name="phoneNumber"/> / <paramref name="email"/> (ACS-02).
+    /// Account whose username is <paramref name="username"/>, or whose phone number equals the normalised
+    /// <paramref name="phoneNumber"/>, verified or not: the password proves the identity, and an unverified phone then
+    /// meets the phone-verification gate (ACS-02). An email address never matches.
     /// </summary>
-    Task<Account?> FindByLoginIdentifierAsync(string username, string? phoneNumber, string? email, CancellationToken cancellationToken);
+    Task<Account?> FindByLoginIdentifierAsync(string username, string? phoneNumber, CancellationToken cancellationToken);
 
     Task<bool> UsernameExistsAsync(string username, Guid? exceptAccountId, CancellationToken cancellationToken);
 
@@ -27,9 +28,6 @@ public interface IAccountRepository
 
     /// <summary>The account linked to this Zalo user (Zalo Mini App "Liên kết tài khoản").</summary>
     Task<Account?> FindByZaloAccountIdAsync(string zaloAccountId, CancellationToken cancellationToken);
-
-    /// <summary>The account whose verified email is this one: only a verified email logs in and receives codes (BR-ACCOUNT-03).</summary>
-    Task<Account?> FindByVerifiedEmailAsync(string email, CancellationToken cancellationToken);
 
     /// <summary>Any account using this email, verified or not (emails are unique system-wide, BR-ACCOUNT-02).</summary>
     Task<Account?> FindByEmailAsync(string email, CancellationToken cancellationToken);

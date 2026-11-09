@@ -22,6 +22,12 @@ public sealed class JwtOptions
     public TimeSpan MobileRefreshTokenLifetime { get; set; } = TimeSpan.FromDays(30);
     public TimeSpan MobileSessionMaxLifetime { get; set; } = TimeSpan.FromDays(90);
 
+    /// <summary>
+    /// How long the refresh token a rotation replaced still gets an access token (without a new refresh token), for a client
+    /// whose rotation response was lost or raced with another request. Any other old token is replay and ends the session.
+    /// </summary>
+    public TimeSpan RefreshGracePeriod { get; set; } = TimeSpan.FromSeconds(30);
+
     public bool HasSigningKey => Encoding.UTF8.GetByteCount(SigningKey) >= MinimumSigningKeyBytes;
 
     public SymmetricSecurityKey CreateSigningKey()

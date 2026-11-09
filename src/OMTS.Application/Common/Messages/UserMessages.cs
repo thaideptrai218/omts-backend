@@ -1138,6 +1138,10 @@ public static class UserMessages
     /// <summary>Not in the SRS list: the Zalo user has not linked an account yet (the Mini App stays a guest).</summary>
     public static readonly UserMessage ZaloNotLinked = new(Legacy.ZaloNotLinked, "This Zalo account is not linked to OMTS yet.");
 
+    /// <summary>Not in the SRS list: this device was signed out by the user or an administrator; only linking the account again opens it.</summary>
+    public static readonly UserMessage ZaloDeviceRevoked = new(
+        Legacy.ZaloDeviceRevoked, "This device was signed out of OMTS. Select Link account to sign in again.");
+
     /// <summary>What a text shows for a value that is not saved.</summary>
     private const string NoValue = "–";
 

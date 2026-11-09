@@ -15,7 +15,8 @@ public static class HealthCheckEndpointExtensions
     /// active Owner). It depends on business data (locking the only Owner turns it 503), so it must not be used as a
     /// probe that takes instances out of rotation. The
     /// checked endpoints answer 503 with the names of the failing checks only; all are anonymous and never
-    /// return business data.
+    /// return business data. A Degraded check (the Redis revocation store down or cold) is listed but answers 200:
+    /// requests are then checked against the database, so the deployment still works.
     /// </summary>
     public static void MapOmtsHealthChecks(this IEndpointRouteBuilder endpoints)
     {
@@ -30,7 +31,7 @@ public static class HealthCheckEndpointExtensions
         ResultStatusCodes =
         {
             [HealthStatus.Healthy] = StatusCodes.Status200OK,
-            [HealthStatus.Degraded] = StatusCodes.Status503ServiceUnavailable,
+            [HealthStatus.Degraded] = StatusCodes.Status200OK,
             [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable,
         },
         ResponseWriter = (context, report) => context.Response.WriteAsJsonAsync(new

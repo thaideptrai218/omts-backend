@@ -200,6 +200,7 @@ public static class MessageCodes
         public const string ZaloPhoneUnsupported = "ZALO_PHONE_UNSUPPORTED";
         public const string ZaloAlreadyLinked = "ZALO_ALREADY_LINKED";
         public const string ZaloNotLinked = "ZALO_NOT_LINKED";
+        public const string ZaloDeviceRevoked = "ZALO_DEVICE_REVOKED";
         public const string LicenseReplaced = "LICENSE_REPLACED";
 
         /// <summary>
@@ -216,7 +217,7 @@ public static class MessageCodes
         public static readonly IReadOnlySet<string> KeptAsCode = new HashSet<string>(StringComparer.Ordinal)
         {
             Msg04, Msg05, Msg06, Msg19, Msg57, Msg58, MiniAppNotification,
-            ZaloTokenInvalid, ZaloPhoneTokenInvalid, ZaloPhoneNotFound, ZaloApprovalPending, ZaloRequestRejected, ZaloAccountExists, ZaloPhoneUnsupported, ZaloAlreadyLinked, ZaloNotLinked,
+            ZaloTokenInvalid, ZaloPhoneTokenInvalid, ZaloPhoneNotFound, ZaloApprovalPending, ZaloRequestRejected, ZaloAccountExists, ZaloPhoneUnsupported, ZaloAlreadyLinked, ZaloNotLinked, ZaloDeviceRevoked,
             NotFound, TooManyRequests, UnexpectedError, PasswordChangeRequired,
         };
     }

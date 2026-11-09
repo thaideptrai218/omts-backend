@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using OMTS.Application.Features.Verification;
@@ -17,6 +18,7 @@ using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Infrastructure.Bootstrap;
 using OMTS.Infrastructure.HealthChecks;
 using OMTS.Infrastructure.Identity;
+using OMTS.Infrastructure.Identity.Revocation;
 using OMTS.Infrastructure.Jobs;
 using OMTS.Infrastructure.Messaging;
 using OMTS.Infrastructure.Messaging.Fakes;
@@ -30,6 +32,7 @@ using OMTS.Infrastructure.Persistence.Seed;
 using OMTS.Infrastructure.Reports;
 using OMTS.Infrastructure.Storage;
 using OMTS.Infrastructure.Zalo;
+using StackExchange.Redis;
 
 namespace OMTS.Infrastructure;
 
@@ -41,6 +44,7 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton<PermissionCacheInvalidationInterceptor>();
+        services.AddSingleton<SessionRevocationInterceptor>();
         // Scoped (it reads the current user): works because AddDbContext builds the options per scope.
         // Switching to DbContext pooling or a context factory would need another way to pass the user.
         services.AddScoped<AuditableEntityStampInterceptor>();
@@ -124,6 +128,7 @@ public static class DependencyInjection
 
         services.AddOptions<JwtOptions>().Bind(configuration.GetSection(JwtOptions.SectionName));
         services.AddSingleton<ITokenService, JwtTokenService>();
+        services.AddSessionRevocation(configuration);
         services.AddSingleton<IVerificationCodeHasher, HmacVerificationCodeHasher>();
         services.AddOptions<VerificationLimitOptions>().Bind(configuration.GetSection(VerificationLimitOptions.SectionName));
         services.AddSingleton<IPasswordHasher, PasswordHasher>();
@@ -166,6 +171,14 @@ public static class DependencyInjection
             .ValidateOnStart();
         services.AddSingleton<OrphanFileCleanupJob>();
         services.AddHostedService<OrphanFileCleanupHostedService>();
+
+        // Sessions that expired or were revoked long ago (and the device, address and browser they carry)
+        services.AddOptions<LoginSessionCleanupOptions>()
+            .Bind(configuration.GetSection(LoginSessionCleanupOptions.SectionName))
+            .Validate(o => o.Retention >= LoginSessionCleanupOptions.MinimumRetention, $"{LoginSessionCleanupOptions.SectionName}:Retention must be at least 1.00:00:00.")
+            .ValidateOnStart();
+        services.AddSingleton<LoginSessionCleanupJob>();
+        services.AddHostedService<LoginSessionCleanupHostedService>();
         services.AddHealthChecks().AddReadinessChecks();
 
         return services;
@@ -179,7 +192,40 @@ public static class DependencyInjection
         options.AddInterceptors(
             provider.GetRequiredService<AuditableEntityStampInterceptor>(),
             provider.GetRequiredService<PermissionCacheInvalidationInterceptor>(),
+            provider.GetRequiredService<SessionRevocationInterceptor>(),
             provider.GetRequiredService<PushOutboxInterceptor>());
+
+    // Redis or the database is picked when first resolved, from the final configuration. Without a Redis connection
+    // string (and with Mode=Sql) nothing connects to Redis and every request is checked against the database.
+    private static void AddSessionRevocation(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<SessionRevocationOptions>()
+            .Bind(configuration.GetSection(SessionRevocationOptions.SectionName))
+            .Configure(o => o.RedisConnectionString = configuration.GetConnectionString(SessionRevocationOptions.RedisConnectionStringName))
+            .Validate(o => o.IsValid(out _), $"Invalid {SessionRevocationOptions.SectionName} configuration; see the README.")
+            .ValidateOnStart();
+
+        services.AddSingleton<RevocationSweepSignal>();
+        services.AddSingleton<RedisCircuitBreaker>();
+        services.AddSingleton<IConnectionMultiplexer>(provider =>
+        {
+            var settings = provider.GetRequiredService<IOptions<SessionRevocationOptions>>().Value;
+            var redis = ConfigurationOptions.Parse(settings.RedisConnectionString!);
+            // Never fail the host because Redis is down, and never queue commands for a Redis that is not there.
+            redis.AbortOnConnectFail = false;
+            redis.BacklogPolicy = BacklogPolicy.FailFast;
+            redis.ConnectTimeout = (int)Math.Max(settings.CommandTimeout.TotalMilliseconds, 2000);
+            redis.SyncTimeout = (int)settings.CommandTimeout.TotalMilliseconds;
+            redis.AsyncTimeout = (int)settings.CommandTimeout.TotalMilliseconds;
+            return ConnectionMultiplexer.Connect(redis);
+        });
+        services.AddSingleton<RedisSessionRevocationStore>();
+        services.AddSingleton<SqlSessionRevocationStore>();
+        services.AddSingleton<ISessionRevocationStore>(provider => provider.GetRequiredService<IOptions<SessionRevocationOptions>>().Value.UseRedis
+            ? provider.GetRequiredService<RedisSessionRevocationStore>()
+            : provider.GetRequiredService<SqlSessionRevocationStore>());
+        services.AddHostedService<SessionRevocationSweeper>();
+    }
 
     // Providers are picked when first resolved, from the final configuration (tests and environments
     // override it after this method runs).
@@ -327,6 +373,10 @@ public static class DependencyInjection
 
     private static void AddReadinessChecks(this IHealthChecksBuilder builder)
     {
+        // Degraded, never Unhealthy: without Redis requests are slower but still correctly checked.
+        builder.AddTypeActivatedCheck<SessionRevocationReadinessCheck>(
+            SessionRevocationReadinessCheck.Name, failureStatus: HealthStatus.Degraded, tags: [DeploymentReadinessCheck.Tag]);
+
         foreach (var kind in Enum.GetValues<ReadinessCheckKind>())
         {
             var tags = kind is ReadinessCheckKind.Database or ReadinessCheckKind.Migrations

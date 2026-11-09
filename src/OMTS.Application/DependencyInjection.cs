@@ -55,6 +55,7 @@ public static class DependencyInjection
 
         services.AddSingleton(provider => new UnknownLoginCounter(timeProvider: provider.GetRequiredService<TimeProvider>()));
         services.AddScoped<AuthService>();
+        services.AddScoped<SessionManagementService>();
         services.AddScoped<ZaloLinkService>();
         services.AddScoped<ZaloLocationService>();
 

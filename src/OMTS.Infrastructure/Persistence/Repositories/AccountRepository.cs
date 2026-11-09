@@ -18,11 +18,9 @@ internal sealed class AccountRepository(OmtsDbContext db) : IAccountRepository
                 .Where(a => accountIds.Contains(a.Id))
                 .ToDictionaryAsync(a => a.Id, a => a.DisplayName, cancellationToken);
 
-    public Task<Account?> FindByLoginIdentifierAsync(string username, string? phoneNumber, string? email, CancellationToken cancellationToken) =>
+    public Task<Account?> FindByLoginIdentifierAsync(string username, string? phoneNumber, CancellationToken cancellationToken) =>
         db.Accounts.FirstOrDefaultAsync(
-            a => a.Username == username
-                || (phoneNumber != null && a.PhoneNumber == phoneNumber && a.PhoneVerifiedAt != null)
-                || (email != null && a.Email == email && a.EmailVerifiedAt != null),
+            a => a.Username == username || (phoneNumber != null && a.PhoneNumber == phoneNumber),
             cancellationToken);
 
     public Task<bool> UsernameExistsAsync(string username, Guid? exceptAccountId, CancellationToken cancellationToken) =>
@@ -42,9 +40,6 @@ internal sealed class AccountRepository(OmtsDbContext db) : IAccountRepository
 
     public Task<Account?> FindByZaloAccountIdAsync(string zaloAccountId, CancellationToken cancellationToken) =>
         db.Accounts.FirstOrDefaultAsync(a => a.ZaloAccountId == zaloAccountId, cancellationToken);
-
-    public Task<Account?> FindByVerifiedEmailAsync(string email, CancellationToken cancellationToken) =>
-        db.Accounts.FirstOrDefaultAsync(a => a.Email == email && a.EmailVerifiedAt != null, cancellationToken);
 
     public Task<Account?> FindByEmailAsync(string email, CancellationToken cancellationToken) =>
         db.Accounts.FirstOrDefaultAsync(a => a.Email == email, cancellationToken);

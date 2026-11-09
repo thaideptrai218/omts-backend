@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OMTS.Application.Common.Constants;
+using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Features.Auth;
 using OMTS.Infrastructure.Identity;
 
@@ -42,6 +43,10 @@ public static class JwtAuthenticationExtensions
 
     // A valid signature is not enough: logout, password change or locking the account revokes the
     // session, and its access tokens must stop working immediately (NFR-01).
+    // The revocation store answers first. It lists revoked sessions only (the access token's own expiry covers the
+    // session's absolute end), so an account locked outside the application, without its sessions being revoked, stays
+    // accepted for up to the access token's lifetime. Only when the store cannot answer (unreachable, cold, not
+    // configured) does the request go to the database, which also checks the account status.
     private static async Task RejectRevokedSessionAsync(TokenValidatedContext context)
     {
         var principal = context.Principal;
@@ -52,7 +57,17 @@ public static class JwtAuthenticationExtensions
             return;
         }
 
-        var authService = context.HttpContext.RequestServices.GetRequiredService<AuthService>();
+        var services = context.HttpContext.RequestServices;
+        switch (await services.GetRequiredService<ISessionRevocationStore>().GetStatusAsync(sessionId))
+        {
+            case SessionRevocationStatus.Revoked:
+                context.Fail("Session is no longer active.");
+                return;
+            case SessionRevocationStatus.NotRevoked:
+                return;
+        }
+
+        var authService = services.GetRequiredService<AuthService>();
         if (!await authService.IsSessionActiveAsync(accountId, sessionId, context.HttpContext.RequestAborted))
         {
             context.Fail("Session is no longer active.");

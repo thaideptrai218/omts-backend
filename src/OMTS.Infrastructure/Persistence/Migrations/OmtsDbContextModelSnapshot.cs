@@ -1420,6 +1420,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("AccountId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AuthMethod")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("ClientType")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -1427,6 +1432,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("DeviceKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("DeviceName")
                         .HasMaxLength(200)
@@ -1439,6 +1448,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("LastRefreshedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<DateTimeOffset?>("PreviousRefreshTokenGraceEndsAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("PreviousRefreshTokenHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
                     b.Property<DateTimeOffset>("RefreshTokenExpiresAt")
                         .HasColumnType("datetimeoffset");
 
@@ -1447,6 +1463,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("RevokeCause")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("RevokeReason")
                         .HasMaxLength(200)
@@ -1461,10 +1481,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AccountId");
+                    b.HasIndex("PreviousRefreshTokenHash")
+                        .HasFilter("[PreviousRefreshTokenHash] IS NOT NULL");
 
                     b.HasIndex("RefreshTokenHash")
                         .IsUnique();
+
+                    b.HasIndex("RevokedAt");
+
+                    b.HasIndex("AccountId", "DeviceKey");
 
                     b.ToTable("LoginSessions");
                 });
