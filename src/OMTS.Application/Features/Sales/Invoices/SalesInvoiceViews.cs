@@ -116,7 +116,7 @@ public sealed class SalesInvoiceViews(
         var ownPayments = invoice.Payments.Where(p => p.Kind == CustomerPaymentKind.Payment && p.StatusId != StatusIds.CustomerPayment.Cancelled).Sum(p => p.Amount);
         var state = SalesInvoicePaidState.Of(invoice.Id, invoice.StatusId, invoice.Total, invoice.CustomerId, ownPayments, allocation);
         return new SalesInvoiceDebtEffect(
-            state.IsPaid, state.Covered, state.Unpaid, invoice.CustomerId is not null && invoice.StatusId != StatusIds.SalesInvoice.Cancelled, allocation?.Debt);
+            state.IsPaid, state.Covered, state.Unpaid, invoice.CustomerId is not null && invoice.StatusId != StatusIds.SalesInvoice.Cancelled && !SalesInvoiceAllowedActions.HasSalesReturn(invoice), allocation?.Debt);
     }
 
     private async Task<SalesInvoiceCallerRights> RightsAsync(Guid zoneId, CancellationToken cancellationToken) =>

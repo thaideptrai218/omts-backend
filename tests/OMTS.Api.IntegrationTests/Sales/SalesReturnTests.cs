@@ -311,6 +311,42 @@ public class SalesReturnTests
     }
 
     [Fact]
+    public async Task A_push_that_fails_undoes_nothing()
+    {
+        var (api, sale) = await StartAsync();
+        using var _ = api;
+        var owner = sale.Owner.Client;
+        var invoice = await OnDebtAsync(sale, sale.LotId, 10m);
+        api.RefusePushTo(sale.Owner.Account.Id);
+
+        await owner.ReturnedAsync(invoice.Id(), ReturnBody(invoice, "BackForSale"));
+
+        Assert.Single(await api.ReturnsOfAsync(invoice.Id()));
+        Assert.Single(await api.ReturnNoticesAsync(invoice.Id()));
+    }
+
+    // The return keeps its record of a line by id, with no foreign key: after a cancelled return, a correction may remove the line.
+    [Fact]
+    public async Task A_correction_after_a_cancelled_return_may_remove_a_line_of_that_return()
+    {
+        var (api, sale) = await StartAsync();
+        using var _ = api;
+        var owner = sale.Owner.Client;
+        var sold = await owner.SellAsync(Invoice(
+            sale.CustomerId, [Line(sale.ProductId, sale.LotId, 5m), Line(sale.ProductId, sale.OtherLotId, 5m)], Cash(0m, "PayLater", payLaterOwnerAgreed: true), sale.LotId, sale.OtherLotId));
+        var invoice = await owner.InvoiceAsync(sold.GetProperty("invoice").Id());
+        var saved = await owner.ReturnedAsync(invoice.Id(), ReturnBody(invoice, "BackForSale"));
+        await (await owner.CancelSalesReturnAsync(saved.GetProperty("return").Id(), CancelBody(saved.GetProperty("return")))).ReadAsync(HttpStatusCode.OK);
+        var restored = await owner.InvoiceAsync(invoice.Id());
+
+        var corrected = await owner.CorrectedAsync(invoice.Id(), DataEntry(restored, [Line(sale.ProductId, sale.LotId, 5m)], sale.LotId));
+
+        Assert.Equal(1, corrected.GetProperty("invoice").GetProperty("lines").GetArrayLength());
+        var cancelled = await (await owner.GetSalesReturnAsync(saved.GetProperty("return").Id())).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal(2, cancelled.GetProperty("lines").GetArrayLength());
+    }
+
+    [Fact]
     public async Task The_preview_shows_the_lines_the_value_and_the_claims()
     {
         var (api, sale) = await StartAsync();

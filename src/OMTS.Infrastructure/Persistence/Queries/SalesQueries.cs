@@ -261,14 +261,16 @@ internal sealed class CustomerDebtQuery(OmtsDbContext db) : ICustomerDebtQuery
             returnRows = returnRows.Where(r => ids.Contains(r.Invoice.CustomerId!.Value));
         }
 
-        var invoices = await invoiceRows
-            .GroupBy(i => i.CustomerId!.Value)
-            .Select(g => new { CustomerId = g.Key, Total = g.Sum(i => i.Total) })
-            .ToDictionaryAsync(x => x.CustomerId, x => x.Total, cancellationToken);
-        var returns = await returnRows
-            .GroupBy(r => r.Invoice.CustomerId!.Value)
-            .Select(g => new { CustomerId = g.Key, Value = g.Sum(r => r.Value) })
-            .ToDictionaryAsync(x => x.CustomerId, x => x.Value, cancellationToken);
+        // One command for invoices and returns: an invoice has at most one return that stands (the filtered unique index), so the join repeats no total.
+        var standing = db.SalesReturns.AsNoTracking().Where(SalesReturn.Standing);
+        var invoiceSums = await (
+                from invoice in invoiceRows
+                from salesReturn in standing.Where(r => r.InvoiceId == invoice.Id).DefaultIfEmpty()
+                group new { invoice.Total, Value = salesReturn == null ? 0m : salesReturn.Value } by invoice.CustomerId!.Value into g
+                select new { CustomerId = g.Key, Total = g.Sum(x => x.Total), Returns = g.Sum(x => x.Value) })
+            .ToListAsync(cancellationToken);
+        var invoices = invoiceSums.ToDictionary(x => x.CustomerId, x => x.Total);
+        var returns = invoiceSums.ToDictionary(x => x.CustomerId, x => x.Returns);
         var payments = await paymentRows
             .GroupBy(p => new { CustomerId = p.CustomerId!.Value, p.Kind })
             .Select(g => new { g.Key.CustomerId, g.Key.Kind, Amount = g.Sum(p => p.Amount), Discount = g.Sum(p => p.DiscountAmount) })

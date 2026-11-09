@@ -6,7 +6,9 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Harvest;
+using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Application.Features.Sales.Payments;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Harvest;
@@ -24,6 +26,7 @@ public sealed class SalesReturnCancellationService(
     ISalesReturnRepository salesReturns,
     IHarvestLotSalesQuery lotSales,
     SalesReturnViews views,
+    ZoneAccessGuard zoneAccess,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
     AuditLogService audit,
@@ -41,7 +44,13 @@ public sealed class SalesReturnCancellationService(
             return AppError.NotFound;
         }
 
-        if (!salesReturn.IsStanding)
+        var refusal = SalesInvoiceAllowedActions.CancelReturnRefusal(salesReturn.IsStanding, await zoneAccess.IsCooperativeOwnerAsync(cancellationToken));
+        if (refusal == SalesReturnRefusal.NotPermitted)
+        {
+            return AppError.Forbidden;
+        }
+
+        if (refusal == SalesReturnRefusal.NoSalesReturn)
         {
             return AppError.Conflict(UserMessages.WrongStatus($"{SalesReturnRules.ObjectName} {salesReturn.Code}", statusCatalog.DisplayNameOf(salesReturn.StatusId)));
         }
