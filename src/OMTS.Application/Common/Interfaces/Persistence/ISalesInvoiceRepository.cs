@@ -14,7 +14,7 @@ public interface ISalesInvoiceRepository
     /// <summary>The invoice saved with this key, if any: a repeated save returns it (BR-SALE-08 has no draft, so a second tap must not sell twice).</summary>
     Task<Guid?> FindByDeduplicationKeyAsync(string key, CancellationToken cancellationToken);
 
-    /// <summary>The invoice with its zone, customer, lines (product and lot) and payments, read only.</summary>
+    /// <summary>The invoice with its zone, customer, lines (product and lot), price cuts and payments, read only.</summary>
     Task<SalesInvoice?> GetAsync(Guid invoiceId, CancellationToken cancellationToken);
 
     /// <summary>The invoice with its customer, lines and payments, tracked: what sending it (SALE-06) and the end of the sale change and read.</summary>
