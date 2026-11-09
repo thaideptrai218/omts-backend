@@ -21,6 +21,7 @@ using OMTS.Application.Features.Farming.Zones;
 using OMTS.Application.Features.Files;
 using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Traceability.Corrections;
+using OMTS.Application.Features.Traceability.Origin;
 using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Application.Features.Traceability.Tracing;
 using OMTS.Application.Features.Traceability.Withdrawal;
@@ -187,6 +188,8 @@ public static class DependencyInjection
         services.AddScoped<LotPublishService>();
         // TRACE-02 – trace a lot backward and forward, and export the trace
         services.AddScoped<LotTraceService>();
+        // ORIGIN-01 – the public provenance page of an invoice QR code (anonymous)
+        services.AddScoped<ProvenancePageService>();
         // TRACE-04 – withdraw the origin information of a lot and tell its traders
         services.AddScoped<WithdrawalNotices>();
         services.AddScoped<LotWithdrawalService>();

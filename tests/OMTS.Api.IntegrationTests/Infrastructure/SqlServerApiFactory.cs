@@ -33,6 +33,7 @@ public sealed class SqlServerApiFactory(SqlServerTestDatabase database, IReadOnl
             ["Jwt:SigningKey"] = _signingKey,
             ["RateLimits:CodeRequestsPerMinute"] = "100000",
             ["RateLimits:LoginsPerMinute"] = "100000",
+            ["RateLimits:ProvenancePagesPerMinute"] = "100000",
             ["Jobs:ZoneLicenseReminder:CatchUpOnStart"] = "false",
             ["Jobs:WaterMeasurementOverdue:CatchUpOnStart"] = "false",
             ["Jobs:EmploymentEnd:CatchUpOnStart"] = "false",

@@ -481,6 +481,41 @@ public static class UserMessages
         Parameters = new Dictionary<string, object?> { ["lot_code"] = lotCode },
     };
 
+    // ---- MSG-ORIGIN ----
+
+    /// <summary>
+    /// MSG-ORIGIN-01 (ORIGIN-01.1): a lot of the provenance page is Withdrawn. The page shows the withdrawal date and the cooperative phone, never the reason (BR-TRACE-06,
+    /// BR-ORIGIN-05).
+    /// </summary>
+    /// <param name="cooperativePhone">Null shows "–": the profile was saved before the phone number became mandatory.</param>
+    public static UserMessage ProvenanceLotWithdrawn(string cooperativeShortName, string lotCode, DateOnly withdrawalDate, string? cooperativePhone) => new(
+        Origin01,
+        $"{cooperativeShortName} withdrew the origin information of lot {lotCode} on {Date(withdrawalDate)}. For details, please call {cooperativePhone ?? NoValue}.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["cooperative_short_name"] = cooperativeShortName, ["lot_code"] = lotCode, ["withdrawal_date"] = withdrawalDate, ["cooperative_phone"] = cooperativePhone,
+        },
+    };
+
+    /// <summary>MSG-ORIGIN-02 (ORIGIN-01.2): no lot of the invoice is Published or Withdrawn (BR-ORIGIN-05); the page does not say why.</summary>
+    public static UserMessage ProvenanceNoLots(string? cooperativePhone) => new(
+        Origin02, $"No origin information is shown for this invoice. For details, please call {cooperativePhone ?? NoValue}.")
+    {
+        Parameters = new Dictionary<string, object?> { ["cooperative_phone"] = cooperativePhone },
+    };
+
+    /// <summary>MSG-ORIGIN-03 (ORIGIN-01.0.E1): no sales invoice has the QR code of the link; also for a link that is no QR code at all, so nothing tells them apart.</summary>
+    public static readonly UserMessage ProvenanceUnknownQrCode = new(
+        Origin03, "No invoice was found for this QR code. Please scan the QR code on the invoice again, or open the link in the invoice message.");
+
+    /// <summary>MSG-ORIGIN-04 (ORIGIN-01.0.E2): the invoice of the QR code is Cancelled; the page shows the cooperative block only (BR-ORIGIN-05).</summary>
+    public static UserMessage ProvenanceInvoiceCancelled(string? cooperativePhone) => new(
+        Origin04, $"This invoice has been cancelled, so no origin information is shown. For details, please call {cooperativePhone ?? NoValue}.")
+    {
+        Parameters = new Dictionary<string, object?> { ["cooperative_phone"] = cooperativePhone },
+    };
+
     /// <summary>MSG-WATER-06 (GFR-04): reminder to measure the water of a zone.</summary>
     /// <param name="lastDate">The business day of the latest measurement, or the start of the overdue period when there is none.</param>
     public static UserMessage WaterMeasurementOverdue(string zoneName, DateOnly lastDate) => new(
@@ -1083,6 +1118,9 @@ public static class UserMessages
 
     /// <summary>Not in the SRS list: the Zalo user has not linked an account yet (the Mini App stays a guest).</summary>
     public static readonly UserMessage ZaloNotLinked = new(Legacy.ZaloNotLinked, "This Zalo account is not linked to OMTS yet.");
+
+    /// <summary>What a text shows for a value that is not saved.</summary>
+    private const string NoValue = "–";
 
     private static string Capitalized(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
 
