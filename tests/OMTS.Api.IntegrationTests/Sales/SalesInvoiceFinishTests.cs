@@ -61,7 +61,8 @@ public class SalesInvoiceFinishTests
         Assert.DoesNotContain(token, audit.After ?? string.Empty);
         Assert.Contains("\"QrCodeCreated\":true", audit.After);
         Assert.Equal(sale.ZoneId, audit.ZoneId);
-        var read = await (await sale.Owner.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK);
+        // Read by the same caller: allowedActions is what this caller is offered (SALE-09.1 step 3).
+        var read = await (await sale.Manager.Client.GetAsync($"/api/sales-invoices/{invoice.Id()}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(view.GetRawText(), read.GetRawText());
     }
 

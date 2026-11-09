@@ -17,7 +17,7 @@ public interface ISalesInvoiceRepository
     /// <summary>The invoice with this code, cancelled ones included: what a transfer with its VietQR code pays (GFR-08). Null when no invoice was saved with it.</summary>
     Task<SalesInvoiceRef?> FindByCodeAsync(string code, CancellationToken cancellationToken);
 
-    /// <summary>The invoice with its zone, customer, lines (product and lot) and payments, read only.</summary>
+    /// <summary>The invoice with its zone, customer, lines (product and lot), price cuts and payments, read only.</summary>
     Task<SalesInvoice?> GetAsync(Guid invoiceId, CancellationToken cancellationToken);
 
     /// <summary>The invoice with its customer, lines and payments, tracked: what sending it (SALE-06) and the end of the sale change and read.</summary>

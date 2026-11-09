@@ -25,6 +25,7 @@ internal sealed class SalesInvoiceRepository(OmtsDbContext db) : ISalesInvoiceRe
             .Include(i => i.Customer)
             .Include(i => i.Lines).ThenInclude(l => l.Product)
             .Include(i => i.Lines).ThenInclude(l => l.HarvestLot)
+            .Include(i => i.PriceCuts)
             .Include(i => i.Payments)
             .FirstOrDefaultAsync(i => i.Id == invoiceId, cancellationToken);
 

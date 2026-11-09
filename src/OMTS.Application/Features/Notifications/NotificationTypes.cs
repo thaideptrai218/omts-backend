@@ -83,6 +83,9 @@ public static class NotificationTypes
     /// </summary>
     public const string CustomerPaymentTransaction = "CUSTOMER_PAYMENT_TRANSACTION";
 
+    /// <summary>MSG-TRACE-05, the withdrawal of the origin information of a lot the trader bought, to the trader account (TRACE-04.1, BR-TRACE-07); not mandatory (BR-ACCOUNT-11).</summary>
+    public const string ProvenanceWithdrawn = "PROVENANCE_WITHDRAWN";
+
     public static readonly IReadOnlyList<NotificationTypeDefinition> All =
     [
         new(WaterAlert, "Water alert", AlwaysPush, [CooperativeOwner, ZoneManager],
@@ -136,6 +139,8 @@ public static class NotificationTypes
         // Customer payments have no zone (BR-FARM-08); a money type, so its SMS carries the code and the amount only.
         new(CustomerPaymentTransaction, "Customer payment transaction", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
             NotificationSmsRule.MoneyToOwner("amount")),
+        // Opens nothing: the trader is asked to call the cooperative, and the list row has no related record (a lot is not the trader's record).
+        new(ProvenanceWithdrawn, "Origin information withdrawn", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
         // A trader asked for an account from the Zalo Mini App, and the Owner's approval (ACS-01, decision of 28/10/2026).
         new(TraderAccessRequested, "Trader access requested", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         new(TraderAccessApproved, "Trader access approved", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),

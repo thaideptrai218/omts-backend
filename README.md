@@ -230,6 +230,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | `PURCHASE_RECEIPT_CANCELLED_ADVANCE` | MSG-PURCHASE-08, when a cancelled receipt leaves the supplier debt below zero | unless turned off | Owner, Accountant |
 | `SUPPLIER_TRANSACTION` | MSG-PURCHASE-04, for a supplier payment, money paid back or a cancelled one, also when the Owner did it | always (mandatory) | Owner |
 | `CUSTOMER_PAYMENT_TRANSACTION` | MSG-DEBT-03, for a customer payment, money paid back or a cancellation saved in DEBT-02, and one notice per list of confirmations (no related record when the list holds several payments), also when the Owner did it | always (mandatory) | Owner |
+| `PROVENANCE_WITHDRAWN` | MSG-TRACE-05, when the Owner withdraws the origin information of a lot the trader bought (TRACE-04); the row opens nothing | unless turned off | Trader |
 | `TRADER_ACCESS_REQUESTED` | a trader asked for an account from the Zalo Mini App (`POST /api/auth/zalo/trader-requests`) | unless turned off | Owner |
 | `TRADER_ACCESS_APPROVED` | the Owner approved the request (`POST /api/trader-requests/{id}/approve`) | unless turned off | Trader |
 
@@ -256,6 +257,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   | MSG-PURCHASE-04 | `user_name`, `transaction_kind` (`Payment`, `PaidBack`, `PaymentCancelled`, `PaidBackCancelled`), `payment_code`, `amount`, `supplier_name`, `debt_amount` (the debt after it; below zero: paid in advance) |
   | MSG-PURCHASE-08 | `user_name`, `receipt_code`, `supplier_name`, `advance_amount` (VND paid in advance, positive) |
   | MSG-DEBT-03 | one transaction: `user_name`, `transaction_kind` (`Payment`, `PaidBack`, `PaymentCancelled`, `PaidBackCancelled`), `payment_code`, `amount`, `customer_name` (null: no customer profile), `debt_amount` (the debt after it; below zero: money owed back; null without a profile); a list of confirmations: `user_name`, `transaction_kind` = `Confirmations`, `confirmed_codes` (the first 10), `confirmed_count`, `confirmed_more_count`, `confirmed_amount`, `cancelled_codes` (the first 10), `cancelled_count`, `cancelled_more_count`, `cancelled_amount`, `amount` (both together), `debts`: `[{ customer_name, debt_amount }]` after the cancellations (the first 5), `debts_more_count`; the text names the same ("PT000001, …, PT000010 and 189 more"), so a list of 200 fits the notification row |
+  | MSG-TRACE-05 | `cooperative_short_name`, `lot_code`, `invoice_codes` (list), `cooperative_phone` (null: none set up yet, the text says "the cooperative") |
 - `GET /api/me/notifications/{id}/open` checks the access again (GFR-02): 403 MSG-GEN-08 when the user may no longer
   open the record (e.g. a revoked zone–role pair), 404 MSG-ACCOUNT-22 when the record was removed. A push carries the
   notification id.
@@ -269,7 +271,14 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   result and sends nothing) and `POST /api/sales-invoices/{id}/resend` (only after `finish`, not while the latest sending
   is Sending; a Sending row older than 2 minutes reads Not sent); a profile without a trader account gets a row with no
   recipient, and a walk-in customer or a profile without a phone gets a Not sent row with no phone (error code
-  `NO_CUSTOMER_PROFILE` / `NO_PHONE_NUMBER`, MSG-SALE-16). TRACE-04 follows.
+  `NO_CUSTOMER_PROFILE` / `NO_PHONE_NUMBER`, MSG-SALE-16). The withdrawal of a lot's origin information (TRACE-04, Owner
+  only: `GET /api/harvest-lots/{id}/withdraw-preview`, `POST /api/harvest-lots/{id}/withdraw` with `{ reason }`) uses them
+  too: one MSG-TRACE-05 per trader of the current invoices of the lot, listing their invoices, kept with the lot as its
+  record; a profile without a phone gets a Not sent row (`NO_PHONE_NUMBER`), a walk-in invoice nothing. The notices are
+  sent at the same time after the save (the answer waits about one send). The answer lists each notice with its delivery
+  status; a failed send undoes nothing and is marked `toCall`; `GET /api/harvest-lots/{id}/withdrawal-notices` reads the
+  notices of the latest withdrawal again. There is no resend. Texts and parameters longer than their columns (2000) are
+  cut / left out, as for list rows.
 - Mandatory types also go out as one SMS (PM decision OMTS-216, 03/11): to the Owners among the recipients and, for the
   water alert and its withdrawal, to the Zone Managers of the zone among them. The rule is data on the type
   (`NotificationSmsRule`, `NotificationTypes.All`). The SMS shares the queue of the push: sent once, only after the save
@@ -281,6 +290,53 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   a short minimum (zone name or list, raft code or license type name, license number; note, customer, product), then the
   closing sentence, then the longer wording of the water alert, then the free text below its minimum. Logs hold the type
   and the account id only, never what a provider answered.
+
+### Public provenance page
+
+`GET /api/public/provenance/{qrToken}?lang=vi|en` (ORIGIN-01, SCR-ORIGIN-01) is what the web page `/origin/{qrToken}` of the
+invoice QR code loads. It needs no login and a logged-in user gets the same answer (BR-ORIGIN-01); it is limited per client IP
+(`RateLimits:ProvenancePagesPerMinute`, 429 `TOO_MANY_REQUESTS`) and sent with `Cache-Control: no-store`, so each opening shows the
+current data (BR-TRACE-05: a TRACE-03 correction or a new publish shows at once). The token is the 128-bit random base64url code
+SALE-05 gave the invoice (22 characters); only the exact code opens the page.
+
+- `lang`: `vi` by default (BR-ORIGIN-02, anything but `en` is Vietnamese). The messages (`message`) and the cooperative
+  introduction follow it (the Vietnamese introduction when the English one is empty); every message also carries `messageCode` and
+  `messageParams` (atomic values: `cooperative_short_name`, `lot_code`, `withdrawal_date`, `cooperative_phone`). The Vietnamese
+  MSG-ORIGIN texts are proposals until the PM confirms them (the SRS gives English only).
+- 200 `{ language, status, message, messageCode, messageParams, invoice: { code, date } | null, cooperative, lots[] }`:
+  - `status` `Ok`: `lots` holds the lots of the invoice that are Published or Withdrawn, in line order, each `{ lotCode, products
+    (names sold from the lot on this invoice), originState, withdrawalDate, message, messageCode, messageParams, origin }`. A
+    Published lot has `origin { harvestDate, raftCode, zoneName, map { latitude, longitude, source: Raft | Zone } | null,
+    seedings[{ seedingDate, seedItemName }], daysOfFarming, harvestPhotoUrls[], raftPhotoUrls[] }` (signed URLs, 1 hour); a
+    Withdrawn lot has `withdrawalDate` and MSG-ORIGIN-01, never the reason, and `origin: null`. Not published lots are not listed.
+  - `NoLots`: no lot is Published or Withdrawn, MSG-ORIGIN-02. `Cancelled`: the cooperative block only (`invoice: null`), MSG-ORIGIN-04.
+  - `cooperative` is the FARM-01 public block (BR-FARM-09): `fullName, shortName, yearEstablished, officeAddress, phoneNumber, email,
+    website, socialLink, logoUrl, coverPhotoUrl, introduction, certifications[{ name, number, issuer, expiryDate, state, fileUrl }]`
+    (not Expired).
+- 404 MSG-ORIGIN-03 (in `lang`) for a code no invoice has, also for a link that is no code at all.
+- Never in the answer (BR-ORIGIN-04, NFR-03; a test fixes the exact set of properties): the customer, prices, amounts, payments,
+  debts, any kg, returns, claims, suppliers, seed lot or receipt codes, the tax code, the bank account, the withdrawal reason or any
+  internal id. A lot whose returned oysters were thrown away (CLAIM-03) will be left out once sales returns exist.
+
+### Sales invoices
+
+SALE-09 (`SALES_INVOICES`, zones of the caller's pairs, BR-SALE-08): the Owner, the Zone Manager of the zone and the Accountant view; the Zone Manager and the Owner also print. Any other zone answers 403 MSG-GEN-08.
+
+- `GET /api/sales-invoices`: newest first, paged (`page`, `pageSize` up to 100). Filters: `from`/`to` (Vietnam dates, both included; today when neither is given, only `to` is that one day, only `from` runs to today, at most 5 years, else MSG-GEN-01), `zoneId`, `customerId`, `harvestLotId`, `raftId` (a line of a lot of the raft), `statusId`, `code` (part of the code, `%`, `_`, `[` are plain text), `paid` (true/false; a Cancelled invoice matches neither) and `cashCollectedByMe=true` (cash this caller collected that is Awaiting confirmation; each row then has `cashAwaitingConfirmation`). No match: 200 with an empty page and MSG-GEN-10 in `message`. A row has `code`, `invoicedAt`, `zone`, `customer` (null for a walk-in), `total`, `status`, `paymentTerm`, `isPaid` (null for a Cancelled invoice), `unpaidAmount` and `deliveryStatus`. `completedTotal` is the total of every Completed match, not of the page; `isPaid` comes from the debt allocation (BR-DEBT-05), a walk-in invoice from its own payments.
+- `GET /api/sales-invoices/{id}`: the invoice with `lines`, `payments`, `sendings`, `priceCuts`, `debtEffect` (`isPaid`, `covered`, `unpaid`, `countsInCustomerDebt`, `customerDebt`) and `allowedActions` (SALE-09.1 step 3). The same fields are in the answers of `POST` create, `finish` and `resend`.
+- `GET /api/sales-invoices/export` (the filters above, every page) and `GET /api/sales-invoices/{id}/print`: an `.xlsx` file for download and print, Export right in the zone of the invoice (the Accountant only views, §I.4.4 R: 403). Text is never a formula. An empty list is a header and a zero total.
+
+`allowedActions`, on the rules of the SRS:
+
+| Value | Offered to | When | Endpoint today |
+|---|---|---|---|
+| `Resend` | Zone Manager of the zone, Owner | not Cancelled, the sale is finished, the latest sending is not Sending | `POST /api/sales-invoices/{id}/resend` |
+| `CreateReturn` | Zone Manager of the zone, Owner | not Cancelled, no sales return that is not cancelled | none yet: CLAIM-03 |
+| `CancelReturn` | Owner | a sales return that is not cancelled (none can exist yet) | none yet: CLAIM-03.3 |
+| `Correct`, `Cancel` | Owner | Completed, no sales return that is not cancelled | none yet: SALE-07, SALE-08 |
+| `Print` | Whoever has Export in the zone | always | `GET /api/sales-invoices/{id}/print` |
+
+The corrections and the cancel date and reason of SALE-09.1 step 2 have no data yet: they join the detail with SALE-07 and SALE-08.
 
 ### Audit log
 
@@ -496,7 +552,7 @@ created by a one-time command run on the server by the deployment operator (not 
 | File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development; one container or folder per environment, see Background jobs) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
 | Zalo Mini App "Liên kết tài khoản" (`POST api/auth/zalo/link`, `zalo/login`, `DELETE api/me/zalo-link`; a trader without an account sends `zalo/trader-requests`, which the Cooperative Owner approves or refuses at `api/trader-requests`). `Zalo:Provider` unset by default: linking answers MSG04; `Graph` calls graph.zalo.me and needs the Zalo App secret (developers.zalo.me), the host does not start without it; `Fake` (Development only) accepts `fake:<zalo user id>` access tokens and `fake:<phone number>` phone tokens | `Zalo:Provider`, `Zalo:AppSecret` (user-secrets / `Zalo__AppSecret`), `Zalo:TimeoutSeconds` (default 10) |
 | Bootstrap (see Deployment) | `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:*` |
-| Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30), `RateLimits:PaymentNotificationsPerMinute` (default 600: the bank notification webhook) |
+| Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30), `RateLimits:ProvenancePagesPerMinute` (default 60: the public provenance page), `RateLimits:PaymentNotificationsPerMinute` (default 600: the bank notification webhook) |
 | CORS: the web app and the Zalo Mini App call the API from the browser. Set their origins in every deployed environment; empty means no CORS. Development allows `http://localhost:3000` and `https://h5.zdn.vn`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`, `Cors__AllowedOrigins__1=https://h5.zdn.vn`) |
 | Provenance link: the QR code of a sales invoice and its SMS (MSG-SALE-15) link to `{PublicBaseUrl}/origin/{qrToken}`, the public page of the web app. **Required** in every environment: without an absolute `http`/`https` URL the host does not start (QR codes are permanent, so a relative link is never made). Development uses `http://localhost:3000`. | `Provenance:PublicBaseUrl` (e.g. `Provenance__PublicBaseUrl=https://<web host>`) |
 | Reverse proxy: X-Forwarded-For is trusted only from these addresses (and loopback), so the limits see the real client | `ForwardedHeaders:KnownProxies` (e.g. `10.0.0.4`), `ForwardedHeaders:KnownNetworks` (e.g. `10.0.0.0/24`) |
