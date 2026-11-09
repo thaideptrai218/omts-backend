@@ -190,7 +190,7 @@ public class SalesInvoiceChangeQaTestsSqlServer
 
     // Values that fit a field alone can overflow a column together: SALE-07.0.E2 answers MSG-GEN-01, not a 500.
     [SqlServerFact]
-    public async Task Defect_other_charges_that_overflow_the_total_answer_500_not_msg_gen_01()
+    public async Task Other_charges_that_overflow_the_total_answer_msg_gen_01()
     {
         var setup = await StartAsync();
         await using var _ = setup.Host;
@@ -200,6 +200,7 @@ public class SalesInvoiceChangeQaTestsSqlServer
         var answer = await setup.Owner.CorrectAsync(invoice.Id(), DataEntry(invoice, [Line(setup.ProductId, lot, 10m, ListPrice)], lot).With("otherCharges", 999_999_999_999_999_999m));
 
         Assert.Equal(HttpStatusCode.BadRequest, answer.StatusCode);
+        Assert.Equal("MSG-GEN-01", (await answer.ReadAsync(HttpStatusCode.BadRequest)).Text("code"));
     }
 
     // N+1: the statement reads the corrections of all its invoices with one command, whatever their number.

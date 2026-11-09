@@ -28,7 +28,7 @@ public sealed class SalesInvoiceCorrectionPlanner(SalesInvoiceFactsReader factsR
 {
     internal async Task<Result<SalesInvoiceCorrectionPlan>> PlanAsync(SalesInvoice invoice, SalesInvoiceCorrectionEntries entries, bool confirmOwedBack, CancellationToken cancellationToken)
     {
-        // A price cut gives a profile only to a walk-in invoice with money to give back (SALE-07.2); another profile is a data entry correction (SALE-07.5).
+        // Another profile is a data entry correction (SALE-07.5), never a price cut.
         if (entries.IsPriceCut && entries.CustomerId is not null && invoice.CustomerId is not null)
         {
             return AppError.Invalid("Customer");
@@ -59,20 +59,31 @@ public sealed class SalesInvoiceCorrectionPlanner(SalesInvoiceFactsReader factsR
             return AppError.Invalid(entries.IsPriceCut ? "Price cut amount" : "Discount");
         }
 
-        var paid = SalesInvoiceChangeMoney.PaidOf(invoice.Payments);
-        if (customer is null)
+        // SALE-07.0.E2: amounts that fit their fields one by one can still overflow the columns of the invoice together.
+        if (!InvoiceMoney.TotalsFit(subtotal, total, priceCutTotal))
         {
-            if (total > invoice.Total)
-            {
-                return AppError.Conflict(UserMessages.WalkInTotalCannotBeRaised(invoice.Code));
-            }
+            return AppError.Invalid("Total");
+        }
 
-            if (paid > total)
-            {
-                return AppError.Conflict(
-                    UserMessages.WalkInBuyerProfileNeeded(invoice.Code, paid - total),
-                    new Dictionary<string, object?> { ["confirmationField"] = "customerId", ["owedBackAmount"] = paid - total });
-            }
+        // SALE-07.0.E4, BR-SALE-10 (2): judged on the invoice as it was; a profile attached by this same correction does not allow a raise.
+        if (invoice.CustomerId is null && total > invoice.Total)
+        {
+            return AppError.Conflict(UserMessages.WalkInTotalCannotBeRaised(invoice.Code));
+        }
+
+        var paid = SalesInvoiceChangeMoney.PaidOf(invoice.Payments);
+
+        // A price cut gives a profile only to a walk-in invoice with money to give back (SALE-07.2): with nothing to give back the profile would only get a debt (BR-SALE-07 (8)).
+        if (entries.IsPriceCut && entries.CustomerId is not null && paid <= total)
+        {
+            return AppError.Invalid("Customer");
+        }
+
+        if (customer is null && paid > total)
+        {
+            return AppError.Conflict(
+                UserMessages.WalkInBuyerProfileNeeded(invoice.Code, paid - total),
+                new Dictionary<string, object?> { ["confirmationField"] = "customerId", ["owedBackAmount"] = paid - total });
         }
 
         var debtsAfter = await DebtsAfterAsync(invoice, customer, customerChanged, total, paid, cancellationToken);
@@ -127,15 +138,21 @@ public sealed class SalesInvoiceCorrectionPlanner(SalesInvoiceFactsReader factsR
             return closed;
         }
 
-        var lines = entries.Lines.Select(e =>
+        var lines = new List<CorrectedLine>();
+        foreach (var e in entries.Lines)
         {
             var product = products.Value![e.ProductId];
             // A product already on the invoice keeps the list price it was sold at (BR-SALE-05); a new one takes today's.
             var listPrice = invoice.Lines.FirstOrDefault(l => l.ProductId == e.ProductId)?.ListPrice ?? product.UnitPrice;
             var unitPrice = e.UnitPrice ?? listPrice;
             var source = unitPrice == listPrice ? SalesPriceSource.PriceList : SalesPriceSource.DecidedByOwner;
-            return new CorrectedLine(e, unitPrice, listPrice, source, InvoiceMoney.LineAmount(e.Kg, unitPrice), !entries.NotSoldWholeLotIds.Contains(e.LotId));
-        }).ToList();
+            if (!InvoiceMoney.TryLineAmount(e.Kg, unitPrice, out var amount))
+            {
+                return AppError.Invalid($"Line {e.LineNumber} amount");
+            }
+
+            lines.Add(new CorrectedLine(e, unitPrice, listPrice, source, amount, !entries.NotSoldWholeLotIds.Contains(e.LotId)));
+        }
 
         // BR-HARVEST-04: only a mark that changed acts on a lot; an unchanged tick leaves it alone whatever its status has become since.
         var wasTicked = invoice.Lines.GroupBy(l => l.HarvestLotId).ToDictionary(g => g.Key, g => g.Any(l => l.SoldWholeLot));

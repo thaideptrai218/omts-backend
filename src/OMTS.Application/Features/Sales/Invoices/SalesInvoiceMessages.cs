@@ -26,6 +26,9 @@ public sealed class SalesInvoiceMessages(
     /// <summary>Error code of the Not sent row of a customer profile without a phone number (MSG-SALE-16 cause).</summary>
     public const string NoPhoneNumber = "NO_PHONE_NUMBER";
 
+    /// <summary>Error code of the Not sent row of a corrected invoice whose message could not be queued after the commit (SALE-07 POST-5).</summary>
+    public const string NotQueued = "NOT_QUEUED";
+
     /// <summary>The type of the rows that keep the cancellation notice (SALE-08 step 7): not a sending of the invoice message, and in no list (BR-SALE-09).</summary>
     public const string CancellationType = "SALES_INVOICE_CANCELLED_MESSAGE";
 
@@ -81,5 +84,15 @@ public sealed class SalesInvoiceMessages(
             invoice.QrToken is { } token ? provenance.Value.LinkOf(token) : null);
         var content = new NotificationContent(MessageType, Title, message, new RelatedRecord(RelatedRecordTypes.SalesInvoice, invoice.Id, invoice.Code));
         return (traderMessages.Queue(customer.AccountId, customer.PhoneNumber, content), null);
+    }
+
+    /// <summary>
+    /// A sending of the corrected invoice that never reached the service, added to the caller's save already Not sent, so the invoice no longer shows an older Sent. It keeps the phone
+    /// like a sending the service refused: MSG-SALE-16 is only for no profile or no phone.
+    /// </summary>
+    public void AddNotQueued(SalesInvoice invoice)
+    {
+        var content = new NotificationContent(MessageType, Title, UserMessages.InvoiceNotQueued(invoice.Code), new RelatedRecord(RelatedRecordTypes.SalesInvoice, invoice.Id, invoice.Code));
+        traderMessages.NotSent(invoice.Customer?.AccountId, content, NotQueued).PhoneNumber = invoice.Customer?.PhoneNumber;
     }
 }

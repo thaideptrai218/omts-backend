@@ -64,7 +64,7 @@ public class SalesInvoiceCancellationQaTests
 
     // A malformed list element must be a field error (MSG-GEN-01), not an exception.
     [Fact]
-    public async Task Defect_a_null_answer_in_the_cash_list_answers_500()
+    public async Task A_null_answer_in_the_cash_list_answers_msg_gen_01()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
@@ -74,6 +74,7 @@ public class SalesInvoiceCancellationQaTests
         var answer = await owner.CancelInvoiceAsync(sold.Id(), Cancellation(sold).With("cashGivenBack", new object?[] { null }));
 
         Assert.Equal(HttpStatusCode.BadRequest, answer.StatusCode);
+        Assert.Equal("MSG-GEN-01", (await answer.ReadAsync(HttpStatusCode.BadRequest)).Text("code"));
     }
 
     // BR-SALE-11: a VietQR payment is never asked about and is kept, also while it is Awaiting confirmation; a payment already Cancelled is neither asked nor counted.
@@ -279,7 +280,7 @@ public class SalesInvoiceCancellationQaTests
 
     // SALE-07 POST-5 and BR-SALE-09: when the corrected invoice cannot be queued after the commit, its delivery status must show it was not sent, not the older Sent.
     [Fact]
-    public async Task Defect_a_correction_that_could_not_be_queued_still_shows_the_older_sending_as_sent()
+    public async Task A_correction_that_could_not_be_queued_shows_not_sent_instead_of_the_older_sending()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
@@ -294,6 +295,7 @@ public class SalesInvoiceCancellationQaTests
         // The correction is saved and must be reported: the sending of the older invoice proves nothing about this one.
         Assert.Equal(250_000m, answer.GetProperty("invoice").Money("total"));
         Assert.Equal("Not sent", answer.Text("deliveryStatus"));
+        Assert.Equal("Not sent", (await owner.InvoiceAsync(sold.Id())).Text("deliveryStatus"));
     }
 
     // SALE-07 and SALE-08 are Owner only, for every role; a refusal never depends on the invoice existing; a locked Owner is refused; anonymous is 401.

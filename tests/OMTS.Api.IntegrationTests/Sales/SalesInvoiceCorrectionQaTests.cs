@@ -210,7 +210,7 @@ public class SalesInvoiceCorrectionQaTests
 
     // BR-SALE-10 (2): "The total of an invoice that has no customer profile cannot be raised; the extra goods go on a new invoice" (SALE-07.0.E4, MSG-SALE-21).
     [Fact]
-    public async Task Defect_a_walk_in_invoice_given_a_profile_in_the_same_correction_can_have_its_total_raised()
+    public async Task A_walk_in_invoice_given_a_profile_in_the_same_correction_cannot_have_its_total_raised()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
@@ -220,7 +220,7 @@ public class SalesInvoiceCorrectionQaTests
 
         var raised = await owner.CorrectAsync(sold.Id(), DataEntry(sold, [Line(sale.ProductId, sale.LotId, 20m)], sale.LotId).With("customerId", profile));
 
-        // Without the profile this very body is refused with MSG-SALE-21; with it the walk-in sale of 300,000 becomes a debt of 300,000 that nobody agreed.
+        // Refused with MSG-SALE-21 with or without the profile: the walk-in sale of 300,000 must not become a debt of 300,000 that nobody agreed.
         Assert.Equal(HttpStatusCode.Conflict, raised.StatusCode);
         Assert.Equal("MSG-SALE-21", (await raised.ReadAsync(HttpStatusCode.Conflict)).Text("code"));
         Assert.Equal(0m, await owner.CustomerDebtAsync(profile));
@@ -228,7 +228,7 @@ public class SalesInvoiceCorrectionQaTests
 
     // The comment of the planner and SALE-07.2 give a profile only to a walk-in invoice with money to give back; a walk-in invoice with nothing paid gets a debt instead.
     [Fact]
-    public async Task Defect_a_price_cut_attaches_a_profile_to_a_walk_in_invoice_that_has_no_money_to_give_back()
+    public async Task A_price_cut_refuses_a_profile_for_a_walk_in_invoice_that_has_no_money_to_give_back()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
@@ -451,7 +451,7 @@ public class SalesInvoiceCorrectionQaTests
 
     // SALE-07.0.E2 for values that do not fit: a line amount above decimal can hold must be a field error, as every other bad entry, not a 500.
     [Fact]
-    public async Task Defect_a_line_amount_too_large_to_compute_answers_500_not_msg_gen_01()
+    public async Task A_line_amount_too_large_to_compute_answers_msg_gen_01()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
@@ -461,6 +461,20 @@ public class SalesInvoiceCorrectionQaTests
         var answer = await owner.CorrectAsync(sold.Id(), DataEntry(sold, [Line(sale.ProductId, sale.LotId, 999_999_999_999_999.999m, 999_999_999_999_999_999m)], sale.LotId));
 
         Assert.Equal(HttpStatusCode.BadRequest, answer.StatusCode);
+        Assert.Equal("MSG-GEN-01", (await answer.ReadAsync(HttpStatusCode.BadRequest)).Text("code"));
+    }
+
+    // SALE-05 shares the bound of the line amount with SALE-07 (InvoiceMoney.TryLineAmount): nothing is saved and it is a field error there too.
+    [Fact]
+    public async Task A_sale_05_line_amount_too_large_to_compute_answers_msg_gen_01()
+    {
+        using var api = new AuthApiFactory();
+        var sale = await api.SaleSetupAsync();
+
+        var answer = await sale.Owner.Client.PostInvoiceAsync(
+            Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 999_999_999_999_999.999m, 999_999_999_999_999_999m)], Cash(0m, "PayLater", payLaterOwnerAgreed: true), sale.LotId));
+
+        Assert.Equal("MSG-GEN-01", (await answer.ReadAsync(HttpStatusCode.BadRequest)).Text("code"));
     }
 
     // The correction leaves the invoice's code, date, payment term, QR decision and payments.
@@ -481,7 +495,7 @@ public class SalesInvoiceCorrectionQaTests
 
     // SALE-09.1 step 2: the print of an invoice shows the corrections and, once cancelled, the cancel date and reason, as the detail now does.
     [Fact]
-    public async Task Defect_the_print_of_an_invoice_shows_neither_its_corrections_nor_its_cancellation()
+    public async Task The_print_of_an_invoice_shows_its_corrections_and_its_cancellation()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
@@ -498,7 +512,7 @@ public class SalesInvoiceCorrectionQaTests
 
     // BR-DEBT-04 / DEBT-03.2: the file of the statement shows what the screen shows, the corrections under each invoice included.
     [Fact]
-    public async Task Defect_the_statement_file_leaves_out_the_corrections_under_each_invoice()
+    public async Task The_statement_file_shows_the_corrections_under_each_invoice()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();

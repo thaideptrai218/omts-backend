@@ -1038,6 +1038,9 @@ public static class UserMessages
         };
     }
 
+    /// <summary>What the Not sent row of a corrected invoice keeps when MSG-SALE-15 could not be queued after the commit (SALE-07 POST-5). Never sent or shown: the row is in no list.</summary>
+    public static UserMessage InvoiceNotQueued(string invoiceCode) => new(Sale15, $"Corrected invoice {invoiceCode} could not be prepared for sending.");
+
     /// <summary>MSG-SALE-17 (SALE-07 step 5, SALE-08 step 4): the debt of the customer will be below zero.</summary>
     /// <param name="action">"correction" or "cancellation".</param>
     public static UserMessage MoneyWillBeOwedBack(string action, string customerName, decimal owedBackAmount) => new(

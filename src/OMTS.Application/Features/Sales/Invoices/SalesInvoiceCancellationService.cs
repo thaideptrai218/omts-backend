@@ -86,6 +86,11 @@ public sealed class SalesInvoiceCancellationService(
     /// <summary>SALE-08.3: every cash payment Awaiting confirmation is answered; a Yes returns it. An answer for another payment is a mistake (MSG-GEN-01).</summary>
     private static Result<IReadOnlyList<CustomerPayment>> AnsweredCash(SalesInvoice invoice, IReadOnlyList<CashGivenBackAnswer>? answers)
     {
+        if (answers?.Any(a => a is null) == true)
+        {
+            return AppError.Invalid("Cash given back");
+        }
+
         var awaiting = invoice.Payments.Where(p => p.Method == CustomerPaymentMethod.Cash && p.Kind == CustomerPaymentKind.Payment && p.StatusId == StatusIds.CustomerPayment.AwaitingConfirmation)
             .OrderBy(p => p.Code, StringComparer.Ordinal)
             .ToList();
