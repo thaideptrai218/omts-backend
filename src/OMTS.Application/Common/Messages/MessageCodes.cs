@@ -111,6 +111,8 @@ public static class MessageCodes
     public const string Sale10 = "MSG-SALE-10";
     public const string Sale11 = "MSG-SALE-11";
     public const string Sale12 = "MSG-SALE-12";
+    public const string Sale13 = "MSG-SALE-13";
+    public const string Sale14 = "MSG-SALE-14";
     public const string Sale15 = "MSG-SALE-15";
     public const string Sale16 = "MSG-SALE-16";
 
@@ -134,12 +136,13 @@ public static class MessageCodes
     /// closes by itself (GFR-05, new in PR H2); MSG-HARVEST-04, the yield report holds lots still for sale (HARVEST-04 is new in PR H3); MSG-TRACE-01, a harvest lot that cannot be published yet (TRACE-01 is new in PR T1a); MSG-DEBT-03/04/05/06, the Owner's notice of a transaction of the Accountant, the payment above the debt, the bank
     /// reference already recorded and the money paid back above the money owed back (DEBT-02 is new in PR 8b); MSG-TRACE-02, missing data in the trace of a harvest lot (TRACE-02 is new in PR T1b); MSG-ORIGIN-01/02/03/04, the withdrawn lot, no lot to show, the unknown QR code and the
     /// cancelled invoice on the public provenance page (ORIGIN-01 is new in PR O1); MSG-TRACE-05/06, the withdrawal notice
-    /// to a trader and a withdrawal with no trader to notify (TRACE-04 is new in PR T3).
+    /// to a trader and a withdrawal with no trader to notify (TRACE-04 is new in PR T3);
+    /// MSG-SALE-13/14, VietQR without a receiving bank account and the question before Stop sale (the VietQR sale is new in PR 7).
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
         Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Harvest04, Harvest05, Trace01, Trace02, Trace03, Trace04, Trace05, Trace06,
-        Origin01, Origin02, Origin03, Origin04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04,
+        Origin01, Origin02, Origin03, Origin04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04,
     };
 
     /// <summary>

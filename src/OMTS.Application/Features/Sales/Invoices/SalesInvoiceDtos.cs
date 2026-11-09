@@ -5,7 +5,7 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Sales.Invoices;
 
-/// <summary>How the part of the total that the cash does not pay is paid (BR-SALE-07 (5)). VietQR comes with the pending sale of PR 7.</summary>
+/// <summary>How the part of the total that the cash does not pay is paid (BR-SALE-07 (5)).</summary>
 public enum SalesInvoiceRestPayment
 {
     /// <summary>Nothing is left: the cash pays the whole total.</summary>
@@ -13,6 +13,9 @@ public enum SalesInvoiceRestPayment
 
     /// <summary>The rest stays on the customer debt, with the agreement of the Cooperative Owner (SALE-05.8).</summary>
     PayLater,
+
+    /// <summary>The rest is paid with the VietQR code of the invoice: the sale waits for the transfer (SALE-05 steps 7-8, SALE-05.7).</summary>
+    VietQr,
 }
 
 /// <summary>One line as the Zone Manager enters it: the unit price is the list price when left out.</summary>
@@ -112,6 +115,9 @@ public sealed record SalesInvoiceSent(
 /// <summary>The answer of SALE-05: the invoice, the change to give back (SALE-05.6 step 2) and MSG-SALE-06.</summary>
 /// <param name="SubtractedFromDebt">The cash above the total that lowered the customer debt (MSG-SALE-11).</param>
 public sealed record SalesInvoiceSaved(SalesInvoiceView Invoice, decimal Change, decimal SubtractedFromDebt, string Message, string MessageCode);
+
+/// <summary>The answer of POST: the saved invoice (201), or the sale awaiting the transfer of its VietQR code (202); exactly one is set.</summary>
+public sealed record SalesInvoiceCreated(SalesInvoiceSaved? Saved, PendingSaleView? Pending);
 
 /// <summary>A purchase request the invoice can be linked to (SALE-05.3): Accepted, not Fulfilled, pickup not more than 3 days ago.</summary>
 public sealed record OpenPurchaseRequestView(Guid Id, Guid ProductId, string ProductName, decimal RequestedKg, decimal AcceptedKg, DateOnly PickupDate, bool PayLaterAgreed, string? ResponseNote);

@@ -29,11 +29,16 @@ public sealed class SalesInvoiceWriter(
     public const string PaymentRecordedAction = "CustomerPayment.Recorded";
     public const string CodeUnusedAction = "SalesInvoice.CodeUnused";
 
-    internal SalesInvoice Write(SalesInvoiceEntries entries, SalesInvoiceFacts facts, SalesInvoiceDecision decision, string code, string? paymentCode, string? deduplicationKey)
+    /// <param name="sellerOnTransfer">
+    /// Set when the bank notification saves a sale paid by VietQR (GFR-08): the Zone Manager who sold it, who is then the creator, the collector of the cash part and the actor
+    /// of their audit rows. The sale was checked when its code was shown, so a lot closed meanwhile stays as it is instead of refusing money that has arrived.
+    /// </param>
+    internal SalesInvoice Write(
+        SalesInvoiceEntries entries, SalesInvoiceFacts facts, SalesInvoiceDecision decision, string code, string? paymentCode, string? deduplicationKey, Guid? sellerOnTransfer = null)
     {
         var now = timeProvider.GetUtcNow();
         var today = BusinessClock.ToBusinessDate(now);
-        var creator = currentUser.AccountId!.Value;
+        var creator = sellerOnTransfer ?? currentUser.AccountId!.Value;
         var invoice = new SalesInvoice
         {
             Code = code,
@@ -64,7 +69,7 @@ public sealed class SalesInvoiceWriter(
                 HarvestLot = line.Lot,
                 Kg = line.Entry.Kg,
                 UnitPrice = line.UnitPrice,
-                ListPrice = line.Product.UnitPrice,
+                ListPrice = line.ListPrice,
                 PriceSource = line.PriceSource,
                 Amount = line.Amount,
                 SoldWholeLot = !entries.NotSoldWholeLotIds.Contains(line.Lot.Id),
@@ -79,15 +84,16 @@ public sealed class SalesInvoiceWriter(
             RecordCode = invoice.Code,
             ZoneId = invoice.ZoneId,
             After = Snapshot(invoice, entries, facts),
+            ActorAccountId = sellerOnTransfer,
         });
 
         if (paymentCode is not null)
         {
-            RecordCash(invoice, decision.Cash.Recorded, paymentCode, today, creator);
+            RecordCash(invoice, decision.Cash.Recorded, paymentCode, today, creator, sellerOnTransfer);
         }
 
         // BR-HARVEST-04: a ticked lot is closed with the reason Sold whole lot and a leftover of 0, naming this invoice, so only it reopens the lot.
-        foreach (var lot in facts.Lots.Where(l => !entries.NotSoldWholeLotIds.Contains(l.Id)))
+        foreach (var lot in facts.Lots.Where(l => !entries.NotSoldWholeLotIds.Contains(l.Id) && (sellerOnTransfer is null || l.IsForSale)))
         {
             // EnsureForSale (SalesInvoiceFactsReader) refused every lot no longer for sale, so a refusal here is a bug, never an answer.
             if (lotStatuses.CloseSoldWholeLot(lot, today, invoice.Id) is { } refused)
@@ -112,7 +118,7 @@ public sealed class SalesInvoiceWriter(
             Reason = reason,
         });
 
-    private void RecordCash(SalesInvoice invoice, decimal amount, string code, DateOnly today, Guid collector)
+    private void RecordCash(SalesInvoice invoice, decimal amount, string code, DateOnly today, Guid collector, Guid? actor)
     {
         var payment = new CustomerPayment
         {
@@ -138,6 +144,7 @@ public sealed class SalesInvoiceWriter(
                 payment.Kind, payment.Method, payment.Amount, payment.PaymentDate, payment.CustomerId, InvoiceCode = invoice.Code, payment.CollectedByAccountId,
                 Status = statusCatalog.CodeOf(payment.StatusId),
             },
+            ActorAccountId = actor,
         });
     }
 

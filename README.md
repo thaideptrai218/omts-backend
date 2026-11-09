@@ -384,6 +384,60 @@ The OCR Service of the water meter photos (WATER-01) is only faked until its pro
 The Payment Notification Service (API-12) has no provider yet, so there is only an interface (`IPaymentNotificationService`)
 and a fake that works in Development: it accepts every receiving bank account except the numbers of
 `Payments:Fake:RejectAccounts` (default `REJECT000001`) and `Payments:Fake:TimeoutAccounts` (default `TIMEOUT00001`, never answers).
+The incoming notifications (API-13) go through `IBankNotificationParser`, the provider's adapter, which checks the signature and
+reads the transfers; the fake one reads the generic format below. `POST /api/dev/payment-notifications`
+(`{ invoiceCode, amount, bankReference?, content?, accountNumber?, occurredAt?, outgoing? }`, anonymous, 404 outside Development)
+fires a transfer to the receiving bank account through the same rules, so a VietQR sale can be finished without a bank; send the
+same `bankReference` again to replay it.
+
+### VietQR sale and bank notifications (SALE-05 steps 7-8, GFR-08, API-13)
+
+- `POST /api/sales-invoices` with `payment.rest = "VietQr"` (all of the total, or the rest after `cashAmount`; a walk-in customer
+  too) answers **202** with the sale awaiting its transfer: `{ code, status: "Awaiting", zone, customer, walkInCustomer, total,
+  cashAmount, toPayAmount, receivedAmount, vietQr: { payload, bankBin, bankName, accountNumber, accountHolderName, amount,
+  content }, createdAt, createdBy, invoiceId, invoice, endedAt }`. The code (HD…) is given now and kept (BR-SALE-08); nothing is
+  saved yet: no invoice, payment, debt or lot close. `payload` is the EMVCo text the client draws as the QR image, made again on
+  every read for the receiving bank account set at that time. Without a receiving bank account: 409 MSG-SALE-13. The questions
+  (MSG-SALE-10/11/12) and `deduplicationKey` work as for any sale (the same key answers the same 202, or the 201 once saved).
+- `GET /api/sales-invoices/pending/{code}` is the poll of the port (every 2–3 s): `Awaiting`, then `Completed` with `invoice`
+  (the saved invoice and MSG-SALE-06, e.g. "Invoice HD000123 is completed: 8,000,000 VND received by VietQR; 4,000,000 VND
+  collected in cash."); the end of the sale then goes on with `POST /api/sales-invoices/{id}/finish`. `GET
+  /api/sales-invoices/pending` lists the sales still Awaiting in the caller's zones (an app that was closed finds its sale again).
+- `POST /api/sales-invoices/pending/{code}/change-payment` `{ payment }` (Cash, part in cash with Pay later, or Pay later; not
+  VietQR) saves the invoice under the same code as a new sale at the port (201, same questions); status `PaymentChanged`.
+- `POST /api/sales-invoices/pending/{code}/stop` `{ confirmed }`: without `confirmed: true`, 409 MSG-SALE-14 (`confirmationField`
+  = `confirmed`); with it, status `Stopped`, nothing saved but the audit row `SalesInvoice.SaleStopped` (record code = the code,
+  reason "Stop sale").
+- These need SALES_INVOICES Create in the zone of the sale (the Zone Managers of the zone and the Owner; others 403). A sale that
+  already ended answers 409 MSG-GEN-09 with `status` and `invoiceId`. A pending sale has no time limit. Its harvest lots cannot be
+  removed meanwhile (HARVEST-01.1: 409 MSG-GEN-09 "… is on a sale awaiting its transfer"), and the daily close (GFR-05) leaves its kg out of
+  the leftover kg it records, because the transfer invoices them on the closed lot.
+- `POST /api/integrations/payment-notifications` (API-13) is anonymous and rate limited (`RateLimits:PaymentNotificationsPerMinute`,
+  256 KB): a notification the adapter does not find authentic answers 401. The fake adapter's format is
+  `{ "transactions": [ { "bankReference", "accountNumber", "amount", "content", "occurredAt", "direction": "In" | "Out" } ] }`,
+  signed as `X-Omts-Signature: sha256=<hex of HMAC-SHA256(raw body, Payments:Fake:WebhookSecret)>`. 200 lists for each transfer
+  `{ bankReference, outcome, paymentCode, invoiceCode, reason }`; 400 for a body it cannot read; 5xx when the save failed, so the
+  service retries. Each transfer is recorded once per bank reference (unique index on the reference of VietQR payments, so also
+  when the service reports it twice at once), and not at all when the Accountant already recorded a payment with that reference
+  that is not cancelled (the reference trimmed, as MSG-DEBT-05 compares it): `AlreadyRecorded` names the payment already recorded.
+  A transfer time before 2000 or more than a day ahead is `Invalid`. A sale that can no longer be saved when its transfer arrives
+  (a record it names is gone) never fails the notification: it is stopped by the system (audit `SalesInvoice.SaleStopped`, the
+  reason says why) and the transfer is kept `WithoutCustomer`.
+- What a transfer becomes (GFR-08), a customer payment with the method VietQR code of the invoice, Awaiting confirmation,
+  recorded by the system (audit actor: the system), with the amount, bank reference and time reported:
+  - `Ignored` (nothing recorded): `Outgoing`, `NotTheReceivingAccount` (another account, or the account before a change,
+    BR-DEBT-01), `NoInvoiceCode` (no `HD` + 6 to 12 digits in the content, not glued to letters before it; case and a separator after HD are tolerated),
+    `Invalid`.
+  - `PaidInvoice`: a saved invoice has the code (a later payment of a Pay later invoice, a sale whose payment method was changed,
+    a cancelled invoice): a payment of its customer (none for a walk-in invoice) that covers it first.
+  - `CompletedSale`: the sale awaiting it, when the amount is at least `toPayAmount`, is saved Completed, Pay now, at the prices
+    shown, with the transfer (its whole amount) and the cash part as its two payments, the lots closed (one closed meanwhile stays
+    as it is) and MSG-SALE-08 to the Owners; the invoice and its cash are the Zone Manager's (creator, collector, audit actor).
+  - `WithoutCustomer`: no saved invoice has the code (Stop sale, an unknown code, or less than the sale awaits, which then keeps
+    waiting and shows it in `receivedAmount`): no customer and no invoice, the code kept in `transferInvoiceCode` of the
+    payment, listed Awaiting confirmation for the Accountant (DEBT-02.6). Until DEBT-02.6 (settle: attach to a profile, or pay it
+    back) ships in PR 7b, such a payment cannot be confirmed (409 MSG-GEN-09 "Customer payment PT… is without a customer profile …",
+    `needsSettlement: true`), so it stays in the list; it can be cancelled.
 
 ### Background jobs
 
@@ -494,11 +548,11 @@ created by a one-time command run on the server by the deployment operator (not 
 | SMS (`Sms:Provider` = `None`, the default: nothing is sent, phone verification cannot complete and each save with mandatory SMS writes one warning; `Fake` keeps messages in the dev inbox and is set in Development only) | `Sms:Fake:FailFor` (test numbers that fail), `Sms:MandatoryTimeoutSeconds` (default 5, from 1 to 60 or the host does not start: the longest the answer of an action waits for the SMS of its mandatory notifications) |
 | Push (`Push:Provider` = `None` by default, `Fake` in Development) | `Push:Fake:FailFor` |
 | OCR (`Ocr:Provider` unset by default: meter photos are not read and the values are entered by hand (MSG-WATER-01); `Fake` invents readings, so it is set in Development only and stops the host elsewhere) | `Ocr:TimeoutSeconds` (default 15), `Ocr:UncertainBelow` (default 0.8), `Ocr:Fake:Mode` (`Success`, `Fail`, `Timeout`), `Ocr:Fake:Ph`, `Ocr:Fake:Salinity`, `Ocr:Fake:Confidence` |
-| Payment notifications, API-12 (`Payments:Provider` = `None`, the default: no provider is chosen, so no receiving bank account can be accepted and the Owner gets MSG-DEBT-02; `Fake` works in Development only and elsewhere acts as `None`) | `Payments:TimeoutSeconds` (default 15; 1 to 300, anything else stops the host at startup), `Payments:Fake:RejectAccounts`, `Payments:Fake:TimeoutAccounts` |
+| Payment notifications, API-12 and API-13 (`Payments:Provider` = `None`, the default: no provider is chosen, so no receiving bank account can be accepted and the Owner gets MSG-DEBT-02, and every bank notification answers 401; `Fake` works in Development only and elsewhere acts as `None`) | `Payments:TimeoutSeconds` (default 15; 1 to 300, anything else stops the host at startup), `Payments:Fake:RejectAccounts`, `Payments:Fake:TimeoutAccounts`, `Payments:Fake:WebhookSecret` (a secret: user-secrets or `Payments__Fake__WebhookSecret`, empty by default, which accepts no notification) |
 | File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development; one container or folder per environment, see Background jobs) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
 | Zalo Mini App "Liên kết tài khoản" (`POST api/auth/zalo/link`, `zalo/login`, `DELETE api/me/zalo-link`; a trader without an account sends `zalo/trader-requests`, which the Cooperative Owner approves or refuses at `api/trader-requests`). `Zalo:Provider` unset by default: linking answers MSG04; `Graph` calls graph.zalo.me and needs the Zalo App secret (developers.zalo.me), the host does not start without it; `Fake` (Development only) accepts `fake:<zalo user id>` access tokens and `fake:<phone number>` phone tokens | `Zalo:Provider`, `Zalo:AppSecret` (user-secrets / `Zalo__AppSecret`), `Zalo:TimeoutSeconds` (default 10) |
 | Bootstrap (see Deployment) | `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:*` |
-| Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30), `RateLimits:ProvenancePagesPerMinute` (default 60: the public provenance page) |
+| Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30), `RateLimits:ProvenancePagesPerMinute` (default 60: the public provenance page), `RateLimits:PaymentNotificationsPerMinute` (default 600: the bank notification webhook) |
 | CORS: the web app and the Zalo Mini App call the API from the browser. Set their origins in every deployed environment; empty means no CORS. Development allows `http://localhost:3000` and `https://h5.zdn.vn`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`, `Cors__AllowedOrigins__1=https://h5.zdn.vn`) |
 | Provenance link: the QR code of a sales invoice and its SMS (MSG-SALE-15) link to `{PublicBaseUrl}/origin/{qrToken}`, the public page of the web app. **Required** in every environment: without an absolute `http`/`https` URL the host does not start (QR codes are permanent, so a relative link is never made). Development uses `http://localhost:3000`. | `Provenance:PublicBaseUrl` (e.g. `Provenance__PublicBaseUrl=https://<web host>`) |
 | Reverse proxy: X-Forwarded-For is trusted only from these addresses (and loopback), so the limits see the real client | `ForwardedHeaders:KnownProxies` (e.g. `10.0.0.4`), `ForwardedHeaders:KnownNetworks` (e.g. `10.0.0.0/24`) |

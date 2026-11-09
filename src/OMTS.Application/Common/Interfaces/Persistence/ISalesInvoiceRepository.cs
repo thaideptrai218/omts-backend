@@ -14,6 +14,9 @@ public interface ISalesInvoiceRepository
     /// <summary>The invoice saved with this key, if any: a repeated save returns it (BR-SALE-08 has no draft, so a second tap must not sell twice).</summary>
     Task<Guid?> FindByDeduplicationKeyAsync(string key, CancellationToken cancellationToken);
 
+    /// <summary>The invoice with this code, cancelled ones included: what a transfer with its VietQR code pays (GFR-08). Null when no invoice was saved with it.</summary>
+    Task<SalesInvoiceRef?> FindByCodeAsync(string code, CancellationToken cancellationToken);
+
     /// <summary>The invoice with its zone, customer, lines (product and lot), price cuts and payments, read only.</summary>
     Task<SalesInvoice?> GetAsync(Guid invoiceId, CancellationToken cancellationToken);
 
@@ -23,6 +26,9 @@ public interface ISalesInvoiceRepository
     /// <summary>The sendings of the invoice message (BR-SALE-09), oldest first.</summary>
     Task<IReadOnlyList<SalesInvoiceSending>> ListSendingsAsync(Guid invoiceId, CancellationToken cancellationToken);
 }
+
+/// <summary>A saved invoice as a transfer names it: its customer profile (none for a walk-in customer).</summary>
+public sealed record SalesInvoiceRef(Guid Id, string Code, Guid? CustomerId);
 
 /// <summary>One sending of an invoice to the trader's phone, as its Notification row keeps it.</summary>
 public sealed record SalesInvoiceSending(NotificationChannel Channel, string? PhoneNumber, int? DeliveryStatusId, DateTimeOffset? DeliveryStatusAt, DateTimeOffset CreatedAt);

@@ -78,6 +78,15 @@ public sealed class CustomerPaymentStatusService(
                 return WrongStatus(done);
             }
 
+            // DEBT-02.2 step 3: a transfer whose code matches no saved invoice is settled (DEBT-02.6, PR 7b), not confirmed plainly, so it stays in this list. Cancelling it stays
+            // allowed; a walk-in payment of an invoice is confirmed as any other.
+            if (confirmIds.Select(id => found[id]).FirstOrDefault(NeedsSettlement) is { } unsettled)
+            {
+                return AppError.Conflict(
+                    UserMessages.WrongStatus($"Customer payment {unsettled.Code}", NeedsSettlementStatus),
+                    new Dictionary<string, object?> { ["paymentId"] = unsettled.Id, ["needsSettlement"] = true });
+            }
+
             var confirmed = confirmIds.Select(id => found[id]).ToList();
             var cancelled = cancels.Select(c => found[c.Id]).ToList();
             var debtsAfter = await DebtsAfterCancellingAsync(cancelled, cancellationToken);
@@ -157,6 +166,13 @@ public sealed class CustomerPaymentStatusService(
 
         return after;
     }
+
+    /// <summary>As MSG-GEN-09 names the state of a payment without a customer and without an invoice: "… is without a customer profile and cannot be used for this action."</summary>
+    public const string NeedsSettlementStatus = "without a customer profile";
+
+    /// <summary>A transfer recorded with no customer and no saved invoice (Stop sale, an unknown code, a short transfer): settled in DEBT-02.6, never confirmed plainly.</summary>
+    public static bool NeedsSettlement(CustomerPayment payment) =>
+        payment.CustomerId is null && payment.InvoiceId is null && payment.Kind == CustomerPaymentKind.Payment;
 
     /// <summary>MSG-GEN-09 naming the payment and its status (GBR-01).</summary>
     private AppError WrongStatus(CustomerPayment payment) => AppError.Conflict(
