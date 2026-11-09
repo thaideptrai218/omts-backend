@@ -21,6 +21,9 @@ internal sealed class QualityClaimRepository(OmtsDbContext db) : IQualityClaimRe
     public Task<QualityClaim?> GetDetailAsync(Guid claimId, CancellationToken cancellationToken) =>
         Detail().FirstOrDefaultAsync(c => c.Id == claimId, cancellationToken);
 
+    public async Task<IReadOnlyList<QualityClaim>> ListOfInvoiceAsync(Guid invoiceId, CancellationToken cancellationToken) =>
+        await db.QualityClaims.AsNoTracking().Where(c => c.InvoiceId == invoiceId).OrderByDescending(c => c.SentAt).ThenBy(c => c.Id).ToListAsync(cancellationToken);
+
     public async Task<(IReadOnlyList<QualityClaim> Items, int Total)> SearchAsync(PermittedZones zones, int? statusId, int page, int pageSize, CancellationToken cancellationToken)
     {
         var query = db.QualityClaims.AsNoTracking();

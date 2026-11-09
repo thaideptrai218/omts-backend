@@ -37,6 +37,7 @@ internal sealed class SalesInvoiceRepository(OmtsDbContext db) : ISalesInvoiceRe
             .Include(i => i.PortWeighing).ThenInclude(w => w!.Cages)
             .Include(i => i.PriceCuts)
             .Include(i => i.Payments)
+            .Include(i => i.Returns)
             .FirstOrDefaultAsync(i => i.Id == invoiceId, cancellationToken);
 
     public async Task<(IReadOnlyList<CustomerInvoiceRow> Rows, int Total)> ListOfCustomerAsync(Guid customerId, int page, int pageSize, CancellationToken cancellationToken)
@@ -65,6 +66,7 @@ internal sealed class SalesInvoiceRepository(OmtsDbContext db) : ISalesInvoiceRe
             .Include(i => i.Customer)
             .Include(i => i.Lines)
             .Include(i => i.Payments)
+            .Include(i => i.Returns)
             .FirstOrDefaultAsync(i => i.Id == invoiceId, cancellationToken);
 
     public async Task<IReadOnlyList<SalesInvoiceSending>> ListSendingsAsync(Guid invoiceId, CancellationToken cancellationToken) =>

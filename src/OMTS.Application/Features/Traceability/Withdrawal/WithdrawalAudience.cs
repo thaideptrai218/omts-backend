@@ -19,7 +19,8 @@ public sealed record WithdrawalAudience(IReadOnlyList<WithdrawalTrader> Traders,
     /// <param name="lines">The forward trace: the lines of the lot on invoices that are not cancelled, the oldest invoice first.</param>
     public static WithdrawalAudience Of(IReadOnlyList<LotSaleLine> lines)
     {
-        // CLAIM-03 seam: an invoice that a sales return took back in full (a return always takes back the whole invoice) is left out here when sales returns are built (BR-TRACE-07).
+        // An invoice that a sales return took back in full (a return always takes back the whole invoice) tells no trader (BR-TRACE-07).
+        lines = lines.Where(l => !l.TakenBackByReturn).ToList();
         var traders = lines
             .Where(l => l.CustomerId is not null)
             .GroupBy(l => l.CustomerId!.Value)

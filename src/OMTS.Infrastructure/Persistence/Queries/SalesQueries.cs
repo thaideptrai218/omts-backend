@@ -3,6 +3,7 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Validation;
 using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Sales.Debts;
+using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Application.Features.Sales.QualityClaims;
 using OMTS.Application.Features.WaterQuality.Dtos;
@@ -13,8 +14,8 @@ using OMTS.Domain.Enums;
 namespace OMTS.Infrastructure.Persistence.Queries;
 
 /// <summary>
-/// What HARVEST reads of the sales (BR-HARVEST-07, BR-HARVEST-05): the kg on lines of invoices that are not cancelled, at their latest kg. Sales returns come with CLAIM-03, so the returned,
-/// back-for-sale and discarded kg are 0 until then. A lot on any invoice, a cancelled one included (it keeps its lines), can no longer be removed.
+/// What HARVEST reads of the sales (BR-HARVEST-07, BR-HARVEST-05): the kg on lines of invoices that are not cancelled, at their latest kg, and the returned kg of the sales returns that stand,
+/// split into back for sale and discarded (AC-09: 600 invoiced - 300 returned = 300 sold). A lot on any invoice, a cancelled one included (it keeps its lines), or on a sales return can no longer be removed.
 /// </summary>
 internal sealed class HarvestLotSalesQuery(OmtsDbContext db) : IHarvestLotSalesQuery
 {
@@ -28,16 +29,32 @@ internal sealed class HarvestLotSalesQuery(OmtsDbContext db) : IHarvestLotSalesQ
                 .GroupBy(l => l.HarvestLotId)
                 .Select(g => new { LotId = g.Key, Kg = g.Sum(l => l.Kg) })
                 .ToDictionaryAsync(x => x.LotId, x => x.Kg, cancellationToken);
-        // CLAIM-03 seam: the returned kg (and their back-for-sale / discarded split) of the non-cancelled sales return lines go in here. HarvestLotFigures subtracts them from the
-        // invoiced kg, so the lot views, the GFR-05 leftover and the HARVEST-04 yield (AC-09: 600 invoiced - 300 returned = 300 sold) need no change.
-        return ids.ToDictionary(id => id, id => invoiced.TryGetValue(id, out var kg) ? LotSalesFigures.None with { InvoicedKg = kg } : LotSalesFigures.None);
+        var returned = ids.Count == 0
+            ? []
+            : await db.SalesReturns.AsNoTracking().Where(SalesReturn.Standing).SelectMany(r => r.Lines)
+                .Where(l => ids.Contains(l.HarvestLotId))
+                .GroupBy(l => l.HarvestLotId)
+                .Select(g => new { LotId = g.Key, Returned = g.Sum(l => l.ReturnedKg), Discarded = g.Sum(l => l.DiscardedKg) })
+                .ToDictionaryAsync(x => x.LotId, cancellationToken);
+        return ids.ToDictionary(id => id, id =>
+        {
+            var back = returned.GetValueOrDefault(id);
+            return new LotSalesFigures(invoiced.GetValueOrDefault(id), back?.Returned ?? 0m, (back?.Returned ?? 0m) - (back?.Discarded ?? 0m), back?.Discarded ?? 0m);
+        });
     }
 
-    public Task<bool> IsOnAnyInvoiceAsync(Guid lotId, CancellationToken cancellationToken) =>
-        db.SalesInvoiceLines.AsNoTracking().AnyAsync(l => l.HarvestLotId == lotId, cancellationToken);
+    public async Task<bool> IsOnAnyInvoiceAsync(Guid lotId, CancellationToken cancellationToken) =>
+        await db.SalesInvoiceLines.AsNoTracking().AnyAsync(l => l.HarvestLotId == lotId, cancellationToken)
+            || await db.SalesReturnLines.AsNoTracking().AnyAsync(l => l.HarvestLotId == lotId, cancellationToken);
 
-    public Task<IReadOnlySet<Guid>> LotsOnAnyInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) =>
-        LotsOnAsync(db.SalesInvoiceLines.AsNoTracking(), lotIds, cancellationToken);
+    public async Task<IReadOnlySet<Guid>> LotsOnAnyInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken)
+    {
+        var ids = lotIds.Distinct().ToList();
+        var returned = ids.Count == 0
+            ? []
+            : await db.SalesReturnLines.AsNoTracking().Where(l => ids.Contains(l.HarvestLotId)).Select(l => l.HarvestLotId).Distinct().ToListAsync(cancellationToken);
+        return (await LotsOnAsync(db.SalesInvoiceLines.AsNoTracking(), lotIds, cancellationToken)).Union(returned).ToHashSet();
+    }
 
     public Task<IReadOnlySet<Guid>> LotsOnCurrentInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) =>
         LotsOnAsync(db.SalesInvoiceLines.AsNoTracking().Where(l => l.Invoice.StatusId != StatusIds.SalesInvoice.Cancelled), lotIds, cancellationToken);
@@ -71,15 +88,16 @@ internal sealed class PurchaseRequestFulfilmentQuery(OmtsDbContext db) : IPurcha
     }
 }
 
-/// <summary>CLAIM-03 seam (PR 13): sales returns do not exist yet, so an invoice never has one (BR-CLAIM-01, BR-CLAIM-02). PR 13 replaces this with the query on Recorded returns.</summary>
-internal sealed class NoSalesReturnsYetCheck : IInvoiceSalesReturnCheck
+/// <summary>"Has a sales return" (BR-CLAIM-01, BR-CLAIM-02) by the same rule as <see cref="SalesInvoiceAllowedActions.HasSalesReturn"/>: <see cref="SalesReturn.Standing"/>.</summary>
+internal sealed class InvoiceSalesReturnCheck(OmtsDbContext db) : IInvoiceSalesReturnCheck
 {
-    public Task<bool> HasSalesReturnAsync(Guid invoiceId, CancellationToken cancellationToken) => Task.FromResult(false);
+    public Task<bool> HasSalesReturnAsync(Guid invoiceId, CancellationToken cancellationToken) =>
+        db.SalesReturns.AsNoTracking().Where(r => r.InvoiceId == invoiceId).AnyAsync(SalesReturn.Standing, cancellationToken);
 }
 
 /// <summary>
 /// The sums of BR-DEBT-02 per profile: invoices not cancelled at their latest total, payments not cancelled (Awaiting confirmation included, Pending transfer left out) by kind with their discounts,
-/// and the debt adjustments not cancelled. Walk-in invoices and payments without a customer have no profile and count nowhere. Sales returns come with CLAIM-03 (0 until then).
+/// and the debt adjustments not cancelled. Walk-in invoices and payments without a customer have no profile and count nowhere. The sales returns that stand are taken off at their value.
 /// </summary>
 internal sealed class CustomerDebtQuery(OmtsDbContext db) : ICustomerDebtQuery
 {
@@ -157,11 +175,19 @@ internal sealed class CustomerDebtQuery(OmtsDbContext db) : ICustomerDebtQuery
         return new CustomerLedgerRows(invoices, await WithAllocationsAsync(payments, ids, cancellationToken), await AdjustmentsOf(ids, true, cancellationToken));
     }
 
+    public async Task<IReadOnlyList<CustomerLedgerReturn>> ReturnsOfAsync(Guid customerId, CancellationToken cancellationToken) =>
+        await db.SalesReturns.AsNoTracking()
+            .Where(r => r.Invoice.CustomerId == customerId)
+            .Select(r => new CustomerLedgerReturn(
+                customerId, r.Id, r.Code, r.InvoiceId, r.Invoice.Code, r.ReturnDate, r.Value, r.StatusId == StatusIds.SalesReturn.Cancelled, r.CancelledAt, r.CancelReason))
+            .ToListAsync(cancellationToken);
+
     private async Task<IReadOnlyList<CustomerLedgerInvoice>> InvoicesOf(List<Guid> ids, CancellationToken cancellationToken)
     {
         var invoices = await db.SalesInvoices.AsNoTracking()
             .Where(i => i.CustomerId != null && ids.Contains(i.CustomerId.Value))
-            .Select(i => new CustomerLedgerInvoice(i.CustomerId!.Value, i.Id, i.Code, i.InvoicedAt, i.InvoiceDate, i.Total, i.StatusId == StatusIds.SalesInvoice.Cancelled, null, i.CancelledAt, i.CancelReason))
+            .Select(i => new CustomerLedgerInvoice(i.CustomerId!.Value, i.Id, i.Code, i.InvoicedAt, i.InvoiceDate, i.Total, i.StatusId == StatusIds.SalesInvoice.Cancelled, null, i.CancelledAt, i.CancelReason,
+                i.Returns.Where(r => r.StatusId == StatusIds.SalesReturn.Recorded).Sum(r => r.Value)))
             .ToListAsync(cancellationToken);
         var cuts = await db.SalesInvoicePriceCuts.AsNoTracking()
             .Where(c => c.Invoice.CustomerId != null && ids.Contains(c.Invoice.CustomerId.Value))
@@ -226,17 +252,23 @@ internal sealed class CustomerDebtQuery(OmtsDbContext db) : ICustomerDebtQuery
         var paymentRows = db.CustomerPayments.AsNoTracking()
             .Where(p => p.CustomerId != null && p.StatusId != StatusIds.CustomerPayment.Cancelled && p.StatusId != StatusIds.CustomerPayment.PendingTransfer);
         var adjustmentRows = db.CustomerDebtAdjustments.AsNoTracking().Where(a => a.CancelledAt == null);
+        var returnRows = db.SalesReturns.AsNoTracking().Where(SalesReturn.Standing).Where(r => r.Invoice.CustomerId != null);
         if (ids is not null)
         {
             invoiceRows = invoiceRows.Where(i => ids.Contains(i.CustomerId!.Value));
             paymentRows = paymentRows.Where(p => ids.Contains(p.CustomerId!.Value));
             adjustmentRows = adjustmentRows.Where(a => ids.Contains(a.CustomerId));
+            returnRows = returnRows.Where(r => ids.Contains(r.Invoice.CustomerId!.Value));
         }
 
         var invoices = await invoiceRows
             .GroupBy(i => i.CustomerId!.Value)
             .Select(g => new { CustomerId = g.Key, Total = g.Sum(i => i.Total) })
             .ToDictionaryAsync(x => x.CustomerId, x => x.Total, cancellationToken);
+        var returns = await returnRows
+            .GroupBy(r => r.Invoice.CustomerId!.Value)
+            .Select(g => new { CustomerId = g.Key, Value = g.Sum(r => r.Value) })
+            .ToDictionaryAsync(x => x.CustomerId, x => x.Value, cancellationToken);
         var payments = await paymentRows
             .GroupBy(p => new { CustomerId = p.CustomerId!.Value, p.Kind })
             .Select(g => new { g.Key.CustomerId, g.Key.Kind, Amount = g.Sum(p => p.Amount), Discount = g.Sum(p => p.DiscountAmount) })
@@ -249,6 +281,6 @@ internal sealed class CustomerDebtQuery(OmtsDbContext db) : ICustomerDebtQuery
         var discounts = payments.Where(p => p.Kind == CustomerPaymentKind.Payment).ToDictionary(p => p.CustomerId, p => p.Discount);
         var paidBack = payments.Where(p => p.Kind == CustomerPaymentKind.PaidBack).ToDictionary(p => p.CustomerId, p => p.Amount);
         return invoices.Keys.Union(paid.Keys).Union(paidBack.Keys).Union(adjusted.Keys).ToDictionary(id => id, id => new CustomerDebtFigures(
-            invoices.GetValueOrDefault(id), 0m, paid.GetValueOrDefault(id), paidBack.GetValueOrDefault(id), discounts.GetValueOrDefault(id), adjusted.GetValueOrDefault(id)));
+            invoices.GetValueOrDefault(id), returns.GetValueOrDefault(id), paid.GetValueOrDefault(id), paidBack.GetValueOrDefault(id), discounts.GetValueOrDefault(id), adjusted.GetValueOrDefault(id)));
     }
 }

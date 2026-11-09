@@ -123,7 +123,8 @@ public static class DependencyInjection
         services.AddScoped<IWithdrawalNoticeQuery, WithdrawalNoticeQuery>();
         services.AddScoped<IPurchaseRequestFulfilment, PurchaseRequestFulfilmentQuery>();
         services.AddScoped<IQualityClaimRepository, QualityClaimRepository>();
-        services.AddScoped<IInvoiceSalesReturnCheck, NoSalesReturnsYetCheck>();
+        services.AddScoped<IInvoiceSalesReturnCheck, InvoiceSalesReturnCheck>();
+        services.AddScoped<ISalesReturnRepository, SalesReturnRepository>();
         services.AddScoped<ISalesInvoiceRepository, SalesInvoiceRepository>();
         services.AddScoped<IPortWeighingRepository, Persistence.Repositories.Sales.PortWeighingRepository>();
         services.AddScoped<ISalesInvoiceSearchReader, SalesInvoiceSearchReader>();

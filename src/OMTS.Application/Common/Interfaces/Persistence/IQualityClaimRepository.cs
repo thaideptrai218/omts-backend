@@ -17,6 +17,9 @@ public interface IQualityClaimRepository
     /// <summary>The claim with its customer profile and invoice, tracked, to respond to it.</summary>
     Task<QualityClaim?> GetForEditAsync(Guid claimId, CancellationToken cancellationToken);
 
+    /// <summary>The claims of the invoice, newest first, read only: what the Sales return screen shows (CLAIM-03 step 1).</summary>
+    Task<IReadOnlyList<QualityClaim>> ListOfInvoiceAsync(Guid invoiceId, CancellationToken cancellationToken);
+
     /// <summary>The claim with what its detail shows (photos, profile, invoice lines), read-only.</summary>
     Task<QualityClaim?> GetDetailAsync(Guid claimId, CancellationToken cancellationToken);
 

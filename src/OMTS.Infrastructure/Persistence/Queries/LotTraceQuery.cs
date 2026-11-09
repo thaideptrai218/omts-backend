@@ -5,6 +5,7 @@ using OMTS.Application.Features.Traceability.Corrections;
 using OMTS.Application.Features.Traceability.Tracing;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Harvest;
+using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Infrastructure.Persistence.Queries;
 
@@ -57,8 +58,19 @@ internal sealed class LotTraceQuery(OmtsDbContext db) : ILotTraceQuery
                 l.Kg,
                 l.UnitPrice,
                 l.Amount,
-                l.Invoice.Customer == null ? null : l.Invoice.Customer.AccountId))
+                l.Invoice.Customer == null ? null : l.Invoice.Customer.AccountId,
+                l.Invoice.Returns.Any(r => r.StatusId == StatusIds.SalesReturn.Recorded)))
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<LotSaleReturn>> SaleReturnsAsync(Guid lotId, CancellationToken cancellationToken)
+    {
+        var rows = await db.SalesReturns.AsNoTracking().Where(SalesReturn.Standing).SelectMany(r => r.Lines.Where(l => l.HarvestLotId == lotId), (r, l) => new { r.InvoiceId, r.Id, r.Code, r.ReturnDate, l.ReturnedKg, l.Outcome })
+            .ToListAsync(cancellationToken);
+        return rows.GroupBy(r => (r.InvoiceId, r.Id, r.Code, r.ReturnDate, r.Outcome))
+            .Select(g => new LotSaleReturn(g.Key.InvoiceId, g.Key.Id, g.Key.Code, g.Key.ReturnDate, g.Sum(r => r.ReturnedKg), g.Key.Outcome.ToString()))
+            .OrderBy(r => r.Code, StringComparer.Ordinal)
+            .ToList();
+    }
 
     public async Task<IReadOnlyList<TraceCorrectionRow>> CorrectionsAsync(IReadOnlyCollection<Guid> recordIds, CancellationToken cancellationToken)
     {

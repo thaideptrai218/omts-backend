@@ -48,6 +48,7 @@ using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Application.Features.Sales.Products;
 using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Application.Features.Sales.QualityClaims;
+using OMTS.Application.Features.Sales.Returns;
 using OMTS.Application.Features.Verification;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
@@ -309,6 +310,13 @@ public static class DependencyInjection
         services.AddScoped<QualityClaimReadService>();
         services.AddScoped<QualityClaimSubmissionService>();
         services.AddScoped<QualityClaimResponseService>();
+        // CLAIM-03 sales returns
+        services.AddScoped<SalesReturnGuard>();
+        services.AddScoped<SalesReturnLots>();
+        services.AddScoped<SalesReturnNotifications>();
+        services.AddScoped<SalesReturnViews>();
+        services.AddScoped<SalesReturnService>();
+        services.AddScoped<SalesReturnCancellationService>();
         // SALE-05 sales invoices and the customer debt (BR-DEBT-02)
         services.AddScoped<CustomerDebtReader>();
         // DEBT-03 customer debts, statement and export (read only)

@@ -27,7 +27,7 @@ public interface ISalesInvoiceRepository
     /// <summary>The invoice with this code, cancelled ones included: what a transfer with its VietQR code pays (GFR-08). Null when no invoice was saved with it.</summary>
     Task<SalesInvoiceRef?> FindByCodeAsync(string code, CancellationToken cancellationToken);
 
-    /// <summary>The invoice with its zone, customer, linked request, weighing (cages), lines (product and lot), price cuts and payments, read only.</summary>
+    /// <summary>The invoice with its zone, customer, linked request, weighing (cages), lines (product and lot), price cuts, payments and sales returns, read only.</summary>
     Task<SalesInvoice?> GetAsync(Guid invoiceId, CancellationToken cancellationToken);
 
     /// <summary>One page of the invoices of a customer profile, newest first, and how many it has in all.</summary>
@@ -36,7 +36,7 @@ public interface ISalesInvoiceRepository
     /// <summary>The cages of the weighings on Completed invoices of each request; a request with none has no entry.</summary>
     Task<IReadOnlyDictionary<Guid, int>> DeliveredCagesAsync(IReadOnlyCollection<Guid> requestIds, CancellationToken cancellationToken);
 
-    /// <summary>The invoice with its customer, lines and payments, tracked: what sending it (SALE-06), the end of the sale, a correction (SALE-07) and a cancellation (SALE-08) change and read.</summary>
+    /// <summary>The invoice with its customer, lines, payments and sales returns, tracked: what sending it (SALE-06), the end of the sale, a correction (SALE-07), a cancellation (SALE-08) and a sales return (CLAIM-03) change and read.</summary>
     Task<SalesInvoice?> GetForSendingAsync(Guid invoiceId, CancellationToken cancellationToken);
 
     /// <summary>The sendings of the invoice message (BR-SALE-09), oldest first.</summary>
@@ -82,6 +82,9 @@ public interface ICustomerDebtQuery
     /// people read in the same query, so the statement sends the same commands whatever the number of payments.
     /// </summary>
     Task<CustomerLedgerRows> StatementLedgerAsync(Guid customerId, CancellationToken cancellationToken);
+
+    /// <summary>The sales returns of the invoices of one profile, cancelled ones included (BR-DEBT-04); one query whatever the number of returns.</summary>
+    Task<IReadOnlyList<CustomerLedgerReturn>> ReturnsOfAsync(Guid customerId, CancellationToken cancellationToken);
 
     /// <summary>The customer payments Awaiting confirmation, those without a customer included (SCR-DEBT-02 tab).</summary>
     Task<int> AwaitingConfirmationCountAsync(CancellationToken cancellationToken);

@@ -98,7 +98,8 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
         var ledger = await queries.StatementLedgerAsync(customerId, cancellationToken);
         // BR-DEBT-04: under each invoice, its corrections, also one made after the period (the price cuts are entries of their own).
         var lines = CustomerStatementLedger.Build(
-            ledger.Invoices, ledger.Payments, start, end, ledger.Adjustments, await corrections.OfAsync(ledger.Invoices.Select(i => i.Id).ToList(), cancellationToken));
+            ledger.Invoices, ledger.Payments, start, end, ledger.Adjustments, await corrections.OfAsync(ledger.Invoices.Select(i => i.Id).ToList(), cancellationToken),
+            await queries.ReturnsOfAsync(customerId, cancellationToken));
         var now = CustomerDebtAllocator.Allocate(ledger.Invoices, ledger.Payments, today, ledger.Adjustments);
         return new CustomerDebtStatement(
             View(customer), start, end, lines.OpeningDebt, lines.Entries, lines.ClosingDebt, now.Debt, now.DebtAgeDays, now.UnpaidInvoices);
@@ -122,7 +123,7 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
 
         var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
         var ledger = await queries.StatementLedgerAsync(customerId, cancellationToken);
-        var lines = CustomerStatementLedger.Build(ledger.Invoices, ledger.Payments, DateOnly.MinValue, DateOnly.MaxValue, ledger.Adjustments);
+        var lines = CustomerStatementLedger.Build(ledger.Invoices, ledger.Payments, DateOnly.MinValue, DateOnly.MaxValue, ledger.Adjustments, returns: await queries.ReturnsOfAsync(customerId, cancellationToken));
         var now = CustomerDebtAllocator.Allocate(ledger.Invoices, ledger.Payments, timeProvider.Today(), ledger.Adjustments);
         var entries = lines.Entries.AsEnumerable().Reverse();
         if (query.From is { } from)

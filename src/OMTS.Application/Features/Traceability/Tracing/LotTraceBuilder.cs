@@ -16,12 +16,14 @@ namespace OMTS.Application.Features.Traceability.Tracing;
 /// <param name="CycleSessions">Every seeding session of the lot's cycle, with lanes, seed lot, receipt, supplier and item.</param>
 /// <param name="Corrections">The TRACE-03 corrections of the lot and of its sessions.</param>
 /// <param name="ActorNames">The display names of the people who corrected them.</param>
+/// <param name="Returns">The sales returns that stand on the lines of the lot (BR-TRACE-03).</param>
 public sealed record LotTraceSource(
     HarvestLot Lot,
     IReadOnlyList<SeedingRecord> CycleSessions,
     IReadOnlyList<LotSaleLine> SaleLines,
     IReadOnlyList<TraceCorrectionRow> Corrections,
-    IReadOnlyDictionary<Guid, string> ActorNames);
+    IReadOnlyDictionary<Guid, string> ActorNames,
+    IReadOnlyList<LotSaleReturn>? Returns = null);
 
 /// <summary>
 /// Builds the trace of a harvest lot (TRACE-02): backward from the lanes of the lot to every seeding session of the lot's cycle on these lanes, their seed lots, receipts and suppliers
@@ -48,7 +50,7 @@ public static class LotTraceBuilder
             .ToList();
         var missing = ProvenanceReadiness.MissingInTrace(lanes.SelectMany(LaneRows(lot.Id)));
         var message = missing.Count == 0 ? null : UserMessages.TraceIncomplete(lot.LotCode, missing);
-        var invoices = Invoices(source.SaleLines, access);
+        var invoices = Invoices(source.SaleLines, source.Returns ?? [], access);
 
         return new LotTrace(
             lot.Id,
@@ -102,7 +104,7 @@ public static class LotTraceBuilder
         : lane.Seedings.Select(s => new LotLaneSeedLot(lotId, lane.LaneNumber, s.SeedLot.Code, s.OnCompletedReceipt));
 
     // The lines of one invoice together, in the order read. Prices and amounts only for whoever views the sales invoices of the invoice's zone (BR-SALE-08: it may not be the lot's).
-    private static List<TraceInvoice> Invoices(IReadOnlyList<LotSaleLine> lines, AccountAccess? access) => lines
+    private static List<TraceInvoice> Invoices(IReadOnlyList<LotSaleLine> lines, IReadOnlyList<LotSaleReturn> returns, AccountAccess? access) => lines
         .GroupBy(l => l.InvoiceId)
         .Select(invoice =>
         {
@@ -112,10 +114,11 @@ public static class LotTraceBuilder
                 .Select(l => new TraceInvoiceLine(l.LineNumber, l.ProductName, l.Kg, prices ? l.UnitPrice : null, prices ? l.Amount : null))
                 .ToList();
 
-            // CLAIM-03 seam: the sales returns of the invoice, not cancelled, go here when CLAIM-03 is built (BR-TRACE-03, AC-11).
+            // The sales returns that stand on this invoice (BR-TRACE-03, AC-11), this lot's kg per outcome.
+            var traceReturns = returns.Where(r => r.InvoiceId == first.InvoiceId).Select(r => new TraceSalesReturn(r.Id, r.Code, r.ReturnDate, r.Kg, r.Outcome)).ToList();
             return new TraceInvoice(
                 first.InvoiceId, first.InvoiceCode, first.InvoicedAt, first.InvoiceDate, first.InvoiceZoneId, first.InvoiceZoneCode, first.CustomerId, first.CustomerName,
-                first.CustomerPhone, first.CustomerId is null, traceLines.Sum(l => l.Kg), traceLines, []);
+                first.CustomerPhone, first.CustomerId is null, traceLines.Sum(l => l.Kg), traceLines, traceReturns);
         })
         .ToList();
 }
