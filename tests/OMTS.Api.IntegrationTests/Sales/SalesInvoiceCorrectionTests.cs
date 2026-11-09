@@ -126,6 +126,10 @@ public class SalesInvoiceCorrectionTests
         var shorter = (await owner.CorrectedAsync(sold.Id(), DataEntry(corrected, [Line(sale.ProductId, sale.LotId, 3m)], sale.LotId))).GetProperty("invoice");
         Assert.Single(shorter.GetProperty("lines").EnumerateArray());
         Assert.Equal(StatusIds.HarvestLot.Reopened, (await api.LotOfAsync(sale.OtherLotId)).StatusId);
+        var audits = await api.InvoiceAuditAsync(sold.Id(), SalesInvoiceCorrectionWriter.CorrectedAction);
+        var latest = audits.OrderBy(a => a.OccurredAt).Last();
+        Assert.Contains(sale.OtherLotId.ToString(), latest.Before);
+        Assert.DoesNotContain(sale.OtherLotId.ToString(), latest.After);
     }
 
     // BR-HARVEST-04: an unchanged mark never closes again a lot reopened since; a lot closed by another invoice is left alone.

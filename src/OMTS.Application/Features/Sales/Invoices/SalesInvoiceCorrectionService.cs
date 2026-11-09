@@ -13,7 +13,7 @@ public sealed class SalesInvoiceCorrectionService(
     SalesInvoiceCorrectionPlanner planner,
     SalesInvoiceCorrectionWriter writer,
     SalesInvoiceOwedBackNotifier owedBack,
-    SalesInvoiceSendingService sending,
+    SalesInvoiceChangeSending sending,
     IUnitOfWork unitOfWork)
 {
     public async Task<Result<SalesInvoiceSent>> CorrectAsync(Guid invoiceId, CorrectSalesInvoiceRequest request, CancellationToken cancellationToken)

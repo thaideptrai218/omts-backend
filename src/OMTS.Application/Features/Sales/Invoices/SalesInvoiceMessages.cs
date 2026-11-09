@@ -53,7 +53,7 @@ public sealed class SalesInvoiceMessages(
     /// already Not sent, has no phone and keeps MSG-SALE-16 with its cause as the error code, and <c>NotSent</c> is MSG-SALE-16: the invoice then shows Not sent even after
     /// an earlier Sent (SALE-06 POST-1). That row names no receiving account, so the DEBT-01 count never sees it.
     /// </summary>
-    /// <param name="corrected">Sent again after a correction (SALE-07, PR 10).</param>
+    /// <param name="corrected">Sent again after a correction (SALE-07).</param>
     public async Task<(Notification Sending, UserMessage? NotSent)> QueueAsync(SalesInvoice invoice, bool corrected, CancellationToken cancellationToken)
     {
         if (invoice.Customer is not { } customer || string.IsNullOrWhiteSpace(customer.PhoneNumber))

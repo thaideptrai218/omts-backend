@@ -31,7 +31,7 @@ public sealed class SalesInvoiceCancellationService(
     CustomerDebtReader debts,
     SalesInvoiceOwedBackNotifier owedBack,
     SalesInvoiceMessages messages,
-    SalesInvoiceSendingService sending,
+    SalesInvoiceChangeSending sending,
     IStatusCatalog statusCatalog,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
@@ -76,10 +76,9 @@ public sealed class SalesInvoiceCancellationService(
                 new Dictionary<string, object?> { ["confirmationField"] = "confirmOwedBack", ["customerName"] = owed.Customer.Name, ["owedBackAmount"] = amount });
         }
 
-        var keptAfterGivenBack = invoice.Payments.Where(p => !givenBack.Value!.Contains(p)).ToList();
         await ApplyAsync(invoice, reason, givenBack.Value!, chosen.Value, debtsAfter, cancellationToken);
         await owedBack.NotifyAsync(invoice, debtsAfter, "cancelled", cancellationToken);
-        var notice = await messages.QueueCancellationAsync(invoice, SalesInvoiceChangeMoney.PaidOf(keptAfterGivenBack), cancellationToken);
+        var notice = await messages.QueueCancellationAsync(invoice, keptPayments, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return await sending.AnswerCancelledAsync(invoice.Id, notice);
     }

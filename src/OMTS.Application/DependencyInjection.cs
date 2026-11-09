@@ -227,6 +227,7 @@ public static class DependencyInjection
         services.AddScoped<SalesInvoiceMessages>();
         services.AddScoped<SalesInvoiceSendingService>();
         services.AddScoped<SalesInvoiceChangeGuard>();
+        services.AddScoped<SalesInvoiceChangeSending>();
         services.AddScoped<SalesInvoiceCorrectionPlanner>();
         services.AddScoped<SalesInvoiceCorrectionWriter>();
         services.AddScoped<SalesInvoiceCorrectionService>();

@@ -22,10 +22,10 @@ public sealed class SalesInvoiceCorrectionWriter(
         var now = timeProvider.GetUtcNow();
         var today = BusinessClock.ToBusinessDate(now);
         var totalBefore = invoice.Total;
-        var before = Snapshot(invoice);
+        var before = Snapshot(invoice, invoice.Lines);
 
         unitOfWork.MarkChanged(invoice);
-        WriteLines(invoice, plan.Lines);
+        var linesAfter = WriteLines(invoice, plan.Lines);
         invoice.Subtotal = plan.Subtotal;
         invoice.DiscountAmount = plan.Discount;
         invoice.DiscountDecidedByOwner = plan.Discount > 0m;
@@ -78,23 +78,25 @@ public sealed class SalesInvoiceCorrectionWriter(
                 TotalAfter = invoice.Total,
                 PriceCutAmount = entries.IsPriceCut ? entries.PriceCutAmount : (decimal?)null,
                 MovedPayments = movedPayments,
-                Values = Snapshot(invoice),
+                Values = Snapshot(invoice, linesAfter),
             },
         });
     }
 
-    // Row i keeps its number, extra rows go and new rows take the next numbers: the unique line number never collides.
-    private void WriteLines(SalesInvoice invoice, IReadOnlyList<CorrectedLine> lines)
+    // Row i keeps its number, extra rows go and new rows take the next numbers: the unique line number never collides. Answers the lines as they will be (a price cut changes none).
+    private List<SalesInvoiceLine> WriteLines(SalesInvoice invoice, IReadOnlyList<CorrectedLine> lines)
     {
+        var existing = invoice.Lines.OrderBy(l => l.LineNumber).ToList();
         if (lines.Count == 0)
         {
-            return;
+            return existing;
         }
 
-        var existing = invoice.Lines.OrderBy(l => l.LineNumber).ToList();
+        var written = new List<SalesInvoiceLine>();
         for (var i = 0; i < lines.Count; i++)
         {
             var line = i < existing.Count ? existing[i] : new SalesInvoiceLine { InvoiceId = invoice.Id, LineNumber = i + 1 };
+            written.Add(line);
             var entry = lines[i];
             line.ProductId = entry.Entry.ProductId;
             line.HarvestLotId = entry.Entry.LotId;
@@ -114,6 +116,8 @@ public sealed class SalesInvoiceCorrectionWriter(
         {
             invoices.RemoveLine(removed);
         }
+
+        return written;
     }
 
     // BR-SALE-10 (2) and SALE-07.2: the invoice and the payments that name it; the audit event keeps the earlier profile. A request belongs to a profile, so its link goes (BR-SALE-01).
@@ -128,7 +132,7 @@ public sealed class SalesInvoiceCorrectionWriter(
         return moved.Select(p => p.Code).ToList();
     }
 
-    private static object Snapshot(SalesInvoice invoice) => new
+    private static object Snapshot(SalesInvoice invoice, IEnumerable<SalesInvoiceLine> lines) => new
     {
         invoice.CustomerId,
         invoice.PurchaseRequestId,
@@ -137,6 +141,6 @@ public sealed class SalesInvoiceCorrectionWriter(
         invoice.OtherCharges,
         invoice.PriceCutTotal,
         invoice.Total,
-        Lines = invoice.Lines.OrderBy(l => l.LineNumber).Select(l => new { l.LineNumber, l.ProductId, l.HarvestLotId, l.Kg, l.UnitPrice, l.ListPrice, l.PriceSource, l.Amount, l.SoldWholeLot }).ToList(),
+        Lines = lines.OrderBy(l => l.LineNumber).Select(l => new { l.LineNumber, l.ProductId, l.HarvestLotId, l.Kg, l.UnitPrice, l.ListPrice, l.PriceSource, l.Amount, l.SoldWholeLot }).ToList(),
     };
 }

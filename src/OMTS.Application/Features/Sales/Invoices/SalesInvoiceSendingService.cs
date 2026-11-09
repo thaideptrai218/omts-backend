@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using Microsoft.Extensions.Logging;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
@@ -39,8 +38,7 @@ public sealed class SalesInvoiceSendingService(
     IStatusCatalog statusCatalog,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
-    TimeProvider timeProvider,
-    ILogger<SalesInvoiceSendingService> logger)
+    TimeProvider timeProvider)
 {
     public const string FinishedAction = "SalesInvoice.SaleFinished";
     public const string WantsQrCodeField = "wantsQrCode";
@@ -134,47 +132,6 @@ public sealed class SalesInvoiceSendingService(
         }
     }
 
-    /// <summary>
-    /// SALE-07 step 9, called after the correction is committed, so the message reads the corrected values and what is now paid. Before the end of the sale nothing has been sent and the QR
-    /// question is open: the end of the sale will send the corrected invoice. A failure here leaves the invoice Not sent, never undoes the correction (GFR-06).
-    /// </summary>
-    public async Task<SalesInvoiceSent> SendCorrectedAsync(Guid invoiceId)
-    {
-        Notification? sending = null;
-        UserMessage? notSent = null;
-        try
-        {
-            var invoice = await invoices.GetForSendingAsync(invoiceId, CancellationToken.None);
-            if (invoice!.QrDecidedAt is null)
-            {
-                return await CurrentAsync(invoiceId, CancellationToken.None);
-            }
-
-            (sending, notSent) = await messages.QueueAsync(invoice, corrected: true, CancellationToken.None);
-            await unitOfWork.SaveChangesAsync(CancellationToken.None);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            logger.LogError("The corrected invoice {InvoiceId} could not be queued for sending: {Exception}", invoiceId, exception.GetType().Name);
-            return await CurrentAsync(invoiceId, CancellationToken.None);
-        }
-
-        return await AnswerAsync(invoiceId, sending, notSent, [], CancellationToken.None);
-    }
-
-    /// <summary>SALE-08 step 7 after the cancellation is committed: delivers the notice; null when nothing was to be sent (SALE-08.1).</summary>
-    public async Task<SalesInvoiceSent> AnswerCancelledAsync(Guid invoiceId, Notification? notice)
-    {
-        if (notice is not null)
-        {
-            await traderMessages.DeliverAsync(notice);
-        }
-
-        var view = await ViewOfAsync(invoiceId, CancellationToken.None);
-        var status = notice?.DeliveryStatusId ?? StatusIds.MessageDelivery.NotSent;
-        return new SalesInvoiceSent(view, status, statusCatalog.DisplayNameOf(status), view.QrUrl, [], null, null);
-    }
-
     /// <summary>404, 403 MSG-GEN-08 outside the zones where the caller sells (BR-SALE-08), 409 MSG-GEN-09 for a Cancelled invoice (PRE-1).</summary>
     private async Task<AppError?> RefusedAsync(SalesInvoice? invoice, CancellationToken cancellationToken)
     {
@@ -209,7 +166,7 @@ public sealed class SalesInvoiceSendingService(
     }
 
     // SALE-06 steps 4-5: the result given back is that of this sending; the invoice is read again as saved. A row that had nothing to send is already Not sent.
-    private async Task<SalesInvoiceSent> AnswerAsync(
+    internal async Task<SalesInvoiceSent> AnswerAsync(
         Guid invoiceId, Notification? sending, UserMessage? notSent, IReadOnlyList<InvoiceLotOriginView> lots, CancellationToken cancellationToken)
     {
         if (notSent is null && sending is not null)
@@ -224,7 +181,7 @@ public sealed class SalesInvoiceSendingService(
 
     // The end of the sale called again: its decision, the QR code and the status of the latest sending as they are now (Sending while a parallel call still delivers it);
     // MSG-SALE-16 again when that sending had nothing to send. The origin states of the lots are not kept, so the lots are empty.
-    private async Task<SalesInvoiceSent> CurrentAsync(Guid invoiceId, CancellationToken cancellationToken)
+    internal async Task<SalesInvoiceSent> CurrentAsync(Guid invoiceId, CancellationToken cancellationToken)
     {
         var view = await ViewOfAsync(invoiceId, cancellationToken);
         var nothingSent = view.Sendings.Count > 0 && view.Sendings[^1].PhoneNumber is null && view.DeliveryStatusId == StatusIds.MessageDelivery.NotSent;
@@ -232,7 +189,7 @@ public sealed class SalesInvoiceSendingService(
         return new SalesInvoiceSent(view, view.DeliveryStatusId, view.DeliveryStatus, view.QrUrl, [], notSent?.Text, notSent?.Code);
     }
 
-    private async Task<SalesInvoiceView> ViewOfAsync(Guid invoiceId, CancellationToken cancellationToken)
+    internal async Task<SalesInvoiceView> ViewOfAsync(Guid invoiceId, CancellationToken cancellationToken)
     {
         var invoice = await invoices.GetAsync(invoiceId, cancellationToken) ?? throw new InvalidOperationException($"Sales invoice {invoiceId} was just saved and cannot be read.");
         return await views.ViewAsync(invoice, cancellationToken);
