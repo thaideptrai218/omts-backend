@@ -133,6 +133,8 @@ public sealed class QualityClaimResponseService(
         }
 
         var detail = await claims.GetDetailAsync(claim.Id, cancellationToken);
-        return await views.ForStaffAsync(detail!, cancellationToken);
+        var view = await views.ForStaffAsync(detail!, cancellationToken);
+        var saved = UserMessages.Saved(QualityClaimRules.ObjectName);
+        return view with { Message = saved.Text, MessageCode = saved.Code };
     }
 }

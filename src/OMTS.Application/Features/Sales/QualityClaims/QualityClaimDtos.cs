@@ -42,9 +42,12 @@ public sealed record QualityClaimInvoiceView(
 public sealed record QualityClaimSendingView(string Channel, string? PhoneNumber, int? DeliveryStatusId, string? DeliveryStatus, DateTimeOffset? DeliveryStatusAt);
 
 /// <summary>A claim as staff read it (SCR-CLAIM-02). <paramref name="RowVersion"/> goes back with the response.</summary>
+/// <param name="Message">MSG-GEN-05 in the answer to a response (CLAIM-02 step 5); null when the claim is only read.</param>
+/// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
 public sealed record QualityClaimView(
     Guid Id, string Code, DateTimeOffset SentAt, int StatusId, string Status, string Description, IReadOnlyList<QualityClaimPhotoView> Photos, QualityClaimOffer? Offer,
-    QualityClaimResponseView? Response, QualityClaimCustomerView Customer, QualityClaimInvoiceView Invoice, IReadOnlyList<QualityClaimSendingView> Sendings, string RowVersion);
+    QualityClaimResponseView? Response, QualityClaimCustomerView Customer, QualityClaimInvoiceView Invoice, IReadOnlyList<QualityClaimSendingView> Sendings, string RowVersion,
+    string? Message = null, string? MessageCode = null);
 
 /// <summary>A claim as its trader reads it: no profile or zone data, no prices, no sendings, no row version.</summary>
 public sealed record TraderQualityClaimView(

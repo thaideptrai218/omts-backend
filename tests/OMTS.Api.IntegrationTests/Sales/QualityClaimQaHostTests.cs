@@ -94,7 +94,7 @@ public class QualityClaimQaHostTests
     }
 
     [Fact]
-    public async Task Defect_accepting_or_rejecting_a_claim_answers_without_msg_gen_05()
+    public async Task Accepting_or_rejecting_a_claim_answers_msg_gen_05()
     {
         using var api = new QualityClaimApiFactory();
         var accept = await api.QaClaimedAsync();
