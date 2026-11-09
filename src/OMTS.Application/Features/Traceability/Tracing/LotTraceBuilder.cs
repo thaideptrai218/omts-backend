@@ -7,6 +7,7 @@ using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Harvest;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Traceability.Tracing;
 
@@ -80,7 +81,8 @@ public static class LotTraceBuilder
             invoices.Sum(i => i.Kg),
             LotPublishRules.Block(access, lot, zoneId, onSalesInvoice: invoices.Count > 0) is null,
             Allows(access, PermissionFunctions.Provenance, PermissionAction.Edit, zoneId),
-            Allows(access, PermissionFunctions.LotTracing, PermissionAction.Export, zoneId));
+            Allows(access, PermissionFunctions.LotTracing, PermissionAction.Export, zoneId),
+            access?.IsCooperativeOwner == true && lot.OriginState == HarvestLotOriginState.Published);
     }
 
     public static bool Allows(AccountAccess? access, string function, PermissionAction action, Guid zoneId) =>

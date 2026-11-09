@@ -83,6 +83,9 @@ public static class NotificationTypes
     /// </summary>
     public const string CustomerPaymentTransaction = "CUSTOMER_PAYMENT_TRANSACTION";
 
+    /// <summary>MSG-TRACE-05, the withdrawal of the origin information of a lot the trader bought, to the trader account (TRACE-04.1, BR-TRACE-07); not mandatory (BR-ACCOUNT-11).</summary>
+    public const string ProvenanceWithdrawn = "PROVENANCE_WITHDRAWN";
+
     /// <summary>MSG-SALE-18, a correction or a cancellation of a sales invoice leaves the customer debt below zero, to the Accountant and the Owner (BR-SALE-03); not mandatory.</summary>
     public const string CustomerMoneyOwedBack = "CUSTOMER_MONEY_OWED_BACK";
 
@@ -139,6 +142,8 @@ public static class NotificationTypes
         // Customer payments have no zone (BR-FARM-08); a money type, so its SMS carries the code and the amount only.
         new(CustomerPaymentTransaction, "Customer payment transaction", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
             NotificationSmsRule.MoneyToOwner("amount")),
+        // Opens nothing: the trader is asked to call the cooperative, and the list row has no related record (a lot is not the trader's record).
+        new(ProvenanceWithdrawn, "Origin information withdrawn", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
         // Opens the invoice (SALE-09); the money is paid back in DEBT-02.
         new(CustomerMoneyOwedBack, "Money owed back to a customer", Default, [CooperativeOwner, Accountant],
             NotificationOpenAccess.InZone(PermissionFunctions.SalesInvoices, PermissionAction.View)),

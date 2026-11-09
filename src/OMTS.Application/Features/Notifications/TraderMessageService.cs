@@ -27,6 +27,11 @@ public sealed class TraderMessageService(
 
     // Column size of both provider fields of Notification: what a service answers must not fail the second save and leave the row Sending.
     private const int MaxProviderTextLength = 100;
+
+    // Column sizes of the title, the text and the parameters of Notification, as NotificationDispatcher cuts its list rows: a long message (a trader on many invoices,
+    // MSG-TRACE-05) must not make the caller's save fail.
+    private const int MaxTitleLength = 200;
+    private const int MaxBodyLength = 2000;
     private const string SendFailed = "SEND_FAILED";
 
     /// <summary>A Sending row older than this was left by a stop between the save and the answer of the service: well past <see cref="SendTimeout"/>.</summary>
@@ -45,15 +50,17 @@ public sealed class TraderMessageService(
     public Notification Queue(Guid? recipientAccountId, string phoneNumber, NotificationContent content)
     {
         var now = timeProvider.GetUtcNow();
+        var parameters = MessageParameterJson.Serialize(content.Message.Parameters);
         var row = new Notification
         {
             RecipientAccountId = recipientAccountId,
             Channel = sender.Channel,
             Type = content.Type,
-            Title = content.Title,
-            Body = content.Message.Text,
+            Title = Cut(content.Title, MaxTitleLength)!,
+            Body = Cut(content.Message.Text, MaxBodyLength),
             MessageCode = content.Message.Code,
-            MessageParams = MessageParameterJson.Serialize(content.Message.Parameters),
+            // Cut JSON is no JSON: parameters too long for the column are left out, as the dispatcher does; the text keeps the message.
+            MessageParams = parameters is { Length: <= MaxBodyLength } ? parameters : null,
             RelatedRecordType = content.Record?.Type,
             RelatedRecordId = content.Record?.Id,
             RelatedRecordCode = content.Record?.Code,
@@ -80,9 +87,38 @@ public sealed class TraderMessageService(
     }
 
     /// <summary>Never throws. Sends with its own limit: the data is committed, so the request's cancellation must not leave the row Sending.</summary>
-    public async Task DeliverAsync(Notification row)
+    public Task DeliverAsync(Notification row) => DeliverAllAsync([row]);
+
+    /// <summary>
+    /// <see cref="DeliverAsync"/> for several rows of one save (one per trader, TRACE-04): the messages are handed to the service at the same time, each with its own limit, so the
+    /// caller waits about one send, not one per row. Only the sends run in parallel and they touch no unit of work (the sender is a singleton, as for the mandatory SMS); the
+    /// statuses are set and saved once, on the caller's unit of work, after every send has answered. Never throws.
+    /// </summary>
+    public async Task DeliverAllAsync(IReadOnlyList<Notification> rows)
     {
-        var result = await SendAsync(row);
+        if (rows.Count == 0)
+        {
+            return;
+        }
+
+        var results = await Task.WhenAll(rows.Select(SendAsync));
+        for (var i = 0; i < rows.Count; i++)
+        {
+            Apply(rows[i], results[i]);
+        }
+
+        try
+        {
+            await unitOfWork.SaveChangesAsync(CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError("The delivery status of message {Type} could not be saved: {Exception}", rows[0].Type, exception.GetType().Name);
+        }
+    }
+
+    private void Apply(Notification row, DeliveryResult result)
+    {
         row.DeliveryStatusId = result.Succeeded ? StatusIds.MessageDelivery.Sent : StatusIds.MessageDelivery.NotSent;
         row.DeliveryStatusAt = timeProvider.GetUtcNow();
         row.ProviderMessageId = FitColumn(result.MessageId);
@@ -92,18 +128,11 @@ public sealed class TraderMessageService(
             // The type and the error code only: never the number or the text.
             logger.LogWarning("Message {Type} to a trader not sent: {Error}", row.Type, row.ProviderErrorCode);
         }
-
-        try
-        {
-            await unitOfWork.SaveChangesAsync(CancellationToken.None);
-        }
-        catch (Exception exception)
-        {
-            logger.LogError("The delivery status of message {Type} could not be saved: {Exception}", row.Type, exception.GetType().Name);
-        }
     }
 
-    private static string? FitColumn(string? text) => text is { Length: > MaxProviderTextLength } ? text[..MaxProviderTextLength] : text;
+    private static string? FitColumn(string? text) => Cut(text, MaxProviderTextLength);
+
+    private static string? Cut(string? text, int maxLength) => text is not null && text.Length > maxLength ? text[..maxLength] : text;
 
     // On its own task and with a limit it enforces itself: a provider that hangs or ignores its cancellation holds the answer no longer.
     private async Task<DeliveryResult> SendAsync(Notification row)

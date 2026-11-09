@@ -55,6 +55,7 @@ public sealed record TraceInvoice(
 /// <param name="CanPublish">Publish is offered (TRACE-01.2): a Not published lot on an invoice, or a Withdrawn lot for the Owner, in a zone where the caller publishes.</param>
 /// <param name="CanCorrect">The link to Correct traceability data (TRACE-03) for the raft: the caller corrects provenance in the zone.</param>
 /// <param name="CanExport">The caller exports the trace (TRACE-02.2).</param>
+/// <param name="CanWithdraw">Withdraw is offered (TRACE-04): the Cooperative Owner, for a Published lot.</param>
 public sealed record LotTrace(
     Guid LotId,
     string LotCode,
@@ -86,4 +87,5 @@ public sealed record LotTrace(
     decimal InvoicedKg,
     bool CanPublish,
     bool CanCorrect,
-    bool CanExport);
+    bool CanExport,
+    bool CanWithdraw);

@@ -230,6 +230,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | `PURCHASE_RECEIPT_CANCELLED_ADVANCE` | MSG-PURCHASE-08, when a cancelled receipt leaves the supplier debt below zero | unless turned off | Owner, Accountant |
 | `SUPPLIER_TRANSACTION` | MSG-PURCHASE-04, for a supplier payment, money paid back or a cancelled one, also when the Owner did it | always (mandatory) | Owner |
 | `CUSTOMER_PAYMENT_TRANSACTION` | MSG-DEBT-03, for a customer payment, money paid back or a cancellation saved in DEBT-02, and one notice per list of confirmations (no related record when the list holds several payments), also when the Owner did it | always (mandatory) | Owner |
+| `PROVENANCE_WITHDRAWN` | MSG-TRACE-05, when the Owner withdraws the origin information of a lot the trader bought (TRACE-04); the row opens nothing | unless turned off | Trader |
 | `TRADER_ACCESS_REQUESTED` | a trader asked for an account from the Zalo Mini App (`POST /api/auth/zalo/trader-requests`) | unless turned off | Owner |
 | `TRADER_ACCESS_APPROVED` | the Owner approved the request (`POST /api/trader-requests/{id}/approve`) | unless turned off | Trader |
 
@@ -256,6 +257,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   | MSG-PURCHASE-04 | `user_name`, `transaction_kind` (`Payment`, `PaidBack`, `PaymentCancelled`, `PaidBackCancelled`), `payment_code`, `amount`, `supplier_name`, `debt_amount` (the debt after it; below zero: paid in advance) |
   | MSG-PURCHASE-08 | `user_name`, `receipt_code`, `supplier_name`, `advance_amount` (VND paid in advance, positive) |
   | MSG-DEBT-03 | one transaction: `user_name`, `transaction_kind` (`Payment`, `PaidBack`, `PaymentCancelled`, `PaidBackCancelled`), `payment_code`, `amount`, `customer_name` (null: no customer profile), `debt_amount` (the debt after it; below zero: money owed back; null without a profile); a list of confirmations: `user_name`, `transaction_kind` = `Confirmations`, `confirmed_codes` (the first 10), `confirmed_count`, `confirmed_more_count`, `confirmed_amount`, `cancelled_codes` (the first 10), `cancelled_count`, `cancelled_more_count`, `cancelled_amount`, `amount` (both together), `debts`: `[{ customer_name, debt_amount }]` after the cancellations (the first 5), `debts_more_count`; the text names the same ("PT000001, …, PT000010 and 189 more"), so a list of 200 fits the notification row |
+  | MSG-TRACE-05 | `cooperative_short_name`, `lot_code`, `invoice_codes` (list), `cooperative_phone` (null: none set up yet, the text says "the cooperative") |
 - `GET /api/me/notifications/{id}/open` checks the access again (GFR-02): 403 MSG-GEN-08 when the user may no longer
   open the record (e.g. a revoked zone–role pair), 404 MSG-ACCOUNT-22 when the record was removed. A push carries the
   notification id.
@@ -269,7 +271,14 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   result and sends nothing) and `POST /api/sales-invoices/{id}/resend` (only after `finish`, not while the latest sending
   is Sending; a Sending row older than 2 minutes reads Not sent); a profile without a trader account gets a row with no
   recipient, and a walk-in customer or a profile without a phone gets a Not sent row with no phone (error code
-  `NO_CUSTOMER_PROFILE` / `NO_PHONE_NUMBER`, MSG-SALE-16). TRACE-04 follows.
+  `NO_CUSTOMER_PROFILE` / `NO_PHONE_NUMBER`, MSG-SALE-16). The withdrawal of a lot's origin information (TRACE-04, Owner
+  only: `GET /api/harvest-lots/{id}/withdraw-preview`, `POST /api/harvest-lots/{id}/withdraw` with `{ reason }`) uses them
+  too: one MSG-TRACE-05 per trader of the current invoices of the lot, listing their invoices, kept with the lot as its
+  record; a profile without a phone gets a Not sent row (`NO_PHONE_NUMBER`), a walk-in invoice nothing. The notices are
+  sent at the same time after the save (the answer waits about one send). The answer lists each notice with its delivery
+  status; a failed send undoes nothing and is marked `toCall`; `GET /api/harvest-lots/{id}/withdrawal-notices` reads the
+  notices of the latest withdrawal again. There is no resend. Texts and parameters longer than their columns (2000) are
+  cut / left out, as for list rows.
 - Mandatory types also go out as one SMS (PM decision OMTS-216, 03/11): to the Owners among the recipients and, for the
   water alert and its withdrawal, to the Zone Managers of the zone among them. The rule is data on the type
   (`NotificationSmsRule`, `NotificationTypes.All`). The SMS shares the queue of the push: sent once, only after the save

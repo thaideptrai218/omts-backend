@@ -56,7 +56,8 @@ internal sealed class LotTraceQuery(OmtsDbContext db) : ILotTraceQuery
                 l.Product.Name,
                 l.Kg,
                 l.UnitPrice,
-                l.Amount))
+                l.Amount,
+                l.Invoice.Customer == null ? null : l.Invoice.Customer.AccountId))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<TraceCorrectionRow>> CorrectionsAsync(IReadOnlyCollection<Guid> recordIds, CancellationToken cancellationToken)

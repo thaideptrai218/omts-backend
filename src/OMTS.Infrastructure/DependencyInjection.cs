@@ -95,6 +95,7 @@ public static class DependencyInjection
         services.AddScoped<IHarvestLotRepository, HarvestLotRepository>();
         services.AddScoped<IHarvestLotSalesQuery, HarvestLotSalesQuery>();
         services.AddScoped<ILotTraceQuery, LotTraceQuery>();
+        services.AddScoped<IWithdrawalNoticeQuery, WithdrawalNoticeQuery>();
         services.AddScoped<IPurchaseRequestFulfilment, PurchaseRequestFulfilmentQuery>();
         services.AddScoped<ISalesInvoiceRepository, SalesInvoiceRepository>();
         services.AddScoped<ISalesInvoiceSearchReader, SalesInvoiceSearchReader>();
