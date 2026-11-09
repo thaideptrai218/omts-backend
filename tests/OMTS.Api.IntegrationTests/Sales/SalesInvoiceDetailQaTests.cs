@@ -135,7 +135,7 @@ public class SalesInvoiceDetailQaTests
 
     // SALE-09.1 step 2: "its payments with their method, amount, time and status". The view has the date of the payment only.
     [Fact]
-    public async Task Defect_the_payments_of_the_detail_carry_their_time()
+    public async Task The_payments_of_the_detail_carry_their_time()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();

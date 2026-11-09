@@ -55,7 +55,7 @@ public sealed record SalesInvoiceLineView(
     decimal Amount, bool SoldWholeLot);
 
 public sealed record CustomerPaymentView(
-    Guid Id, string Code, CustomerPaymentKind Kind, CustomerPaymentMethod Method, decimal Amount, DateOnly PaymentDate, int StatusId, string Status, AccountRef? CollectedBy);
+    Guid Id, string Code, CustomerPaymentKind Kind, CustomerPaymentMethod Method, decimal Amount, DateOnly PaymentDate, DateTimeOffset CreatedAt, int StatusId, string Status, AccountRef? CollectedBy);
 
 /// <summary>One sending of the invoice message (BR-SALE-09). A Sending row left by a server stop reads Not sent.</summary>
 /// <param name="Channel">Sms, or ZaloOa once its templates are approved.</param>

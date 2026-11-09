@@ -65,8 +65,8 @@ public static class SalesInvoiceExportSheets
             ["Price cuts", null, null, null, null, null, invoice.PriceCutTotal],
             ["Total", null, null, null, null, null, invoice.Total],
         ]),
-        new SpreadsheetSheet(PaymentsSheet, ["Code", "Kind", "Method", "Amount", "Date", "Status", "Collected by"],
-            invoice.Payments.Select(p => (IReadOnlyList<object?>)[p.Code, p.Kind.ToString(), p.Method.ToString(), p.Amount, p.PaymentDate, p.Status, p.CollectedBy?.Name]).ToList()),
+        new SpreadsheetSheet(PaymentsSheet, ["Code", "Kind", "Method", "Amount", "Date", "Time", "Status", "Collected by"],
+            invoice.Payments.Select(p => (IReadOnlyList<object?>)[p.Code, p.Kind.ToString(), p.Method.ToString(), p.Amount, p.PaymentDate, Local(p.CreatedAt), p.Status, p.CollectedBy?.Name]).ToList()),
         new SpreadsheetSheet(SendingsSheet, ["Channel", "Delivery status", "Time"],
             invoice.Sendings.Select(s => (IReadOnlyList<object?>)[s.Channel, s.DeliveryStatus, s.DeliveryStatusAt is { } at ? Local(at) : null]).ToList()),
     ];
