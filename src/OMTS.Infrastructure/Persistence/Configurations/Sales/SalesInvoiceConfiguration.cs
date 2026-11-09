@@ -97,6 +97,12 @@ internal sealed class CustomerPaymentConfiguration : IEntityTypeConfiguration<Cu
         builder.Property(x => x.BankReference).HasMaxLength(Lengths.ShortText);
         // Not unique: the Accountant may save a second payment with the same reference after MSG-DEBT-05 (BR-DEBT-03).
         builder.HasIndex(x => x.BankReference);
+        // GFR-08, AC-07: a transfer whose bank reference is already recorded is not recorded again, also when the service reports it twice at once.
+        builder.HasIndex(x => x.BankReference, "IX_CustomerPayments_VietQrBankReference")
+            .IsUnique()
+            .HasFilter("[Method] = 'VietQrInvoice' AND [BankReference] IS NOT NULL");
+        builder.Property(x => x.TransferInvoiceCode).HasMaxLength(Lengths.Code);
+        builder.HasIndex(x => x.TransferInvoiceCode);
         builder.Property(x => x.Note).HasMaxLength(Lengths.Reason);
         builder.Property(x => x.DeduplicationKey).HasMaxLength(Lengths.ShortText);
         builder.HasIndex(x => x.DeduplicationKey).IsUnique();

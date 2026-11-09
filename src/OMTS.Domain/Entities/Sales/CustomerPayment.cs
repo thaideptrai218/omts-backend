@@ -42,6 +42,15 @@ public class CustomerPayment : AuditableEntity, IHasStatus
     /// <summary>Required for a transfer the Accountant records (BR-DEBT-03); a second payment with the same one needs a confirmation (MSG-DEBT-05).</summary>
     public string? BankReference { get; set; }
 
+    /// <summary>
+    /// A transfer reported by the Payment Notification Service (GFR-08) whose invoice code matches no saved invoice, for example after Stop sale: the code it carried, so the
+    /// Accountant can find it (DEBT-02.6). Null otherwise.
+    /// </summary>
+    public string? TransferInvoiceCode { get; set; }
+
+    /// <summary>The time of the transfer that the Payment Notification Service reported (GFR-08); null for a payment recorded by a person.</summary>
+    public DateTimeOffset? TransferredAt { get; set; }
+
     public string? Note { get; set; }
 
     /// <summary>A repeated key returns the first payment and creates nothing (NFR-04).</summary>

@@ -228,6 +228,14 @@ public static class DependencyInjection
         services.AddScoped<SalesInvoiceViews>();
         services.AddScoped<SalesInvoiceService>();
         services.AddScoped<SalesInvoiceReadService>();
+        // SALE-05 steps 7-8: the sale awaiting its VietQR transfer, and GFR-08 / API-13 the transfers the bank reports
+        services.AddScoped<PendingSaleWriter>();
+        services.AddScoped<PendingSaleViews>();
+        services.AddScoped<PendingSaleService>();
+        services.AddScoped<PendingSaleCompletion>();
+        services.AddScoped<PendingSaleLotQuery>();
+        services.AddScoped<TransferPaymentWriter>();
+        services.AddScoped<BankTransferNoticeService>();
         services.AddScoped<SalesInvoiceSearchService>();
         services.AddScoped<SalesInvoiceExportService>();
         // SALE-06 sending the invoice, and the end of the sale with the QR code

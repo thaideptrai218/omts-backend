@@ -18,7 +18,7 @@ namespace OMTS.Api.Controllers;
 [Authorize]
 public sealed class SalesInvoicesController(
     SalesInvoiceService invoices, SalesInvoiceReadService reads, SalesInvoiceSendingService sending, SalesInvoiceSearchService search, SalesInvoiceExportService exports,
-    SalesInvoiceCorrectionService corrections, SalesInvoiceCancellationService cancellations) : ControllerBase
+    SalesInvoiceCorrectionService corrections, SalesInvoiceCancellationService cancellations, PendingSaleService pendingSales) : ControllerBase
 {
     /// <summary>
     /// SALE-07, Owner only: a correction of a data entry error, or a price cut after a claim. 409 MSG-SALE-17/19 asks a question, answered by the flag in <c>confirmationField</c>;
@@ -59,14 +59,50 @@ public sealed class SalesInvoicesController(
         (await exports.PrintAsync(id, cancellationToken)).ToActionResult(f => File(f.Content, f.ContentType, f.FileName));
 
     /// <summary>
-    /// 201 with the Completed invoice, the change and MSG-SALE-06; 409 MSG-SALE-10/11/12 asks a question, answered by the flag named in <c>confirmationField</c> in the same request;
-    /// 409 MSG-GEN-09 names a lot no longer for sale or a request no longer open.
+    /// 201 with the Completed invoice, the change and MSG-SALE-06; with <c>payment.rest = VietQr</c> (all, or the rest after a cash part), 202 with the sale awaiting its transfer
+    /// and its VietQR code (poll <c>GET pending/{code}</c>); 409 MSG-SALE-10/11/12 asks a question, answered by the flag named in <c>confirmationField</c> in the same request;
+    /// 409 MSG-SALE-13 without a receiving bank account; 409 MSG-GEN-09 names a lot no longer for sale or a request no longer open.
     /// </summary>
     [HttpPost]
     [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Create, PermissionScope.AnyZone)]
     [ProducesResponseType<SalesInvoiceSaved>(StatusCodes.Status201Created)]
+    [ProducesResponseType<PendingSaleView>(StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Create(CreateSalesInvoiceRequest request, CancellationToken cancellationToken) =>
-        (await invoices.CreateAsync(request, cancellationToken)).ToActionResult(saved => StatusCode(StatusCodes.Status201Created, saved));
+        (await invoices.CreateAsync(request, cancellationToken)).ToActionResult(SavedOrAwaiting);
+
+    /// <summary>The sales of the caller's zones still awaiting their VietQR transfer, oldest first.</summary>
+    [HttpGet("pending")]
+    [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Create, PermissionScope.AnyZone)]
+    [ProducesResponseType<IReadOnlyList<PendingSaleView>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListPending(CancellationToken cancellationToken) => Ok(await pendingSales.ListAwaitingAsync(cancellationToken));
+
+    /// <summary>SALE-05 steps 7-8, polled every few seconds: Awaiting with the VietQR code, then Completed with the invoice and MSG-SALE-06 once the transfer arrived.</summary>
+    [HttpGet("pending/{code}")]
+    [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Create, PermissionScope.AnyZone)]
+    [ProducesResponseType<PendingSaleView>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPending(string code, CancellationToken cancellationToken) =>
+        (await pendingSales.GetAsync(code, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// SALE-05.0.E4 step 2: Cash, part in cash with Pay later, or Pay later instead of the transfer; 201 with the invoice under the same code, the questions as for POST;
+    /// 409 MSG-GEN-09 when the transfer arrived meanwhile (<c>status</c>, <c>invoiceId</c>).
+    /// </summary>
+    [HttpPost("pending/{code}/change-payment")]
+    [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Create, PermissionScope.AnyZone)]
+    [ProducesResponseType<SalesInvoiceSaved>(StatusCodes.Status201Created)]
+    public async Task<IActionResult> ChangePendingPayment(string code, ChangePendingSalePaymentRequest request, CancellationToken cancellationToken) =>
+        (await invoices.ChangePaymentAsync(code, request, cancellationToken)).ToActionResult(SavedOrAwaiting);
+
+    /// <summary>SALE-05.0.E4 step 3: 409 MSG-SALE-14 asks first (<c>confirmed</c>); 200 Stopped, nothing saved but the code in the audit log.</summary>
+    [HttpPost("pending/{code}/stop")]
+    [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Create, PermissionScope.AnyZone)]
+    [ProducesResponseType<PendingSaleView>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> StopPending(string code, StopPendingSaleRequest request, CancellationToken cancellationToken) =>
+        (await pendingSales.StopAsync(code, request, cancellationToken)).ToActionResult(Ok);
+
+    private ObjectResult SavedOrAwaiting(SalesInvoiceCreated created) => created.Saved is { } saved
+        ? StatusCode(StatusCodes.Status201Created, saved)
+        : StatusCode(StatusCodes.Status202Accepted, created.Pending);
 
     [HttpGet("{id:guid}")]
     [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.View, PermissionScope.AnyZone)]

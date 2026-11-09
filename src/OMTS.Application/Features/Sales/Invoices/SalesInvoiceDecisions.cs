@@ -7,11 +7,17 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Sales.Invoices;
 
 /// <summary>One line with its price and amount, as it will be saved.</summary>
-internal sealed record PricedLine(SalesInvoiceLineEntries Entry, Product Product, HarvestLot Lot, decimal UnitPrice, SalesPriceSource PriceSource, decimal Amount);
+/// <param name="ListPrice">The list price of the product when the sale was decided (a sale paid by VietQR is saved later, at the prices shown).</param>
+internal sealed record PricedLine(SalesInvoiceLineEntries Entry, Product Product, HarvestLot Lot, decimal UnitPrice, SalesPriceSource PriceSource, decimal Amount, decimal ListPrice);
 
 /// <summary>The money of the invoice and how it is paid at the port.</summary>
 /// <param name="LaterAmount">What the invoice adds to the customer debt: the rest after the cash part with Pay later, else 0.</param>
-internal sealed record SalesInvoiceDecision(IReadOnlyList<PricedLine> Lines, decimal Subtotal, decimal Total, PortCashSplit Cash, SalesPaymentTerm Term, decimal LaterAmount);
+/// <param name="VietQrAmount">The amount of the VietQR code: the rest after the cash part when it is paid by VietQR, else 0 (the sale then waits for the transfer).</param>
+internal sealed record SalesInvoiceDecision(
+    IReadOnlyList<PricedLine> Lines, decimal Subtotal, decimal Total, PortCashSplit Cash, SalesPaymentTerm Term, decimal LaterAmount, decimal VietQrAmount = 0m)
+{
+    public bool AwaitsTransfer => VietQrAmount > 0m;
+}
 
 /// <summary>
 /// SALE-05 steps 4 to 6 as pure rules: prices from the price list unless the Cooperative Owner decided otherwise (BR-SALE-06, MSG-SALE-10), the total (never below 0), and the payment
@@ -42,7 +48,7 @@ internal static class SalesInvoiceDecisions
                 return AppError.Invalid($"Line {entry.LineNumber} amount");
             }
 
-            lines.Add(new PricedLine(entry, product, lots[entry.LotId], unitPrice, source, amount));
+            lines.Add(new PricedLine(entry, product, lots[entry.LotId], unitPrice, source, amount, product.UnitPrice));
         }
 
         var subtotal = InvoiceMoney.Subtotal(lines.Select(l => l.Amount));
@@ -71,12 +77,19 @@ internal static class SalesInvoiceDecisions
         var customerName = facts.Customer?.Name ?? string.Empty;
         var rest = total - Math.Min(entries.Cash, total);
         var term = SalesPaymentTerm.PayNow;
+        if (rest > 0m && entries.RestByVietQr)
+        {
+            // BR-SALE-07 (1), (5): the VietQR code of the invoice is for the rest; the invoice is saved Pay now when the transfer arrives (SALE-05 steps 7-8).
+            var split = InvoiceMoney.SplitCash(total, entries.Cash, 0m, subtractExtraFromDebt: false);
+            return new SalesInvoiceDecision(lines, subtotal, total, split, term, 0m, split.Rest);
+        }
+
         if (rest > 0m)
         {
             if (entries.Rest != SalesInvoiceRestPayment.PayLater)
             {
-                // BR-SALE-07 (5): otherwise the rest is paid now. VietQR for the rest comes with the pending sale (PR 7).
-                return AppError.Invalid("Cash amount", "The cash is less than the total: choose Pay later for the rest, or take the whole total.");
+                // BR-SALE-07 (5): otherwise the rest is paid now.
+                return AppError.Invalid("Cash amount", "The cash is less than the total: choose VietQR or Pay later for the rest, or take the whole total.");
             }
 
             if (facts.Request?.PayLaterAgreed != true && !entries.PayLaterOwnerAgreed)

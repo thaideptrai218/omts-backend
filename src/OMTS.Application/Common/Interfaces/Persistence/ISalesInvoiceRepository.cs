@@ -23,6 +23,9 @@ public interface ISalesInvoiceRepository
     /// <summary>The invoice saved with this key, if any: a repeated save returns it (BR-SALE-08 has no draft, so a second tap must not sell twice).</summary>
     Task<Guid?> FindByDeduplicationKeyAsync(string key, CancellationToken cancellationToken);
 
+    /// <summary>The invoice with this code, cancelled ones included: what a transfer with its VietQR code pays (GFR-08). Null when no invoice was saved with it.</summary>
+    Task<SalesInvoiceRef?> FindByCodeAsync(string code, CancellationToken cancellationToken);
+
     /// <summary>The invoice with its zone, customer, lines (product and lot), price cuts and payments, read only.</summary>
     Task<SalesInvoice?> GetAsync(Guid invoiceId, CancellationToken cancellationToken);
 
@@ -35,6 +38,9 @@ public interface ISalesInvoiceRepository
     /// <summary>The correction events of the invoices in the audit log (BR-SALE-10, BR-DEBT-04), oldest first, one query whatever the number of invoices.</summary>
     Task<IReadOnlyList<SalesInvoiceCorrectionEvent>> ListCorrectionEventsAsync(IReadOnlyCollection<Guid> invoiceIds, CancellationToken cancellationToken);
 }
+
+/// <summary>A saved invoice as a transfer names it: its customer profile (none for a walk-in customer).</summary>
+public sealed record SalesInvoiceRef(Guid Id, string Code, Guid? CustomerId);
 
 /// <summary>One correction of an invoice as its audit event keeps it: <see cref="After"/> is the JSON written by the correction.</summary>
 public sealed record SalesInvoiceCorrectionEvent(Guid InvoiceId, DateTimeOffset OccurredAt, string? Reason, string? After);

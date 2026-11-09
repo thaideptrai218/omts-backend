@@ -21,6 +21,18 @@ public interface ICustomerPaymentRepository
     /// <summary>The latest payment that is not cancelled with this bank reference, whatever its customer (MSG-DEBT-05), with its customer.</summary>
     Task<CustomerPayment?> FindNotCancelledByBankReferenceAsync(string bankReference, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The payment that already records the transfer with this bank reference (GFR-08 "not recorded again"), read only: a VietQR payment, cancelled or not, or a payment the
+    /// Accountant recorded from the bank statement that is not cancelled (BR-DEBT-01/03). The reference is compared as MSG-DEBT-05 compares it (trimmed, the column's collation).
+    /// </summary>
+    Task<CustomerPayment?> FindRecordedTransferAsync(string bankReference, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// For each invoice code: Σ of the transfers recorded with it and no invoice (GFR-08) that are not cancelled, i.e. transfers short of the sale awaiting them; one query for
+    /// every code. A code with none is left out.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, decimal>> ReceivedWithoutInvoiceAsync(IReadOnlyCollection<string> invoiceCodes, CancellationToken cancellationToken);
+
     /// <summary>The payments Awaiting confirmation, oldest first (payment date, then code), and their number and sum.</summary>
     Task<(IReadOnlyList<CustomerPayment> Items, int Total, decimal TotalAmount)> AwaitingConfirmationAsync(int page, int pageSize, CancellationToken cancellationToken);
 }

@@ -17,6 +17,9 @@ public sealed class RateLimitOptions
 
     public int LoginsPerMinute { get; set; } = 30;
 
+    /// <summary>The bank notification webhook (API-13): the service's own servers, so a high limit that still stops a flood of unsigned requests.</summary>
+    public int PaymentNotificationsPerMinute { get; set; } = 600;
+
     /// <summary>The public provenance page (ORIGIN-01): a page opened by hand needs a few, a client trying QR codes many.</summary>
     public int ProvenancePagesPerMinute { get; set; } = 60;
 }
@@ -31,6 +34,7 @@ public static class RateLimitingExtensions
 {
     public const string CodeRequests = "code-requests";
     public const string Logins = "logins";
+    public const string PaymentNotifications = "payment-notifications";
     public const string ProvenancePages = "provenance-pages";
 
     public static IServiceCollection AddOmtsRateLimiting(this IServiceCollection services, IConfiguration configuration)
@@ -51,6 +55,7 @@ public static class RateLimitingExtensions
             };
             options.AddPolicy(CodeRequests, context => PerClient(context, o => o.CodeRequestsPerMinute));
             options.AddPolicy(Logins, context => PerClient(context, o => o.LoginsPerMinute));
+            options.AddPolicy(PaymentNotifications, context => PerClient(context, o => o.PaymentNotificationsPerMinute));
             options.AddPolicy(ProvenancePages, context => PerClient(context, o => o.ProvenancePagesPerMinute));
         });
         return services;

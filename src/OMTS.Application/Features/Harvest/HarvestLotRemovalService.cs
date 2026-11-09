@@ -5,6 +5,7 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Files;
+using OMTS.Application.Features.Sales.Invoices;
 
 namespace OMTS.Application.Features.Harvest;
 
@@ -15,12 +16,16 @@ namespace OMTS.Application.Features.Harvest;
 public sealed class HarvestLotRemovalService(
     IHarvestLotRepository lots,
     IHarvestLotSalesQuery sales,
+    PendingSaleLotQuery pendingSales,
     HarvestLotEditReader edits,
     RowVersionGuard rowVersions,
     UploadedFileSaver fileSaver,
     AuditLogService audit,
     IUnitOfWork unitOfWork)
 {
+    /// <summary>As MSG-GEN-09 names a lot held by a sale awaiting its transfer.</summary>
+    public const string AwaitingTransferStatus = "on a sale awaiting its transfer";
+
     public async Task<Result<bool>> RemoveAsync(Guid lotId, RemoveHarvestLotRequest request, CancellationToken cancellationToken)
     {
         var lot = await lots.GetForEditAsync(lotId, cancellationToken);
@@ -37,6 +42,13 @@ public sealed class HarvestLotRemovalService(
         if (await sales.IsOnAnyInvoiceAsync(lot.Id, cancellationToken))
         {
             return AppError.Conflict(UserMessages.WrongStatus($"Harvest lot {lot.LotCode}", "on a sales invoice"));
+        }
+
+        // A sale awaiting its VietQR transfer will invoice the lot when the money arrives (SALE-05 step 8), so it is as good as on an invoice. A sale created at this moment marks
+        // the lot changed, so the row version makes one of the two fail.
+        if ((await pendingSales.AwaitingAsync(lot.Id, cancellationToken)).Sales > 0)
+        {
+            return AppError.Conflict(UserMessages.WrongStatus($"Harvest lot {lot.LotCode}", AwaitingTransferStatus));
         }
 
         var check = new FieldCheck();

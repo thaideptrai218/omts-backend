@@ -22,6 +22,9 @@ internal sealed class SalesInvoiceRepository(OmtsDbContext db) : ISalesInvoiceRe
     public async Task<Guid?> FindByDeduplicationKeyAsync(string key, CancellationToken cancellationToken) =>
         await db.SalesInvoices.AsNoTracking().Where(i => i.DeduplicationKey == key).Select(i => (Guid?)i.Id).FirstOrDefaultAsync(cancellationToken);
 
+    public Task<SalesInvoiceRef?> FindByCodeAsync(string code, CancellationToken cancellationToken) =>
+        db.SalesInvoices.AsNoTracking().Where(i => i.Code == code).Select(i => new SalesInvoiceRef(i.Id, i.Code, i.CustomerId)).FirstOrDefaultAsync(cancellationToken);
+
     public Task<SalesInvoice?> GetAsync(Guid invoiceId, CancellationToken cancellationToken) =>
         db.SalesInvoices.AsNoTracking().AsSplitQuery()
             .Include(i => i.Zone)
