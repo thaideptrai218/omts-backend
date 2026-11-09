@@ -16,6 +16,9 @@ public sealed class RateLimitOptions
     public int CodeRequestsPerMinute { get; set; } = 10;
 
     public int LoginsPerMinute { get; set; } = 30;
+
+    /// <summary>The public provenance page (ORIGIN-01): a page opened by hand needs a few, a client trying QR codes many.</summary>
+    public int ProvenancePagesPerMinute { get; set; } = 60;
 }
 
 /// <summary>
@@ -28,6 +31,7 @@ public static class RateLimitingExtensions
 {
     public const string CodeRequests = "code-requests";
     public const string Logins = "logins";
+    public const string ProvenancePages = "provenance-pages";
 
     public static IServiceCollection AddOmtsRateLimiting(this IServiceCollection services, IConfiguration configuration)
     {
@@ -47,6 +51,7 @@ public static class RateLimitingExtensions
             };
             options.AddPolicy(CodeRequests, context => PerClient(context, o => o.CodeRequestsPerMinute));
             options.AddPolicy(Logins, context => PerClient(context, o => o.LoginsPerMinute));
+            options.AddPolicy(ProvenancePages, context => PerClient(context, o => o.ProvenancePagesPerMinute));
         });
         return services;
     }

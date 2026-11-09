@@ -23,6 +23,9 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
     private const string Trace02 = "Missing data in the trace of harvest lot {lot_code}: {missing_items}. Please ask the Cooperative Owner whether the data must be corrected.";
     private const string Trace03 ="The correction is not saved: lane {lane_number} of harvest lot {lot_code} would have no seed lot. Please keep at least one seed lot for this lane.";
     private const string Trace04 = "This correction changes the origin information of harvest lots {lot_codes}. Has the Cooperative Owner agreed in person that the data is wrong?";
+    private const string Origin01 = "{cooperative_short_name} withdrew the origin information of lot {lot_code} on {withdrawal_date}. For details, please call {cooperative_phone}.";
+    private const string Origin02 = "No origin information is shown for this invoice. For details, please call {cooperative_phone}.";
+    private const string Origin04 = "This invoice has been cancelled, so no origin information is shown. For details, please call {cooperative_phone}.";
     private const string Trace05 = "{cooperative_short_name}: the origin information of oyster lot {lot_code} (invoice {invoice_codes}) has been withdrawn. You do not need to return the oysters. Please call {cooperative_phone}.";
     private const string Trace06 = "No current sales invoice sells harvest lot {lot_code}; no trader will be notified.";
     private const string Farm01 ="{document} expires on {expiry_date}, in {days} days. Please renew it and record the new one.";
@@ -41,7 +44,17 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
         "cycle-04", "cycle-08", "harvest-01", "harvest-03", "harvest-05",
         "cycle-05", "cycle-06", "cycle-06-early", "cycle-07", "cycle-07-no-seeding",
         "trace-01", "trace-02", "trace-03", "trace-04", "trace-04-no-lot", "trace-05", "trace-06",
+        "origin-01", "origin-01-no-phone", "origin-02", "origin-04",
     };
+
+    // MSG-ORIGIN-03 has no placeholder: the text is the SRS text.
+    [Fact]
+    public void Msg_origin_03_is_the_srs_text()
+    {
+        Assert.Equal(
+            ("MSG-ORIGIN-03", "No invoice was found for this QR code. Please scan the QR code on the invoice again, or open the link in the invoice message."),
+            (UserMessages.ProvenanceUnknownQrCode.Code, UserMessages.ProvenanceUnknownQrCode.Text));
+    }
 
     // MSG-TRACE-05 before the Owner saves a cooperative phone number (FARM-01): the trader is asked to call the cooperative.
     [Fact]
@@ -194,6 +207,28 @@ public sealed partial class NotificationMessageSrsTemplateQaTests
             UserMessages.TraceIncomplete("KV01-B01-20261026", [OriginGap.NoSeedingSession(2), OriginGap.SeedLotNotOnCompletedReceipt(3, ["PN000004-1"])]),
             "Missing data in the trace of harvest lot KV01-B01-20261026: lane 2 has no seeding session in the cycle of the lot; the seed lot PN000004-1 of lane 3 is not on a completed purchase receipt. Please ask the Cooperative Owner whether the data must be corrected.",
             """{"lot_code":"KV01-B01-20261026","missing_items":[{"kind":"NoSeedingSession","lane_number":2,"seed_lot_codes":[],"zone_code":null},{"kind":"SeedLotNotOnCompletedReceipt","lane_number":3,"seed_lot_codes":["PN000004-1"],"zone_code":null}]}"""),
+        // ORIGIN-01.1: the withdrawal date (business date), never the reason (BR-TRACE-06).
+        "origin-01" => (
+            "MSG-ORIGIN-01", Origin01,
+            UserMessages.ProvenanceLotWithdrawn("DEMO HTX", "KV01-B01-20261026", new DateOnly(2026, 11, 8), "DEMO-PHONE"),
+            "DEMO HTX withdrew the origin information of lot KV01-B01-20261026 on 08/11/2026. For details, please call DEMO-PHONE.",
+            """{"cooperative_short_name":"DEMO HTX","lot_code":"KV01-B01-20261026","withdrawal_date":"2026-11-08","cooperative_phone":"DEMO-PHONE"}"""),
+        // A profile saved before the phone number became mandatory: the text shows "–", the parameter stays null.
+        "origin-01-no-phone" => (
+            "MSG-ORIGIN-01", Origin01,
+            UserMessages.ProvenanceLotWithdrawn("DEMO HTX", "KV01-B01-20261026", new DateOnly(2026, 11, 8), null),
+            "DEMO HTX withdrew the origin information of lot KV01-B01-20261026 on 08/11/2026. For details, please call –.",
+            """{"cooperative_short_name":"DEMO HTX","lot_code":"KV01-B01-20261026","withdrawal_date":"2026-11-08","cooperative_phone":null}"""),
+        "origin-02" => (
+            "MSG-ORIGIN-02", Origin02,
+            UserMessages.ProvenanceNoLots("DEMO-PHONE"),
+            "No origin information is shown for this invoice. For details, please call DEMO-PHONE.",
+            """{"cooperative_phone":"DEMO-PHONE"}"""),
+        "origin-04" => (
+            "MSG-ORIGIN-04", Origin04,
+            UserMessages.ProvenanceInvoiceCancelled("DEMO-PHONE"),
+            "This invoice has been cancelled, so no origin information is shown. For details, please call DEMO-PHONE.",
+            """{"cooperative_phone":"DEMO-PHONE"}"""),
         "trace-04" => (
             "MSG-TRACE-04", Trace04,
             UserMessages.TraceCorrectionAgreement(["KV01-B01-20261026", "KV01-B01-20261026-2"]),

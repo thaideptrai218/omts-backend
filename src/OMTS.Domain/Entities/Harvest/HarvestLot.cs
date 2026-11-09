@@ -75,8 +75,11 @@ public class HarvestLot : AuditableEntity, IHasStatus
     public bool IsForSale => StatusId is StatusIds.HarvestLot.Open or StatusIds.HarvestLot.Reopened;
 
     /// <summary>The origin state is worked out from the two times, never stored (BR-TRACE-02).</summary>
-    public HarvestLotOriginState OriginState =>
-        WithdrawnAt > PublishedAt ? HarvestLotOriginState.Withdrawn
-        : PublishedAt is not null ? HarvestLotOriginState.Published
+    public HarvestLotOriginState OriginState => OriginStateOf(PublishedAt, WithdrawnAt);
+
+    /// <summary>The origin state of these two times: Withdrawn when the withdrawal is later than the publish time (BR-TRACE-02).</summary>
+    public static HarvestLotOriginState OriginStateOf(DateTimeOffset? publishedAt, DateTimeOffset? withdrawnAt) =>
+        withdrawnAt > publishedAt ? HarvestLotOriginState.Withdrawn
+        : publishedAt is not null ? HarvestLotOriginState.Published
         : HarvestLotOriginState.NotPublished;
 }
