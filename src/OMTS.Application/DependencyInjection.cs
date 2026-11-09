@@ -23,6 +23,7 @@ using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Traceability.Corrections;
 using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Application.Features.Traceability.Tracing;
+using OMTS.Application.Features.Traceability.Withdrawal;
 using OMTS.Application.Features.Labor;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
@@ -186,6 +187,9 @@ public static class DependencyInjection
         services.AddScoped<LotPublishService>();
         // TRACE-02 – trace a lot backward and forward, and export the trace
         services.AddScoped<LotTraceService>();
+        // TRACE-04 – withdraw the origin information of a lot and tell its traders
+        services.AddScoped<WithdrawalNotices>();
+        services.AddScoped<LotWithdrawalService>();
 
         services.AddScoped<UploadedFileSaver>();
         services.AddScoped<OrphanFileCleanupService>();

@@ -85,6 +85,56 @@ public class TraderMessageServiceTests
         Assert.Equal((StatusIds.MessageDelivery.NotSent, "SEND_FAILED"), (row.DeliveryStatusId, row.ProviderErrorCode));
     }
 
+    // QA L1: MSG-TRACE-05 lists every invoice of the trader; a trader on many invoices must not make the caller's save fail on the 2,000-character columns (as NotificationDispatcher).
+    [Fact]
+    public void Queue_cuts_a_long_text_to_the_column_and_leaves_out_parameters_that_do_not_fit()
+    {
+        var (service, _) = Build(_ => Task.FromResult(DeliveryResult.Sent("id")));
+        var invoiceCodes = Enumerable.Range(1, 400).Select(i => $"HD{i:D6}").ToList();
+        var message = UserMessages.ProvenanceWithdrawnNotice("DEMO HTX", "LOT-DEMO-01", invoiceCodes, null);
+        Assert.True(message.Text.Length > 2000);
+
+        var row = service.Queue(Guid.NewGuid(), "999900000001", Content with { Type = NotificationTypes.ProvenanceWithdrawn, Message = message });
+
+        Assert.Equal(message.Text[..2000], row.Body);
+        Assert.Null(row.MessageParams);
+        Assert.Equal("MSG-TRACE-05", row.MessageCode);
+
+        var shortRow = service.Queue(Guid.NewGuid(), "999900000001", Content with { Message = UserMessages.ProvenanceWithdrawnNotice("DEMO HTX", "LOT-DEMO-01", ["HD000001"], null) });
+        Assert.Contains("HD000001", shortRow.MessageParams);
+    }
+
+    // QA M2: the rows of one save are handed to the service at the same time, and saved once after every send answered.
+    [Fact]
+    public async Task Several_messages_are_sent_at_the_same_time_and_saved_once()
+    {
+        var running = 0;
+        var most = 0;
+        var (service, stubs) = Build(async _ =>
+        {
+            var now = Interlocked.Increment(ref running);
+            InterlockedMax(ref most, now);
+            await Task.Delay(TimeSpan.FromMilliseconds(300));
+            Interlocked.Decrement(ref running);
+            return DeliveryResult.Sent("id");
+        });
+        var rows = Enumerable.Range(0, 4).Select(_ => service.Queue(Guid.NewGuid(), "999900000001", Content)).ToList();
+
+        await service.DeliverAllAsync(rows);
+
+        Assert.Equal(4, most);
+        Assert.All(rows, r => Assert.Equal(StatusIds.MessageDelivery.Sent, r.DeliveryStatusId));
+        Assert.Equal(1, stubs.Saves);
+    }
+
+    private static void InterlockedMax(ref int target, int value)
+    {
+        int seen;
+        while ((seen = Volatile.Read(ref target)) < value && Interlocked.CompareExchange(ref target, value, seen) != seen)
+        {
+        }
+    }
+
     [Fact]
     public async Task A_second_save_that_fails_changes_no_answer()
     {
