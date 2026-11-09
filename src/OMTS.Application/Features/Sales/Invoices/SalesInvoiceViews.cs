@@ -21,6 +21,7 @@ public sealed class SalesInvoiceViews(
     IAccountRepository accounts,
     ISalesInvoiceRepository invoices,
     CustomerDebtReader debts,
+    SalesInvoiceCorrectionLog corrections,
     ZoneAccessGuard zoneAccess,
     IStatusCatalog statusCatalog,
     IOptions<ProvenanceOptions> provenance,
@@ -39,8 +40,7 @@ public sealed class SalesInvoiceViews(
         var latest = LatestStatus(sendings);
         var debtEffect = await DebtEffectAsync(invoice, cancellationToken);
         var allowedActions = SalesInvoiceAllowedActions.Of(
-            // CLAIM-03 seam: a sales return that is not cancelled goes in here when returns exist; none can exist yet.
-            new SalesInvoiceActionFacts(invoice.StatusId, latest, SaleFinished: invoice.QrDecidedAt is not null, HasSalesReturn: false),
+            new SalesInvoiceActionFacts(invoice.StatusId, latest, SaleFinished: invoice.QrDecidedAt is not null, HasSalesReturn: SalesInvoiceAllowedActions.HasSalesReturn(invoice)),
             await RightsAsync(invoice.ZoneId, cancellationToken));
         return new SalesInvoiceView(
             invoice.Id,
@@ -74,7 +74,13 @@ public sealed class SalesInvoiceViews(
             RowVersionGuard.Encode(invoice.RowVersion),
             invoice.PriceCuts.OrderBy(c => c.CutDate).ThenBy(c => c.Id).Select(c => new SalesInvoicePriceCutView(c.Amount, c.CutDate, c.Reason)).ToList(),
             debtEffect,
-            allowedActions);
+            allowedActions,
+            invoice.LastCorrectionKind,
+            invoice.LastCorrectedAt,
+            invoice.LastCorrectionReason,
+            await corrections.OfAsync(invoice.Id, cancellationToken),
+            invoice.CancelledAt,
+            invoice.CancelReason);
     }
 
     /// <summary>The paid state of the invoice (BR-DEBT-05) and the debt of its profile now (BR-DEBT-02).</summary>

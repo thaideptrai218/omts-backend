@@ -15,6 +15,9 @@ internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<Sales
         builder.HasOne(x => x.PurchaseRequest).WithMany().HasForeignKey(x => x.PurchaseRequestId);
         builder.HasOne(x => x.Status).WithMany().HasForeignKey(x => x.StatusId);
         builder.ReferencesAccount(nameof(SalesInvoice.CreatedByAccountId));
+        builder.ReferencesAccount(nameof(SalesInvoice.CancelledByAccountId));
+        builder.Property(x => x.CancelReason).HasMaxLength(Lengths.Reason);
+        builder.Property(x => x.LastCorrectionReason).HasMaxLength(Lengths.Reason);
 
         // Whole VND (BR-SALE-06: no rounding to thousands; a line amount is rounded half up to the dong).
         builder.Property(x => x.DiscountAmount).HasPrecision(18, 0);

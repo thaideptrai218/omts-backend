@@ -83,6 +83,9 @@ public static class NotificationTypes
     /// </summary>
     public const string CustomerPaymentTransaction = "CUSTOMER_PAYMENT_TRANSACTION";
 
+    /// <summary>MSG-SALE-18, a correction or a cancellation of a sales invoice leaves the customer debt below zero, to the Accountant and the Owner (BR-SALE-03); not mandatory.</summary>
+    public const string CustomerMoneyOwedBack = "CUSTOMER_MONEY_OWED_BACK";
+
     public static readonly IReadOnlyList<NotificationTypeDefinition> All =
     [
         new(WaterAlert, "Water alert", AlwaysPush, [CooperativeOwner, ZoneManager],
@@ -136,6 +139,9 @@ public static class NotificationTypes
         // Customer payments have no zone (BR-FARM-08); a money type, so its SMS carries the code and the amount only.
         new(CustomerPaymentTransaction, "Customer payment transaction", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
             NotificationSmsRule.MoneyToOwner("amount")),
+        // Opens the invoice (SALE-09); the money is paid back in DEBT-02.
+        new(CustomerMoneyOwedBack, "Money owed back to a customer", Default, [CooperativeOwner, Accountant],
+            NotificationOpenAccess.InZone(PermissionFunctions.SalesInvoices, PermissionAction.View)),
         // A trader asked for an account from the Zalo Mini App, and the Owner's approval (ACS-01, decision of 28/10/2026).
         new(TraderAccessRequested, "Trader access requested", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         new(TraderAccessApproved, "Trader access approved", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),

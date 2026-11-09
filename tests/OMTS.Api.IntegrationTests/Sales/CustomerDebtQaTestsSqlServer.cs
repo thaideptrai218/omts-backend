@@ -5,6 +5,8 @@ using OMTS.Api.IntegrationTests.Farming;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common;
 using OMTS.Application.Features.Sales.Debts;
+using OMTS.Application.Features.Sales.Invoices;
+using OMTS.Infrastructure.Persistence.Repositories;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Sales;
@@ -113,7 +115,7 @@ public class CustomerDebtQaTestsSqlServer
         var counter = new CommandCounter();
         await using var db = new OmtsDbContext(new DbContextOptionsBuilder<OmtsDbContext>().UseSqlServer(host.Database.ConnectionString).AddInterceptors(counter).Options);
         var query = new CustomerDebtQuery(db);
-        var service = new CustomerDebtService(query, new CustomerDebtReader(query, TimeProvider.System), TimeProvider.System);
+        var service = new CustomerDebtService(query, new CustomerDebtReader(query, TimeProvider.System), new SalesInvoiceCorrectionLog(new SalesInvoiceRepository(db)), TimeProvider.System);
         var statement = await service.StatementAsync(customerId, from, to, CancellationToken.None);
         Assert.True(statement.IsSuccess);
         return (counter.Count, statement.Value!);

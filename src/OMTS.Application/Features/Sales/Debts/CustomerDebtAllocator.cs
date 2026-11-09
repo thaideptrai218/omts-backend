@@ -6,7 +6,10 @@ namespace OMTS.Application.Features.Sales.Debts;
 
 /// <summary>A sales invoice of a customer profile, cancelled ones included (the statement lists them; the debt and the allocation skip them).</summary>
 /// <param name="Total">The total at its latest values (BR-SALE-10).</param>
-public sealed record CustomerLedgerInvoice(Guid CustomerId, Guid Id, string Code, DateTimeOffset InvoicedAt, DateOnly InvoiceDate, decimal Total, bool Cancelled);
+/// <param name="CancelledAt">When SALE-08 cancelled it, shown in the statement (BR-DEBT-04).</param>
+/// <param name="CancelReason">Why it was cancelled.</param>
+public sealed record CustomerLedgerInvoice(
+    Guid CustomerId, Guid Id, string Code, DateTimeOffset InvoicedAt, DateOnly InvoiceDate, decimal Total, bool Cancelled, DateTimeOffset? CancelledAt = null, string? CancelReason = null);
 
 /// <summary>A customer payment or money paid back of a profile, cancelled ones included.</summary>
 /// <param name="InvoiceId">The invoice the money came with (cash at the port, VietQR code of the invoice): it covers that invoice first.</param>

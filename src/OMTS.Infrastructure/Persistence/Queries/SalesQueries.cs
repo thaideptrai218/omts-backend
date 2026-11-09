@@ -153,7 +153,7 @@ internal sealed class CustomerDebtQuery(OmtsDbContext db) : ICustomerDebtQuery
     private async Task<IReadOnlyList<CustomerLedgerInvoice>> InvoicesOf(List<Guid> ids, CancellationToken cancellationToken) =>
         await db.SalesInvoices.AsNoTracking()
             .Where(i => i.CustomerId != null && ids.Contains(i.CustomerId.Value))
-            .Select(i => new CustomerLedgerInvoice(i.CustomerId!.Value, i.Id, i.Code, i.InvoicedAt, i.InvoiceDate, i.Total, i.StatusId == StatusIds.SalesInvoice.Cancelled))
+            .Select(i => new CustomerLedgerInvoice(i.CustomerId!.Value, i.Id, i.Code, i.InvoicedAt, i.InvoiceDate, i.Total, i.StatusId == StatusIds.SalesInvoice.Cancelled, i.CancelledAt, i.CancelReason))
             .ToListAsync(cancellationToken);
 
     private IQueryable<CustomerPayment> PaymentsOf(List<Guid> ids) =>

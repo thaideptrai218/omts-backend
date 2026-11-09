@@ -13,6 +13,12 @@ internal sealed class SalesInvoiceRepository(OmtsDbContext db) : ISalesInvoiceRe
 
     public void AddPayment(CustomerPayment payment) => db.CustomerPayments.Add(payment);
 
+    public void AddLine(SalesInvoiceLine line) => db.SalesInvoiceLines.Add(line);
+
+    public void RemoveLine(SalesInvoiceLine line) => db.SalesInvoiceLines.Remove(line);
+
+    public void AddPriceCut(SalesInvoicePriceCut priceCut) => db.Add(priceCut);
+
     public async Task<Guid?> FindByDeduplicationKeyAsync(string key, CancellationToken cancellationToken) =>
         await db.SalesInvoices.AsNoTracking().Where(i => i.DeduplicationKey == key).Select(i => (Guid?)i.Id).FirstOrDefaultAsync(cancellationToken);
 
@@ -41,4 +47,16 @@ internal sealed class SalesInvoiceRepository(OmtsDbContext db) : ISalesInvoiceRe
             .OrderBy(n => n.CreatedAt)
             .Select(n => new SalesInvoiceSending(n.Channel, n.PhoneNumber, n.DeliveryStatusId, n.DeliveryStatusAt, n.CreatedAt))
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<SalesInvoiceCorrectionEvent>> ListCorrectionEventsAsync(IReadOnlyCollection<Guid> invoiceIds, CancellationToken cancellationToken)
+    {
+        var ids = invoiceIds.Distinct().ToList();
+        return ids.Count == 0
+            ? []
+            : await db.AuditEvents.AsNoTracking()
+                .Where(e => e.Action == SalesInvoiceCorrectionWriter.CorrectedAction && e.RecordId != null && ids.Contains(e.RecordId.Value))
+                .OrderBy(e => e.OccurredAt)
+                .Select(e => new SalesInvoiceCorrectionEvent(e.RecordId!.Value, e.OccurredAt, e.Reason, e.After))
+                .ToListAsync(cancellationToken);
+    }
 }
