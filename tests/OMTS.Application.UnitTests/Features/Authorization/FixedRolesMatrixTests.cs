@@ -55,7 +55,7 @@ public class FixedRolesMatrixTests
         { "PURCHASE-04", No, Full, SupplierPayments, [View, Export] },
         { "PURCHASE-05", No, Full, SupplierPayments, [Create] },
         { "PURCHASE-06", Full, No, PurchaseReceipts, [Delete] },
-        { "PURCHASE-07", Full, No, Suppliers, [View, Create, Edit] },
+        { "PURCHASE-07", Full, No, Suppliers, [View, Create, Edit, Export] },
         { "LABOR-01", Full, No, LaborWorkers, [View, Create, Edit] },
         { "LABOR-02", Full, No, WorkAssignments, [View, Create, Edit, Delete] },
         { "LABOR-04", Full, No, Attendance, [View, Create, Edit] },
@@ -82,12 +82,12 @@ public class FixedRolesMatrixTests
 
     /// <summary>
     /// Where the code deliberately differs from the SRS column: the Accountant views suppliers to pick the payee of a
-    /// supplier payment (PURCHASE-05). §I.4.4 shows PURCHASE-07 as No; kept by default until the BA answers (gap Q4). The
+    /// supplier payment (PURCHASE-05) and exports the list it can already see; §I.4.4 shows PURCHASE-07 as No. The
     /// Accountant's R on PURCHASE-03 "includes exporting to a file", so it views and exports receipts (lead decision, QA P2 Q1).
     /// </summary>
     private static readonly Dictionary<(string Uc, StaffRole Role), string> Deviations = new()
     {
-        [("PURCHASE-07", StaffRole.Accountant)] = R,
+        [("PURCHASE-07", StaffRole.Accountant)] = RExport,
         [("PURCHASE-03", StaffRole.Accountant)] = RExport,
     };
 

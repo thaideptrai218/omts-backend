@@ -123,13 +123,13 @@ public class DemoDataSeedQaTests
         Assert.Contains(demo.Messages, m => m.Contains("already initialized"));
         // Every step had work to do, the Owner's login included.
         // 19 steps before CYCLE-02, plus the seeding sessions, the harvest lots and the sales invoices.
-        Assert.Equal(22, demo.Messages.Count(m => m.StartsWith("Demo ")));
+        Assert.Equal(23, demo.Messages.Count(m => m.StartsWith("Demo ")));
         Assert.All(demo.Messages.Where(m => m.StartsWith("Demo ")), m => Assert.EndsWith("created.", m));
         Assert.Equal(1, demoCounts["Cooperatives"]);
         Assert.Equal(3, demoCounts["FarmingZones"]);
         Assert.Equal(20, demoCounts["Rafts"]);
         Assert.Equal(9, demoCounts["Employees"]);
-        Assert.Equal(20, demoCounts["PurchaseReceipts"]);
+        Assert.Equal(26, demoCounts["PurchaseReceipts"]);
 
         Assert.Equal(DeploymentBootstrapper.Success, again.ExitCode);
         Assert.All(again.Messages.Where(m => m.StartsWith("Demo ")), m => Assert.EndsWith("already there.", m));

@@ -6,6 +6,7 @@ using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Features.Authorization;
 using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
 using FarmingHost = OMTS.Api.IntegrationTests.Farming.FarmingSqlServerHost;
@@ -47,6 +48,18 @@ public static class PurchasingSqlServerKit
     }
 
     public static Task<HttpClient> ZoneManagerAsync(this FarmingHost host, Guid zoneId) => host.StaffAsync(zoneId, StaffRole.ZoneManager);
+
+    /// <summary>A material usage on the raft, dated <paramref name="date"/> (default today), recorded by the Owner.</summary>
+    public static async Task<Guid> UseMaterialAsync(this FarmingHost host, Guid raftId, Guid itemId, decimal quantity, DateOnly? date = null)
+    {
+        var usage = new MaterialUsage
+        {
+            RaftId = raftId, ItemId = itemId, Quantity = quantity, UsageDate = date ?? PurchasingTestKit.Today, RepairReason = "Broken buoy",
+            RecordedByAccountId = host.Owner.Account.Id,
+        };
+        await host.UseDbAsync(db => db.MaterialUsages.Add(usage));
+        return usage.Id;
+    }
 
     /// <summary>Starts the requests together (HttpClient is safe for concurrent requests).</summary>
     public static async Task<HttpResponseMessage[]> InParallelAsync(int count, Func<int, Task<HttpResponseMessage>> request)

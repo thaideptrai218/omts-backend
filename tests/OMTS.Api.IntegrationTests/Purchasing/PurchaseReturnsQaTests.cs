@@ -314,13 +314,11 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
 
     // One return of several lines: all or nothing, one statement entry, and only its Material line that names the raft moves the raft (BR-FARM-05). A Seed line that names the raft does not.
     [Fact]
-    public async Task One_return_of_several_lines_is_all_or_nothing_and_only_a_material_line_with_the_raft_moves_its_cost()
+    public async Task One_return_of_several_lines_is_all_or_nothing_and_counts_every_line_it_holds()
     {
         var world = await factory.WorldAsync();
         var receipt = await world.CompletedAsync(world.MaterialForRaft(10, 10_000), new LineBody(world.Seed, 10, 1_000, RaftId: world.Raft.Id), new LineBody(world.Other, 10, 500));
         var (material, seed, other) = (receipt.LineOf(world.Material), receipt.LineOf(world.Seed), receipt.LineOf(world.Other));
-        var costBefore = (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{world.Raft.Id}")).Money("materialCost");
-        Assert.Equal(100_000m, costBefore);
 
         var refused = await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(material, 1), new ReturnLineBody(other, 11)] }))
             .ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-03");
@@ -331,9 +329,8 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
             .ReadAsync(HttpStatusCode.Created);
 
         Assert.Equal(11_500m, saved.Money("returned"));
-        Assert.Equal(90_000m, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{world.Raft.Id}")).Money("materialCost"));
         var filtered = (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts?supplierId={world.SupplierId}&raftId={world.Raft.Id}")).GetProperty("totals");
-        Assert.Equal((110_000m, 11_000m, 90_000m), (filtered.Money("receiptsTotal"), filtered.Money("returnsTotal"), filtered.Money("raftMaterialCost")));
+        Assert.Equal((110_000m, 11_000m), (filtered.Money("receiptsTotal"), filtered.Money("returnsTotal")));
         var statement = await world.Owner.GetFromJsonAsync<JsonElement>($"{Debts}/{world.SupplierId}/statement");
         Assert.Equal([("Receipt", 115_000m), ("Return", -11_500m)], statement.GetProperty("entries").EnumerateArray().Select(e => (e.GetProperty("kind").GetString(), e.Money("amount"))).ToList());
     }

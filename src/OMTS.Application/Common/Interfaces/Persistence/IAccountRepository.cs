@@ -39,5 +39,8 @@ public interface IAccountRepository
     /// <summary>The Active Cooperative Owner accounts, for a notification that has no zone (BR-LABOR-04).</summary>
     Task<IReadOnlyList<Guid>> ListActiveOwnerIdsAsync(CancellationToken cancellationToken);
 
+    /// <summary>The Active accounts of the cooperative's own people (the Owner and staff, never traders), ordered by display name.</summary>
+    Task<IReadOnlyList<Account>> ListActiveInternalAsync(CancellationToken cancellationToken);
+
     void Add(Account account);
 }

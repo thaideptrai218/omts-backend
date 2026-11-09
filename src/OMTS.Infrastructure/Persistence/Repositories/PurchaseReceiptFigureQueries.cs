@@ -8,8 +8,8 @@ using OMTS.Infrastructure.Persistence.Queries;
 namespace OMTS.Infrastructure.Persistence.Repositories;
 
 /// <summary>
-/// PURCHASE-03 read side: money figures are summed by SQL and paged or grouped in the database, so a list, its totals, the
-/// export and the raft material cost never materialize receipts with their lines and returns. The item group, item and raft
+/// PURCHASE-03 read side: money figures are summed by SQL and paged or grouped in the database, so a list, its totals and the
+/// export never materialize receipts with their lines and returns. The item group, item and raft
 /// filters are line filters (PURCHASE-03 step 3).
 /// </summary>
 internal sealed partial class PurchaseReceiptRepository
@@ -23,14 +23,14 @@ internal sealed partial class PurchaseReceiptRepository
             return ([], totals);
         }
 
-        var items = await Figures(Newest(Filtered(filter, db.PurchaseReceipts.AsNoTracking())).Skip((page - 1) * pageSize).Take(pageSize), filter)
+        var items = await Figures(Sorted(Filtered(filter, db.PurchaseReceipts.AsNoTracking()), filter).Skip((page - 1) * pageSize).Take(pageSize), filter)
             .ToListAsync(cancellationToken);
         return (items, totals);
     }
 
     public async Task<IReadOnlyList<ReceiptFigureRow>> ListFiguresAsync(PurchaseReceiptFilter filter, int? take, CancellationToken cancellationToken)
     {
-        var query = Newest(Filtered(filter, db.PurchaseReceipts.AsNoTracking()));
+        var query = Sorted(Filtered(filter, db.PurchaseReceipts.AsNoTracking()), filter);
         return await Figures(take is { } limit ? query.Take(limit) : query, filter).ToListAsync(cancellationToken);
     }
 
@@ -40,50 +40,17 @@ internal sealed partial class PurchaseReceiptRepository
         var count = await matching.CountAsync(cancellationToken);
         var completedCount = await matching.CountAsync(r => r.StatusId == StatusIds.PurchaseReceipt.Completed, cancellationToken);
         var (receipts, returns) = await SumsAsync(filter, cancellationToken);
-        decimal? raftMaterialCost = null;
-        if (filter.RaftId is not null)
-        {
-            // BR-FARM-05: the material cost of the raft counts its Material lines only, whatever group is chosen.
-            var (material, materialReturns) = filter.ItemGroup == InputItemGroup.Material
-                ? (receipts, returns)
-                : await SumsAsync(filter with { ItemGroup = InputItemGroup.Material }, cancellationToken);
-            raftMaterialCost = material - materialReturns;
-        }
-
-        return new ReceiptListTotals(count, completedCount, receipts, returns, raftMaterialCost);
-    }
-
-    public async Task<(IReadOnlyList<RaftCostLineRow> Lines, IReadOnlyList<RaftCostReturnRow> Returns)> RaftMaterialCostRowsAsync(
-        PurchaseReceiptFilter filter, CancellationToken cancellationToken)
-    {
-        var (from, to) = (filter.From ?? DateOnly.MinValue, filter.To ?? DateOnly.MaxValue);
-        var lines = OfCompletedReceipts(filter, MatchingLines(filter with { ItemGroup = InputItemGroup.Material }, db.PurchaseReceiptLines.AsNoTracking()))
-            .Where(l => l.RaftId != null);
-        var lineRows = await lines
-            .Where(l => l.Receipt.ReceiptDate >= from && l.Receipt.ReceiptDate <= to)
-            .Select(l => new RaftCostLineRow(
-                l.RaftId!.Value, l.Raft!.Code, l.Raft.ZoneId, l.Raft.Zone.Code, l.Raft.Zone.Name,
-                l.ReceiptId, l.Receipt.Code, l.Receipt.ReceiptDate, l.Receipt.SupplierId, l.Receipt.Supplier.Name,
-                l.Id, l.LineNumber, l.ItemId!.Value, l.Item!.Code, l.Item.Name, l.Unit, l.Quantity ?? 0m, l.UnitPrice ?? 0m, l.LineAmount))
-            .ToListAsync(cancellationToken);
-        var lineIds = lines.Select(l => l.Id);
-        var returnRows = await db.RecordedReturnLines()
-            .Where(rl => lineIds.Contains(rl.ReceiptLineId) && rl.Return.ReturnDate >= from && rl.Return.ReturnDate <= to)
-            .Select(rl => new RaftCostReturnRow(
-                rl.ReceiptLine.RaftId!.Value, rl.ReceiptLine.Raft!.Code, rl.ReceiptLine.Raft.ZoneId, rl.ReceiptLine.Raft.Zone.Code, rl.ReceiptLine.Raft.Zone.Name,
-                rl.ReturnId, rl.Return.Code, rl.Return.ReturnDate, rl.ReceiptLine.ReceiptId, rl.ReceiptLine.Receipt.Code,
-                rl.ReceiptLineId, rl.ReceiptLine.LineNumber, rl.ReceiptLine.Item!.Name, rl.ReceiptLine.Unit, rl.Quantity, rl.ReturnValue))
-            .ToListAsync(cancellationToken);
-        return (lineRows, returnRows);
+        return new ReceiptListTotals(count, completedCount, receipts, returns);
     }
 
     /// <summary>
-    /// Σ of the matching lines of the matching Completed receipts received in the period, and Σ of the returns of those lines
-    /// that are not cancelled, dated in the period whatever the date received (PURCHASE-03 step 3, BR-FARM-05).
+    /// Σ of the matching lines of the matching Completed receipts received in the period, and Σ of the Recorded returns of those
+    /// lines, dated in the period whatever the date received (PURCHASE-03 step 3, BR-FARM-05).
     /// </summary>
     private async Task<(decimal Receipts, decimal Returns)> SumsAsync(PurchaseReceiptFilter filter, CancellationToken cancellationToken)
     {
-        if (filter.StatusId is { } statusId && statusId != StatusIds.PurchaseReceipt.Completed)
+        if ((filter.StatusId is { } statusId && statusId != StatusIds.PurchaseReceipt.Completed)
+            || (filter.StatusIds is { } statusIds && !statusIds.Contains(StatusIds.PurchaseReceipt.Completed)))
         {
             // Totals count Completed receipts only (BR-PURCHASE-03), and only Completed receipts have returns.
             return (0, 0);
@@ -95,23 +62,44 @@ internal sealed partial class PurchaseReceiptRepository
             .SumAsync(l => (decimal?)l.LineAmount, cancellationToken) ?? 0m;
         var lineIds = lines.Select(l => l.Id);
         var returns = await db.RecordedReturnLines()
-            .Where(rl => lineIds.Contains(rl.ReceiptLineId) && rl.Return.ReturnDate >= from && rl.Return.ReturnDate <= to)
+            .Where(rl => rl.ReceiptLineId != null && lineIds.Contains(rl.ReceiptLineId.Value) && rl.Return.ReturnDate >= from && rl.Return.ReturnDate <= to)
             .SumAsync(rl => (decimal?)rl.ReturnValue, cancellationToken) ?? 0m;
         return (receipts, returns);
     }
 
-    private static IOrderedQueryable<PurchaseReceipt> Newest(IQueryable<PurchaseReceipt> rows) =>
-        rows.OrderByDescending(r => r.ReceiptDate).ThenByDescending(r => r.Code);
+    private static IQueryable<PurchaseReceipt> Sorted(IQueryable<PurchaseReceipt> rows, PurchaseReceiptFilter filter)
+    {
+        var descending = filter.Descending;
+        var sorted = filter.Sort switch
+        {
+            PurchaseReceiptSort.Code => descending ? rows.OrderByDescending(r => r.Code) : rows.OrderBy(r => r.Code),
+            PurchaseReceiptSort.Supplier => descending ? rows.OrderByDescending(r => r.Supplier.Name) : rows.OrderBy(r => r.Supplier.Name),
+            PurchaseReceiptSort.Total => descending
+                ? rows.OrderByDescending(r => r.Lines.Sum(l => (decimal?)l.LineAmount) ?? 0m)
+                : rows.OrderBy(r => r.Lines.Sum(l => (decimal?)l.LineAmount) ?? 0m),
+            PurchaseReceiptSort.Status => descending ? rows.OrderByDescending(r => r.StatusId) : rows.OrderBy(r => r.StatusId),
+            _ => descending ? rows.OrderByDescending(r => r.ReceiptDate) : rows.OrderBy(r => r.ReceiptDate),
+        };
+        return sorted.ThenByDescending(r => r.Code);
+    }
 
     /// <summary>The receipt with its total and the total of the lines matching the filter, as SQL subqueries.</summary>
     private static IQueryable<ReceiptFigureRow> Figures(IQueryable<PurchaseReceipt> receipts, PurchaseReceiptFilter? filter)
     {
-        var (group, itemId, raftId) = (filter?.ItemGroup, filter?.ItemId, filter?.RaftId);
+        var (group, itemId, raftId, groups) = (filter?.ItemGroup, filter?.ItemId, filter?.RaftId, filter?.ItemGroups);
         return receipts.Select(r => new ReceiptFigureRow(
             r.Id, r.Code, r.ReceiptDate, r.SupplierId, r.Supplier.Name, r.Supplier.PhoneNumber, r.StatusId, r.RecordedByAccountId,
             r.Lines.Sum(l => (decimal?)l.LineAmount) ?? 0m,
-            r.Lines.Where(l => (group == null || (l.Item != null && l.Item.Group == group)) && (itemId == null || l.ItemId == itemId) && (raftId == null || l.RaftId == raftId))
-                .Sum(l => (decimal?)l.LineAmount) ?? 0m));
+            r.Lines.Where(l => (group == null || (l.Item != null && l.Item.Group == group)) && (groups == null || (l.Item != null && groups.Contains(l.Item.Group)))
+                    && (itemId == null || l.ItemId == itemId) && (raftId == null || l.RaftId == raftId))
+                .Sum(l => (decimal?)l.LineAmount) ?? 0m,
+            r.Supplier.Code,
+            r.Lines.Count,
+            (r.Returns.Where(x => x.StatusId == StatusIds.PurchaseReturn.Recorded).SelectMany(x => x.Lines).Sum(l => (decimal?)l.ReturnValue) ?? 0m)
+                - (r.Returns.Where(x => x.StatusId == StatusIds.PurchaseReturn.Recorded).Sum(x => (decimal?)x.Discount) ?? 0m),
+            r.Discount, r.ZoneId, r.Zone!.Code, r.Zone!.Name, r.Notes, r.CompletedAt, r.CreatedAt, r.UpdatedAt, r.ReceivedAt, r.ReceivedByAccountId,
+            // Codes of its Recorded returns, oldest first, for the list's "Mã trả hàng nhập" column.
+            r.Returns.Where(x => x.StatusId == StatusIds.PurchaseReturn.Recorded).OrderBy(x => x.ReturnedAt).Select(x => x.Code).ToList()));
     }
 
     private static IQueryable<PurchaseReceiptLine> MatchingLines(PurchaseReceiptFilter filter, IQueryable<PurchaseReceiptLine> lines)
@@ -119,6 +107,11 @@ internal sealed partial class PurchaseReceiptRepository
         if (filter.ItemGroup is { } group)
         {
             lines = lines.Where(l => l.Item != null && l.Item.Group == group);
+        }
+
+        if (filter.ItemGroups is { } groups)
+        {
+            lines = lines.Where(l => l.Item != null && groups.Contains(l.Item.Group));
         }
 
         if (filter.ItemId is { } itemId)
@@ -149,16 +142,28 @@ internal sealed partial class PurchaseReceiptRepository
             lines = lines.Where(l => l.Receipt.Code.Contains(code));
         }
 
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            var text = filter.Search.Trim();
+            lines = lines.Where(l => l.Receipt.Code.Contains(text) || l.Receipt.Supplier.Name.Contains(text));
+        }
+
+        if (filter.ZoneIds is { } zoneIds)
+        {
+            lines = lines.Where(l => l.Receipt.ZoneId != null && zoneIds.Contains(l.Receipt.ZoneId.Value));
+        }
+
         return lines;
     }
 
     private static IQueryable<PurchaseReceipt> Filtered(PurchaseReceiptFilter filter, IQueryable<PurchaseReceipt> query)
     {
-        if (filter.ItemGroup is not null || filter.ItemId is not null || filter.RaftId is not null)
+        if (filter.ItemGroup is not null || filter.ItemGroups is not null || filter.ItemId is not null || filter.RaftId is not null)
         {
-            var (group, itemId, raftId) = (filter.ItemGroup, filter.ItemId, filter.RaftId);
+            var (group, groups, itemId, raftId) = (filter.ItemGroup, filter.ItemGroups, filter.ItemId, filter.RaftId);
             query = query.Where(r => r.Lines.Any(l =>
-                (group == null || (l.Item != null && l.Item.Group == group)) && (itemId == null || l.ItemId == itemId) && (raftId == null || l.RaftId == raftId)));
+                (group == null || (l.Item != null && l.Item.Group == group)) && (groups == null || (l.Item != null && groups.Contains(l.Item.Group)))
+                && (itemId == null || l.ItemId == itemId) && (raftId == null || l.RaftId == raftId)));
         }
 
         if (filter.SupplierId is { } supplierId)
@@ -169,6 +174,22 @@ internal sealed partial class PurchaseReceiptRepository
         if (filter.StatusId is { } statusId)
         {
             query = query.Where(r => r.StatusId == statusId);
+        }
+
+        if (filter.StatusIds is { } statusIds)
+        {
+            query = query.Where(r => statusIds.Contains(r.StatusId));
+        }
+
+        if (filter.ZoneIds is { } zoneIds)
+        {
+            query = query.Where(r => r.ZoneId != null && zoneIds.Contains(r.ZoneId.Value));
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            var text = filter.Search.Trim();
+            query = query.Where(r => r.Code.Contains(text) || r.Supplier.Name.Contains(text));
         }
 
         if (filter.From is { } from)

@@ -46,6 +46,25 @@ public class PurchaseMoneyTests
     public void Line_amount_is_quantity_times_unit_price_half_up_to_the_dong(decimal quantity, decimal unitPrice, decimal expected) =>
         Assert.Equal(expected, PurchaseMoney.LineAmount(quantity, unitPrice));
 
+    public static TheoryData<decimal?, decimal?, decimal, decimal> DiscountVectors => new()
+    {
+        { 3m, 10_000m, 500m, 28_500m },
+        { 1.5m, 333m, 0m, 500m }, // 499.5 half up
+        { 1.5m, 334m, 1m, 500m }, // the discount comes off the unit, before rounding
+        { 2.5m, 1_000m, 1_000m, 0m }, // the whole price off
+        { null, 1_000m, 100m, 0m }, // a Draft line without a quantity
+        { 2m, null, 100m, 0m },
+    };
+
+    [Theory]
+    [MemberData(nameof(DiscountVectors))]
+    public void Line_amount_with_a_discount_is_quantity_times_unit_price_less_discount_half_up(decimal? quantity, decimal? unitPrice, decimal discount, decimal expected) =>
+        Assert.Equal(expected, PurchaseMoney.LineAmount(quantity, unitPrice, discount));
+
+    [Fact]
+    public void The_net_unit_price_is_the_unit_price_less_the_discount_per_unit() =>
+        Assert.Equal(9_500m, PurchaseMoney.NetUnitPrice(new PurchaseReceiptLine { UnitPrice = 10_000, Discount = 500 }));
+
     [Fact]
     public void The_total_is_the_sum_of_the_rounded_lines_not_the_rounded_sum()
     {

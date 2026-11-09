@@ -26,6 +26,7 @@ using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Application.Features.Traceability.Tracing;
 using OMTS.Application.Features.Traceability.Withdrawal;
 using OMTS.Application.Features.Labor;
+using OMTS.Application.Features.Purchasing;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
@@ -201,6 +202,7 @@ public static class DependencyInjection
         // INP – suppliers, farming inputs, purchase receipts, returns and supplier payments
         services.AddScoped<ZoneAccessGuard>();
         services.AddScoped<SupplierService>();
+        services.AddScoped<SupplierFileService>();
         services.AddScoped<FarmingInputItemService>();
         services.AddScoped<ProductService>();
         services.AddScoped<ProductReadService>();
@@ -246,11 +248,15 @@ public static class DependencyInjection
         services.AddScoped<PurchaseReceiptValidator>();
         services.AddScoped<PurchaseReceiptViews>();
         services.AddScoped<PurchaseReceiptNotifications>();
+        services.AddScoped<PurchaseDocumentCodeService>();
         services.AddScoped<PurchaseReceiptService>();
         services.AddScoped<PurchaseReceiptCancellationService>();
         services.AddScoped<PurchaseReceiptCorrectionService>();
+        services.AddScoped<PurchaseReceiptEditService>();
         services.AddScoped<PurchaseReceiptCopyService>();
         services.AddScoped<PurchaseReturnService>();
+        services.AddScoped<PurchaseReturnQueryService>();
+        services.AddScoped<SupplierPaymentAllocationService>();
         services.AddScoped<PurchaseReceiptQueryService>();
         services.AddScoped<SupplierPaymentService>();
         services.AddScoped<SupplierPaymentNotifications>();

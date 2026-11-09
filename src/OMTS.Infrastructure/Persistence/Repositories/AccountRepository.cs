@@ -73,5 +73,11 @@ internal sealed class AccountRepository(OmtsDbContext db) : IAccountRepository
             .Select(a => a.Id)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Account>> ListActiveInternalAsync(CancellationToken cancellationToken) =>
+        await db.Accounts.AsNoTracking()
+            .Where(a => (a.SubjectType == SubjectType.CooperativeOwner || a.SubjectType == SubjectType.Staff) && a.StatusId == StatusIds.Account.Active)
+            .OrderBy(a => a.DisplayName).ThenBy(a => a.Username)
+            .ToListAsync(cancellationToken);
+
     public void Add(Account account) => db.Accounts.Add(account);
 }

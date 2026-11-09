@@ -56,7 +56,7 @@ public static class PermissionFunctions
         new(HarvestLots, "Harvest lots and farming yield (HARVEST-02, HARVEST-04)", false, [View, Create, Edit, Export]),
         new(LotTracing, "Lot tracing and its export (TRACE-02)", false, [View, Export]),
         new(Provenance, "Provenance publication and corrections (TRACE-01, TRACE-03; withdrawing, TRACE-04, is Owner-only)", false, [View, Create, Edit, Publish]),
-        new(Suppliers, "Suppliers (PURCHASE-07)", true, [View, Create, Edit]),
+        new(Suppliers, "Suppliers (PURCHASE-07)", true, [View, Create, Edit, Export]),
         new(PurchaseReceipts, "Purchase receipts, returns and cancellations (PURCHASE-01, PURCHASE-02, PURCHASE-03, PURCHASE-06; correcting a receipt is Owner-only)", true, [View, Create, Edit, Delete, Export]),
         new(SupplierPayments, "Supplier payments and supplier debts (PURCHASE-04, PURCHASE-05)", true, [View, Create, Export]),
         new(Customers, "Customers (SALE-04)", true, [View, Create, Edit]),

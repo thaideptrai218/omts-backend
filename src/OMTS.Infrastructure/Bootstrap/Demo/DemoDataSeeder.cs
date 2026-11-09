@@ -34,6 +34,7 @@ internal static class DemoDataSeeder
         new DemoCustomerStep(),
         new DemoPurchaseRequestStep(),
         new DemoSupplierStep(),
+        new DemoExtraSupplierStep(),
         new DemoInputItemStep(),
         new DemoMaterialUsageStep(),
         new DemoPurchaseReceiptStep(),

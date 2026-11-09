@@ -58,9 +58,9 @@ public static class FixedRoles
             new(PurchaseReceipts, [View, Export]),
             // TRACE-02 is R for the Accountant: the trace result is viewed, not exported (TRACE-02.2 is the Zone Manager's).
             new(LotTracing, [View]),
-            // Suppliers are read to pick the payee of a supplier payment (PURCHASE-05). §I.4.4 shows PURCHASE-07 as No for
-            // the Accountant; kept by default until the BA answers (gap Q4, OMTS-118).
-            new(Suppliers, [View]),
+            // Suppliers are read to pick the payee of a supplier payment (PURCHASE-05) and the Accountant may export the list it
+            // already sees. §I.4.4 shows PURCHASE-07 as No; this deviation was confirmed by the user.
+            new(Suppliers, [View, Export]),
         ]);
 
     public static readonly IReadOnlyList<FixedRole> All = [ZoneManager, Accountant];

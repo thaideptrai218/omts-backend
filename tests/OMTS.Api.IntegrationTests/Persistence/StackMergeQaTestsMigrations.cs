@@ -34,7 +34,7 @@ public class StackMergeQaTestsMigrations
         "20261105093720_AuditSearch", "20261105093736_EmployeesV2", "20261105122524_PurchaseRequests", "20261105140242_SupplierPaymentsV2", "20261105161142_RaftsV2",
         "20261105165022_CultivationCyclesV2", "20261105170348_PurchaseReturnsV2", "20261106081809_LaborSettings", "20261106083401_CultivationLogs", "20261106084757_MaterialUsages",
         "20261107050042_SeedingRecords", "20261107052218_HarvestLots", "20261107055301_HarvestLotCorrections", "20261107112721_SalesInvoices",
-        "20261107145951_SalesInvoiceSending", "20261107164749_HarvestLotAutoClose", "20261108020405_CustomerPayments", "20261108182824_VietQrPendingSales",
+        "20261107145951_SalesInvoiceSending", "20261107164749_HarvestLotAutoClose", "20261108020405_CustomerPayments", "20261108182824_VietQrPendingSales", "20261109104320_SupplierProfileFields",
     ];
 
     private const string MigrationBeforeSeeding = "20261106084757_MaterialUsages";
@@ -266,7 +266,7 @@ public class StackMergeQaTestsMigrations
         var cycle = new CultivationCycle { Raft = new Raft { Zone = new FarmingZone { CooperativeId = await OldSchemaRows.CooperativeAsync(db), Code = "KV01", Name = "A" }, Code = "B01", Size = "1" }, StartDate = new DateOnly(2026, 1, 1) };
         var account = new Account { Username = "owner", DisplayName = "Owner", SubjectType = SubjectType.CooperativeOwner, StatusId = StatusIds.Account.Active };
         var item = new FarmingInputItem { Code = "VT001", Name = "Seed", Group = InputItemGroup.Seed, Unit = "con" };
-        var receipt = new PurchaseReceipt { Code = "PN000001", Supplier = new Supplier { Name = "S", PhoneNumber = "0900000002" }, ReceiptDate = new DateOnly(2026, 1, 1), RecordedByAccountId = Guid.Empty, StatusId = StatusIds.PurchaseReceipt.Completed };
+        var receipt = new PurchaseReceipt { Code = "PN000001", SupplierId = await OldSchemaRows.SupplierAsync(db), ReceiptDate = new DateOnly(2026, 1, 1), RecordedByAccountId = Guid.Empty, StatusId = StatusIds.PurchaseReceipt.Completed };
         db.AddRange(cycle, account, item, receipt);
         receipt.RecordedByAccountId = account.Id;
         var line = new PurchaseReceiptLine { Receipt = receipt, LineNumber = 1, Item = item, Unit = "con", Quantity = 10, UnitPrice = 1 };

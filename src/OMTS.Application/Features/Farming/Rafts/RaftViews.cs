@@ -33,7 +33,7 @@ public sealed class RaftViews(IRaftMaterialCostQuery materialCosts, IFileStorage
             raft.StatusId, statusCatalog.DisplayNameOf(raft.StatusId),
             RaftLaneChange.InUseCount(raft.Lanes),
             Lanes(raft),
-            costs?.GetValueOrDefault(raft.Id),
+            costs.GetValueOrDefault(raft.Id),
             RowVersionGuard.Encode(raft.RowVersion));
     }
 

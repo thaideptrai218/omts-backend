@@ -6,6 +6,9 @@ namespace OMTS.Application.Common.Constants;
 /// </summary>
 public static class DocumentSequenceKeys
 {
+    /// <summary>Suppliers, NCC000123.</summary>
+    public const string Supplier = "NCC";
+
     /// <summary>Purchase receipts, PN000123 (GBR-04).</summary>
     public const string PurchaseReceipt = "PN";
 

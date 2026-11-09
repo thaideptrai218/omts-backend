@@ -37,7 +37,7 @@ internal sealed class RaftRepository(OmtsDbContext db) : IRaftRepository
     public async Task<IReadOnlyList<RaftLookupItem>> ListForLookupAsync(PermittedZones permitted, CancellationToken cancellationToken) =>
         await (permitted.AllZones ? db.Rafts.AsNoTracking() : db.Rafts.AsNoTracking().Where(r => permitted.ZoneIds.Contains(r.ZoneId)))
             .OrderBy(r => r.Zone.Code).ThenBy(r => r.Code)
-            .Select(r => new RaftLookupItem(r.Id, r.Code, r.Zone.Code))
+            .Select(r => new RaftLookupItem(r.Id, r.Code, r.Zone.Code, r.ZoneId))
             .ToListAsync(cancellationToken);
 
     public void Add(Raft raft) => db.Rafts.Add(raft);

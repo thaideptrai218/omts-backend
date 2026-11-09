@@ -328,6 +328,8 @@ public class AccountRulesSqlServerTests
 
         public Task<IReadOnlyList<Guid>> ListActiveOwnerIdsAsync(CancellationToken cancellationToken) => inner.ListActiveOwnerIdsAsync(cancellationToken);
 
+        public Task<IReadOnlyList<Account>> ListActiveInternalAsync(CancellationToken cancellationToken) => inner.ListActiveInternalAsync(cancellationToken);
+
         public Task<IReadOnlyList<Account>> ListTraderRequestsAsync(int statusId, CancellationToken cancellationToken) =>
             inner.ListTraderRequestsAsync(statusId, cancellationToken);
 

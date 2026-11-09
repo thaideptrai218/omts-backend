@@ -122,6 +122,7 @@ public static class DependencyInjection
         services.AddScoped<IFarmingInputItemRepository, FarmingInputItemRepository>();
         services.AddScoped<IPurchaseReceiptRepository, PurchaseReceiptRepository>();
         services.AddScoped<ISupplierPaymentRepository, SupplierPaymentRepository>();
+        services.AddScoped<IPurchaseDocumentCodeQuery, PurchaseDocumentCodeQuery>();
         services.AddScoped<ISupplierDebtQuery, SupplierDebtQuery>();
         services.AddScoped<IWaterMeasurementRepository, WaterMeasurementRepository>();
         services.AddSingleton<IStatusCatalog, StatusCatalog>();
@@ -139,6 +140,7 @@ public static class DependencyInjection
         services.AddPayments(configuration);
         services.AddZalo(configuration);
         services.AddSingleton<ISpreadsheetWriter, ClosedXmlSpreadsheetWriter>();
+        services.AddSingleton<ISpreadsheetReader, ClosedXmlSpreadsheetReader>();
 
         services.AddScoped<DeploymentBootstrapper>();
         services.AddScoped<OwnerPasswordReset>();

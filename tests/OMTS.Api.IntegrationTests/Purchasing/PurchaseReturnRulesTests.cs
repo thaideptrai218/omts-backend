@@ -137,11 +137,12 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
     }
 
     [Fact]
-    public async Task Non_seed_lines_are_never_seeded_and_a_material_return_lowers_the_raft_material_cost()
+    public async Task Non_seed_lines_are_never_seeded_and_a_return_lowers_the_debt_but_not_the_price_of_material_used_on_a_raft()
     {
         var world = await factory.WorldAsync();
         var receipt = await world.CompletedAsync(world.MaterialForRaft(10, 50_000), new LineBody(world.Other, 4, 25_000));
-        Assert.Equal(500_000, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{world.Raft.Id}")).Money("materialCost"));
+        await factory.UseMaterialAsync(world.Raft.Id, world.Material, 1);
+        Assert.Equal(50_000, await world.Owner.RaftMaterialCostAsync(world.Raft.Id));
 
         var returned = await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody
         {
@@ -150,7 +151,8 @@ public class PurchaseReturnRulesTests(AuthApiFactory factory) : IClassFixture<Au
 
         Assert.Equal(600_000m, returned.Money("returned"));
         Assert.All(returned.GetProperty("lines").EnumerateArray(), l => Assert.Equal(0m, l.Money("seeded")));
-        Assert.Equal(0, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{world.Raft.Id}")).Money("materialCost"));
+        // What was used stays costed at the latest purchase price of the item.
+        Assert.Equal(50_000, await world.Owner.RaftMaterialCostAsync(world.Raft.Id));
         Assert.Equal(0, await world.DebtAsync());
     }
 

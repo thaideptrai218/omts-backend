@@ -33,7 +33,7 @@ public class PurchaseReceiptRaftLookupTests(AuthApiFactory factory) : IClassFixt
 
         var all = (await owner.GetFromJsonAsync<JsonElement>(Lookup)).EnumerateArray().ToList();
 
-        Assert.All(all, r => Assert.Equal(["code", "id", "zoneCode"], r.EnumerateObject().Select(p => p.Name).Order()));
+        Assert.All(all, r => Assert.Equal(["code", "id", "zoneCode", "zoneId"], r.EnumerateObject().Select(p => p.Name).Order()));
         var found = all.Single(r => r.Id() == raftA);
         var saved = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raftA}");
         Assert.Equal((saved.Text("code"), zoneA.Text("code")), (found.Text("code"), found.Text("zoneCode")));
