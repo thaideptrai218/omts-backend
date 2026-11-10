@@ -69,13 +69,16 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<CustomerPayment> CustomerPayments => Set<CustomerPayment>();
     public DbSet<PendingSale> PendingSales => Set<PendingSale>();
 
-    // Labor (LABOR-01, LABOR-11, LABOR-15; the attendance and work assignment tables come with LABOR-04 and LABOR-02)
+    // Labor (LABOR-01, LABOR-02, LABOR-04, LABOR-05, LABOR-10, LABOR-11, LABOR-15)
     public DbSet<EmployeeTypePeriod> EmployeeTypePeriods => Set<EmployeeTypePeriod>();
     public DbSet<JobType> JobTypes => Set<JobType>();
     public DbSet<EmployeeJobType> EmployeeJobTypes => Set<EmployeeJobType>();
     public DbSet<PayRate> PayRates => Set<PayRate>();
     public DbSet<AttendanceSettingsVersion> AttendanceSettingsVersions => Set<AttendanceSettingsVersion>();
     public DbSet<Payroll> Payrolls => Set<Payroll>();
+    public DbSet<WorkAssignment> WorkAssignments => Set<WorkAssignment>();
+    public DbSet<Attendance> Attendances => Set<Attendance>();
+    public DbSet<EmployeeRequest> EmployeeRequests => Set<EmployeeRequest>();
 
     // System
     public DbSet<Notification> Notifications => Set<Notification>();

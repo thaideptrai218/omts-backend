@@ -67,6 +67,15 @@ public static class StatusIds
         public const int Finalized = 3404;
     }
 
+    /// <summary>STD-EMPLOYEE-REQUEST (BR-LABOR-08): a reviewed or cancelled request does not change any more.</summary>
+    public static class EmployeeRequest
+    {
+        public const int AwaitingReview = 3801;
+        public const int Approved = 3802;
+        public const int Rejected = 3803;
+        public const int Cancelled = 3804;
+    }
+
     public static class PurchaseReturn
     {
         public const int Recorded = 1901;

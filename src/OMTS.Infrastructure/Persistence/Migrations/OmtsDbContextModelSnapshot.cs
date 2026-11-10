@@ -2058,6 +2058,78 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("VerificationCodes");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.Attendance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("CheckInAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("CheckInMethod")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("CheckInReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid?>("CheckInRecordedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("CheckOutAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("CheckOutMethod")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("CheckOutReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid?>("CheckOutRecordedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CheckInRecordedByAccountId");
+
+                    b.HasIndex("CheckOutRecordedByAccountId");
+
+                    b.HasIndex("Date");
+
+                    b.HasIndex("EmployeeId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("Attendances");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.AttendanceSettingsVersion", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2125,6 +2197,98 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("JobTypeId");
 
                     b.ToTable("EmployeeJobTypes");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ClientOperationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("FromDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<TimeOnly?>("RequestedTime")
+                        .HasColumnType("time");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ReviewedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset>("SentAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("StatusId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("ToDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewedByAccountId");
+
+                    b.HasIndex("EmployeeId", "ClientOperationId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_EmployeeRequests_Employee_ClientOperation")
+                        .HasFilter("[ClientOperationId] IS NOT NULL");
+
+                    b.HasIndex("EmployeeId", "FromDate");
+
+                    b.HasIndex("StatusId", "SentAt");
+
+                    b.HasIndex("EmployeeId", "Type", "FromDate")
+                        .IsUnique()
+                        .HasDatabaseName("UX_EmployeeRequests_Awaiting_MissedTime")
+                        .HasFilter("[StatusId] = 3801 AND [Type] <> N'Leave'");
+
+                    b.ToTable("EmployeeRequests", t =>
+                        {
+                            t.HasCheckConstraint("CK_EmployeeRequests_Period", "[ToDate] >= [FromDate]");
+                        });
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeTypePeriod", b =>
@@ -2340,6 +2504,74 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_Payrolls_Period", "[PeriodEnd] >= [PeriodStart]");
                         });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.WorkAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AssignedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CorrectionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("JobTypeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Method")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("RaftId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset?>("StartsAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedByAccountId");
+
+                    b.HasIndex("JobTypeId");
+
+                    b.HasIndex("RaftId");
+
+                    b.HasIndex("Date", "RaftId");
+
+                    b.HasIndex("EmployeeId", "Date")
+                        .IsUnique()
+                        .HasDatabaseName("UX_WorkAssignments_Employee_Date_First")
+                        .HasFilter("[StartsAt] IS NULL");
+
+                    b.ToTable("WorkAssignments");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Platform.AuditEvent", b =>
@@ -2985,6 +3217,50 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
+                            Id = 3801,
+                            Code = "AWAITING_REVIEW",
+                            DisplayName = "Awaiting review",
+                            Group = "EMPLOYEE_REQUEST",
+                            IsFinal = false,
+                            IsInitial = true,
+                            Meaning = "Sent by the employee; not reviewed yet.",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 3802,
+                            Code = "APPROVED",
+                            DisplayName = "Approved",
+                            Group = "EMPLOYEE_REQUEST",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "Approved by the Cooperative Owner; leave is recorded, a missed time is in the attendance.",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 3803,
+                            Code = "REJECTED",
+                            DisplayName = "Rejected",
+                            Group = "EMPLOYEE_REQUEST",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "Rejected by the Cooperative Owner with a note.",
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 3804,
+                            Code = "CANCELLED",
+                            DisplayName = "Cancelled",
+                            Group = "EMPLOYEE_REQUEST",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "Cancelled by the employee while it was awaiting review; kept in the list.",
+                            SortOrder = 4
+                        },
+                        new
+                        {
                             Id = 2901,
                             Code = "OPEN",
                             DisplayName = "Open",
@@ -3456,6 +3732,39 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             ToStatusId = 3603,
                             TriggerEvent = "Action",
                             UseCases = "DEBT-02"
+                        },
+                        new
+                        {
+                            Id = 230,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 3801,
+                            GuardCondition = "The payroll of the pay period of the day is not Awaiting finalization or Finalized, and the times stay in order.",
+                            ReasonRequired = false,
+                            ToStatusId = 3802,
+                            TriggerEvent = "Action",
+                            UseCases = "LABOR-05"
+                        },
+                        new
+                        {
+                            Id = 231,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 3801,
+                            GuardCondition = "A note gives the reason.",
+                            ReasonRequired = true,
+                            ToStatusId = 3803,
+                            TriggerEvent = "Action",
+                            UseCases = "LABOR-05"
+                        },
+                        new
+                        {
+                            Id = 232,
+                            AllowedPerformers = "Employee",
+                            FromStatusId = 3801,
+                            GuardCondition = "The employee cancels their own request before it is reviewed.",
+                            ReasonRequired = false,
+                            ToStatusId = 3804,
+                            TriggerEvent = "Action",
+                            UseCases = "LABOR-10"
                         },
                         new
                         {
@@ -5445,6 +5754,27 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Account");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.Attendance", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("CheckInRecordedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("CheckOutRecordedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.AttendanceSettingsVersion", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
@@ -5471,6 +5801,30 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Employee");
 
                     b.Navigation("JobType");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeRequest", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
+                        .WithMany()
+                        .HasForeignKey("StatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("Status");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeTypePeriod", b =>
@@ -5536,6 +5890,39 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Status");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.WorkAssignment", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AssignedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Labor.JobType", "JobType")
+                        .WithMany()
+                        .HasForeignKey("JobTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
+                        .WithMany()
+                        .HasForeignKey("RaftId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("JobType");
+
+                    b.Navigation("Raft");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Platform.AuditEvent", b =>

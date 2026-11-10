@@ -27,6 +27,7 @@ using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Application.Features.Traceability.Tracing;
 using OMTS.Application.Features.Traceability.Withdrawal;
 using OMTS.Application.Features.Labor;
+using OMTS.Application.Features.Labor.Work;
 using OMTS.Application.Features.Purchasing;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
@@ -121,6 +122,13 @@ public static class DependencyInjection
 
         // LABOR-11 job types and rates, LABOR-15 attendance settings, LABOR-16 payroll settings, the pay period lock (BR-LABOR-13)
         services.AddScoped<PayPeriodLock>();
+
+        // LABOR-02 work assignment, LABOR-04 attendance, LABOR-05 and LABOR-10 employee requests, LABOR-08 my work
+        services.AddScoped<WorkAssignmentService>();
+        services.AddScoped<AttendanceRecordingService>();
+        services.AddScoped<AttendanceCorrectionService>();
+        services.AddScoped<EmployeeRequestService>();
+        services.AddScoped<WorkQueryService>();
         services.AddScoped<JobTypeQueryService>();
         services.AddScoped<JobTypeService>();
         services.AddScoped<PayRateService>();

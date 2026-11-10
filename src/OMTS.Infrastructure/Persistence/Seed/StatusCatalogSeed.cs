@@ -78,6 +78,12 @@ internal static class StatusCatalogSeed
         NewStatus(S.Payroll.SentBack, G.Payroll, "SENT_BACK", "Sent back", "Returned with a note for correction; the records of the period can change again."),
         NewStatus(S.Payroll.Finalized, G.Payroll, "FINALIZED", "Finalized", "The amounts are saved; never changed or reopened.", final: true),
 
+        // STD-EMPLOYEE-REQUEST (BR-LABOR-08): a reviewed or cancelled request does not change any more.
+        NewStatus(S.EmployeeRequest.AwaitingReview, G.EmployeeRequest, "AWAITING_REVIEW", "Awaiting review", "Sent by the employee; not reviewed yet.", initial: true),
+        NewStatus(S.EmployeeRequest.Approved, G.EmployeeRequest, "APPROVED", "Approved", "Approved by the Cooperative Owner; leave is recorded, a missed time is in the attendance.", final: true),
+        NewStatus(S.EmployeeRequest.Rejected, G.EmployeeRequest, "REJECTED", "Rejected", "Rejected by the Cooperative Owner with a note.", final: true),
+        NewStatus(S.EmployeeRequest.Cancelled, G.EmployeeRequest, "CANCELLED", "Cancelled", "Cancelled by the employee while it was awaiting review; kept in the list.", final: true),
+
         NewStatus(S.HarvestLot.Open, G.HarvestLot, "OPEN", "Open", "For sale: it can be chosen on a sales invoice.", initial: true),
         NewStatus(S.HarvestLot.Reopened, G.HarvestLot, "REOPENED", "Reopened", "Closed earlier and for sale again; the days before automatic close count from the day it was reopened."),
         NewStatus(S.HarvestLot.Closed, G.HarvestLot, "CLOSED", "Closed", "No longer for sale; its close reason is kept. The system can reopen it."),
@@ -143,6 +149,11 @@ internal static class StatusCatalogSeed
         NewTransition(210, S.CustomerPayment.AwaitingConfirmation, S.CustomerPayment.Confirmed, "DEBT-02", Accountant, Action, "The cash or the transfer that arrived matches the payment.", false),
         NewTransition(211, S.CustomerPayment.AwaitingConfirmation, S.CustomerPayment.Cancelled, "DEBT-02, SALE-08", $"{Accountant}; {Owner}", Action, "The customer did not pay, or the cash was given back when the invoice was cancelled.", true),
         NewTransition(212, S.CustomerPayment.Confirmed, S.CustomerPayment.Cancelled, "DEBT-02", Accountant, Action, "Recorded by mistake, or the money never arrived.", true),
+
+        // STD-EMPLOYEE-REQUEST (BR-LABOR-08, LABOR-05, LABOR-10.2).
+        NewTransition(230, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Approved, "LABOR-05", Owner, Action, "The payroll of the pay period of the day is not Awaiting finalization or Finalized, and the times stay in order.", false),
+        NewTransition(231, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Rejected, "LABOR-05", Owner, Action, "A note gives the reason.", true),
+        NewTransition(232, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Cancelled, "LABOR-10", "Employee", Action, "The employee cancels their own request before it is reviewed.", false),
 
         // Trader accounts requested from the Zalo Mini App (not in the SRS table yet, decision of 28/10/2026).
         NewTransition(30074, S.Account.PendingApproval, S.Account.Active, "ACS-01 (Zalo)", Owner, Action, "Approve the trader's request.", false),
