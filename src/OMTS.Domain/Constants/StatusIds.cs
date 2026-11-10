@@ -128,11 +128,12 @@ public static class StatusIds
         public const int Cancelled = 3502;
     }
 
-    /// <summary>STD-CUSTOMER-PAYMENT (BR-DEBT-03): counts in the debt from its recording, also while Awaiting confirmation.</summary>
+    /// <summary>STD-CUSTOMER-PAYMENT (BR-DEBT-03): counts in the debt from its recording, also while Awaiting confirmation; Pending transfer counts nowhere until the transfer arrives.</summary>
     public static class CustomerPayment
     {
         public const int AwaitingConfirmation = 3601;
-        public const int Confirmed = 3602;
+        public const int Completed = 3602;
         public const int Cancelled = 3603;
+        public const int PendingTransfer = 3604;
     }
 }

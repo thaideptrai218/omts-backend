@@ -51,7 +51,7 @@ public sealed record CreateSalesInvoiceRequest(
 
 public sealed record SalesInvoiceZoneView(Guid Id, string Code, string Name);
 
-public sealed record SalesInvoiceCustomerView(Guid Id, string Name, string? PhoneNumber);
+public sealed record SalesInvoiceCustomerView(Guid Id, string Name, string? PhoneNumber, string? Code = null);
 
 public sealed record SalesInvoiceLineView(
     Guid Id, int LineNumber, Guid ProductId, string ProductName, Guid HarvestLotId, string LotCode, decimal Kg, decimal UnitPrice, decimal ListPrice, SalesPriceSource PriceSource,

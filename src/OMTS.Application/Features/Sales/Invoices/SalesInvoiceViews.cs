@@ -67,7 +67,7 @@ public sealed class SalesInvoiceViews(
             invoice.InvoicedAt,
             invoice.InvoiceDate,
             new SalesInvoiceZoneView(invoice.Zone.Id, invoice.Zone.Code, invoice.Zone.Name),
-            invoice.Customer is { } c ? new SalesInvoiceCustomerView(c.Id, c.Name, c.PhoneNumber) : null,
+            invoice.Customer is { } c ? new SalesInvoiceCustomerView(c.Id, c.Name, c.PhoneNumber, c.Code) : null,
             invoice.CustomerId is null,
             invoice.PurchaseRequestId,
             invoice.TakesRequestInFull,

@@ -91,13 +91,16 @@ public sealed class CustomerDebtExportService(CustomerDebtService debts, ISpread
     /// <summary>BR-DEBT-04: a cancelled entry with its cancel date (business date) when it has one.</summary>
     private static string? Status(CustomerStatementEntry e) => e.Cancelled
         ? e.CancelledAt is { } at ? "Cancelled " + BusinessClock.ToBusinessDate(at).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) : "Cancelled"
-        : e.AwaitingConfirmation ? "Awaiting confirmation" : null;
+        : e.AwaitingConfirmation ? "Awaiting confirmation" : e.Pending ? "Pending transfer" : null;
 
     private static string KindText(CustomerStatementEntryKind kind) => kind switch
     {
         CustomerStatementEntryKind.Invoice => "Sales invoice",
+        CustomerStatementEntryKind.PriceCut => "Price cut",
         CustomerStatementEntryKind.Return => "Sales return",
         CustomerStatementEntryKind.Payment => "Payment",
+        CustomerStatementEntryKind.Discount => "Payment discount",
+        CustomerStatementEntryKind.Adjustment => "Adjustment",
         _ => "Money paid back",
     };
 }

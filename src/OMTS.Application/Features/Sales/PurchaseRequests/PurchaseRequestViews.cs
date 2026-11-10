@@ -25,7 +25,7 @@ public sealed class PurchaseRequestViews(
             var isFulfilled = fulfilled.Contains(r.Id);
             return new PurchaseRequestView(
                 r.Id,
-                new PurchaseRequestCustomerView(r.CustomerId, r.Customer.Name, r.Customer.PhoneNumber, owed[r.CustomerId]),
+                new PurchaseRequestCustomerView(r.CustomerId, r.Customer.Name, r.Customer.PhoneNumber, owed[r.CustomerId], r.Customer.Code),
                 r.ProductId, r.Product.Name, r.RequestedKg, r.PickupDate, r.Note, r.SentAt,
                 r.StatusId, StatusName(r, isFulfilled), isFulfilled, Response(r), r.CancelReason, r.CancelledAt,
                 sendings[r.Id].Select(Sending).ToList(),

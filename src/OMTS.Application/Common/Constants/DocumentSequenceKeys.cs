@@ -27,6 +27,12 @@ public static class DocumentSequenceKeys
     /// <summary>Quality claims, KN000123 (BR-CLAIM-01 gives no prefix: PM default).</summary>
     public const string QualityClaim = "KN";
 
+    /// <summary>Customer profiles, KH000123.</summary>
+    public const string Customer = "KH";
+
+    /// <summary>Customer debt adjustments, DC000123.</summary>
+    public const string CustomerDebtAdjustment = "DC";
+
     /// <summary>Cash book receipt vouchers of the Cash fund, TTM000123.</summary>
     public const string CashReceiptCash = "TTM";
 

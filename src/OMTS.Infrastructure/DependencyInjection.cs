@@ -81,6 +81,7 @@ public static class DependencyInjection
         services.AddScoped<IVerificationCodeRepository, VerificationCodeRepository>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<ICustomerReferences, CustomerReferences>();
+        services.AddScoped<ICustomerListQuery, CustomerListReader>();
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<IPurchaseRequestRepository, PurchaseRequestRepository>();
         services.AddScoped<ICooperativeOwnerQuery, CooperativeOwnerQuery>();
@@ -108,6 +109,7 @@ public static class DependencyInjection
         services.AddScoped<ISalesInvoiceRepository, SalesInvoiceRepository>();
         services.AddScoped<ISalesInvoiceSearchReader, SalesInvoiceSearchReader>();
         services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();
+        services.AddScoped<ICustomerDebtAdjustmentRepository, CustomerDebtAdjustmentRepository>();
         services.AddScoped<IPendingSaleRepository, PendingSaleRepository>();
         services.AddOptions<ProvenanceOptions>()
             .Bind(configuration.GetSection(ProvenanceOptions.SectionName))

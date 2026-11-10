@@ -27,7 +27,7 @@ public class SalesCatalogueQaLinkerMergeTests(AuthApiFactory factory) : IClassFi
         var cooperative = await factory.EnsureCooperativeAsync();
         var password = NewPassword();
         var trader = await factory.AddAccountAsync(NewCode(), password, SubjectType.Trader, configure);
-        var own = new Customer { CooperativeId = cooperative.Id, AccountId = trader.Id, Name = $"Own {NewCode()}", PhoneNumber = trader.PhoneNumber };
+        var own = new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = cooperative.Id, AccountId = trader.Id, Name = $"Own {NewCode()}", PhoneNumber = trader.PhoneNumber };
         await factory.UseDbAsync(db => db.Customers.Add(own));
         return (trader, own, await factory.LoginAsync(trader.Username, password), password);
     }

@@ -209,6 +209,8 @@ public static class DependencyInjection
         services.AddScoped<ProductService>();
         services.AddScoped<ProductReadService>();
         services.AddScoped<CustomerService>();
+        services.AddScoped<CustomerCodeService>();
+        services.AddScoped<CustomerFileService>();
         services.AddScoped<CustomerMergeService>();
         services.AddScoped<PurchaseRequestViews>();
         services.AddScoped<PurchaseRequestNotifications>();
@@ -232,6 +234,8 @@ public static class DependencyInjection
         services.AddScoped<CustomerPaymentStatusChanges>();
         services.AddScoped<CustomerPaymentNotifications>();
         services.AddScoped<CustomerPaymentService>();
+        services.AddScoped<CustomerPaymentCodeService>();
+        services.AddScoped<CustomerDebtAdjustmentService>();
         services.AddScoped<CustomerPaymentStatusService>();
         services.AddScoped<SalesInvoiceFactsReader>();
         services.AddScoped<SalesInvoiceWriter>();

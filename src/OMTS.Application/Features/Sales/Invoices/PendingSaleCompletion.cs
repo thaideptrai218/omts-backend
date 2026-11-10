@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Sales.Payments;
 using OMTS.Application.Common.Constants;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Domain.Constants;
@@ -19,7 +20,7 @@ public sealed class PendingSaleCompletion(
     SalesInvoiceWriter writer,
     PendingSaleWriter pendingWriter,
     SalesInvoiceNotifications notifications,
-    IDocumentNumberAllocator numbers,
+    CustomerPaymentCodeService paymentCodes,
     IUnitOfWork unitOfWork)
 {
     // A profile merged into one that was merged again: follow a few steps, never a loop.
@@ -72,7 +73,7 @@ public sealed class PendingSaleCompletion(
             lines, snapshot.Subtotal, snapshot.Total, new PortCashSplit(sale.CashAmount, 0m, 0m, sale.ToPayAmount), SalesPaymentTerm.PayNow, 0m, sale.ToPayAmount);
         var facts = new SalesInvoiceFacts(customer, request, lineProducts, lineLots, sale.ZoneId, snapshot.ByOwner, 0m);
 
-        var cashCode = sale.CashAmount > 0m ? SalesDocumentCodes.PaymentCode(await numbers.NextAsync(DocumentSequenceKeys.CustomerPayment, cancellationToken)) : null;
+        var cashCode = sale.CashAmount > 0m ? await paymentCodes.NextAsync(cancellationToken) : null;
         var invoice = writer.Write(entries, facts, decision, sale.Code, cashCode, deduplicationKey: null, sellerOnTransfer: sale.CreatedByAccountId);
         pendingWriter.End(sale, PendingSaleStatus.Completed, invoice.Id, by: null);
         await notifications.SaleAsync(invoice, decision, sale.CreatedByAccountId, cancellationToken);

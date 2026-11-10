@@ -65,6 +65,8 @@ public class FixedRolesMatrixTests
         // Responding (Edit) is Owner-only.
         { "SALE-03", R, No, PurchaseRequests, [Edit] },
         { "SALE-04", Full, No, Customers, [View, Create, Edit] },
+        // Deleting a customer nothing refers to and exporting the list are part of the customer screen, not of the SRS use case.
+        { "SALE-04.2", Full, No, Customers, [Delete, Export] },
         { "SALE-05", Full, No, SalesInvoices, [Create] },
         { "SALE-06", Full, No, SalesInvoices, [Create] },
         // Correcting (Edit) and cancelling (Delete) are Owner-only.
@@ -86,12 +88,15 @@ public class FixedRolesMatrixTests
     /// <summary>
     /// Where the code deliberately differs from the SRS column: the Accountant views suppliers to pick the payee of a
     /// supplier payment (PURCHASE-05) and exports the list it can already see; §I.4.4 shows PURCHASE-07 as No. The
-    /// Accountant's R on PURCHASE-03 "includes exporting to a file", so it views and exports receipts (lead decision, QA P2 Q1).
+    /// Accountant's R on PURCHASE-03 "includes exporting to a file", so it views and exports receipts (lead decision, QA P2 Q1). The Accountant also
+    /// looks up, adds, edits and exports customers (the customer screen holds their debts and payments), but does not delete them.
     /// </summary>
     private static readonly Dictionary<(string Uc, StaffRole Role), string> Deviations = new()
     {
         [("PURCHASE-07", StaffRole.Accountant)] = RExport,
         [("PURCHASE-03", StaffRole.Accountant)] = RExport,
+        [("SALE-04", StaffRole.Accountant)] = Full,
+        [("SALE-04.2", StaffRole.Accountant)] = RExport,
     };
 
     [Theory]

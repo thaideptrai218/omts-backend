@@ -126,6 +126,7 @@ public sealed class SalesInvoiceWriter(
             CustomerId = invoice.CustomerId,
             Kind = CustomerPaymentKind.Payment,
             PaymentDate = today,
+            PaidAt = invoice.InvoicedAt,
             Amount = amount,
             Method = CustomerPaymentMethod.Cash,
             InvoiceId = invoice.Id,

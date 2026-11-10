@@ -390,6 +390,19 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Manual = true,
                             Name = "Chi phí khác",
                             RowVersion = new byte[0]
+                        },
+                        new
+                        {
+                            Id = new Guid("5d6c1a10-0000-4c3a-9a10-000000000008"),
+                            Category = "Goods",
+                            CountsInResult = false,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 7, 0, 0, 0)),
+                            Direction = "Payment",
+                            IsActive = true,
+                            IsSystem = true,
+                            Manual = false,
+                            Name = "Chi trả lại khách",
+                            RowVersion = new byte[0]
                         });
                 });
 
@@ -3034,12 +3047,12 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         new
                         {
                             Id = 3602,
-                            Code = "CONFIRMED",
-                            DisplayName = "Confirmed",
+                            Code = "COMPLETED",
+                            DisplayName = "Completed",
                             Group = "CUSTOMER_PAYMENT",
                             IsFinal = false,
                             IsInitial = false,
-                            Meaning = "Checked or recorded by the Accountant.",
+                            Meaning = "The money has arrived or was recorded by the Accountant; counts in the debt.",
                             SortOrder = 2
                         },
                         new
@@ -3052,6 +3065,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             IsInitial = false,
                             Meaning = "Recorded by mistake or never received; no longer counts.",
                             SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 3604,
+                            Code = "PENDING_TRANSFER",
+                            DisplayName = "Pending transfer",
+                            Group = "CUSTOMER_PAYMENT",
+                            IsFinal = false,
+                            IsInitial = true,
+                            Meaning = "A VietQR code was made for the payment and the transfer has not arrived; counts nowhere until it does.",
+                            SortOrder = 4
                         });
                 });
 
@@ -3434,6 +3458,28 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             AllowedPerformers = "Accountant",
                             FromStatusId = 3602,
                             GuardCondition = "Recorded by mistake, or the money never arrived.",
+                            ReasonRequired = true,
+                            ToStatusId = 3603,
+                            TriggerEvent = "Action",
+                            UseCases = "DEBT-02"
+                        },
+                        new
+                        {
+                            Id = 30078,
+                            AllowedPerformers = "System; Accountant",
+                            FromStatusId = 3604,
+                            GuardCondition = "The transfer with the payment code arrived; the payment takes the amount received.",
+                            ReasonRequired = false,
+                            ToStatusId = 3602,
+                            TriggerEvent = "Action",
+                            UseCases = "DEBT-02, GFR-08"
+                        },
+                        new
+                        {
+                            Id = 30079,
+                            AllowedPerformers = "Accountant; Cooperative Owner",
+                            FromStatusId = 3604,
+                            GuardCondition = "The customer did not transfer, or the code was made by mistake.",
                             ReasonRequired = true,
                             ToStatusId = 3603,
                             TriggerEvent = "Action",
@@ -4063,6 +4109,30 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("BankAccountNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("BankBin")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("BankName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateOnly?>("BirthDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("CompanyName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<Guid>("CooperativeId")
                         .HasColumnType("uniqueidentifier");
 
@@ -4072,9 +4142,26 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("CustomerType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("Facebook")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Gender")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("IdentityNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<Guid?>("MergedIntoCustomerId")
                         .HasColumnType("uniqueidentifier");
@@ -4095,17 +4182,40 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<string>("PhoneNumber2")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("PhotoUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Province")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<int>("StatusId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TaxCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Ward")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("ZaloAccountId")
                         .HasMaxLength(100)
@@ -4117,9 +4227,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("[AccountId] IS NOT NULL");
 
+                    b.HasIndex("Code")
+                        .IsUnique();
+
                     b.HasIndex("CooperativeId");
 
                     b.HasIndex("MergedIntoCustomerId");
+
+                    b.HasIndex("StatusId");
 
                     b.HasIndex("ZaloAccountId")
                         .IsUnique()
@@ -4132,6 +4247,83 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasFilter("[PhoneCheckedByStaff] = 1 AND [MergedIntoCustomerId] IS NULL AND [PhoneNumber] IS NOT NULL");
 
                     b.ToTable("Customers");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.CustomerDebtAdjustment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("AdjustmentDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CancelledByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("RecordedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CancelledByAccountId");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("RecordedByAccountId");
+
+                    b.HasIndex("CustomerId", "AdjustmentDate");
+
+                    b.ToTable("CustomerDebtAdjustments", t =>
+                        {
+                            t.HasCheckConstraint("CK_CustomerDebtAdjustment_Amount", "[Amount] <> 0");
+                        });
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.CustomerPayment", b =>
@@ -4156,6 +4348,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasColumnType("datetimeoffset");
 
                     b.Property<Guid?>("CancelledByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CashAccountId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Code")
@@ -4185,6 +4380,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
                     b.Property<Guid?>("InvoiceId")
                         .HasColumnType("uniqueidentifier");
 
@@ -4201,6 +4400,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<string>("Note")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset>("PaidAt")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<DateOnly>("PaymentDate")
                         .HasColumnType("date");
@@ -4236,6 +4438,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CancelledByAccountId");
 
+                    b.HasIndex("CashAccountId");
+
                     b.HasIndex("Code")
                         .IsUnique();
 
@@ -4263,7 +4467,36 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.ToTable("CustomerPayments", t =>
                         {
-                            t.HasCheckConstraint("CK_CustomerPayment_Amount", "[Amount] > 0");
+                            t.HasCheckConstraint("CK_CustomerPayment_Amount", "[Amount] >= 0 AND [DiscountAmount] >= 0 AND ([Amount] > 0 OR [DiscountAmount] > 0)");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.CustomerPaymentAllocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PaymentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("PaymentId", "InvoiceId")
+                        .IsUnique();
+
+                    b.ToTable("CustomerPaymentAllocations", t =>
+                        {
+                            t.HasCheckConstraint("CK_CustomerPaymentAllocation_Amount", "[Amount] > 0");
                         });
                 });
 
@@ -5803,11 +6036,41 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("MergedIntoCustomerId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
+                        .WithMany()
+                        .HasForeignKey("StatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Account");
 
                     b.Navigation("Cooperative");
 
                     b.Navigation("MergedIntoCustomer");
+
+                    b.Navigation("Status");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.CustomerDebtAdjustment", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("CancelledByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("RecordedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.CustomerPayment", b =>
@@ -5815,6 +6078,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("CancelledByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.CashBook.CashAccount", "CashAccount")
+                        .WithMany()
+                        .HasForeignKey("CashAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
@@ -5848,11 +6116,32 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.Navigation("CashAccount");
+
                     b.Navigation("Customer");
 
                     b.Navigation("Invoice");
 
                     b.Navigation("Status");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.CustomerPaymentAllocation", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesInvoice", "Invoice")
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.CustomerPayment", "Payment")
+                        .WithMany("Allocations")
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Invoice");
+
+                    b.Navigation("Payment");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.PendingSale", b =>
@@ -6158,6 +6447,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.SupplierPayment", b =>
+                {
+                    b.Navigation("Allocations");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.CustomerPayment", b =>
                 {
                     b.Navigation("Allocations");
                 });

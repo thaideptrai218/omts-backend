@@ -141,7 +141,7 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         var cooperative = await factory.EnsureCooperativeAsync();
         var phone = NewPhone();
         await factory.UseDbAsync(db => db.Customers.AddRange(Enumerable.Range(0, offlineProfiles)
-            .Select(i => new Customer { CooperativeId = cooperative.Id, Name = $"Offline {i}", PhoneNumber = phone })));
+            .Select(i => new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = cooperative.Id, Name = $"Offline {i}", PhoneNumber = phone })));
         var client = factory.CreateClient();
         var id = await VerificationIdAsync(await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }));
         var token = await VerifyAsync(client, id, factory.LastSmsCode(phone));

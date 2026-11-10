@@ -13,6 +13,7 @@ namespace OMTS.Application.UnitTests.Features.Sales;
 public class CustomerPaymentRulesTests
 {
     private static readonly DateOnly Today = new(2026, 11, 8);
+    private static readonly DateTimeOffset Now = new(2026, 11, 8, 12, 0, 0, TimeSpan.FromHours(7));
 
     private static RecordCustomerPaymentRequest Transfer(decimal? amount = 100_000m, DateOnly? date = null, string? reference = "FT-DEMO-1") =>
         new(Guid.NewGuid(), date ?? Today, amount, CustomerPaymentMethod.OtherTransfer, reference);
@@ -20,17 +21,17 @@ public class CustomerPaymentRulesTests
     [Fact]
     public void A_payment_needs_a_date_not_after_today_a_whole_amount_above_zero_cash_or_another_transfer_and_the_reference_of_a_transfer()
     {
-        Assert.Empty(CustomerPaymentRules.InvalidFields(Transfer(), Today));
-        Assert.Empty(CustomerPaymentRules.InvalidFields(Transfer() with { Method = CustomerPaymentMethod.Cash, BankReference = null }, Today));
-        Assert.Equal(["Payment date"], CustomerPaymentRules.InvalidFields(Transfer(date: Today.AddDays(1)), Today));
-        Assert.Equal(["Amount"], CustomerPaymentRules.InvalidFields(Transfer(amount: 0m), Today));
-        Assert.Equal(["Amount"], CustomerPaymentRules.InvalidFields(Transfer(amount: 100.5m), Today));
-        Assert.Equal(["Bank reference"], CustomerPaymentRules.InvalidFields(Transfer(reference: "  "), Today));
-        Assert.Equal(["Bank reference"], CustomerPaymentRules.InvalidFields(Transfer(reference: new string('9', 101)), Today));
+        Assert.Empty(CustomerPaymentRules.InvalidFields(Transfer(), Now));
+        Assert.Empty(CustomerPaymentRules.InvalidFields(Transfer() with { Method = CustomerPaymentMethod.Cash, BankReference = null }, Now));
+        Assert.Equal(["Payment date"], CustomerPaymentRules.InvalidFields(Transfer(date: Today.AddDays(1)), Now));
+        Assert.Equal(["Amount"], CustomerPaymentRules.InvalidFields(Transfer(amount: 0m), Now));
+        Assert.Equal(["Amount"], CustomerPaymentRules.InvalidFields(Transfer(amount: 100.5m), Now));
+        Assert.Equal(["Bank reference"], CustomerPaymentRules.InvalidFields(Transfer(reference: "  "), Now));
+        Assert.Equal(["Bank reference"], CustomerPaymentRules.InvalidFields(Transfer(reference: new string('9', 101)), Now));
         // The VietQR code of an invoice is recorded by the system only (GFR-08).
-        Assert.Equal(["Method"], CustomerPaymentRules.InvalidFields(Transfer() with { Method = CustomerPaymentMethod.VietQrInvoice }, Today));
+        Assert.Equal(["Method"], CustomerPaymentRules.InvalidFields(Transfer() with { Method = CustomerPaymentMethod.VietQrInvoice }, Now));
         Assert.Equal(["Payment date", "Amount", "Method", "Note", "Deduplication key"], CustomerPaymentRules.InvalidFields(
-            new RecordCustomerPaymentRequest(null, null, null, null, Note: new string('n', 1001), DeduplicationKey: new string('k', 101)), Today));
+            new RecordCustomerPaymentRequest(null, null, null, null, Note: new string('n', 1001), DeduplicationKey: new string('k', 101)), Now));
         Assert.Null(CustomerPaymentRules.Reason("   "));
         Assert.Equal("Never arrived", CustomerPaymentRules.Reason("  Never arrived "));
     }

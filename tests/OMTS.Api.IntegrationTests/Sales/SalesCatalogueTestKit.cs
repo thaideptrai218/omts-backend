@@ -59,7 +59,7 @@ public static class SalesCatalogueTestKit
     {
         var cooperative = await factory.EnsureCooperativeAsync();
         var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
-        var profile = new Customer { CooperativeId = cooperative.Id, AccountId = trader.Id, Name = name ?? $"Trader {NewCode()}", PhoneNumber = trader.PhoneNumber };
+        var profile = new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = cooperative.Id, AccountId = trader.Id, Name = name ?? $"Trader {NewCode()}", PhoneNumber = trader.PhoneNumber };
         configure?.Invoke(profile);
         await factory.UseDbAsync(db => db.Customers.Add(profile));
         return (trader, profile);

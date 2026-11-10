@@ -88,8 +88,9 @@ internal static class StatusCatalogSeed
 
         // STD-CUSTOMER-PAYMENT (BR-DEBT-03): a payment counts in the debt from its recording.
         NewStatus(S.CustomerPayment.AwaitingConfirmation, G.CustomerPayment, "AWAITING_CONFIRMATION", "Awaiting confirmation", "Recorded at the port or by the system; counts in the debt until the Accountant confirms or cancels it.", initial: true),
-        NewStatus(S.CustomerPayment.Confirmed, G.CustomerPayment, "CONFIRMED", "Confirmed", "Checked or recorded by the Accountant."),
+        NewStatus(S.CustomerPayment.Completed, G.CustomerPayment, "COMPLETED", "Completed", "The money has arrived or was recorded by the Accountant; counts in the debt."),
         NewStatus(S.CustomerPayment.Cancelled, G.CustomerPayment, "CANCELLED", "Cancelled", "Recorded by mistake or never received; no longer counts.", final: true),
+        NewStatus(S.CustomerPayment.PendingTransfer, G.CustomerPayment, "PENDING_TRANSFER", "Pending transfer", "A VietQR code was made for the payment and the transfer has not arrived; counts nowhere until it does.", initial: true),
     ];
 
     public static readonly StatusTransition[] Transitions =
@@ -140,9 +141,11 @@ internal static class StatusCatalogSeed
 
         // STD-SALES-INVOICE and STD-CUSTOMER-PAYMENT; the creation of each is SALE-05 (and GFR-08 for a VietQR payment).
         NewTransition(200, S.SalesInvoice.Completed, S.SalesInvoice.Cancelled, "SALE-08", Owner, Action, "The invoice has no sales return that is not cancelled; a cash payment is cancelled with it only when the cash was given back.", true),
-        NewTransition(210, S.CustomerPayment.AwaitingConfirmation, S.CustomerPayment.Confirmed, "DEBT-02", Accountant, Action, "The cash or the transfer that arrived matches the payment.", false),
+        NewTransition(210, S.CustomerPayment.AwaitingConfirmation, S.CustomerPayment.Completed, "DEBT-02", Accountant, Action, "The cash or the transfer that arrived matches the payment.", false),
         NewTransition(211, S.CustomerPayment.AwaitingConfirmation, S.CustomerPayment.Cancelled, "DEBT-02, SALE-08", $"{Accountant}; {Owner}", Action, "The customer did not pay, or the cash was given back when the invoice was cancelled.", true),
-        NewTransition(212, S.CustomerPayment.Confirmed, S.CustomerPayment.Cancelled, "DEBT-02", Accountant, Action, "Recorded by mistake, or the money never arrived.", true),
+        NewTransition(212, S.CustomerPayment.Completed, S.CustomerPayment.Cancelled, "DEBT-02", Accountant, Action, "Recorded by mistake, or the money never arrived.", true),
+        NewTransition(30078, S.CustomerPayment.PendingTransfer, S.CustomerPayment.Completed, "DEBT-02, GFR-08", $"{SystemActor}; {Accountant}", Action, "The transfer with the payment code arrived; the payment takes the amount received.", false),
+        NewTransition(30079, S.CustomerPayment.PendingTransfer, S.CustomerPayment.Cancelled, "DEBT-02", $"{Accountant}; {Owner}", Action, "The customer did not transfer, or the code was made by mistake.", true),
 
         // Trader accounts requested from the Zalo Mini App (not in the SRS table yet, decision of 28/10/2026).
         NewTransition(30074, S.Account.PendingApproval, S.Account.Active, "ACS-01 (Zalo)", Owner, Action, "Approve the trader's request.", false),

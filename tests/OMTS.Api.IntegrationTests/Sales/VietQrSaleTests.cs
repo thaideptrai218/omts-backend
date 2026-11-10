@@ -53,7 +53,7 @@ public class VietQrSaleTests
         var invoice = saved.GetProperty("invoice");
         Assert.Equal((code, "PayNow", 12_000_000m, sale.Manager.Account.Id), (invoice.Text("code"), invoice.Text("paymentTerm"), invoice.Money("total"), invoice.GetProperty("createdBy").Id()));
         var payments = invoice.GetProperty("payments").EnumerateArray().Select(p => (p.Text("method"), p.Money("amount"), p.GetProperty("statusId").GetInt32())).Order().ToList();
-        Assert.Equal([("Cash", 4_000_000m, StatusIds.CustomerPayment.AwaitingConfirmation), ("VietQrInvoice", 8_000_000m, StatusIds.CustomerPayment.AwaitingConfirmation)], payments);
+        Assert.Equal([("Cash", 4_000_000m, StatusIds.CustomerPayment.AwaitingConfirmation), ("VietQrInvoice", 8_000_000m, StatusIds.CustomerPayment.Completed)], payments);
         var invoiceId = invoice.Id();
         var transfer = Assert.Single(await api.VietQrPaymentsAsync(reference));
         Assert.Equal((invoiceId, sale.CustomerId, (Guid?)null, (string?)null), (transfer.InvoiceId!.Value, transfer.CustomerId!.Value, transfer.RecordedByAccountId, transfer.TransferInvoiceCode));
@@ -75,9 +75,9 @@ public class VietQrSaleTests
         Assert.Equal(2, (await api.PaymentsOfAsync(invoiceId)).Count);
         Assert.Equal(1, await api.QueryAsync(db => db.SalesInvoices.CountAsync()));
 
-        // DEBT-02.2: both wait for the Accountant.
+        // DEBT-02.2: the cash waits for the Accountant; the transfer is Completed at once.
         var accountant = await api.AllZonesAccountantAsync();
-        Assert.Equal(2, (await accountant.Client.AwaitingRowsAsync()).Count(r => r.GetProperty("invoice").Text("code") == code));
+        Assert.Equal(1, (await accountant.Client.AwaitingRowsAsync()).Count(r => r.GetProperty("invoice").Text("code") == code));
     }
 
     // SALE-05.0.E3: VietQR is not offered without a receiving bank account (MSG-SALE-13); cash still works.

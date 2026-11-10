@@ -39,7 +39,7 @@ public sealed class CustomerPaymentsController(CustomerPaymentService payments, 
         (await payments.GetAsync(id, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>
-    /// Steps 2-7: a payment, Confirmed when saved. 409 MSG-DEBT-04 until <c>confirmAboveDebt</c>, then 409 MSG-DEBT-05 until <c>confirmDuplicateBankReference</c>
+    /// Steps 2-7: a payment, Completed when saved; with <c>discountAmount</c> and <c>allocations</c> (the invoices it pays), a <c>cashAccountId</c> for a transfer and a <c>code</c> the user types. 409 MSG-DEBT-04 until <c>confirmAboveDebt</c>, then 409 MSG-DEBT-05 until <c>confirmDuplicateBankReference</c>
     /// (the field is named in <c>confirmationField</c>). A repeated <c>deduplicationKey</c> returns the first payment and creates nothing.
     /// </summary>
     [HttpPost]
@@ -47,6 +47,30 @@ public sealed class CustomerPaymentsController(CustomerPaymentService payments, 
     [ProducesResponseType<CustomerPaymentSaved>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Record(RecordCustomerPaymentRequest request, CancellationToken cancellationToken) =>
         (await payments.RecordAsync(request, CustomerPaymentKind.Payment, cancellationToken)).ToActionResult(p => StatusCode(StatusCodes.Status201Created, p));
+
+    /// <summary>
+    /// "Tạo QR" and "Tạo phiếu thu &amp; In QR": a payment that waits for the customer's transfer (status Pending transfer), with the VietQR code that pays its code into the
+    /// <c>cashAccountId</c> chosen. It counts nowhere until the transfer arrives (webhook) or it is cancelled. Without <c>allocations</c> the unpaid invoices are set oldest first.
+    /// </summary>
+    [HttpPost("pending-transfer")]
+    [RequirePermission(PermissionFunctions.CustomerPayments, PermissionAction.Create, PermissionScope.NoZone)]
+    [ProducesResponseType<CustomerPaymentSaved>(StatusCodes.Status201Created)]
+    public async Task<IActionResult> CreatePendingTransfer(RecordCustomerPaymentRequest request, CancellationToken cancellationToken) =>
+        (await payments.CreatePendingTransferAsync(request, cancellationToken)).ToActionResult(p => StatusCode(StatusCodes.Status201Created, p));
+
+    /// <summary>The VietQR code of a payment that waits for its transfer, again (reprint, download, copy); 409 MSG-GEN-09 for any other payment.</summary>
+    [HttpGet("{id:guid}/qr")]
+    [RequirePermission(PermissionFunctions.CustomerPayments, PermissionAction.View, PermissionScope.NoZone)]
+    [ProducesResponseType<CustomerPaymentQr>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Qr(Guid id, CancellationToken cancellationToken) =>
+        (await payments.GetQrAsync(id, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>Confirms one payment Awaiting confirmation (cash at the port); 409 MSG-GEN-09 when it is not.</summary>
+    [HttpPost("{id:guid}/confirm")]
+    [RequirePermission(PermissionFunctions.CustomerPayments, PermissionAction.Edit, PermissionScope.NoZone)]
+    [ProducesResponseType<CustomerPaymentSaved>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ConfirmOne(Guid id, CancellationToken cancellationToken) =>
+        (await statuses.ConfirmOneAsync(id, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>DEBT-02.3: money paid back, at most the money owed back (400 MSG-DEBT-06); 409 MSG-DEBT-05 as for a payment.</summary>
     [HttpPost("pay-back")]
@@ -62,7 +86,7 @@ public sealed class CustomerPaymentsController(CustomerPaymentService payments, 
     public async Task<IActionResult> Confirm(ConfirmCustomerPaymentsRequest request, CancellationToken cancellationToken) =>
         (await statuses.ConfirmAsync(request, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>DEBT-02.4: a payment or money paid back that is not cancelled, with a reason; 409 MSG-GEN-09 when it is already cancelled.</summary>
+    /// <summary>DEBT-02.4: a payment or money paid back that is not cancelled (one waiting for its transfer too), with a reason; 409 MSG-GEN-09 when it is already cancelled.</summary>
     [HttpPost("{id:guid}/cancel")]
     [RequirePermission(PermissionFunctions.CustomerPayments, PermissionAction.Edit, PermissionScope.NoZone)]
     [ProducesResponseType<CustomerPaymentSaved>(StatusCodes.Status200OK)]
