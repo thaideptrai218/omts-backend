@@ -24,6 +24,7 @@ public sealed class EmployeeService(
     StaffAccountService staffAccounts,
     EmployeeCallerAccess callers,
     EmployeeProfileValidator validator,
+    EmployeeCodeAllocator codes,
     EmployeeQueryService queries,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
@@ -58,12 +59,9 @@ public sealed class EmployeeService(
 
         var cooperative = await cooperatives.GetCurrentAsync(cancellationToken)
             ?? throw new InvalidOperationException("The cooperative has not been created yet (run the bootstrap command).");
-        var employee = new Employee { CooperativeId = cooperative.Id };
-        EmployeeProfileChanges.ApplyFields(employee, input);
-        employees.Add(employee);
-        EmployeeProfileChanges.SyncZones(employees, employee, input.WorkingZoneIds);
-        EmployeeProfileChanges.SyncJobTypes(employees, employee, input.JobTypeIds);
-        EmployeeProfileChanges.ChangeType(employees, employee, input.Type!.Value, input.TypeFrom!.Value);
+        var employee = EmployeeProfileChanges.AddNew(employees, cooperative.Id, input);
+        // The number is taken once everything is valid, just before the save (see IDocumentNumberAllocator).
+        employee.Code ??= await codes.NextAsync(null, cancellationToken);
 
         StaffAccountWithPassword? created = null;
         if (request.Account is not null)
@@ -162,7 +160,7 @@ public sealed class EmployeeService(
 
     /// <summary>
     /// Saves; a parallel save of the same phone number passes the pre-check, so the unique index refuses the second one,
-    /// which then gets the same MSG-LABOR-03 as the pre-check, and a login account whose username, phone number or email was
+    /// which then gets the same MSG-LABOR-03 as the pre-check (and a code typed twice the same MSG-GEN-02), and a login account whose username, phone number or email was
     /// taken meanwhile gets MSG-ACCOUNT-09. On an edit, any other duplicate is a type period, working zone or job type row
     /// that a parallel save of this employee just added: its insert meets the index before the version check, so it answers
     /// what that check would, MSG06. Other duplicates are left to the exception handler.
@@ -179,6 +177,11 @@ public sealed class EmployeeService(
             if (await validator.PhoneRefusalAsync(input.PhoneNumber, employeeId, cancellationToken) is { } phoneTaken)
             {
                 return phoneTaken;
+            }
+
+            if (await validator.CodeRefusalAsync(input.Code, employeeId, cancellationToken) is { } codeTaken)
+            {
+                return codeTaken;
             }
 
             if (created is not null && await FindTakenFieldAsync(created, cancellationToken) is { } fieldTaken)

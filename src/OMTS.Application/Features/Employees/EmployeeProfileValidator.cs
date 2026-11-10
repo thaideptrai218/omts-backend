@@ -54,8 +54,19 @@ public sealed class EmployeeProfileValidator(IEmployeeRepository employees, IFar
             return locked;
         }
 
+        if (await CodeRefusalAsync(input.Code, employee?.Id, cancellationToken) is { } codeTaken)
+        {
+            return codeTaken;
+        }
+
         return await PhoneRefusalAsync(input.PhoneNumber, employee?.Id, cancellationToken) is { } taken ? taken : input;
     }
+
+    /// <summary>MSG-GEN-02 naming the code, with the id of the employee who has it.</summary>
+    public async Task<AppError?> CodeRefusalAsync(string? code, Guid? exceptEmployeeId, CancellationToken cancellationToken) =>
+        code is not null && await employees.FindByCodeAsync(code, exceptEmployeeId, cancellationToken) is { } other
+            ? AppError.AlreadyExists("Employee code", other.Id, "Code")
+            : null;
 
     /// <summary>
     /// LABOR-01.1.E1: a new type takes effect after every pay period that is sent or finalized (MSG-LABOR-04). Only on an edit:

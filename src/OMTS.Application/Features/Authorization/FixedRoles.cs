@@ -42,7 +42,9 @@ public static class FixedRoles
             new(SalesInvoices, [View, Create, Export]),
             new(QualityClaims, [View]),
             new(SalesReturns, [View, Create]),
-            Full(LaborWorkers), Full(WorkAssignments), Full(Attendance),
+            // Exporting and importing employee files is the Cooperative Owner's: the Zone Manager holds the other three actions.
+            new(LaborWorkers, [View, Create, Edit]),
+            Full(WorkAssignments), Full(Attendance),
         ]);
 
     /// <summary>Office work, usually granted at All zones; views sales invoices and lot traces, views and exports purchase receipts.</summary>

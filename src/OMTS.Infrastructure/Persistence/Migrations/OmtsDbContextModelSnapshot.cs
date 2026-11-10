@@ -1698,6 +1698,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly?>("Birthday")
                         .HasColumnType("date");
 
+                    b.Property<string>("Code")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<Guid>("CooperativeId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1707,10 +1711,22 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Email")
+                        .HasMaxLength(254)
+                        .HasColumnType("nvarchar(254)");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Gender")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("IdNumber")
+                        .HasMaxLength(12)
+                        .HasColumnType("nvarchar(12)");
 
                     b.Property<DateOnly?>("LastWorkingDay")
                         .HasColumnType("date");
@@ -1733,6 +1749,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<DateOnly?>("StartDate")
+                        .HasColumnType("date");
+
                     b.Property<int>("StatusId")
                         .HasColumnType("int");
 
@@ -1752,14 +1771,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("[AccountId] IS NOT NULL");
 
-                    b.HasIndex("CooperativeId");
-
                     b.HasIndex("PhoneNumber")
                         .IsUnique()
                         .HasDatabaseName("UX_Employees_PhoneNumber_Employed")
                         .HasFilter("[PhoneNumber] IS NOT NULL AND [StatusId] = 401");
 
                     b.HasIndex("StatusId");
+
+                    b.HasIndex("CooperativeId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Employees_Cooperative_Code")
+                        .HasFilter("[Code] IS NOT NULL");
 
                     b.ToTable("Employees");
                 });

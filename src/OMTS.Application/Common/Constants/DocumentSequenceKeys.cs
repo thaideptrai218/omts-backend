@@ -9,6 +9,9 @@ public static class DocumentSequenceKeys
     /// <summary>Suppliers, NCC000123.</summary>
     public const string Supplier = "NCC";
 
+    /// <summary>Employees, NV000123 (LABOR-01).</summary>
+    public const string Employee = "NV";
+
     /// <summary>Purchase receipts, PN000123 (GBR-04).</summary>
     public const string PurchaseReceipt = "PN";
 
