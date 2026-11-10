@@ -17,7 +17,8 @@ internal sealed class JobTypeRepository(OmtsDbContext db) : IJobTypeRepository
         return db.JobTypes.AsNoTracking().FirstOrDefaultAsync(j => (j.Name == name || j.Name.ToUpper() == upper) && j.Id != exceptId, cancellationToken);
     }
 
-    public async Task<(IReadOnlyList<JobType> Items, int Total)> SearchAsync(string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<(IReadOnlyList<JobType> Items, int Total)> SearchAsync(
+        string? search, int? statusId, JobTypeSort sort, bool descending, DateOnly today, int page, int pageSize, CancellationToken cancellationToken)
     {
         var query = db.JobTypes.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(search))
@@ -32,13 +33,26 @@ internal sealed class JobTypeRepository(OmtsDbContext db) : IJobTypeRepository
         }
 
         var total = await query.CountAsync(cancellationToken);
-        var items = await query.OrderBy(j => j.Name).ThenBy(j => j.Id)
+        var items = await Ordered(query, sort, descending, today).ThenBy(j => j.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Include(j => j.Rates)
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
         return (items, total);
     }
+
+    /// <summary>The rate and its date are those in force on <paramref name="today"/> (<c>PayRate.EffectiveOn</c>), written inline so they become SQL.</summary>
+    private static IOrderedQueryable<JobType> Ordered(IQueryable<JobType> query, JobTypeSort sort, bool descending, DateOnly today) => sort switch
+    {
+        JobTypeSort.Rate => descending
+            ? query.OrderByDescending(j => j.Rates.Where(r => r.EffectiveFrom <= today).OrderByDescending(r => r.EffectiveFrom).Select(r => (decimal?)r.HourlyRate).FirstOrDefault())
+            : query.OrderBy(j => j.Rates.Where(r => r.EffectiveFrom <= today).OrderByDescending(r => r.EffectiveFrom).Select(r => (decimal?)r.HourlyRate).FirstOrDefault()),
+        JobTypeSort.EffectiveFrom => descending
+            ? query.OrderByDescending(j => j.Rates.Where(r => r.EffectiveFrom <= today).Max(r => (DateOnly?)r.EffectiveFrom))
+            : query.OrderBy(j => j.Rates.Where(r => r.EffectiveFrom <= today).Max(r => (DateOnly?)r.EffectiveFrom)),
+        JobTypeSort.Status => descending ? query.OrderByDescending(j => j.StatusId) : query.OrderBy(j => j.StatusId),
+        _ => descending ? query.OrderByDescending(j => j.Name) : query.OrderBy(j => j.Name),
+    };
 
     public async Task<IReadOnlyList<JobType>> ListInUseAsync(CancellationToken cancellationToken) =>
         await db.JobTypes.AsNoTracking().Where(j => j.StatusId == StatusIds.Usage.InUse).OrderBy(j => j.Name).ToListAsync(cancellationToken);

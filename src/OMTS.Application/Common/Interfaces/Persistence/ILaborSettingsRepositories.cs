@@ -2,6 +2,15 @@ using OMTS.Domain.Entities.Labor;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
+/// <summary>How the job type list is ordered.</summary>
+public enum JobTypeSort
+{
+    Name,
+    Rate,
+    EffectiveFrom,
+    Status,
+}
+
 /// <summary>LABOR-11: job types with their rates.</summary>
 public interface IJobTypeRepository
 {
@@ -11,7 +20,9 @@ public interface IJobTypeRepository
     /// <summary>Another job type with the name, whatever its letter case (BR-LABOR-12).</summary>
     Task<JobType?> FindByNameAsync(string name, Guid? exceptId, CancellationToken cancellationToken);
 
-    Task<(IReadOnlyList<JobType> Items, int Total)> SearchAsync(string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken);
+    /// <summary>One page of the job types by name or status, or by the rate in force on <paramref name="today"/> or the date it applies from (the job types with no rate in force first when ascending); always ending by id.</summary>
+    Task<(IReadOnlyList<JobType> Items, int Total)> SearchAsync(
+        string? search, int? statusId, JobTypeSort sort, bool descending, DateOnly today, int page, int pageSize, CancellationToken cancellationToken);
 
     /// <summary>The job types that can be chosen for profiles and work (GBR-01), by name.</summary>
     Task<IReadOnlyList<JobType>> ListInUseAsync(CancellationToken cancellationToken);
