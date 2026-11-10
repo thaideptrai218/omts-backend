@@ -14,8 +14,8 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Accounts;
 
 /// <summary>
-/// ACS-03 – recover a forgotten password with a code sent to a verified phone number or email. The start
-/// answer is always the same (MSG-ACCOUNT-20), so it never reveals whether an account exists.
+/// ACS-03 – recover a forgotten password with a code sent by SMS to a verified phone number. Email is not a recovery
+/// channel. The start answer is always the same (MSG-ACCOUNT-20), so it never reveals whether an account exists.
 /// </summary>
 public sealed class PasswordRecoveryService(
     IAccountRepository accounts,
@@ -27,28 +27,24 @@ public sealed class PasswordRecoveryService(
     TimeProvider timeProvider)
 {
     /// <summary>
-    /// Sends a code only to the exact identifier entered, only when it is verified on an Active account; a
-    /// new start for the account (another delivery method) cancels its previous unused code.
+    /// Sends a code only to the exact phone number entered, only when it is verified on an Active account; a
+    /// new start for the account cancels its previous unused code.
     /// </summary>
     public async Task<RecoveryStarted> StartAsync(StartRecoveryRequest request, CancellationToken cancellationToken)
     {
         var phone = PhoneNumbers.Normalize(request.Identifier);
-        var email = phone is null ? EmailAddresses.Normalize(request.Identifier) : null;
-        var account = phone is not null
-            ? await accounts.FindByPhoneAsync(phone, cancellationToken)
-            : email is not null ? await accounts.FindByVerifiedEmailAsync(email, cancellationToken) : null;
+        var account = phone is not null ? await accounts.FindByPhoneAsync(phone, cancellationToken) : null;
 
         var verified = account is not null
             && account.StatusId == StatusIds.Account.Active
-            && (phone is null || account.PhoneVerifiedAt is not null);
+            && account.PhoneVerifiedAt is not null;
 
-        // Unknown, unverified or locked identifiers and sender failures get the same answer and an id that
-        // leads nowhere.
+        // An email address, an unknown, unverified or locked number and sender failures get the same answer and an id
+        // that leads nowhere.
         var requestId = Guid.NewGuid();
         if (verified)
         {
-            var channel = phone is not null ? VerificationChannel.Sms : VerificationChannel.Email;
-            var started = await verification.StartAsync(VerificationPurpose.AccountRecovery, channel, phone ?? email!, account!.Id, cancellationToken);
+            var started = await verification.StartAsync(VerificationPurpose.AccountRecovery, VerificationChannel.Sms, phone!, account!.Id, cancellationToken);
             if (started.IsSuccess)
             {
                 requestId = started.Value!.VerificationId;
@@ -102,10 +98,9 @@ public sealed class PasswordRecoveryService(
     }
 
     /// <summary>
-    /// ACCOUNT-03 step 7: the token resets only the account that still has this verified contact. A change of the contact
+    /// ACCOUNT-03 step 7: the token resets only the account that still has this verified phone number. A change of the number
     /// has already cancelled the token; this also holds for a recovery that started while the change was being saved.
     /// </summary>
-    private static bool IsVerifiedContact(Account account, VerificationCode token) => token.Channel == VerificationChannel.Sms
-        ? account.PhoneVerifiedAt is not null && account.PhoneNumber == token.Target
-        : account.EmailVerifiedAt is not null && account.Email == token.Target;
+    private static bool IsVerifiedContact(Account account, VerificationCode token) =>
+        token.Channel == VerificationChannel.Sms && account.PhoneVerifiedAt is not null && account.PhoneNumber == token.Target;
 }

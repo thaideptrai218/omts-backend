@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using OMTS.Api.IntegrationTests.Cooperatives;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Enums;
@@ -186,19 +187,24 @@ public class AuthEndpointsTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal("MSG-ACCOUNT-07", await ErrorCodeAsync(refresh));
     }
 
+    // The replaced token is forgiven for 30 seconds (RefreshGraceTests); a replay after that ends the session.
     [Fact]
-    public async Task Refresh_rotates_the_token_and_replaying_the_old_one_ends_the_session()
+    public async Task Refresh_rotates_the_token_and_replaying_the_old_one_after_the_grace_period_ends_the_session()
     {
-        await factory.AddAccountAsync("owner4", Password);
-        var client = factory.CreateClient();
+        await using var api = new MovableClockApiFactory();
+        await api.AddAccountAsync("owner4", Password);
+        var client = api.CreateClient();
         var first = await LoginAsync(client, "owner4", Password);
         var oldRefreshToken = first.GetProperty("refreshToken").GetString();
+        var start = DateTimeOffset.UtcNow;
+        api.Clock.Set(start);
 
         var refreshed = await client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = oldRefreshToken });
         Assert.Equal(HttpStatusCode.OK, refreshed.StatusCode);
         var second = await refreshed.Content.ReadFromJsonAsync<JsonElement>();
         Assert.NotEqual(oldRefreshToken, second.GetProperty("refreshToken").GetString());
 
+        api.Clock.Set(start + TimeSpan.FromSeconds(31));
         var replay = await client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = oldRefreshToken });
         Assert.Equal("MSG19", await ErrorCodeAsync(replay));
 

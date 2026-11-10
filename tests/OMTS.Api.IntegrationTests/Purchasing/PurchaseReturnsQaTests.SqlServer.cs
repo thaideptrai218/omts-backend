@@ -84,6 +84,12 @@ public class PurchaseReturnsQaSqlServerTests
         public Task<IReadOnlyList<DebtMoneyBackRow>> MoneyBackAsync(IReadOnlyCollection<Guid> supplierIds, CancellationToken cancellationToken) =>
             inner.MoneyBackAsync(supplierIds, cancellationToken);
 
+        public Task<IReadOnlyList<DebtPaymentRow>> PaymentsAsync(IReadOnlyCollection<Guid> supplierIds, CancellationToken cancellationToken) =>
+            inner.PaymentsAsync(supplierIds, cancellationToken);
+
+        public Task<IReadOnlyList<DebtAllocationRow>> AllocationsAsync(IReadOnlyCollection<Guid> supplierIds, CancellationToken cancellationToken) =>
+            inner.AllocationsAsync(supplierIds, cancellationToken);
+
         public Task<(IReadOnlyList<DebtReceiptRow> Receipts, IReadOnlyList<StatementReturnRow> Returns, IReadOnlyList<StatementPaymentRow> Payments)> StatementRowsAsync(
             Guid supplierId, DateOnly from, DateOnly to, CancellationToken cancellationToken) =>
             inner.StatementRowsAsync(supplierId, from, to, cancellationToken);
@@ -297,7 +303,7 @@ public class PurchaseReturnsQaSqlServerTests
         Assert.Equal(4, await LastThAsync(host));
     }
 
-    // A return in a past period: the statement of that month, the opening of the next, the list totals, the raft and the exports read one number, before and after the cancel.
+    // A return in a past period: the statement of that month, the opening of the next, the list totals and the exports read one number, before and after the cancel.
     [SqlServerFact]
     public async Task Past_periods_agree_before_and_after_a_return_of_that_period_is_cancelled()
     {
@@ -321,10 +327,10 @@ public class PurchaseReturnsQaSqlServerTests
             return (s.Money("openingDebt"), s.Money("closingDebt"), s.GetProperty("entries").GetArrayLength());
         }
 
-        async Task<(decimal Receipts, decimal Returns, decimal Net, decimal Raft)> TotalsAsync(DateOnly from, DateOnly to)
+        async Task<(decimal Receipts, decimal Returns, decimal Net)> TotalsAsync(DateOnly from, DateOnly to)
         {
             var t = (await owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts?supplierId={world.SupplierId}&raftId={world.Raft.Id}&from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}")).GetProperty("totals");
-            return (t.Money("receiptsTotal"), t.Money("returnsTotal"), t.Money("netTotal"), t.Money("raftMaterialCost"));
+            return (t.Money("receiptsTotal"), t.Money("returnsTotal"), t.Money("netTotal"));
         }
 
         async Task<decimal> ExportedReturnsAsync(DateOnly from, DateOnly to)
@@ -340,21 +346,15 @@ public class PurchaseReturnsQaSqlServerTests
         Assert.Equal((100_000m, 70_000m, 1), await StatementAsync(inside.From, inside.To));
         Assert.Equal((70_000m, 70_000m, 0), await StatementAsync(after, Today));
         Assert.Equal((100_000m, 100_000m, 0), await StatementAsync(before.AddDays(-2), before));
-        Assert.Equal((0m, 30_000m, -30_000m, -30_000m), await TotalsAsync(inside.From, inside.To));
+        Assert.Equal((0m, 30_000m, -30_000m), await TotalsAsync(inside.From, inside.To));
         Assert.Equal(30_000m, await ExportedReturnsAsync(inside.From, inside.To));
-        var costs = await owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/raft-material-costs?raftId={world.Raft.Id}&from={inside.From:yyyy-MM-dd}&to={inside.To:yyyy-MM-dd}");
-        Assert.Equal((-30_000m, 1), (costs.Money("materialCost"), costs.GetProperty("rafts")[0].GetProperty("returns").GetArrayLength()));
-        Assert.Equal(70_000m, (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{world.Raft.Id}")).Money("materialCost"));
 
         await (await owner.CancelReturnAsync(returnId, "Not sent back")).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal((100_000m, 100_000m, 0), await StatementAsync(inside.From, inside.To));
         Assert.Equal((100_000m, 100_000m, 0), await StatementAsync(after, Today));
-        Assert.Equal((0m, 0m, 0m, 0m), await TotalsAsync(inside.From, inside.To));
+        Assert.Equal((0m, 0m, 0m), await TotalsAsync(inside.From, inside.To));
         Assert.Equal(0m, await ExportedReturnsAsync(inside.From, inside.To));
-        var costsAfter = await owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/raft-material-costs?raftId={world.Raft.Id}&from={inside.From:yyyy-MM-dd}&to={inside.To:yyyy-MM-dd}");
-        Assert.Empty(costsAfter.GetProperty("rafts").EnumerateArray());
-        Assert.Equal(100_000m, (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{world.Raft.Id}")).Money("materialCost"));
         var list = await (await owner.GetAsync($"/api/supplier-debts?search={tag}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal((100_000m, 60), (list.GetProperty("page").GetProperty("items")[0].Money("debt"), list.GetProperty("page").GetProperty("items")[0].GetProperty("debtAgeDays").GetInt32()));
     }

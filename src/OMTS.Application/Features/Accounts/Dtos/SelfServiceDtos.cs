@@ -2,7 +2,7 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Accounts.Dtos;
 
-/// <param name="Channel">Sms (phone number) or Email.</param>
+/// <param name="Channel">Must be Sms: a phone number is the only way to register.</param>
 public sealed record RegisterTraderRequest(
     VerificationChannel Channel,
     string Identifier,
@@ -22,11 +22,9 @@ public sealed record RecoveryStarted(Guid RequestId, string Message, string Mess
 
 public sealed record ResetPasswordRequest(string VerificationToken, string NewPassword, string PasswordConfirmation);
 
-/// <param name="CurrentPassword">Proof by the current password…</param>
-/// <param name="VerificationToken">…or by an email code with purpose ChangePassword. Neither is needed for the forced change after a temporary password (ACCOUNT-04.1).</param>
+/// <param name="CurrentPassword">Proof of identity; not needed for the forced change after a temporary password (ACCOUNT-04.1).</param>
 public sealed record ChangePasswordRequest(
     string? CurrentPassword,
-    string? VerificationToken,
     string NewPassword,
     string PasswordConfirmation,
     ClientType ClientType = ClientType.Web,

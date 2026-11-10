@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using OMTS.Api.IntegrationTests.Cooperatives;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
@@ -51,18 +52,21 @@ public class PushDeviceSessionQaTests
     [Fact]
     public async Task A_refresh_keeps_the_device_and_a_replayed_refresh_token_stops_it()
     {
-        await using var api = new AuthApiFactory();
+        await using var api = new MovableClockApiFactory();
         var account = await api.AddAccountAsync(NewCode(), Password);
         var client = api.CreateClient();
         var tokens = await LoginMobileAsync(client, account.Username);
         await RegisterAsync(client, tokens, "phone-token");
         var oldRefresh = tokens.GetProperty("refreshToken").GetString();
+        var start = DateTimeOffset.UtcNow;
+        api.Clock.Set(start);
 
         var refreshed = await client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = oldRefresh });
         Assert.Equal(HttpStatusCode.OK, refreshed.StatusCode);
         var afterRefresh = await NotifyAsync(api, account.Id);
 
-        // Reuse of the rotated token is treated as theft: the session is revoked (AuthService).
+        // Reuse of the rotated token after its 30 seconds of grace is treated as theft: the session is revoked (AuthService).
+        api.Clock.Set(start + TimeSpan.FromSeconds(31));
         var replayed = await client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = oldRefresh });
         var afterReplay = await NotifyAsync(api, account.Id);
 

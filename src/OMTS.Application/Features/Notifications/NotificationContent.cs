@@ -39,7 +39,7 @@ public static partial class RelatedRecordTypes
     /// <summary>A harvest lot (HARVEST-01); the code shown is its lot code.</summary>
     public const string HarvestLot = "HarvestLot";
 
-    /// <summary>A purchase receipt (PURCHASE-01, PURCHASE-06); it has no zone.</summary>
+    /// <summary>A purchase receipt (PURCHASE-01, PURCHASE-06); the notification follows the role, whatever the zone of the receipt.</summary>
     public const string PurchaseReceipt = "PurchaseReceipt";
 
     /// <summary>A supplier payment or money paid back (PURCHASE-05); it has no zone and is never removed, only cancelled.</summary>

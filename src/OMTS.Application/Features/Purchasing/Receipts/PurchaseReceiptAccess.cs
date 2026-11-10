@@ -6,8 +6,8 @@ using OMTS.Domain.Entities.Purchasing;
 namespace OMTS.Application.Features.Purchasing.Receipts;
 
 /// <summary>
-/// The record rules of purchase receipts on top of the role check the API makes: receipts have no zone and follow the
-/// role only (BR-FARM-08), so any Zone Manager views every receipt, drafts of others included (read-only).
+/// The record rules of purchase receipts on top of the role check the API makes: they follow the
+/// role only (BR-FARM-08), whatever their zone, so any Zone Manager views every receipt, drafts of others included (read-only).
 /// </summary>
 public sealed class PurchaseReceiptAccess(ZoneAccessGuard zoneAccess, ICurrentUser currentUser)
 {
@@ -17,6 +17,10 @@ public sealed class PurchaseReceiptAccess(ZoneAccessGuard zoneAccess, ICurrentUs
     /// </summary>
     public async Task<bool> MayChangeAsync(PurchaseReceipt receipt, CancellationToken cancellationToken) =>
         receipt.RecordedByAccountId == currentUser.AccountId || await zoneAccess.IsCooperativeOwnerAsync(cancellationToken);
+
+    /// <summary>The same rule for a purchase return.</summary>
+    public async Task<bool> MayChangeAsync(PurchaseReturn purchaseReturn, CancellationToken cancellationToken) =>
+        purchaseReturn.RecordedByAccountId == currentUser.AccountId || await zoneAccess.IsCooperativeOwnerAsync(cancellationToken);
 
     /// <summary>
     /// BR-PURCHASE-01: the rafts offered on a line are those In Use in the zones the user can access, that is the zones of

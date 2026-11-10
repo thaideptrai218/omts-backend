@@ -161,7 +161,9 @@ public sealed class BankAccountQaTestsAccess
         var leaks = new List<string>();
         foreach (var (who, client) in callers)
         {
-            foreach (var route in routes.Where(r => who != "owner" || r != Route))
+            // The cash book lists its bank accounts, the receiving one among them, to the Owner and the Accountant who keep it.
+            var keepsCashBook = who is "owner" or "accountant";
+            foreach (var route in routes.Where(r => (who != "owner" || r != Route) && !(keepsCashBook && r == "/api/cash-accounts")))
             {
                 var body = await (await client.GetAsync(route)).Content.ReadAsStringAsync();
                 if (body.Contains(SweepNumber, StringComparison.OrdinalIgnoreCase) || body.Contains(SweepHolder, StringComparison.OrdinalIgnoreCase))

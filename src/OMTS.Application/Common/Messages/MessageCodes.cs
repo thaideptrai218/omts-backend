@@ -123,6 +123,9 @@ public static class MessageCodes
     public const string Sale22 = "MSG-SALE-22";
     public const string Sale23 = "MSG-SALE-23";
 
+    public const string Cash01 = "MSG-CASH-01";
+    public const string Cash02 = "MSG-CASH-02";
+
     /// <summary>
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-01, the
     /// account is linked to the existing customer profile; MSG-ACCOUNT-22, the record of a notification or of an audit
@@ -146,12 +149,13 @@ public static class MessageCodes
     /// to a trader and a withdrawal with no trader to notify (TRACE-04 is new in PR T3);
     /// MSG-SALE-13/14, VietQR without a receiving bank account and the question before Stop sale (the VietQR sale is new in PR 7);
     /// MSG-SALE-17/18/19/20/21/22/23, the correction and the cancellation of a sales invoice: money owed back and its notice, the profile of a walk-in buyer, the sales return that blocks them, the
-    /// total of a walk-in invoice, the cancellation notice and the question on cash collected (SALE-07 and SALE-08 are new in PR 10).
+    /// total of a walk-in invoice, the cancellation notice and the question on cash collected (SALE-07 and SALE-08 are new in PR 10);
+    /// MSG-CASH-01/02, the cash book refusals: the VietQR account and the system voucher types are protected.
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
         Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Harvest04, Harvest05, Trace01, Trace02, Trace03, Trace04, Trace05, Trace06,
-        Origin01, Origin02, Origin03, Origin04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Sale17, Sale18, Sale19, Sale20, Sale21, Sale22, Sale23, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04,
+        Origin01, Origin02, Origin03, Origin04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Sale17, Sale18, Sale19, Sale20, Sale21, Sale22, Sale23, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04, Cash01, Cash02,
     };
 
     /// <summary>
@@ -209,6 +213,7 @@ public static class MessageCodes
         public const string ZaloPhoneUnsupported = "ZALO_PHONE_UNSUPPORTED";
         public const string ZaloAlreadyLinked = "ZALO_ALREADY_LINKED";
         public const string ZaloNotLinked = "ZALO_NOT_LINKED";
+        public const string ZaloDeviceRevoked = "ZALO_DEVICE_REVOKED";
         public const string LicenseReplaced = "LICENSE_REPLACED";
 
         /// <summary>
@@ -225,7 +230,7 @@ public static class MessageCodes
         public static readonly IReadOnlySet<string> KeptAsCode = new HashSet<string>(StringComparer.Ordinal)
         {
             Msg04, Msg05, Msg06, Msg19, Msg57, Msg58, MiniAppNotification,
-            ZaloTokenInvalid, ZaloPhoneTokenInvalid, ZaloPhoneNotFound, ZaloApprovalPending, ZaloRequestRejected, ZaloAccountExists, ZaloPhoneUnsupported, ZaloAlreadyLinked, ZaloNotLinked,
+            ZaloTokenInvalid, ZaloPhoneTokenInvalid, ZaloPhoneNotFound, ZaloApprovalPending, ZaloRequestRejected, ZaloAccountExists, ZaloPhoneUnsupported, ZaloAlreadyLinked, ZaloNotLinked, ZaloDeviceRevoked,
             NotFound, TooManyRequests, UnexpectedError, PasswordChangeRequired,
         };
     }

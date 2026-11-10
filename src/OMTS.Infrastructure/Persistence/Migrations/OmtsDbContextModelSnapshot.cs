@@ -22,6 +22,377 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("OMTS.Domain.Entities.CashBook.CashAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AccountNumber")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("BankBin")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("HolderName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("ProviderName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Kind", "ProviderName", "AccountNumber")
+                        .IsUnique();
+
+                    b.ToTable("CashAccounts");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.CashBook.CashParty", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Area")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Ward")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CashParties");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.CashBook.CashVoucher", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CashAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid?>("CollectedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("CountsInResult")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Fund")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("PartyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PartyKind")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PartyName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("TypeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("VoucherDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CashAccountId");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("CollectedByAccountId");
+
+                    b.HasIndex("TypeId");
+
+                    b.HasIndex("Fund", "VoucherDate");
+
+                    b.ToTable("CashVouchers");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.CashBook.CashVoucherType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("CountsInResult")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("Manual")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Direction", "IsActive");
+
+                    b.ToTable("CashVoucherTypes");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("5d6c1a10-0000-4c3a-9a10-000000000001"),
+                            Category = "Goods",
+                            CountsInResult = false,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 7, 0, 0, 0)),
+                            Direction = "Receipt",
+                            IsActive = true,
+                            IsSystem = true,
+                            Manual = false,
+                            Name = "Thu tiền khách trả",
+                            RowVersion = new byte[0]
+                        },
+                        new
+                        {
+                            Id = new Guid("5d6c1a10-0000-4c3a-9a10-000000000002"),
+                            Category = "Goods",
+                            CountsInResult = false,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 7, 0, 0, 0)),
+                            Direction = "Receipt",
+                            IsActive = true,
+                            IsSystem = true,
+                            Manual = false,
+                            Name = "Thu tiền NCC hoàn trả",
+                            RowVersion = new byte[0]
+                        },
+                        new
+                        {
+                            Id = new Guid("5d6c1a10-0000-4c3a-9a10-000000000003"),
+                            Category = "OtherIncome",
+                            CountsInResult = true,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 7, 0, 0, 0)),
+                            Direction = "Receipt",
+                            IsActive = true,
+                            IsSystem = true,
+                            Manual = true,
+                            Name = "Thu khác",
+                            RowVersion = new byte[0]
+                        },
+                        new
+                        {
+                            Id = new Guid("5d6c1a10-0000-4c3a-9a10-000000000004"),
+                            Category = "TransferWithdrawal",
+                            CountsInResult = false,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 7, 0, 0, 0)),
+                            Direction = "Receipt",
+                            IsActive = true,
+                            IsSystem = true,
+                            Manual = true,
+                            Name = "Chuyển/Rút",
+                            RowVersion = new byte[0]
+                        },
+                        new
+                        {
+                            Id = new Guid("5d6c1a10-0000-4c3a-9a10-000000000005"),
+                            Category = "Goods",
+                            CountsInResult = false,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 7, 0, 0, 0)),
+                            Direction = "Payment",
+                            IsActive = true,
+                            IsSystem = true,
+                            Manual = false,
+                            Name = "Chi tiền trả NCC",
+                            RowVersion = new byte[0]
+                        },
+                        new
+                        {
+                            Id = new Guid("5d6c1a10-0000-4c3a-9a10-000000000006"),
+                            Category = "Payroll",
+                            CountsInResult = true,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 7, 0, 0, 0)),
+                            Direction = "Payment",
+                            IsActive = true,
+                            IsSystem = true,
+                            Manual = false,
+                            Name = "Chi trả lương NV",
+                            RowVersion = new byte[0]
+                        },
+                        new
+                        {
+                            Id = new Guid("5d6c1a10-0000-4c3a-9a10-000000000007"),
+                            Category = "OtherExpense",
+                            CountsInResult = true,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 7, 0, 0, 0)),
+                            Direction = "Payment",
+                            IsActive = true,
+                            IsSystem = true,
+                            Manual = true,
+                            Name = "Chi phí khác",
+                            RowVersion = new byte[0]
+                        });
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationCycle", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1420,6 +1791,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("AccountId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AuthMethod")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("ClientType")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -1427,6 +1803,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("DeviceKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("DeviceName")
                         .HasMaxLength(200)
@@ -1439,6 +1819,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("LastRefreshedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<DateTimeOffset?>("PreviousRefreshTokenGraceEndsAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("PreviousRefreshTokenHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
                     b.Property<DateTimeOffset>("RefreshTokenExpiresAt")
                         .HasColumnType("datetimeoffset");
 
@@ -1447,6 +1834,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("RevokeCause")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("RevokeReason")
                         .HasMaxLength(200)
@@ -1461,10 +1852,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AccountId");
+                    b.HasIndex("PreviousRefreshTokenHash")
+                        .HasFilter("[PreviousRefreshTokenHash] IS NOT NULL");
 
                     b.HasIndex("RefreshTokenHash")
                         .IsUnique();
+
+                    b.HasIndex("RevokedAt");
+
+                    b.HasIndex("AccountId", "DeviceKey");
 
                     b.ToTable("LoginSessions");
                 });
@@ -2357,7 +2753,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Group = "PURCHASE_RECEIPT",
                             IsFinal = false,
                             IsInitial = false,
-                            Meaning = "Cannot be changed; counts in the supplier debt and raft material costs; each Seed line is a seed lot.",
+                            Meaning = "Counts in the supplier debt; each Seed line is a seed lot. May be edited, never its supplier, and every edit is audited.",
                             SortOrder = 2
                         },
                         new
@@ -2401,7 +2797,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Group = "PURCHASE_RETURN",
                             IsFinal = false,
                             IsInitial = true,
-                            Meaning = "Lowers the supplier debt and the material cost of the raft; cannot be edited.",
+                            Meaning = "Lowers the supplier debt. May be edited within the quantity left, never below the money paid back, and every edit is audited.",
                             SortOrder = 1
                         },
                         new
@@ -2414,6 +2810,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             IsInitial = false,
                             Meaning = "Recorded by mistake; no longer counts.",
                             SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 1903,
+                            Code = "DRAFT",
+                            DisplayName = "Draft",
+                            Group = "PURCHASE_RETURN",
+                            IsFinal = false,
+                            IsInitial = true,
+                            Meaning = "Being prepared; counts nowhere and holds no quantity. Removed, never cancelled.",
+                            SortOrder = 3
                         },
                         new
                         {
@@ -2817,9 +3224,20 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Id = 74,
                             AllowedPerformers = "Cooperative Owner",
                             FromStatusId = 1901,
-                            GuardCondition = "A return recorded by mistake; it no longer counts in the supplier debt, the material cost of a raft or the quantity returned.",
+                            GuardCondition = "A return recorded by mistake; it no longer counts in the supplier debt or the quantity returned.",
                             ReasonRequired = true,
                             ToStatusId = 1902,
+                            TriggerEvent = "Action",
+                            UseCases = "PURCHASE-02"
+                        },
+                        new
+                        {
+                            Id = 30077,
+                            AllowedPerformers = "Zone Manager (own drafts); Cooperative Owner",
+                            FromStatusId = 1903,
+                            GuardCondition = "The return is complete and within the quantity left on each line of its receipt; dated the day it is completed.",
+                            ReasonRequired = false,
+                            ToStatusId = 1901,
                             TriggerEvent = "Action",
                             UseCases = "PURCHASE-02"
                         },
@@ -3096,12 +3514,22 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal>("Discount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
                     b.Property<DateOnly>("ReceiptDate")
                         .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ReceivedByAccountId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("RecordedByAccountId")
                         .HasColumnType("uniqueidentifier");
@@ -3124,14 +3552,21 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ZoneId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Code")
                         .IsUnique();
 
+                    b.HasIndex("ReceivedByAccountId");
+
                     b.HasIndex("RecordedByAccountId");
 
                     b.HasIndex("StatusId");
+
+                    b.HasIndex("ZoneId");
 
                     b.HasIndex("ReceiptDate", "StatusId");
 
@@ -3145,6 +3580,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Discount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
 
                     b.Property<Guid?>("ItemId")
                         .HasColumnType("uniqueidentifier");
@@ -3215,12 +3654,16 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal>("Discount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
                     b.Property<string>("Reason")
                         .IsRequired()
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
-                    b.Property<Guid>("ReceiptId")
+                    b.Property<Guid?>("ReceiptId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("RecordedByAccountId")
@@ -3228,6 +3671,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.Property<DateOnly>("ReturnDate")
                         .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("ReturnedAt")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -3238,10 +3684,16 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<int>("StatusId")
                         .HasColumnType("int");
 
+                    b.Property<Guid>("SupplierId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ZoneId")
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
@@ -3255,6 +3707,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("StatusId");
 
+                    b.HasIndex("ZoneId");
+
+                    b.HasIndex("SupplierId", "StatusId");
+
                     b.ToTable("PurchaseReturns");
                 });
 
@@ -3264,11 +3720,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<decimal>("Quantity")
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
 
-                    b.Property<Guid>("ReceiptLineId")
+                    b.Property<Guid?>("ReceiptLineId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("ReturnId")
@@ -3278,7 +3737,18 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasPrecision(18)
                         .HasColumnType("decimal(18,0)");
 
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("ItemId");
 
                     b.HasIndex("ReceiptLineId");
 
@@ -3301,6 +3771,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("CompanyName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -3311,15 +3790,27 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
+                    b.Property<string>("IdentityNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("Note")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
                     b.Property<string>("PhoneNumber")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Province")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -3335,13 +3826,24 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("TaxCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Ward")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
 
                     b.HasIndex("PhoneNumber")
                         .IsUnique();
@@ -3372,6 +3874,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("CancelledAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<Guid?>("CashAccountId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -3387,6 +3892,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -3401,8 +3910,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<DateTimeOffset>("PaidAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("PaidByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateOnly>("PaymentDate")
                         .HasColumnType("date");
+
+                    b.Property<Guid?>("PurchaseReturnId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("RecordedByAccountId")
                         .HasColumnType("uniqueidentifier");
@@ -3429,12 +3947,18 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("BankReference");
 
+                    b.HasIndex("CashAccountId");
+
                     b.HasIndex("Code")
                         .IsUnique();
 
                     b.HasIndex("DeduplicationKey")
                         .IsUnique()
                         .HasFilter("[DeduplicationKey] IS NOT NULL");
+
+                    b.HasIndex("PaidByAccountId");
+
+                    b.HasIndex("PurchaseReturnId");
 
                     b.HasIndex("RecordedByAccountId");
 
@@ -3443,6 +3967,32 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("SupplierId", "PaymentDate");
 
                     b.ToTable("SupplierPayments");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.SupplierPaymentAllocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<Guid>("PaymentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ReceiptId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReceiptId");
+
+                    b.HasIndex("PaymentId", "ReceiptId")
+                        .IsUnique();
+
+                    b.ToTable("SupplierPaymentAllocations");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.Customer", b =>
@@ -4154,6 +4704,29 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_SalesInvoicePriceCut_Amount", "[Amount] > 0");
                         });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.CashBook.CashVoucher", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.CashBook.CashAccount", "CashAccount")
+                        .WithMany()
+                        .HasForeignKey("CashAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("CollectedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.CashBook.CashVoucherType", "Type")
+                        .WithMany()
+                        .HasForeignKey("TypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CashAccount");
+
+                    b.Navigation("Type");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationCycle", b =>
@@ -4870,6 +5443,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 {
                     b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
+                        .HasForeignKey("ReceivedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
                         .HasForeignKey("RecordedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -4886,9 +5464,16 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OMTS.Domain.Entities.Farming.FarmingZone", "Zone")
+                        .WithMany()
+                        .HasForeignKey("ZoneId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Status");
 
                     b.Navigation("Supplier");
+
+                    b.Navigation("Zone");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.PurchaseReceiptLine", b =>
@@ -4921,8 +5506,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasOne("OMTS.Domain.Entities.Purchasing.PurchaseReceipt", "Receipt")
                         .WithMany("Returns")
                         .HasForeignKey("ReceiptId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
@@ -4936,24 +5520,46 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.Supplier", "Supplier")
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Farming.FarmingZone", "Zone")
+                        .WithMany()
+                        .HasForeignKey("ZoneId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Receipt");
 
                     b.Navigation("Status");
+
+                    b.Navigation("Supplier");
+
+                    b.Navigation("Zone");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.PurchaseReturnLine", b =>
                 {
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.FarmingInputItem", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("OMTS.Domain.Entities.Purchasing.PurchaseReceiptLine", "ReceiptLine")
                         .WithMany()
                         .HasForeignKey("ReceiptLineId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("OMTS.Domain.Entities.Purchasing.PurchaseReturn", "Return")
                         .WithMany("Lines")
                         .HasForeignKey("ReturnId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Item");
 
                     b.Navigation("ReceiptLine");
 
@@ -4973,6 +5579,21 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.SupplierPayment", b =>
                 {
+                    b.HasOne("OMTS.Domain.Entities.CashBook.CashAccount", "CashAccount")
+                        .WithMany()
+                        .HasForeignKey("CashAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("PaidByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.PurchaseReturn", "PurchaseReturn")
+                        .WithMany("Refunds")
+                        .HasForeignKey("PurchaseReturnId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("RecordedByAccountId")
@@ -4991,9 +5612,32 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.Navigation("CashAccount");
+
+                    b.Navigation("PurchaseReturn");
+
                     b.Navigation("Status");
 
                     b.Navigation("Supplier");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.SupplierPaymentAllocation", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.SupplierPayment", "Payment")
+                        .WithMany("Allocations")
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.PurchaseReceipt", "Receipt")
+                        .WithMany()
+                        .HasForeignKey("ReceiptId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Payment");
+
+                    b.Navigation("Receipt");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.Customer", b =>
@@ -5321,11 +5965,18 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.PurchaseReturn", b =>
                 {
                     b.Navigation("Lines");
+
+                    b.Navigation("Refunds");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.Supplier", b =>
                 {
                     b.Navigation("Receipts");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.SupplierPayment", b =>
+                {
+                    b.Navigation("Allocations");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesInvoice", b =>

@@ -59,4 +59,9 @@ internal sealed class SeedLotRepository(OmtsDbContext db) : ISeedLotRepository, 
             .ToListAsync(cancellationToken);
         return rows.GroupBy(r => r.SeedLotLineId).ToDictionary(g => g.Key, g => g.Sum(r => r.Quantity));
     }
+
+    public async Task<DateOnly?> FirstSeedingDateAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken) =>
+        await db.SeedingRecords.AsNoTracking()
+            .Where(r => lineIds.Contains(r.SeedLotLineId))
+            .MinAsync(r => (DateOnly?)r.SeedingDate, cancellationToken);
 }

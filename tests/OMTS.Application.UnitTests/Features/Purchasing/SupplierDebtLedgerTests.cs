@@ -18,6 +18,57 @@ public class SupplierDebtLedgerTests
     private static StatementPaymentRow Payment(string code, int daysAgo, decimal amount, SupplierPaymentKind kind = SupplierPaymentKind.Payment) =>
         new(Guid.NewGuid(), code, kind, Ago(daysAgo), amount, PaymentMethod.Cash, null, null);
 
+    private static DebtPaymentRow Paid(string code, int daysAgo, decimal amount, decimal discount = 0) =>
+        new(Guid.Empty, Guid.NewGuid(), code, Ago(daysAgo), amount, discount, PaymentMethod.Cash, Guid.Empty, 0);
+
+    [Fact]
+    public void A_receipt_owes_its_total_less_its_discount_and_its_returns()
+    {
+        var receipt = new DebtReceiptRow(Guid.Empty, Guid.NewGuid(), "PN000001", Ago(2), 1_000, 100, 50);
+
+        var unpaid = Assert.Single(SupplierDebtLedger.UnpaidReceipts([receipt], 300, Today));
+
+        Assert.Equal(850, receipt.Net);
+        Assert.Equal(550, unpaid.Remaining);
+        Assert.Equal(50, unpaid.Discount);
+    }
+
+    [Fact]
+    public void A_return_without_a_receipt_is_credit_so_what_stays_unpaid_adds_up_to_the_debt()
+    {
+        var sums = new SupplierDebtSums(Receipts: 1_000, Returned: 200, Paid: 300, PaidBack: 0, StandaloneReturned: 200);
+        var receipt = Receipt("PN000001", 2, 1_000);
+
+        var unpaid = Assert.Single(SupplierDebtLedger.UnpaidReceipts([receipt], sums.Credit, Today));
+
+        Assert.Equal(sums.Debt, unpaid.Remaining);
+    }
+
+    [Fact]
+    public void Payments_are_allocated_oldest_first_and_money_paid_back_comes_out_of_the_newest()
+    {
+        var (first, second) = (Receipt("PN000001", 9, 300), Receipt("PN000002", 1, 500));
+        var (older, newer) = (Paid("TT000001", 5, 200, discount: 50), Paid("TT000002", 2, 400));
+
+        var allocated = SupplierDebtLedger.AllocatePayments([second, first], [newer, older], paidBack: 100);
+
+        Assert.Equal(650 - 100, allocated.Sum(a => a.Amount));
+        Assert.Equal(300, allocated.Where(a => a.ReceiptId == first.Id).Sum(a => a.Amount));
+        Assert.Equal(250, allocated.Where(a => a.ReceiptId == second.Id).Sum(a => a.Amount));
+        Assert.Contains(allocated, a => a.ReceiptId == first.Id && a.PaymentId == older.Id && a.Amount == 250);
+    }
+
+    [Fact]
+    public void A_payment_with_a_discount_lowers_the_debt_by_both_on_the_statement()
+    {
+        var row = new StatementPaymentRow(Guid.NewGuid(), "TT000001", SupplierPaymentKind.Payment, Ago(1), 100, PaymentMethod.Cash, null, null, 20);
+
+        var entry = Assert.Single(SupplierDebtLedger.Statement(500, [], [], [row]));
+
+        Assert.Equal(-120, entry.Amount);
+        Assert.Equal(380, entry.DebtAfter);
+    }
+
     [Fact]
     public void The_debt_is_receipts_minus_returns_minus_payments_plus_money_paid_back()
     {

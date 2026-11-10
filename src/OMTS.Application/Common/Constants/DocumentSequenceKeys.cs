@@ -6,6 +6,9 @@ namespace OMTS.Application.Common.Constants;
 /// </summary>
 public static class DocumentSequenceKeys
 {
+    /// <summary>Suppliers, NCC000123.</summary>
+    public const string Supplier = "NCC";
+
     /// <summary>Purchase receipts, PN000123 (GBR-04).</summary>
     public const string PurchaseReceipt = "PN";
 
@@ -20,4 +23,22 @@ public static class DocumentSequenceKeys
 
     /// <summary>Customer payments and money paid back, PT000123 (BR-DEBT-03 gives no prefix: PM default).</summary>
     public const string CustomerPayment = "PT";
+
+    /// <summary>Cash book receipt vouchers of the Cash fund, TTM000123.</summary>
+    public const string CashReceiptCash = "TTM";
+
+    /// <summary>Cash book payment vouchers of the Cash fund, CTM000123.</summary>
+    public const string CashPaymentCash = "CTM";
+
+    /// <summary>Cash book receipt vouchers of the Bank fund, TNH000123.</summary>
+    public const string CashReceiptBank = "TNH";
+
+    /// <summary>Cash book payment vouchers of the Bank fund, CNH000123.</summary>
+    public const string CashPaymentBank = "CNH";
+
+    /// <summary>Cash book receipt vouchers of the EWallet fund, TVD000123.</summary>
+    public const string CashReceiptEWallet = "TVD";
+
+    /// <summary>Cash book payment vouchers of the EWallet fund, CVD000123.</summary>
+    public const string CashPaymentEWallet = "CVD";
 }

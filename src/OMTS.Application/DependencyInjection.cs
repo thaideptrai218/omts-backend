@@ -6,6 +6,7 @@ using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Features.AccessManagement;
 using OMTS.Application.Features.Accounts;
 using OMTS.Application.Features.Audit;
+using OMTS.Application.Features.CashBook;
 using OMTS.Application.Features.Cooperatives;
 using OMTS.Application.Features.Employees;
 using OMTS.Application.Features.Cultivation.Closing;
@@ -26,6 +27,7 @@ using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Application.Features.Traceability.Tracing;
 using OMTS.Application.Features.Traceability.Withdrawal;
 using OMTS.Application.Features.Labor;
+using OMTS.Application.Features.Purchasing;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
@@ -55,6 +57,7 @@ public static class DependencyInjection
 
         services.AddSingleton(provider => new UnknownLoginCounter(timeProvider: provider.GetRequiredService<TimeProvider>()));
         services.AddScoped<AuthService>();
+        services.AddScoped<SessionManagementService>();
         services.AddScoped<ZaloLinkService>();
         services.AddScoped<ZaloLocationService>();
 
@@ -200,6 +203,7 @@ public static class DependencyInjection
         // INP – suppliers, farming inputs, purchase receipts, returns and supplier payments
         services.AddScoped<ZoneAccessGuard>();
         services.AddScoped<SupplierService>();
+        services.AddScoped<SupplierFileService>();
         services.AddScoped<FarmingInputItemService>();
         services.AddScoped<ProductService>();
         services.AddScoped<ProductReadService>();
@@ -253,16 +257,28 @@ public static class DependencyInjection
         services.AddScoped<PurchaseReceiptValidator>();
         services.AddScoped<PurchaseReceiptViews>();
         services.AddScoped<PurchaseReceiptNotifications>();
+        services.AddScoped<PurchaseDocumentCodeService>();
         services.AddScoped<PurchaseReceiptService>();
         services.AddScoped<PurchaseReceiptCancellationService>();
         services.AddScoped<PurchaseReceiptCorrectionService>();
+        services.AddScoped<PurchaseReceiptEditService>();
         services.AddScoped<PurchaseReceiptCopyService>();
         services.AddScoped<PurchaseReturnService>();
+        services.AddScoped<PurchaseReturnQueryService>();
+        services.AddScoped<SupplierPaymentAllocationService>();
         services.AddScoped<PurchaseReceiptQueryService>();
         services.AddScoped<SupplierPaymentService>();
         services.AddScoped<SupplierPaymentNotifications>();
         services.AddScoped<SupplierDebtService>();
         services.AddScoped<SupplierDebtExportService>();
+        services.AddScoped<CashAccountService>();
+        services.AddScoped<CashVoucherTypeService>();
+        services.AddScoped<CashPartyService>();
+        services.AddScoped<CashVoucherCodeService>();
+        services.AddScoped<CashBookLookupService>();
+        services.AddScoped<CashVoucherService>();
+        services.AddScoped<CashBookService>();
+        services.AddScoped<CashBookExportService>();
 
         // ENV-01…ENV-04 water quality monitoring and the overdue measurement reminder
         services.AddSingleton<EditingPresenceTracker>();

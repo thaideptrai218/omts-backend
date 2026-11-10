@@ -5,14 +5,17 @@ using OMTS.Api.Filters;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Farming.Rafts;
+using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
+using OMTS.Application.Features.WaterQuality.Dtos;
 
 namespace OMTS.Api.Controllers;
 
 /// <summary>
-/// PURCHASE-01, PURCHASE-02, PURCHASE-03, PURCHASE-06 – purchase receipts and their returns. Receipts have no zone: they
-/// follow the role only (BR-FARM-08), so the filter checks the PURCHASE_RECEIPTS action of the role; the handlers add the
-/// record rules (own drafts and own cancellations, rafts of the caller's zones).
+/// PURCHASE-01, PURCHASE-02, PURCHASE-03, PURCHASE-06 – purchase receipts and returns. Whatever their zone, they follow the
+/// role only (BR-FARM-08), so the filter checks the PURCHASE_RECEIPTS action of the role; the handlers add the
+/// record rules (own drafts and own cancellations, rafts of the caller's zones). Completed receipts and Recorded returns are
+/// edited by anyone whose role has Edit.
 /// </summary>
 [ApiController]
 [Authorize]
@@ -22,9 +25,11 @@ public sealed class PurchaseReceiptsController(
     PurchaseReceiptCorrectionService corrections,
     PurchaseReceiptCopyService copies,
     PurchaseReturnService returns,
+    PurchaseReturnQueryService returnQueries,
     PurchaseReceiptQueryService queries) : ControllerBase
 {
     private const string Receipts = "api/purchase-receipts";
+    private const string ReturnsRoute = "api/purchase-returns";
 
     /// <summary>PURCHASE-03: the receipts of the period (default: the current month) with the three totals.</summary>
     [HttpGet(Receipts)]
@@ -33,7 +38,7 @@ public sealed class PurchaseReceiptsController(
     public async Task<IActionResult> Search([FromQuery] PurchaseReceiptQuery query, CancellationToken cancellationToken) =>
         (await queries.SearchAsync(query, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>BR-FARM-05: the material cost of each raft in the period, with its lines and returns.</summary>
+    /// <summary>BR-FARM-05: the material cost of each raft in the period, from its material usages at the latest purchase prices.</summary>
     [HttpGet(Receipts + "/raft-material-costs")]
     [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.View, PermissionScope.NoZone)]
     [ProducesResponseType<RaftMaterialCostResult>(StatusCodes.Status200OK)]
@@ -47,6 +52,13 @@ public sealed class PurchaseReceiptsController(
     public async Task<IActionResult> RaftLookup(CancellationToken cancellationToken) =>
         Ok(await queries.RaftLookupAsync(cancellationToken));
 
+    /// <summary>Picker of who received the goods: the Active Owner and staff accounts, by name.</summary>
+    [HttpGet(Receipts + "/receivers")]
+    [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.View, PermissionScope.NoZone)]
+    [ProducesResponseType<IReadOnlyList<AccountRef>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Receivers(CancellationToken cancellationToken) =>
+        Ok(await queries.ReceiversAsync(cancellationToken));
+
     [HttpGet(Receipts + "/export")]
     [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Export, PermissionScope.NoZone)]
     public async Task<IActionResult> Export([FromQuery] PurchaseReceiptQuery query, CancellationToken cancellationToken) =>
@@ -59,6 +71,13 @@ public sealed class PurchaseReceiptsController(
     public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken) =>
         (await receipts.GetAsync(id, cancellationToken)).ToActionResult(Ok);
 
+    /// <summary>The payments the supplier ledger reads as covering this receipt, oldest first.</summary>
+    [HttpGet(Receipts + "/{id:guid}/payments")]
+    [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.View, PermissionScope.NoZone)]
+    [ProducesResponseType<IReadOnlyList<ReceiptPaymentView>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Payments(Guid id, CancellationToken cancellationToken) =>
+        (await queries.PaymentsAsync(id, cancellationToken)).ToActionResult(Ok);
+
     /// <summary>Saves a Draft, or completes it at once with <c>complete: true</c> (the Owner is notified, MSG-PURCHASE-01).</summary>
     [HttpPost(Receipts)]
     [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Create, PermissionScope.NoZone)]
@@ -66,7 +85,10 @@ public sealed class PurchaseReceiptsController(
     public async Task<IActionResult> Create(SavePurchaseReceiptRequest request, CancellationToken cancellationToken) =>
         (await receipts.CreateAsync(request, cancellationToken)).ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
 
-    /// <summary>Continues an own Draft (the Owner: any); <c>rowVersion</c> is required.</summary>
+    /// <summary>
+    /// Continues an own Draft (the Owner: any), or edits a Completed receipt (anyone who may edit receipts; the supplier stays);
+    /// <c>rowVersion</c> is required. A Cancelled receipt is never changed.
+    /// </summary>
     [HttpPut(Receipts + "/{id:guid}")]
     [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Edit, PermissionScope.NoZone)]
     [ProducesResponseType<PurchaseReceiptView>(StatusCodes.Status200OK)]
@@ -114,7 +136,7 @@ public sealed class PurchaseReceiptsController(
     public async Task<IActionResult> Copy(Guid id, CancellationToken cancellationToken) =>
         (await copies.CopyAsync(id, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>PURCHASE-02.0: dated today; a Zone Manager answers MSG-PURCHASE-02 with <c>ownerApproved: true</c>.</summary>
+    /// <summary>PURCHASE-02.0: at <c>returnedAt</c> or now; a Zone Manager answers MSG-PURCHASE-02 with <c>ownerApproved: true</c>.</summary>
     [HttpPost(Receipts + "/{id:guid}/returns")]
     [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Create, PermissionScope.NoZone)]
     [ProducesResponseType<PurchaseReceiptView>(StatusCodes.Status201Created)]
@@ -127,16 +149,60 @@ public sealed class PurchaseReceiptsController(
     public async Task<IActionResult> Returns(Guid id, CancellationToken cancellationToken) =>
         (await receipts.GetAsync(id, cancellationToken)).ToActionResult(r => Ok(r.Returns));
 
-    [HttpGet("api/purchase-returns/{id:guid}")]
+    /// <summary>The purchase returns of the period (default: the current month), every status, with the total of the Recorded ones.</summary>
+    [HttpGet(ReturnsRoute)]
+    [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.View, PermissionScope.NoZone)]
+    [ProducesResponseType<PurchaseReturnSearchResult>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> SearchReturns([FromQuery] PurchaseReturnQuery query, CancellationToken cancellationToken) =>
+        (await returnQueries.SearchAsync(query, cancellationToken)).ToActionResult(Ok);
+
+    [HttpGet(ReturnsRoute + "/export")]
+    [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Export, PermissionScope.NoZone)]
+    public async Task<IActionResult> ExportReturns([FromQuery] PurchaseReturnQuery query, CancellationToken cancellationToken) =>
+        (await returnQueries.ExportAsync(query, cancellationToken)).ToActionResult(f => File(f.Content, f.ContentType, f.FileName));
+
+    [HttpGet(ReturnsRoute + "/{id:guid}")]
     [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.View, PermissionScope.NoZone)]
     [ProducesResponseType<PurchaseReturnView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetReturn(Guid id, CancellationToken cancellationToken) =>
-        (await returns.GetAsync(id, cancellationToken)).ToActionResult(Ok);
+        (await returnQueries.GetAsync(id, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>PURCHASE-02.1: the Owner cancels a return recorded by mistake, with a reason; answers the receipt.</summary>
-    [HttpPost("api/purchase-returns/{id:guid}/cancel")]
+    /// <summary>Saves a Draft, from a receipt or on its own, or records it at once with <c>complete: true</c>.</summary>
+    [HttpPost(ReturnsRoute)]
+    [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Create, PermissionScope.NoZone)]
+    [ProducesResponseType<PurchaseReturnView>(StatusCodes.Status201Created)]
+    public async Task<IActionResult> SaveReturn(SavePurchaseReturnRequest request, CancellationToken cancellationToken) =>
+        (await returns.CreateAsync(request, cancellationToken)).ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
+
+    /// <summary>
+    /// Continues an own Draft (the Owner: any), or edits a Recorded return (anyone who may edit receipts): time returned, reason,
+    /// discount, quantities and prices; <c>rowVersion</c> is required.
+    /// </summary>
+    [HttpPut(ReturnsRoute + "/{id:guid}")]
+    [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Edit, PermissionScope.NoZone)]
+    [ProducesResponseType<PurchaseReturnView>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> UpdateReturn(Guid id, SavePurchaseReturnRequest request, CancellationToken cancellationToken) =>
+        (await returns.UpdateAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>Records an own Draft (the Owner: any) at <c>returnedAt</c> or now; a Zone Manager answers MSG-PURCHASE-02 with <c>ownerApproved: true</c>.</summary>
+    [HttpPost(ReturnsRoute + "/{id:guid}/complete")]
+    [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Edit, PermissionScope.NoZone)]
+    [ProducesResponseType<PurchaseReturnView>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> CompleteReturn(Guid id, CompletePurchaseReturnRequest? request, CancellationToken cancellationToken) =>
+        (await returns.CompleteAsync(id, request ?? new CompletePurchaseReturnRequest(), cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>Removes an own Draft (the Owner: any) with its lines.</summary>
+    [HttpDelete(ReturnsRoute + "/{id:guid}")]
+    [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.Delete, PermissionScope.NoZone)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> RemoveReturn(Guid id, CancellationToken cancellationToken) =>
+        (await returns.RemoveAsync(id, cancellationToken)).ToActionResult(_ => NoContent());
+
+    /// <summary>PURCHASE-02.1: the Owner cancels a return recorded by mistake, with a reason; answers the receipt, or the return itself when it has no receipt.</summary>
+    [HttpPost(ReturnsRoute + "/{id:guid}/cancel")]
     [RequireCooperativeOwner]
     [ProducesResponseType<PurchaseReceiptView>(StatusCodes.Status200OK)]
+    [ProducesResponseType<PurchaseReturnView>(StatusCodes.Status200OK)]
     public async Task<IActionResult> CancelReturn(Guid id, CancelPurchaseReturnRequest request, CancellationToken cancellationToken) =>
-        (await returns.CancelAsync(id, request, cancellationToken)).ToActionResult(Ok);
+        (await returns.CancelAsync(id, request, cancellationToken)).ToActionResult(r => r.Receipt is not null ? Ok(r.Receipt) : Ok(r.Return));
 }

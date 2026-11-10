@@ -10,6 +10,8 @@ x-api: &api
     ASPNETCORE_ENVIRONMENT: Development
     ConnectionStrings__OmtsDb: "Server=sqlserver,1433;Database=OMTS;User Id=sa;Password=${MSSQL_SA_PASSWORD:?set it in .env};TrustServerCertificate=True"
     Jwt__SigningKey: ${JWT_SIGNING_KEY:?set it in .env}
+    # Revoked sessions are looked up in Redis; without it (or while it is down) every request asks SQL Server.
+    ConnectionStrings__Redis: "redis:6379,password=${REDIS_PASSWORD:?set it in .env}"
     # Signed download links point at the API itself (/api/files/local/...), so phones and browsers can open them.
     Storage__Provider: Local
     Storage__Local__SigningKey: ${STORAGE_SIGNING_KEY:?set it in .env}
@@ -45,6 +47,21 @@ services:
       retries: 30
       start_period: 20s
 
+  # Disposable copy of the revoked sessions (the database stays the source of truth): no persistence, and no eviction,
+  # because an evicted key would silently drop a revocation. Not published: only the other containers reach it.
+  redis:
+    image: redis:7.4.2-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set it in .env}
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --save \"\" --appendonly no --maxmemory 128mb --maxmemory-policy noeviction"]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
   # Runs once: migrations, status catalog, default roles, cooperative and Owner, then the demo data. Idempotent.
   seed:
     <<: *api
@@ -63,6 +80,8 @@ services:
     depends_on:
       seed:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
 
 volumes:
   sqlserver:

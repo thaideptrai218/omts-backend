@@ -156,9 +156,9 @@ public class StackMergeQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         Assert.Equal(HttpStatusCode.NotFound, answer.StatusCode);
     }
 
-    // BR-FARM-05 across the merge: the raft view reads the purchase lines; a Seed line that names the raft is not material cost, and seeding it changes nothing.
+    // BR-FARM-05: the raft view reads the material used on the raft; purchase lines that name the raft are not its cost, and seeding changes nothing.
     [Fact]
-    public async Task The_material_cost_of_a_raft_counts_material_lines_only_and_seeding_does_not_touch_it_or_the_debt()
+    public async Task The_material_cost_of_a_raft_is_its_material_usages_and_neither_purchase_lines_nor_seeding_touch_it_or_the_debt()
     {
         var world = await factory.WorldAsync();
         var raftId = (await world.Owner.CreateRaftAsync(world.Zone.Id)).Id();
@@ -169,7 +169,9 @@ public class StackMergeQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
 
         await world.Owner.RecordSeedingAsync(cycle.Id(), new SeedingBody(Today, seed.LineOf(world.Seed), [1], 5m));
 
-        Assert.Equal(6_000m, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raftId}")).Money("materialCost"));
+        Assert.Equal(0m, await world.Owner.RaftMaterialCostAsync(raftId));
+        await factory.UseMaterialAsync(raftId, world.Material, 2);
+        Assert.Equal(4_000m, await world.Owner.RaftMaterialCostAsync(raftId));
         Assert.Equal(debt, await world.DebtAsync());
     }
 

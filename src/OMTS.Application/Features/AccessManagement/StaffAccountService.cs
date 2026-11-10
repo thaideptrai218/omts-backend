@@ -346,6 +346,14 @@ public sealed class StaffAccountService(
 
         audit.RecordStatusChange(nameof(Account), account.Id, account.Username, from, to, reason);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        if (to == StatusIds.Account.Locked)
+        {
+            // A login that stored its session while this save was running was not in the first sweep, and its own check
+            // of the status may have run before this save committed. Sessions stored before the commit are visible now.
+            await sessions.RevokeAllAsync(account.Id, timeProvider.GetUtcNow(), "Account locked", cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
         return await ViewAsync(account, cancellationToken);
     }
 

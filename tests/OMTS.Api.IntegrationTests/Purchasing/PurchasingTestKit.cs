@@ -13,7 +13,8 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
 namespace OMTS.Api.IntegrationTests.Purchasing;
 
-public sealed record LineBody(Guid? ItemId, decimal? Quantity, decimal? UnitPrice, string? SupplierLotCode = null, Guid? RaftId = null);
+public sealed record LineBody(
+    Guid? ItemId, decimal? Quantity, decimal? UnitPrice, string? SupplierLotCode = null, Guid? RaftId = null, decimal? Discount = null, Guid? LineId = null);
 
 /// <summary>PURCHASE-01 request body; every field can be left out (null) to check the validation.</summary>
 public sealed record ReceiptBody
@@ -24,6 +25,11 @@ public sealed record ReceiptBody
     public IReadOnlyList<LineBody>? Lines { get; init; }
     public bool Complete { get; init; }
     public string? RowVersion { get; init; }
+    public decimal Discount { get; init; }
+    public Guid? ZoneId { get; init; }
+    public DateTimeOffset? ReceivedAt { get; init; }
+    public Guid? ReceivedById { get; init; }
+    public string? Code { get; init; }
 }
 
 public sealed record ReturnLineBody(Guid? ReceiptLineId, decimal? Quantity);
@@ -34,6 +40,7 @@ public sealed record ReturnBody
     public string? Reason { get; init; } = "Weak seed";
     public IReadOnlyList<ReturnLineBody>? Lines { get; init; }
     public bool OwnerApproved { get; init; }
+    public string? Code { get; init; }
 }
 
 /// <summary>PURCHASE-05 request body: a cash payment dated today unless the test says otherwise.</summary>
@@ -42,6 +49,7 @@ public sealed record PaymentBody
     public Guid? SupplierId { get; init; }
     public string? Kind { get; init; } = "Payment";
     public decimal? Amount { get; init; }
+    public decimal DiscountAmount { get; init; }
     public DateOnly? PaymentDate { get; init; } = PurchasingTestKit.Today;
     public string? Method { get; init; } = "Cash";
     public string? BankReference { get; init; }
@@ -49,13 +57,14 @@ public sealed record PaymentBody
     public bool ConfirmAdvance { get; init; }
     public bool ConfirmDuplicateBankReference { get; init; }
     public string? DeduplicationKey { get; init; }
+    public string? Code { get; init; }
 }
 
 /// <summary>A zone with one In Use raft, a supplier and one item per group, created by the Owner through the API.</summary>
 public sealed record PurchasingWorld(HttpClient Owner, FarmingZone Zone, Raft Raft, Guid SupplierId, Guid Seed, Guid Material, Guid Other)
 {
-    /// <summary>A body for this world's supplier (receipts have no zone).</summary>
-    public ReceiptBody Body(params LineBody[] lines) => new() { SupplierId = SupplierId, Lines = lines };
+    /// <summary>A body for this world's supplier and zone.</summary>
+    public ReceiptBody Body(params LineBody[] lines) => new() { SupplierId = SupplierId, ZoneId = Zone.Id, Lines = lines };
 
     /// <summary>A Material line bought for the world's raft (it counts in the raft material cost, BR-FARM-05).</summary>
     public LineBody MaterialForRaft(decimal quantity, decimal unitPrice) => new(Material, quantity, unitPrice, RaftId: Raft.Id);
@@ -100,6 +109,25 @@ public static class PurchasingTestKit
         return (zone, raft);
     }
 
+    /// <summary>
+    /// A material usage of <paramref name="quantity"/> of the item on the raft, dated <paramref name="date"/> (default today): what
+    /// the raft material cost is made of (BR-FARM-05), costed at the latest purchase price of the item on that date.
+    /// </summary>
+    public static async Task<Guid> UseMaterialAsync(this AuthApiFactory factory, Guid raftId, Guid itemId, decimal quantity, DateOnly? date = null)
+    {
+        var recordedBy = await factory.QueryAsync(db => db.Accounts.Select(a => a.Id).FirstAsync());
+        var usage = new MaterialUsage
+        {
+            RaftId = raftId, ItemId = itemId, Quantity = quantity, UsageDate = date ?? Today, RepairReason = "Broken buoy", RecordedByAccountId = recordedBy,
+        };
+        await factory.UseDbAsync(db => db.MaterialUsages.Add(usage));
+        return usage.Id;
+    }
+
+    /// <summary>The material cost of the raft as its detail shows it (FARM-04).</summary>
+    public static async Task<decimal> RaftMaterialCostAsync(this HttpClient client, Guid raftId) =>
+        (await client.GetFromJsonAsync<JsonElement>($"/api/rafts/{raftId}")).Money("materialCost");
+
     public static async Task<PurchasingWorld> WorldAsync(this AuthApiFactory factory, HttpClient? owner = null)
     {
         owner ??= await factory.PurchasingOwnerAsync();
@@ -126,8 +154,16 @@ public static class PurchasingTestKit
         return (await response.ReadAsync(HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
-    public static Task<HttpResponseMessage> PostReceiptAsync(this HttpClient client, ReceiptBody body) =>
-        client.PostAsJsonAsync("/api/purchase-receipts", body);
+    public static async Task<HttpResponseMessage> PostReceiptAsync(this HttpClient client, ReceiptBody body) =>
+        await client.PostAsJsonAsync("/api/purchase-receipts", body is { Complete: true, ZoneId: null } ? body with { ZoneId = await AnyZoneAsync(client) } : body);
+
+    /// <summary>The zone is optional; a completed receipt of a test that is not about zones is booked to the first one the caller sees.</summary>
+    private static async Task<Guid?> AnyZoneAsync(HttpClient client)
+    {
+        var response = await client.GetAsync("/api/zones/lookup");
+        var zones = response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<JsonElement>() : default;
+        return zones.ValueKind == JsonValueKind.Array && zones.GetArrayLength() > 0 ? zones[0].Id() : null;
+    }
 
     public static async Task<JsonElement> CreateReceiptAsync(this HttpClient client, ReceiptBody body) =>
         await (await client.PostReceiptAsync(body)).ReadAsync(HttpStatusCode.Created);
