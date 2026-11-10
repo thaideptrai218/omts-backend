@@ -26,7 +26,8 @@ namespace OMTS.Api.IntegrationTests.Sales;
 /// <summary>QA of CLAIM-03 on a real SQL Server (OMTS-225): the migration, every read that joins the returns, column sizes and the races the author's tests leave out.</summary>
 public class SalesReturnQaSqlServerTests
 {
-    private const string MigrationBeforeReturns = "20261109104138_QualityClaims";
+    // Migrations of other branches sort before and after it, so the test compares this step alone: its predecessor in the chain, and itself.
+    private const string ReturnsMigration = "20261109133559_SalesReturns";
 
     private sealed record World(FarmingSqlServerHost Host, HttpClient Owner, HttpClient Manager, TraderActor Trader, Guid ZoneId, Guid ProductId, Guid[] LotIds);
 
@@ -72,11 +73,16 @@ public class SalesReturnQaSqlServerTests
         var latest = await ColumnsAsync(db);
         var migrator = db.GetService<IMigrator>();
 
-        await migrator.MigrateAsync(MigrationBeforeReturns);
+        var chain = db.Database.GetMigrations().ToList();
+        var migrationBeforeReturns = chain[chain.IndexOf(ReturnsMigration) - 1];
+        await migrator.MigrateAsync(ReturnsMigration);
+        var withReturns = await ColumnsAsync(db);
+        await migrator.MigrateAsync(migrationBeforeReturns);
 
         var before = await ColumnsAsync(db);
-        Assert.Empty(before.Except(latest));
-        var added = latest.Except(before).ToList();
+        Assert.Empty(before.Except(withReturns));
+        var added = withReturns.Except(before).ToList();
+        Assert.NotEmpty(added);
         Assert.All(added, c => Assert.True(c.StartsWith("SalesReturns.", StringComparison.Ordinal) || c.StartsWith("SalesReturnLines.", StringComparison.Ordinal), c));
         Assert.False(await db.Statuses.AnyAsync(s => s.Group == StatusGroups.SalesReturn));
         Assert.False(await db.StatusTransitions.AnyAsync(t => t.Id == 230));
