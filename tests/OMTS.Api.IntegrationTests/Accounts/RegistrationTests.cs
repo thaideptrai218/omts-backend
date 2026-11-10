@@ -2,14 +2,16 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
+using OMTS.Infrastructure.Messaging.Fakes;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
 namespace OMTS.Api.IntegrationTests.Accounts;
 
-/// <summary>ACS-01 – trader registration with a verified phone number or email.</summary>
+/// <summary>ACS-01 – trader registration with a verified phone number (an email cannot register).</summary>
 public class RegistrationTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
     [Theory]
@@ -37,18 +39,25 @@ public class RegistrationTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         Assert.Equal(HttpStatusCode.OK, (await factory.CreateClient().PostAsJsonAsync("/api/auth/login", new { identifier = phone, password = Password })).StatusCode);
     }
 
+    // A phone number is the only way to register: an email is refused on the channel, at the code and at the account step.
     [Fact]
-    public async Task Email_registration_creates_a_new_profile_and_asks_for_a_phone_after_login()
+    public async Task Email_cannot_register_and_gets_no_code()
     {
         await factory.EnsureCooperativeAsync();
         var email = $"trader-{NewCode()}@example.com";
+        var client = factory.CreateClient();
 
-        var registered = await RegisterAsync("Email", email);
-        var tokens = await LoginTokensAsync(factory.CreateClient(), email.ToUpperInvariant());
+        var start = await client.PostAsJsonAsync("/api/verifications", new { channel = "Email", target = email });
+        var register = await client.PostAsJsonAsync("/api/auth/register", Body("Email", email, Password, "not-a-token"));
 
-        Assert.False(registered.GetProperty("linkedExistingCustomer").GetBoolean());
-        Assert.True(tokens.GetProperty("phoneVerificationRequired").GetBoolean());
-        Assert.Equal("Trader", tokens.GetProperty("subjectType").GetString());
+        foreach (var refused in new[] { start, register })
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+            Assert.Equal("MSG-GEN-01", await refused.ErrorCodeAsync());
+            Assert.Equal("Channel", (await refused.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("field").GetString());
+        }
+
+        Assert.Empty(factory.Services.GetRequiredService<FakeEmailSender>().Inbox.List(email));
     }
 
     [Fact]

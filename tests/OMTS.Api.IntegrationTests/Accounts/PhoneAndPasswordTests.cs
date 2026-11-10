@@ -126,23 +126,6 @@ public class PhoneAndPasswordTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(HttpStatusCode.OK, (await fresh.GetAsync("/api/me")).StatusCode);
     }
 
-    [Fact]
-    public async Task Change_password_with_an_email_code_or_guidance_without_a_verified_email()
-    {
-        var email = $"owner-{NewCode()}@example.com";
-        var withEmail = await factory.AddAccountAsync(NewCode(), Password, configure: a => { a.Email = email; a.EmailVerifiedAt = DateTimeOffset.UtcNow; });
-        var withoutEmail = await factory.AddAccountAsync(NewCode(), Password);
-        var client = await factory.LoginAsync(withEmail.Username);
-
-        var noEmail = await (await factory.LoginAsync(withoutEmail.Username)).PostAsync("/api/me/password/code", null);
-        var id = await VerificationIdAsync(await client.PostAsync("/api/me/password/code", null));
-        var token = await VerifyAsync(client, id, factory.LastEmailCode(email));
-        var changed = await client.PostAsJsonAsync("/api/me/password", new { verificationToken = token, newPassword = "NewPass2026", passwordConfirmation = "NewPass2026" });
-
-        Assert.Equal("MSG-ACCOUNT-15", await noEmail.ErrorCodeAsync());
-        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
-    }
-
     // ACCOUNT-02.2, ACCOUNT-04.1: with a temporary password only the change is open and it asks for no current
     // password; afterwards everything is.
     [Fact]

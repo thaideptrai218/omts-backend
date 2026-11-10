@@ -125,13 +125,20 @@ public partial class StagingDemoQaServerTests
         Assert.True(await db.Notifications.AnyAsync());
     }
 
-    // Change list: Email:Provider=Smtp without a host gives no warning at start, and each send fails with 503.
+    // Change list: Email:Provider=Smtp without a host gives no warning at start, and each send fails with 503. An email
+    // no longer registers, so the send is the code for a new contact email of a logged-in account.
     [SqlServerFact]
     public async Task Smtp_without_a_host_gives_no_warning_and_a_send_answers_503()
     {
         Assert.DoesNotContain("Email provider", server.Staging!.Output);
+        var (_, body) = await LoginAsync(server.Staging.Client, "owner", server.Secret);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/me/contact-changes")
+        {
+            Content = JsonContent.Create(new { channel = "Email", target = $"qa-216-{Guid.NewGuid():N}@example.com", currentPassword = server.Secret }),
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", body.GetProperty("accessToken").GetString());
 
-        var response = await server.Staging.Client.PostAsJsonAsync("/api/verifications", new { channel = "Email", target = "qa-216@example.com" });
+        var response = await server.Staging.Client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
     }
