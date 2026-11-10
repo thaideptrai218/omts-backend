@@ -4,6 +4,7 @@ using OMTS.Application.Common.Validation;
 using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Sales.Debts;
 using OMTS.Application.Features.Sales.PurchaseRequests;
+using OMTS.Application.Features.Sales.QualityClaims;
 using OMTS.Application.Features.WaterQuality.Dtos;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
@@ -68,6 +69,12 @@ internal sealed class PurchaseRequestFulfilmentQuery(OmtsDbContext db) : IPurcha
             .ToListAsync(cancellationToken);
         return fulfilled.ToHashSet();
     }
+}
+
+/// <summary>CLAIM-03 seam (PR 13): sales returns do not exist yet, so an invoice never has one (BR-CLAIM-01, BR-CLAIM-02). PR 13 replaces this with the query on Recorded returns.</summary>
+internal sealed class NoSalesReturnsYetCheck : IInvoiceSalesReturnCheck
+{
+    public Task<bool> HasSalesReturnAsync(Guid invoiceId, CancellationToken cancellationToken) => Task.FromResult(false);
 }
 
 /// <summary>
