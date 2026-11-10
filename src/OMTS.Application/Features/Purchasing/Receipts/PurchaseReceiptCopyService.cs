@@ -5,13 +5,13 @@ using OMTS.Domain.Constants;
 namespace OMTS.Application.Features.Purchasing.Receipts;
 
 /// <summary>
-/// PURCHASE-01.4 – Copy fills a new receipt with the supplier, the date received and the lines of a receipt (for example one
-/// just cancelled); nothing is saved until the user saves a Draft or completes it. A supplier, an item or a raft that is no
+/// PURCHASE-01.4 – Copy fills a new receipt with the supplier, the time received, the zone, the discount and the lines (with their discounts) of a receipt (for example one
+/// just cancelled); nothing is saved until the user saves a Draft or completes it. A supplier, a zone, an item or a raft that is no
 /// longer In Use, or a raft the caller may not choose (BR-PURCHASE-01), is left empty (GBR-01); a line whose item is left
 /// empty loses its raft too. The copy as returned can be saved as a Draft once it has a supplier (a Draft needs one).
 /// </summary>
 public sealed class PurchaseReceiptCopyService(
-    IPurchaseReceiptRepository receipts, ISupplierRepository suppliers, PurchaseReceiptValidator validator, PurchaseReceiptAccess access)
+    IPurchaseReceiptRepository receipts, ISupplierRepository suppliers, IFarmingZoneRepository zones, PurchaseReceiptValidator validator, PurchaseReceiptAccess access)
 {
     public async Task<Result<PurchaseReceiptCopy>> CopyAsync(Guid receiptId, CancellationToken cancellationToken)
     {
@@ -27,6 +27,13 @@ public sealed class PurchaseReceiptCopyService(
         {
             supplierId = null;
             leftEmpty.Add("Supplier");
+        }
+
+        Guid? zoneId = source.ZoneId;
+        if (zoneId is { } id && !(await zones.GetByIdsAsync([id], cancellationToken)).Any(z => z.StatusId == StatusIds.Usage.InUse))
+        {
+            zoneId = null;
+            leftEmpty.Add("Zone");
         }
 
         var lines = source.Lines.OrderBy(l => l.LineNumber).ToList();
@@ -53,9 +60,13 @@ public sealed class PurchaseReceiptCopyService(
                 }
             }
 
-            copied.Add(new ReceiptLineInput(copiedItem, line.Quantity, line.UnitPrice, line.SupplierLotCode, copiedRaft));
+            copied.Add(new ReceiptLineInput(copiedItem, line.Quantity, line.UnitPrice, line.SupplierLotCode, copiedRaft, line.Discount));
         }
 
-        return new PurchaseReceiptCopy(source.Id, source.Code, new SavePurchaseReceiptRequest(supplierId, source.ReceiptDate, null, copied), leftEmpty);
+        // The receiver is left out: the new receipt is taken in by whoever saves it unless they choose someone.
+        return new PurchaseReceiptCopy(
+            source.Id, source.Code,
+            new SavePurchaseReceiptRequest(supplierId, source.ReceiptDate, null, copied, Discount: source.Discount, ZoneId: zoneId, ReceivedAt: source.ReceivedAt),
+            leftEmpty);
     }
 }

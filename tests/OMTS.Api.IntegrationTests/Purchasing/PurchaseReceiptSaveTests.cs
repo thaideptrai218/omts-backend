@@ -226,16 +226,19 @@ public class PurchaseReceiptSaveTests(AuthApiFactory factory) : IClassFixture<Au
     }
 
     [Fact]
-    public async Task A_completed_or_cancelled_receipt_is_never_edited_or_completed_again_and_creates_no_second_notification()
+    public async Task A_cancelled_receipt_is_never_edited_and_a_completed_one_is_never_completed_again_nor_notified_again_when_edited()
     {
         var world = await factory.WorldAsync();
         var completed = await world.CompletedAsync(new LineBody(world.Other, 1, 10_000));
         var cancelled = await world.CompletedAsync(new LineBody(world.Other, 1, 10_000));
         await (await world.Owner.CancelAsync(cancelled.Id(), "Nhập nhầm")).ReadAsync(HttpStatusCode.OK);
 
+        await (await world.Owner.EditAsync(cancelled, world.Body(new LineBody(world.Other, 9, 10_000)))).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
+        // An edit of a Completed receipt ignores "complete" and sends no second MSG-PURCHASE-01.
+        var edited = await (await world.Owner.EditAsync(completed, world.Body(new LineBody(world.Other, 9, 10_000)) with { Complete = true })).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal(90_000m, edited.Money("total"));
         foreach (var receipt in new[] { completed, cancelled })
         {
-            await (await world.Owner.EditAsync(receipt, world.Body(new LineBody(world.Other, 9, 10_000)))).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
             await (await world.Owner.CompleteAsync(receipt.Id())).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
         }
 

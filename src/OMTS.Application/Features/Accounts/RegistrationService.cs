@@ -15,7 +15,7 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Accounts;
 
-/// <summary>ACS-01 – a trader opens an account with a verified phone number or email.</summary>
+/// <summary>ACS-01 – a trader opens an account with a verified phone number. Email is a contact only, never a way to register.</summary>
 public sealed class RegistrationService(
     IAccountRepository accounts,
     ICooperativeRepository cooperatives,
@@ -27,29 +27,39 @@ public sealed class RegistrationService(
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
 {
-    /// <summary>Checks the format and that no account uses the identifier, then sends the code.</summary>
+    /// <summary>Checks the format and that no account uses the phone number, then sends the code.</summary>
     public async Task<Result<VerificationStarted>> StartVerificationAsync(StartVerificationRequest request, CancellationToken cancellationToken)
     {
-        var identifier = ContactInputs.Normalize(request.Channel, request.Target);
+        if (RefusalOfChannel(request.Channel) is { } refused)
+        {
+            return refused;
+        }
+
+        var identifier = PhoneNumbers.Normalize(request.Target);
         if (identifier is null)
         {
-            return AppError.Invalid(ContactInputs.FieldName(request.Channel));
+            return AppError.Invalid(PhoneField);
         }
 
-        if (await IsTakenAsync(request.Channel, identifier, cancellationToken))
+        if (await accounts.FindByPhoneAsync(identifier, cancellationToken) is not null)
         {
-            return AlreadyRegistered(request.Channel);
+            return AlreadyRegistered();
         }
 
-        return await verification.StartAsync(VerificationPurpose.Registration, request.Channel, identifier, null, cancellationToken);
+        return await verification.StartAsync(VerificationPurpose.Registration, VerificationChannel.Sms, identifier, null, cancellationToken);
     }
 
     public async Task<Result<TraderRegistered>> RegisterAsync(RegisterTraderRequest request, CancellationToken cancellationToken)
     {
-        var identifier = ContactInputs.Normalize(request.Channel, request.Identifier);
+        if (RefusalOfChannel(request.Channel) is { } refused)
+        {
+            return refused;
+        }
+
+        var identifier = PhoneNumbers.Normalize(request.Identifier);
         if (identifier is null)
         {
-            return AppError.Invalid(ContactInputs.FieldName(request.Channel));
+            return AppError.Invalid(PhoneField);
         }
 
         if (!PasswordPolicy.IsValid(request.Password) || request.Password != request.PasswordConfirmation)
@@ -57,9 +67,9 @@ public sealed class RegistrationService(
             return AppError.Invalid("Password");
         }
 
-        if (await IsTakenAsync(request.Channel, identifier, cancellationToken))
+        if (await accounts.FindByPhoneAsync(identifier, cancellationToken) is not null)
         {
-            return AlreadyRegistered(request.Channel);
+            return AlreadyRegistered();
         }
 
         var token = await verification.ConsumeTokenAsync(
@@ -73,18 +83,14 @@ public sealed class RegistrationService(
             ?? throw new InvalidOperationException("The cooperative has not been created yet (run the bootstrap command).");
 
         var now = timeProvider.GetUtcNow();
-        var isPhone = request.Channel == VerificationChannel.Sms;
         var trader = new Account
         {
             SubjectType = SubjectType.Trader,
             StatusId = StatusIds.Account.Active,
             Username = await usernames.NewTraderUsernameAsync(cancellationToken),
-            // Display names hold 200 characters; an email may be longer.
-            DisplayName = identifier.Length > 200 ? identifier[..200] : identifier,
-            PhoneNumber = isPhone ? identifier : null,
-            PhoneVerifiedAt = isPhone ? now : null,
-            Email = isPhone ? null : identifier,
-            EmailVerifiedAt = isPhone ? null : now,
+            DisplayName = identifier,
+            PhoneNumber = identifier,
+            PhoneVerifiedAt = now,
             PasswordHash = passwordHasher.Hash(request.Password),
         };
         accounts.Add(trader);
@@ -95,7 +101,7 @@ public sealed class RegistrationService(
             RecordId = trader.Id,
             RecordCode = trader.Username,
             ActorAccountId = trader.Id,
-            After = new { trader.Username, trader.SubjectType, trader.PhoneNumber, trader.Email, CustomerId = customer.Id, LinkedExistingCustomer = linkedExisting },
+            After = new { trader.Username, trader.SubjectType, trader.PhoneNumber, CustomerId = customer.Id, LinkedExistingCustomer = linkedExisting },
         });
         try
         {
@@ -103,8 +109,8 @@ public sealed class RegistrationService(
         }
         catch (DuplicateRecordException)
         {
-            // A parallel registration took the phone or email between the check above and this save.
-            return AlreadyRegistered(request.Channel);
+            // A parallel registration took the phone number between the check above and this save.
+            return AlreadyRegistered();
         }
 
         // ACCOUNT-01 step 7: MSG-ACCOUNT-01 with the existing profile, MSG-ACCOUNT-02 with a new one (ACCOUNT-01.1).
@@ -112,13 +118,14 @@ public sealed class RegistrationService(
         return new TraderRegistered(trader.Id, trader.Username, linkedExisting, notice.Text, notice.Code);
     }
 
-    /// <summary>MSG-ACCOUNT-03 naming the phone number or email, also as <c>field</c>.</summary>
-    private static AppError AlreadyRegistered(VerificationChannel channel) => AppError.Conflict(
-        UserMessages.AlreadyRegistered(ContactInputs.ContactName(channel)),
-        new Dictionary<string, object?> { ["field"] = ContactInputs.FieldName(channel) });
+    private static readonly string PhoneField = ContactInputs.FieldName(VerificationChannel.Sms);
 
-    private async Task<bool> IsTakenAsync(VerificationChannel channel, string identifier, CancellationToken cancellationToken) =>
-        channel == VerificationChannel.Sms
-            ? await accounts.FindByPhoneAsync(identifier, cancellationToken) is not null
-            : await accounts.FindByEmailAsync(identifier, cancellationToken) is not null;
+    /// <summary>The request keeps its <c>channel</c> field; only <c>Sms</c> is accepted, anything else names the field and says why.</summary>
+    private static AppError? RefusalOfChannel(VerificationChannel channel) =>
+        channel == VerificationChannel.Sms ? null : AppError.Invalid("Channel", "Registration uses a phone number.");
+
+    /// <summary>MSG-ACCOUNT-03 naming the phone number, also as <c>field</c>.</summary>
+    private static AppError AlreadyRegistered() => AppError.Conflict(
+        UserMessages.AlreadyRegistered(ContactInputs.ContactName(VerificationChannel.Sms)),
+        new Dictionary<string, object?> { ["field"] = PhoneField });
 }

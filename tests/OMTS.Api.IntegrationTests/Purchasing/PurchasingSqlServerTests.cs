@@ -93,7 +93,7 @@ public class PurchasingSqlServerTests
             await response.ReadAsync(HttpStatusCode.Created);
         }
 
-        var returnCodes = await host.QueryAsync(db => db.PurchaseReturns.Where(r => r.Receipt.SupplierId == world.SupplierId).Select(r => r.Code).ToListAsync());
+        var returnCodes = await host.QueryAsync(db => db.PurchaseReturns.Where(r => r.SupplierId == world.SupplierId).Select(r => r.Code).ToListAsync());
         Assert.Equal(completed.Count, returnCodes.Distinct().Count());
         Assert.All(returnCodes, code => Assert.Matches("^TH\\d{6}$", code));
     }
@@ -342,12 +342,15 @@ public class PurchasingSqlServerTests
             .ReadAsync(HttpStatusCode.OK);
         Assert.Equal([receipt.Id()], all.GetProperty("page").GetProperty("items").EnumerateArray().Select(r => r.Id()));
         var totals = all.GetProperty("totals");
-        Assert.Equal((100_000m, 10_000m, 90_000m, 90_000m), (totals.Money("receiptsTotal"), totals.Money("returnsTotal"), totals.Money("netTotal"), totals.Money("raftMaterialCost")));
+        Assert.Equal((100_000m, 10_000m, 90_000m), (totals.Money("receiptsTotal"), totals.Money("returnsTotal"), totals.Money("netTotal")));
+        Assert.Equal(JsonValueKind.Null, totals.GetProperty("raftMaterialCost").ValueKind);
         var row = all.GetProperty("page").GetProperty("items")[0];
         Assert.Equal((1_100_500m, 100_000m), (row.Money("total"), row.Money("linesTotal")));
+        // The price of a usage is a subquery per usage: the latest Completed line of the item received by its date.
+        await host.UseMaterialAsync(world.Raft.Id, world.Material, 3);
         var costs = await (await owner.GetAsync($"/api/purchase-receipts/raft-material-costs?{period}&raftId={world.Raft.Id}")).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(90_000m, costs.Money("materialCost"));
-        Assert.Equal(90_000m, (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{world.Raft.Id}")).Money("materialCost"));
+        Assert.Equal(30_000m, costs.Money("materialCost"));
+        Assert.Equal(30_000m, (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{world.Raft.Id}")).Money("materialCost"));
 
         // 1,100,500 − 10,000 returned − 200,000 paid.
         var debts = await (await owner.GetAsync($"/api/supplier-debts?search={await host.QueryAsync(db => db.Suppliers.Where(s => s.Id == world.SupplierId).Select(s => s.PhoneNumber).SingleAsync())}")).ReadAsync(HttpStatusCode.OK);

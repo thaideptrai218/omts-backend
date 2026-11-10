@@ -15,4 +15,12 @@ public static class OldSchemaRows
         await db.Database.ExecuteSqlAsync($"INSERT INTO Cooperatives (Id, FullName, CreatedAt) VALUES ({id}, N'HTX', SYSDATETIMEOFFSET())");
         return id;
     }
+
+    /// <summary>A supplier with the columns of every schema before SupplierProfileFields, which adds the code.</summary>
+    public static async Task<Guid> SupplierAsync(OmtsDbContext db)
+    {
+        var id = Guid.NewGuid();
+        await db.Database.ExecuteSqlAsync($"INSERT INTO Suppliers (Id, Name, SupplierType, PhoneNumber, CertificateUrls, StatusId, CreatedAt) VALUES ({id}, N'S', N'Seed', N'0900000002', N'[]', 101, SYSDATETIMEOFFSET())");
+        return id;
+    }
 }

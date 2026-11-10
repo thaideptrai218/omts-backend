@@ -83,7 +83,8 @@ public sealed class TestRoleService(
             Reason = "Explicit role testing by the configured linked Owner",
         });
         // Normal CreateSession persists the persona, grant, profile, audit and revoked old session together.
-        return await auth.CreateSessionAsync(target, ClientType.Mobile, "Zalo · thử vai trò", client, ct);
+        return await auth.CreateSessionAsync(
+            target, ClientType.Mobile, "Zalo · thử vai trò", client, oldSession.AuthMethod, deviceId: null, ct);
     }
 
     private async Task<Result<Account>> AuthorizeAsync(CancellationToken ct)

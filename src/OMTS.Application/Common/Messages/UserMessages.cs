@@ -481,6 +481,41 @@ public static class UserMessages
         Parameters = new Dictionary<string, object?> { ["lot_code"] = lotCode },
     };
 
+    // ---- MSG-ORIGIN ----
+
+    /// <summary>
+    /// MSG-ORIGIN-01 (ORIGIN-01.1): a lot of the provenance page is Withdrawn. The page shows the withdrawal date and the cooperative phone, never the reason (BR-TRACE-06,
+    /// BR-ORIGIN-05).
+    /// </summary>
+    /// <param name="cooperativePhone">Null shows "–": the profile was saved before the phone number became mandatory.</param>
+    public static UserMessage ProvenanceLotWithdrawn(string cooperativeShortName, string lotCode, DateOnly withdrawalDate, string? cooperativePhone) => new(
+        Origin01,
+        $"{cooperativeShortName} withdrew the origin information of lot {lotCode} on {Date(withdrawalDate)}. For details, please call {cooperativePhone ?? NoValue}.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["cooperative_short_name"] = cooperativeShortName, ["lot_code"] = lotCode, ["withdrawal_date"] = withdrawalDate, ["cooperative_phone"] = cooperativePhone,
+        },
+    };
+
+    /// <summary>MSG-ORIGIN-02 (ORIGIN-01.2): no lot of the invoice is Published or Withdrawn (BR-ORIGIN-05); the page does not say why.</summary>
+    public static UserMessage ProvenanceNoLots(string? cooperativePhone) => new(
+        Origin02, $"No origin information is shown for this invoice. For details, please call {cooperativePhone ?? NoValue}.")
+    {
+        Parameters = new Dictionary<string, object?> { ["cooperative_phone"] = cooperativePhone },
+    };
+
+    /// <summary>MSG-ORIGIN-03 (ORIGIN-01.0.E1): no sales invoice has the QR code of the link; also for a link that is no QR code at all, so nothing tells them apart.</summary>
+    public static readonly UserMessage ProvenanceUnknownQrCode = new(
+        Origin03, "No invoice was found for this QR code. Please scan the QR code on the invoice again, or open the link in the invoice message.");
+
+    /// <summary>MSG-ORIGIN-04 (ORIGIN-01.0.E2): the invoice of the QR code is Cancelled; the page shows the cooperative block only (BR-ORIGIN-05).</summary>
+    public static UserMessage ProvenanceInvoiceCancelled(string? cooperativePhone) => new(
+        Origin04, $"This invoice has been cancelled, so no origin information is shown. For details, please call {cooperativePhone ?? NoValue}.")
+    {
+        Parameters = new Dictionary<string, object?> { ["cooperative_phone"] = cooperativePhone },
+    };
+
     /// <summary>MSG-WATER-06 (GFR-04): reminder to measure the water of a zone.</summary>
     /// <param name="lastDate">The business day of the latest measurement, or the start of the overdue period when there is none.</param>
     public static UserMessage WaterMeasurementOverdue(string zoneName, DateOnly lastDate) => new(
@@ -828,13 +863,18 @@ public static class UserMessages
     // ---- MSG-SALE: the sales invoice (SALE-05) ----
 
     /// <summary>
-    /// MSG-SALE-06 (SALE-05.6 to SALE-05.8): the invoice is completed. {payment_text} lists the payments joined by "; ": the cash recorded (the part subtracted from the debt included)
-    /// and the part added to the debt. An invoice of 0 VND reads "0 VND collected in cash".
+    /// MSG-SALE-06 (SALE-05 step 8, SALE-05.6 to SALE-05.8): the invoice is completed. {payment_text} lists the payments joined by "; ": the transfer received with its VietQR code, the
+    /// cash recorded (the part subtracted from the debt included) and the part added to the debt. An invoice of 0 VND reads "0 VND collected in cash".
     /// </summary>
-    public static UserMessage SaleCompleted(string invoiceCode, decimal cashAmount, decimal laterAmount, string customerName)
+    public static UserMessage SaleCompleted(string invoiceCode, decimal cashAmount, decimal laterAmount, string customerName, decimal vietQrAmount = 0m)
     {
         var parts = new List<string>();
-        if (cashAmount > 0 || laterAmount == 0)
+        if (vietQrAmount > 0)
+        {
+            parts.Add($"{Vnd(vietQrAmount)} VND received by VietQR");
+        }
+
+        if (cashAmount > 0 || (laterAmount == 0 && vietQrAmount == 0))
         {
             parts.Add($"{Vnd(cashAmount)} VND collected in cash");
         }
@@ -851,12 +891,26 @@ public static class UserMessages
             {
                 ["invoice_code"] = invoiceCode,
                 ["payment_text"] = paymentText,
+                ["vietqr_amount"] = vietQrAmount,
                 ["cash_amount"] = cashAmount,
                 ["later_amount"] = laterAmount,
                 ["customer_name"] = customerName,
             },
         };
     }
+
+    /// <summary>MSG-SALE-13 (SALE-05.0.E3): VietQR is chosen, but the cooperative has no receiving bank account (BR-DEBT-01).</summary>
+    public static readonly UserMessage VietQrNeedsReceivingAccount = new(
+        Sale13,
+        "VietQR cannot be used yet: the cooperative has no receiving bank account. Please choose another payment method, and ask the Cooperative Owner to set up the account.");
+
+    /// <summary>MSG-SALE-14 (SALE-05.0.E4 step 3): Stop sale while the transfer has not arrived, answered by <c>confirmed</c>.</summary>
+    public static UserMessage StopSaleQuestion(string invoiceCode) => new(
+        Sale14,
+        $"The transfer for invoice {invoiceCode} has not arrived. Stop this sale? Nothing is saved, and code {invoiceCode} is kept in the audit log. Give back any cash and keep the oysters. If the transfer still arrives, the Accountant pays it back.")
+    {
+        Parameters = new Dictionary<string, object?> { ["invoice_code"] = invoiceCode },
+    };
 
     /// <summary>MSG-SALE-08 (BR-SALE-03): a new sale, to the Cooperative Owner. {customer_name} is "a walk-in customer" without a profile; {price_text} is empty or starts with a space.</summary>
     /// <param name="paymentTerm">"Pay now" or "Pay later".</param>
@@ -1003,6 +1057,56 @@ public static class UserMessages
         };
     }
 
+    // ---- MSG-CLAIM ----
+
+    /// <summary>MSG-CLAIM-01 (CLAIM-01, BR-CLAIM-01): a new quality claim, to the Cooperative Owner.</summary>
+    public static UserMessage QualityClaimNew(string customerName, string invoiceCode, string descriptionStart) => new(
+        Claim01,
+        $"{customerName} reported a quality problem with invoice {invoiceCode}: {descriptionStart}. Please ask the Zone Manager to check it, then respond.")
+    {
+        Parameters = new Dictionary<string, object?> { ["customer_name"] = customerName, ["invoice_code"] = invoiceCode, ["description_start"] = descriptionStart },
+    };
+
+    /// <summary>MSG-CLAIM-02 (CLAIM-02, BR-CLAIM-02): the response, to the trader account and the phone number of the profile. <paramref name="note"/> is the Owner's note, cut for SMS by the caller.</summary>
+    /// <param name="offer">The offer when accepted: <c>ReturnAllGoods</c> or <c>PriceCutWholeInvoice</c>; null when rejected.</param>
+    public static UserMessage QualityClaimResponse(string cooperativeShortName, string invoiceCode, bool accepted, string? offer, string? note, string? cooperativePhone)
+    {
+        var result = !accepted
+            ? "not accepted"
+            : offer == "ReturnAllGoods" ? "accepted: the cooperative offers a return of all the goods" : "accepted: the cooperative offers a price cut of the whole invoice";
+        var callText = $"Please call {cooperativePhone ?? "the cooperative"}.";
+        return new UserMessage(Claim02, $"{cooperativeShortName}: your quality claim on invoice {invoiceCode} is {result}.{(note is null ? "" : " " + note)} {callText}")
+        {
+            Parameters = new Dictionary<string, object?>
+            {
+                ["cooperative_short_name"] = cooperativeShortName,
+                ["invoice_code"] = invoiceCode,
+                ["result"] = accepted ? "Accepted" : "Rejected",
+                ["offer"] = offer,
+                ["note"] = note,
+                ["cooperative_phone"] = cooperativePhone,
+            },
+        };
+    }
+
+    /// <summary>MSG-CLAIM-03 (CLAIM-02.0.E2): the invoice was cancelled or has a sales return, so the claim cannot be accepted; it can still be rejected.</summary>
+    /// <param name="cause">"was cancelled" or "has a sales return".</param>
+    public static UserMessage QualityClaimCannotBeAccepted(string invoiceCode, string cause) => new(
+        Claim03, $"Invoice {invoiceCode} {cause}, so the claim cannot be accepted. You can still reject it with a note.")
+    {
+        Parameters = new Dictionary<string, object?> { ["invoice_code"] = invoiceCode, ["cause"] = cause },
+    };
+
+    // ---- MSG-CASH ----
+
+    /// <summary>MSG-CASH-01: the account of the VietQR codes cannot be deleted or put out of use.</summary>
+    public static readonly UserMessage CashAccountIsVietQr = new(
+        Cash01, "Tài khoản đang dùng để nhận VietQR, không thể xóa hoặc ngừng dùng.");
+
+    /// <summary>MSG-CASH-02: a system voucher type cannot be edited or deleted.</summary>
+    public static readonly UserMessage CashSystemVoucherType = new(
+        Cash02, "Loại thu chi của hệ thống không thể sửa hoặc xóa.");
+
     // ---- Old codes still sent as the code (Legacy.KeptAsCode) ----
 
     /// <summary>MSG05: an export file could not be generated, or a stored file could not be read.</summary>
@@ -1083,6 +1187,13 @@ public static class UserMessages
 
     /// <summary>Not in the SRS list: the Zalo user has not linked an account yet (the Mini App stays a guest).</summary>
     public static readonly UserMessage ZaloNotLinked = new(Legacy.ZaloNotLinked, "This Zalo account is not linked to OMTS yet.");
+
+    /// <summary>Not in the SRS list: this device was signed out by the user or an administrator; only linking the account again opens it.</summary>
+    public static readonly UserMessage ZaloDeviceRevoked = new(
+        Legacy.ZaloDeviceRevoked, "This device was signed out of OMTS. Select Link account to sign in again.");
+
+    /// <summary>What a text shows for a value that is not saved.</summary>
+    private const string NoValue = "–";
 
     private static string Capitalized(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
 

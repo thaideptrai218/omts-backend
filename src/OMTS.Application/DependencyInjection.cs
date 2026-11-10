@@ -8,6 +8,7 @@ using OMTS.Application.Features.AccessManagement;
 using OMTS.Application.Features.Accounts;
 using OMTS.Application.Features.Accounts.Dtos;
 using OMTS.Application.Features.Audit;
+using OMTS.Application.Features.CashBook;
 using OMTS.Application.Features.Cooperatives;
 using OMTS.Application.Features.Employees;
 using OMTS.Application.Features.Cultivation.Closing;
@@ -23,10 +24,12 @@ using OMTS.Application.Features.Farming.Zones;
 using OMTS.Application.Features.Files;
 using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Traceability.Corrections;
+using OMTS.Application.Features.Traceability.Origin;
 using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Application.Features.Traceability.Tracing;
 using OMTS.Application.Features.Traceability.Withdrawal;
 using OMTS.Application.Features.Labor;
+using OMTS.Application.Features.Purchasing;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
@@ -38,6 +41,7 @@ using OMTS.Application.Features.Sales.Payments;
 using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Application.Features.Sales.Products;
 using OMTS.Application.Features.Sales.PurchaseRequests;
+using OMTS.Application.Features.Sales.QualityClaims;
 using OMTS.Application.Features.Verification;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
@@ -57,6 +61,7 @@ public static class DependencyInjection
 
         services.AddSingleton(provider => new UnknownLoginCounter(timeProvider: provider.GetRequiredService<TimeProvider>()));
         services.AddScoped<AuthService>();
+        services.AddScoped<SessionManagementService>();
         services.AddScoped<ZaloLinkService>();
         services.AddScoped<ZaloLocationService>();
         services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseRequestService>();
@@ -200,6 +205,8 @@ public static class DependencyInjection
         services.AddScoped<LotPublishService>();
         // TRACE-02 – trace a lot backward and forward, and export the trace
         services.AddScoped<LotTraceService>();
+        // ORIGIN-01 – the public provenance page of an invoice QR code (anonymous)
+        services.AddScoped<ProvenancePageService>();
         // TRACE-04 – withdraw the origin information of a lot and tell its traders
         services.AddScoped<WithdrawalNotices>();
         services.AddScoped<LotWithdrawalService>();
@@ -210,6 +217,7 @@ public static class DependencyInjection
         // INP – suppliers, farming inputs, purchase receipts, returns and supplier payments
         services.AddScoped<ZoneAccessGuard>();
         services.AddScoped<SupplierService>();
+        services.AddScoped<SupplierFileService>();
         services.AddScoped<FarmingInputItemService>();
         services.AddScoped<ProductService>();
         services.AddScoped<ProductReadService>();
@@ -217,6 +225,12 @@ public static class DependencyInjection
         services.AddScoped<CustomerMergeService>();
         services.AddScoped<PurchaseRequestNotifications>();
         services.AddScoped<TraderMessageService>();
+        // CLAIM-01 and CLAIM-02
+        services.AddScoped<QualityClaimViews>();
+        services.AddScoped<QualityClaimNotifications>();
+        services.AddScoped<QualityClaimReadService>();
+        services.AddScoped<QualityClaimSubmissionService>();
+        services.AddScoped<QualityClaimResponseService>();
         // SALE-05 sales invoices and the customer debt (BR-DEBT-02)
         services.AddScoped<CustomerDebtReader>();
         // DEBT-03 customer debts, statement and export (read only)
@@ -234,6 +248,14 @@ public static class DependencyInjection
         services.AddScoped<SalesInvoiceViews>();
         services.AddScoped<SalesInvoiceService>();
         services.AddScoped<SalesInvoiceReadService>();
+        // SALE-05 steps 7-8: the sale awaiting its VietQR transfer, and GFR-08 / API-13 the transfers the bank reports
+        services.AddScoped<PendingSaleWriter>();
+        services.AddScoped<PendingSaleViews>();
+        services.AddScoped<PendingSaleService>();
+        services.AddScoped<PendingSaleCompletion>();
+        services.AddScoped<PendingSaleLotQuery>();
+        services.AddScoped<TransferPaymentWriter>();
+        services.AddScoped<BankTransferNoticeService>();
         services.AddScoped<SalesInvoiceSearchService>();
         services.AddScoped<SalesInvoiceExportService>();
         // SALE-06 sending the invoice, and the end of the sale with the QR code
@@ -243,16 +265,28 @@ public static class DependencyInjection
         services.AddScoped<PurchaseReceiptValidator>();
         services.AddScoped<PurchaseReceiptViews>();
         services.AddScoped<PurchaseReceiptNotifications>();
+        services.AddScoped<PurchaseDocumentCodeService>();
         services.AddScoped<PurchaseReceiptService>();
         services.AddScoped<PurchaseReceiptCancellationService>();
         services.AddScoped<PurchaseReceiptCorrectionService>();
+        services.AddScoped<PurchaseReceiptEditService>();
         services.AddScoped<PurchaseReceiptCopyService>();
         services.AddScoped<PurchaseReturnService>();
+        services.AddScoped<PurchaseReturnQueryService>();
+        services.AddScoped<SupplierPaymentAllocationService>();
         services.AddScoped<PurchaseReceiptQueryService>();
         services.AddScoped<SupplierPaymentService>();
         services.AddScoped<SupplierPaymentNotifications>();
         services.AddScoped<SupplierDebtService>();
         services.AddScoped<SupplierDebtExportService>();
+        services.AddScoped<CashAccountService>();
+        services.AddScoped<CashVoucherTypeService>();
+        services.AddScoped<CashPartyService>();
+        services.AddScoped<CashVoucherCodeService>();
+        services.AddScoped<CashBookLookupService>();
+        services.AddScoped<CashVoucherService>();
+        services.AddScoped<CashBookService>();
+        services.AddScoped<CashBookExportService>();
 
         // ENV-01…ENV-04 water quality monitoring and the overdue measurement reminder
         services.AddSingleton<EditingPresenceTracker>();

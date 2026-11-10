@@ -12,5 +12,8 @@ public static class SalesDocumentCodes
     /// <summary>PT followed by at least six digits: the "receipt" of a customer payment (BR-DEBT-03).</summary>
     public static string PaymentCode(long number) => Code(DocumentSequenceKeys.CustomerPayment, number);
 
+    /// <summary>KN000123, a quality claim (BR-CLAIM-01 gives no prefix: PM default).</summary>
+    public static string ClaimCode(long number) => Code(DocumentSequenceKeys.QualityClaim, number);
+
     private static string Code(string prefix, long number) => $"{prefix}{number.ToString("000000", CultureInfo.InvariantCulture)}";
 }

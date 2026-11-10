@@ -268,6 +268,7 @@ public class PurchaseCatalogueQaTests(AuthApiFactory factory) : IClassFixture<Au
 
         var receipts = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts?itemGroup=Material&supplierId={world.SupplierId}");
         Assert.Equal([material.Id()], receipts.GetProperty("page").GetProperty("items").EnumerateArray().Select(r => r.Id()));
+        await factory.UseMaterialAsync(world.Raft.Id, world.Material, 2);
         var costs = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/raft-material-costs?raftId={world.Raft.Id}");
         Assert.Equal(100_000, costs.GetProperty("rafts").EnumerateArray().Single().Money("materialCost"));
     }

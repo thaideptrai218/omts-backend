@@ -37,11 +37,13 @@ Each use case runs in one HTTP request scope: the services of the request share 
 ```mermaid
 classDiagram
     direction LR
-    class AuthController { +Login() +Refresh() +Logout() }
+    class AuthController { +Login() +Refresh() +Logout() +LinkZalo() +LoginWithZalo() }
+    class MeSessionsController { +ListSessions() +RevokeSession() +RevokeOtherSessions() +ListDevices() +RevokeDevice() }
     class AccountRecoveryController { +Register() +StartRecovery() +Reset() }
     class VerificationsController { +Start() +Resend() +Verify() }
-    class MeSecurityController { +ChangePassword() +SendPasswordCode() +StartPhoneVerification() }
-    class AuthService { +LoginAsync() +RefreshAsync() +LogoutAsync() +CreateSessionAsync() }
+    class MeSecurityController { +ChangePassword() +StartPhoneVerification() }
+    class AuthService { +LoginAsync() +RefreshAsync() +LogoutAsync() +CreateSessionAsync() +DeviceKeyOf() }
+    class SessionManagementService { +ListSessionsAsync() +RevokeSessionAsync() +RevokeOthersAsync() +ListDevicesAsync() +RevokeDeviceAsync() }
     class VerificationService { +StartAsync() +ResendAsync() +VerifyAsync() +ConsumeTokenAsync() }
     class VerificationThrottle { +CheckStartAsync() +CheckSendAsync() }
     class IVerificationCodeHasher { <<interface>> +Hash() +Matches() }
@@ -49,8 +51,8 @@ classDiagram
     class CurrentPasswordProof { +CheckAsync() }
     class RegistrationService { +RegisterAsync() }
     class PasswordRecoveryService { +StartAsync() +ResetAsync() }
-    class PasswordChangeService { +ChangeAsync() +SendCodeAsync() }
-    class ITokenService { <<interface>> +CreateAccessToken() +CreateRefreshToken() +HashRefreshToken() }
+    class PasswordChangeService { +ChangeAsync() }
+    class ITokenService { <<interface>> +CreateAccessToken() +CreateRefreshToken() +HashRefreshToken() +DeriveDeviceKey() }
     class IPasswordHasher { <<interface>> +Hash() +Verify() }
     class IAccountRepository { <<interface>> }
     class ILoginSessionRepository { <<interface>> }
@@ -59,7 +61,7 @@ classDiagram
     class JwtTokenService
     class PasswordHasher
     class Account { Username; PhoneNumber; Email; PasswordHash; MustChangePassword; FailedLoginCount; LockoutEndAt; SubjectType; StatusId }
-    class LoginSession { ClientType; RefreshTokenHash; RefreshTokenExpiresAt; AbsoluteExpiresAt; RevokedAt; +Rotate() +Revoke() }
+    class LoginSession { ClientType; RefreshTokenHash; PreviousRefreshTokenHash; RefreshTokenExpiresAt; AbsoluteExpiresAt; RevokedAt; +Rotate() +Revoke() }
     class VerificationCode { Purpose; Channel; Target; CodeHash; SendCount; FailedAttempts; TokenHash; RowVersion }
     AuthController --> AuthService
     AccountRecoveryController --> RegistrationService
@@ -140,10 +142,10 @@ sequenceDiagram
     participant H as PasswordHasher
     participant T as JwtTokenService
     participant L as LoginSessions
-    U->>C: POST /api/auth/login {identifier, password, clientType}
+    U->>C: POST /api/auth/login {identifier, password, clientType, deviceId?}
     Note over C: per-IP limiter "logins" (RateLimits:LoginsPerMinute)
     C->>S: LoginAsync
-    S->>A: find by username / verified phone / verified email
+    S->>A: find by username / phone number (verified or not; an email never matches)
     alt unknown identifier
         S->>S: count failures in memory (5 → MSG69 for 15 min)
         S-->>C: MSG12
@@ -157,7 +159,7 @@ sequenceDiagram
         else temporary password older than 24 h
             S-->>C: MSG68
         else
-            S->>L: new LoginSession(refresh lifetime web 7 d / mobile 30 d, absolute 30 / 90 d)
+            S->>L: new LoginSession(refresh lifetime web 7 d / mobile 30 d, absolute 30 / 90 d, AuthMethod, DeviceKey = HMAC(deviceId) or none)
             S->>T: CreateAccessToken (HS256, 15 min, sub, sid, jti, subject type)
             S->>T: CreateRefreshToken = "{sessionId}.{512 random bits}"
             S->>L: store SHA-256(refresh token) only
@@ -167,16 +169,23 @@ sequenceDiagram
     U->>C: POST /api/auth/refresh {refreshToken}
     C->>S: RefreshAsync
     S->>L: find by SHA-256(token)
-    alt token not current (already rotated)
-        S->>L: revoke the session of that id (reuse detected)
-        S-->>C: MSG19
+    alt token is the one the last rotation replaced, within 30 s (Jwt:RefreshGracePeriod)
+        S->>S: check session, account status and grants as for a rotation
+        S-->>C: new access token + the same refresh token, refreshTokenRotated = false (no second rotation)
+    else token not current (older, or replaced more than 30 s ago)
+        S->>L: revoke the session of that id (reuse detected, RevokeCause = TokenReuse)
+        S-->>C: MSG19 + reason (reuse; expired when the session is gone; revoked when it was ended on purpose)
     else valid and not expired
-        S->>L: Rotate (new hash, concurrency token on RefreshTokenHash)
-        S-->>C: new access + refresh token
+        S->>L: Rotate (new hash, previous hash kept for the grace period, concurrency token on RefreshTokenHash)
+        S-->>C: new access + refresh token, refreshTokenRotated = true
     end
 ```
 
-After login every request passes `AccountStateGateFilter`: an account that must change its temporary password reaches only the password endpoints (`PASSWORD_CHANGE_REQUIRED`). A trader or staff member without a verified phone reaches only the phone verification endpoints (MSG67, ACS-06 extends ACS-02).
+A refresh that loses the save to a concurrent rotation of the same token reloads the session and is answered as the grace case. The access token's `exp` is the earlier of its lifetime and the session's absolute expiry.
+
+After login every request passes `AccountStateGateFilter`: an account that must change its temporary password reaches only the password endpoints (`PASSWORD_CHANGE_REQUIRED`). A trader or staff member without a verified phone reaches only the phone verification endpoints (MSG67, ACS-06 extends ACS-02); a phone number logs in before it is verified, so this gate is what enforces the verification.
+
+Every refused refresh carries the problem extension `reason` (`expired`, `reuse`, `revoked`). `POST /api/auth/zalo/login` refuses (403 `ZALO_DEVICE_REVOKED`) a `deviceId` whose newest session of the account was revoked by a user or an administrator; `POST /api/auth/zalo/link` creates a newer session and so lets the device in again. `SessionManagementService` lists and revokes the caller's own sessions and devices (`/api/me/sessions`, `/api/me/devices`).
 
 ### 3.2 UC03 / ACS-03 – Recover password
 
@@ -188,7 +197,7 @@ sequenceDiagram
     participant V as VerificationService
     participant M as SMS / Email adapter
     participant S as AuthService
-    U->>C: POST /api/auth/recovery {identifier, channel}
+    U->>C: POST /api/auth/recovery {identifier} (a phone number; SMS only)
     C->>R: StartAsync
     R->>V: StartAsync(AccountRecovery, account, verified target)
     Note over V: budget per purpose + account/target: 5 sends/hour, 60 s apart, 10 wrong entries/hour → MSG69
@@ -273,7 +282,7 @@ SQL Server, code-first EF Core migrations. Every business table derives from `Au
 | Table | Main columns | Keys / indexes |
 |---|---|---|
 | Accounts | DisplayName, Username, PhoneNumber, PhoneVerifiedAt, Email, EmailVerifiedAt, PasswordHash, MustChangePassword, TemporaryPasswordIssuedAt, FailedLoginCount, LockoutEndAt, LastLoginAt, SubjectType (CooperativeOwner, Staff, Trader), StatusId, NotificationPreferences (JSON) | unique Username; unique PhoneNumber; unique Email where verified |
-| LoginSessions | AccountId, ClientType (Web, Mobile), RefreshTokenHash, RefreshTokenExpiresAt, AbsoluteExpiresAt, LastRefreshedAt, RevokedAt, RevokeReason, DeviceName, UserAgent, IpAddress | unique RefreshTokenHash (concurrency token) |
+| LoginSessions | AccountId, ClientType (Web, Mobile), AuthMethod (Password, ZaloMiniApp), DeviceKey (keyed hash of the client's device id, null when none), RefreshTokenHash, PreviousRefreshTokenHash, PreviousRefreshTokenGraceEndsAt, RefreshTokenExpiresAt, AbsoluteExpiresAt, LastRefreshedAt, RevokedAt, RevokeReason, RevokeCause (Revoked, TokenReuse), DeviceName, UserAgent, IpAddress | unique RefreshTokenHash (concurrency token); filtered index on PreviousRefreshTokenHash; (AccountId, DeviceKey); RevokedAt. A daily job deletes sessions 30 days after they expired or were revoked |
 | VerificationCodes | AccountId?, Purpose, Channel, Target, CodeHash, ExpiresAt, LastSentAt, SendCount, FailedAttempts, ConsumedAt, CancelledAt, TokenHash, TokenExpiresAt, TokenConsumedAt, RowVersion | unique TokenHash; (Target, Purpose, CreatedAt); (AccountId, Purpose) |
 | PushDevices | AccountId, Token, Platform, PermissionGranted, RegisteredAt, LastSeenAt | unique Token |
 | Roles | Name, Description, StatusId (In Use / Discontinued) | unique Name |
@@ -299,13 +308,15 @@ All routes are JSON over HTTPS. Errors are `application/problem+json` with `code
 | POST /api/verifications/{id}/resend, /verify | anonymous or signed in, per-IP limit | ACS-06 |
 | POST /api/auth/register | anonymous, per-IP limit | ACS-01 |
 | POST /api/auth/recovery, /api/auth/recovery/reset | anonymous, per-IP limit | ACS-03 |
-| POST /api/me/password; POST /api/me/password/code (per-IP limit) | signed in | ACS-04 |
+| POST /api/me/password (current password; none after a temporary-password login) | signed in | ACS-04 |
+| GET /api/me/sessions; DELETE /api/me/sessions/{id}; POST /api/me/sessions/revoke-others; GET /api/me/devices; DELETE /api/me/devices/{deviceKey} | signed in, own account only | ACS-02 (devices and sessions) |
 | POST /api/me/phone-verification (per-IP limit, unverified phone only), /confirm | signed in | ACS-02 branch, ACS-06 |
 | POST /api/auth/zalo/link, /zalo/login, /zalo/trader-requests (login rate limit) | anonymous, proven by the Zalo tokens | ACS-01 (Zalo Mini App) |
 | DELETE /api/me/zalo-link | signed in | ACS-01 (Zalo Mini App) |
 | GET /api/trader-requests; POST …/{id}/approve, …/{id}/reject | Cooperative Owner | ACS-01 (Zalo Mini App) |
 | GET/PUT /api/me/profile; POST /api/me/contact-changes (current password, per-IP limit), /confirm | signed in | ACS-05 |
 | GET/PUT /api/me/notification-preferences; POST/DELETE /api/me/devices | signed in | ACS-07 |
+| GET /api/me (identity, `mustChangePassword`, `phoneVerificationRequired`; open while either step is pending) | signed in | onboarding routing |
 | GET /api/me/permissions | signed in | menus, dashboard tiles |
 | GET/POST /api/accounts; GET/PUT /api/accounts/{id}; POST …/lock, …/unlock, …/reset-password | Cooperative Owner | ACS-09 |
 | GET/POST /api/accounts/{id}/grants; POST …/grants/{grantId}/revoke; POST /api/accounts/permission-preview | Cooperative Owner | FARM-05 |
@@ -325,7 +336,7 @@ All routes are JSON over HTTPS. Errors are `application/problem+json` with `code
 | Temporary passwords | 10 random characters, valid 24 h, must be changed at first login (`MustChangePassword`); returned once in the create/reset response only. |
 | Login throttling | 5 wrong passwords → 15-minute lock (`LockoutEndAt`); unknown identifiers counted the same way in a dedicated, size-limited memory cache (`UnknownLoginCounter`), and a locked account takes the same hashing time as a locked unknown identifier. Identifier (254) and password (128) are length-limited before any hashing or query. Per-IP fixed-window limiter on login (default 30/min). A wrong current password in ACS-04 and ACS-05 counts too. |
 | Access token | JWT HS256, 15 minutes, 30 s clock skew; claims: subject (account id), session id, token id, username, subject type. Permissions are not in the token: they are read per request (cached 5 min, invalidated on every grant/role/account change), so role edits apply at once. The signing key comes from configuration (user-secrets / pipeline secret), at least 32 bytes. |
-| Refresh token / sessions | One `LoginSession` per login; refresh token = `{sessionId}.{512 random bits}.{HMAC}`, stored as SHA-256 only; the HMAC proves the server issued it, so a made-up token naming a session cannot end it. Each refresh rotates it; reuse of an old token revokes the session. Web 7 d sliding / 30 d absolute, mobile 30 d / 90 d. Logout revokes the session; password change, reset and lock revoke all sessions. |
+| Refresh token / sessions | One `LoginSession` per login; refresh token = `{sessionId}.{512 random bits}.{HMAC}`, stored as SHA-256 only; the HMAC proves the server issued it, so a made-up token naming a session cannot end it. Each refresh rotates it; the token just replaced is still answered for 30 s (new access token only, no second rotation), any other reuse of an old token revokes the session. Web 7 d sliding / 30 d absolute, mobile 30 d / 90 d. Logout revokes the session; password change, reset and lock revoke all sessions. |
 | Verification codes | 6 digits from a CSPRNG, stored as HMAC-SHA256(requestId:code) with a server key (`IVerificationCodeHasher`), compared in constant time; valid 5 min, 5 wrong entries lock the request, at most 3 sends 60 s apart per request and 5 per hour per purpose + account/target, 10 wrong entries per hour → MSG69. `VerificationThrottle` adds 10 sends per hour to one number or address across accounts and a system-wide daily SMS ceiling (`Verification:DailySmsLimit`, MSG04 and a critical log entry). A request is saved before its code is sent, so parallel starts or resends of one subject send once. The verified result is a single-use 32-byte token (10 min, stored hashed) bound to purpose, account and target. Per-IP limiter (default 10/min, IPv6 per /64) on every endpoint that sends or checks a code. |
 | Contact changes | Changing or adding an email or phone (ACS-05) needs the current password, then a code to the new contact; the previous verified contact is told after the change. Phone verification after login applies to an unverified phone only. |
 | Authorization | `RequirePermissionAttribute` (function, action, scope: zone from the route, any zone, or All zones) and `RequireCooperativeOwnerAttribute`; handlers re-check the zone of the record they load, so a record of zone B is never opened with a grant on zone A. The Owner manages Staff accounts only: Owner and Trader accounts are refused (403 MSG02) by `StaffAccountService`, and a request for Owner rights (ACS-09 or LAB-01, one rule: `RefuseOtherSubjectType`) is refused and audited. Trader accounts are locked or unlocked by the System Administrator outside the app (no endpoint). A role cannot be discontinued while an Effective grant, current or future, uses it. |

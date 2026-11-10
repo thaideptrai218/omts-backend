@@ -39,7 +39,7 @@ public static partial class RelatedRecordTypes
     /// <summary>A harvest lot (HARVEST-01); the code shown is its lot code.</summary>
     public const string HarvestLot = "HarvestLot";
 
-    /// <summary>A purchase receipt (PURCHASE-01, PURCHASE-06); it has no zone.</summary>
+    /// <summary>A purchase receipt (PURCHASE-01, PURCHASE-06); the notification follows the role, whatever the zone of the receipt.</summary>
     public const string PurchaseReceipt = "PurchaseReceipt";
 
     /// <summary>A supplier payment or money paid back (PURCHASE-05); it has no zone and is never removed, only cancelled.</summary>
@@ -50,6 +50,9 @@ public static partial class RelatedRecordTypes
 
     /// <summary>A customer payment or money paid back (DEBT-02); it has no zone and is never removed, only cancelled; the code shown is PT000123.</summary>
     public const string CustomerPayment = "CustomerPayment";
+
+    /// <summary>A quality claim (CLAIM-01, CLAIM-02); its zone is the zone of its invoice, the trader of its profile opens it, and the code shown is KN000123.</summary>
+    public const string QualityClaim = "QualityClaim";
 
     /// <summary>
     /// "FarmingZone" → "Farming zone", "ZoneLicense" → "Zone license": the {object_name} of MSG-ACCOUNT-22. A certification

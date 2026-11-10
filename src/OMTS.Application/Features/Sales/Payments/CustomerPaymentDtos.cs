@@ -38,11 +38,13 @@ public sealed record CustomerPaymentInvoiceRef(Guid Id, string Code);
 /// <param name="Customer">Null for a payment without a customer profile (BR-DEBT-03).</param>
 /// <param name="Invoice">The invoice the money came with (cash at the port, VietQR code of the invoice).</param>
 /// <param name="RecordedBy">Null when the system recorded it (GFR-08).</param>
+/// <param name="TransferInvoiceCode">A transfer whose invoice code matches no saved invoice (Stop sale, an unknown code): the code it carried (DEBT-02.6).</param>
+/// <param name="TransferredAt">The time of the transfer the Payment Notification Service reported (GFR-08).</param>
 public sealed record CustomerPaymentDetails(
     Guid Id, string Code, CustomerDebtCustomer? Customer, CustomerPaymentKind Kind, decimal Amount, DateOnly PaymentDate, CustomerPaymentMethod Method,
     string? BankReference, CustomerPaymentInvoiceRef? Invoice, AccountRef? CollectedBy, AccountRef? RecordedBy, string? Note,
     int StatusId, string Status, AccountRef? ConfirmedBy, DateTimeOffset? ConfirmedAt, AccountRef? CancelledBy, DateTimeOffset? CancelledAt, string? CancelReason,
-    string RowVersion);
+    string RowVersion, string? TransferInvoiceCode = null, DateTimeOffset? TransferredAt = null);
 
 /// <summary>The answer of a record, a pay back or a cancel: the payment, the customer debt after it (null without a profile) and MSG-GEN-05.</summary>
 /// <param name="DebtAfter">On a repeated deduplication key: the debt now.</param>

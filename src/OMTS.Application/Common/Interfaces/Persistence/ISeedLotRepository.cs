@@ -37,4 +37,7 @@ public interface ISeedLotUsageQuery
 {
     /// <summary>Per seed lot (receipt line) with at least one session: the total quantity of its sessions.</summary>
     Task<IReadOnlyDictionary<Guid, decimal>> SeededAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken);
+
+    /// <summary>The earliest seeding date of any of these seed lots, or null when none was seeded.</summary>
+    Task<DateOnly?> FirstSeedingDateAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken);
 }

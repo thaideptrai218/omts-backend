@@ -7,7 +7,6 @@ using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Files;
 using OMTS.Application.Features.Purchasing.Suppliers;
-using OMTS.Domain.Enums;
 
 namespace OMTS.Api.Controllers;
 
@@ -19,14 +18,48 @@ namespace OMTS.Api.Controllers;
 [ApiController]
 [Route("api/suppliers")]
 [Authorize]
-public sealed class SuppliersController(SupplierService suppliers) : ControllerBase
+public sealed class SuppliersController(SupplierService suppliers, SupplierFileService files) : ControllerBase
 {
+    /// <summary>Total purchased and current debt are null, and their sort and filter parameters refused, without the permission that reads them.</summary>
     [HttpGet]
     [RequirePermission(PermissionFunctions.Suppliers, PermissionAction.View, PermissionScope.NoZone)]
     [ProducesResponseType<Paged<SupplierListItem>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Search(
-        string? search, SupplierType? type, int? statusId, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default) =>
-        Ok(await suppliers.SearchAsync(search, type, statusId, page, pageSize, cancellationToken));
+    public async Task<IActionResult> Search([FromQuery] SupplierListQuery query, CancellationToken cancellationToken) =>
+        (await suppliers.SearchAsync(query, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>The list as filtered and sorted, as .xlsx. Figures appear only for callers who may read them; the identity number never.</summary>
+    [HttpGet("export")]
+    [RequirePermission(PermissionFunctions.Suppliers, PermissionAction.Export, PermissionScope.NoZone)]
+    public async Task<IActionResult> Export([FromQuery] SupplierListQuery query, CancellationToken cancellationToken) =>
+        (await files.ExportAsync(query, cancellationToken)).ToActionResult(f => File(f.Content, f.ContentType, f.FileName));
+
+    [HttpGet("import/template")]
+    [RequirePermission(PermissionFunctions.Suppliers, PermissionAction.Create, PermissionScope.NoZone)]
+    public IActionResult ImportTemplate() =>
+        files.Template().ToActionResult(f => File(f.Content, f.ContentType, f.FileName));
+
+    /// <summary>Multipart field <c>file</c>: .xlsx, at most 2 MB and 1000 rows. All rows or none; rejected rows are listed in <c>errors</c>.</summary>
+    [HttpPost("import")]
+    [RequirePermission(PermissionFunctions.Suppliers, PermissionAction.Create, PermissionScope.NoZone)]
+    [RequestSizeLimit(3 * 1024 * 1024)]
+    [UploadField("File")]
+    [ProducesResponseType<SupplierImportResult>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Import(IFormFile? file, CancellationToken cancellationToken) =>
+        (await files.ImportAsync(file is null ? null : await file.ToIncomingFileAsync(cancellationToken), cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>Discontinues or resumes several suppliers; each id reports its own outcome.</summary>
+    [HttpPost("bulk-status")]
+    [RequirePermission(PermissionFunctions.Suppliers, PermissionAction.Edit, PermissionScope.NoZone)]
+    [ProducesResponseType<SupplierBulkResult>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> BulkStatus(SupplierBulkStatusRequest request, CancellationToken cancellationToken) =>
+        (await suppliers.BulkStatusAsync(request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>The purchase receipts and returns of the supplier, newest first, for those who view receipts.</summary>
+    [HttpGet("{id:guid}/history")]
+    [RequirePermission(PermissionFunctions.PurchaseReceipts, PermissionAction.View, PermissionScope.NoZone)]
+    [ProducesResponseType<Paged<SupplierHistoryItem>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> History(Guid id, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default) =>
+        (await suppliers.HistoryAsync(id, page, pageSize, cancellationToken)).ToActionResult(Ok);
 
     [HttpGet("{id:guid}")]
     [RequirePermission(PermissionFunctions.Suppliers, PermissionAction.View, PermissionScope.NoZone)]

@@ -72,6 +72,9 @@ public static class StatusIds
     {
         public const int Recorded = 1901;
         public const int Cancelled = 1902;
+
+        /// <summary>Saved but not completed: holds no quantity, lowers no debt and is removed rather than cancelled.</summary>
+        public const int Draft = 1903;
     }
 
     /// <summary>LANE (BR-FARM-04): a lane taken off the end of a raft is Removed, never deleted, and may return to In Use.</summary>
@@ -110,6 +113,14 @@ public static class StatusIds
         public const int Declined = 3203;
         public const int Cancelled = 3204;
         public const int AwaitingStaff = 3205;
+    }
+
+    /// <summary>STD-QUALITY-CLAIM (BR-CLAIM-02): a response cannot be changed.</summary>
+    public static class QualityClaim
+    {
+        public const int AwaitingResponse = 3701;
+        public const int Rejected = 3702;
+        public const int Accepted = 3703;
     }
 
     /// <summary>STD-SALES-INVOICE (BR-SALE-08): saved only when paid or put on the debt, so no draft; Paid and the delivery status are worked out.</summary>

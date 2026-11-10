@@ -25,13 +25,20 @@ public sealed class CooperativeProfileViews(ICooperativeRepository cooperatives,
             certifications.Add(await CertificationAsync(certification, today, cancellationToken));
         }
 
-        var logoUrl = CooperativePublicFiles.UrlOf(c.LogoUrl, FileCategories.CooperativeLogos, CooperativePublicFiles.LogoFilesPath);
-        var coverPhotoUrl = CooperativePublicFiles.UrlOf(c.CoverPhotoUrl, FileCategories.CooperativeCoverPhotos, CooperativePublicFiles.CoverPhotoFilesPath);
+        var (logoUrl, coverPhotoUrl) = PublicFileUrls(c);
         var preview = Preview(c, logoUrl, coverPhotoUrl, await PublicCertificationsAsync(stored, now, cancellationToken));
         return new CooperativeProfileView(
             c.Id, c.FullName, c.ShortName, c.TaxCode, c.YearEstablished, c.OfficeAddress, c.PhoneNumber, c.Email, c.Website,
             c.SocialLink, c.IntroductionVi, c.IntroductionEn, c.LegalRepresentative, BusinessLinesOf(c), logoUrl, coverPhotoUrl,
             today, certifications, preview, RowVersionGuard.Encode(c.RowVersion));
+    }
+
+    /// <summary>The cooperative block of the provenance page (ORIGIN-01, BR-FARM-09): the same block the FARM-01 preview shows, as of now.</summary>
+    public async Task<PublicCooperativePreview> PublicBlockAsync(Cooperative c, CancellationToken cancellationToken)
+    {
+        var stored = await cooperatives.ListCertificationsAsync(c.Id, cancellationToken);
+        var (logoUrl, coverPhotoUrl) = PublicFileUrls(c);
+        return Preview(c, logoUrl, coverPhotoUrl, await PublicCertificationsAsync(stored, timeProvider.GetUtcNow(), cancellationToken));
     }
 
     public async Task<CooperativeCertificationView> CertificationAsync(CooperativeCertification c, DateOnly today, CancellationToken cancellationToken)
@@ -41,6 +48,10 @@ public sealed class CooperativeProfileViews(ICooperativeRepository cooperatives,
             c.Id, c.Name, c.Number, c.Issuer, c.ExpiryDate, CertificationStateRules.StateOn(c.ExpiryDate, today), fileUrl,
             RowVersionGuard.Encode(c.RowVersion));
     }
+
+    private static (string? LogoUrl, string? CoverPhotoUrl) PublicFileUrls(Cooperative c) => (
+        CooperativePublicFiles.UrlOf(c.LogoUrl, FileCategories.CooperativeLogos, CooperativePublicFiles.LogoFilesPath),
+        CooperativePublicFiles.UrlOf(c.CoverPhotoUrl, FileCategories.CooperativeCoverPhotos, CooperativePublicFiles.CoverPhotoFilesPath));
 
     public static IReadOnlyList<string> BusinessLinesOf(Cooperative c) =>
         string.IsNullOrEmpty(c.BusinessLines) ? [] : JsonSerializer.Deserialize<List<string>>(c.BusinessLines) ?? [];

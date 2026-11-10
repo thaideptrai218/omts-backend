@@ -121,8 +121,8 @@ public class PurchaseReceiptCancelCorrectListQaTests(AuthApiFactory factory) : I
         Assert.Equal("Seeded", (await (await world.Owner.CancelAsync(receipt.Id(), "x")).ProblemAsync(HttpStatusCode.Conflict, "MSG-PURCHASE-09")).GetProperty("cause").GetString());
     }
 
-    // PURCHASE-06.2 step 5: the list and the raft material cost follow the corrected line amounts; repeated or missing lines
-    // and a version read before another change are refused.
+    // PURCHASE-06.2 step 5: the list and the price of material used on a raft follow the corrected line; repeated or missing
+    // lines and a version read before another change are refused.
     [Fact]
     public async Task A_correction_moves_the_list_and_the_raft_material_cost_and_refuses_repeated_lines_or_a_stale_version()
     {
@@ -144,11 +144,12 @@ public class PurchaseReceiptCancelCorrectListQaTests(AuthApiFactory factory) : I
         var list = await world.Owner.GetFromJsonAsync<JsonElement>($"{Receipts}?supplierId={world.SupplierId}&raftId={world.Raft.Id}");
         var row = Assert.Single(list.GetProperty("page").GetProperty("items").EnumerateArray());
         Assert.Equal((90_000m, 80_000m, 80_000m), (row.Money("total"), row.Money("linesTotal"), list.GetProperty("totals").Money("receiptsTotal")));
+        await factory.UseMaterialAsync(world.Raft.Id, world.Material, 2);
         var costs = await world.Owner.GetFromJsonAsync<JsonElement>($"{Receipts}/raft-material-costs?raftId={world.Raft.Id}");
-        Assert.Equal(80_000m, Assert.Single(costs.GetProperty("rafts").EnumerateArray()).Money("purchased"));
+        Assert.Equal(40_000m, Assert.Single(costs.GetProperty("rafts").EnumerateArray()).Money("materialCost"));
     }
 
-    // PURCHASE-03.2: the file holds the receipts and the three totals shown (and the raft material cost with a raft filter).
+    // PURCHASE-03.2: the file holds the receipts and the three totals shown; the raft material cost is not a receipt total.
     [Fact]
     public async Task The_export_holds_the_rows_and_the_totals_shown_with_and_without_a_raft_filter()
     {
@@ -161,7 +162,7 @@ public class PurchaseReceiptCancelCorrectListQaTests(AuthApiFactory factory) : I
         foreach (var (filter, rows, totals) in new[]
         {
             ($"supplierId={world.SupplierId}", new[] { (completed, "Completed", 1_500m, 1_500m), (draft, "Draft", 2_000m, 2_000m) }, new decimal?[] { 1_500m, 1_000m, 500m, null }),
-            ($"supplierId={world.SupplierId}&raftId={world.Raft.Id}", new[] { (completed, "Completed", 1_500m, 500m) }, new decimal?[] { 500m, 0m, 500m, 500m }),
+            ($"supplierId={world.SupplierId}&raftId={world.Raft.Id}", new[] { (completed, "Completed", 1_500m, 500m) }, new decimal?[] { 500m, 0m, 500m, null }),
         })
         {
             var shown = (await world.Owner.GetFromJsonAsync<JsonElement>($"{Receipts}?{filter}")).GetProperty("totals");

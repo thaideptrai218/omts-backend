@@ -49,14 +49,15 @@ internal static class StatusCatalogSeed
         NewStatus(S.MessageDelivery.NotSent, G.MessageDelivery, "NOT_SENT", "Not sent", "Not accepted by the service; nothing that was saved is undone (GFR-06).", final: true),
 
         NewStatus(S.PurchaseReceipt.Draft, G.PurchaseReceipt, "DRAFT", "Draft", "Being prepared; counts nowhere and creates no seed lot. Removed, never cancelled.", initial: true),
-        NewStatus(S.PurchaseReceipt.Completed, G.PurchaseReceipt, "COMPLETED", "Completed", "Cannot be changed; counts in the supplier debt and raft material costs; each Seed line is a seed lot."),
+        NewStatus(S.PurchaseReceipt.Completed, G.PurchaseReceipt, "COMPLETED", "Completed", "Counts in the supplier debt; each Seed line is a seed lot. May be edited, never its supplier, and every edit is audited."),
         NewStatus(S.PurchaseReceipt.Cancelled, G.PurchaseReceipt, "CANCELLED", "Cancelled", "Kept with its reason; counts nowhere; its Seed lines are no longer seed lots.", final: true),
 
         NewStatus(S.SupplierPayment.Recorded, G.SupplierPayment, "RECORDED", "Recorded", "Counts in the supplier debt; cannot be edited.", initial: true),
         NewStatus(S.SupplierPayment.Cancelled, G.SupplierPayment, "CANCELLED", "Cancelled", "Recorded by mistake; no longer counts in the supplier debt.", final: true),
 
-        NewStatus(S.PurchaseReturn.Recorded, G.PurchaseReturn, "RECORDED", "Recorded", "Lowers the supplier debt and the material cost of the raft; cannot be edited.", initial: true),
+        NewStatus(S.PurchaseReturn.Recorded, G.PurchaseReturn, "RECORDED", "Recorded", "Lowers the supplier debt. May be edited within the quantity left, never below the money paid back, and every edit is audited.", initial: true),
         NewStatus(S.PurchaseReturn.Cancelled, G.PurchaseReturn, "CANCELLED", "Cancelled", "Recorded by mistake; no longer counts.", final: true),
+        NewStatus(S.PurchaseReturn.Draft, G.PurchaseReturn, "DRAFT", "Draft", "Being prepared; counts nowhere and holds no quantity. Removed, never cancelled.", initial: true),
 
         NewStatus(S.Lane.InUse, G.Lane, "IN_USE", "In Use", "Seeded and harvested.", initial: true),
         NewStatus(S.Lane.Removed, G.Lane, "REMOVED", "Removed", "Removed at the end of the raft; keeps its number and records."),
@@ -65,6 +66,11 @@ internal static class StatusCatalogSeed
         NewStatus(S.PurchaseRequest.Accepted, G.PurchaseRequest, "ACCEPTED", "Accepted", "Accepted by the Cooperative Owner, possibly for fewer cages; invoices may be linked to it."),
         NewStatus(S.PurchaseRequest.Declined, G.PurchaseRequest, "DECLINED", "Declined", "Declined by the Cooperative Owner with a note.", final: true),
         NewStatus(S.PurchaseRequest.Cancelled, G.PurchaseRequest, "CANCELLED", "Cancelled", "Cancelled by the trader; no invoice can be linked to it.", final: true),
+
+        // STD-QUALITY-CLAIM: a response cannot be changed (BR-CLAIM-02).
+        NewStatus(S.QualityClaim.AwaitingResponse, G.QualityClaim, "AWAITING_RESPONSE", "Awaiting response", "Sent by the trader; not answered yet.", initial: true),
+        NewStatus(S.QualityClaim.Rejected, G.QualityClaim, "REJECTED", "Rejected", "Rejected by the Cooperative Owner with a note.", final: true),
+        NewStatus(S.QualityClaim.Accepted, G.QualityClaim, "ACCEPTED", "Accepted", "Accepted by the Cooperative Owner, who offered a return of all the goods or a price cut of the whole invoice.", final: true),
 
         // The transitions of a payroll come with LABOR-12 and LABOR-13, which perform them.
         NewStatus(S.Payroll.Draft, G.Payroll, "DRAFT", "Draft", "Being prepared; its lines are calculated from the current records.", initial: true),
@@ -115,7 +121,9 @@ internal static class StatusCatalogSeed
         NewTransition(70, S.PurchaseReceipt.Draft, S.PurchaseReceipt.Completed, "PURCHASE-01", "Zone Manager (own drafts); Cooperative Owner", Action, "Supplier In Use, date received not later than today, and every line complete with an input item In Use, a quantity greater than 0 and a unit price of 0 or more.", false),
         NewTransition(72, S.PurchaseReceipt.Completed, S.PurchaseReceipt.Cancelled, "PURCHASE-06", "Zone Manager (own receipts); Cooperative Owner", Action, "No seed lot of the receipt has been seeded and the receipt has no purchase return that is not cancelled.", true),
         NewTransition(73, S.SupplierPayment.Recorded, S.SupplierPayment.Cancelled, "PURCHASE-05", "Accountant; Cooperative Owner", Action, "A payment recorded by mistake; payments are never cancelled with a purchase receipt.", true),
-        NewTransition(74, S.PurchaseReturn.Recorded, S.PurchaseReturn.Cancelled, "PURCHASE-02", Owner, Action, "A return recorded by mistake; it no longer counts in the supplier debt, the material cost of a raft or the quantity returned.", true),
+        NewTransition(74, S.PurchaseReturn.Recorded, S.PurchaseReturn.Cancelled, "PURCHASE-02", Owner, Action, "A return recorded by mistake; it no longer counts in the supplier debt or the quantity returned.", true),
+
+        NewTransition(30077, S.PurchaseReturn.Draft, S.PurchaseReturn.Recorded, "PURCHASE-02", "Zone Manager (own drafts); Cooperative Owner", Action, "The return is complete and within the quantity left on each line of its receipt; dated the day it is completed.", false),
 
         NewTransition(76, S.Lane.InUse, S.Lane.Removed, "FARM-04", Owner, Action, "The raft has no open cycle; the last lanes are removed first (BR-FARM-04).", false),
         NewTransition(77, S.Lane.Removed, S.Lane.InUse, "FARM-04", Owner, Action, "The raft has no open cycle; Removed lanes return in number order before new numbers (BR-FARM-04).", false),
@@ -123,6 +131,8 @@ internal static class StatusCatalogSeed
         NewTransition(181, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Declined, "SALE-03", Owner, Action, "A note gives the reason.", true),
         NewTransition(182, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Cancelled, "SALE-02", Trader, Action, "The trader cancels; a reason is optional.", false),
         NewTransition(183, S.PurchaseRequest.Accepted, S.PurchaseRequest.Cancelled, "SALE-02", Trader, Action, "The request is not Fulfilled; a reason is optional.", false),
+        NewTransition(220, S.QualityClaim.AwaitingResponse, S.QualityClaim.Accepted, "CLAIM-02", Owner, Action, "The invoice is not cancelled and has no sales return; an offer is chosen and a note is optional.", false),
+        NewTransition(221, S.QualityClaim.AwaitingResponse, S.QualityClaim.Rejected, "CLAIM-02", Owner, Action, "A note gives the reason.", true),
 
         // BR-HARVEST-04: closed in one of four ways; only the system reopens a lot. 80–140 are taken or reserved on other branches.
         NewTransition(150, S.HarvestLot.Open, S.HarvestLot.Closed, "HARVEST-02, GFR-05, SALE-05, SALE-07, CLAIM-03", LotCloser, Action, "Sold whole lot, closed with the leftover kg, or the time limit reached.", false),

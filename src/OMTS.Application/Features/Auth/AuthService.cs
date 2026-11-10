@@ -3,7 +3,9 @@ using OMTS.Application.Common;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Models;
+using OMTS.Application.Common.Results;
 using OMTS.Application.Common.Validation;
 using OMTS.Application.Features.Auth.Dtos;
 using OMTS.Domain.Constants;
@@ -31,6 +33,9 @@ public sealed class AuthService(
     // so this covers any burst the per-IP limiter lets through.
     private const int MaxSaveAttempts = 20;
 
+    // A refresh whose save failed without another rotation having happened (a deadlock victim) is tried again.
+    private const int MaxRefreshAttempts = 3;
+
     private const int MaxUserAgentLength = 500;
     private const int MaxDeviceNameLength = 200;
     private const int MaxIpAddressLength = 64;
@@ -42,13 +47,13 @@ public sealed class AuthService(
     public async Task<AuthResult> LoginAsync(LoginRequest request, ClientInfo client, CancellationToken cancellationToken)
     {
         var identifier = request.Identifier.Trim();
+        // An email address is not a login identifier: it finds nothing and fails like any unknown identifier.
         var phone = PhoneNumbers.Normalize(identifier);
-        var email = EmailAddresses.Normalize(identifier);
-        var account = await accounts.FindByLoginIdentifierAsync(identifier, phone, email, cancellationToken);
+        var account = await accounts.FindByLoginIdentifierAsync(identifier, phone, cancellationToken);
         if (account is null)
         {
             // Normalised as the lookup is: every format of one number finds one row, so it shares one count here too.
-            return FailUnknownIdentifier(phone ?? email ?? identifier, request.Password);
+            return FailUnknownIdentifier(phone ?? identifier, request.Password);
         }
 
         // Hashed once: a retry re-applies the outcome to the re-read account, it does not hash again.
@@ -82,46 +87,70 @@ public sealed class AuthService(
     public async Task<AuthResult> RefreshAsync(RefreshRequest request, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
-        var session = await sessions.GetByRefreshTokenHashAsync(tokenService.HashRefreshToken(request.RefreshToken), cancellationToken);
+        var tokenHash = tokenService.HashRefreshToken(request.RefreshToken);
+        var session = await sessions.GetByRefreshTokenHashAsync(tokenHash, cancellationToken);
         if (session is null)
         {
-            // Not the current token of any session: if it names a session, it is an old token being
-            // replayed, so treat it as stolen and end that session.
-            await RevokeReplayedSessionAsync(request.RefreshToken, now, cancellationToken);
-            return AuthResult.Failure(AuthError.SessionExpired);
+            // Not the current token of any session. The token the last rotation replaced is still answered for its
+            // grace period; any other old token is being replayed, so treat it as stolen and end that session.
+            if (await sessions.GetByPreviousRefreshTokenHashAsync(tokenHash, cancellationToken) is { } superseded
+                && superseded.IsWithinRefreshGrace(tokenHash, now))
+            {
+                return await RefreshWithinGraceAsync(superseded, request.RefreshToken, now, cancellationToken);
+            }
+
+            var replayReason = await RejectReplayedTokenAsync(request.RefreshToken, now, cancellationToken);
+            return AuthResult.RefreshRefused(AuthError.SessionExpired, replayReason);
         }
 
-        if (!session.CanRefresh(now))
+        for (var attempt = 1; ; attempt++)
         {
-            return AuthResult.Failure(AuthError.SessionExpired);
-        }
+            if (!session.CanRefresh(now))
+            {
+                return AuthResult.RefreshRefused(AuthError.SessionExpired, ReasonOfEnded(session));
+            }
 
-        var account = session.Account;
-        var refusal = account.StatusId != StatusIds.Account.Active || !await HasEffectiveAccessAsync(account, cancellationToken)
-            ? AuthError.AccessDenied
-            : account.IsTemporaryPasswordExpired(now) ? AuthError.TemporaryPasswordExpired : (AuthError?)null;
-        if (refusal is not null)
-        {
-            await RevokeAsync(session, now, "Account no longer allowed to log in", cancellationToken);
-            return AuthResult.Failure(refusal.Value);
-        }
+            if (await RefusalToRefreshAsync(session, now, cancellationToken) is { } refusal)
+            {
+                return refusal;
+            }
 
-        var refreshToken = tokenService.CreateRefreshToken(session.Id);
-        session.Rotate(tokenService.HashRefreshToken(refreshToken), now, tokenService.GetSessionLifetime(session.ClientType).RefreshTokenLifetime);
-        try
-        {
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch (ConcurrencyConflictException)
-        {
-            // Another request rotated the same token first: two holders of one token means reuse.
-            await unitOfWork.ReloadAsync(session, cancellationToken);
-            session.Revoke(now, "Concurrent refresh with the same token");
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            return AuthResult.Failure(AuthError.SessionExpired);
-        }
+            var lifetime = tokenService.GetSessionLifetime(session.ClientType);
+            var refreshToken = tokenService.CreateRefreshToken(session.Id);
+            session.Rotate(tokenService.HashRefreshToken(refreshToken), now, lifetime.RefreshTokenLifetime, lifetime.RefreshGrace);
+            try
+            {
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+            catch (ConcurrencyConflictException)
+            {
+                // Another request rotated the same token first (or the database picked this save as a deadlock victim).
+                await unitOfWork.ReloadAsync(session, cancellationToken);
+                if (session.RefreshTokenHash == tokenHash)
+                {
+                    // Nothing rotated the session, so the token is not being replayed: try again, and when the
+                    // attempts run out report the failure instead of ending a healthy session.
+                    if (attempt < MaxRefreshAttempts)
+                    {
+                        continue;
+                    }
 
-        return AuthResult.Success(BuildTokens(account, session, refreshToken));
+                    throw;
+                }
+
+                // The winner's rotation made this request's token the replaced one: answer it as the grace case. Only
+                // a token that is no longer the replaced one (a genuine replay) ends the session.
+                if (!session.IsWithinRefreshGrace(tokenHash, now))
+                {
+                    await RevokeAsync(session, now, "Refresh token reuse detected", cancellationToken, SessionRevokeCause.TokenReuse);
+                    return AuthResult.RefreshRefused(AuthError.SessionExpired, RefreshFailureReason.Reuse);
+                }
+
+                return await RefreshWithinGraceAsync(session, request.RefreshToken, now, cancellationToken);
+            }
+
+            return AuthResult.Success(BuildTokens(session.Account, session, refreshToken));
+        }
     }
 
     /// <summary>Revokes the current session; returns false when it no longer exists.</summary>
@@ -178,20 +207,29 @@ public sealed class AuthService(
         account.RegisterSuccessfulLogin(now);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return AuthResult.Success(await CreateSessionAsync(account, request.ClientType, request.DeviceName, client, cancellationToken));
+        var created = await CreateSessionAsync(
+            account, request.ClientType, request.DeviceName, client, AuthMethod.Password, request.DeviceId, cancellationToken);
+        return created.IsSuccess ? AuthResult.Success(created.Value!) : AuthResult.Failure(AuthError.AccessDenied);
     }
 
     /// <summary>
     /// Opens a new login session for an account whose identity is already proven (login, or right after a
     /// password change that revoked every other session) and saves it.
     /// </summary>
+    /// <param name="authMethod">How the person proved their identity; ignored when <paramref name="replacesSessionId"/> names a session.</param>
+    /// <param name="deviceId">The client's random device id, hashed before it is stored; null, empty or <c>unknown</c> means no device.</param>
     /// <param name="replacesSessionId">
     /// The caller's session that a password change just revoked: the push devices it registered belong to this
-    /// device and move to the new session, so the device keeps its notifications.
+    /// device and move to the new session, so the device keeps its notifications. The new session also keeps that
+    /// session's device and sign-in method, so the device does not drop out of the device list.
     /// </param>
-    public async Task<AuthTokens> CreateSessionAsync(
-        Account account, ClientType clientType, string? deviceName, ClientInfo client, CancellationToken cancellationToken,
-        Guid? replacesSessionId = null)
+    /// <returns>
+    /// The tokens, or Forbidden when the account stopped being Active between the caller's checks and this save (a lock
+    /// racing the login): the session is then revoked in a further save, so no usable session is left behind.
+    /// </returns>
+    public async Task<Result<AuthTokens>> CreateSessionAsync(
+        Account account, ClientType clientType, string? deviceName, ClientInfo client, AuthMethod authMethod, string? deviceId,
+        CancellationToken cancellationToken, Guid? replacesSessionId = null)
     {
         var now = timeProvider.GetUtcNow();
         var lifetime = tokenService.GetSessionLifetime(clientType);
@@ -205,7 +243,15 @@ public sealed class AuthService(
             DeviceName = Truncate(deviceName, MaxDeviceNameLength),
             UserAgent = Truncate(client.UserAgent, MaxUserAgentLength),
             IpAddress = Truncate(client.IpAddress, MaxIpAddressLength),
+            AuthMethod = authMethod,
+            DeviceKey = DeviceKeyOf(deviceId),
         };
+        if (replacesSessionId is { } previousId && await sessions.GetAsync(previousId, account.Id, cancellationToken) is { } previous)
+        {
+            session.AuthMethod = previous.AuthMethod;
+            session.DeviceKey = previous.DeviceKey;
+        }
+
         var refreshToken = tokenService.CreateRefreshToken(session.Id);
         session.RefreshTokenHash = tokenService.HashRefreshToken(refreshToken);
         sessions.Add(session);
@@ -219,8 +265,20 @@ public sealed class AuthService(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        // The caller checked the status before this save. A lock that committed meanwhile revoked only the sessions it
+        // could see, so look again now that this session is stored.
+        if (!await sessions.IsActiveAsync(account.Id, session.Id, now, cancellationToken))
+        {
+            await RevokeAsync(session, now, "Account no longer allowed to log in", cancellationToken);
+            return new AppError(ErrorKind.Forbidden, UserMessages.AccountUnusable);
+        }
+
         return BuildTokens(account, session, refreshToken);
     }
+
+    /// <summary>The stored key of a client's device id, or null when the client sent none (see <see cref="DeviceIds"/>).</summary>
+    public string? DeviceKeyOf(string? deviceId) =>
+        DeviceIds.Normalize(deviceId) is { } normalized ? tokenService.DeriveDeviceKey(normalized) : null;
 
     /// <summary>
     /// Unknown identifiers behave like accounts: same hashing time, and after 5 failures the same MSG-ACCOUNT-06
@@ -236,20 +294,76 @@ public sealed class AuthService(
             : AuthResult.Failure(AuthError.InvalidCredentials);
     }
 
-    private async Task RevokeReplayedSessionAsync(string refreshToken, DateTimeOffset now, CancellationToken cancellationToken)
+    /// <summary>
+    /// The replaced refresh token inside its grace period: a new access token, but no new refresh token and no
+    /// second rotation. The presented token is echoed back with the session's current expiry, so a client that
+    /// stores whatever it receives keeps working; <see cref="AuthTokens.RefreshTokenRotated"/> tells it nothing changed.
+    /// The session, account and grants are checked exactly as for a rotation.
+    /// </summary>
+    private async Task<AuthResult> RefreshWithinGraceAsync(
+        LoginSession session, string presentedRefreshToken, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        if (tokenService.ReadSessionId(refreshToken) is not { } sessionId
-            || await sessions.GetByIdAsync(sessionId, cancellationToken) is not { RevokedAt: null } replayed)
+        if (!session.CanRefresh(now))
         {
-            return;
+            return AuthResult.RefreshRefused(AuthError.SessionExpired, ReasonOfEnded(session));
         }
 
-        await RevokeAsync(replayed, now, "Refresh token reuse detected", cancellationToken);
+        if (await RefusalToRefreshAsync(session, now, cancellationToken) is { } refusal)
+        {
+            return refusal;
+        }
+
+        return AuthResult.Success(BuildTokens(session.Account, session, presentedRefreshToken, refreshTokenRotated: false));
     }
 
-    private async Task RevokeAsync(LoginSession session, DateTimeOffset now, string reason, CancellationToken cancellationToken)
+    /// <summary>A refresh is refused for an account that may no longer log in; that also ends the session.</summary>
+    private async Task<AuthResult?> RefusalToRefreshAsync(LoginSession session, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        session.Revoke(now, reason);
+        var account = session.Account;
+        var refusal = account.StatusId != StatusIds.Account.Active || !await HasEffectiveAccessAsync(account, cancellationToken)
+            ? AuthError.AccessDenied
+            : account.IsTemporaryPasswordExpired(now) ? AuthError.TemporaryPasswordExpired : (AuthError?)null;
+        if (refusal is null)
+        {
+            return null;
+        }
+
+        await RevokeAsync(session, now, "Account no longer allowed to log in", cancellationToken);
+        return AuthResult.RefreshRefused(refusal.Value, RefreshFailureReason.Revoked);
+    }
+
+    /// <summary>
+    /// A token that is neither current nor within its grace period. A session that is still usable is ended as possibly stolen
+    /// (reuse); one that already ended answers with how it ended. A token that names no session (made up, or the session was
+    /// cleaned up long ago) is expired.
+    /// </summary>
+    private async Task<RefreshFailureReason> RejectReplayedTokenAsync(string refreshToken, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        if (tokenService.ReadSessionId(refreshToken) is not { } sessionId
+            || await sessions.GetByIdAsync(sessionId, cancellationToken) is not { } replayed)
+        {
+            return RefreshFailureReason.Expired;
+        }
+
+        if (replayed.RevokedAt is not null || !replayed.IsUsable(now))
+        {
+            return ReasonOfEnded(replayed);
+        }
+
+        await RevokeAsync(replayed, now, "Refresh token reuse detected", cancellationToken, SessionRevokeCause.TokenReuse);
+        return RefreshFailureReason.Reuse;
+    }
+
+    /// <summary>How a session that cannot be refreshed ended: by a person or the system, by reuse, or by running out of time.</summary>
+    private static RefreshFailureReason ReasonOfEnded(LoginSession session) => session.RevokedAt is null
+        ? RefreshFailureReason.Expired
+        : session.RevokeCause == SessionRevokeCause.TokenReuse ? RefreshFailureReason.Reuse : RefreshFailureReason.Revoked;
+
+    private async Task RevokeAsync(
+        LoginSession session, DateTimeOffset now, string reason, CancellationToken cancellationToken,
+        SessionRevokeCause cause = SessionRevokeCause.Revoked)
+    {
+        session.Revoke(now, reason, cause);
         try
         {
             await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -258,7 +372,7 @@ public sealed class AuthService(
         {
             // The session changed meanwhile (rotated or revoked); revoke the current state.
             await unitOfWork.ReloadAsync(session, cancellationToken);
-            session.Revoke(now, reason);
+            session.Revoke(now, reason, cause);
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
     }
@@ -290,9 +404,9 @@ public sealed class AuthService(
     private static string? Truncate(string? value, int maxLength) =>
         value is { Length: > 0 } && value.Length > maxLength ? value[..maxLength] : value;
 
-    private AuthTokens BuildTokens(Account account, LoginSession session, string refreshToken)
+    private AuthTokens BuildTokens(Account account, LoginSession session, string refreshToken, bool refreshTokenRotated = true)
     {
-        var accessToken = tokenService.CreateAccessToken(account, session.Id);
+        var accessToken = tokenService.CreateAccessToken(account, session.Id, session.AbsoluteExpiresAt);
         return new AuthTokens(
             accessToken.Token,
             accessToken.ExpiresAt,
@@ -303,6 +417,7 @@ public sealed class AuthService(
             account.SubjectType,
             account.MustChangePassword,
             // Every account must verify a phone number before other functions (BR-ACCOUNT-03, ACCOUNT-02.1).
-            PhoneVerificationRequired: account.PhoneVerifiedAt is null);
+            PhoneVerificationRequired: account.PhoneVerifiedAt is null,
+            RefreshTokenRotated: refreshTokenRotated);
     }
 }

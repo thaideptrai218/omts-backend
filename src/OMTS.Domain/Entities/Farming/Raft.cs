@@ -7,8 +7,8 @@ using OMTS.Domain.Entities.Platform;
 namespace OMTS.Domain.Entities.Farming;
 
 /// <summary>
-/// E10 – Physical structure grouping lanes. Its material cost is the total of the purchase receipts
-/// linked to it (INP-03); float and line counts are not kept.
+/// E10 – Physical structure grouping lanes. Its material cost is the material used on it, each at the latest purchase
+/// price of the item (BR-FARM-05); float and line counts are not kept.
 /// </summary>
 public class Raft : AuditableEntity, IHasStatus
 {
@@ -37,6 +37,6 @@ public class Raft : AuditableEntity, IHasStatus
     public ICollection<Lane> Lanes { get; set; } = [];
     public ICollection<RaftPhoto> Photos { get; set; } = [];
     public ICollection<CultivationCycle> CultivationCycles { get; set; } = [];
-    /// <summary>Purchase receipt lines bought for the raft; its Material lines make its material cost (BR-FARM-05).</summary>
+    /// <summary>Purchase receipt lines that name the raft (optional, kept from older receipts); they are not its material cost.</summary>
     public ICollection<PurchaseReceiptLine> PurchaseReceiptLines { get; set; } = [];
 }

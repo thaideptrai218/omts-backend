@@ -86,11 +86,17 @@ public sealed class ZaloLinkService(
             return AppError.Conflict(UserMessages.ZaloAlreadyLinked);
         }
 
-        var tokens = await authService.CreateSessionAsync(account, request.ClientType, request.DeviceName, client, cancellationToken);
-        return ZaloLinked.From(tokens, hidden);
+        // Linking is the explicit act that lets a signed-out device in again: the session it creates is the device's newest.
+        var created = await authService.CreateSessionAsync(
+            account, request.ClientType, request.DeviceName, client, AuthMethod.ZaloMiniApp, request.DeviceId, cancellationToken);
+        return created.IsSuccess ? ZaloLinked.From(created.Value!, hidden) : created.Error!;
     }
 
-    /// <summary>A session for the account already linked to this Zalo user (Mini App opened again).</summary>
+    /// <summary>
+    /// A session for the account already linked to this Zalo user (Mini App opened again). A device whose newest session of
+    /// this account a user or an administrator ended is refused with 403 ZALO_DEVICE_REVOKED: only <see cref="LinkAsync"/>
+    /// opens it again. A session ended by token reuse does not count, so the app may sign in again by itself.
+    /// </summary>
     public async Task<Result<AuthTokens>> LoginAsync(ZaloLoginRequest request, ClientInfo client, CancellationToken cancellationToken)
     {
         var zaloUser = await zalo.GetUserIdAsync(request.ZaloAccessToken, cancellationToken);
@@ -116,6 +122,14 @@ public sealed class ZaloLinkService(
             return new AppError(ErrorKind.Forbidden, UserMessages.TemporaryPasswordExpired);
         }
 
+        var deviceKey = authService.DeviceKeyOf(request.DeviceId);
+        if (deviceKey is not null
+            && await sessions.GetLatestForDeviceAsync(account.Id, deviceKey, cancellationToken) is { RevokedAt: not null } latest
+            && latest.RevokeCause != SessionRevokeCause.TokenReuse)
+        {
+            return new AppError(ErrorKind.Forbidden, UserMessages.ZaloDeviceRevoked);
+        }
+
         // Concurrent openings of the Mini App conflict on the account's row version; the loser re-reads it.
         for (var attempt = 1; ; attempt++)
         {
@@ -131,7 +145,8 @@ public sealed class ZaloLinkService(
             }
         }
 
-        return await authService.CreateSessionAsync(account, request.ClientType, request.DeviceName, client, cancellationToken);
+        return await authService.CreateSessionAsync(
+            account, request.ClientType, request.DeviceName, client, AuthMethod.ZaloMiniApp, request.DeviceId, cancellationToken);
     }
 
     /// <summary>
@@ -237,7 +252,8 @@ public sealed class ZaloLinkService(
 
     /// <summary>
     /// The user removes the link from the Mini App (Zalo rule: users delete their own data). The account stays;
-    /// the current session ends, so the next opening of the Mini App is a guest until linked again.
+    /// every Mini App session of the account ends, on every device, and so does the current session, so the next opening
+    /// of the Mini App is a guest until linked again.
     /// </summary>
     public async Task<Result<Done>> UnlinkAsync(Guid accountId, Guid sessionId, CancellationToken cancellationToken)
     {
@@ -253,9 +269,11 @@ public sealed class ZaloLinkService(
             audit.Record(new AuditEntry("Account.ZaloUnlinked", nameof(Account)) { RecordId = account.Id, RecordCode = account.Username });
         }
 
+        var now = timeProvider.GetUtcNow();
+        await sessions.RevokeByMethodAsync(accountId, AuthMethod.ZaloMiniApp, now, "Zalo link removed", cancellationToken);
         if (await sessions.GetAsync(sessionId, accountId, cancellationToken) is { } session)
         {
-            session.Revoke(timeProvider.GetUtcNow(), "Zalo link removed");
+            session.Revoke(now, "Zalo link removed");
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);

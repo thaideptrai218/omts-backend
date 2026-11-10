@@ -20,7 +20,7 @@ public sealed class SalesInvoiceNotifications(IZoneRecipientQuery recipients, IA
         var names = await accounts.GetDisplayNamesAsync([sellerAccountId], cancellationToken);
         var decidedPrices = decision.Lines
             .Where(l => l.PriceSource == SalesPriceSource.DecidedByOwner)
-            .Select(l => (l.UnitPrice, l.Product.UnitPrice))
+            .Select(l => (l.UnitPrice, l.ListPrice))
             .ToList();
         var message = UserMessages.SaleNotice(
             names.GetValueOrDefault(sellerAccountId) ?? string.Empty,

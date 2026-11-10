@@ -18,6 +18,7 @@ public static class StatusGroups
     public const string SupplierPayment = "SUPPLIER_PAYMENT";
     public const string PurchaseReturn = "PURCHASE_RETURN";
     public const string Lane = "LANE";
+    public const string QualityClaim = "QUALITY_CLAIM";
     public const string Payroll = "PAYROLL";
     public const string HarvestLot = "HARVEST_LOT";
     public const string SalesInvoice = "SALES_INVOICE";

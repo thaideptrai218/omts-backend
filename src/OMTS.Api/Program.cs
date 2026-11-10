@@ -31,6 +31,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
 builder.Services.AddOmtsForwardedHeaders(builder.Configuration);
+builder.Services.AddOmtsBffClientHeaders(builder.Configuration);
 builder.Services.AddOmtsCors(builder.Configuration);
 builder.Services.AddOmtsRateLimiting(builder.Configuration);
 builder.Services.AddExceptionHandler<ProblemExceptionHandler>();
@@ -57,8 +58,11 @@ if (BootstrapCommand.IsInvoked(args))
     return await BootstrapCommand.RunAsync(app.Services, args);
 }
 
-// First: the client IP of a request through a trusted proxy is what the rate limits and logs see.
+// First: the client IP of a request through a trusted proxy is what the rate limits and logs see. The BFF's secret is
+// checked before forwarded headers can replace the connection address; what it supplied is applied after them.
+app.UseOmtsBffClientCapture();
 app.UseForwardedHeaders();
+app.UseOmtsBffClientApply();
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())

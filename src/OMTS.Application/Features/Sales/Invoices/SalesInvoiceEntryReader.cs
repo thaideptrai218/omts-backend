@@ -21,6 +21,9 @@ internal sealed record SalesInvoiceEntries(
 {
     public bool IsWalkIn => CustomerId is null;
 
+    /// <summary>The rest after the cash is paid with the VietQR code of the invoice (SALE-05 steps 7-8).</summary>
+    public bool RestByVietQr => Rest == SalesInvoiceRestPayment.VietQr;
+
     /// <summary>The lots of the invoice, in the order first added: the first one proposes the zone (BR-SALE-08).</summary>
     public IReadOnlyList<Guid> LotIds => Lines.Select(l => l.LotId).Distinct().ToList();
 }

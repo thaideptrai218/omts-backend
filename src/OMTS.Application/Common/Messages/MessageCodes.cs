@@ -41,6 +41,11 @@ public static class MessageCodes
     public const string Trace05 = "MSG-TRACE-05";
     public const string Trace06 = "MSG-TRACE-06";
 
+    public const string Origin01 = "MSG-ORIGIN-01";
+    public const string Origin02 = "MSG-ORIGIN-02";
+    public const string Origin03 = "MSG-ORIGIN-03";
+    public const string Origin04 = "MSG-ORIGIN-04";
+
     public const string Water01 = "MSG-WATER-01";
     public const string Water02 = "MSG-WATER-02";
     public const string Water03 = "MSG-WATER-03";
@@ -106,8 +111,17 @@ public static class MessageCodes
     public const string Sale10 = "MSG-SALE-10";
     public const string Sale11 = "MSG-SALE-11";
     public const string Sale12 = "MSG-SALE-12";
+    public const string Sale13 = "MSG-SALE-13";
+    public const string Sale14 = "MSG-SALE-14";
     public const string Sale15 = "MSG-SALE-15";
     public const string Sale16 = "MSG-SALE-16";
+
+    public const string Claim01 = "MSG-CLAIM-01";
+    public const string Claim02 = "MSG-CLAIM-02";
+    public const string Claim03 = "MSG-CLAIM-03";
+
+    public const string Cash01 = "MSG-CASH-01";
+    public const string Cash02 = "MSG-CASH-02";
 
     /// <summary>
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-01, the
@@ -127,12 +141,17 @@ public static class MessageCodes
     /// Owner's notice and the three questions at the port (SALE-05 is new in PR 6a); MSG-SALE-07/15/16, the QR question at the end of the sale, the
     /// invoice message to the trader and the invoice not sent (SALE-06 is new in PR 6b); MSG-HARVEST-05, the warning the day before a harvest lot
     /// closes by itself (GFR-05, new in PR H2); MSG-HARVEST-04, the yield report holds lots still for sale (HARVEST-04 is new in PR H3); MSG-TRACE-01, a harvest lot that cannot be published yet (TRACE-01 is new in PR T1a); MSG-DEBT-03/04/05/06, the Owner's notice of a transaction of the Accountant, the payment above the debt, the bank
-    /// reference already recorded and the money paid back above the money owed back (DEBT-02 is new in PR 8b); MSG-TRACE-02, missing data in the trace of a harvest lot (TRACE-02 is new in PR T1b); MSG-TRACE-05/06, the withdrawal notice
-    /// to a trader and a withdrawal with no trader to notify (TRACE-04 is new in PR T3).
+    /// reference already recorded and the money paid back above the money owed back (DEBT-02 is new in PR 8b); MSG-TRACE-02, missing data in the trace of a harvest lot (TRACE-02 is new in PR T1b); MSG-ORIGIN-01/02/03/04, the withdrawn lot, no lot to show, the unknown QR code and the
+    /// cancelled invoice on the public provenance page (ORIGIN-01 is new in PR O1); MSG-TRACE-05/06, the withdrawal notice
+    /// to a trader and a withdrawal with no trader to notify (TRACE-04 is new in PR T3);
+    /// MSG-SALE-13/14, VietQR without a receiving bank account and the question before Stop sale (the VietQR sale is new in PR 7);
+    /// MSG-CLAIM-01/02/03, the new quality claim, its response and a claim that cannot be accepted (CLAIM-01 and CLAIM-02 are new in PR 12);
+    /// MSG-CASH-01/02, the cash book refusals: the VietQR account and the system voucher types are protected.
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
-        Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Harvest04, Harvest05, Trace01, Trace02, Trace03, Trace04, Trace05, Trace06, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04,
+        Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Harvest04, Harvest05, Trace01, Trace02, Trace03, Trace04, Trace05, Trace06,
+        Origin01, Origin02, Origin03, Origin04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04, Claim01, Claim02, Claim03, Cash01, Cash02,
     };
 
     /// <summary>
@@ -151,6 +170,7 @@ public static class MessageCodes
         public const string ZaloPhoneUnsupported = "ZALO_PHONE_UNSUPPORTED";
         public const string ZaloAlreadyLinked = "ZALO_ALREADY_LINKED";
         public const string ZaloNotLinked = "ZALO_NOT_LINKED";
+        public const string ZaloDeviceRevoked = "ZALO_DEVICE_REVOKED";
         public const string MiniAppNotification = "MINI_APP_NOTIFICATION";
 
         public const string Msg01 = "MSG01";
@@ -191,7 +211,6 @@ public static class MessageCodes
         public const string NoVerifiedEmail = "NO_VERIFIED_EMAIL";
         public const string UnexpectedError = "UNEXPECTED_ERROR";
         public const string PasswordChangeRequired = "PASSWORD_CHANGE_REQUIRED";
-        // The Zalo Mini App linking messages have no equivalent in the SRS catalogue.
         public const string LicenseReplaced = "LICENSE_REPLACED";
 
         /// <summary>
@@ -208,7 +227,7 @@ public static class MessageCodes
         public static readonly IReadOnlySet<string> KeptAsCode = new HashSet<string>(StringComparer.Ordinal)
         {
             Msg04, Msg05, Msg06, Msg19, Msg57, Msg58, MiniAppNotification,
-            ZaloTokenInvalid, ZaloPhoneTokenInvalid, ZaloPhoneNotFound, ZaloApprovalPending, ZaloRequestRejected, ZaloAccountExists, ZaloPhoneUnsupported, ZaloAlreadyLinked, ZaloNotLinked,
+            ZaloTokenInvalid, ZaloPhoneTokenInvalid, ZaloPhoneNotFound, ZaloApprovalPending, ZaloRequestRejected, ZaloAccountExists, ZaloPhoneUnsupported, ZaloAlreadyLinked, ZaloNotLinked, ZaloDeviceRevoked,
             NotFound, TooManyRequests, UnexpectedError, PasswordChangeRequired,
         };
     }

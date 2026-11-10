@@ -83,6 +83,25 @@ jobs:
             azurite-blob --blobHost 0.0.0.0 --skipApiVersionCheck
           echo "OMTS_TEST_AZURITE=UseDevelopmentStorage=true" >> "$GITHUB_ENV"
 
+      # A real Redis for the revoked-session store, set up as in docker-compose.yml (password, no persistence, no
+      # eviction). Tests that use it read OMTS_TEST_REDIS; the others leave Redis unconfigured and use SQL.
+      - name: Start Redis for revocation store tests
+        if: ${{ matrix.sql }}
+        run: |
+          password="$(openssl rand -hex 16)"
+          echo "::add-mask::$password"
+          docker run -d --name omts-redis -p 127.0.0.1:6379:6379 -e "REDIS_PASSWORD=$password" redis:7.4.2-alpine \
+            sh -c 'exec redis-server --requirepass "$REDIS_PASSWORD" --save "" --appendonly no --maxmemory 128mb --maxmemory-policy noeviction'
+          ready=false
+          for i in $(seq 1 30); do
+            if docker exec -e "REDISCLI_AUTH=$password" omts-redis redis-cli ping 2>/dev/null | grep -q PONG; then ready=true; break; fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            echo "Redis did not start"; docker logs omts-redis | tail -50; exit 1
+          fi
+          echo "OMTS_TEST_REDIS=localhost:6379,password=$password" >> "$GITHUB_ENV"
+
       - run: dotnet restore OMTS.sln
       - run: dotnet build OMTS.sln -c Release --no-restore
 

@@ -149,7 +149,9 @@ public class PurchaseReceiptsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         Assert.Equal(1_504m, row.Money("total"));
         Assert.Equal(1_504m, await world.DebtAsync());
         Assert.Equal(1_504m, (await world.Owner.GetFromJsonAsync<JsonElement>($"{Receipts}/{receipt.Id()}/cancel-preview")).Money("debtBefore"));
-        Assert.Equal(500m, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{world.Raft.Id}")).Money("materialCost"));
+        // 1.5 used at the purchase price 333 is 499.5: half up, as on the receipt.
+        await factory.UseMaterialAsync(world.Raft.Id, world.Material, 1.5m);
+        Assert.Equal(500m, await world.Owner.RaftMaterialCostAsync(world.Raft.Id));
         var notification = Assert.Single((await world.Owner.NotificationPageAsync()).Items(),
             n => n.GetProperty("type").GetString() == NotificationTypes.PurchaseReceiptCompleted && n.GetProperty("relatedRecordId").GetGuid() == receipt.Id());
         Assert.Equal(1_504m, notification.GetProperty("messageParams").GetProperty("total_amount").GetDecimal());

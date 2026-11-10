@@ -1,4 +1,5 @@
 using OMTS.Domain.Entities.Purchasing;
+using OMTS.Domain.Entities.CashBook;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Domain.Common;
 using OMTS.Domain.Entities.Cultivation;
@@ -40,6 +41,11 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<PurchaseReturn> PurchaseReturns => Set<PurchaseReturn>();
     public DbSet<PurchaseReturnLine> PurchaseReturnLines => Set<PurchaseReturnLine>();
     public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
+    public DbSet<SupplierPaymentAllocation> SupplierPaymentAllocations => Set<SupplierPaymentAllocation>();
+    public DbSet<CashAccount> CashAccounts => Set<CashAccount>();
+    public DbSet<CashVoucherType> CashVoucherTypes => Set<CashVoucherType>();
+    public DbSet<CashVoucher> CashVouchers => Set<CashVoucher>();
+    public DbSet<CashParty> CashParties => Set<CashParty>();
     public DbSet<CultivationCycle> CultivationCycles => Set<CultivationCycle>();
     public DbSet<CultivationLog> CultivationLogs => Set<CultivationLog>();
     public DbSet<MaterialUsage> MaterialUsages => Set<MaterialUsage>();
@@ -55,10 +61,13 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<PurchaseRequest> PurchaseRequests => Set<PurchaseRequest>();
+    public DbSet<QualityClaim> QualityClaims => Set<QualityClaim>();
+    public DbSet<QualityClaimPhoto> QualityClaimPhotos => Set<QualityClaimPhoto>();
     public DbSet<SalesInvoice> SalesInvoices => Set<SalesInvoice>();
     public DbSet<SalesInvoiceLine> SalesInvoiceLines => Set<SalesInvoiceLine>();
     public DbSet<SalesInvoicePriceCut> SalesInvoicePriceCuts => Set<SalesInvoicePriceCut>();
     public DbSet<CustomerPayment> CustomerPayments => Set<CustomerPayment>();
+    public DbSet<PendingSale> PendingSales => Set<PendingSale>();
 
     // Labor (LABOR-01, LABOR-11, LABOR-15; the attendance and work assignment tables come with LABOR-04 and LABOR-02)
     public DbSet<EmployeeTypePeriod> EmployeeTypePeriods => Set<EmployeeTypePeriod>();

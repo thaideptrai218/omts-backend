@@ -15,13 +15,16 @@ public sealed record ReceiptLineRefs(IReadOnlyDictionary<Guid, FarmingInputItem>
 
 /// <summary>
 /// PURCHASE-01 checks (BR-PURCHASE-01/03). A Draft needs only a supplier In Use; what it holds must still be valid (no
-/// Discontinued item or raft, no raft the caller may not choose, no date after today). Completing needs every line
-/// complete. MSG-GEN-01 names the first invalid field, <c>fields</c> all of them.
+/// Discontinued item, zone or raft, no raft the caller may not choose, no time received later than now, a receiver who is an
+/// active Owner or staff account). Completing needs every line complete; the zone and the rafts stay optional. MSG-GEN-01
+/// names the first invalid field, <c>fields</c> all of them.
 /// </summary>
 public sealed class PurchaseReceiptValidator(
     ISupplierRepository suppliers,
     IRaftRepository rafts,
     IFarmingInputItemRepository items,
+    IFarmingZoneRepository zones,
+    IAccountRepository accounts,
     PurchaseReceiptAccess access,
     TimeProvider timeProvider)
 {
@@ -29,14 +32,41 @@ public sealed class PurchaseReceiptValidator(
     public const decimal MaxAmount = 100_000_000_000_000m;
     public const decimal MaxQuantity = 1_000_000_000m;
     public const int MaxLines = 200;
+    public const int MaxNotesLength = 1000;
+    public const int MaxSupplierLotCodeLength = 100;
+
+    /// <summary>How far ahead of the server clock a time received may be: a client clock a little fast is not "in the future".</summary>
+    public static readonly TimeSpan ClockTolerance = TimeSpan.FromMinutes(5);
 
     /// <summary>A quantity has at most 2 decimals (PM 03/11); the column keeps its 3 for rows saved before the rule.</summary>
     public static bool HasAllowedDecimals(decimal quantity) => decimal.Round(quantity, 2) == quantity;
+
+    /// <summary>Whole VND from 0 to <see cref="MaxAmount"/>.</summary>
+    public static bool IsWholeAmount(decimal amount) => amount >= 0 && amount <= MaxAmount && amount == decimal.Truncate(amount);
+
+    /// <summary>A line discount is whole VND off each unit, never more than the unit price (when the line has one).</summary>
+    public static bool DiscountAllowed(decimal discount, decimal? unitPrice) => IsWholeAmount(discount) && (unitPrice is not { } price || discount <= price);
+
+    /// <summary>True when the time received is not later than now (with <see cref="ClockTolerance"/>).</summary>
+    public bool NotInFuture(DateTimeOffset receivedAt) => receivedAt <= timeProvider.GetUtcNow() + ClockTolerance;
+
+    /// <summary>Whether the account may be named as the receiver: an Active Owner or staff account.</summary>
+    public async Task<bool> IsReceiverAsync(Guid accountId, CancellationToken cancellationToken) =>
+        (await accounts.ListActiveInternalAsync(cancellationToken)).Any(a => a.Id == accountId);
+
+    /// <summary>Whether the zone exists and is In Use (GBR-01).</summary>
+    public async Task<bool> ZoneInUseAsync(Guid zoneId, CancellationToken cancellationToken) =>
+        (await zones.GetByIdsAsync([zoneId], cancellationToken)).Any(z => z.StatusId == StatusIds.Usage.InUse);
 
     /// <summary>Checks of every save, Draft or not; returns the items and rafts of the lines.</summary>
     public async Task<(ReceiptLineRefs Refs, AppError? Error)> CheckDraftAsync(SavePurchaseReceiptRequest request, CancellationToken cancellationToken)
     {
         var invalid = new List<string>();
+        if (!DocumentCodes.TypedAllowed(request.Code))
+        {
+            invalid.Add("Code");
+        }
+
         // A Discontinued supplier or item cannot be chosen, not even on a Draft (GBR-01).
         if (request.SupplierId is not { } supplierId || await suppliers.GetForEditAsync(supplierId, cancellationToken) is not { StatusId: StatusIds.Usage.InUse })
         {
@@ -48,9 +78,29 @@ public sealed class PurchaseReceiptValidator(
             invalid.Add("Receipt date");
         }
 
-        if (request.Notes?.Trim().Length > 1000)
+        if (request.ReceivedAt is { } receivedAt && !NotInFuture(receivedAt))
+        {
+            invalid.Add("Received at");
+        }
+
+        if (request.ReceivedById is { } receiverId && !await IsReceiverAsync(receiverId, cancellationToken))
+        {
+            invalid.Add("Received by");
+        }
+
+        if (request.Notes?.Trim().Length > MaxNotesLength)
         {
             invalid.Add("Notes");
+        }
+
+        if (!IsWholeAmount(request.Discount))
+        {
+            invalid.Add("Discount");
+        }
+
+        if (request.ZoneId is { } zoneId && !await ZoneInUseAsync(zoneId, cancellationToken))
+        {
+            invalid.Add("Zone");
         }
 
         var lines = request.Lines ?? [];
@@ -69,7 +119,7 @@ public sealed class PurchaseReceiptValidator(
                 invalid.Add($"Line {i + 1} item");
             }
 
-            if (lines[i].SupplierLotCode?.Trim().Length > 100)
+            if (lines[i].SupplierLotCode?.Trim().Length > MaxSupplierLotCodeLength)
             {
                 invalid.Add($"Line {i + 1} supplier lot code");
             }
@@ -87,12 +137,19 @@ public sealed class PurchaseReceiptValidator(
         }
 
         // At most 2 decimals, whole prices stored as decimal(18,0): refuse what the rule forbids or the database would round or overflow.
-        var badLine = lines.ToList().FindIndex(l =>
-            (l.Quantity is { } q && (q <= 0 || q > MaxQuantity || !HasAllowedDecimals(q)))
-            || (l.UnitPrice is { } p && (p < 0 || p > MaxAmount || decimal.Truncate(p) != p))
-            || (l.Quantity is { } lq && l.UnitPrice is { } lp && lq * lp > MaxAmount));
+        var badLine = lines.ToList().FindIndex(l => !LineValuesAllowed(l.Quantity, l.UnitPrice, l.Discount ?? 0));
         return (refs, badLine >= 0 ? InvalidLine(badLine + 1) : null);
     }
+
+    /// <summary>
+    /// The values a line may hold, each when given: a quantity above 0 with at most 2 decimals, a whole unit price of 0 or more,
+    /// a whole discount per unit of at most the unit price, and an amount inside the bounds.
+    /// </summary>
+    public static bool LineValuesAllowed(decimal? quantity, decimal? unitPrice, decimal discount) =>
+        (quantity is not { } q || (q > 0 && q <= MaxQuantity && HasAllowedDecimals(q)))
+        && (unitPrice is not { } p || IsWholeAmount(p))
+        && DiscountAllowed(discount, unitPrice)
+        && (quantity is not { } lq || unitPrice is not { } lp || lq * lp <= MaxAmount);
 
     /// <summary>Full check before Draft → Completed, on the receipt as it will be saved (also by a later complete).</summary>
     public async Task<AppError?> CheckCompleteAsync(PurchaseReceipt receipt, ReceiptLineRefs refs, CancellationToken cancellationToken)
@@ -130,13 +187,25 @@ public sealed class PurchaseReceiptValidator(
             }
         }
 
+        // The zone is optional; one given must still be In Use (it may have been discontinued since the Draft was saved).
+        if (receipt.ZoneId is { } zoneId && !await ZoneInUseAsync(zoneId, cancellationToken))
+        {
+            invalid.Add("Zone");
+        }
+
+        if (receipt.Discount > PurchaseMoney.Total(receipt.Lines))
+        {
+            invalid.Add("Discount");
+        }
+
         if (invalid.Count > 0)
         {
             return AppError.InvalidFields(invalid);
         }
 
         // BR-PURCHASE-01: a quantity greater than 0 and a unit price of 0 or more; a Draft saved before the 2-decimal rule is refused here too.
-        var incomplete = lines.FirstOrDefault(l => l.Quantity is not > 0 || !HasAllowedDecimals(l.Quantity.Value) || l.UnitPrice is not >= 0);
+        var incomplete = lines.FirstOrDefault(l =>
+            l.Quantity is not > 0 || !HasAllowedDecimals(l.Quantity.Value) || l.UnitPrice is not >= 0 || !DiscountAllowed(l.Discount, l.UnitPrice));
         return incomplete is null ? null : InvalidLine(incomplete.LineNumber);
     }
 
@@ -158,6 +227,19 @@ public sealed class PurchaseReceiptValidator(
         && raft is { StatusId: StatusIds.Usage.InUse }
         && raft.Zone?.StatusId is null or StatusIds.Usage.InUse
         && (raftZones.AllZones || raftZones.ZoneIds.Contains(raft.ZoneId));
+
+    /// <summary>MSG-PURCHASE-10: a line quantity changed to less than what was seeded from it and returned of it.</summary>
+    public static AppError QuantityBelowUsed(PurchaseReceiptLine line, string field, decimal seeded, decimal returned)
+    {
+        var minimum = seeded + returned;
+        return new AppError(
+            ErrorKind.Validation,
+            UserMessages.QuantityBelowUsed(line.Item?.Name ?? field, minimum, line.Unit, seeded, returned),
+            new Dictionary<string, object?>
+            {
+                ["field"] = field, ["minQuantity"] = minimum, ["seededQuantity"] = seeded, ["returnedQuantity"] = returned,
+            });
+    }
 
     /// <summary>MSG-GEN-01 naming the line whose quantity or unit price is invalid (MSG59 before).</summary>
     public static AppError InvalidLine(int lineNumber)

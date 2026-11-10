@@ -63,12 +63,23 @@ public sealed class SupplierDebtService(
 
         var today = timeProvider.Today();
         var sums = await SumsAsync(supplierId, today, cancellationToken);
-        var unpaid = sums.Debt > 0
-            ? SupplierDebtLedger.UnpaidReceipts(await queries.ReceiptsAsync([supplierId], cancellationToken), sums.Credit, today)
-            : [];
+        var unpaid = await UnpaidOfAsync(supplierId, sums, today, cancellationToken);
         var oldest = unpaid.Count > 0 ? unpaid[0].ReceiptDate : await OldestOfAsync(supplierId, sums, cancellationToken);
         return new SupplierDebtDetail(View(supplier), sums.Debt, AgeDays(oldest, today), oldest, unpaid);
     }
+
+    /// <summary>The Completed receipts of the supplier not yet fully covered today, oldest first, as the debt detail lists them.</summary>
+    public async Task<IReadOnlyList<UnpaidReceipt>> UnpaidReceiptsAsync(Guid supplierId, CancellationToken cancellationToken)
+    {
+        var today = timeProvider.Today();
+        return await UnpaidOfAsync(supplierId, await SumsAsync(supplierId, today, cancellationToken), today, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<UnpaidReceipt>> UnpaidOfAsync(Guid supplierId, SupplierDebtSums sums, DateOnly today, CancellationToken cancellationToken) =>
+        sums.Debt > 0
+            ? SupplierDebtLedger.UnpaidReceipts(
+                await queries.ReceiptsAsync([supplierId], cancellationToken), sums.Credit, today, await queries.AllocationsAsync([supplierId], cancellationToken))
+            : [];
 
     /// <summary>Step 3: the debt at the start of the period, what happened in it, the debt at its end. The period defaults to the current month.</summary>
     public async Task<Result<SupplierDebtStatement>> StatementAsync(Guid supplierId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken)
@@ -122,9 +133,10 @@ public sealed class SupplierDebtService(
 
         var today = timeProvider.Today();
         var receipts = (await queries.ReceiptsAsync(owing.Keys.ToList(), cancellationToken)).ToLookup(r => r.SupplierId);
+        var named = (await queries.AllocationsAsync(owing.Keys.ToList(), cancellationToken)).ToLookup(a => a.SupplierId);
         foreach (var (supplierId, sums) in owing)
         {
-            var first = SupplierDebtLedger.UnpaidReceipts(receipts[supplierId], sums.Credit, today).FirstOrDefault();
+            var first = SupplierDebtLedger.UnpaidReceipts(receipts[supplierId], sums.Credit, today, named[supplierId]).FirstOrDefault();
             if (first is not null)
             {
                 oldest[supplierId] = first.ReceiptDate;
@@ -138,7 +150,7 @@ public sealed class SupplierDebtService(
             foreach (var supplierId in withoutReceipt)
             {
                 oldest[supplierId] = SupplierDebtLedger.OldestUncoveredMoneyBack(
-                    moneyBack[supplierId], owing[supplierId].Paid + SupplierDebtLedger.ReturnExcess(receipts[supplierId]));
+                    moneyBack[supplierId], owing[supplierId].Paid + owing[supplierId].StandaloneReturned + SupplierDebtLedger.ReturnExcess(receipts[supplierId]));
             }
         }
 

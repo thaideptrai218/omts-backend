@@ -65,6 +65,12 @@ public class SupplierPaymentSameDebtReadingSqlServerTests
         public Task<IReadOnlyList<DebtMoneyBackRow>> MoneyBackAsync(IReadOnlyCollection<Guid> supplierIds, CancellationToken cancellationToken) =>
             inner.MoneyBackAsync(supplierIds, cancellationToken);
 
+        public Task<IReadOnlyList<DebtPaymentRow>> PaymentsAsync(IReadOnlyCollection<Guid> supplierIds, CancellationToken cancellationToken) =>
+            inner.PaymentsAsync(supplierIds, cancellationToken);
+
+        public Task<IReadOnlyList<DebtAllocationRow>> AllocationsAsync(IReadOnlyCollection<Guid> supplierIds, CancellationToken cancellationToken) =>
+            inner.AllocationsAsync(supplierIds, cancellationToken);
+
         public Task<(IReadOnlyList<DebtReceiptRow> Receipts, IReadOnlyList<StatementReturnRow> Returns, IReadOnlyList<StatementPaymentRow> Payments)> StatementRowsAsync(
             Guid supplierId, DateOnly from, DateOnly to, CancellationToken cancellationToken) =>
             inner.StatementRowsAsync(supplierId, from, to, cancellationToken);

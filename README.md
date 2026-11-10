@@ -57,6 +57,7 @@ on every `docker compose up` and creates nothing twice.
 | Swagger | `http://localhost:8080/swagger` |
 | Health | `http://localhost:8080/health/db` (database), `http://localhost:8080/health/ready` (deployment complete) |
 | SQL Server (this PC only) | `localhost,1433`, user `sa`, password `MSSQL_SA_PASSWORD` from `.env` |
+| Redis (containers only) | Not published. Holds the revoked-session lookup, without persistence; stopping it only makes each request ask SQL Server (see [Session revocation store](#session-revocation-store-redis)) |
 
 **Demo logins.** Every account below uses the password `Demo@1234`. It exists only in this local demo data; a shared
 server uses a secret of its own (see [Demo on a shared server](#demo-on-a-shared-server)).
@@ -141,7 +142,8 @@ published, from that origin). For another origin, add a line such as `Cors__Allo
 `environment` in `docker-compose.yml`, then run `docker compose up -d`.
 
 **Update, reset, stop.**
-- `docker compose up -d --build`: after a pull. It rebuilds the image, and the seed applies new migrations.
+- `docker compose up -d --build`: after a pull. It rebuilds the image, and the seed applies new migrations. An `.env` made
+  before Redis was added needs the line `REDIS_PASSWORD=` from `.env.example`, or compose stops with "set it in .env".
 - `docker compose down -v`: deletes the database and the stored files. The next `up` seeds a fresh copy.
 - `docker compose down`: stops everything and keeps the data.
 
@@ -169,10 +171,67 @@ OMTS_TEST_SQLSERVER="Server=localhost;User Id=sa;Password=<pwd>;TrustServerCerti
 
 ### Authentication
 
-`POST /api/auth/login` (username, verified phone or verified email) returns a 15-minute access token and a
+`POST /api/auth/login` (a phone number or a username, and the password) returns a 15-minute access token and a
 refresh token (7 days web / 30 days mobile, rotated on every `POST /api/auth/refresh`); `POST /api/auth/logout`
-revokes the session. `GET /api/me` and `GET /api/me/permissions` return the caller and their effective
-zone-scoped permissions. Errors are RFC 7807 problem details whose `title` and `code` are the message code of
+revokes the session. Every `AuthTokens` response (login, refresh, `zalo/login`; also the `tokens` object of a password
+change) has the field `refreshTokenRotated`. Normally it is `true`: `refreshToken` is a new token, and after a refresh
+the old one stops working. If the client sends the token that its previous refresh just
+replaced (the response was lost, or two requests carried the same token), it gets, for 30 seconds (`Jwt:RefreshGracePeriod`),
+a new access token and the token it sent, echoed back with the session's current `refreshTokenExpiresAt`, and
+`refreshTokenRotated` is `false`: no new refresh token is issued, the session is not rotated again, and the client keeps
+the token it already holds (a web server must not write cookies for such a response). The session, the account status and
+the effective grants are checked as for a rotation. Any other old token, or the replaced one after the grace period, is
+replay and revokes the session. A refresh response that never arrives is not repaired: the client that kept the old token
+ends the session when it uses it after the grace period and must sign in again. An access token never outlives its
+session: its `exp` is the earlier of the 15-minute lifetime and the session's absolute expiry. Token validation accepts
+30 seconds of clock skew, so a token can be accepted up to 30 seconds after its `exp`, and the session's absolute expiry
+can be overrun by up to 30 seconds. Locking an account
+revokes all its sessions in the same save, and a login that races the lock revokes the session it just stored.
+
+**Login identifier.** A phone number or a username; an email address is never an identifier, so logging in with one fails
+like any unknown identifier. A phone number logs in whether or not it is verified (the password proves who the person is);
+an unverified phone then meets the phone-verification gate (`AccountStateGateFilter`, MSG-ACCOUNT-04): every business call
+is refused until the phone is verified. Email is a contact for notifications only: it is no longer a way to register
+(`POST /api/auth/register` and `POST /api/verifications` accept `channel` `Sms` only), to recover a password
+(`POST /api/auth/recovery` sends an SMS code to a verified phone number; an email identifier gets the same answer and no code) or to
+prove identity when changing the password (`POST /api/me/password` needs the current password; `POST /api/me/password/code` is gone).
+Adding, changing and verifying an email in the profile still works. A trader account created through the old email registration
+has no phone number: it cannot log in by phone, and a username (generated at registration) is not something the person knows. There is
+no migration for such accounts; run `SELECT Id, Username, Email FROM Accounts WHERE PhoneNumber IS NULL AND Email IS NOT NULL` before deploying
+to see whether any exist (staff and Owner accounts always have a phone number).
+
+**Devices and sessions.** `POST /api/auth/login`, `zalo/login` and `zalo/link` accept an optional `deviceId`: a random id
+the browser or app install keeps, base64url, at most 128 characters; missing, empty or `unknown` means no device. The server stores only
+a keyed hash of it (`DeviceKey`, derived from the signing key), never the id, and never uses it to authenticate. Sessions
+without a device are never grouped. A session also records how it was opened (`AuthMethod`: `Password` or `ZaloMiniApp`) and why it
+ended (`RevokeCause`: `Revoked` or `TokenReuse`). Under `/api/me`, for the caller's own account only (another account's session answers 404):
+
+| Request | Answer |
+|---|---|
+| `GET sessions` | Open sessions, newest first: `id, clientType, authMethod, deviceKey, deviceName, userAgent, maskedIpAddress` (`203.0.*.*`), `signedInAt, lastActiveAt, expiresAt, isCurrent` |
+| `DELETE sessions/{id}` | 204, also when the session had already ended; the current session may be ended (the next request is 401) |
+| `POST sessions/revoke-others` | 200 `{ "count": n }`: every open session except the current one |
+| `GET devices` | Open sessions grouped by `deviceKey` (`deviceKey, clientType, authMethod, deviceName, userAgent, maskedIpAddress, firstSignedInAt, lastActiveAt, isCurrent, sessionIds`); a session without a device is its own entry with a null `deviceKey` |
+| `DELETE devices/{deviceKey}` | 204 always (idempotent): ends the caller's sessions on that device. `deviceKey` is 43 base64url characters; the route shares its prefix with `DELETE devices/{token}` (push token), which keeps any other shape |
+
+Revoking goes through the same path as logout, so the next request of an ended session is 401 (through Redis when configured). A
+password change keeps the device and sign-in method of the session it replaces. `DELETE /api/me/zalo-link` ends every `ZaloMiniApp`
+session of the account, on every device, and the current session.
+
+**Refusing a refresh.** A refused `POST /api/auth/refresh` keeps its status and problem shape (401 MSG19; 403 when the account may no
+longer log in) and adds the problem extension `reason`: `expired` (the lifetime ended, or the session no longer exists),
+`reuse` (a replaced token was presented again, so the session is revoked) or `revoked` (a user or an administrator ended it: logout
+elsewhere, a session or device revoked, a lock, a password change). A Mini App signs in again by itself after `expired` or `reuse` only.
+`POST /api/auth/zalo/login` with a `deviceId` whose newest session of that account was revoked by a user or an administrator answers
+403 `ZALO_DEVICE_REVOKED`; only `POST /api/auth/zalo/link`, which creates a newer session, lets the device in again.
+A session revoked for reuse does not block silent login. Sessions are deleted 30 days after they expired or were revoked
+(`Jobs:LoginSessionCleanup`), and from then on a device that was signed out is no longer remembered as such.
+
+`GET /api/me` and `GET /api/me/permissions` return the caller and their effective
+zone-scoped permissions. `GET /api/me` also carries `mustChangePassword` and `phoneVerificationRequired`, the same
+account state the gate behind the 403 `PASSWORD_CHANGE_REQUIRED` / MSG-ACCOUNT-04 answers uses, and stays reachable while
+either is true, so the web can route onboarding without waiting for a 403. Both can be true at once; the phone step
+comes first. Errors are RFC 7807 problem details whose `title` and `code` are the message code of
 the SRS 27/10/2026 catalogue (`MSG-GEN-01`, `MSG-ACCOUNT-05`…) and whose `detail` is the SRS English text. For one
 release they also carry `legacyCode`, the old code of the same situation (`MSG01`, `MSG12`…), so web and mobile can
 switch on their own schedule. A few old codes have no SRS 27/10 message yet and are still sent as `code` (MSG05,
@@ -183,6 +242,35 @@ MSG06, MSG19, MSG58, the technical codes `NOT_FOUND`, `UNEXPECTED_ERROR`…; ful
 Dates and times are ISO 8601. A time sent without a UTC offset (`2026-10-20T08:00:00`, in JSON or a multipart field)
 is Vietnam time (UTC+7), never the server's time zone or UTC; `Z` or an offset such as `+07:00` is kept. Responses always
 carry the offset. Business dates (`from`/`to` filters, receipt dates) are Vietnam dates.
+
+#### Session revocation store (Redis)
+
+Every authenticated request checks that its session is not revoked. With Redis configured, this is a lookup of
+`omts:auth:rev:s:{sessionId}` instead of a database query. The database stays the source of truth:
+- A saved revocation (logout, password change or reset, lock, refresh token reuse) is written to Redis right after the
+  commit, with a time to live of the access token lifetime plus one minute (about 16 minutes). Keys hold session ids only.
+- Every instance also copies the sessions revoked in that window from the database every 10 seconds
+  (`Revocation:SweepInterval`) and then renews the marker `omts:auth:ready` (60 seconds). A write that failed after the
+  commit is repaired by the next sweep, which is started at once; a revocation can therefore reach Redis up to about 10
+  seconds late when Redis was unreachable at that moment.
+- A request is answered from Redis only while the marker exists. When Redis is unreachable, slow (`Revocation:CommandTimeout`,
+  250 ms; three failures within 5 seconds stop all Redis calls for 10 seconds), empty after a restart or flush, or the
+  marker has expired, the request is checked against the database as before: a revoked session is still refused, a valid
+  one still accepted. `/health/ready` lists `session-revocation` as Degraded (still 200) in that state; it is not part of
+  `/health` or `/health/db`.
+- **A lock performed outside the application** (a trader account locked by a direct database change, any other script)
+  **must also set `RevokedAt` on that account's `LoginSessions`**. The Redis path no longer reads the account status, so
+  without it the account keeps working for up to 15 minutes (until the access token expires; a refresh is refused at
+  once). Locking in the application does both in one save.
+- Revocations must be saved through EF Core entities. A bulk `ExecuteUpdate` on `LoginSessions` bypasses the write after
+  commit and would be seen only by the next sweep.
+
+Configuration: `ConnectionStrings:Redis` (a secret, e.g. `redis:6379,password=...`; empty by default), `Revocation:Mode`
+(`Auto`, the default: Redis when the connection string is set, otherwise the database; `Redis`: the host does not
+start without the connection string; `Sql`: the database always), `Revocation:CommandTimeout`, `Revocation:SweepInterval`
+(1 to 30 seconds). Without a connection string nothing changes compared with before. Run Redis without persistence and
+without eviction (`maxmemory-policy noeviction`): evicting a key would silently drop a revocation until the next sweep
+notices, and a restart is harmless because the sweep refills it. `docker-compose.yml` does this.
 
 ### Roles and zone access
 
@@ -233,6 +321,8 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | `PROVENANCE_WITHDRAWN` | MSG-TRACE-05, when the Owner withdraws the origin information of a lot the trader bought (TRACE-04); the row opens nothing | unless turned off | Trader |
 | `TRADER_ACCESS_REQUESTED` | a trader asked for an account from the Zalo Mini App (`POST /api/auth/zalo/trader-requests`) | unless turned off | Owner |
 | `TRADER_ACCESS_APPROVED` | the Owner approved the request (`POST /api/trader-requests/{id}/approve`) | unless turned off | Trader |
+| `QUALITY_CLAIM_NEW` | MSG-CLAIM-01, a new quality claim (CLAIM-01) | unless turned off | Owner |
+| `QUALITY_CLAIM_RESPONSE` | MSG-CLAIM-02, the Owner's response (CLAIM-02); also sent as an SMS to the phone number of the profile | unless turned off | Trader |
 
 - Preferences (ACCOUNT-07): `GET`/`PUT /api/me/notification-preferences` list the types of the roles the account
   holds with `push` on or off (`items: [{ type, push }]`). Mandatory types are shown as always pushed and cannot be
@@ -291,6 +381,33 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   closing sentence, then the longer wording of the water alert, then the free text below its minimum. Logs hold the type
   and the account id only, never what a provider answered.
 
+### Public provenance page
+
+`GET /api/public/provenance/{qrToken}?lang=vi|en` (ORIGIN-01, SCR-ORIGIN-01) is what the web page `/origin/{qrToken}` of the
+invoice QR code loads. It needs no login and a logged-in user gets the same answer (BR-ORIGIN-01); it is limited per client IP
+(`RateLimits:ProvenancePagesPerMinute`, 429 `TOO_MANY_REQUESTS`) and sent with `Cache-Control: no-store`, so each opening shows the
+current data (BR-TRACE-05: a TRACE-03 correction or a new publish shows at once). The token is the 128-bit random base64url code
+SALE-05 gave the invoice (22 characters); only the exact code opens the page.
+
+- `lang`: `vi` by default (BR-ORIGIN-02, anything but `en` is Vietnamese). The messages (`message`) and the cooperative
+  introduction follow it (the Vietnamese introduction when the English one is empty); every message also carries `messageCode` and
+  `messageParams` (atomic values: `cooperative_short_name`, `lot_code`, `withdrawal_date`, `cooperative_phone`). The Vietnamese
+  MSG-ORIGIN texts are proposals until the PM confirms them (the SRS gives English only).
+- 200 `{ language, status, message, messageCode, messageParams, invoice: { code, date } | null, cooperative, lots[] }`:
+  - `status` `Ok`: `lots` holds the lots of the invoice that are Published or Withdrawn, in line order, each `{ lotCode, products
+    (names sold from the lot on this invoice), originState, withdrawalDate, message, messageCode, messageParams, origin }`. A
+    Published lot has `origin { harvestDate, raftCode, zoneName, map { latitude, longitude, source: Raft | Zone } | null,
+    seedings[{ seedingDate, seedItemName }], daysOfFarming, harvestPhotoUrls[], raftPhotoUrls[] }` (signed URLs, 1 hour); a
+    Withdrawn lot has `withdrawalDate` and MSG-ORIGIN-01, never the reason, and `origin: null`. Not published lots are not listed.
+  - `NoLots`: no lot is Published or Withdrawn, MSG-ORIGIN-02. `Cancelled`: the cooperative block only (`invoice: null`), MSG-ORIGIN-04.
+  - `cooperative` is the FARM-01 public block (BR-FARM-09): `fullName, shortName, yearEstablished, officeAddress, phoneNumber, email,
+    website, socialLink, logoUrl, coverPhotoUrl, introduction, certifications[{ name, number, issuer, expiryDate, state, fileUrl }]`
+    (not Expired).
+- 404 MSG-ORIGIN-03 (in `lang`) for a code no invoice has, also for a link that is no code at all.
+- Never in the answer (BR-ORIGIN-04, NFR-03; a test fixes the exact set of properties): the customer, prices, amounts, payments,
+  debts, any kg, returns, claims, suppliers, seed lot or receipt codes, the tax code, the bank account, the withdrawal reason or any
+  internal id. A lot whose returned oysters were thrown away (CLAIM-03) will be left out once sales returns exist.
+
 ### Sales invoices
 
 SALE-09 (`SALES_INVOICES`, zones of the caller's pairs, BR-SALE-08): the Owner, the Zone Manager of the zone and the Accountant view; the Zone Manager and the Owner also print. Any other zone answers 403 MSG-GEN-08.
@@ -310,6 +427,15 @@ SALE-09 (`SALES_INVOICES`, zones of the caller's pairs, BR-SALE-08): the Owner, 
 | `Print` | Whoever has Export in the zone | always | `GET /api/sales-invoices/{id}/print` |
 
 The corrections and the cancel date and reason of SALE-09.1 step 2 have no data yet: they join the detail with SALE-07 and SALE-08.
+
+### Quality claims (CLAIM-01, CLAIM-02)
+
+A trader reports a quality problem on one of their invoices with photos; the Cooperative Owner responds. A claim changes neither the invoice nor the customer debt (BR-CLAIM-01/02).
+
+- `POST /api/me/sales-invoices/{id}/quality-claims` (trader, multipart: `description` up to 2000 characters, one `photos` part per photo, 1 to 10 JPEG or PNG of at most 10 MB; 201 with the claim, code `KN000123`, and MSG-GEN-05). Only an invoice of the trader's own profile (a profile merged into theirs counts; else 404) that is not cancelled, has no sales return (sales returns come with CLAIM-03: the check is the seam `IInvoiceSalesReturnCheck`) and has no other claim Awaiting response (409 MSG-GEN-09, one filtered unique index per invoice). A photo that cannot be uploaded answers 502 MSG-GEN-03 and saves nothing. The Owner gets MSG-CLAIM-01 (not a mandatory type). Answered claims do not stop a new one and OMTS sets no time limit.
+- `GET /api/me/quality-claims` (own claims, newest first, MSG-GEN-11 when none) and `GET /api/me/quality-claims/{id}` (404 for another trader's): the description, photo links, status, offer and response note. The photos are private (BR-CLAIM-01): signed links for 1 hour, never on the provenance page.
+- `GET /api/quality-claims` (`statusId`, `page`, `pageSize`; Awaiting response first) and `GET /api/quality-claims/{id}` (customer with phone number, invoice with lines, lots, kg, amounts, status and price cuts, the SMS sendings, `rowVersion`): QUALITY_CLAIMS View, so the Owner and the Zone Managers, who see the claims of invoices in their zones only (PM default; another zone answers 403). An Accountant has no access.
+- `POST /api/quality-claims/{id}/accept` (`{ offer: "ReturnAllGoods" | "PriceCutWholeInvoice", note?, rowVersion }`) and `POST /api/quality-claims/{id}/reject` (`{ note, rowVersion }`): Owner only, while Awaiting response; a response cannot be changed (409 MSG-GEN-09, or MSG06 when the form is stale). Accepting answers 409 MSG-CLAIM-03 when the invoice was cancelled or has a sales return (it can still be rejected). The offer only records what was proposed: the return is CLAIM-03 and the price cut SALE-07 (`PUT /api/sales-invoices/{id}/correction`, PriceCutAfterClaim), which the Owner runs after the trader chooses. Neither changes here. The trader gets a push and an SMS with MSG-CLAIM-02; a message that cannot be sent undoes nothing (GFR-06), it stays in the trader's list and the sending is listed Not sent on the claim; a profile without a phone number gets a Not sent row (`NO_PHONE_NUMBER`).
 
 ### Audit log
 
@@ -357,6 +483,60 @@ The OCR Service of the water meter photos (WATER-01) is only faked until its pro
 The Payment Notification Service (API-12) has no provider yet, so there is only an interface (`IPaymentNotificationService`)
 and a fake that works in Development: it accepts every receiving bank account except the numbers of
 `Payments:Fake:RejectAccounts` (default `REJECT000001`) and `Payments:Fake:TimeoutAccounts` (default `TIMEOUT00001`, never answers).
+The incoming notifications (API-13) go through `IBankNotificationParser`, the provider's adapter, which checks the signature and
+reads the transfers; the fake one reads the generic format below. `POST /api/dev/payment-notifications`
+(`{ invoiceCode, amount, bankReference?, content?, accountNumber?, occurredAt?, outgoing? }`, anonymous, 404 outside Development)
+fires a transfer to the receiving bank account through the same rules, so a VietQR sale can be finished without a bank; send the
+same `bankReference` again to replay it.
+
+### VietQR sale and bank notifications (SALE-05 steps 7-8, GFR-08, API-13)
+
+- `POST /api/sales-invoices` with `payment.rest = "VietQr"` (all of the total, or the rest after `cashAmount`; a walk-in customer
+  too) answers **202** with the sale awaiting its transfer: `{ code, status: "Awaiting", zone, customer, walkInCustomer, total,
+  cashAmount, toPayAmount, receivedAmount, vietQr: { payload, bankBin, bankName, accountNumber, accountHolderName, amount,
+  content }, createdAt, createdBy, invoiceId, invoice, endedAt }`. The code (HD…) is given now and kept (BR-SALE-08); nothing is
+  saved yet: no invoice, payment, debt or lot close. `payload` is the EMVCo text the client draws as the QR image, made again on
+  every read for the receiving bank account set at that time. Without a receiving bank account: 409 MSG-SALE-13. The questions
+  (MSG-SALE-10/11/12) and `deduplicationKey` work as for any sale (the same key answers the same 202, or the 201 once saved).
+- `GET /api/sales-invoices/pending/{code}` is the poll of the port (every 2–3 s): `Awaiting`, then `Completed` with `invoice`
+  (the saved invoice and MSG-SALE-06, e.g. "Invoice HD000123 is completed: 8,000,000 VND received by VietQR; 4,000,000 VND
+  collected in cash."); the end of the sale then goes on with `POST /api/sales-invoices/{id}/finish`. `GET
+  /api/sales-invoices/pending` lists the sales still Awaiting in the caller's zones (an app that was closed finds its sale again).
+- `POST /api/sales-invoices/pending/{code}/change-payment` `{ payment }` (Cash, part in cash with Pay later, or Pay later; not
+  VietQR) saves the invoice under the same code as a new sale at the port (201, same questions); status `PaymentChanged`.
+- `POST /api/sales-invoices/pending/{code}/stop` `{ confirmed }`: without `confirmed: true`, 409 MSG-SALE-14 (`confirmationField`
+  = `confirmed`); with it, status `Stopped`, nothing saved but the audit row `SalesInvoice.SaleStopped` (record code = the code,
+  reason "Stop sale").
+- These need SALES_INVOICES Create in the zone of the sale (the Zone Managers of the zone and the Owner; others 403). A sale that
+  already ended answers 409 MSG-GEN-09 with `status` and `invoiceId`. A pending sale has no time limit. Its harvest lots cannot be
+  removed meanwhile (HARVEST-01.1: 409 MSG-GEN-09 "… is on a sale awaiting its transfer"), and the daily close (GFR-05) leaves its kg out of
+  the leftover kg it records, because the transfer invoices them on the closed lot.
+- `POST /api/integrations/payment-notifications` (API-13) is anonymous and rate limited (`RateLimits:PaymentNotificationsPerMinute`,
+  256 KB): a notification the adapter does not find authentic answers 401. The fake adapter's format is
+  `{ "transactions": [ { "bankReference", "accountNumber", "amount", "content", "occurredAt", "direction": "In" | "Out" } ] }`,
+  signed as `X-Omts-Signature: sha256=<hex of HMAC-SHA256(raw body, Payments:Fake:WebhookSecret)>`. 200 lists for each transfer
+  `{ bankReference, outcome, paymentCode, invoiceCode, reason }`; 400 for a body it cannot read; 5xx when the save failed, so the
+  service retries. Each transfer is recorded once per bank reference (unique index on the reference of VietQR payments, so also
+  when the service reports it twice at once), and not at all when the Accountant already recorded a payment with that reference
+  that is not cancelled (the reference trimmed, as MSG-DEBT-05 compares it): `AlreadyRecorded` names the payment already recorded.
+  A transfer time before 2000 or more than a day ahead is `Invalid`. A sale that can no longer be saved when its transfer arrives
+  (a record it names is gone) never fails the notification: it is stopped by the system (audit `SalesInvoice.SaleStopped`, the
+  reason says why) and the transfer is kept `WithoutCustomer`.
+- What a transfer becomes (GFR-08), a customer payment with the method VietQR code of the invoice, Awaiting confirmation,
+  recorded by the system (audit actor: the system), with the amount, bank reference and time reported:
+  - `Ignored` (nothing recorded): `Outgoing`, `NotTheReceivingAccount` (another account, or the account before a change,
+    BR-DEBT-01), `NoInvoiceCode` (no `HD` + 6 to 12 digits in the content, not glued to letters before it; case and a separator after HD are tolerated),
+    `Invalid`.
+  - `PaidInvoice`: a saved invoice has the code (a later payment of a Pay later invoice, a sale whose payment method was changed,
+    a cancelled invoice): a payment of its customer (none for a walk-in invoice) that covers it first.
+  - `CompletedSale`: the sale awaiting it, when the amount is at least `toPayAmount`, is saved Completed, Pay now, at the prices
+    shown, with the transfer (its whole amount) and the cash part as its two payments, the lots closed (one closed meanwhile stays
+    as it is) and MSG-SALE-08 to the Owners; the invoice and its cash are the Zone Manager's (creator, collector, audit actor).
+  - `WithoutCustomer`: no saved invoice has the code (Stop sale, an unknown code, or less than the sale awaits, which then keeps
+    waiting and shows it in `receivedAmount`): no customer and no invoice, the code kept in `transferInvoiceCode` of the
+    payment, listed Awaiting confirmation for the Accountant (DEBT-02.6). Until DEBT-02.6 (settle: attach to a profile, or pay it
+    back) ships in PR 7b, such a payment cannot be confirmed (409 MSG-GEN-09 "Customer payment PT… is without a customer profile …",
+    `needsSettlement: true`), so it stays in the list; it can be cancelled.
 
 ### Background jobs
 
@@ -395,7 +575,7 @@ A replaced raft photo, license file, cooperative cover photo, certificate file, 
 certification, cover photo or cultivation log too), and the upload of a failed save right away. `OrphanFileCleanupJob` runs every day at
 03:00 (Asia/Ho_Chi_Minh), with no catch-up at start unless `CatchUpOnStart` is set, and deletes what such a removal left behind: raft photos (`raft-photos/`), license files
 (`zone-licenses/`), cover photos (`cooperative-covers/`), certificate files (`cooperative-certifications/`), cultivation log photos (`cultivation-log-photos/`), harvest lot photos
-(`harvest-lot-photos/`) and water meter photos (`water-meter-photos/`, a recognition that was never saved as a measurement) that no record points to and that were
+(`harvest-lot-photos/`), quality claim photos (`claim-photos/`, a claim whose save failed after its uploads) and water meter photos (`water-meter-photos/`, a recognition that was never saved as a measurement) that no record points to and that were
 written more than the grace period (24 hours) ago. No other storage folder is scanned, so cooperative logos are kept for ever.
 
 **Every environment must use its own storage container (`Storage:AzureBlob:Container`) or folder
@@ -459,7 +639,8 @@ created by a one-time command run on the server by the deployment operator (not 
    rows (by code), cooperative and an active Owner are all in place, else 503 listing the failing checks. This is a
    post-deployment verification, **not** a platform probe: it depends on business data (locking the only Owner turns it
    503). Point App Service / Kubernetes readiness and load-balancer probes at `GET /health/db`
-   (database reachable and migrated). `GET /health` is liveness only.
+   (database reachable and migrated). `GET /health` is liveness only. When Redis is configured but unreachable or empty,
+   `/health/ready` still answers 200 and lists `session-revocation` as Degraded.
 
 | Area | Keys |
 |---|---|
@@ -467,19 +648,23 @@ created by a one-time command run on the server by the deployment operator (not 
 | SMS (`Sms:Provider` = `None`, the default: nothing is sent, phone verification cannot complete and each save with mandatory SMS writes one warning; `Fake` keeps messages in the dev inbox and is set in Development only) | `Sms:Fake:FailFor` (test numbers that fail), `Sms:MandatoryTimeoutSeconds` (default 5, from 1 to 60 or the host does not start: the longest the answer of an action waits for the SMS of its mandatory notifications) |
 | Push (`Push:Provider` = `None` by default, `Fake` in Development) | `Push:Fake:FailFor` |
 | OCR (`Ocr:Provider` unset by default: meter photos are not read and the values are entered by hand (MSG-WATER-01); `Fake` invents readings, so it is set in Development only and stops the host elsewhere) | `Ocr:TimeoutSeconds` (default 15), `Ocr:UncertainBelow` (default 0.8), `Ocr:Fake:Mode` (`Success`, `Fail`, `Timeout`), `Ocr:Fake:Ph`, `Ocr:Fake:Salinity`, `Ocr:Fake:Confidence` |
-| Payment notifications, API-12 (`Payments:Provider` = `None`, the default: no provider is chosen, so no receiving bank account can be accepted and the Owner gets MSG-DEBT-02; `Fake` works in Development only and elsewhere acts as `None`) | `Payments:TimeoutSeconds` (default 15; 1 to 300, anything else stops the host at startup), `Payments:Fake:RejectAccounts`, `Payments:Fake:TimeoutAccounts` |
+| Payment notifications, API-12 and API-13 (`Payments:Provider` = `None`, the default: no provider is chosen, so no receiving bank account can be accepted and the Owner gets MSG-DEBT-02, and every bank notification answers 401; `Fake` works in Development only and elsewhere acts as `None`) | `Payments:TimeoutSeconds` (default 15; 1 to 300, anything else stops the host at startup), `Payments:Fake:RejectAccounts`, `Payments:Fake:TimeoutAccounts`, `Payments:Fake:WebhookSecret` (a secret: user-secrets or `Payments__Fake__WebhookSecret`, empty by default, which accepts no notification) |
 | File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development; one container or folder per environment, see Background jobs) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
 | Zalo Mini App "Liên kết tài khoản" (`POST api/auth/zalo/link`, `zalo/login`, `DELETE api/me/zalo-link`; a trader without an account sends `zalo/trader-requests`, which the Cooperative Owner approves or refuses at `api/trader-requests`). `Zalo:Provider` unset by default: linking answers MSG04; `Graph` calls graph.zalo.me and needs the Zalo App secret (developers.zalo.me), the host does not start without it; `Fake` (Development only) accepts `fake:<zalo user id>` access tokens and `fake:<phone number>` phone tokens | `Zalo:Provider`, `Zalo:AppSecret` (user-secrets / `Zalo__AppSecret`), `Zalo:TimeoutSeconds` (default 10) |
 | Bootstrap (see Deployment) | `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:*` |
-| Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30) |
+| Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30), `RateLimits:ProvenancePagesPerMinute` (default 60: the public provenance page), `RateLimits:PaymentNotificationsPerMinute` (default 600: the bank notification webhook) |
 | CORS: the web app and the Zalo Mini App call the API from the browser. Set their origins in every deployed environment; empty means no CORS. Development allows `http://localhost:3000` and `https://h5.zdn.vn`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`, `Cors__AllowedOrigins__1=https://h5.zdn.vn`) |
 | Provenance link: the QR code of a sales invoice and its SMS (MSG-SALE-15) link to `{PublicBaseUrl}/origin/{qrToken}`, the public page of the web app. **Required** in every environment: without an absolute `http`/`https` URL the host does not start (QR codes are permanent, so a relative link is never made). Development uses `http://localhost:3000`. | `Provenance:PublicBaseUrl` (e.g. `Provenance__PublicBaseUrl=https://<web host>`) |
 | Reverse proxy: X-Forwarded-For is trusted only from these addresses (and loopback), so the limits see the real client | `ForwardedHeaders:KnownProxies` (e.g. `10.0.0.4`), `ForwardedHeaders:KnownNetworks` (e.g. `10.0.0.0/24`) |
+| Next.js server (BFF) in front of the API: it sends the end user's address and browser so the per-IP limits and the session list see the user, not the BFF. Off by default. Requests carrying `X-Bff-Secret` equal to the shared secret (constant-time compare) may set `X-Client-Ip` and `X-Client-User-Agent`; without a valid secret both are ignored, so an address cannot be chosen by the caller. The secret is **required, at least 32 characters, outside Development** when `Enabled` is true (the host does not start otherwise); in Development an empty secret leaves the feature inactive. The supplied address wins over `X-Forwarded-For`. | `BffClient:Enabled` (default `false`), `BffClient:SharedSecret` (a secret: user-secrets or an environment variable) |
+| Refresh grace period: how long the refresh token a rotation replaced still gets an access token (see Authentication) | `Jwt:RefreshGracePeriod` (default `00:00:30`) |
+| Revoked-session lookup in Redis instead of SQL on every request (see [Session revocation store](#session-revocation-store-redis)). Optional: unset means SQL. Run Redis with a password, no persistence and `noeviction`; a lock done outside the application must also revoke the account's sessions | `ConnectionStrings:Redis` (a secret), `Revocation:Mode` (`Auto`, `Redis`, `Sql`), `Revocation:CommandTimeout` (default `00:00:00.250`), `Revocation:SweepInterval` (default `00:00:10`, 1 to 30 seconds) |
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG-ACCOUNT-13 and a critical log entry is written (BR-ACCOUNT-09: one purpose and one number or address get at most 3 codes per hour, at least 60 seconds apart; over all purposes one number or address gets at most 10) | `Verification:DailySmsLimit` (default 500) |
 | Expiry reminder of zone licenses and certifications (GFR-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
 | Overdue water measurement reminder (GFR-04, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
 | Daily close check of harvest lots (GFR-05, daily, business time zone UTC+7) | `Jobs:HarvestLotAutoClose:RunAt` (default `00:05`), `Jobs:HarvestLotAutoClose:CatchUpOnStart` (default `true`) |
 | Employment end: an employee is Left from the day after the last working day (LABOR-01, daily, business time zone UTC+7) | `Jobs:EmploymentEnd:RunAt` (default `00:01`), `Jobs:EmploymentEnd:CatchUpOnStart` (default `true`) |
+| Login session clean-up: sessions that expired or were revoked more than `Retention` ago, with the device key, address and browser they hold (daily, UTC+7) | `Jobs:LoginSessionCleanup:Enabled` (default `true`), `RunAt` (default `03:30`), `CatchUpOnStart` (default `false`), `Retention` (default `30.00:00:00`, at least `1.00:00:00` or the host does not start) |
 | Orphan file clean-up: raft photos, license files, cover photos, certificate files, cultivation log photos, meter photos (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
 
 ## Demo on a shared server
