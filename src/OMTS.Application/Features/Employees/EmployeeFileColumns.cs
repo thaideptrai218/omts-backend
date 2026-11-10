@@ -28,16 +28,15 @@ internal static class EmployeeFileColumns
     public const string AccountHolder = "Chủ tài khoản";
     public const string Gender = "Giới tính";
     public const string IdNumber = "Số CCCD";
-    public const string Email = "Email";
     public const string StartDate = "Ngày bắt đầu làm việc";
     public const string Status = "Tình trạng";
     public const string LastWorkingDay = "Ngày làm cuối";
 
-    /// <summary>The first thirteen are those of EMP-API-04; the last four are the optional profile fields of EMP-API-06.</summary>
+    /// <summary>The first thirteen are those of EMP-API-04; the last four (code, gender, ID number, start date) are the optional profile fields of EMP-API-06.</summary>
     public static readonly string[] Import =
     [
         Name, Phone, Birthday, Type, Zones, JobTypes, Address, Area, Ward, Notes, Bank, AccountNumber, AccountHolder,
-        Code, Gender, IdNumber, Email, StartDate,
+        Code, Gender, IdNumber, StartDate,
     ];
 
     public static readonly string[] RequiredOnImport = [Name, Type, Zones];

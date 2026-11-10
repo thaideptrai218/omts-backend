@@ -31,7 +31,6 @@ public sealed class EmployeeViewBuilder(IStatusCatalog statusCatalog, TimeProvid
             maintains ? e.Birthday : null,
             maintains ? e.Gender : null,
             maintains ? e.IdNumber : null,
-            maintains ? e.Email : null,
             maintains ? e.StartDate : null,
             maintains ? e.Address : null,
             maintains ? e.Area : null,

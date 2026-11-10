@@ -35,7 +35,6 @@ public sealed record NewEmployeeAccount(
 /// </param>
 /// <param name="Gender">Optional. Left out (null) on an edit, it stays; it cannot be cleared once set.</param>
 /// <param name="IdNumber">Optional, 9 or 12 digits. Null on an edit leaves it, an empty text clears it. Never in a file.</param>
-/// <param name="Email">Optional, valid, at most 254 characters (stored lower-case). Null on an edit leaves it, an empty text clears it.</param>
 /// <param name="StartDate">Optional first day of work, not after today. Left out (null) on an edit, it stays; it cannot be cleared once set.</param>
 public sealed record SaveEmployeeRequest(
     string? FullName,
@@ -57,7 +56,6 @@ public sealed record SaveEmployeeRequest(
     string? Code = null,
     Gender? Gender = null,
     string? IdNumber = null,
-    string? Email = null,
     DateOnly? StartDate = null);
 
 /// <param name="ZoneId">One of the caller's zones.</param>
@@ -83,7 +81,7 @@ public sealed record EmployeeBankAccountView(string BankName, string AccountNumb
 /// <param name="CanMaintain">The caller may edit, end or resume the employee: Owner, All zones, or a shared zone.</param>
 /// <param name="HasStaffAccount">A staff account has the phone number of the employee (BR-LABOR-01).</param>
 /// <param name="Code">Null only for a profile older than the code; every profile has one after the migration.</param>
-/// <param name="Birthday">This and the other personal fields (gender, ID number, email, start date, address…), down to <paramref name="BankAccount"/>, only when <paramref name="CanMaintain"/>.</param>
+/// <param name="Birthday">This and the other personal fields (gender, ID number, start date, address…), down to <paramref name="BankAccount"/>, only when <paramref name="CanMaintain"/>.</param>
 /// <param name="Account">The linked staff account; for the Cooperative Owner only.</param>
 public sealed record EmployeeView(
     Guid Id,
@@ -101,7 +99,6 @@ public sealed record EmployeeView(
     DateOnly? Birthday,
     Gender? Gender,
     string? IdNumber,
-    string? Email,
     DateOnly? StartDate,
     string? Address,
     string? Area,

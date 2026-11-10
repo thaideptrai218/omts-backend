@@ -42,7 +42,7 @@ public sealed class EmployeeFileService(
         var headers = new List<string> { C.Code, C.Name, C.Phone, C.Type, C.JobTypes, C.Zones, C.Status, C.LastWorkingDay };
         if (personal)
         {
-            headers.AddRange([C.Birthday, C.Gender, C.Email, C.StartDate, C.Address, C.Area, C.Ward, C.Bank, C.AccountHolder]);
+            headers.AddRange([C.Birthday, C.Gender, C.StartDate, C.Address, C.Area, C.Ward, C.Bank, C.AccountHolder]);
         }
 
         var rows = items.Select(e => (IReadOnlyList<object?>)Row(e, today, personal && caller.Maintains(e), personal)).ToList();
@@ -115,7 +115,7 @@ public sealed class EmployeeFileService(
             row.AddRange(showPersonal
                 ? new object?[]
                 {
-                    e.Birthday, C.GenderLabel(e.Gender), e.Email, e.StartDate, e.Address, e.Area, e.Ward,
+                    e.Birthday, C.GenderLabel(e.Gender), e.StartDate, e.Address, e.Area, e.Ward,
                     e.BankAccount?.BankName, e.BankAccount?.AccountHolderName,
                 }
                 : new object?[9]);

@@ -25,7 +25,6 @@ internal static class EmployeeProfileChanges
         employee.Gender = input.Gender ?? employee.Gender;
         employee.StartDate = input.StartDate ?? employee.StartDate;
         employee.IdNumber = input.IdNumber is null ? employee.IdNumber : input.IdNumber.Length == 0 ? null : input.IdNumber;
-        employee.Email = input.Email is null ? employee.Email : input.Email.Length == 0 ? null : input.Email;
     }
 
     /// <summary>A new profile with its working zones, job types and first type period, added to the unit of work; the caller gives it its code.</summary>
@@ -99,7 +98,7 @@ internal static class EmployeeProfileChanges
     /// <param name="accountNumberBefore">On the snapshot after an edit: the real number before it, see <see cref="BankSnapshot"/>.</param>
     public static object Snapshot(Employee e, IReadOnlyCollection<Guid> zoneIds, IReadOnlyCollection<Guid> jobTypeIds, string? accountNumberBefore = null) => new
     {
-        e.Code, e.FullName, e.PhoneNumber, e.Birthday, e.Gender, e.Email, e.StartDate, HasIdNumber = e.IdNumber is not null, e.Address, e.Area, e.Ward, e.OtherInformation, e.Notes, e.AccountId,
+        e.Code, e.FullName, e.PhoneNumber, e.Birthday, e.Gender, e.StartDate, HasIdNumber = e.IdNumber is not null, e.Address, e.Area, e.Ward, e.OtherInformation, e.Notes, e.AccountId,
         WorkingZoneIds = zoneIds.Order().ToList(),
         JobTypeIds = jobTypeIds.Order().ToList(),
         TypeHistory = e.TypePeriods.OrderBy(p => p.EffectiveFrom).Select(p => new { p.Type, p.EffectiveFrom }).ToList(),

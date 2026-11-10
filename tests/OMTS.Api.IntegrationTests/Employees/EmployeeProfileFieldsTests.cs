@@ -10,7 +10,7 @@ using static OMTS.Api.IntegrationTests.Purchasing.PurchasingTestKit;
 
 namespace OMTS.Api.IntegrationTests.Employees;
 
-/// <summary>EMP-API-06: the optional employee fields code, gender, ID number, email and start date, and that older clients keep working.</summary>
+/// <summary>EMP-API-06: the optional employee fields code, gender, ID number and start date, and that older clients keep working.</summary>
 public partial class EmployeeProfileFieldsTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
     private const string Url = "/api/employees";
@@ -39,7 +39,7 @@ public partial class EmployeeProfileFieldsTests(AuthApiFactory factory) : IClass
         Assert.Matches(GeneratedCode(), CodeOf(first));
         Assert.Equal(NumberOf(CodeOf(first)) + 1, NumberOf(CodeOf(second)));
         var employee = first.GetProperty("employee");
-        foreach (var field in new[] { "gender", "idNumber", "email", "startDate" })
+        foreach (var field in new[] { "gender", "idNumber", "startDate" })
         {
             Assert.Equal(JsonValueKind.Null, employee.GetProperty(field).ValueKind);
         }
@@ -111,7 +111,6 @@ public partial class EmployeeProfileFieldsTests(AuthApiFactory factory) : IClass
         {
             b["gender"] = "Female";
             b["idNumber"] = "079090001234";
-            b["email"] = "Lan.Nguyen@Example.com";
             b["startDate"] = today.AddDays(-10).ToString("yyyy-MM-dd");
         }));
         var id = IdOf(created);
@@ -119,7 +118,6 @@ public partial class EmployeeProfileFieldsTests(AuthApiFactory factory) : IClass
         var byOwner = created.GetProperty("employee");
         Assert.Equal("Female", byOwner.GetProperty("gender").GetString());
         Assert.Equal("079090001234", byOwner.GetProperty("idNumber").GetString());
-        Assert.Equal("lan.nguyen@example.com", byOwner.GetProperty("email").GetString());
         Assert.Equal(today.AddDays(-10).ToString("yyyy-MM-dd"), byOwner.GetProperty("startDate").GetString());
 
         var ownDetail = await (await own.GetAsync($"{Url}/{id}")).ReadAsync(HttpStatusCode.OK);
@@ -129,7 +127,7 @@ public partial class EmployeeProfileFieldsTests(AuthApiFactory factory) : IClass
         var outsiderDetail = await (await outsider.GetAsync($"{Url}/{id}")).ReadAsync(HttpStatusCode.OK);
         Assert.False(outsiderDetail.GetProperty("canMaintain").GetBoolean());
         Assert.Equal(CodeOf(created), outsiderDetail.GetProperty("code").GetString());
-        foreach (var field in new[] { "gender", "idNumber", "email", "startDate" })
+        foreach (var field in new[] { "gender", "idNumber", "startDate" })
         {
             Assert.Equal(JsonValueKind.Null, outsiderDetail.GetProperty(field).ValueKind);
         }
@@ -144,7 +142,7 @@ public partial class EmployeeProfileFieldsTests(AuthApiFactory factory) : IClass
     public async Task The_audit_log_keeps_the_new_fields_but_says_only_whether_an_id_number_is_held()
     {
         var (owner, zone, _) = await SetupAsync(factory);
-        var created = await CreateAsync(owner, Profile($"Audit {NewCode()}", null, zone.Id, b => { b["idNumber"] = "079090004321"; b["email"] = "audit@example.com"; }));
+        var created = await CreateAsync(owner, Profile($"Audit {NewCode()}", null, zone.Id, b => { b["idNumber"] = "079090004321"; }));
         var id = IdOf(created);
         await UpdateAsync(owner, id, Profile($"Audit {NewCode()}", null, zone.Id, b => b["gender"] = "Male"));
 
@@ -153,11 +151,10 @@ public partial class EmployeeProfileFieldsTests(AuthApiFactory factory) : IClass
         Assert.All(events, e => Assert.DoesNotContain("079090004321", (e.Before ?? string.Empty) + e.After));
         var createdEvent = events.Single(e => e.Action == "Employee.Created");
         Assert.Contains(CodeOf(created)!, createdEvent.After);
-        Assert.Contains("audit@example.com", createdEvent.After);
     }
 
     [Fact]
-    public async Task An_edit_that_leaves_the_fields_out_keeps_them_and_an_empty_text_clears_the_id_number_and_the_email()
+    public async Task An_edit_that_leaves_the_fields_out_keeps_them_and_an_empty_text_clears_the_id_number()
     {
         var (owner, zone, _) = await SetupAsync(factory);
         var name = $"Clear {NewCode()}";
@@ -165,17 +162,15 @@ public partial class EmployeeProfileFieldsTests(AuthApiFactory factory) : IClass
         {
             b["gender"] = "Other";
             b["idNumber"] = "079090009999";
-            b["email"] = "keep@example.com";
             b["startDate"] = "2026-01-05";
         })));
 
         var kept = (await UpdateAsync(owner, id, Profile(name, null, zone.Id))).GetProperty("employee");
-        var cleared = (await UpdateAsync(owner, id, Profile(name, null, zone.Id, b => { b["idNumber"] = ""; b["email"] = " "; }))).GetProperty("employee");
+        var cleared = (await UpdateAsync(owner, id, Profile(name, null, zone.Id, b => { b["idNumber"] = ""; }))).GetProperty("employee");
 
-        Assert.Equal(("Other", "079090009999", "keep@example.com", "2026-01-05"),
-            (kept.GetProperty("gender").GetString(), kept.GetProperty("idNumber").GetString(), kept.GetProperty("email").GetString(), kept.GetProperty("startDate").GetString()));
+        Assert.Equal(("Other", "079090009999", "2026-01-05"),
+            (kept.GetProperty("gender").GetString(), kept.GetProperty("idNumber").GetString(), kept.GetProperty("startDate").GetString()));
         Assert.Equal(JsonValueKind.Null, cleared.GetProperty("idNumber").ValueKind);
-        Assert.Equal(JsonValueKind.Null, cleared.GetProperty("email").ValueKind);
         Assert.Equal("Other", cleared.GetProperty("gender").GetString());
         Assert.Equal("2026-01-05", cleared.GetProperty("startDate").GetString());
     }
@@ -184,8 +179,6 @@ public partial class EmployeeProfileFieldsTests(AuthApiFactory factory) : IClass
     [InlineData("idNumber", "12345678", "ID number")]
     [InlineData("idNumber", "1234567890123", "ID number")]
     [InlineData("idNumber", "07909000123x", "ID number")]
-    [InlineData("email", "not an email", "Email")]
-    [InlineData("email", "a@b", "Email")]
     public async Task An_invalid_value_of_a_new_field_is_refused_naming_the_field(string property, string value, string field)
     {
         var (owner, zone, _) = await SetupAsync(factory);
@@ -196,19 +189,30 @@ public partial class EmployeeProfileFieldsTests(AuthApiFactory factory) : IClass
     }
 
     [Fact]
-    public async Task A_start_date_in_the_future_a_gender_that_does_not_exist_and_an_email_over_254_characters_are_refused()
+    public async Task A_start_date_in_the_future_a_gender_that_does_not_exist_are_refused()
     {
         var (owner, zone, _) = await SetupAsync(factory);
-        var longEmail = $"{new string('a', 64)}@{new string('b', 63)}.{new string('c', 63)}.{new string('d', 63)}.com";
 
         var future = await owner.PostAsJsonAsync(Url, Profile($"Future {NewCode()}", null, zone.Id, b => b["startDate"] = EmployeeRequests.Today().AddDays(1).ToString("yyyy-MM-dd")));
         var gender = await owner.PostAsJsonAsync(Url, Profile($"Gender {NewCode()}", null, zone.Id, b => b["gender"] = "Alien"));
-        var email = await owner.PostAsJsonAsync(Url, Profile($"Email {NewCode()}", null, zone.Id, b => b["email"] = longEmail));
         var today = await owner.PostAsJsonAsync(Url, Profile($"Today {NewCode()}", null, zone.Id, b => b["startDate"] = EmployeeRequests.Today().ToString("yyyy-MM-dd")));
 
         Assert.Equal("Start date", await future.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         await gender.ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
-        Assert.Equal("Email", await email.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         Assert.Equal(HttpStatusCode.Created, today.StatusCode);
+    }
+
+    // The email of an employee was removed (11/11/2026): accounts log in by username or phone only. An unknown property of the
+    // body is ignored like any other (System.Text.Json default), and the employee no longer has an email in any response.
+    [Fact]
+    public async Task An_email_in_the_body_is_ignored_like_any_unknown_property_and_the_employee_has_none()
+    {
+        var (owner, zone, _) = await SetupAsync(factory);
+
+        var created = await CreateAsync(owner, Profile($"No email {NewCode()}", null, zone.Id, b => b["email"] = "ignored@example.com"));
+
+        var employee = created.GetProperty("employee");
+        Assert.False(employee.TryGetProperty("email", out _));
+        Assert.DoesNotContain("ignored@example.com", employee.GetRawText());
     }
 }

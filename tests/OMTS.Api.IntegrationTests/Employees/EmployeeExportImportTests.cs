@@ -112,7 +112,8 @@ public class EmployeeExportImportTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Equal($"employees-{EmployeeRequests.Today():yyyyMMdd}.xlsx", response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName);
         Assert.Equal(
             ["Mã nhân viên", "Họ và tên", "Số điện thoại", "Loại nhân viên", "Loại công việc", "Vùng làm việc", "Tình trạng", "Ngày làm cuối",
-             "Ngày sinh", "Giới tính", "Email", "Ngày bắt đầu làm việc", "Địa chỉ", "Khu vực", "Phường/Xã", "Ngân hàng", "Chủ tài khoản"], headers);
+             "Ngày sinh", "Giới tính", "Ngày bắt đầu làm việc", "Địa chỉ", "Khu vực", "Phường/Xã", "Ngân hàng", "Chủ tài khoản"], headers);
+        Assert.DoesNotContain("Email", headers);
         Assert.Equal([$"{tag} B", $"{tag} A"], rows.Select(r => r["Họ và tên"]));
         var b = rows[0];
         Assert.Equal(("Nhân viên", job.Name, zone.Code, "Đang làm việc", "Nam", "Số 1 Đường A", "Vietcombank", "NGUYEN VAN A"),
@@ -201,6 +202,7 @@ public class EmployeeExportImportTests(AuthApiFactory factory) : IClassFixture<A
 
         Assert.Equal("employees-import-template.xlsx", response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName);
         Assert.Equal(ImportHeaders, headers.Take(13));
+        Assert.DoesNotContain("Email", headers);
         Assert.Empty(rows);
     }
 
@@ -213,8 +215,8 @@ public class EmployeeExportImportTests(AuthApiFactory factory) : IClassFixture<A
         var job2 = await AddJobTypeAsync(factory);
         var tag = NewCode();
         var phone = NewPhone();
-        var file = Workbook(ImportHeaders.Concat(["Mã nhân viên", "Giới tính", "Số CCCD", "Email", "Ngày bắt đầu làm việc"]).ToArray(),
-            [$"{tag} Một", phone, "14/03/1988", "Thời vụ", $"{zone.Code}, {second.Code}", $"{job1.Name}, {job2.Name.ToLowerInvariant()}", "Số 1", "Vân Đồn", "Cái Rồng", "Ghi chú", "Vietcombank", "999900007777", "Nguyen Van A", "imp-1", "Nữ", "079090001234", "A@Example.com", "2026-01-05"],
+        var file = Workbook(ImportHeaders.Concat(["Mã nhân viên", "Giới tính", "Số CCCD", "Ngày bắt đầu làm việc"]).ToArray(),
+            [$"{tag} Một", phone, "14/03/1988", "Thời vụ", $"{zone.Code}, {second.Code}", $"{job1.Name}, {job2.Name.ToLowerInvariant()}", "Số 1", "Vân Đồn", "Cái Rồng", "Ghi chú", "Vietcombank", "999900007777", "Nguyen Van A", "imp-1", "Nữ", "079090001234", "2026-01-05"],
             [$"{tag} Hai", double.Parse(NewPhone()[1..]), null, "Staff", zone.Code.ToLowerInvariant(), null, null, null, null, null, null, null, null],
             [$"{tag} Ba", null, new DateTime(1990, 5, 1), "nhan vien", zone.Code]);
 
@@ -226,8 +228,8 @@ public class EmployeeExportImportTests(AuthApiFactory factory) : IClassFixture<A
             .Include(e => e.WorkingZones).Include(e => e.JobTypes).Include(e => e.TypePeriods)
             .Where(e => e.FullName.StartsWith(tag)).OrderBy(e => e.FullName).ToListAsync());
         var (one, two, three) = (saved.Single(e => e.FullName.EndsWith("Một")), saved.Single(e => e.FullName.EndsWith("Hai")), saved.Single(e => e.FullName.EndsWith("Ba")));
-        Assert.Equal(("IMP-1", phone, new DateOnly(1988, 3, 14), Gender.Female, "079090001234", "a@example.com", new DateOnly(2026, 1, 5)),
-            (one.Code, one.PhoneNumber, one.Birthday, one.Gender, one.IdNumber, one.Email, one.StartDate));
+        Assert.Equal(("IMP-1", phone, new DateOnly(1988, 3, 14), Gender.Female, "079090001234", new DateOnly(2026, 1, 5)),
+            (one.Code, one.PhoneNumber, one.Birthday, one.Gender, one.IdNumber, one.StartDate));
         Assert.Equal(new[] { zone.Id, second.Id }.Order(), one.WorkingZones.Select(w => w.ZoneId).Order());
         Assert.Equal(new[] { job1.Id, job2.Id }.Order(), one.JobTypes.Select(j => j.JobTypeId).Order());
         Assert.Equal("999900007777", one.BankAccount!.AccountNumber);

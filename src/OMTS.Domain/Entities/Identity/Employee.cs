@@ -37,9 +37,6 @@ public class Employee : AuditableEntity, IHasStatus
     /// <summary>Citizen ID (CCCD) of 12 digits, or an older 9-digit ID card. Personal data: shown only to those who maintain the employee, never exported.</summary>
     public string? IdNumber { get; set; }
 
-    /// <summary>Stored lower-case.</summary>
-    public string? Email { get; set; }
-
     /// <summary>The first day of work; not the same as the date the employee type applies from.</summary>
     public DateOnly? StartDate { get; set; }
     public string? Address { get; set; }

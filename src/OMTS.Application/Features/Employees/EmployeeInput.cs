@@ -23,12 +23,8 @@ public sealed partial record EmployeeInput(
     string? Code = null,
     Gender? Gender = null,
     string? IdNumber = null,
-    string? Email = null,
     DateOnly? StartDate = null)
 {
-    /// <summary>The longest email an employee may have.</summary>
-    public const int MaxEmailLength = 254;
-
     /// <summary>The normalised input, or the names of every invalid field.</summary>
     /// <param name="adding">A new employee needs a type and a working zone; an edit may leave the type out, and its zones are checked with those it keeps.</param>
     public static (EmployeeInput? Input, List<string> Invalid) From(SaveEmployeeRequest request, DateOnly today, bool adding)
@@ -97,17 +93,11 @@ public sealed partial record EmployeeInput(
             invalid.Add("ID number");
         }
 
-        var email = Clearable(request.Email);
-        if (email is { Length: > 0 } && (email.Length > MaxEmailLength || (email = EmailAddresses.Normalize(email)) is null))
-        {
-            invalid.Add("Email");
-        }
-
         var bank = Bank(request.BankAccount, invalid);
         var typeFrom = request.EmployeeTypeFrom ?? (adding ? today : null);
         return invalid.Count > 0
             ? (null, invalid)
-            : (new EmployeeInput(fullName, phone, request.EmployeeType, typeFrom, request.Birthday, address, area, ward, other, notes, zones, jobTypes, bank, code, request.Gender, idNumber, email, request.StartDate), invalid);
+            : (new EmployeeInput(fullName, phone, request.EmployeeType, typeFrom, request.Birthday, address, area, ward, other, notes, zones, jobTypes, bank, code, request.Gender, idNumber, request.StartDate), invalid);
     }
 
     /// <summary>A phone number is optional: empty gives none, anything else must be a valid number.</summary>
@@ -121,7 +111,7 @@ public sealed partial record EmployeeInput(
     public static string MaskAccountNumber(string number) => Common.Masking.AccountNumber(number);
 
     /// <summary>
-    /// The fields added after the first clients (code, gender, ID number, email, start date): null is "not sent" and leaves the
+    /// The fields added after the first clients (code, gender, ID number, start date): null is "not sent" and leaves the
     /// value of an edited profile as it is, so older clients keep working; an empty text is "clear it" (null on a new profile).
     /// </summary>
     private static string? Clearable(string? value) => value is null ? null : value.Trim();

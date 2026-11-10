@@ -153,7 +153,7 @@ public sealed class EmployeeImportService(
         var request = new SaveEmployeeRequest(
             row.Cell(C.Name), C.RestoredPhone(row.Cell(C.Phone)), birthday, row.Cell(C.Address), row.Cell(C.Area), row.Cell(C.Ward), null, row.Cell(C.Notes),
             zoneIds.Distinct().ToList(), bank, C.ParseType(row.Cell(C.Type)), null, jobTypeIds.Distinct().ToList(),
-            Code: row.Cell(C.Code), Gender: gender, IdNumber: row.Cell(C.IdNumber), Email: row.Cell(C.Email), StartDate: startDate);
+            Code: row.Cell(C.Code), Gender: gender, IdNumber: row.Cell(C.IdNumber), StartDate: startDate);
         return (request, invalid.Distinct().ToList());
 
         void AddIf(bool condition, string field)

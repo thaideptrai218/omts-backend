@@ -26,7 +26,6 @@ internal sealed class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
             .HasDatabaseName("UX_Employees_Cooperative_Code")
             .HasFilter("[Code] IS NOT NULL");
         builder.Property(x => x.IdNumber).HasMaxLength(12);
-        builder.Property(x => x.Email).HasMaxLength(254);
         builder.Property(x => x.Address).HasMaxLength(Lengths.Address);
         builder.Property(x => x.Area).HasMaxLength(Lengths.Name);
         builder.Property(x => x.Ward).HasMaxLength(Lengths.Name);

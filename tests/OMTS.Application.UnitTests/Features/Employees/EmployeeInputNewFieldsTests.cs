@@ -3,15 +3,15 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.UnitTests.Features.Employees;
 
-/// <summary>EMP-API-06: the optional fields code, gender, ID number, email and start date of <see cref="EmployeeInput"/>; the rules of the other fields are those of SaveEmployeeRequest.</summary>
+/// <summary>EMP-API-06: the optional fields code, gender, ID number and start date of <see cref="EmployeeInput"/>; the rules of the other fields are those of SaveEmployeeRequest.</summary>
 public class EmployeeInputNewFieldsTests
 {
     private static readonly DateOnly Today = new(2026, 11, 11);
 
     private static SaveEmployeeRequest Request(
-        string? code = null, Gender? gender = null, string? idNumber = null, string? email = null, DateOnly? startDate = null) =>
+        string? code = null, Gender? gender = null, string? idNumber = null, DateOnly? startDate = null) =>
         new("Trần Văn A", "0912345678", null, null, null, null, null, null, [Guid.NewGuid()], null, EmployeeType.SeasonalWorker,
-            Code: code, Gender: gender, IdNumber: idNumber, Email: email, StartDate: startDate);
+            Code: code, Gender: gender, IdNumber: idNumber, StartDate: startDate);
 
     private static (EmployeeInput? Input, List<string> Invalid) Check(SaveEmployeeRequest request, bool adding = true) =>
         EmployeeInput.From(request, Today, adding);
@@ -22,16 +22,16 @@ public class EmployeeInputNewFieldsTests
         var (input, invalid) = Check(Request());
 
         Assert.Empty(invalid);
-        Assert.Equal((null, null, null, null, null), (input!.Code, input.Gender, input.IdNumber, input.Email, input.StartDate));
+        Assert.Equal((null, null, null, null), (input!.Code, input.Gender, input.IdNumber, input.StartDate));
     }
 
     [Fact]
     public void Valid_values_are_normalised()
     {
-        var (input, invalid) = Check(Request(" nv-7 ", Gender.Female, " 079090001234 ", "  An@Example.COM ", Today));
+        var (input, invalid) = Check(Request(" nv-7 ", Gender.Female, " 079090001234 ", Today));
 
         Assert.Empty(invalid);
-        Assert.Equal(("NV-7", Gender.Female, "079090001234", "an@example.com", Today), (input!.Code, input.Gender, input.IdNumber, input.Email, input.StartDate));
+        Assert.Equal(("NV-7", Gender.Female, "079090001234", Today), (input!.Code, input.Gender, input.IdNumber, input.StartDate));
     }
 
     [Theory]
@@ -45,22 +45,6 @@ public class EmployeeInputNewFieldsTests
     [InlineData("1234567890123")]
     [InlineData("12345678901a")]
     public void Any_other_id_number_is_refused(string number) => Assert.Equal(["ID number"], Check(Request(idNumber: number)).Invalid);
-
-    [Theory]
-    [InlineData("not-an-email")]
-    [InlineData("a@b")]
-    [InlineData("a b@example.com")]
-    public void An_invalid_email_is_refused(string email) => Assert.Equal(["Email"], Check(Request(email: email)).Invalid);
-
-    [Fact]
-    public void An_email_of_more_than_254_characters_is_refused()
-    {
-        var local = new string('a', 64);
-        var tooLong = $"{local}@{new string('b', 63)}.{new string('c', 63)}.{new string('d', 63)}.com";
-
-        Assert.True(tooLong.Length > 254);
-        Assert.Equal(["Email"], Check(Request(email: tooLong)).Invalid);
-    }
 
     [Fact]
     public void The_start_date_may_be_today_but_not_later()
@@ -76,12 +60,12 @@ public class EmployeeInputNewFieldsTests
     public void A_code_with_other_characters_is_refused() => Assert.Equal(["Code"], Check(Request(code: "NV 1")).Invalid);
 
     [Fact]
-    public void An_empty_text_clears_the_id_number_and_email_of_an_edit_while_null_leaves_them()
+    public void An_empty_text_clears_the_id_number_of_an_edit_while_null_leaves_them()
     {
-        var (cleared, _) = Check(Request(idNumber: "", email: " "), adding: false);
+        var (cleared, _) = Check(Request(idNumber: ""), adding: false);
         var (kept, _) = Check(Request(), adding: false);
 
-        Assert.Equal(("", ""), (cleared!.IdNumber, cleared.Email));
-        Assert.Equal((null, null), (kept!.IdNumber, kept.Email));
+        Assert.Equal("", cleared!.IdNumber);
+        Assert.Null(kept!.IdNumber);
     }
 }

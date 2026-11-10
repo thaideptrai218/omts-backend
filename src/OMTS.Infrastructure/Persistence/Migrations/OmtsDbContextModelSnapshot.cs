@@ -1711,10 +1711,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("Email")
-                        .HasMaxLength(254)
-                        .HasColumnType("nvarchar(254)");
-
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasMaxLength(200)
