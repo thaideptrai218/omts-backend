@@ -129,7 +129,7 @@ public static class NotificationTypes
         // Opens the progress view of the closed cycle on its close date (CYCLE-05.2).
         new(CycleClosed, "Cultivation cycle closed", Default, [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
-        // Purchase receipts have no zone: opening one follows the role only (BR-FARM-08). Only the transaction of the
+        // Opening a purchase receipt follows the role only, whatever its zone (BR-FARM-08). Only the transaction of the
         // Accountant (MSG-PURCHASE-04, PURCHASE-05) is mandatory in FE-08 (BR-ACCOUNT-11).
         new(PurchaseReceiptCompleted, "New purchase receipt", Default, [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.PurchaseReceipts, PermissionAction.View)),

@@ -200,9 +200,8 @@ public class PurchaseReturnsSqlServerTests
         Assert.Equal(debt, sheet[^1].Cell(9).GetValue<decimal>());
         Assert.Equal(1, sheet.Count(r => r.Cell(2).GetString() == "Purchase return"));
 
-        // The list totals and the raft read the same return: the corrected line less what it kept.
+        // The list totals read the same return: the corrected line less what it kept.
         var totals = (await owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts?supplierId={world.SupplierId}&from={from:yyyy-MM-dd}&to={Today:yyyy-MM-dd}")).GetProperty("totals");
         Assert.Equal((114_000m, 100_000m, 14_000m), (totals.Money("receiptsTotal"), totals.Money("returnsTotal"), totals.Money("netTotal")));
-        Assert.Equal(-500m, (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{world.Raft.Id}")).Money("materialCost"));
     }
 }

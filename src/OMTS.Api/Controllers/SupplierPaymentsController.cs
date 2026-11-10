@@ -5,6 +5,7 @@ using OMTS.Api.Filters;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Purchasing.Payments;
+using OMTS.Application.Features.WaterQuality.Dtos;
 
 namespace OMTS.Api.Controllers;
 
@@ -39,6 +40,23 @@ public sealed class SupplierPaymentsController(SupplierPaymentService payments) 
     [ProducesResponseType<SupplierPaymentView>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Record(RecordSupplierPaymentRequest request, CancellationToken cancellationToken) =>
         (await payments.RecordAsync(request, cancellationToken)).ToActionResult(p => StatusCode(StatusCodes.Status201Created, p));
+
+    /// <summary>
+    /// The voucher of a Recorded payment: when and by whom it was paid, the method, the bank reference and the note; the row
+    /// version is required. Its money, kind, supplier and receipts never change. 409 MSG-GEN-09 when it is cancelled.
+    /// </summary>
+    [HttpPut("{id:guid}")]
+    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.Create, PermissionScope.NoZone)]
+    [ProducesResponseType<SupplierPaymentView>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Update(Guid id, UpdateSupplierPaymentRequest request, CancellationToken cancellationToken) =>
+        (await payments.UpdateAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>Picker of who paid ("Người chi"): the Active Owner and staff accounts, by name.</summary>
+    [HttpGet("payers")]
+    [RequirePermission(PermissionFunctions.SupplierPayments, PermissionAction.View, PermissionScope.NoZone)]
+    [ProducesResponseType<IReadOnlyList<AccountRef>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Payers(CancellationToken cancellationToken) =>
+        Ok(await payments.PayersAsync(cancellationToken));
 
     /// <summary>PURCHASE-05.3: a payment recorded by mistake, with a reason; 409 MSG-GEN-09 when it is already cancelled.</summary>
     [HttpPost("{id:guid}/cancel")]

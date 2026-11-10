@@ -13,17 +13,32 @@ namespace OMTS.Api.Controllers;
 [Authorize]
 public sealed class MeController(ICurrentUser currentUser, PermissionService permissionService) : ControllerBase
 {
-    /// <summary>Identity of the caller, read from the access token.</summary>
+    /// <summary>
+    /// Identity of the caller, read from the access token, and the onboarding steps the account still owes
+    /// (<c>phoneVerificationRequired</c>, <c>mustChangePassword</c>), taken from the same access state as the account gate.
+    /// Reachable while either step is pending.
+    /// </summary>
     [HttpGet]
     [AllowWhenPasswordChangeRequired]
     [AllowWhenPhoneUnverified]
-    public IActionResult Get() => Ok(new
+    public async Task<IActionResult> Get(CancellationToken cancellationToken)
     {
-        accountId = currentUser.AccountId,
-        sessionId = currentUser.SessionId,
-        username = User.Identity?.Name,
-        subjectType = User.FindFirst(OmtsClaimTypes.SubjectType)?.Value,
-    });
+        var access = await permissionService.GetAccessAsync(currentUser.AccountId!.Value, cancellationToken);
+        if (access is null)
+        {
+            return Unauthorized();
+        }
+
+        return Ok(new
+        {
+            accountId = currentUser.AccountId,
+            sessionId = currentUser.SessionId,
+            username = User.Identity?.Name,
+            subjectType = User.FindFirst(OmtsClaimTypes.SubjectType)?.Value,
+            mustChangePassword = access.RequiresPasswordChange,
+            phoneVerificationRequired = access.RequiresPhoneVerification,
+        });
+    }
 
     /// <summary>Effective permissions per function and zone, for building web/mobile menus.</summary>
     [HttpGet("permissions")]

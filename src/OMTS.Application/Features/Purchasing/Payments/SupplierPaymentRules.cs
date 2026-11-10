@@ -1,3 +1,4 @@
+using OMTS.Application.Common;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Domain.Entities.Purchasing;
@@ -15,45 +16,137 @@ public static class SupplierPaymentRules
     /// <summary>The largest amount the column holds: decimal(18,0).</summary>
     public const decimal MaxAmount = 999_999_999_999_999_999m;
 
-    /// <summary>Every missing or invalid field (MSG-GEN-01), the supplier apart. A Discontinued supplier can still be paid (GBR-01).</summary>
-    public static List<string> InvalidFields(RecordSupplierPaymentRequest request, DateOnly today)
+    /// <summary>How far ahead of the server clock a time paid may be: a client clock a little fast is not "in the future".</summary>
+    public static readonly TimeSpan ClockTolerance = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Every missing or invalid field (MSG-GEN-01), the supplier, the payer and the receipts of the allocations apart. A
+    /// Discontinued supplier can still be paid (GBR-01).
+    /// </summary>
+    public static List<string> InvalidFields(RecordSupplierPaymentRequest request, DateTimeOffset now)
     {
+        var today = BusinessClock.ToBusinessDate(now);
         var invalid = new List<string>();
+        if (!DocumentCodes.TypedAllowed(request.Code))
+        {
+            invalid.Add("Code");
+        }
+
         if (request.Kind is not { } kind || !Enum.IsDefined(kind))
         {
             invalid.Add("Kind");
         }
 
+        var discount = request.DiscountAmount;
+        if (discount < 0 || discount > MaxAmount || discount != decimal.Truncate(discount) || (discount > 0 && request.Kind != SupplierPaymentKind.Payment))
+        {
+            invalid.Add("Discount amount");
+        }
+
         // Whole VND: the column has no decimals, and a silent rounding would record another amount than the bank's.
-        if (request.Amount is not > 0 || request.Amount > MaxAmount || request.Amount != decimal.Truncate(request.Amount.Value))
+        // Zero only when the payment is all discount.
+        if (request.Amount is not { } money || money < 0 || (money == 0 && discount <= 0) || money > MaxAmount || money != decimal.Truncate(money))
         {
             invalid.Add("Amount");
         }
 
-        if (request.PaymentDate is not { } paymentDate || paymentDate > today)
+        if (request.PaidAt is { } paidAt)
+        {
+            if (!NotInFuture(paidAt, now))
+            {
+                invalid.Add("Paid at");
+            }
+            else if (request.PaymentDate is { } date && date != BusinessClock.ToBusinessDate(paidAt))
+            {
+                invalid.Add("Payment date");
+            }
+        }
+        else if (request.PaymentDate is not { } paymentDate || paymentDate > today)
         {
             invalid.Add("Payment date");
         }
 
-        if (request.Method is not (PaymentMethod.Cash or PaymentMethod.BankTransfer))
+        invalid.AddRange(InvalidVoucher(request.Method, request.BankReference, request.Note));
+        if (Trimmed(request.DeduplicationKey)?.Length > MaxKeyLength)
+        {
+            invalid.Add("Deduplication key");
+        }
+
+        invalid.AddRange(InvalidAllocations(request));
+        return invalid;
+    }
+
+    /// <summary>The method, the bank reference a transfer needs and the note, as a create and an edit check them.</summary>
+    public static List<string> InvalidVoucher(PaymentMethod? method, string? bankReference, string? note)
+    {
+        var invalid = new List<string>();
+        if (method is not (PaymentMethod.Cash or PaymentMethod.BankTransfer))
         {
             invalid.Add("Method");
         }
 
         // Asked only on a transfer (PURCHASE-05.0 step 2): any other method ignores it, whatever its length.
-        if (request.Method == PaymentMethod.BankTransfer && Trimmed(request.BankReference)?.Length is null or > MaxBankReferenceLength)
+        if (method == PaymentMethod.BankTransfer && Trimmed(bankReference)?.Length is null or > MaxBankReferenceLength)
         {
             invalid.Add("Bank reference");
         }
 
-        if (Trimmed(request.Note)?.Length > MaxNoteLength)
+        if (Trimmed(note)?.Length > MaxNoteLength)
         {
             invalid.Add("Note");
         }
 
-        if (Trimmed(request.DeduplicationKey)?.Length > MaxKeyLength)
+        return invalid;
+    }
+
+    /// <summary>True when the time paid is not later than now (with <see cref="ClockTolerance"/>).</summary>
+    public static bool NotInFuture(DateTimeOffset paidAt, DateTimeOffset now) => paidAt <= now + ClockTolerance;
+
+    /// <summary>
+    /// The time paid: <c>paidAt</c> when sent; otherwise the payment date at the time now when it is today, or at the start of an
+    /// earlier day, at UTC+7.
+    /// </summary>
+    public static DateTimeOffset PaidAt(RecordSupplierPaymentRequest request, DateTimeOffset now)
+    {
+        if (request.PaidAt is { } paidAt)
         {
-            invalid.Add("Deduplication key");
+            return paidAt.ToOffset(BusinessClock.UtcOffset);
+        }
+
+        var date = request.PaymentDate!.Value;
+        return date == BusinessClock.ToBusinessDate(now) ? now.ToOffset(BusinessClock.UtcOffset) : BusinessClock.FromLocal(date.ToDateTime(TimeOnly.MinValue));
+    }
+
+    /// <summary>
+    /// The shape of the allocations: kind Payment only, one per receipt, whole VND above zero, together at most the amount plus the
+    /// discount. Whether each receipt has that much left is read from the ledger by the service.
+    /// </summary>
+    private static List<string> InvalidAllocations(RecordSupplierPaymentRequest request)
+    {
+        var invalid = new List<string>();
+        if (request.Allocations is not { } allocations)
+        {
+            return invalid;
+        }
+
+        if (allocations.Count > 0 && request.Kind != SupplierPaymentKind.Payment)
+        {
+            invalid.Add("Allocations");
+            return invalid;
+        }
+
+        for (var i = 0; i < allocations.Count; i++)
+        {
+            if (allocations[i] is not { ReceiptId: not null, Amount: { } amount } || amount <= 0 || amount > MaxAmount || amount != decimal.Truncate(amount))
+            {
+                invalid.Add($"Allocation {i + 1}");
+            }
+        }
+
+        if (allocations.Select(a => a?.ReceiptId).Distinct().Count() != allocations.Count
+            || allocations.Sum(a => a?.Amount ?? 0) > (request.Amount ?? 0) + request.DiscountAmount)
+        {
+            invalid.Add("Allocations");
         }
 
         return invalid;
@@ -62,7 +155,7 @@ public static class SupplierPaymentRules
     /// <summary>MSG-PURCHASE-05: more than the debt, or a debt of zero or below; never for money paid back (PURCHASE-05.2).</summary>
     public static AppError? AdvanceConfirmation(RecordSupplierPaymentRequest request, string supplierName, decimal debt)
     {
-        var amount = request.Amount!.Value;
+        var amount = request.Amount!.Value + request.DiscountAmount;
         if (request.ConfirmAdvance || request.Kind != SupplierPaymentKind.Payment || (debt > 0 && amount <= debt))
         {
             return null;

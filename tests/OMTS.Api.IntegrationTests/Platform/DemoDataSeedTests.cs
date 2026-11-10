@@ -159,7 +159,7 @@ public class DemoDataSeedTests
         Assert.Equal(1, await db.Employees.CountAsync(e => e.PhoneNumber == null));
         Assert.True(await db.Employees.Where(e => e.BankAccount != null).AllAsync(e => e.BankAccount!.AccountNumber.StartsWith("9999")));
         Assert.Equal(1, await db.Employees.CountAsync(e => e.StatusId == StatusIds.Employee.Left));
-        Assert.Equal(5, await db.Suppliers.CountAsync());
+        Assert.Equal(65, await db.Suppliers.CountAsync());
         Assert.Equal(15, await db.FarmingInputItems.CountAsync());
         // SALE-11: a price list with one Discontinued product to resume. SALE-04: the two trader profiles and five offline
         // ones, every offline number checked, the last two the same buyer to merge.
@@ -171,11 +171,12 @@ public class DemoDataSeedTests
         Assert.Equal(5, await db.Customers.CountAsync(c => c.AccountId == null && c.PhoneCheckedByStaff));
 
         var statuses = await db.PurchaseReceipts.GroupBy(r => r.StatusId).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
-        Assert.Equal(20, statuses.Sum(s => s.Count));
+        Assert.Equal(26, statuses.Sum(s => s.Count));
         Assert.Equal(2, statuses.Single(s => s.Key == StatusIds.PurchaseReceipt.Draft).Count);
         Assert.Equal(2, statuses.Single(s => s.Key == StatusIds.PurchaseReceipt.Cancelled).Count);
-        // One return stands and one was cancelled by the Owner (PURCHASE-02.1), both with TH codes.
-        Assert.Equal(1, await db.PurchaseReturns.CountAsync(r => r.StatusId == StatusIds.PurchaseReturn.Recorded));
+        // Returns: one of a receipt and one without a receipt stand, one was cancelled by the Owner (PURCHASE-02.1), one is a Draft; all with TH codes.
+        Assert.Equal(2, await db.PurchaseReturns.CountAsync(r => r.StatusId == StatusIds.PurchaseReturn.Recorded));
+        Assert.Equal(1, await db.PurchaseReturns.CountAsync(r => r.StatusId == StatusIds.PurchaseReturn.Draft));
         Assert.Equal(1, await db.PurchaseReturns.CountAsync(r => r.StatusId == StatusIds.PurchaseReturn.Cancelled && r.CancelReason != null));
         Assert.True(await db.PurchaseReturns.AllAsync(r => r.Code.StartsWith("TH")));
         // TT codes; payments are not linked to receipts; a supplier paid back and a payment was cancelled (PURCHASE-05.2/05.3).
@@ -192,7 +193,7 @@ public class DemoDataSeedTests
         Assert.True(await db.PurchaseReceiptLines.Where(l => l.Item!.Group == InputItemGroup.Material && l.Receipt.StatusId != StatusIds.PurchaseReceipt.Draft).AllAsync(l => l.RaftId != null));
         Assert.True(await db.PurchaseReceiptLines.AnyAsync(l => l.LineAmount % 1000 != 0));
         // The Owner was told of each completed receipt (MSG-PURCHASE-01), cancelled ones included.
-        Assert.Equal(18, await db.Notifications.Where(n => n.Type == NotificationTypes.PurchaseReceiptCompleted).Select(n => n.RelatedRecordId).Distinct().CountAsync());
+        Assert.Equal(24, await db.Notifications.Where(n => n.Type == NotificationTypes.PurchaseReceiptCompleted).Select(n => n.RelatedRecordId).Distinct().CountAsync());
 
         // Dates are relative to today in UTC+7, whenever the seed runs.
         var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime);

@@ -15,11 +15,17 @@ internal sealed class JwtTokenService(IOptions<JwtOptions> options, TimeProvider
 {
     private readonly JsonWebTokenHandler _handler = new();
 
-    public AccessToken CreateAccessToken(Account account, Guid sessionId)
+    public AccessToken CreateAccessToken(Account account, Guid sessionId, DateTimeOffset sessionExpiresAt)
     {
         var jwt = options.Value;
         var now = timeProvider.GetUtcNow();
+
+        // Never outlives the session: past its absolute limit nothing may still be accepted.
         var expiresAt = now + jwt.AccessTokenLifetime;
+        if (sessionExpiresAt < expiresAt)
+        {
+            expiresAt = sessionExpiresAt;
+        }
 
         // Only identity goes in the token; zone–role permissions are read from the database so role
         // edits apply immediately (BR-19).
@@ -75,6 +81,13 @@ internal sealed class JwtTokenService(IOptions<JwtOptions> options, TimeProvider
         return Base64UrlEncoder.Encode(HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(body)));
     }
 
+    // A key of its own, derived from the signing key like the refresh-token one. 256 bits as base64url: 43 characters.
+    public string DeriveDeviceKey(string deviceId)
+    {
+        var key = HMACSHA256.HashData(options.Value.CreateSigningKey().Key, "omts-device-key"u8);
+        return Base64UrlEncoder.Encode(HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(deviceId)));
+    }
+
     // Refresh tokens are 512-bit random values, so a fast hash is enough (unlike passwords).
     public string HashRefreshToken(string refreshToken) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken)));
@@ -83,7 +96,7 @@ internal sealed class JwtTokenService(IOptions<JwtOptions> options, TimeProvider
     {
         var jwt = options.Value;
         return clientType == ClientType.Mobile
-            ? new SessionLifetime(jwt.MobileRefreshTokenLifetime, jwt.MobileSessionMaxLifetime)
-            : new SessionLifetime(jwt.WebRefreshTokenLifetime, jwt.WebSessionMaxLifetime);
+            ? new SessionLifetime(jwt.MobileRefreshTokenLifetime, jwt.MobileSessionMaxLifetime, jwt.RefreshGracePeriod)
+            : new SessionLifetime(jwt.WebRefreshTokenLifetime, jwt.WebSessionMaxLifetime, jwt.RefreshGracePeriod);
     }
 }

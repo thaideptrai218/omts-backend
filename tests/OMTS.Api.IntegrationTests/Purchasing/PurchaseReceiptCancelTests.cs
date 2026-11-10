@@ -52,6 +52,8 @@ public class PurchaseReceiptCancelTests(AuthApiFactory factory) : IClassFixture<
         var author = await factory.ZoneManagerAsync(world.Zone);
         var colleague = await factory.ZoneManagerAsync(world.Zone);
         var receipt = await author.CreateReceiptAsync(world.Body(world.MaterialForRaft(2, 50_000), new LineBody(world.Seed, 10, 900)) with { Complete = true });
+        // The raft cost prices the material used on it at its latest purchase: the receipt, until it is cancelled.
+        await factory.UseMaterialAsync(world.Raft.Id, world.Material, 2);
 
         await (await colleague.CancelAsync(receipt.Id(), "Wrong supplier")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         await (await colleague.GetAsync($"/api/purchase-receipts/{receipt.Id()}/cancel-preview")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");

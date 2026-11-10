@@ -110,7 +110,7 @@ public class PurchaseReturnCancelTests(AuthApiFactory factory) : IClassFixture<A
     }
 
     [Fact]
-    public async Task A_cancelled_return_counts_in_no_total_raft_cost_statement_or_unpaid_receipt()
+    public async Task A_cancelled_return_counts_in_no_total_statement_or_unpaid_receipt()
     {
         var world = await factory.WorldAsync();
         var receipt = await world.CompletedAsync(world.MaterialForRaft(10, 10_000));
@@ -118,11 +118,9 @@ public class PurchaseReturnCancelTests(AuthApiFactory factory) : IClassFixture<A
         await (await world.Owner.CancelReturnAsync(mistaken, "Not sent back")).ReadAsync(HttpStatusCode.OK);
 
         var totals = (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts?supplierId={world.SupplierId}&raftId={world.Raft.Id}")).GetProperty("totals");
-        Assert.Equal((100_000m, 0m, 100_000m, 100_000m), (totals.Money("receiptsTotal"), totals.Money("returnsTotal"), totals.Money("netTotal"), totals.Money("raftMaterialCost")));
-        Assert.Equal(100_000m, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{world.Raft.Id}")).Money("materialCost"));
-        var costs = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/raft-material-costs?raftId={world.Raft.Id}");
-        var raft = Assert.Single(costs.GetProperty("rafts").EnumerateArray());
-        Assert.Equal((0m, 0), (raft.Money("returned"), raft.GetProperty("returns").GetArrayLength()));
+        Assert.Equal((100_000m, 0m, 100_000m), (totals.Money("receiptsTotal"), totals.Money("returnsTotal"), totals.Money("netTotal")));
+        // The raft material cost comes from the material used on the raft, never from the receipt totals.
+        Assert.Equal(JsonValueKind.Null, totals.GetProperty("raftMaterialCost").ValueKind);
 
         var statement = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/supplier-debts/{world.SupplierId}/statement");
         Assert.Equal(["Receipt"], statement.GetProperty("entries").EnumerateArray().Select(e => e.GetProperty("kind").GetString()));
@@ -146,7 +144,9 @@ public class PurchaseReturnCancelTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Equal(20_000m, Assert.Single(corrected.GetProperty("returns").EnumerateArray()).Money("returnValue"));
         Assert.Equal(20_000m, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-returns/{first}")).Money("returnValue"));
         Assert.Equal(30_000, await world.DebtAsync());
-        Assert.Equal(30_000, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{world.Raft.Id}")).Money("materialCost"));
+        // A material used now is costed at the corrected price, the latest the item was bought at.
+        await factory.UseMaterialAsync(world.Raft.Id, world.Material, 1);
+        Assert.Equal(5_000, await world.Owner.RaftMaterialCostAsync(world.Raft.Id));
         var statement = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/supplier-debts/{world.SupplierId}/statement");
         Assert.Equal([("Receipt", 50_000m), ("Return", -20_000m)], statement.GetProperty("entries").EnumerateArray().Select(e => (e.GetProperty("kind").GetString(), e.Money("amount"))).ToList());
 

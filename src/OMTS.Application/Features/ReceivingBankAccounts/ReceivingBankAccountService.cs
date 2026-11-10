@@ -7,6 +7,7 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.CashBook;
 using OMTS.Domain.Entities.Identity;
 
 namespace OMTS.Application.Features.ReceivingBankAccounts;
@@ -14,12 +15,14 @@ namespace OMTS.Application.Features.ReceivingBankAccounts;
 /// <summary>
 /// DEBT-01 – the Cooperative Owner sets the receiving bank account. In the order of the SRS: check (step 3), the service
 /// accepts (step 4), MSG-DEBT-01 (step 5), save (step 7). Each request asks the service, also the confirming one: a client
-/// cannot save an account the service did not accept, and the time saved is that of the latest answer.
+/// cannot save an account the service did not accept, and the time saved is that of the latest answer. The cash book keeps a
+/// matching bank account (<see cref="CashAccountService.SyncVietQrAccountAsync"/>), saved with it.
 /// </summary>
 public sealed class ReceivingBankAccountService(
     ICooperativeRepository cooperatives,
     ReceivingAccountAcceptance acceptance,
     ISentInvoiceQrCodeQuery sentCodes,
+    CashAccountService cashAccounts,
     RowVersionGuard rowVersions,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
@@ -78,6 +81,8 @@ public sealed class ReceivingBankAccountService(
             Before = before,
             After = Snapshot(cooperative.BankAccount),
         });
+        // The cash book lists the account too: the matching one is brought back into use, or made, in the same save.
+        await cashAccounts.SyncVietQrAccountAsync(cooperative.BankAccount, cancellationToken);
         try
         {
             await unitOfWork.SaveChangesAsync(cancellationToken);

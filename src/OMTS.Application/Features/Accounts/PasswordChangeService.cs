@@ -20,14 +20,12 @@ namespace OMTS.Application.Features.Accounts;
 public sealed record PasswordChanged(AuthTokens Tokens, string Message, string MessageCode);
 
 /// <summary>
-/// ACCOUNT-04 – the logged-in user changes the password after proving identity (current password, or a code sent to
-/// the verified email). The forced change after a temporary password asks for no proof: the user has just entered it
-/// to log in (ACCOUNT-04.1).
+/// ACCOUNT-04 – the logged-in user changes the password after proving identity with the current password. The forced
+/// change after a temporary password asks for no proof: the user has just entered it to log in (ACCOUNT-04.1).
 /// </summary>
 public sealed class PasswordChangeService(
     IAccountRepository accounts,
     ILoginSessionRepository sessions,
-    VerificationService verification,
     AuthService authService,
     CurrentPasswordProof currentPassword,
     IPasswordHasher passwordHasher,
@@ -35,23 +33,6 @@ public sealed class PasswordChangeService(
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
 {
-    /// <summary>Sends a ChangePassword code to the verified email; without one, explains the alternatives.</summary>
-    public async Task<Result<VerificationStarted>> SendEmailCodeAsync(Guid accountId, CancellationToken cancellationToken)
-    {
-        var account = await accounts.GetByIdAsync(accountId, cancellationToken);
-        if (account is null)
-        {
-            return AppError.NotFound;
-        }
-
-        if (account.Email is null || account.EmailVerifiedAt is null)
-        {
-            return new AppError(ErrorKind.Validation, UserMessages.NoVerifiedEmail);
-        }
-
-        return await verification.StartAsync(VerificationPurpose.ChangePassword, VerificationChannel.Email, account.Email, account.Id, cancellationToken);
-    }
-
     /// <param name="sessionId">The caller's session: its push devices move to the new session of this device.</param>
     public async Task<Result<PasswordChanged>> ChangeAsync(
         Guid accountId, Guid? sessionId, ChangePasswordRequest request, ClientInfo client, CancellationToken cancellationToken)
@@ -80,7 +61,7 @@ public sealed class PasswordChangeService(
             return AppError.Invalid("Password");
         }
 
-        var proofKind = account.MustChangePassword ? "TemporaryPasswordLogin" : request.CurrentPassword is not null ? "CurrentPassword" : "EmailCode";
+        var proofKind = account.MustChangePassword ? "TemporaryPasswordLogin" : "CurrentPassword";
         if (!account.MustChangePassword && await CheckProofAsync(account, request, cancellationToken) is { } proof)
         {
             return proof;
@@ -98,24 +79,15 @@ public sealed class PasswordChangeService(
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var tokens = await authService.CreateSessionAsync(account, request.ClientType, request.DeviceName, client, cancellationToken, sessionId);
-        return new PasswordChanged(tokens, UserMessages.PasswordChanged.Text, UserMessages.PasswordChanged.Code);
+        var created = await authService.CreateSessionAsync(
+            account, request.ClientType, request.DeviceName, client, AuthMethod.Password, null, cancellationToken, sessionId);
+        return created.IsSuccess
+            ? new PasswordChanged(created.Value!, UserMessages.PasswordChanged.Text, UserMessages.PasswordChanged.Code)
+            : created.Error!;
     }
 
-    private async Task<AppError?> CheckProofAsync(Account account, ChangePasswordRequest request, CancellationToken cancellationToken)
-    {
-        if (!string.IsNullOrEmpty(request.CurrentPassword))
-        {
-            return await currentPassword.CheckAsync(account, request.CurrentPassword, cancellationToken);
-        }
-
-        if (string.IsNullOrEmpty(request.VerificationToken))
-        {
-            return AppError.Invalid("Current password");
-        }
-
-        var token = await verification.ConsumeTokenAsync(
-            request.VerificationToken, [VerificationPurpose.ChangePassword], account.Id, account.Email, cancellationToken);
-        return token.IsSuccess ? null : token.Error;
-    }
+    private async Task<AppError?> CheckProofAsync(Account account, ChangePasswordRequest request, CancellationToken cancellationToken) =>
+        string.IsNullOrEmpty(request.CurrentPassword)
+            ? AppError.Invalid("Current password")
+            : await currentPassword.CheckAsync(account, request.CurrentPassword, cancellationToken);
 }

@@ -57,6 +57,7 @@ on every `docker compose up` and creates nothing twice.
 | Swagger | `http://localhost:8080/swagger` |
 | Health | `http://localhost:8080/health/db` (database), `http://localhost:8080/health/ready` (deployment complete) |
 | SQL Server (this PC only) | `localhost,1433`, user `sa`, password `MSSQL_SA_PASSWORD` from `.env` |
+| Redis (containers only) | Not published. Holds the revoked-session lookup, without persistence; stopping it only makes each request ask SQL Server (see [Session revocation store](#session-revocation-store-redis)) |
 
 **Demo logins.** Every account below uses the password `Demo@1234`. It exists only in this local demo data; a shared
 server uses a secret of its own (see [Demo on a shared server](#demo-on-a-shared-server)).
@@ -141,7 +142,8 @@ published, from that origin). For another origin, add a line such as `Cors__Allo
 `environment` in `docker-compose.yml`, then run `docker compose up -d`.
 
 **Update, reset, stop.**
-- `docker compose up -d --build`: after a pull. It rebuilds the image, and the seed applies new migrations.
+- `docker compose up -d --build`: after a pull. It rebuilds the image, and the seed applies new migrations. An `.env` made
+  before Redis was added needs the line `REDIS_PASSWORD=` from `.env.example`, or compose stops with "set it in .env".
 - `docker compose down -v`: deletes the database and the stored files. The next `up` seeds a fresh copy.
 - `docker compose down`: stops everything and keeps the data.
 
@@ -169,10 +171,67 @@ OMTS_TEST_SQLSERVER="Server=localhost;User Id=sa;Password=<pwd>;TrustServerCerti
 
 ### Authentication
 
-`POST /api/auth/login` (username, verified phone or verified email) returns a 15-minute access token and a
+`POST /api/auth/login` (a phone number or a username, and the password) returns a 15-minute access token and a
 refresh token (7 days web / 30 days mobile, rotated on every `POST /api/auth/refresh`); `POST /api/auth/logout`
-revokes the session. `GET /api/me` and `GET /api/me/permissions` return the caller and their effective
-zone-scoped permissions. Errors are RFC 7807 problem details whose `title` and `code` are the message code of
+revokes the session. Every `AuthTokens` response (login, refresh, `zalo/login`; also the `tokens` object of a password
+change) has the field `refreshTokenRotated`. Normally it is `true`: `refreshToken` is a new token, and after a refresh
+the old one stops working. If the client sends the token that its previous refresh just
+replaced (the response was lost, or two requests carried the same token), it gets, for 30 seconds (`Jwt:RefreshGracePeriod`),
+a new access token and the token it sent, echoed back with the session's current `refreshTokenExpiresAt`, and
+`refreshTokenRotated` is `false`: no new refresh token is issued, the session is not rotated again, and the client keeps
+the token it already holds (a web server must not write cookies for such a response). The session, the account status and
+the effective grants are checked as for a rotation. Any other old token, or the replaced one after the grace period, is
+replay and revokes the session. A refresh response that never arrives is not repaired: the client that kept the old token
+ends the session when it uses it after the grace period and must sign in again. An access token never outlives its
+session: its `exp` is the earlier of the 15-minute lifetime and the session's absolute expiry. Token validation accepts
+30 seconds of clock skew, so a token can be accepted up to 30 seconds after its `exp`, and the session's absolute expiry
+can be overrun by up to 30 seconds. Locking an account
+revokes all its sessions in the same save, and a login that races the lock revokes the session it just stored.
+
+**Login identifier.** A phone number or a username; an email address is never an identifier, so logging in with one fails
+like any unknown identifier. A phone number logs in whether or not it is verified (the password proves who the person is);
+an unverified phone then meets the phone-verification gate (`AccountStateGateFilter`, MSG-ACCOUNT-04): every business call
+is refused until the phone is verified. Email is a contact for notifications only: it is no longer a way to register
+(`POST /api/auth/register` and `POST /api/verifications` accept `channel` `Sms` only), to recover a password
+(`POST /api/auth/recovery` sends an SMS code to a verified phone number; an email identifier gets the same answer and no code) or to
+prove identity when changing the password (`POST /api/me/password` needs the current password; `POST /api/me/password/code` is gone).
+Adding, changing and verifying an email in the profile still works. A trader account created through the old email registration
+has no phone number: it cannot log in by phone, and a username (generated at registration) is not something the person knows. There is
+no migration for such accounts; run `SELECT Id, Username, Email FROM Accounts WHERE PhoneNumber IS NULL AND Email IS NOT NULL` before deploying
+to see whether any exist (staff and Owner accounts always have a phone number).
+
+**Devices and sessions.** `POST /api/auth/login`, `zalo/login` and `zalo/link` accept an optional `deviceId`: a random id
+the browser or app install keeps, base64url, at most 128 characters; missing, empty or `unknown` means no device. The server stores only
+a keyed hash of it (`DeviceKey`, derived from the signing key), never the id, and never uses it to authenticate. Sessions
+without a device are never grouped. A session also records how it was opened (`AuthMethod`: `Password` or `ZaloMiniApp`) and why it
+ended (`RevokeCause`: `Revoked` or `TokenReuse`). Under `/api/me`, for the caller's own account only (another account's session answers 404):
+
+| Request | Answer |
+|---|---|
+| `GET sessions` | Open sessions, newest first: `id, clientType, authMethod, deviceKey, deviceName, userAgent, maskedIpAddress` (`203.0.*.*`), `signedInAt, lastActiveAt, expiresAt, isCurrent` |
+| `DELETE sessions/{id}` | 204, also when the session had already ended; the current session may be ended (the next request is 401) |
+| `POST sessions/revoke-others` | 200 `{ "count": n }`: every open session except the current one |
+| `GET devices` | Open sessions grouped by `deviceKey` (`deviceKey, clientType, authMethod, deviceName, userAgent, maskedIpAddress, firstSignedInAt, lastActiveAt, isCurrent, sessionIds`); a session without a device is its own entry with a null `deviceKey` |
+| `DELETE devices/{deviceKey}` | 204 always (idempotent): ends the caller's sessions on that device. `deviceKey` is 43 base64url characters; the route shares its prefix with `DELETE devices/{token}` (push token), which keeps any other shape |
+
+Revoking goes through the same path as logout, so the next request of an ended session is 401 (through Redis when configured). A
+password change keeps the device and sign-in method of the session it replaces. `DELETE /api/me/zalo-link` ends every `ZaloMiniApp`
+session of the account, on every device, and the current session.
+
+**Refusing a refresh.** A refused `POST /api/auth/refresh` keeps its status and problem shape (401 MSG19; 403 when the account may no
+longer log in) and adds the problem extension `reason`: `expired` (the lifetime ended, or the session no longer exists),
+`reuse` (a replaced token was presented again, so the session is revoked) or `revoked` (a user or an administrator ended it: logout
+elsewhere, a session or device revoked, a lock, a password change). A Mini App signs in again by itself after `expired` or `reuse` only.
+`POST /api/auth/zalo/login` with a `deviceId` whose newest session of that account was revoked by a user or an administrator answers
+403 `ZALO_DEVICE_REVOKED`; only `POST /api/auth/zalo/link`, which creates a newer session, lets the device in again.
+A session revoked for reuse does not block silent login. Sessions are deleted 30 days after they expired or were revoked
+(`Jobs:LoginSessionCleanup`), and from then on a device that was signed out is no longer remembered as such.
+
+`GET /api/me` and `GET /api/me/permissions` return the caller and their effective
+zone-scoped permissions. `GET /api/me` also carries `mustChangePassword` and `phoneVerificationRequired`, the same
+account state the gate behind the 403 `PASSWORD_CHANGE_REQUIRED` / MSG-ACCOUNT-04 answers uses, and stays reachable while
+either is true, so the web can route onboarding without waiting for a 403. Both can be true at once; the phone step
+comes first. Errors are RFC 7807 problem details whose `title` and `code` are the message code of
 the SRS 27/10/2026 catalogue (`MSG-GEN-01`, `MSG-ACCOUNT-05`…) and whose `detail` is the SRS English text. For one
 release they also carry `legacyCode`, the old code of the same situation (`MSG01`, `MSG12`…), so web and mobile can
 switch on their own schedule. A few old codes have no SRS 27/10 message yet and are still sent as `code` (MSG05,
@@ -183,6 +242,35 @@ MSG06, MSG19, MSG58, the technical codes `NOT_FOUND`, `UNEXPECTED_ERROR`…; ful
 Dates and times are ISO 8601. A time sent without a UTC offset (`2026-10-20T08:00:00`, in JSON or a multipart field)
 is Vietnam time (UTC+7), never the server's time zone or UTC; `Z` or an offset such as `+07:00` is kept. Responses always
 carry the offset. Business dates (`from`/`to` filters, receipt dates) are Vietnam dates.
+
+#### Session revocation store (Redis)
+
+Every authenticated request checks that its session is not revoked. With Redis configured, this is a lookup of
+`omts:auth:rev:s:{sessionId}` instead of a database query. The database stays the source of truth:
+- A saved revocation (logout, password change or reset, lock, refresh token reuse) is written to Redis right after the
+  commit, with a time to live of the access token lifetime plus one minute (about 16 minutes). Keys hold session ids only.
+- Every instance also copies the sessions revoked in that window from the database every 10 seconds
+  (`Revocation:SweepInterval`) and then renews the marker `omts:auth:ready` (60 seconds). A write that failed after the
+  commit is repaired by the next sweep, which is started at once; a revocation can therefore reach Redis up to about 10
+  seconds late when Redis was unreachable at that moment.
+- A request is answered from Redis only while the marker exists. When Redis is unreachable, slow (`Revocation:CommandTimeout`,
+  250 ms; three failures within 5 seconds stop all Redis calls for 10 seconds), empty after a restart or flush, or the
+  marker has expired, the request is checked against the database as before: a revoked session is still refused, a valid
+  one still accepted. `/health/ready` lists `session-revocation` as Degraded (still 200) in that state; it is not part of
+  `/health` or `/health/db`.
+- **A lock performed outside the application** (a trader account locked by a direct database change, any other script)
+  **must also set `RevokedAt` on that account's `LoginSessions`**. The Redis path no longer reads the account status, so
+  without it the account keeps working for up to 15 minutes (until the access token expires; a refresh is refused at
+  once). Locking in the application does both in one save.
+- Revocations must be saved through EF Core entities. A bulk `ExecuteUpdate` on `LoginSessions` bypasses the write after
+  commit and would be seen only by the next sweep.
+
+Configuration: `ConnectionStrings:Redis` (a secret, e.g. `redis:6379,password=...`; empty by default), `Revocation:Mode`
+(`Auto`, the default: Redis when the connection string is set, otherwise the database; `Redis`: the host does not
+start without the connection string; `Sql`: the database always), `Revocation:CommandTimeout`, `Revocation:SweepInterval`
+(1 to 30 seconds). Without a connection string nothing changes compared with before. Run Redis without persistence and
+without eviction (`maxmemory-policy noeviction`): evicting a key would silently drop a revocation until the next sweep
+notices, and a restart is harmless because the sweep refills it. `docker-compose.yml` does this.
 
 ### Roles and zone access
 
@@ -551,7 +639,8 @@ created by a one-time command run on the server by the deployment operator (not 
    rows (by code), cooperative and an active Owner are all in place, else 503 listing the failing checks. This is a
    post-deployment verification, **not** a platform probe: it depends on business data (locking the only Owner turns it
    503). Point App Service / Kubernetes readiness and load-balancer probes at `GET /health/db`
-   (database reachable and migrated). `GET /health` is liveness only.
+   (database reachable and migrated). `GET /health` is liveness only. When Redis is configured but unreachable or empty,
+   `/health/ready` still answers 200 and lists `session-revocation` as Degraded.
 
 | Area | Keys |
 |---|---|
@@ -567,11 +656,15 @@ created by a one-time command run on the server by the deployment operator (not 
 | CORS: the web app and the Zalo Mini App call the API from the browser. Set their origins in every deployed environment; empty means no CORS. Development allows `http://localhost:3000` and `https://h5.zdn.vn`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`, `Cors__AllowedOrigins__1=https://h5.zdn.vn`) |
 | Provenance link: the QR code of a sales invoice and its SMS (MSG-SALE-15) link to `{PublicBaseUrl}/origin/{qrToken}`, the public page of the web app. **Required** in every environment: without an absolute `http`/`https` URL the host does not start (QR codes are permanent, so a relative link is never made). Development uses `http://localhost:3000`. | `Provenance:PublicBaseUrl` (e.g. `Provenance__PublicBaseUrl=https://<web host>`) |
 | Reverse proxy: X-Forwarded-For is trusted only from these addresses (and loopback), so the limits see the real client | `ForwardedHeaders:KnownProxies` (e.g. `10.0.0.4`), `ForwardedHeaders:KnownNetworks` (e.g. `10.0.0.0/24`) |
+| Next.js server (BFF) in front of the API: it sends the end user's address and browser so the per-IP limits and the session list see the user, not the BFF. Off by default. Requests carrying `X-Bff-Secret` equal to the shared secret (constant-time compare) may set `X-Client-Ip` and `X-Client-User-Agent`; without a valid secret both are ignored, so an address cannot be chosen by the caller. The secret is **required, at least 32 characters, outside Development** when `Enabled` is true (the host does not start otherwise); in Development an empty secret leaves the feature inactive. The supplied address wins over `X-Forwarded-For`. | `BffClient:Enabled` (default `false`), `BffClient:SharedSecret` (a secret: user-secrets or an environment variable) |
+| Refresh grace period: how long the refresh token a rotation replaced still gets an access token (see Authentication) | `Jwt:RefreshGracePeriod` (default `00:00:30`) |
+| Revoked-session lookup in Redis instead of SQL on every request (see [Session revocation store](#session-revocation-store-redis)). Optional: unset means SQL. Run Redis with a password, no persistence and `noeviction`; a lock done outside the application must also revoke the account's sessions | `ConnectionStrings:Redis` (a secret), `Revocation:Mode` (`Auto`, `Redis`, `Sql`), `Revocation:CommandTimeout` (default `00:00:00.250`), `Revocation:SweepInterval` (default `00:00:10`, 1 to 30 seconds) |
 | Verification codes: SMS sent system-wide per 24 hours; beyond it SMS codes answer MSG-ACCOUNT-13 and a critical log entry is written (BR-ACCOUNT-09: one purpose and one number or address get at most 3 codes per hour, at least 60 seconds apart; over all purposes one number or address gets at most 10) | `Verification:DailySmsLimit` (default 500) |
 | Expiry reminder of zone licenses and certifications (GFR-03, daily, business time zone UTC+7) | `Jobs:ZoneLicenseReminder:RunAt` (default `07:00`), `Jobs:ZoneLicenseReminder:CatchUpOnStart` (default `true`: a host started after the run time runs once at start) |
 | Overdue water measurement reminder (GFR-04, daily, business time zone UTC+7) | `Jobs:WaterMeasurementOverdue:RunAt` (default `06:00`), `Jobs:WaterMeasurementOverdue:CatchUpOnStart` (default `true`) |
 | Daily close check of harvest lots (GFR-05, daily, business time zone UTC+7) | `Jobs:HarvestLotAutoClose:RunAt` (default `00:05`), `Jobs:HarvestLotAutoClose:CatchUpOnStart` (default `true`) |
 | Employment end: an employee is Left from the day after the last working day (LABOR-01, daily, business time zone UTC+7) | `Jobs:EmploymentEnd:RunAt` (default `00:01`), `Jobs:EmploymentEnd:CatchUpOnStart` (default `true`) |
+| Login session clean-up: sessions that expired or were revoked more than `Retention` ago, with the device key, address and browser they hold (daily, UTC+7) | `Jobs:LoginSessionCleanup:Enabled` (default `true`), `RunAt` (default `03:30`), `CatchUpOnStart` (default `false`), `Retention` (default `30.00:00:00`, at least `1.00:00:00` or the host does not start) |
 | Orphan file clean-up: raft photos, license files, cover photos, certificate files, cultivation log photos, meter photos (daily, UTC+7) | `Jobs:OrphanFileCleanup:Enabled` (default `true`), `RunAt` (default `03:00`), `GracePeriod` (default `1.00:00:00`, at least `01:00:00` or the host does not start) |
 
 ## Demo on a shared server

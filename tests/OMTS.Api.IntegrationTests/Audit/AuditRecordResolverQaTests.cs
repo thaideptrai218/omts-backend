@@ -34,7 +34,7 @@ public class AuditRecordResolverQaTests(AuthApiFactory factory) : IClassFixture<
         var supplier = new Supplier { Name = "NCC", PhoneNumber = NewPhone() };
         var item = new FarmingInputItem { Code = NewCode(), Name = "Phao", Unit = "cái" };
         var receipt = new PurchaseReceipt { Code = NewCode(), SupplierId = supplier.Id };
-        var purchaseReturn = new PurchaseReturn { Code = NewCode(), ReceiptId = receipt.Id, Reason = "Hỏng" };
+        var purchaseReturn = new PurchaseReturn { Code = NewCode(), ReceiptId = receipt.Id, SupplierId = receipt.SupplierId, Reason = "Hỏng" };
         var payment = new SupplierPayment { SupplierId = supplier.Id, Amount = 1 };
         var device = new PushDevice { AccountId = account.Id, Token = NewCode(), Platform = "android" };
         await factory.UseDbAsync(db => db.AddRange(raft, measurement, license, employee, supplier, item, receipt, purchaseReturn, payment, device));

@@ -15,9 +15,10 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Purchasing.Receipts;
 
 /// <summary>
-/// PURCHASE-01 – purchase receipts saved as Draft or Completed. Receipts have no zone (the API checks the role); a Draft is
+/// PURCHASE-01 – purchase receipts saved as Draft or Completed. The API checks the role; the zone of a receipt filters only. A Draft is
 /// continued or completed only by the person who recorded it or the Owner (BR-PURCHASE-03). Completing makes each Seed
-/// line a seed lot (GBR-04) and notifies the Owner (MSG-PURCHASE-01). A Completed receipt is never edited here.
+/// line a seed lot (GBR-04) and notifies the Owner (MSG-PURCHASE-01). An edit of a Completed receipt goes to
+/// <see cref="PurchaseReceiptEditService"/>.
 /// </summary>
 public sealed class PurchaseReceiptService(
     IPurchaseReceiptRepository receipts,
@@ -25,7 +26,8 @@ public sealed class PurchaseReceiptService(
     PurchaseReceiptViews views,
     PurchaseReceiptAccess access,
     PurchaseReceiptNotifications notifications,
-    IDocumentNumberAllocator numbers,
+    PurchaseReceiptEditService edits,
+    PurchaseDocumentCodeService codes,
     ICurrentUser currentUser,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
@@ -53,14 +55,20 @@ public sealed class PurchaseReceiptService(
         }
 
         var receipt = new PurchaseReceipt { RecordedByAccountId = currentUser.AccountId!.Value };
-        Apply(receipt, request, refs);
+        Apply(receipt, request, refs, kept: null);
         if (request.Complete && await validator.CheckCompleteAsync(receipt, refs, cancellationToken) is { } error)
         {
             return error;
         }
 
-        // Taken once the receipt is valid, so a refused save spends no number; never given twice (GBR-04).
-        receipt.Code = DocumentCodes.ReceiptCode(await numbers.NextAsync(DocumentSequenceKeys.PurchaseReceipt, cancellationToken));
+        // The typed code, or one taken once the receipt is valid, so a refused save spends no number; never given twice (GBR-04).
+        var (code, duplicate) = await codes.ForNewAsync(PurchaseDocumentKind.Receipt, request.Code, cancellationToken);
+        if (duplicate is not null)
+        {
+            return duplicate;
+        }
+
+        receipt.Code = code;
         receipts.Add(receipt);
         audit.Record(new AuditEntry("PurchaseReceipt.Created", RecordType) { RecordId = receipt.Id, RecordCode = receipt.Code, After = Snapshot(receipt) });
         if (request.Complete)
@@ -73,13 +81,21 @@ public sealed class PurchaseReceiptService(
         return await views.ViewAsync(receipt.Id, cancellationToken);
     }
 
-    /// <summary>Continues a Draft (PURCHASE-01.3): replaces its fields and lines; with <c>complete</c> it is completed in the same save.</summary>
+    /// <summary>
+    /// Continues a Draft (PURCHASE-01.3): replaces its fields and lines; with <c>complete</c> it is completed in the same save. A
+    /// Completed receipt is edited by <see cref="PurchaseReceiptEditService"/>; a Cancelled one is never changed.
+    /// </summary>
     public async Task<Result<PurchaseReceiptView>> UpdateAsync(Guid receiptId, SavePurchaseReceiptRequest request, CancellationToken cancellationToken)
     {
         var receipt = await receipts.GetForEditAsync(receiptId, cancellationToken);
         if (receipt is null)
         {
             return AppError.NotFound;
+        }
+
+        if (receipt.StatusId == StatusIds.PurchaseReceipt.Completed)
+        {
+            return await edits.EditAsync(receipt, request, cancellationToken);
         }
 
         if (await EditableDraftAsync(receipt, request.RowVersion, requireRowVersion: true, cancellationToken) is { } refused)
@@ -93,14 +109,21 @@ public sealed class PurchaseReceiptService(
             return invalid;
         }
 
+        var (code, duplicate) = await codes.ForDraftAsync(PurchaseDocumentKind.Receipt, request.Code, receipt.Id, receipt.Code, cancellationToken);
+        if (duplicate is not null)
+        {
+            return duplicate;
+        }
+
         var before = Snapshot(receipt);
+        receipt.Code = code;
         foreach (var line in receipt.Lines.ToList())
         {
             receipt.Lines.Remove(line);
             receipts.RemoveLine(line);
         }
 
-        Apply(receipt, request, refs);
+        Apply(receipt, request, refs, kept: receipt.ReceivedAt);
         // Lines are rows of their own: a lines-only edit must still give the receipt a new row version, so a second
         // editor holding the old one gets MSG06 instead of overwriting it.
         unitOfWork.MarkChanged(receipt);
@@ -180,11 +203,14 @@ public sealed class PurchaseReceiptService(
     }
 
     /// <summary>The fields and lines of the request; lines are numbered 1…n in the order entered (GBR-04).</summary>
-    private void Apply(PurchaseReceipt receipt, SavePurchaseReceiptRequest request, ReceiptLineRefs refs)
+    private void Apply(PurchaseReceipt receipt, SavePurchaseReceiptRequest request, ReceiptLineRefs refs, DateTimeOffset? kept)
     {
         receipt.SupplierId = request.SupplierId!.Value;
-        receipt.ReceiptDate = request.ReceiptDate ?? timeProvider.Today();
+        SetReceived(receipt, ReceivedAt(request, timeProvider.GetUtcNow(), kept));
+        receipt.ReceivedByAccountId = request.ReceivedById ?? receipt.ReceivedByAccountId ?? currentUser.AccountId!.Value;
         receipt.Notes = Trimmed(request.Notes);
+        receipt.Discount = request.Discount;
+        receipt.ZoneId = request.ZoneId;
         var lineNumber = 0;
         foreach (var input in request.Lines ?? [])
         {
@@ -197,7 +223,8 @@ public sealed class PurchaseReceiptService(
                 Unit = item?.Unit ?? string.Empty,
                 Quantity = input.Quantity,
                 UnitPrice = input.UnitPrice,
-                LineAmount = PurchaseMoney.LineAmount(input.Quantity, input.UnitPrice),
+                Discount = input.Discount ?? 0,
+                LineAmount = PurchaseMoney.LineAmount(input.Quantity, input.UnitPrice, input.Discount ?? 0),
                 SupplierLotCode = item?.Group == InputItemGroup.Seed ? Trimmed(input.SupplierLotCode) : null,
                 RaftId = input.RaftId,
             };
@@ -206,12 +233,41 @@ public sealed class PurchaseReceiptService(
         }
     }
 
-    private static string? Trimmed(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    internal static string? Trimmed(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>
+    /// When the goods were received, at UTC+7: <c>receivedAt</c> when sent; otherwise the date received at the time now when it
+    /// is today, or at the start of an earlier day. <paramref name="kept"/> (the stored time of a receipt being edited) stays
+    /// when the request sends no time and no other day.
+    /// </summary>
+    public static DateTimeOffset ReceivedAt(SavePurchaseReceiptRequest request, DateTimeOffset now, DateTimeOffset? kept)
+    {
+        if (request.ReceivedAt is { } receivedAt)
+        {
+            return receivedAt.ToOffset(BusinessClock.UtcOffset);
+        }
+
+        var today = BusinessClock.ToBusinessDate(now);
+        if (kept is { } stored && (request.ReceiptDate is null || request.ReceiptDate == BusinessClock.ToBusinessDate(stored)))
+        {
+            return stored;
+        }
+
+        var date = request.ReceiptDate ?? today;
+        return date == today ? now.ToOffset(BusinessClock.UtcOffset) : BusinessClock.FromLocal(date.ToDateTime(TimeOnly.MinValue));
+    }
+
+    /// <summary>The time received and, from it, the date received that every period filter reads.</summary>
+    public static void SetReceived(PurchaseReceipt receipt, DateTimeOffset receivedAt)
+    {
+        receipt.ReceivedAt = receivedAt;
+        receipt.ReceiptDate = BusinessClock.ToBusinessDate(receivedAt);
+    }
 
     public static object Snapshot(PurchaseReceipt r) => new
     {
-        r.SupplierId, r.ReceiptDate, r.Notes,
+        r.Code, r.SupplierId, r.ReceiptDate, r.ReceivedAt, r.ReceivedByAccountId, r.Notes, r.Discount, r.ZoneId,
         Lines = r.Lines.OrderBy(l => l.LineNumber)
-            .Select(l => new { l.LineNumber, l.ItemId, l.Quantity, l.UnitPrice, l.LineAmount, l.SupplierLotCode, l.RaftId }).ToList(),
+            .Select(l => new { l.LineNumber, l.ItemId, l.Quantity, l.UnitPrice, l.Discount, l.LineAmount, l.SupplierLotCode, l.RaftId }).ToList(),
     };
 }

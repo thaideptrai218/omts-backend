@@ -1,4 +1,5 @@
 using OMTS.Domain.Entities.Purchasing;
+using OMTS.Domain.Entities.CashBook;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Domain.Common;
 using OMTS.Domain.Entities.Cultivation;
@@ -40,6 +41,11 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<PurchaseReturn> PurchaseReturns => Set<PurchaseReturn>();
     public DbSet<PurchaseReturnLine> PurchaseReturnLines => Set<PurchaseReturnLine>();
     public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
+    public DbSet<SupplierPaymentAllocation> SupplierPaymentAllocations => Set<SupplierPaymentAllocation>();
+    public DbSet<CashAccount> CashAccounts => Set<CashAccount>();
+    public DbSet<CashVoucherType> CashVoucherTypes => Set<CashVoucherType>();
+    public DbSet<CashVoucher> CashVouchers => Set<CashVoucher>();
+    public DbSet<CashParty> CashParties => Set<CashParty>();
     public DbSet<CultivationCycle> CultivationCycles => Set<CultivationCycle>();
     public DbSet<CultivationLog> CultivationLogs => Set<CultivationLog>();
     public DbSet<MaterialUsage> MaterialUsages => Set<MaterialUsage>();

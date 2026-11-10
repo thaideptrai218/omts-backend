@@ -14,9 +14,10 @@ namespace OMTS.Application.Features.Purchasing.Receipts;
 /// <summary>
 /// PURCHASE-06.2 – the Owner corrects a Completed receipt that can no longer be cancelled (a seed lot seeded, or a purchase
 /// return that is not cancelled): the unit price, the quantity (not below seeded + returned, MSG-PURCHASE-10) and the supplier's
-/// lot code of its lines, with a reason; never the supplier or the items (BR-PURCHASE-09). The audit log keeps the values before
-/// and after. The supplier debt and raft material costs follow the new line amounts, while the returns already recorded keep
-/// the amounts they had (PM 03/11); no notification is sent (BR-PURCHASE-05).
+/// lot code of its lines, with a reason; never the supplier or the items (BR-PURCHASE-09). A line keeps its discount per unit, and
+/// its unit price is never set below it. The audit log keeps the values before and after. The supplier debt follows the new
+/// line amounts, while the returns already recorded keep the amounts they had (PM 03/11); no notification is sent
+/// (BR-PURCHASE-05). The fuller edit of a Completed receipt is <see cref="PurchaseReceiptEditService"/>.
 /// </summary>
 public sealed class PurchaseReceiptCorrectionService(
     IPurchaseReceiptRepository receipts,
@@ -77,6 +78,14 @@ public sealed class PurchaseReceiptCorrectionService(
             }
         }
 
+        var corrected = receipt.Lines.Sum(line => inputs.FirstOrDefault(i => i.LineId == line.Id) is { } input
+            ? PurchaseMoney.LineAmount(input.Quantity ?? line.Quantity, input.UnitPrice ?? line.UnitPrice, line.Discount)
+            : line.LineAmount);
+        if (receipt.Discount > corrected)
+        {
+            return AppError.Invalid("Discount");
+        }
+
         if (request.RowVersion is not null && await rowVersions.CheckAsync(receipt, request.RowVersion, cancellationToken) is { } conflict)
         {
             return conflict;
@@ -95,7 +104,7 @@ public sealed class PurchaseReceiptCorrectionService(
                 line.SupplierLotCode = string.IsNullOrWhiteSpace(lotCode) ? null : lotCode.Trim();
             }
 
-            line.LineAmount = PurchaseMoney.LineAmount(line.Quantity, line.UnitPrice);
+            line.LineAmount = PurchaseMoney.LineAmount(line.Quantity, line.UnitPrice, line.Discount);
             after.Add(LineValues(line));
         }
 
@@ -116,7 +125,7 @@ public sealed class PurchaseReceiptCorrectionService(
         var (quantity, price) = (input.Quantity ?? line.Quantity ?? 0, input.UnitPrice ?? line.UnitPrice ?? 0);
         // A quantity saved before the 2-decimal rule and left unchanged does not stop the Owner correcting the price of the line.
         if (quantity <= 0 || quantity > PurchaseReceiptValidator.MaxQuantity || (quantity != line.Quantity && !PurchaseReceiptValidator.HasAllowedDecimals(quantity))
-            || price < 0 || price > PurchaseReceiptValidator.MaxAmount || decimal.Truncate(price) != price
+            || price < line.Discount || price > PurchaseReceiptValidator.MaxAmount || decimal.Truncate(price) != price
             || quantity * price > PurchaseReceiptValidator.MaxAmount)
         {
             return PurchaseReceiptValidator.InvalidLine(line.LineNumber);
@@ -133,20 +142,11 @@ public sealed class PurchaseReceiptCorrectionService(
             return null;
         }
 
-        var minimum = seededQuantity + returned;
-        return quantity >= minimum
-            ? null
-            : new AppError(
-                ErrorKind.Validation,
-                UserMessages.QuantityBelowUsed(line.Item?.Name ?? field, minimum, line.Unit, seededQuantity, returned),
-                new Dictionary<string, object?>
-                {
-                    ["field"] = field, ["minQuantity"] = minimum, ["seededQuantity"] = seededQuantity, ["returnedQuantity"] = returned,
-                });
+        return quantity >= seededQuantity + returned ? null : PurchaseReceiptValidator.QuantityBelowUsed(line, field, seededQuantity, returned);
     }
 
     private static object LineValues(PurchaseReceiptLine line) =>
-        new { line.LineNumber, line.Quantity, line.UnitPrice, line.LineAmount, line.SupplierLotCode };
+        new { line.LineNumber, line.Quantity, line.UnitPrice, line.Discount, line.LineAmount, line.SupplierLotCode };
 
     private AppError WrongStatus(PurchaseReceipt receipt, string? hint) => AppError.Conflict(
         UserMessages.WrongStatus($"Purchase receipt {receipt.Code}", statusCatalog.DisplayNameOf(receipt.StatusId)),
