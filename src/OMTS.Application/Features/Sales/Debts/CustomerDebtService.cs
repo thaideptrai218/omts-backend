@@ -42,9 +42,8 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
     /// </summary>
     public async Task<CustomerDebtRows> RowsAsync(string? search, CancellationToken cancellationToken)
     {
-        var debtOf = (await queries.AllFiguresAsync(cancellationToken)).ToDictionary(f => f.Key, f => CustomerDebtMath.Debt(f.Value));
-        var totalReceivables = debtOf.Values.Sum(CustomerDebtMath.Receivable);
-        var totalOwedBack = debtOf.Values.Sum(CustomerDebtMath.OwedBack);
+        var debtOf = await DebtOfEveryProfileAsync(cancellationToken);
+        var (totalReceivables, totalOwedBack) = Totals(debtOf);
         var nonZero = debtOf.Where(d => d.Value != 0).Select(d => d.Key).ToList();
         if (nonZero.Count == 0)
         {
@@ -67,6 +66,16 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
             .ToList();
         return new CustomerDebtRows(rows, totalReceivables, totalOwedBack);
     }
+
+    /// <summary>The cooperative's totals alone (BR-FARM-10, BR-DEBT-02): the debts above zero, and the money owed back to customers shown apart. The operations dashboard (FARM-06) reads them here.</summary>
+    public async Task<(decimal Receivables, decimal OwedBack)> TotalsAsync(CancellationToken cancellationToken) =>
+        Totals(await DebtOfEveryProfileAsync(cancellationToken));
+
+    private async Task<Dictionary<Guid, decimal>> DebtOfEveryProfileAsync(CancellationToken cancellationToken) =>
+        (await queries.AllFiguresAsync(cancellationToken)).ToDictionary(f => f.Key, f => CustomerDebtMath.Debt(f.Value));
+
+    private static (decimal Receivables, decimal OwedBack) Totals(Dictionary<Guid, decimal> debtOf) =>
+        (debtOf.Values.Sum(CustomerDebtMath.Receivable), debtOf.Values.Sum(CustomerDebtMath.OwedBack));
 
     /// <summary>Step 3: the debt at the start of the period, what happened in it, the debt at its end, and the invoices unpaid today. The period defaults to the current month.</summary>
     public async Task<Result<CustomerDebtStatement>> StatementAsync(Guid customerId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken)

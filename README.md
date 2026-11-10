@@ -437,6 +437,30 @@ A trader reports a quality problem on one of their invoices with photos; the Coo
 - `GET /api/quality-claims` (`statusId`, `page`, `pageSize`; Awaiting response first) and `GET /api/quality-claims/{id}` (customer with phone number, invoice with lines, lots, kg, amounts, status and price cuts, the SMS sendings, `rowVersion`): QUALITY_CLAIMS View, so the Owner and the Zone Managers, who see the claims of invoices in their zones only (PM default; another zone answers 403). An Accountant has no access.
 - `POST /api/quality-claims/{id}/accept` (`{ offer: "ReturnAllGoods" | "PriceCutWholeInvoice", note?, rowVersion }`) and `POST /api/quality-claims/{id}/reject` (`{ note, rowVersion }`): Owner only, while Awaiting response; a response cannot be changed (409 MSG-GEN-09, or MSG06 when the form is stale). Accepting answers 409 MSG-CLAIM-03 when the invoice was cancelled or has a sales return (it can still be rejected). The offer only records what was proposed: the return is CLAIM-03 and the price cut SALE-07 (`PUT /api/sales-invoices/{id}/correction`, PriceCutAfterClaim), which the Owner runs after the trader chooses. Neither changes here. The trader gets a push and an SMS with MSG-CLAIM-02; a message that cannot be sent undoes nothing (GFR-06), it stays in the trader's list and the sending is listed Not sent on the claim; a profile without a phone number gets a Not sent row (`NO_PHONE_NUMBER`).
 
+### Operations dashboard (FARM-06)
+
+Only the Cooperative Owner opens it; every other caller gets 403 MSG-GEN-08. Read only: every figure is worked out from the
+records at the moment of the call and nothing is stored (BR-FARM-10); `computedAt` is when the computation started.
+
+- `GET /api/dashboard?from=&to=&zoneId=`: 200 `{ computedAt, zoneId, dailyRevenue { from, to, total, invoiceCount }, receivables
+  { receivables, owedBack }, openHarvestLots { count }, waterAlerts { count, zones[{ zoneId, code, name, measuredAt }] },
+  pendingTasks { total, groups[{ kind, count, oldest[{ id, code, label, since }] }] } }`.
+- Filters: `from`/`to` (Vietnam dates, both included; today when neither is given, only `to` is that one day, only `from` runs to
+  today, at most 5 years) apply to the daily revenue only. `zoneId` applies to the daily revenue (by the zone of the invoice), the
+  open harvest lots and the water alerts. Receivables and pending tasks are always of the whole cooperative. A period that cannot
+  be read (`from` after `to`, a start in the future, over 5 years, not a date) or a `zoneId` that is not a zone is 400 MSG-GEN-01
+  naming the field.
+- Definitions (the same as the screens they link to): `dailyRevenue.total` is the total of the invoices of the period that are not
+  Cancelled, at their latest values (SALE-09); `receivables` is the total of the customer debts above zero and `owedBack` the money
+  owed back to customers, as a positive amount (BR-DEBT-02, DEBT-03); `openHarvestLots.count` is the lots Open or Reopened now
+  (BR-HARVEST-04; list them with `GET /api/harvest-lots/for-sale?zoneId=`); `waterAlerts` are the zones In Use whose latest Active
+  measurement is outside its thresholds, one entry per zone however many values are outside (BR-WATER-04, WATER-03).
+- Pending tasks, one group per `kind`: `PurchaseRequest` Awaiting response (SALE-03), `QualityClaim` Awaiting response (CLAIM-02),
+  `Payroll` Awaiting finalization (LABOR-13). `count` is every record; `oldest` is the 5 that wait longest (`id` opens the record,
+  `code` is null for a record with no code, `since` is when it began to wait). `label` names the record without opening it:
+  `{customer} – {kg} kg {product}, pickup dd/MM/yyyy` for a purchase request, `{customer} – invoice {code}` for a quality claim,
+  `Payroll dd/MM/yyyy–dd/MM/yyyy` for a payroll. The employee requests Awaiting review come with LABOR-05/08/10 as one more group.
+
 ### Audit log
 
 Every create, edit and status change writes one `AuditEvent` in the same save as the change (GBR-02, NFR-02): who acted

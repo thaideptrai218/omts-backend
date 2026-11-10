@@ -107,6 +107,7 @@ public static class DependencyInjection
         services.AddScoped<IInvoiceSalesReturnCheck, NoSalesReturnsYetCheck>();
         services.AddScoped<ISalesInvoiceRepository, SalesInvoiceRepository>();
         services.AddScoped<ISalesInvoiceSearchReader, SalesInvoiceSearchReader>();
+        services.AddScoped<IOperationsDashboardQuery, OperationsDashboardQuery>();
         services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();
         services.AddScoped<IPendingSaleRepository, PendingSaleRepository>();
         services.AddOptions<ProvenanceOptions>()

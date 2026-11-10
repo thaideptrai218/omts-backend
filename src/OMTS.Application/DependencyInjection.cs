@@ -15,6 +15,7 @@ using OMTS.Application.Features.Cultivation.CultivationLogs;
 using OMTS.Application.Features.Cultivation.MaterialUsages;
 using OMTS.Application.Features.Cultivation.Seeding;
 using OMTS.Application.Features.Cultivation.Progress;
+using OMTS.Application.Features.Dashboard;
 using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Farming.Licenses;
 using OMTS.Application.Features.Farming.Rafts;
@@ -293,6 +294,7 @@ public static class DependencyInjection
         services.AddScoped<WaterThresholdService>();
         services.AddScoped<WaterMeasurementOverdueReminder>();
         services.AddScoped<WaterZoneOverviewService>();
+        services.AddScoped<OperationsDashboardService>();
 
         return services;
     }
