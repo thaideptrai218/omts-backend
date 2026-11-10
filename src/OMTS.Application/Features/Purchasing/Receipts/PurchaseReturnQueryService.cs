@@ -32,7 +32,7 @@ public sealed class PurchaseReturnQueryService(
         return new PurchaseReturnView(
             found.Id, found.Code, found.ReceiptId, found.Receipt?.Code,
             found.Receipt is { } receipt ? new ReturnReceiptRef(receipt.Id, receipt.Code) : null,
-            new SupplierRef(found.Supplier.Id, found.Supplier.Name, found.Supplier.PhoneNumber),
+            new SupplierRef(found.Supplier.Id, found.Supplier.Name, found.Supplier.PhoneNumber, found.Supplier.Code),
             found.Zone is { } zone ? new ZoneRef(zone.Id, zone.Code, zone.Name) : null,
             found.ReturnDate, found.Reason, found.Discount, found.StatusId, statusCatalog.DisplayNameOf(found.StatusId),
             found.CancelledAt, found.CancelReason, new AccountRef(found.RecordedByAccountId, names.GetValueOrDefault(found.RecordedByAccountId) ?? string.Empty),
@@ -132,7 +132,7 @@ public sealed class PurchaseReturnQueryService(
         var names = await accounts.GetDisplayNamesAsync(found.Select(r => r.RecordedByAccountId).Distinct().ToList(), cancellationToken);
         return found.Select(r => new PurchaseReturnRow(
             r.Id, r.Code, r.ReturnDate, r.ReceiptId, r.ReceiptCode,
-            new SupplierRef(r.SupplierId, r.SupplierName, r.SupplierPhone), r.SupplierCode,
+            new SupplierRef(r.SupplierId, r.SupplierName, r.SupplierPhone, r.SupplierCode), r.SupplierCode,
             r.ZoneId is { } zoneId ? new ZoneRef(zoneId, r.ZoneCode!, r.ZoneName!) : null,
             r.Reason, r.StatusId, statusCatalog.DisplayNameOf(r.StatusId),
             new AccountRef(r.RecordedByAccountId, names.GetValueOrDefault(r.RecordedByAccountId) ?? string.Empty),

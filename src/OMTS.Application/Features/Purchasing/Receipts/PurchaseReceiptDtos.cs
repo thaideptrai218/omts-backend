@@ -50,7 +50,8 @@ public sealed record CorrectionLineInput(Guid? LineId, decimal? Quantity, decima
 /// <summary>PURCHASE-06.2: the Owner corrects lines of a receipt that can no longer be cancelled, with a reason (an edit through PUT can do more).</summary>
 public sealed record CorrectReceiptRequest(string? Reason, IReadOnlyList<CorrectionLineInput>? Lines, string? RowVersion = null);
 
-public sealed record SupplierRef(Guid Id, string Name, string PhoneNumber);
+/// <param name="Code">The supplier code: links to the supplier list search by it, never by the name.</param>
+public sealed record SupplierRef(Guid Id, string Name, string PhoneNumber, string? Code = null);
 
 public sealed record RaftRef(Guid Id, string Code);
 

@@ -246,7 +246,7 @@ public sealed class PurchaseReceiptQueryService(
             found.Select(r => r.RecordedByAccountId).Concat(found.Select(r => r.ReceivedByAccountId).OfType<Guid>()).Distinct().ToList(), cancellationToken);
         var paid = await allocations.PaidByReceiptAsync(found.Select(r => r.SupplierId).Distinct().ToList(), cancellationToken);
         return found.Select(r => new PurchaseReceiptRow(
-            r.Id, r.Code, r.ReceiptDate, new SupplierRef(r.SupplierId, r.SupplierName, r.SupplierPhone),
+            r.Id, r.Code, r.ReceiptDate, new SupplierRef(r.SupplierId, r.SupplierName, r.SupplierPhone, r.SupplierCode),
             r.StatusId, statusCatalog.DisplayNameOf(r.StatusId), r.Total, r.LinesTotal, r.RecordedByAccountId,
             r.SupplierCode, names.GetValueOrDefault(r.RecordedByAccountId) ?? string.Empty, r.ItemCount, r.Returned, r.Discount, r.Payable, paid.GetValueOrDefault(r.Id),
             r.ZoneId is { } zoneId ? new ZoneRef(zoneId, r.ZoneCode!, r.ZoneName!) : null,

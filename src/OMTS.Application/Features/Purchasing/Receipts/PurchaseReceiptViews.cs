@@ -31,7 +31,7 @@ public sealed class PurchaseReceiptViews(
         return new PurchaseReceiptView(
             r.Id,
             r.Code,
-            new SupplierRef(r.Supplier.Id, r.Supplier.Name, r.Supplier.PhoneNumber),
+            new SupplierRef(r.Supplier.Id, r.Supplier.Name, r.Supplier.PhoneNumber, r.Supplier.Code),
             r.ReceiptDate,
             figures.Total,
             figures.Returned,
