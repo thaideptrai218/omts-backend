@@ -321,6 +321,8 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | `PROVENANCE_WITHDRAWN` | MSG-TRACE-05, when the Owner withdraws the origin information of a lot the trader bought (TRACE-04); the row opens nothing | unless turned off | Trader |
 | `TRADER_ACCESS_REQUESTED` | a trader asked for an account from the Zalo Mini App (`POST /api/auth/zalo/trader-requests`) | unless turned off | Owner |
 | `TRADER_ACCESS_APPROVED` | the Owner approved the request (`POST /api/trader-requests/{id}/approve`) | unless turned off | Trader |
+| `QUALITY_CLAIM_NEW` | MSG-CLAIM-01, a new quality claim (CLAIM-01) | unless turned off | Owner |
+| `QUALITY_CLAIM_RESPONSE` | MSG-CLAIM-02, the Owner's response (CLAIM-02); also sent as an SMS to the phone number of the profile | unless turned off | Trader |
 
 - Preferences (ACCOUNT-07): `GET`/`PUT /api/me/notification-preferences` list the types of the roles the account
   holds with `push` on or off (`items: [{ type, push }]`). Mandatory types are shown as always pushed and cannot be
@@ -436,6 +438,15 @@ SALE-07 `PUT /api/sales-invoices/{id}/correction` and SALE-08 `POST /api/sales-i
 - Cancel: each cash payment Awaiting confirmation is asked (MSG-SALE-23, `cashGivenBack: [{paymentId, givenBack}]`); only a Yes cancels it. A walk-in invoice with payments kept needs `customerId` (MSG-SALE-19). Only the lots this invoice closed reopen; a request it took in full is no longer Fulfilled, and every figure ignores it from its status. The trader gets MSG-SALE-22 (type `SALES_INVOICE_CANCELLED_MESSAGE`, not a sending of the invoice message) when the profile has a phone; failing to send never undoes the save (GFR-06).
 
 Migration `20261109053538_SalesInvoiceCorrectionAndCancellation` only adds nullable columns.
+
+### Quality claims (CLAIM-01, CLAIM-02)
+
+A trader reports a quality problem on one of their invoices with photos; the Cooperative Owner responds. A claim changes neither the invoice nor the customer debt (BR-CLAIM-01/02).
+
+- `POST /api/me/sales-invoices/{id}/quality-claims` (trader, multipart: `description` up to 2000 characters, one `photos` part per photo, 1 to 10 JPEG or PNG of at most 10 MB; 201 with the claim, code `KN000123`, and MSG-GEN-05). Only an invoice of the trader's own profile (a profile merged into theirs counts; else 404) that is not cancelled, has no sales return (sales returns come with CLAIM-03: the check is the seam `IInvoiceSalesReturnCheck`) and has no other claim Awaiting response (409 MSG-GEN-09, one filtered unique index per invoice). A photo that cannot be uploaded answers 502 MSG-GEN-03 and saves nothing. The Owner gets MSG-CLAIM-01 (not a mandatory type). Answered claims do not stop a new one and OMTS sets no time limit.
+- `GET /api/me/quality-claims` (own claims, newest first, MSG-GEN-11 when none) and `GET /api/me/quality-claims/{id}` (404 for another trader's): the description, photo links, status, offer and response note. The photos are private (BR-CLAIM-01): signed links for 1 hour, never on the provenance page.
+- `GET /api/quality-claims` (`statusId`, `page`, `pageSize`; Awaiting response first) and `GET /api/quality-claims/{id}` (customer with phone number, invoice with lines, lots, kg, amounts, status and price cuts, the SMS sendings, `rowVersion`): QUALITY_CLAIMS View, so the Owner and the Zone Managers, who see the claims of invoices in their zones only (PM default; another zone answers 403). An Accountant has no access.
+- `POST /api/quality-claims/{id}/accept` (`{ offer: "ReturnAllGoods" | "PriceCutWholeInvoice", note?, rowVersion }`) and `POST /api/quality-claims/{id}/reject` (`{ note, rowVersion }`): Owner only, while Awaiting response; a response cannot be changed (409 MSG-GEN-09, or MSG06 when the form is stale). Accepting answers 409 MSG-CLAIM-03 when the invoice was cancelled or has a sales return (it can still be rejected). The offer only records what was proposed: the return is CLAIM-03 and the price cut SALE-07 (`PUT /api/sales-invoices/{id}/correction`, PriceCutAfterClaim), which the Owner runs after the trader chooses. Neither changes here. The trader gets a push and an SMS with MSG-CLAIM-02; a message that cannot be sent undoes nothing (GFR-06), it stays in the trader's list and the sending is listed Not sent on the claim; a profile without a phone number gets a Not sent row (`NO_PHONE_NUMBER`).
 
 ### Audit log
 
@@ -575,7 +586,7 @@ A replaced raft photo, license file, cooperative cover photo, certificate file, 
 certification, cover photo or cultivation log too), and the upload of a failed save right away. `OrphanFileCleanupJob` runs every day at
 03:00 (Asia/Ho_Chi_Minh), with no catch-up at start unless `CatchUpOnStart` is set, and deletes what such a removal left behind: raft photos (`raft-photos/`), license files
 (`zone-licenses/`), cover photos (`cooperative-covers/`), certificate files (`cooperative-certifications/`), cultivation log photos (`cultivation-log-photos/`), harvest lot photos
-(`harvest-lot-photos/`) and water meter photos (`water-meter-photos/`, a recognition that was never saved as a measurement) that no record points to and that were
+(`harvest-lot-photos/`), quality claim photos (`claim-photos/`, a claim whose save failed after its uploads) and water meter photos (`water-meter-photos/`, a recognition that was never saved as a measurement) that no record points to and that were
 written more than the grace period (24 hours) ago. No other storage folder is scanned, so cooperative logos are kept for ever.
 
 **Every environment must use its own storage container (`Storage:AzureBlob:Container`) or folder

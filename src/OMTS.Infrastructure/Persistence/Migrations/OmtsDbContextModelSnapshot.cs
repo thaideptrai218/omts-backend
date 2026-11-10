@@ -2890,6 +2890,39 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
+                            Id = 3701,
+                            Code = "AWAITING_RESPONSE",
+                            DisplayName = "Awaiting response",
+                            Group = "QUALITY_CLAIM",
+                            IsFinal = false,
+                            IsInitial = true,
+                            Meaning = "Sent by the trader; not answered yet.",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 3702,
+                            Code = "REJECTED",
+                            DisplayName = "Rejected",
+                            Group = "QUALITY_CLAIM",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "Rejected by the Cooperative Owner with a note.",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 3703,
+                            Code = "ACCEPTED",
+                            DisplayName = "Accepted",
+                            Group = "QUALITY_CLAIM",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "Accepted by the Cooperative Owner, who offered a return of all the goods or a price cut of the whole invoice.",
+                            SortOrder = 3
+                        },
+                        new
+                        {
                             Id = 3401,
                             Code = "DRAFT",
                             DisplayName = "Draft",
@@ -3306,6 +3339,28 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             ToStatusId = 3204,
                             TriggerEvent = "Action",
                             UseCases = "SALE-02"
+                        },
+                        new
+                        {
+                            Id = 220,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 3701,
+                            GuardCondition = "The invoice is not cancelled and has no sales return; an offer is chosen and a note is optional.",
+                            ReasonRequired = false,
+                            ToStatusId = 3703,
+                            TriggerEvent = "Action",
+                            UseCases = "CLAIM-02"
+                        },
+                        new
+                        {
+                            Id = 221,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 3701,
+                            GuardCondition = "A note gives the reason.",
+                            ReasonRequired = true,
+                            ToStatusId = 3702,
+                            TriggerEvent = "Action",
+                            UseCases = "CLAIM-02"
                         },
                         new
                         {
@@ -4453,6 +4508,119 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_PurchaseRequest_Declined_Has_Note", "[StatusId] <> 3203 OR [ResponseNote] IS NOT NULL");
 
                             t.HasCheckConstraint("CK_PurchaseRequest_RequestedKg_Positive", "[RequestedKg] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.QualityClaim", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Offer")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset?>("RespondedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("RespondedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ResponseNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset>("SentAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("StatusId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("RespondedByAccountId");
+
+                    b.HasIndex("CustomerId", "SentAt");
+
+                    b.HasIndex("StatusId", "SentAt");
+
+                    b.HasIndex(new[] { "InvoiceId" }, "UX_QualityClaims_Invoice_Awaiting")
+                        .IsUnique()
+                        .HasFilter("[StatusId] = 3701");
+
+                    b.ToTable("QualityClaims", t =>
+                        {
+                            t.HasCheckConstraint("CK_QualityClaim_Accepted_Has_Offer", "[StatusId] <> 3703 OR [Offer] IS NOT NULL");
+
+                            t.HasCheckConstraint("CK_QualityClaim_Answered_Has_Response", "[StatusId] = 3701 OR ([RespondedAt] IS NOT NULL AND [RespondedByAccountId] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_QualityClaim_Rejected_Has_Note", "[StatusId] <> 3702 OR [ResponseNote] IS NOT NULL");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.QualityClaimPhoto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ClaimId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FileKey")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClaimId", "SortOrder")
+                        .IsUnique();
+
+                    b.ToTable("QualityClaimPhotos", t =>
+                        {
+                            t.HasCheckConstraint("CK_QualityClaimPhoto_SortOrder", "[SortOrder] BETWEEN 1 AND 10");
                         });
                 });
 
@@ -5789,6 +5957,49 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.QualityClaim", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Sales.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesInvoice", "Invoice")
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("RespondedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
+                        .WithMany()
+                        .HasForeignKey("StatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("Invoice");
+
+                    b.Navigation("Status");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.QualityClaimPhoto", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Sales.QualityClaim", "Claim")
+                        .WithMany("Photos")
+                        .HasForeignKey("ClaimId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Claim");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesInvoice", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
@@ -5977,6 +6188,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.SupplierPayment", b =>
                 {
                     b.Navigation("Allocations");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.QualityClaim", b =>
+                {
+                    b.Navigation("Photos");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesInvoice", b =>

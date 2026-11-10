@@ -89,6 +89,12 @@ public static class NotificationTypes
     /// <summary>MSG-SALE-18, a correction or a cancellation of a sales invoice leaves the customer debt below zero, to the Accountant and the Owner (BR-SALE-03); not mandatory.</summary>
     public const string CustomerMoneyOwedBack = "CUSTOMER_MONEY_OWED_BACK";
 
+    /// <summary>MSG-CLAIM-01, a new quality claim, to the Cooperative Owner (BR-CLAIM-01); not mandatory (BR-CLAIM-01 says so).</summary>
+    public const string QualityClaimNew = "QUALITY_CLAIM_NEW";
+
+    /// <summary>MSG-CLAIM-02, the response to a quality claim, to the trader account (BR-CLAIM-02); also sent by SMS or Zalo OA.</summary>
+    public const string QualityClaimResponse = "QUALITY_CLAIM_RESPONSE";
+
     public static readonly IReadOnlyList<NotificationTypeDefinition> All =
     [
         new(WaterAlert, "Water alert", AlwaysPush, [CooperativeOwner, ZoneManager],
@@ -150,6 +156,9 @@ public static class NotificationTypes
         // A trader asked for an account from the Zalo Mini App, and the Owner's approval (ACS-01, decision of 28/10/2026).
         new(TraderAccessRequested, "Trader access requested", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         new(TraderAccessApproved, "Trader access approved", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
+        new(QualityClaimNew, "New quality claim", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        // Opens the claim (CLAIM-02 response), for the trader the claim belongs to now.
+        new(QualityClaimResponse, "Response to your quality claim", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
     ];
 
     private static readonly Dictionary<string, NotificationTypeDefinition> ByCode = All.ToDictionary(t => t.Code, StringComparer.Ordinal);
