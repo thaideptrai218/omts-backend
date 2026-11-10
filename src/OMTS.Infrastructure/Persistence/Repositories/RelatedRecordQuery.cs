@@ -39,6 +39,12 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
             return FindPurchaseRequestAsync(recordId, cancellationToken);
         }
 
+        // The zone of its invoice, and the trader of its customer profile.
+        if (recordType == RelatedRecordTypes.QualityClaim)
+        {
+            return FindQualityClaimAsync(recordId, cancellationToken);
+        }
+
         if (recordType == RelatedRecordTypes.CultivationLog)
         {
             return FindCultivationLogAsync(recordId, cancellationToken);
@@ -97,6 +103,13 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
     {
         var traders = await db.PurchaseRequests.AsNoTracking().Where(r => r.Id == id).Select(r => r.Customer.AccountId).ToListAsync(cancellationToken);
         return traders.Count == 0 ? null : new RelatedRecordLocation(null, traders[0]);
+    }
+
+    private async Task<RelatedRecordLocation?> FindQualityClaimAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var claims = await db.QualityClaims.AsNoTracking().Where(c => c.Id == id)
+            .Select(c => new { c.Invoice.ZoneId, c.Customer.AccountId }).ToListAsync(cancellationToken);
+        return claims.Count == 0 ? null : new RelatedRecordLocation(claims[0].ZoneId, claims[0].AccountId);
     }
 
     private async Task<RelatedRecordLocation?> FindRecordAsync<T>(Guid id, CancellationToken cancellationToken) where T : Entity =>
