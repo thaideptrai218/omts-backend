@@ -9,9 +9,11 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.CashBook;
 using OMTS.Application.Features.Purchasing.Receipts;
 using OMTS.Application.Features.WaterQuality.Dtos;
 using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.CashBook;
 using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Enums;
 
@@ -33,6 +35,7 @@ public sealed class SupplierPaymentService(
     SupplierPaymentNotifications notifications,
     PurchaseDocumentCodeService codes,
     IAccountRepository accounts,
+    ICashAccountRepository cashAccounts,
     ICurrentUser currentUser,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
@@ -63,6 +66,7 @@ public sealed class SupplierPaymentService(
             invalid.Add("Paid by");
         }
 
+        var cashAccount = await CashAccountAsync(request.Method, request.CashAccountId, null, invalid, cancellationToken);
         if (invalid.Count > 0)
         {
             return AppError.InvalidFields(invalid);
@@ -110,6 +114,8 @@ public sealed class SupplierPaymentService(
             PaidByAccountId = request.PaidById ?? currentUser.AccountId!.Value,
             Method = request.Method!.Value,
             BankReference = bankReference,
+            CashAccountId = cashAccount?.Id,
+            CashAccount = cashAccount,
             Note = SupplierPaymentRules.Trimmed(request.Note),
             DeduplicationKey = key,
             RecordedByAccountId = currentUser.AccountId!.Value,
@@ -128,7 +134,7 @@ public sealed class SupplierPaymentService(
             After = new
             {
                 payment.Kind, payment.SupplierId, payment.Amount, payment.DiscountAmount, payment.PaymentDate, payment.PaidAt, payment.PaidByAccountId,
-                payment.Method, payment.BankReference, payment.Note,
+                payment.Method, payment.BankReference, payment.CashAccountId, payment.Note,
                 Allocations = payment.Allocations.Select(a => new { a.ReceiptId, a.Amount }).ToList(),
             },
         });
@@ -188,6 +194,7 @@ public sealed class SupplierPaymentService(
             invalid.Add("Paid by");
         }
 
+        var cashAccount = await CashAccountAsync(request.Method, request.CashAccountId, payment.CashAccountId, invalid, cancellationToken);
         if (invalid.Count > 0)
         {
             return AppError.InvalidFields(invalid);
@@ -210,6 +217,8 @@ public sealed class SupplierPaymentService(
         payment.PaidByAccountId = request.PaidById ?? payment.PaidByAccountId;
         payment.Method = request.Method!.Value;
         payment.BankReference = bankReference;
+        payment.CashAccountId = cashAccount?.Id;
+        payment.CashAccount = cashAccount;
         payment.Note = SupplierPaymentRules.Trimmed(request.Note);
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, VoucherSnapshot(payment));
         if (changedAfter is not null)
@@ -267,11 +276,32 @@ public sealed class SupplierPaymentService(
         return invalid;
     }
 
-    private static object VoucherSnapshot(SupplierPayment p) => new { p.PaymentDate, p.PaidAt, p.PaidByAccountId, p.Method, p.BankReference, p.Note };
+    private static object VoucherSnapshot(SupplierPayment p) => new { p.PaymentDate, p.PaidAt, p.PaidByAccountId, p.Method, p.BankReference, p.CashAccountId, p.Note };
 
     /// <summary>Who may be named as having paid: the Active Owner and staff accounts, by name (as the receivers of a receipt).</summary>
     public async Task<IReadOnlyList<AccountRef>> PayersAsync(CancellationToken cancellationToken) =>
         (await accounts.ListActiveInternalAsync(cancellationToken)).Select(a => new AccountRef(a.Id, a.DisplayName)).ToList();
+
+    /// <summary>
+    /// The bank account named, which only a bank transfer may name and which must be an active Bank account of the cash book (the one
+    /// the payment already has may be sent again once it is out of use); "Cash account" is added to <paramref name="invalid"/> otherwise.
+    /// </summary>
+    private async Task<CashAccount?> CashAccountAsync(
+        PaymentMethod? method, Guid? accountId, Guid? storedAccountId, List<string> invalid, CancellationToken cancellationToken)
+    {
+        if (accountId is not { } id)
+        {
+            return null;
+        }
+
+        var account = await cashAccounts.GetForEditAsync(id, cancellationToken);
+        if (method != PaymentMethod.BankTransfer || account is null || account.Kind != CashAccountKind.Bank || (!account.IsActive && id != storedAccountId))
+        {
+            invalid.Add("Cash account");
+        }
+
+        return account;
+    }
 
     /// <summary>Whether the account may be named as the payer: an Active Owner or staff account.</summary>
     private async Task<bool> IsPayerAsync(Guid accountId, CancellationToken cancellationToken) =>
@@ -394,5 +424,6 @@ public sealed class SupplierPaymentService(
         p.BankReference, p.Note, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId), p.CancelledAt, p.CancelReason,
         new AccountRef(p.RecordedByAccountId, names.GetValueOrDefault(p.RecordedByAccountId) ?? string.Empty),
         RowVersionGuard.Encode(p.RowVersion), debtAfter, p.DiscountAmount, p.PurchaseReturnId,
-        p.PaidAt, p.PaidByAccountId is { } payer ? new AccountRef(payer, names.GetValueOrDefault(payer) ?? string.Empty) : null, allocationViews);
+        p.PaidAt, p.PaidByAccountId is { } payer ? new AccountRef(payer, names.GetValueOrDefault(payer) ?? string.Empty) : null, allocationViews,
+        p.CashAccount is { } account ? new CashAccountRef(account.Id, account.ProviderName, account.AccountNumber) : null);
 }

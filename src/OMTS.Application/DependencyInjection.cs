@@ -6,6 +6,7 @@ using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Features.AccessManagement;
 using OMTS.Application.Features.Accounts;
 using OMTS.Application.Features.Audit;
+using OMTS.Application.Features.CashBook;
 using OMTS.Application.Features.Cooperatives;
 using OMTS.Application.Features.Employees;
 using OMTS.Application.Features.Cultivation.Closing;
@@ -262,6 +263,14 @@ public static class DependencyInjection
         services.AddScoped<SupplierPaymentNotifications>();
         services.AddScoped<SupplierDebtService>();
         services.AddScoped<SupplierDebtExportService>();
+        services.AddScoped<CashAccountService>();
+        services.AddScoped<CashVoucherTypeService>();
+        services.AddScoped<CashPartyService>();
+        services.AddScoped<CashVoucherCodeService>();
+        services.AddScoped<CashBookLookupService>();
+        services.AddScoped<CashVoucherService>();
+        services.AddScoped<CashBookService>();
+        services.AddScoped<CashBookExportService>();
 
         // ENV-01…ENV-04 water quality monitoring and the overdue measurement reminder
         services.AddSingleton<EditingPresenceTracker>();

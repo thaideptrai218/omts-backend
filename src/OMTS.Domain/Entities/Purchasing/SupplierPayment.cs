@@ -1,5 +1,6 @@
 using OMTS.Domain.Common;
 using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.CashBook;
 using OMTS.Domain.Entities.Platform;
 using OMTS.Domain.Enums;
 
@@ -41,6 +42,10 @@ public class SupplierPayment : AuditableEntity, IHasStatus
     /// <summary>Required for a bank transfer, empty for cash; a second payment with the same one needs a confirmation (MSG-PURCHASE-06).</summary>
     public string? BankReference { get; set; }
     public string? Note { get; set; }
+
+    /// <summary>The bank account the money was paid from or into, on a bank transfer only: an active Bank account of the cash book.</summary>
+    public Guid? CashAccountId { get; set; }
+    public CashAccount? CashAccount { get; set; }
 
     /// <summary>A repeated key returns the first payment and creates nothing.</summary>
     public string? DeduplicationKey { get; set; }

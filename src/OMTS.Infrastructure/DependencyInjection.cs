@@ -124,6 +124,11 @@ public static class DependencyInjection
         services.AddScoped<ISupplierPaymentRepository, SupplierPaymentRepository>();
         services.AddScoped<IPurchaseDocumentCodeQuery, PurchaseDocumentCodeQuery>();
         services.AddScoped<ISupplierDebtQuery, SupplierDebtQuery>();
+        services.AddScoped<ICashAccountRepository, CashAccountRepository>();
+        services.AddScoped<ICashVoucherTypeRepository, CashVoucherTypeRepository>();
+        services.AddScoped<ICashVoucherRepository, CashVoucherRepository>();
+        services.AddScoped<ICashPartyRepository, CashPartyRepository>();
+        services.AddScoped<ICashBookQuery, CashBookReader>();
         services.AddScoped<IWaterMeasurementRepository, WaterMeasurementRepository>();
         services.AddSingleton<IStatusCatalog, StatusCatalog>();
 

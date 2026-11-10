@@ -1,4 +1,5 @@
 using OMTS.Application.Features.AccessManagement.Dtos;
+using OMTS.Application.Features.CashBook;
 using OMTS.Application.Features.Purchasing.Receipts;
 using OMTS.Application.Features.WaterQuality.Dtos;
 using OMTS.Domain.Enums;
@@ -23,6 +24,7 @@ public sealed record PaymentAllocationInput(Guid? ReceiptId, decimal? Amount);
 /// The code the user types: 1–30 ASCII letters, digits, "-", "_" or ".", unique among supplier payments regardless of case. Left
 /// empty: the next TT code. It never changes once recorded.
 /// </param>
+/// <param name="CashAccountId">The bank account the money was paid from, on a bank transfer only: an active Bank account of the cash book.</param>
 public sealed record RecordSupplierPaymentRequest(
     Guid? SupplierId,
     SupplierPaymentKind? Kind,
@@ -38,13 +40,15 @@ public sealed record RecordSupplierPaymentRequest(
     DateTimeOffset? PaidAt = null,
     Guid? PaidById = null,
     IReadOnlyList<PaymentAllocationInput>? Allocations = null,
-    string? Code = null);
+    string? Code = null,
+    Guid? CashAccountId = null);
 
 /// <summary>
 /// The edit of a Recorded payment's voucher: <see cref="Method"/> is required and, with <see cref="BankReference"/> and
 /// <see cref="Note"/>, replaces the stored one (a transfer needs its bank reference; null clears the note). <see cref="PaidAt"/>
 /// and <see cref="PaidById"/> left out keep theirs. The money never changes: <see cref="SupplierId"/>, <see cref="Kind"/>,
 /// <see cref="Amount"/>, <see cref="DiscountAmount"/>, <see cref="Allocations"/> and <see cref="Code"/> may be sent, but only as stored.
+/// <see cref="CashAccountId"/> replaces the stored account like the bank reference does: only with a bank transfer, empty clears it.
 /// </summary>
 public sealed record UpdateSupplierPaymentRequest(
     string? RowVersion,
@@ -59,7 +63,8 @@ public sealed record UpdateSupplierPaymentRequest(
     decimal? Amount = null,
     decimal? DiscountAmount = null,
     IReadOnlyList<PaymentAllocationInput>? Allocations = null,
-    string? Code = null);
+    string? Code = null,
+    Guid? CashAccountId = null);
 
 public sealed record CancelSupplierPaymentRequest(string? Reason, string? RowVersion = null);
 
@@ -76,11 +81,13 @@ public sealed record PaymentAllocationView(
 /// <param name="PaidAt">When the money was paid, at UTC+7; <paramref name="PaymentDate"/> is its date.</param>
 /// <param name="PaidBy">Who paid; null on a payment that names no one.</param>
 /// <param name="Allocations">The receipts it pays, in the order received; null on the list, which does not read them.</param>
+/// <param name="CashAccount">The bank account of a bank transfer; null for cash or a transfer with no account named.</param>
 public sealed record SupplierPaymentView(
     Guid Id, string Code, SupplierRef Supplier, SupplierPaymentKind Kind, decimal Amount, DateOnly PaymentDate, PaymentMethod Method,
     string? BankReference, string? Note, int StatusId, string Status, DateTimeOffset? CancelledAt, string? CancelReason,
     AccountRef RecordedBy, string RowVersion, decimal? DebtAfter = null, decimal DiscountAmount = 0, Guid? PurchaseReturnId = null,
-    DateTimeOffset PaidAt = default, AccountRef? PaidBy = null, IReadOnlyList<PaymentAllocationView>? Allocations = null);
+    DateTimeOffset PaidAt = default, AccountRef? PaidBy = null, IReadOnlyList<PaymentAllocationView>? Allocations = null,
+    CashAccountRef? CashAccount = null);
 
 public sealed record SupplierPaymentQuery(
     Guid? SupplierId = null, SupplierPaymentKind? Kind = null, PaymentMethod? Method = null, int? StatusId = null,

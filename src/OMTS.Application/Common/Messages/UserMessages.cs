@@ -1057,6 +1057,16 @@ public static class UserMessages
         };
     }
 
+    // ---- MSG-CASH ----
+
+    /// <summary>MSG-CASH-01: the account of the VietQR codes cannot be deleted or put out of use.</summary>
+    public static readonly UserMessage CashAccountIsVietQr = new(
+        Cash01, "Tài khoản đang dùng để nhận VietQR, không thể xóa hoặc ngừng dùng.");
+
+    /// <summary>MSG-CASH-02: a system voucher type cannot be edited or deleted.</summary>
+    public static readonly UserMessage CashSystemVoucherType = new(
+        Cash02, "Loại thu chi của hệ thống không thể sửa hoặc xóa.");
+
     // ---- Old codes still sent as the code (Legacy.KeptAsCode) ----
 
     /// <summary>MSG05: an export file could not be generated, or a stored file could not be read.</summary>

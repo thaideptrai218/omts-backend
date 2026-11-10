@@ -86,6 +86,7 @@ internal sealed class SupplierPaymentConfiguration : IEntityTypeConfiguration<Su
         builder.Property(x => x.Amount).HasPrecision(18, 0);
         builder.Property(x => x.DiscountAmount).HasPrecision(18, 0);
         builder.HasOne(x => x.PurchaseReturn).WithMany(r => r.Refunds).HasForeignKey(x => x.PurchaseReturnId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.CashAccount).WithMany().HasForeignKey(x => x.CashAccountId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(x => x.BankReference).HasMaxLength(Lengths.ShortText);
         // Not unique: the Accountant may confirm a second payment with the same reference (MSG-PURCHASE-06).
         builder.HasIndex(x => x.BankReference);

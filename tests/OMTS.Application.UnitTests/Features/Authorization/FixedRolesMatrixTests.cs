@@ -78,6 +78,9 @@ public class FixedRolesMatrixTests
         { "REPORT-01", No, Full, SalesReports, [View, Export] },
         { "REPORT-02", No, Full, SalesReports, [View, Export] },
         { "REPORT-03", No, Full, SalesReports, [View, Export] },
+        // The cash book is not a use case of the SRS matrix: the Accountant keeps it, Delete cancels a voucher.
+        { "CASH-BOOK", No, Full, CashBookOperations, [View, Create, Edit, Delete, Export] },
+        { "CASH-BOOK-SETTINGS", No, Full, CashBookSettings, [View, Edit] },
     };
 
     /// <summary>

@@ -36,6 +36,9 @@ public static class PermissionFunctions
     public const string PayRules = "PAY_RULES";
     public const string Payroll = "PAYROLL";
     public const string SalesReports = "SALES_REPORTS";
+    /// <summary>The cash book vouchers and lines; not named CashBook, which is the namespace of the feature.</summary>
+    public const string CashBookOperations = "CASH_BOOK";
+    public const string CashBookSettings = "CASH_BOOK_SETTINGS";
 
     public const string DashboardDailyRevenue = "DASHBOARD_DAILY_REVENUE";
     public const string DashboardReceivables = "DASHBOARD_RECEIVABLES";
@@ -72,6 +75,8 @@ public static class PermissionFunctions
         new(PayRules, "Job types and pay rates (LABOR-11)", true, [View, Create, Edit]),
         new(Payroll, "Payroll preparation and wage payments (LABOR-12, LABOR-14; finalizing, LABOR-13, is Owner-only)", true, [View, Create, Edit, Export]),
         new(SalesReports, "Sales, price and post-sale reports (REPORT-01…REPORT-03)", false, [View, Export]),
+        new(CashBookOperations, "Cash book: vouchers, parties and the book of each fund; Delete cancels a voucher", true, [View, Create, Edit, Delete, Export]),
+        new(CashBookSettings, "Cash book settings: bank accounts, e-wallets and voucher types", true, [View, Edit]),
 
         new(DashboardDailyRevenue, "Dashboard tile: daily revenue (FARM-06, Owner only)", false, [View], IsDashboardTile: true),
         new(DashboardReceivables, "Dashboard tile: receivables (FARM-06, Owner only)", false, [View], IsDashboardTile: true),

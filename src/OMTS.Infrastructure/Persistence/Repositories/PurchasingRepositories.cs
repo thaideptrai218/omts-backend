@@ -245,7 +245,7 @@ internal sealed partial class PurchaseReceiptRepository(OmtsDbContext db) : IPur
 internal sealed class SupplierPaymentRepository(OmtsDbContext db) : ISupplierPaymentRepository
 {
     public Task<SupplierPayment?> GetForEditAsync(Guid paymentId, CancellationToken cancellationToken) =>
-        db.SupplierPayments.Include(p => p.Supplier).Include(p => p.Allocations).FirstOrDefaultAsync(p => p.Id == paymentId, cancellationToken);
+        db.SupplierPayments.Include(p => p.Supplier).Include(p => p.CashAccount).Include(p => p.Allocations).FirstOrDefaultAsync(p => p.Id == paymentId, cancellationToken);
 
     public async Task<IReadOnlyList<PaymentAllocationRow>> AllocationsOfAsync(Guid paymentId, CancellationToken cancellationToken) =>
         await db.SupplierPaymentAllocations.AsNoTracking()
@@ -256,7 +256,7 @@ internal sealed class SupplierPaymentRepository(OmtsDbContext db) : ISupplierPay
             .ToListAsync(cancellationToken);
 
     public Task<SupplierPayment?> FindByDeduplicationKeyAsync(string key, CancellationToken cancellationToken) =>
-        db.SupplierPayments.AsNoTracking().Include(p => p.Supplier).FirstOrDefaultAsync(p => p.DeduplicationKey == key, cancellationToken);
+        db.SupplierPayments.AsNoTracking().Include(p => p.Supplier).Include(p => p.CashAccount).FirstOrDefaultAsync(p => p.DeduplicationKey == key, cancellationToken);
 
     public Task<SupplierPayment?> FindRecordedByBankReferenceAsync(string bankReference, CancellationToken cancellationToken) =>
         db.SupplierPayments.AsNoTracking().Include(p => p.Supplier)
@@ -279,7 +279,7 @@ internal sealed class SupplierPaymentRepository(OmtsDbContext db) : ISupplierPay
         var recorded = query.Where(p => p.StatusId == StatusIds.SupplierPayment.Recorded);
         var paid = await recorded.Where(p => p.Kind == SupplierPaymentKind.Payment).SumAsync(p => (decimal?)p.Amount, cancellationToken) ?? 0;
         var paidBack = await recorded.Where(p => p.Kind == SupplierPaymentKind.PaidBack).SumAsync(p => (decimal?)p.Amount, cancellationToken) ?? 0;
-        var items = await query.Include(p => p.Supplier)
+        var items = await query.Include(p => p.Supplier).Include(p => p.CashAccount)
             .OrderByDescending(p => p.PaidAt).ThenByDescending(p => p.Code)
             .Skip((page - 1) * pageSize).Take(pageSize)
             .ToListAsync(cancellationToken);

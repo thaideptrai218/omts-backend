@@ -49,6 +49,8 @@ public class FixedRolesScopeQaTests
         { WorkAssignments, false },
         { Attendance, false },
         { SalesReports, false },
+        { CashBookOperations, true },
+        { CashBookSettings, true },
         { DashboardDailyRevenue, false },
         { DashboardReceivables, false },
         { DashboardOpenHarvestLots, false },
