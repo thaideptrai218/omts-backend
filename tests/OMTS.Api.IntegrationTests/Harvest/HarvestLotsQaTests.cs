@@ -434,7 +434,7 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var lot = saved.GetProperty("lot");
         Assert.Equal(
             Sorted("id", "lotCode", "cycleId", "raftId", "raftCode", "zoneId", "zoneCode", "harvestedAt", "harvestDate", "laneNumbers", "finishedLaneNumbers", "cageCount", "kgPerCage", "estimatedKg", "figures", "statusId", "status", "reopenedOn", "closeDate", "leftoverKg", "closeReason", "originState", "publishedAt", "withdrawnAt", "originMissing", "canPublish", "photos", "recordedByAccountId", "recordedByName", "canCorrect", "canRemove", "canClose", "rowVersion",
-                "purchaseRequestId", "purchaseRequestCode"),
+                "purchaseRequestId", "purchaseRequestCode", "overPlanReason"),
             Names(lot));
         Assert.Equal(Sorted("invoicedKg", "returnedKg", "soldKg", "remainingKg", "lostKg", "differenceKg", "notFinal"), Names(lot.GetProperty("figures")));
         Assert.Equal(Sorted("key", "sortOrder", "url"), Names(lot.GetProperty("photos")[0]));
@@ -442,11 +442,11 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal(Names(lot), Names(await owner.GetHarvestLotAsync(lot.Id())));
 
         var screen = await owner.HarvestScreenAsync(raft.RaftId);
-        Assert.Equal(Sorted("raftId", "raftCode", "cycle", "averageKgPerCage", "canRecordHarvest", "lanes", "lots", "orders"), Names(screen));
+        Assert.Equal(Sorted("raftId", "raftCode", "cycle", "averageKgPerCage", "canRecordHarvest", "lanes", "lots", "orders", "harvestedCages", "harvestedKg", "targetYieldKg", "remainingKg"), Names(screen));
         Assert.Equal(
             Sorted("id", "code", "customerName", "productName", "acceptedCages", "harvestedCages", "pickupDate", "workDate", "plannedOnRaft"),
             Names(screen.GetProperty("orders")[0]));
-        Assert.Equal(Sorted("id", "laneNumber", "statusId", "status", "state", "canHarvest"), Names(screen.GetProperty("lanes")[0]));
+        Assert.Equal(Sorted("id", "laneNumber", "statusId", "status", "state", "canHarvest", "reason", "reasonCode", "canFinish", "lotCount", "lastHarvestDate", "seedLotCodes", "harvestedCages"), Names(screen.GetProperty("lanes")[0]));
         Assert.Equal(
             Sorted("id", "lotCode", "harvestedAt", "harvestDate", "laneNumbers", "finishedLaneNumbers", "cageCount", "kgPerCage", "estimatedKg", "invoicedKg", "remainingKg", "statusId", "status", "originState", "originMissing", "canPublish", "canCorrect", "canRemove", "canClose", "rowVersion",
                 "purchaseRequestId", "purchaseRequestCode"),

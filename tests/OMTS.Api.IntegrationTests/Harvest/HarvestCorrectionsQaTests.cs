@@ -502,10 +502,10 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
     [InlineData("Estimated kg", "8", "-1")]
     [InlineData("Estimated kg", "8", "1.234")]
     [InlineData("Estimated kg", "8", "abc")]
-    [InlineData("Estimated kg", "2147483647", null)]
+    [InlineData("Number of cages", "2147483647", null)] // cages are at most 100000 now: the estimate is never asked about
     [InlineData("Number of cages", "0", null)]
     [InlineData("Number of cages", "-1", null)]
-    [InlineData("Number of cages", "8.5", null)]
+    [InlineData("Number of cages", "8.555", null)]
     [InlineData("Number of cages", "8,5", null)]
     [InlineData("Number of cages", "abc", null)]
     [InlineData("Number of cages", null, null)]
