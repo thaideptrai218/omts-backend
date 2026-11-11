@@ -145,6 +145,8 @@ public class MaterialUsagesQaTestsMigrationAndDemo
             {
                 await db.AuditEvents.Where(e => e.RecordType == "MaterialUsage").ExecuteDeleteAsync();
                 await db.MaterialUsages.ExecuteDeleteAsync();
+                // The deleted records leave the stock they used (their issues stay): this test is about the passed-over rafts, so the rerun may take the stock below zero.
+                await db.Cooperatives.ExecuteUpdateAsync(c => c.SetProperty(x => x.AllowNegativeInputQuantity, true));
 
                 // B1-01 too young, B1-02 Discontinued, B1-06 a closed cycle on the date of its repair, B2-06 Discontinued.
                 var young = await db.CultivationCycles.SingleAsync(c => c.Raft.Code == "B1-01");
