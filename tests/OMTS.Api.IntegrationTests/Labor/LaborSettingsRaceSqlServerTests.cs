@@ -20,15 +20,15 @@ public class LaborSettingsRaceSqlServerTests
         await using var database = SqlServerTestDatabase.Create();
         await using var api = await StartAsync(database);
         var (owner, _, _) = await OwnerWithCooperativeAsync(api);
-        var version = (await owner.GetFromJsonAsync<JsonElement>(AttendanceSettings)).VersionOf();
+        var version = (await owner.GetFromJsonAsync<JsonElement>(LaborSettingsTestKit.AttendanceSettings)).VersionOf();
 
-        var sameDate = await InParallelAsync(Parallel, i => owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = i % 2 == 0 ? "Minutes15" : "Hour1", effectiveFrom = "2020-03-01", rowVersion = version }));
+        var sameDate = await InParallelAsync(Parallel, i => owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { roundingUnit = i % 2 == 0 ? "Minutes15" : "Hour1", effectiveFrom = "2020-03-01", rowVersion = version }));
 
         await AssertOneWinnerAsync(sameDate, HttpStatusCode.OK, "MSG06");
         Assert.Equal(1, await QueryAsync(api, db => db.AttendanceSettingsVersions.CountAsync()));
 
-        version = (await owner.GetFromJsonAsync<JsonElement>(AttendanceSettings)).VersionOf();
-        var dates = await InParallelAsync(Parallel, i => owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "Minutes30", effectiveFrom = $"2021-03-{i + 1:00}", rowVersion = version }));
+        version = (await owner.GetFromJsonAsync<JsonElement>(LaborSettingsTestKit.AttendanceSettings)).VersionOf();
+        var dates = await InParallelAsync(Parallel, i => owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { roundingUnit = "Minutes30", effectiveFrom = $"2021-03-{i + 1:00}", rowVersion = version }));
 
         await AssertOneWinnerAsync(dates, HttpStatusCode.OK, "MSG06");
         Assert.Equal(2, await QueryAsync(api, db => db.AttendanceSettingsVersions.CountAsync()));
@@ -83,12 +83,12 @@ public class LaborSettingsRaceSqlServerTests
         await using var database = SqlServerTestDatabase.Create();
         await using var api = await StartAsync(database);
         var (owner, _, _) = await OwnerWithCooperativeAsync(api);
-        var stale = (await owner.GetFromJsonAsync<JsonElement>(AttendanceSettings)).VersionOf();
+        var stale = (await owner.GetFromJsonAsync<JsonElement>(LaborSettingsTestKit.AttendanceSettings)).VersionOf();
         Assert.Equal(stale, (await owner.GetFromJsonAsync<JsonElement>(PayrollSettings)).VersionOf());
 
-        Assert.Equal(HttpStatusCode.OK, (await owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = "2020-03-01", rowVersion = stale })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = "2020-03-01", rowVersion = stale })).StatusCode);
 
-        await (await owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "Hour1", effectiveFrom = "2021-03-01", rowVersion = stale })).SrsProblemAsync(HttpStatusCode.Conflict, "MSG06", null);
+        await (await owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { roundingUnit = "Hour1", effectiveFrom = "2021-03-01", rowVersion = stale })).SrsProblemAsync(HttpStatusCode.Conflict, "MSG06", null);
         await (await owner.PutAsJsonAsync(PayrollSettings, new { payPeriodStartDay = 26, automaticPayroll = true, rowVersion = stale })).SrsProblemAsync(HttpStatusCode.Conflict, "MSG06", null);
         Assert.Equal(1, await QueryAsync(api, db => db.AttendanceSettingsVersions.CountAsync()));
         Assert.Equal(1, await QueryAsync(api, db => db.Cooperatives.Select(c => c.PayPeriodStartDay).SingleAsync()));

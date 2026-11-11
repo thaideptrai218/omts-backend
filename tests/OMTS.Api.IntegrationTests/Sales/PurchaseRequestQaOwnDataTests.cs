@@ -121,7 +121,7 @@ public class PurchaseRequestQaOwnDataTests(AuthApiFactory factory) : IClassFixtu
         var other = await factory.TraderAsync();
         var request = await trader.Client.PlaceAsync(productId, note: "Sáng sớm");
         await other.Client.PlaceAsync(productId);
-        (await owner.AcceptAsync(request, 60m, payLater: true, note: "Còn 60 kg")).EnsureSuccessStatusCode();
+        (await owner.AcceptAsync(request, 60, payLater: true, note: "Còn 60 kg")).EnsureSuccessStatusCode();
 
         var single = await trader.Client.GetAsync($"/api/me/purchase-requests/{request.Id()}");
         var list = await trader.Client.GetAsync("/api/me/purchases");
@@ -136,7 +136,7 @@ public class PurchaseRequestQaOwnDataTests(AuthApiFactory factory) : IClassFixtu
 
         var names = (await single.ReadAsync(HttpStatusCode.OK)).EnumerateObject().Select(p => p.Name).Order().ToList();
         Assert.Equal(
-            new[] { "cancelReason", "cancelledAt", "canCancel", "fulfilled", "id", "note", "pickupDate", "productId", "productName", "requestedKg", "response", "rowVersion", "sentAt", "status", "statusId" }.Order().ToList(),
+            new[] { "cancelReason", "cancelledAt", "canCancel", "code", "fulfilled", "harvestCompletedAt", "id", "note", "pickupDate", "productId", "productName", "requestedCages", "response", "rowVersion", "sentAt", "status", "statusId" }.Order().ToList(),
             names);
     }
 

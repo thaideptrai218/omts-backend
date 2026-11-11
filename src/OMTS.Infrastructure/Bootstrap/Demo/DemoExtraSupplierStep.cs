@@ -74,9 +74,15 @@ internal sealed class DemoExtraSupplierStep : IDemoSeedStep
                 DemoSeedContext.Ensure(await service.DiscontinueAsync(supplier.Id, cancellationToken), $"discontinuing {request.Name}");
             }
 
-            // The service stamps today; the list needs a spread to sort and filter by creation date.
-            var createdAt = context.Now.AddDays(-(7 + (index * 6)));
-            await context.Db.Suppliers.Where(s => s.Id == supplier.Id).ExecuteUpdateAsync(s => s.SetProperty(x => x.CreatedAt, createdAt), cancellationToken);
+            // The service stamps today; the list needs a spread to sort and filter by creation date. The stamp interceptor
+            // keeps CreatedAt on a normal save, so this is a bulk update, which only a relational provider runs (the
+            // in-memory test database keeps today's date).
+            if (context.Db.Database.IsRelational())
+            {
+                var createdAt = context.Now.AddDays(-(7 + (index * 6)));
+                await context.Db.Suppliers.Where(s => s.Id == supplier.Id).ExecuteUpdateAsync(s => s.SetProperty(x => x.CreatedAt, createdAt), cancellationToken);
+            }
+
             created++;
         }
 

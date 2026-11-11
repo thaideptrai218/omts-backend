@@ -9,6 +9,7 @@ using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Sales.Customers;
 using OMTS.Application.Features.Sales.Debts;
 using OMTS.Application.Features.Sales.PurchaseRequests;
+using OMTS.Application.Features.Sales.Weighings;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Harvest;
 using OMTS.Domain.Entities.Sales;
@@ -17,7 +18,8 @@ namespace OMTS.Application.Features.Sales.Invoices;
 
 /// <summary>What the entries name, read tracked as the save will write it, and the debt of the customer before the invoice (BR-SALE-07 (4)).</summary>
 internal sealed record SalesInvoiceFacts(
-    Customer? Customer, PurchaseRequest? Request, IReadOnlyDictionary<Guid, Product> Products, IReadOnlyList<HarvestLot> Lots, Guid ZoneId, bool ByOwner, decimal DebtBefore);
+    Customer? Customer, PurchaseRequest? Request, IReadOnlyDictionary<Guid, Product> Products, IReadOnlyList<HarvestLot> Lots, Guid ZoneId, bool ByOwner, decimal DebtBefore,
+    PortWeighing? Weighing = null);
 
 /// <summary>
 /// SALE-05 steps 2 to 6 against the database: the profile, the request (SALE-05.3), the products In Use (GBR-01), the lots for sale in zones the user can access (BR-SALE-06, BR-FARM-08)
@@ -27,6 +29,7 @@ public sealed class SalesInvoiceFactsReader(
     ICustomerRepository customers,
     IPurchaseRequestRepository requests,
     IPurchaseRequestFulfilment fulfilment,
+    IPortWeighingRepository weighings,
     IProductRepository products,
     IHarvestLotRepository lots,
     IFarmingZoneRepository zones,
@@ -64,6 +67,12 @@ public sealed class SalesInvoiceFactsReader(
             return request.Error!;
         }
 
+        var weighing = await ReadWeighingAsync(entries, cancellationToken);
+        if (!weighing.IsSuccess)
+        {
+            return weighing.Error!;
+        }
+
         var lineProducts = await ReadProductsAsync(entries, cancellationToken);
         if (!lineProducts.IsSuccess)
         {
@@ -95,7 +104,31 @@ public sealed class SalesInvoiceFactsReader(
 
         var byOwner = await zoneAccess.IsCooperativeOwnerAsync(cancellationToken);
         var debt = customer is null ? 0m : await debts.DebtAsync(customer.Id, cancellationToken);
-        return new SalesInvoiceFacts(customer, request.Value, lineProducts.Value!, lineLots.Value!, zoneId, byOwner, debt);
+        return new SalesInvoiceFacts(customer, request.Value, lineProducts.Value!, lineLots.Value!, zoneId, byOwner, debt, weighing.Value);
+    }
+
+    /// <summary>The weighing has to be confirmed by the trader and still free: read on each attempt, as a parallel sale may have taken it.</summary>
+    private async Task<Result<PortWeighing?>> ReadWeighingAsync(SalesInvoiceEntries entries, CancellationToken cancellationToken)
+    {
+        if (entries.PortWeighingId is not { } weighingId)
+        {
+            return Result<PortWeighing?>.Success(null);
+        }
+
+        var weighing = await weighings.GetForEditAsync(weighingId, cancellationToken);
+        if (weighing is null || weighing.PurchaseRequestId != entries.RequestId)
+        {
+            return AppError.Invalid("Port weighing");
+        }
+
+        if (!weighing.IsConfirmed)
+        {
+            return AppError.Conflict(UserMessages.WrongStatus(PortWeighingService.ObjectName, PortWeighingService.UnconfirmedStatus));
+        }
+
+        return weighing.Invoices.Count > 0
+            ? AppError.Conflict(UserMessages.WrongStatus(PortWeighingService.ObjectName, PortWeighingService.InvoicedStatus))
+            : weighing;
     }
 
     private async Task<Result<PurchaseRequest?>> ReadRequestAsync(SalesInvoiceEntries entries, Customer? customer, CancellationToken cancellationToken)

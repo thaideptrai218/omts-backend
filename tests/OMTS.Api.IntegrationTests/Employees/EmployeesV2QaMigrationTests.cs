@@ -45,7 +45,8 @@ public class EmployeesV2QaMigrationTests
         var (migrator, own, previous) = Plan(db);
         await migrator.MigrateAsync(own);
 
-        Assert.Empty(db.Model.GetEntityTypes().Where(t => t.ClrType.Name is "SeasonalWorker" or "Contractor" or "AttendanceRecord"));
+        Assert.Empty(db.Model.GetEntityTypes().Where(t => t.ClrType.Name is "SeasonalWorker" or "Contractor"));
+        Assert.Single(db.Model.GetEntityTypes(), t => t.ClrType.Name == "AttendanceRecord");
         Assert.Single(db.Model.GetEntityTypes(), t => t.ClrType.Name == "JobType");
 
         await migrator.MigrateAsync(previous);

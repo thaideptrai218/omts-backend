@@ -1,9 +1,13 @@
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
+using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Notifications;
 using OMTS.Domain.Common;
 using OMTS.Domain.Entities.Farming;
+using OMTS.Domain.Entities.Labor;
+using OMTS.Domain.Enums;
+using OMTS.Infrastructure.Persistence.Repositories.Sales;
 
 namespace OMTS.Infrastructure.Persistence.Repositories;
 
@@ -33,6 +37,18 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
 
     public Task<RelatedRecordLocation?> FindAsync(string recordType, Guid recordId, CancellationToken cancellationToken)
     {
+        if (recordType == nameof(WorkDayPlan))
+            return db.Set<WorkDayPlan>().Where(p => p.Id == recordId)
+                .Select(p => new RelatedRecordLocation(p.Raft.ZoneId, null, null, p.ResponsibleAccountId, null)).FirstOrDefaultAsync(cancellationToken);
+        if (recordType == nameof(WorkAssignment))
+            return db.WorkAssignments.Where(p => p.Id == recordId)
+                .Select(p => new RelatedRecordLocation(p.ZoneId, null, p.Employee!.AccountId, null, null)).FirstOrDefaultAsync(cancellationToken);
+        if (recordType == nameof(EmployeeLeaveRequest))
+            return db.Set<EmployeeLeaveRequest>().Where(p => p.Id == recordId)
+                .Select(p => new RelatedRecordLocation(null, null, p.Employee.AccountId, null, null)).FirstOrDefaultAsync(cancellationToken);
+        if (recordType == RelatedRecordTypes.Account)
+            return db.Accounts.Where(a => a.Id == recordId)
+                .Select(a => new RelatedRecordLocation(null, a.SubjectType == SubjectType.Trader ? a.Id : null, null, null, null)).FirstOrDefaultAsync(cancellationToken);
         // No zone (PM 03/11): the Owner opens it, and the trader of its customer profile.
         if (recordType == RelatedRecordTypes.PurchaseRequest)
         {
@@ -101,8 +117,10 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
 
     private async Task<RelatedRecordLocation?> FindPurchaseRequestAsync(Guid id, CancellationToken cancellationToken)
     {
-        var traders = await db.PurchaseRequests.AsNoTracking().Where(r => r.Id == id).Select(r => r.Customer.AccountId).ToListAsync(cancellationToken);
-        return traders.Count == 0 ? null : new RelatedRecordLocation(null, traders[0]);
+        var request = await db.PurchaseRequests.AsNoTracking().Include(r => r.Customer)
+            .Include(r => r.ShiftInvitations).ThenInclude(i => i.Employee).FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+        return request is null ? null : new RelatedRecordLocation(null, request.Customer.AccountId, EmployeeAccountIds:
+            request.ShiftInvitations.Select(i => i.Employee.AccountId).OfType<Guid>().Distinct().ToList());
     }
 
     private async Task<RelatedRecordLocation?> FindQualityClaimAsync(Guid id, CancellationToken cancellationToken)

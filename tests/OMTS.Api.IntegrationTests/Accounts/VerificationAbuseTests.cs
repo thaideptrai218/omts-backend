@@ -94,9 +94,10 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
         Assert.Empty(factory.Services.GetRequiredService<FakeEmailSender>().Inbox.List(email));
     }
 
-    // Phone and email alternate, one minute apart: the account's budget of 5 requests per hour holds across channels.
+    // Phone and email alternate, two minutes apart. An email is no recovery channel any more: it gets the same 202, no
+    // code and no share of the budget, so the phone codes stop at the cap of the hour as if the email starts were not there.
     [Fact]
-    public async Task Alternating_phone_and_email_recovery_starts_stop_at_the_per_account_budget()
+    public async Task Alternating_phone_and_email_recovery_starts_send_only_the_phone_codes_up_to_the_hourly_cap()
     {
         var (owner, email) = await OwnerWithPhoneAndEmailAsync();
         var anonymous = factory.CreateClient();
@@ -111,7 +112,8 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
 
         var sms = factory.Services.GetRequiredService<FakeSmsSender>().Inbox.List(owner.PhoneNumber!).Count;
         var mail = factory.Services.GetRequiredService<FakeEmailSender>().Inbox.List(email).Count;
-        Assert.Equal(VerificationService.MaxRequestsPerWindow, sms + mail);
+        Assert.Equal(0, mail);
+        Assert.Equal(VerificationCode.MaxCodesPerHour, sms);
     }
 
     // The 4th recovery code of the hour is not sent, with the same 202 answer (BR-ACCOUNT-07); recovery ids keep
@@ -154,7 +156,7 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
         }
     }
 
-    // Every secret of registration, recovery (phone and email), staff creation and password changes stays out of
+    // Every secret of registration, recovery, staff creation and password changes stays out of
     // the logs and the audit trail. The flows must succeed, or the check proves nothing.
     [Fact]
     public async Task Codes_tokens_and_passwords_never_reach_the_logs_or_the_audit_trail()
@@ -176,11 +178,9 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
         });
         Assert.Equal(HttpStatusCode.Created, registered.StatusCode);
 
-        // Recovery (ACS-03) by SMS, then by email.
+        // Recovery (ACS-03) by SMS, the only recovery channel.
         var (owner, email) = await OwnerWithPhoneAndEmailAsync();
         await ResetThroughRecoveryAsync(anonymous, owner.PhoneNumber!, "Reset2026x", tokens);
-        var ownerEmail = await factory.AddAccountAsync(NewCode(), Password, configure: a => { a.Email = $"by-mail-{NewCode()}@example.com"; a.EmailVerifiedAt = DateTimeOffset.UtcNow; });
-        await ResetThroughRecoveryAsync(anonymous, ownerEmail.Email!, "Reset2027x", tokens);
 
         // Staff creation (ACS-09): the temporary password is returned once, never logged.
         var zone = await factory.AddZoneAsync(NewCode());
@@ -224,7 +224,6 @@ public class VerificationAbuseTests(AuthApiFactory factory) : IClassFixture<Auth
             ("temporary password", temporaryPassword, false),
             ("password", TraderPassword, false),
             ("password", "Reset2026x", false),
-            ("password", "Reset2027x", false),
             ("password", StaffNewPassword, false),
             ("password", "Owner2026x", false),
             ("password", "Owner2026y", false),

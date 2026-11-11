@@ -125,6 +125,7 @@ public class LaborSettingsQaPayrollHeaderTests
             [
                 "api/job-types", "api/job-types", "api/job-types/options", "api/job-types/{id:guid}", "api/job-types/{id:guid}/discontinue",
                 "api/job-types/{id:guid}/name", "api/job-types/{id:guid}/rates", "api/job-types/{id:guid}/resume",
+                "api/workforce/job-types",
             ],
             endpoints.Where(p => p.Contains("job-types", StringComparison.OrdinalIgnoreCase)).Order(StringComparer.Ordinal));
         var client = await OwnerAsync(factory);

@@ -26,6 +26,18 @@ internal sealed class DemoHarvestLotStep : IDemoSeedStep
 
     public async Task<int> RunAsync(DemoSeedContext context, CancellationToken cancellationToken)
     {
+        // A lot is recorded for a purchase request (decision of 11/11/2026): the demo trader's Accepted one, whose harvest is not marked done.
+        var order = await context.Db.PurchaseRequests.AsNoTracking()
+            .Where(r => r.StatusId == StatusIds.PurchaseRequest.Accepted && r.HarvestCompletedAt == null)
+            .OrderBy(r => r.AgreedPickupDate).ThenBy(r => r.SentAt)
+            .Select(r => (Guid?)r.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (order is null)
+        {
+            context.Notes.Add("Demo harvest lots: no Accepted purchase request to harvest for, so no lot was recorded.");
+            return 0;
+        }
+
         var created = 0;
         foreach (var (zoneCode, manager, raftNumbers) in Zones)
         {
@@ -34,14 +46,15 @@ internal sealed class DemoHarvestLotStep : IDemoSeedStep
             using var acting = context.Get<AmbientActor>().Use(actor);
             foreach (var number in raftNumbers)
             {
-                created += await HarvestRaftAsync(context, zoneId, zoneCode, DemoRaftStep.RaftCode(zoneCode, number), number, cancellationToken);
+                created += await HarvestRaftAsync(context, zoneId, zoneCode, DemoRaftStep.RaftCode(zoneCode, number), number, order.Value, cancellationToken);
             }
         }
 
         return created;
     }
 
-    private static async Task<int> HarvestRaftAsync(DemoSeedContext context, Guid zoneId, string zoneCode, string raftCode, int number, CancellationToken cancellationToken)
+    private static async Task<int> HarvestRaftAsync(
+        DemoSeedContext context, Guid zoneId, string zoneCode, string raftCode, int number, Guid order, CancellationToken cancellationToken)
     {
         var db = context.Db;
         var cycle = await db.CultivationCycles.AsNoTracking()
@@ -67,10 +80,10 @@ internal sealed class DemoHarvestLotStep : IDemoSeedStep
         var trips = number == 1
             ? new[]
             {
-                new RecordHarvestRequest(lanes.Take(2).ToList(), [], CagesOfATrip, null),
-                new RecordHarvestRequest([lanes[1]], [lanes[1]], CagesOfATrip / 2, 180m),
+                new RecordHarvestRequest(lanes.Take(2).ToList(), [], CagesOfATrip, null, PurchaseRequestId: order),
+                new RecordHarvestRequest([lanes[1]], [lanes[1]], CagesOfATrip / 2, 180m, PurchaseRequestId: order),
             }
-            : [new RecordHarvestRequest(lanes, lanes, CagesOfATrip * lanes.Count, null)];
+            : [new RecordHarvestRequest(lanes, lanes, CagesOfATrip * lanes.Count, null, PurchaseRequestId: order)];
         var service = context.Get<HarvestLotRecordingService>();
         for (var trip = 0; trip < trips.Length; trip++)
         {

@@ -65,12 +65,16 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<QualityClaimPhoto> QualityClaimPhotos => Set<QualityClaimPhoto>();
     public DbSet<SalesInvoice> SalesInvoices => Set<SalesInvoice>();
     public DbSet<SalesInvoiceLine> SalesInvoiceLines => Set<SalesInvoiceLine>();
+    public DbSet<PortWeighing> PortWeighings => Set<PortWeighing>();
+    public DbSet<PortWeighingCage> PortWeighingCages => Set<PortWeighingCage>();
     public DbSet<SalesInvoicePriceCut> SalesInvoicePriceCuts => Set<SalesInvoicePriceCut>();
     public DbSet<CustomerPayment> CustomerPayments => Set<CustomerPayment>();
     public DbSet<PendingSale> PendingSales => Set<PendingSale>();
 
     // Labor (LABOR-01, LABOR-11, LABOR-15; the attendance and work assignment tables come with LABOR-04 and LABOR-02)
     public DbSet<EmployeeTypePeriod> EmployeeTypePeriods => Set<EmployeeTypePeriod>();
+    public DbSet<WorkAssignment> WorkAssignments => Set<WorkAssignment>();
+    public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
     public DbSet<JobType> JobTypes => Set<JobType>();
     public DbSet<EmployeeJobType> EmployeeJobTypes => Set<EmployeeJobType>();
     public DbSet<PayRate> PayRates => Set<PayRate>();
@@ -95,6 +99,8 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OmtsDbContext).Assembly);
+        // The legacy Mini App shape is an adapter over AttendanceSettingsVersions, not a second settings store.
+        modelBuilder.Ignore<AttendanceSettings>();
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes().Where(e => !e.IsOwned()))
         {

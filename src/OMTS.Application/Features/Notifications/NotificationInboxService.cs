@@ -1,4 +1,5 @@
 using System.Text.Json;
+using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
@@ -87,7 +88,12 @@ public sealed class NotificationInboxService(
 
         var rule = NotificationTypes.Find(notification.Type)?.Open ?? NotificationOpenAccess.OwnerOnly;
         var access = await permissions.GetAccessAsync(accountId, cancellationToken);
-        var allowed = access is not null && (rule.OwnTraderRecord
+        var allowed = access is not null && (recordType == "WorkDayPlan"
+            ? access.IsCooperativeOwner || location.ResponsibleAccountId == accountId &&
+                access.Allows(PermissionFunctions.WorkAssignments, PermissionAction.View, PermissionScope.ZoneScoped, location.ZoneId)
+            : rule.OwnEmployeeRecord
+            ? location.EmployeeAccountId == accountId || location.EmployeeAccountIds?.Contains(accountId) == true
+            : rule.OwnTraderRecord
             ? location.TraderAccountId == accountId
             : rule.Function is { } function
                 ? access.Allows(function, rule.Action, PermissionScope.ZoneScoped, location.ZoneId)

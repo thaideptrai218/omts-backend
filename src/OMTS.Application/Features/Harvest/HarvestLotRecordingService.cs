@@ -11,6 +11,7 @@ using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Application.Features.Files;
+using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
@@ -23,12 +24,17 @@ namespace OMTS.Application.Features.Harvest;
 /// uploaded nothing is saved and nobody is told (GFR-01). Everything the save decides is read again after the uploads, which can take minutes at sea: the Open cycle, the lane states, the
 /// average kg per cage it copies (BR-HARVEST-02), the harvest time and the lot code. The cycle row is part of the save, so of two parallel saves that change the lane states of a cycle
 /// one answers MSG06 and saves nothing, and a new send is checked against the new states. Two lots that take one code without sharing a cycle lose nothing: the loser takes the next code, with its photos.
+/// The trip harvests for one purchase request (decision of 11/11/2026), read again with the rest: the request row is part of the save too, so a lot and the Owner marking its harvest done
+/// never both pass.
 /// </summary>
 public sealed class HarvestLotRecordingService(
     IRaftRepository rafts,
     ICultivationCycleRepository cycles,
     ICultivationCycleQuery cycleQuery,
     IHarvestLotRepository lots,
+    IPurchaseRequestRepository requests,
+    IPurchaseRequestFulfilment fulfilment,
+    IStatusCatalog statuses,
     ICooperativeRepository cooperatives,
     RaftViews raftViews,
     LaneStateReader laneStates,
@@ -72,6 +78,12 @@ public sealed class HarvestLotRecordingService(
         if (HarvestLotFieldReader.Read(request, raft, open!.States, open.KgPerCage, photoHint, out _) is { } invalid)
         {
             return invalid;
+        }
+
+        var order = await requests.GetForEditAsync(request.PurchaseRequestId!.Value, cancellationToken);
+        if (await PurchaseRequestRules.RefusesHarvestLotAsync(order, statuses, fulfilment, cancellationToken) is { } wrongRequest)
+        {
+            return wrongRequest;
         }
 
         var recorder = currentUser.AccountId ?? throw new InvalidOperationException("A harvest lot needs an authenticated caller.");
@@ -143,6 +155,12 @@ public sealed class HarvestLotRecordingService(
             return invalid;
         }
 
+        var order = await requests.GetForEditAsync(request.PurchaseRequestId!.Value, cancellationToken);
+        if (await PurchaseRequestRules.RefusesHarvestLotAsync(order, statuses, fulfilment, cancellationToken) is { } wrongRequest)
+        {
+            return wrongRequest;
+        }
+
         var cycle = open.Cycle;
         var baseCode = HarvestLotCodes.Base(raft.Zone.Code, raft.Code, harvestDate);
         var lot = new HarvestLot
@@ -158,6 +176,8 @@ public sealed class HarvestLotRecordingService(
             KgPerCage = open.KgPerCage,
             EstimatedKg = fields.EstimatedKg,
             RecordedByAccountId = recorder,
+            PurchaseRequestId = order!.Id,
+            PurchaseRequest = order,
             Lanes = fields.Lanes.Select(l => new HarvestLotLane { LaneId = l.Id, Lane = l, IsFinished = fields.FinishedLaneIds.Contains(l.Id) }).ToList(),
             Photos = keys.Select((key, index) => new HarvestLotPhoto { SortOrder = index + 1, FileKey = key }).ToList(),
         };
@@ -165,6 +185,8 @@ public sealed class HarvestLotRecordingService(
 
         // The lane states depend on the cycle row: a parallel lot, close, cancel or seeding correction read it before this lot, so one of them fails with MSG06.
         unitOfWork.MarkChanged(cycle);
+        // The harvest of the request is marked done on its row: a parallel mark read it before this lot, so one of the two fails with MSG06.
+        unitOfWork.MarkChanged(order);
         audit.Record(HarvestLotAudit.Entry(HarvestLotAudit.Created, lot, raft.ZoneId) with { After = HarvestLotAudit.Snapshot(lot) });
         await notifier.LotRecordedAsync(lot, raft, recorder, cancellationToken);
 

@@ -3,8 +3,10 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
+using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Features.AccessManagement;
 using OMTS.Application.Features.Accounts;
+using OMTS.Application.Features.Accounts.Dtos;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.CashBook;
 using OMTS.Application.Features.Cooperatives;
@@ -45,6 +47,7 @@ using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Notifications;
 using OMTS.Application.Features.WaterQuality;
+using OMTS.Application.Features.WaterQuality.Dtos;
 
 namespace OMTS.Application;
 
@@ -61,6 +64,17 @@ public static class DependencyInjection
         services.AddScoped<SessionManagementService>();
         services.AddScoped<ZaloLinkService>();
         services.AddScoped<ZaloLocationService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseHarvestService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseStaffingService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseHarvestReader>();
+        services.AddScoped<OMTS.Application.Features.Sales.Products.SalesProductService>();
+        services.AddOptions<OMTS.Application.Features.Testing.Options.TestRoleOptions>();
+        services.AddScoped<OMTS.Application.Features.Testing.TestRoleService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.WorkforceService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.WorkPlanAccessService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.WorkDayPlanService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.LeaveService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.WorkforceSettingsService>();
 
         services.AddSingleton<PermissionCache>();
         services.AddSingleton<IPermissionCacheInvalidator>(provider => provider.GetRequiredService<PermissionCache>());
@@ -194,6 +208,7 @@ public static class DependencyInjection
         services.AddScoped<LotTraceService>();
         // ORIGIN-01 – the public provenance page of an invoice QR code (anonymous)
         services.AddScoped<ProvenancePageService>();
+        services.AddScoped<PublicOriginService>();
         // TRACE-04 – withdraw the origin information of a lot and tell its traders
         services.AddScoped<WithdrawalNotices>();
         services.AddScoped<LotWithdrawalService>();
@@ -249,6 +264,10 @@ public static class DependencyInjection
         services.AddScoped<BankTransferNoticeService>();
         services.AddScoped<SalesInvoiceSearchService>();
         services.AddScoped<SalesInvoiceExportService>();
+        services.AddScoped<MyInvoiceService>();
+        services.AddScoped<SalesInvoiceWeighingReader>();
+        services.AddScoped<OMTS.Application.Features.Sales.Weighings.PortWeighingService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Weighings.MyPortWeighingService>();
         // SALE-06 sending the invoice, and the end of the sale with the QR code
         services.AddScoped<SalesInvoiceMessages>();
         services.AddScoped<SalesInvoiceSendingService>();

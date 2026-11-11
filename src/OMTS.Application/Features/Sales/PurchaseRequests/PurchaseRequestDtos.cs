@@ -1,19 +1,27 @@
+using OMTS.Application.Features.Sales.Requests.Dtos;
+
 namespace OMTS.Application.Features.Sales.PurchaseRequests;
 
-/// <summary>SALE-01 step 2: one product, the approximate kg, the pickup date and an optional note.</summary>
-public sealed record PlacePurchaseRequest(Guid? ProductId, decimal? RequestedKg, DateOnly? PickupDate, string? Note);
+/// <summary>
+/// SALE-01 step 2: one product, how many whole cages (decision of 08/11/2026), the pickup date and an optional note. A retry of a send
+/// carries the same <paramref name="ClientOperationId"/> and answers the request already saved instead of a second one.
+/// </summary>
+public sealed record PlacePurchaseRequest(Guid? ProductId, int? RequestedCages, DateOnly? PickupDate, string? Note, Guid? ClientOperationId = null);
 
 /// <summary>SALE-02 step 3: an optional reason.</summary>
 public sealed record CancelPurchaseRequest(string? Reason, string? RowVersion);
 
-/// <summary>SALE-03.0 step 4: the Owner may lower the kg and change the date, and chooses whether the trader may pay later.</summary>
-public sealed record AcceptPurchaseRequest(decimal? AcceptedKg, DateOnly? PickupDate, bool? PayLaterAgreed, string? Note, string? RowVersion);
+/// <summary>
+/// SALE-03.0 step 4: the Owner may lower the cages and change the date, and chooses whether the trader may pay later. The cages and the date
+/// are those of the staffing plan, whose staff must all have agreed first (decision of 31/10/2026).
+/// </summary>
+public sealed record AcceptPurchaseRequest(int? AcceptedCages, DateOnly? PickupDate, bool? PayLaterAgreed, string? Note, string? RowVersion);
 
 /// <summary>SALE-03.1: the note gives the reason.</summary>
 public sealed record DeclinePurchaseRequest(string? Note, string? RowVersion);
 
-/// <summary>The response of the Owner (SALE-10.1): the kg, date and agreement are empty when Declined.</summary>
-public sealed record PurchaseRequestResponseView(decimal? AcceptedKg, DateOnly? PickupDate, bool? PayLaterAgreed, string? Note, DateTimeOffset RespondedAt);
+/// <summary>The response of the Owner (SALE-10.1): the cages, date and agreement are empty when Declined.</summary>
+public sealed record PurchaseRequestResponseView(int? AcceptedCages, DateOnly? PickupDate, bool? PayLaterAgreed, string? Note, DateTimeOffset RespondedAt);
 
 /// <summary>The profile of a request, as the Owner decides with it (SCR-SALE-02). The debt is 0 until invoices exist.</summary>
 public sealed record PurchaseRequestCustomerView(Guid Id, string Name, string? PhoneNumber, decimal CurrentDebt);
@@ -23,18 +31,25 @@ public sealed record PurchaseRequestSendingView(string Channel, string? PhoneNum
 
 /// <summary>A request as staff see it (SCR-SALE-02).</summary>
 /// <param name="Status">"Fulfilled" while <paramref name="Fulfilled"/> is true, with <paramref name="StatusId"/> still Accepted.</param>
+/// <param name="Code">The code the request is named by on the screens, in the harvest and at the port.</param>
+/// <param name="Staffing">The staffing plan the Owner sends before accepting (decision of 31/10/2026); null before it.</param>
+/// <param name="HarvestCompletedAt">When the Cooperative Owner marked the harvest done (decision of 11/11/2026).</param>
+/// <param name="Harvest">The lots of the request and the commands on them, on the detail of an Accepted request only.</param>
 public sealed record PurchaseRequestView(
-    Guid Id, PurchaseRequestCustomerView Customer, Guid ProductId, string ProductName, decimal RequestedKg, DateOnly PickupDate, string? Note, DateTimeOffset SentAt,
+    Guid Id, PurchaseRequestCustomerView Customer, Guid ProductId, string ProductName, int RequestedCages, DateOnly PickupDate, string? Note, DateTimeOffset SentAt,
     int StatusId, string Status, bool Fulfilled, PurchaseRequestResponseView? Response, string? CancelReason, DateTimeOffset? CancelledAt,
-    IReadOnlyList<PurchaseRequestSendingView> Sendings, string RowVersion);
+    IReadOnlyList<PurchaseRequestSendingView> Sendings, string RowVersion,
+    string Code = "", PurchaseStaffingView? Staffing = null, DateTimeOffset? HarvestCompletedAt = null, PurchaseHarvestView? Harvest = null);
 
 /// <summary>A request as its trader sees it (SCR-SALE-01): no other customer's data, no price, no internal field.</summary>
+/// <param name="HarvestCompletedAt">When the Cooperative Owner marked the harvest done (decision of 11/11/2026): the weighing at the port comes next.</param>
 public sealed record TraderPurchaseRequestView(
-    Guid Id, Guid ProductId, string ProductName, decimal RequestedKg, DateOnly PickupDate, string? Note, DateTimeOffset SentAt,
-    int StatusId, string Status, bool Fulfilled, bool CanCancel, PurchaseRequestResponseView? Response, string? CancelReason, DateTimeOffset? CancelledAt, string RowVersion);
+    Guid Id, Guid ProductId, string ProductName, int RequestedCages, DateOnly PickupDate, string? Note, DateTimeOffset SentAt,
+    int StatusId, string Status, bool Fulfilled, bool CanCancel, PurchaseRequestResponseView? Response, string? CancelReason, DateTimeOffset? CancelledAt, string RowVersion,
+    string Code = "", DateTimeOffset? HarvestCompletedAt = null);
 
-/// <summary>A sent request with MSG-GEN-05 (SALE-01 step 5).</summary>
-public sealed record PurchaseRequestSaved(TraderPurchaseRequestView Request, string Message, string MessageCode);
+/// <summary>A sent request with MSG-GEN-05 (SALE-01 step 5). <paramref name="Replayed"/> when a retry answered the request already saved.</summary>
+public sealed record PurchaseRequestSaved(TraderPurchaseRequestView Request, string Message, string MessageCode, bool Replayed = false);
 
 /// <summary>
 /// My purchases (SALE-10), the requests part; the invoices join it with SALE-10. <paramref name="Message"/> is MSG-GEN-11 when

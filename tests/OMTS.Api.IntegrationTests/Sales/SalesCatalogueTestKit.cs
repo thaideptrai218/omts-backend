@@ -49,7 +49,7 @@ public static class SalesCatalogueTestKit
     {
         foreach (var response in responses)
         {
-            var answer = await response.CodeOrStatusAsync();
+            var answer = response.IsSuccessStatusCode ? ((int)response.StatusCode).ToString(System.Globalization.CultureInfo.InvariantCulture) : await response.CodeOrStatusAsync();
             Assert.True(allowed.Contains(answer), $"Unexpected answer {answer}: {await response.Content.ReadAsStringAsync()}");
         }
     }

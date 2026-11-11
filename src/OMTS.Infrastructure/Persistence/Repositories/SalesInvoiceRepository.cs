@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Common.Models.Sales;
 using OMTS.Application.Features.Notifications;
 using OMTS.Application.Features.Sales.Invoices;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
 
@@ -23,11 +25,34 @@ internal sealed class SalesInvoiceRepository(OmtsDbContext db) : ISalesInvoiceRe
         db.SalesInvoices.AsNoTracking().AsSplitQuery()
             .Include(i => i.Zone)
             .Include(i => i.Customer)
+            .Include(i => i.PurchaseRequest)
             .Include(i => i.Lines).ThenInclude(l => l.Product)
             .Include(i => i.Lines).ThenInclude(l => l.HarvestLot)
+            .Include(i => i.PortWeighing).ThenInclude(w => w!.Cages)
             .Include(i => i.PriceCuts)
             .Include(i => i.Payments)
             .FirstOrDefaultAsync(i => i.Id == invoiceId, cancellationToken);
+
+    public async Task<(IReadOnlyList<CustomerInvoiceRow> Rows, int Total)> ListOfCustomerAsync(Guid customerId, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        var ofCustomer = db.SalesInvoices.AsNoTracking().Where(i => i.CustomerId == customerId);
+        var total = await ofCustomer.CountAsync(cancellationToken);
+        var rows = await ofCustomer
+            .OrderByDescending(i => i.InvoicedAt).ThenByDescending(i => i.Code)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(i => new CustomerInvoiceRow(
+                i.Id, i.Code, i.InvoicedAt, i.InvoiceDate, i.Zone.Name, i.PurchaseRequest != null ? i.PurchaseRequest.Code : null,
+                i.PortWeighing != null ? i.PortWeighing.Cages.Count : 0, i.Lines.Sum(l => l.Kg), i.Total, i.StatusId, i.PaymentTerm))
+            .ToListAsync(cancellationToken);
+        return (rows, total);
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, int>> DeliveredCagesAsync(IReadOnlyCollection<Guid> requestIds, CancellationToken cancellationToken) =>
+        await db.PortWeighingCages.AsNoTracking()
+            .Where(c => requestIds.Contains(c.PortWeighing.PurchaseRequestId) && c.PortWeighing.Invoices.Any(i => i.StatusId == StatusIds.SalesInvoice.Completed))
+            .GroupBy(c => c.PortWeighing.PurchaseRequestId)
+            .Select(g => new { RequestId = g.Key, Cages = g.Count() })
+            .ToDictionaryAsync(x => x.RequestId, x => x.Cages, cancellationToken);
 
     public Task<SalesInvoice?> GetForSendingAsync(Guid invoiceId, CancellationToken cancellationToken) =>
         db.SalesInvoices.AsSplitQuery()

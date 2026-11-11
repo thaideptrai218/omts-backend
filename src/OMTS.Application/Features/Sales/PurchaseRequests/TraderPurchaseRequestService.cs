@@ -6,6 +6,7 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.Sales.Requests;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
 
@@ -23,16 +24,21 @@ public sealed class TraderPurchaseRequestService(
     PurchaseRequestNotifications notifications,
     PurchaseRequestViews views,
     IPurchaseRequestFulfilment fulfilment,
+    PurchaseStaffingService staffing,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
 {
+    // A product outside its sale dates is not on sale that day, as the product list shows it.
+    private const string NotOnSaleStatus = "not on sale on this day";
+
     /// <summary>
     /// SALE-01. The profile row is written too (<see cref="ICustomerReferences"/>): a merge at this moment conflicts, and so
-    /// does a second tap on Send. A product discontinued in the very moment of the save is not caught: the request names it,
-    /// reserves nothing, and the Owner declines it.
+    /// does a second tap on Send. A retry with the same client operation answers the request it saved, even on a later day. A
+    /// product discontinued in the very moment of the save is not caught: the request names it, reserves nothing, and the Owner
+    /// declines it.
     /// </summary>
     public async Task<Result<PurchaseRequestSaved>> PlaceAsync(Guid accountId, PlacePurchaseRequest entry, CancellationToken cancellationToken)
     {
@@ -41,20 +47,32 @@ public sealed class TraderPurchaseRequestService(
             return AppError.Forbidden;
         }
 
-        var product = entry.ProductId is { } productId ? await products.GetForEditAsync(productId, cancellationToken) : null;
         var note = PurchaseRequestRules.CleanText(entry.Note);
+        var operation = entry.ClientOperationId is { } given && given != Guid.Empty ? given : (Guid?)null;
+        if (operation is { } operationId && await requests.FindOperationAsync(customer.Id, operationId, cancellationToken) is { } replay)
+        {
+            if (replay.ProductId != entry.ProductId || replay.RequestedCages != entry.RequestedCages || replay.PickupDate != entry.PickupDate || replay.Note != note)
+            {
+                return AppError.Invalid("Client operation");
+            }
+
+            return await SavedAsync(replay, replayed: true, cancellationToken);
+        }
+
+        var product = entry.ProductId is { } productId ? await products.GetForEditAsync(productId, cancellationToken) : null;
         var invalid = new List<string>();
         if (product is null)
         {
             invalid.Add("Product");
         }
 
-        if (!PurchaseRequestRules.IsKg(entry.RequestedKg))
+        if (!PurchaseRequestRules.IsCages(entry.RequestedCages))
         {
-            invalid.Add("Requested kg");
+            invalid.Add("Requested cages");
         }
 
-        if (entry.PickupDate is not { } pickupDate || pickupDate < timeProvider.Today())
+        var today = timeProvider.Today();
+        if (entry.PickupDate is not { } pickupDate || pickupDate < today)
         {
             invalid.Add("Pickup date");
         }
@@ -74,39 +92,47 @@ public sealed class TraderPurchaseRequestService(
             return AppError.NotUsableChoice($"Product {product.Name}", statusCatalog.DisplayNameOf(product.StatusId), "Product");
         }
 
+        if (product.ValidFrom > today || product.ValidTo < today)
+        {
+            return AppError.NotUsableChoice($"Product {product.Name}", NotOnSaleStatus, "Product");
+        }
+
         var request = new PurchaseRequest
         {
             CustomerId = customer.Id,
             Customer = customer,
             ProductId = product.Id,
             Product = product,
-            RequestedKg = entry.RequestedKg!.Value,
+            ProductName = product.Name,
+            RequestedCages = entry.RequestedCages!.Value,
             PickupDate = entry.PickupDate!.Value,
             Note = note,
+            ClientOperationId = operation ?? Guid.NewGuid(),
             SentAt = timeProvider.GetUtcNow(),
         };
+        request.Code = PurchaseRequestRules.CodeOf(request, today);
         requests.Add(request);
         unitOfWork.MarkChanged(customer);
         audit.Record(new AuditEntry("PurchaseRequest.Sent", PurchaseRequestRules.RecordType)
         {
             RecordId = request.Id,
+            RecordCode = request.Code,
             ActorAccountId = accountId,
-            After = new { Status = statusCatalog.CodeOf(request.StatusId), request.CustomerId, request.ProductId, ProductName = product.Name, request.RequestedKg, request.PickupDate, request.Note },
+            After = new { Status = statusCatalog.CodeOf(request.StatusId), request.CustomerId, request.ProductId, ProductName = product.Name, request.RequestedCages, request.PickupDate, request.Note },
         });
         await notifications.NewRequestAsync(request, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
-
-        var saved = UserMessages.Saved(PurchaseRequestRules.ObjectName);
-        return new PurchaseRequestSaved((await views.ForTraderAsync([request], cancellationToken))[0], saved.Text, saved.Code);
+        return await SavedAsync(request, replayed: false, cancellationToken);
     }
 
     /// <summary>
     /// SALE-02. The status comes first: a request that can no longer be cancelled answers its status whatever the form holds.
-    /// A form read before the Owner answered gets MSG06, so the trader sees the response before cancelling.
+    /// A form read before the Owner answered gets MSG06, so the trader sees the response before cancelling. The shifts the staff
+    /// agreed to are let go, unless one of them already checked in.
     /// </summary>
     public async Task<Result<TraderPurchaseRequestView>> CancelAsync(Guid accountId, Guid requestId, CancelPurchaseRequest entry, CancellationToken cancellationToken)
     {
-        var request = await requests.GetForEditAsync(requestId, cancellationToken);
+        var request = await requests.GetAsync(requestId, cancellationToken);
         if (request is null || request.Customer.AccountId != accountId)
         {
             return AppError.NotFound;
@@ -133,13 +159,20 @@ public sealed class TraderPurchaseRequestService(
             return AppError.Invalid("Reason");
         }
 
+        if (await staffing.CanReleaseAsync(request, cancellationToken) is { } worked)
+        {
+            return worked;
+        }
+
         var before = request.StatusId;
         request.StatusId = StatusIds.PurchaseRequest.Cancelled;
         request.CancelReason = reason;
         request.CancelledAt = timeProvider.GetUtcNow();
+        await staffing.ReleaseAsync(request, cancellationToken);
         audit.Record(new AuditEntry("PurchaseRequest.Cancelled", PurchaseRequestRules.RecordType)
         {
             RecordId = request.Id,
+            RecordCode = request.Code,
             ActorAccountId = accountId,
             Before = new { Status = statusCatalog.CodeOf(before) },
             After = new { Status = statusCatalog.CodeOf(request.StatusId) },
@@ -152,5 +185,11 @@ public sealed class TraderPurchaseRequestService(
         }
 
         return (await views.ForTraderAsync([request], cancellationToken))[0];
+    }
+
+    private async Task<PurchaseRequestSaved> SavedAsync(PurchaseRequest request, bool replayed, CancellationToken cancellationToken)
+    {
+        var saved = UserMessages.Saved(PurchaseRequestRules.ObjectName);
+        return new PurchaseRequestSaved((await views.ForTraderAsync([request], cancellationToken))[0], saved.Text, saved.Code, replayed);
     }
 }

@@ -12,10 +12,10 @@ namespace OMTS.Api.IntegrationTests.Labor;
 /// <summary>LABOR-15: the break and the rounding unit from a date, with the earlier settings kept. Each test has its own history.</summary>
 public class AttendanceSettingsTests
 {
-    private static async Task<JsonElement> ReadAsync(HttpClient owner) => await owner.GetFromJsonAsync<JsonElement>(AttendanceSettings);
+    private static async Task<JsonElement> ReadAsync(HttpClient owner) => await owner.GetFromJsonAsync<JsonElement>(LaborSettingsTestKit.AttendanceSettings);
 
     private static async Task<JsonElement> SaveAsync(HttpClient owner, object body) =>
-        (await (await owner.PostAsJsonAsync(AttendanceSettings, body)).BodyAsync(HttpStatusCode.OK)).GetProperty("settings").Clone();
+        (await (await owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, body)).BodyAsync(HttpStatusCode.OK)).GetProperty("settings").Clone();
 
     [Fact]
     public async Task When_set_up_there_is_no_break_and_no_rounding()
@@ -40,7 +40,7 @@ public class AttendanceSettingsTests
         var owner = await OwnerAsync(factory);
 
         var response = await owner.PostAsJsonAsync(
-            AttendanceSettings, new { breakStart = "11:30", breakEnd = "12:30", roundingUnit = "Minutes15", effectiveFrom = "2020-03-01", rowVersion = (await ReadAsync(owner)).VersionOf() });
+            LaborSettingsTestKit.AttendanceSettings, new { breakStart = "11:30", breakEnd = "12:30", roundingUnit = "Minutes15", effectiveFrom = "2020-03-01", rowVersion = (await ReadAsync(owner)).VersionOf() });
         var saved = await response.BodyAsync(HttpStatusCode.OK);
         Assert.Equal(("MSG-GEN-05", "Attendance settings saved."), (saved.Str("messageCode"), saved.Str("message")));
         var first = saved.GetProperty("settings");
@@ -97,7 +97,7 @@ public class AttendanceSettingsTests
         var owner = await OwnerAsync(factory);
 
         var refused = await owner.PostAsJsonAsync(
-            AttendanceSettings, new { breakStart = start, breakEnd = end, roundingUnit = "None", effectiveFrom = "2020-03-01", rowVersion = (await ReadAsync(owner)).VersionOf() });
+            LaborSettingsTestKit.AttendanceSettings, new { breakStart = start, breakEnd = end, roundingUnit = "None", effectiveFrom = "2020-03-01", rowVersion = (await ReadAsync(owner)).VersionOf() });
 
         Assert.Equal(("MSG-GEN-01", field), (await refused.ErrorCodeAsync(), await EmployeeRequests.FieldAsync(refused)));
         Assert.Equal(0, await factory.QueryAsync(db => db.AttendanceSettingsVersions.CountAsync()));
@@ -110,9 +110,9 @@ public class AttendanceSettingsTests
         var owner = await OwnerAsync(factory);
         var version = (await ReadAsync(owner)).VersionOf();
 
-        var missing = await owner.PostAsJsonAsync(AttendanceSettings, new { rowVersion = version });
-        var notAUnit = await owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = 7, effectiveFrom = "2020-03-01", rowVersion = version });
-        var unitByNumber = await owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = 15, effectiveFrom = "2020-03-01", rowVersion = version });
+        var missing = await owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { rowVersion = version });
+        var notAUnit = await owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { roundingUnit = 7, effectiveFrom = "2020-03-01", rowVersion = version });
+        var unitByNumber = await owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { roundingUnit = 15, effectiveFrom = "2020-03-01", rowVersion = version });
 
         var problem = await missing.SrsProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01", "MSG01");
         Assert.Equal(["Rounding unit", "Effective date"], problem.GetProperty("fields").EnumerateArray().Select(f => f.GetString()));
@@ -129,7 +129,7 @@ public class AttendanceSettingsTests
         await using var factory = new AuthApiFactory();
         var owner = await OwnerAsync(factory);
 
-        var refused = await owner.PostAsJsonAsync(AttendanceSettings, new { breakStart = start, breakEnd = end, roundingUnit = "None", effectiveFrom = "2020-03-01", rowVersion = "" });
+        var refused = await owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { breakStart = start, breakEnd = end, roundingUnit = "None", effectiveFrom = "2020-03-01", rowVersion = "" });
 
         Assert.Equal(("MSG-GEN-01", field), (await refused.ErrorCodeAsync(), await EmployeeRequests.FieldAsync(refused)));
     }
@@ -155,7 +155,7 @@ public class AttendanceSettingsTests
         await using var factory = new AuthApiFactory();
         var owner = await OwnerAsync(factory);
 
-        var refused = await owner.PostAsync(AttendanceSettings, new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+        var refused = await owner.PostAsync(LaborSettingsTestKit.AttendanceSettings, new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
 
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
         Assert.Equal("MSG-GEN-01", await refused.ErrorCodeAsync());
@@ -167,7 +167,7 @@ public class AttendanceSettingsTests
         await using var factory = new AuthApiFactory();
         var owner = await OwnerAsync(factory);
 
-        var refused = await owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "None", effectiveFrom = "2020-03-01" });
+        var refused = await owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { roundingUnit = "None", effectiveFrom = "2020-03-01" });
 
         Assert.Equal("RowVersion", await EmployeeRequests.FieldAsync(refused));
     }
