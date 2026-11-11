@@ -237,4 +237,65 @@ public class PayrollPaymentTests
         Assert.Equal([idle], searched.GetProperty("items").EnumerateArray().Select(i => i.GuidOf("employeeId")));
         Assert.Matches(@"^NV\d{6}$", all.GetProperty("items")[0].Str("code"));
     }
+
+    [Fact]
+    public async Task The_payments_list_filters_by_payrollId_and_names_the_sheet()
+    {
+        await using var factory = new AuthApiFactory();
+        var f = await FinalizedSheetAsync(factory);
+        await PayAsync(f.S.Owner, f.Sheet.GuidOf(), "Cash", (f.SlipAn, 640_000), (f.SlipBinh, 320_000));
+        await PayEmployeeAsync(f.S.Owner, f.An, 5_000);
+
+        var all = await f.S.Owner.JsonAsync(Payments);
+        var ofSheet = await f.S.Owner.JsonAsync($"{Payments}?payrollId={f.Sheet.GuidOf()}&pageSize=1&page=2");
+        var none = await f.S.Owner.JsonAsync($"{Payments}?payrollId={Guid.NewGuid()}");
+        var withEmployee = await f.S.Owner.JsonAsync($"{Payments}?payrollId={f.Sheet.GuidOf()}&employeeId={f.Binh}");
+
+        Assert.Equal(3, all.GetProperty("total").GetInt32());
+        Assert.Equal(2, ofSheet.GetProperty("total").GetInt32());
+        Assert.Equal(f.Sheet.GuidOf(), ofSheet.GetProperty("items")[0].GuidOf("payrollId"));
+        Assert.Equal(0, none.GetProperty("total").GetInt32());
+        Assert.Equal(1, withEmployee.GetProperty("total").GetInt32());
+        Assert.Equal("Bảng lương tháng 03/2024", withEmployee.GetProperty("items")[0].Str("payrollName"));
+        var advance = all.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("payrollId").ValueKind == JsonValueKind.Null);
+        Assert.Equal(JsonValueKind.Null, advance.GetProperty("payrollName").ValueKind);
+        Assert.Equal(HttpStatusCode.BadRequest, (await f.S.Owner.GetAsync($"{Payments}?payrollId=not-a-guid")).StatusCode);
+    }
+
+    [Fact]
+    public async Task The_payments_list_filters_by_method_kind_and_status_and_sums_the_whole_filtered_set()
+    {
+        await using var factory = new AuthApiFactory();
+        var f = await FinalizedSheetAsync(factory);
+        var paid = await (await PayAsync(f.S.Owner, f.Sheet.GuidOf(), "Cash", (f.SlipAn, 640_000))).BodyAsync(HttpStatusCode.Created);
+        await PayAsync(f.S.Owner, f.Sheet.GuidOf(), "BankTransfer", (f.SlipBinh, 320_000));
+        await PayEmployeeAsync(f.S.Owner, f.An, 5_000);
+        var cancel = await f.S.Owner.PostAsJsonAsync($"/api/cash-book/vouchers/{paid.GetProperty("vouchers")[0].GuidOf()}/cancel", new { reason = "Chi nhầm" });
+        Assert.Equal(HttpStatusCode.OK, cancel.StatusCode);
+
+        async Task<JsonElement> ListAsync(string query) => await f.S.Owner.JsonAsync($"{Payments}?{query}");
+        var all = await ListAsync("pageSize=1");
+        var cash = await ListAsync("method=Cash");
+        var bank = await ListAsync("method=BankTransfer");
+        var advance = await ListAsync("kind=Advance");
+        var wage = await ListAsync("kind=Wage&pageSize=1");
+        var recorded = await ListAsync("status=Recorded");
+        var cancelled = await ListAsync("status=Cancelled");
+        var combined = await ListAsync("method=Cash&kind=Wage&status=Recorded");
+
+        // Three payments, one cancelled: the sum counts the Recorded ones of the whole set, not only the one on the page.
+        Assert.Equal((3, 1), (all.GetProperty("total").GetInt32(), all.GetProperty("items").GetArrayLength()));
+        Assert.Equal(325_000m, all.GetProperty("summary").Money("amount"));
+        Assert.Equal((2, 5_000m), (cash.GetProperty("total").GetInt32(), cash.GetProperty("summary").Money("amount")));
+        Assert.Equal((1, 320_000m), (bank.GetProperty("total").GetInt32(), bank.GetProperty("summary").Money("amount")));
+        Assert.Equal((1, 5_000m), (advance.GetProperty("total").GetInt32(), advance.GetProperty("summary").Money("amount")));
+        Assert.Equal((2, 320_000m), (wage.GetProperty("total").GetInt32(), wage.GetProperty("summary").Money("amount")));
+        Assert.Equal((2, 325_000m), (recorded.GetProperty("total").GetInt32(), recorded.GetProperty("summary").Money("amount")));
+        Assert.Equal((1, 0m), (cancelled.GetProperty("total").GetInt32(), cancelled.GetProperty("summary").Money("amount")));
+        Assert.Equal((0, 0m), (combined.GetProperty("total").GetInt32(), combined.GetProperty("summary").Money("amount")));
+        foreach (var bad in new[] { "method=Card", "method=cash", "method=0", "kind=Salary", "kind=1", "status=Paid", "status=recorded" })
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, (await f.S.Owner.GetAsync($"{Payments}?{bad}")).StatusCode);
+        }
+    }
 }

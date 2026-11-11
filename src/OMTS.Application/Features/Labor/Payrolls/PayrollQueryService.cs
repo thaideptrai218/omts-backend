@@ -108,7 +108,7 @@ public sealed class PayrollQueryService(
         var paid = slips.Sum(s => s.Paid);
         return new PayrollSheetDetail(
             raw.Id, raw.Code, PayrollRules.NameOf(raw.PeriodType, raw.From, raw.To), raw.PeriodType, raw.From, raw.To, raw.Scope, PayrollRules.StatusOf(raw.StatusId),
-            raw.ExpenseMonth, raw.Note, createdBy, raw.CreatedAt, total, paid, total - paid, slips);
+            raw.ExpenseMonth, raw.Note, createdBy, raw.CreatedAt, total, paid, total - paid, slips, createdBy, slips.Count);
     }
 
     private static PayrollSlipRow Slip(PayrollSlipRaw s)
@@ -188,11 +188,46 @@ public sealed class PayrollQueryService(
         }
 
         var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
-        var (items, total) = await reader.ListPaymentsAsync(query.Search?.Trim(), query.EmployeeId, query.From, query.To, page, pageSize, cancellationToken);
+        if (!TryParse<PaymentMethod>(query.Method, out var method) || !TryParse<WagePaymentKind>(query.Kind, out var kind))
+        {
+            return AppError.Invalid(method is null && query.Method is not null ? "Method" : "Kind");
+        }
+
+        bool? cancelled = null;
+        if (query.Status is not null)
+        {
+            cancelled = query.Status switch { "Recorded" => false, "Cancelled" => true, _ => null };
+            if (cancelled is null)
+            {
+                return AppError.Invalid("Status");
+            }
+        }
+
+        var (items, total, recorded) = await reader.ListPaymentsAsync(
+            new PaymentFilter(query.Search?.Trim(), query.EmployeeId, query.PayrollId, query.From, query.To, method, kind, cancelled), page, pageSize, cancellationToken);
         return new PayrollPaymentPage(
             items.Select(p => new PayrollPaymentRow(
-                p.Id, p.VoucherCode, p.PaidAt, p.EmployeeId, p.EmployeeName, p.PayrollId, p.PayrollCode, p.Method, p.Amount, p.Kind, p.Cancelled ? "Cancelled" : "Recorded")).ToList(),
-            total, page, pageSize);
+                p.Id, p.VoucherCode, p.PaidAt, p.EmployeeId, p.EmployeeName, p.PayrollId, p.PayrollCode, p.Method, p.Amount, p.Kind, p.Cancelled ? "Cancelled" : "Recorded",
+                p.PayrollPeriodType is { } type && p.PayrollFrom is { } start && p.PayrollTo is { } end ? PayrollRules.NameOf(type, start, end) : null)).ToList(),
+            total, page, pageSize, new PayrollPaymentSummary(recorded));
+    }
+
+    /// <summary>An enum name exactly as written (no numbers, no other case); null and empty mean "no filter".</summary>
+    private static bool TryParse<T>(string? text, out T? value) where T : struct, Enum
+    {
+        value = null;
+        if (string.IsNullOrEmpty(text))
+        {
+            return true;
+        }
+
+        if (!Enum.TryParse<T>(text, false, out var parsed) || !Enum.GetNames<T>().Contains(text))
+        {
+            return false;
+        }
+
+        value = parsed;
+        return true;
     }
 
     public async Task<Result<PayableEmployees>> PayableEmployeesAsync(string? search, bool includeAll, CancellationToken cancellationToken)

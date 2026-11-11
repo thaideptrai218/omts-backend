@@ -62,7 +62,8 @@ public sealed record PayrollExportQuery(
     string? SortBy = null,
     string? SortDir = null);
 
-public sealed record PayrollPaymentListQuery(string? Search = null, Guid? EmployeeId = null, DateOnly? From = null, DateOnly? To = null, int Page = 1, int PageSize = 20);
+public sealed record PayrollPaymentListQuery(string? Search = null, Guid? EmployeeId = null, DateOnly? From = null, DateOnly? To = null, int Page = 1, int PageSize = 20, Guid? PayrollId = null,
+    string? Method = null, string? Kind = null, string? Status = null);
 
 public sealed record EmployeePayslipListQuery(PayrollSheetStatus? Status = null, int Page = 1, int PageSize = 20);
 
@@ -81,7 +82,7 @@ public sealed record PayrollSlipRow(
 public sealed record PayrollSheetDetail(
     Guid Id, string Code, string Name, PayrollPeriodType PeriodType, DateOnly From, DateOnly To, PayrollScope Scope, PayrollSheetStatus Status,
     string? ExpenseMonth, string? Note, string? CreatedBy, DateTimeOffset CreatedAt, decimal Total, decimal Paid, decimal Outstanding,
-    IReadOnlyList<PayrollSlipRow> Slips);
+    IReadOnlyList<PayrollSlipRow> Slips, string? CreatedByName, int EmployeeCount);
 
 public sealed record PayrollVoucherRef(Guid Id, string Code, Guid SlipId, string EmployeeName, decimal Amount);
 
@@ -91,9 +92,12 @@ public sealed record StandalonePaymentResult(Guid Id);
 
 public sealed record PayrollPaymentRow(
     Guid Id, string VoucherCode, DateTimeOffset PaidAt, Guid EmployeeId, string EmployeeName, Guid? PayrollId, string? PayrollCode,
-    PaymentMethod Method, decimal Amount, WagePaymentKind Kind, string Status);
+    PaymentMethod Method, decimal Amount, WagePaymentKind Kind, string Status, string? PayrollName = null);
 
-public sealed record PayrollPaymentPage(IReadOnlyList<PayrollPaymentRow> Items, int Total, int Page, int PageSize);
+/// <summary><c>Amount</c> is the sum of the Recorded (not cancelled) payments of the whole filtered set, not of the page.</summary>
+public sealed record PayrollPaymentSummary(decimal Amount);
+
+public sealed record PayrollPaymentPage(IReadOnlyList<PayrollPaymentRow> Items, int Total, int Page, int PageSize, PayrollPaymentSummary Summary);
 
 public sealed record PayableEmployee(Guid EmployeeId, string Code, string Name, decimal Outstanding);
 

@@ -264,4 +264,23 @@ public class PayrollSheetTests
         var reloaded = await (await s.Owner.PostAsJsonAsync($"{Payrolls}/{sheet.GuidOf()}/reload", new { mode = "All" })).BodyAsync(HttpStatusCode.OK);
         Assert.Equal(9m, reloaded.SlipOf(an).Money("hours"));
     }
+
+    [Fact]
+    public async Task The_sheet_detail_names_its_creator_and_counts_its_payslips()
+    {
+        await using var factory = new AuthApiFactory();
+        var s = await SetupWorkAsync(factory);
+        await WorkerAsync(s, "An", FirstDays(3, 2));
+        await WorkerAsync(s, "Bình", FirstDays(3, 1));
+        var made = await NewSheetAsync(s.Owner, 3);
+
+        var sheet = await s.Owner.SheetAsync(made.GuidOf());
+
+        Assert.Equal(2, sheet.GetProperty("employeeCount").GetInt32());
+        Assert.False(string.IsNullOrWhiteSpace(sheet.Str("createdByName")));
+        Assert.Equal(sheet.Str("createdBy"), sheet.Str("createdByName"));
+        Assert.Equal(JsonValueKind.Null, sheet.GetProperty("expenseMonth").ValueKind);
+        Assert.Equal(JsonValueKind.Null, sheet.GetProperty("note").ValueKind);
+        Assert.True(DateTimeOffset.TryParse(sheet.Str("createdAt"), out _));
+    }
 }

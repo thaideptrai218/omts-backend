@@ -121,10 +121,16 @@ internal sealed class PayrollReader(OmtsDbContext db, TimeProvider timeProvider)
         return new EmployeeSlipPageRaw(items, total, net - paid, advanced - deducted);
     }
 
-    public async Task<(IReadOnlyList<PaymentRaw> Items, int Total)> ListPaymentsAsync(
-        string? search, Guid? employeeId, DateOnly? from, DateOnly? to, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<(IReadOnlyList<PaymentRaw> Items, int Total, decimal RecordedAmount)> ListPaymentsAsync(
+        PaymentFilter filter, int page, int pageSize, CancellationToken cancellationToken)
     {
+        var (search, employeeId, payrollId, from, to) = (filter.Search, filter.EmployeeId, filter.PayrollId, filter.From, filter.To);
         var payments = db.WagePayments.AsNoTracking().AsQueryable();
+        if (payrollId is { } sheet)
+        {
+            payments = payments.Where(w => w.PayrollLine != null && w.PayrollLine.PayrollId == sheet);
+        }
+
         if (employeeId is { } employee)
         {
             payments = payments.Where(w => w.EmployeeId == employee);
@@ -140,6 +146,21 @@ internal sealed class PayrollReader(OmtsDbContext db, TimeProvider timeProvider)
             payments = payments.Where(w => w.CashVoucher.VoucherDate <= end);
         }
 
+        if (filter.Method is { } method)
+        {
+            payments = payments.Where(w => w.Method == method);
+        }
+
+        if (filter.Kind is { } kind)
+        {
+            payments = payments.Where(w => w.Kind == kind);
+        }
+
+        if (filter.Cancelled is { } cancelled)
+        {
+            payments = payments.Where(w => (w.CashVoucher.CancelledAt != null) == cancelled);
+        }
+
         if (!string.IsNullOrEmpty(search))
         {
             payments = payments.Where(w => w.CashVoucher.Code.Contains(search) || w.Employee.FullName.Contains(search)
@@ -147,15 +168,19 @@ internal sealed class PayrollReader(OmtsDbContext db, TimeProvider timeProvider)
         }
 
         var total = await payments.CountAsync(cancellationToken);
+        var recorded = await payments.Where(w => w.CashVoucher.CancelledAt == null).SumAsync(w => (decimal?)w.Amount, cancellationToken) ?? 0m;
         var items = await payments
             .OrderByDescending(w => w.PaidAt).ThenByDescending(w => w.CashVoucher.Code).ThenByDescending(w => w.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(w => new PaymentRaw(
                 w.CashVoucherId, w.CashVoucher.Code, w.PaidAt, w.EmployeeId, w.Employee.FullName,
                 w.PayrollLine == null ? null : w.PayrollLine.PayrollId, w.PayrollLine == null ? null : w.PayrollLine.Payroll.Code,
-                w.Method, w.Amount, w.Kind, w.CashVoucher.CancelledAt != null))
+                w.Method, w.Amount, w.Kind, w.CashVoucher.CancelledAt != null,
+                w.PayrollLine == null ? null : w.PayrollLine.Payroll.PeriodType,
+                w.PayrollLine == null ? null : w.PayrollLine.Payroll.PeriodStart,
+                w.PayrollLine == null ? null : w.PayrollLine.Payroll.PeriodEnd))
             .ToListAsync(cancellationToken);
-        return (items, total);
+        return (items, total, recorded);
     }
 
     public async Task<IReadOnlyList<PayableEmployeeRaw>> ListPayableEmployeesAsync(string? search, bool includeAll, int take, CancellationToken cancellationToken)

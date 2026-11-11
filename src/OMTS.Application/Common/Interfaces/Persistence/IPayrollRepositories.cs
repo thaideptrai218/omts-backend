@@ -101,7 +101,12 @@ public sealed record EmployeeSlipPageRaw(IReadOnlyList<EmployeeSlipRaw> Items, i
 
 public sealed record PaymentRaw(
     Guid Id, string VoucherCode, DateTimeOffset PaidAt, Guid EmployeeId, string EmployeeName, Guid? PayrollId, string? PayrollCode,
-    PaymentMethod Method, decimal Amount, WagePaymentKind Kind, bool Cancelled);
+    PaymentMethod Method, decimal Amount, WagePaymentKind Kind, bool Cancelled,
+    PayrollPeriodType? PayrollPeriodType = null, DateOnly? PayrollFrom = null, DateOnly? PayrollTo = null);
+
+/// <summary>What the payments list keeps; <c>Cancelled</c> true keeps the payments whose voucher is cancelled, false the others, null both.</summary>
+public sealed record PaymentFilter(
+    string? Search, Guid? EmployeeId, Guid? PayrollId, DateOnly? From, DateOnly? To, PaymentMethod? Method, WagePaymentKind? Kind, bool? Cancelled);
 
 public sealed record PayableEmployeeRaw(Guid EmployeeId, string? Code, string Name, decimal Outstanding);
 
@@ -119,9 +124,9 @@ public interface IPayrollReader
     /// <summary>The payslips of the employee, the newest period first; <paramref name="statusIds"/> null leaves out Cancelled sheets.</summary>
     Task<EmployeeSlipPageRaw> ListEmployeeSlipsAsync(Guid employeeId, IReadOnlyCollection<int>? statusIds, int page, int pageSize, CancellationToken cancellationToken);
 
-    /// <summary>The payments, newest first, matching the code of the voucher, the employee's name or the code of the sheet.</summary>
-    Task<(IReadOnlyList<PaymentRaw> Items, int Total)> ListPaymentsAsync(
-        string? search, Guid? employeeId, DateOnly? from, DateOnly? to, int page, int pageSize, CancellationToken cancellationToken);
+    /// <summary>The payments, newest first, matching the code of the voucher, the employee's name or the code of the sheet; <c>payrollId</c> keeps the payments of one sheet.</summary>
+    Task<(IReadOnlyList<PaymentRaw> Items, int Total, decimal RecordedAmount)> ListPaymentsAsync(
+        PaymentFilter filter, int page, int pageSize, CancellationToken cancellationToken);
 
     /// <summary>Employees with something owed on Finalized sheets (Left ones too), or every Employed employee when <paramref name="includeAll"/>; by name, at most <paramref name="take"/>.</summary>
     Task<IReadOnlyList<PayableEmployeeRaw>> ListPayableEmployeesAsync(string? search, bool includeAll, int take, CancellationToken cancellationToken);
