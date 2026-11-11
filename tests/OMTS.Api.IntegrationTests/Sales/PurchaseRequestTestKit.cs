@@ -125,7 +125,16 @@ public static class PurchaseRequestTestKit
         row.WorkDate = day;
         row.PlannedPickupDate = pickup;
         row.CagesPerEmployeePerDay = cages;
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // A parallel answer or cancel changed the request first: the accept goes out on the version read, and loses as a stale form would.
+            return rowVersion;
+        }
+
         return Convert.ToBase64String(row.RowVersion);
     }
 

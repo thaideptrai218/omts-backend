@@ -25,7 +25,7 @@ namespace OMTS.Application.Features.Harvest;
 /// average kg per cage it copies (BR-HARVEST-02), the harvest time and the lot code. The cycle row is part of the save, so of two parallel saves that change the lane states of a cycle
 /// one answers MSG06 and saves nothing, and a new send is checked against the new states. Two lots that take one code without sharing a cycle lose nothing: the loser takes the next code, with its photos.
 /// The trip harvests for one purchase request (decision of 11/11/2026), read again with the rest: the request row is part of the save too, so a lot and the Owner marking its harvest done
-/// never both pass.
+/// never both pass. Two lots of one request on two rafts both pass: the one that loses on the request row alone tries again.
 /// </summary>
 public sealed class HarvestLotRecordingService(
     IRaftRepository rafts,
@@ -96,12 +96,16 @@ public sealed class HarvestLotRecordingService(
         return await SaveAsync(raftId, request, uploaded.Value!, recorder, cancellationToken);
     }
 
-    /// <summary>One attempt per lot code: a new attempt starts clean, from the database as it now is. The uploads stay until the last attempt fails.</summary>
+    /// <summary>
+    /// One attempt per lot code: a new attempt starts clean, from the database as it now is. The uploads stay until the last attempt fails. A conflict on the
+    /// purchase request alone also gets a new attempt: two people record lots for one request on two rafts at once (decision of 11/11/2026), and the new attempt
+    /// still refuses a request marked harvest done in between. A conflict on the cycle stays MSG06, as the lane states may have changed.
+    /// </summary>
     private async Task<Result<HarvestLotSaved>> SaveAsync(Guid raftId, RecordHarvestRequest request, IReadOnlyList<string> keys, Guid recorder, CancellationToken cancellationToken)
     {
         for (var attempt = 1; ; attempt++)
         {
-            // Forgets every row read or added and the pushes queued with them, so a new attempt after a lost race on the lot code reads the database again.
+            // Forgets every row read or added and the pushes queued with them, so a new attempt after a lost race reads the database again.
             unitOfWork.DiscardChanges();
             var prepared = await photoStore.PrepareSaveAsync(keys, () => PrepareAsync(raftId, request, keys, recorder, cancellationToken));
             if (!prepared.IsSuccess)
@@ -109,10 +113,11 @@ public sealed class HarvestLotRecordingService(
                 return prepared.Error!;
             }
 
+            var cycleRead = prepared.Value!.Cycle.RowVersion.ToArray();
             try
             {
                 var mayRetry = attempt < MaxCodeAttempts;
-                await fileSaver.SaveAsync(keys, [], cancellationToken, exception => mayRetry && exception is DuplicateRecordException);
+                await fileSaver.SaveAsync(keys, [], cancellationToken, exception => mayRetry && exception is DuplicateRecordException or ConcurrencyConflictException);
             }
             catch (DuplicateRecordException) when (attempt < MaxCodeAttempts)
             {
@@ -121,6 +126,18 @@ public sealed class HarvestLotRecordingService(
             catch (DuplicateRecordException exception)
             {
                 throw new ConcurrencyConflictException(exception);
+            }
+            catch (ConcurrencyConflictException) when (attempt < MaxCodeAttempts)
+            {
+                unitOfWork.DiscardChanges();
+                var cycleNow = await cycles.GetAsync(prepared.Value!.Cycle.Id, cancellationToken);
+                if (cycleNow is not null && cycleNow.RowVersion.AsSpan().SequenceEqual(cycleRead))
+                {
+                    continue;
+                }
+
+                await fileSaver.DiscardAsync(keys);
+                throw;
             }
 
             var done = prepared.Value!;
