@@ -5,10 +5,13 @@ namespace OMTS.Application.Features.Cultivation.Seeding;
 
 /// <summary>CYCLE-02.0: one seed lot and the lanes on which its seed was hung.</summary>
 /// <param name="SeedLotId">The <c>id</c> of a lot of the seed lot list: the receipt line.</param>
-public sealed record RecordSeedingRequest(DateOnly? SeedingDate, Guid? SeedLotId, IReadOnlyList<int>? LaneNumbers, decimal? Quantity);
+/// <param name="ConfirmOverPlan">The answer to the over-plan question (409 MSG-GEN-04 with <c>confirmFlag: "confirmOverPlan"</c>): the seed of the cycle goes above 110 % of its planned seed; needs <paramref name="OverPlanReason"/>.</param>
+public sealed record RecordSeedingRequest(
+    DateOnly? SeedingDate, Guid? SeedLotId, IReadOnlyList<int>? LaneNumbers, decimal? Quantity, bool ConfirmOverPlan = false, string? OverPlanReason = null);
 
 /// <summary>CYCLE-02.2: the session as it should be, with the reason and the version read (NFR-09).</summary>
-public sealed record CorrectSeedingRequest(DateOnly? SeedingDate, Guid? SeedLotId, IReadOnlyList<int>? LaneNumbers, decimal? Quantity, string? Reason, string? RowVersion);
+public sealed record CorrectSeedingRequest(
+    DateOnly? SeedingDate, Guid? SeedLotId, IReadOnlyList<int>? LaneNumbers, decimal? Quantity, string? Reason, string? RowVersion, bool ConfirmOverPlan = false, string? OverPlanReason = null);
 
 /// <summary>CYCLE-02.2 remove.</summary>
 public sealed record RemoveSeedingRequest(string? Reason, string? RowVersion);
@@ -58,7 +61,8 @@ public sealed record SeedingRecordView(
     bool CanCorrect,
     string RowVersion,
     Guid? IssueId = null,
-    string? IssueCode = null);
+    string? IssueCode = null,
+    string? OverPlanReason = null);
 
 /// <summary>Answer of a saved session.</summary>
 /// <param name="OfferMarkComplete">No lane In Use is left Not seeded and the seeding is not yet marked complete (CYCLE-02.0 step 7).</param>
@@ -96,7 +100,10 @@ public sealed record SeedingList(
     IReadOnlyList<SeedingLaneView> Lanes,
     IReadOnlyList<SeedingRecordView> Records,
     IReadOnlyList<SeedLotTotal> Lots,
-    string CycleRowVersion);
+    string CycleRowVersion,
+    decimal? PlannedSeedQuantity = null,
+    decimal SeededQuantity = 0m,
+    decimal? Percent = null);
 
 /// <summary>What to ask before marking the seeding complete (CYCLE-02.1 step 2).</summary>
 /// <param name="Message">MSG-CYCLE-01, listing the lanes that are still Not seeded.</param>

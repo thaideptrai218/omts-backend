@@ -91,7 +91,10 @@ public sealed class SeedingReadService(
                 .Select(g => new SeedLotTotal(g.Key, SeedingValues.LotCode(g.First().SeedLotLine), g.First().SeedLotLine.Item?.Name, g.First().SeedLotLine.Item?.Unit ?? g.First().SeedLotLine.Unit, g.Sum(r => r.Quantity)))
                 .OrderBy(t => t.Code, StringComparer.Ordinal)
                 .ToList(),
-            RowVersionGuard.Encode(cycle.RowVersion));
+            RowVersionGuard.Encode(cycle.RowVersion),
+            cycle.ExpectedSeedQuantity,
+            ofCycle.Sum(r => r.Quantity),
+            SeedingPlanRules.Percent(cycle.ExpectedSeedQuantity, ofCycle.Sum(r => r.Quantity)));
     }
 
     public async Task<Result<SeedingRecordView>> GetAsync(Guid recordId, CancellationToken cancellationToken)

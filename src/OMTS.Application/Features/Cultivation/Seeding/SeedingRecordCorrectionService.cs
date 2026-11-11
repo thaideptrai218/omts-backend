@@ -56,13 +56,25 @@ public sealed class SeedingRecordCorrectionService(
             return conflict;
         }
 
+        // Judged only when the correction raises the seed (the other sessions and this one's new quantity against the plan), as for a harvest lot.
+        string? overPlanReason = null;
+        if (fields!.Quantity > record.Quantity)
+        {
+            var others = (await records.ListByCycleAsync(record.CycleId, cancellationToken)).Where(r => r.Id != record.Id).Sum(r => r.Quantity);
+            if (SeedingPlanRules.Check(new SeedingPlanInput(record.Cycle.ExpectedSeedQuantity, others, request.ConfirmOverPlan, request.OverPlanReason), fields.Quantity, out overPlanReason) is { } overPlan)
+            {
+                return overPlan;
+            }
+        }
+
         var before = SeedingValues.Snapshot(record);
         if (await stockSync.ReplaceAsync(record, fields!, raft, cancellationToken) is { } stockRefused)
         {
             return stockRefused;
         }
 
-        SeedingRecordRows.Apply(records, record, fields!);
+        SeedingRecordRows.Apply(records, record, fields);
+        record.OverPlanReason = overPlanReason ?? record.OverPlanReason;
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, SeedingValues.Snapshot(record));
         if (changedAfter is not null)
         {

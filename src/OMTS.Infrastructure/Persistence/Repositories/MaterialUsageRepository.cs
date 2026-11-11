@@ -20,6 +20,8 @@ internal sealed class MaterialUsageRepository(OmtsDbContext db) : IMaterialUsage
 
     public void Add(MaterialUsage usage) => db.MaterialUsages.Add(usage);
 
+    public void Remove(MaterialUsage usage) => db.MaterialUsages.Remove(usage);
+
     private static IQueryable<MaterialUsage> Whole(IQueryable<MaterialUsage> usages) =>
         usages.Include(u => u.Item).Include(u => u.Issue).Include(u => u.Raft).ThenInclude(r => r.Zone);
 }

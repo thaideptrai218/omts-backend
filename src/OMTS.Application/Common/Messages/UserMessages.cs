@@ -34,6 +34,10 @@ public static class UserMessages
     public static UserMessage HarvestOverPlanQuestion(decimal totalKg, decimal targetKg) => ConfirmAction(
         $"record this harvest, which takes the cycle to {Quantity(totalKg)} kg, above its target yield of {Quantity(targetKg)} kg");
 
+    /// <summary>MSG-GEN-04 for a seeding session that takes the cycle above 110 % of its planned seed: the client asks again with <c>confirmOverPlan</c> and a reason.</summary>
+    public static UserMessage SeedingOverPlanQuestion(decimal totalQuantity, decimal plannedQuantity) => ConfirmAction(
+        $"record this seeding, which takes the cycle to {Quantity(totalQuantity)} seed, above its planned seed of {Quantity(plannedQuantity)}");
+
     /// <summary>MSG-GEN-05: a record is saved.</summary>
     public static UserMessage Saved(string what) => new(Gen05, $"{what} saved.", Legacy.Msg10);
 

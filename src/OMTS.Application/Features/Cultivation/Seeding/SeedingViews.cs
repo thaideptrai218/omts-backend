@@ -78,7 +78,8 @@ public sealed class SeedingViews(
             CultivationCycleViews.CanEdit(cycle, raft, raft.Zone.StatusId == StatusIds.Usage.InUse) && !inALot && MayCorrect(access, record, raft.ZoneId),
             RowVersionGuard.Encode(record.RowVersion),
             record.IssueId,
-            record.Issue?.Code);
+            record.Issue?.Code,
+            record.OverPlanReason);
     }
 
     /// <summary>MSG-GEN-05 "Seeding session saved.", and the offer to mark the seeding complete when no lane is left Not seeded (CYCLE-02.0 step 7).</summary>

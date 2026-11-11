@@ -109,7 +109,7 @@ public sealed class FarmingStockLinkTests
         var owner = setup.Owner.Client;
         var lot = await owner.SeedLotAsync(100m);
         var record = await owner.SeedingRecordAsync(setup.CycleId, lot.Session(quantity: 10m));
-        var typeId = (await owner.GetFromJsonAsync<JsonElement>("/api/input-issue-types")).EnumerateArray().First().Id();
+        var typeId = (await (await owner.PostAsJsonAsync("/api/input-issue-types", new { name = "Khác" })).ReadAsync(HttpStatusCode.Created)).Id();
 
         var manual = await (await owner.PostAsJsonAsync(
             Issues, new { kind = "Use", zoneId = setup.ZoneId, raftId = setup.RaftId, issueTypeId = typeId, complete = true, lines = new[] { new { itemId = lot.ItemId, quantity = 1, seedLotLineId = (Guid?)lot.LineId } } }))
@@ -131,7 +131,7 @@ public sealed class FarmingStockLinkTests
         var owner = setup.Owner.Client;
         var item = (await (await owner.PostAsJsonAsync(Items, new { name = "Rope", group = "Material", unit = "m", costPrice = 100m, openingQuantity = 10m })).ReadAsync(HttpStatusCode.Created)).Id();
 
-        var usage = (await owner.RecordUsageAsync(setup.RaftId, item, quantity: 4m)).GetProperty("records")[0];
+        var usage = await owner.RecordUsageAsync(setup.RaftId, item, quantity: 4m);
 
         var issueId = usage.GetProperty("issueId").GetGuid();
         var issue = await api.QueryAsync(db => db.InputIssues.SingleAsync(i => i.Id == issueId));

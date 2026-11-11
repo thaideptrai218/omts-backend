@@ -654,6 +654,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("IssueId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("OverPlanReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<decimal>("Quantity")
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");

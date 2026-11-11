@@ -187,6 +187,8 @@ public static class DependencyInjection
         services.AddScoped<MaterialUsageService>();
         services.AddScoped<MaterialUsageStockSync>();
         services.AddScoped<MaterialUsageEditService>();
+        services.AddScoped<MaterialUsageRemoveService>();
+        services.AddScoped<RecordHistoryService>();
         services.AddScoped<MaterialUsageReadService>();
         services.AddScoped<CultivationCycleService>();
         services.AddScoped<CultivationCycleReadService>();

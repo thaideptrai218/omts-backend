@@ -54,7 +54,8 @@ public sealed class CycleSummaryReader(
             notHarvested,
             isOpen ? null : cycle.Assessment,
             lots.Sum(l => l.CageCount),
-            cycle.TargetYieldKg is { } target ? target - lots.Sum(l => l.EstimatedKg) : null);
+            cycle.TargetYieldKg is { } target ? target - lots.Sum(l => l.EstimatedKg) : null,
+            Seeding.SeedingPlanRules.Percent(cycle.ExpectedSeedQuantity, sessions.Sum(s => s.Quantity)));
     }
 
     /// <summary>

@@ -40,6 +40,15 @@ public sealed class MaterialUsageStockSync(FarmingStockIssuer issuer, IInputIssu
         return await issuer.CheckNotNegativeAsync(cancellationToken);
     }
 
+    /// <summary>A removed usage: its quantity returns to the stock and the issue is Cancelled. A legacy usage has no issue and nothing to return.</summary>
+    internal async Task RemoveAsync(MaterialUsage usage, Raft raft, string reason, CancellationToken cancellationToken)
+    {
+        if (usage.IssueId is { } issueId && await issues.GetForEditAsync(issueId, cancellationToken) is { } issue)
+        {
+            await issuer.CancelAsync(issue, raft, reason, cancellationToken);
+        }
+    }
+
     private async Task<Guid?> CycleOnAsync(Raft raft, DateOnly date, CancellationToken cancellationToken) =>
         await cycleQuery.OpenCycleAsync(raft.Id, cancellationToken) is { } open && open.StartDate <= date ? open.Id : null;
 }

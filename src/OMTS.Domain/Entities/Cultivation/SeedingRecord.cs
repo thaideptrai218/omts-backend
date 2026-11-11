@@ -29,5 +29,8 @@ public class SeedingRecord : AuditableEntity
     public Guid? IssueId { get; set; }
     public InputIssue? Issue { get; set; }
 
+    /// <summary>The reason given when the seed of the cycle went above 110 % of its planned seed quantity (confirmed by the caller); null otherwise.</summary>
+    public string? OverPlanReason { get; set; }
+
     public ICollection<SeedingRecordLane> Lanes { get; set; } = [];
 }

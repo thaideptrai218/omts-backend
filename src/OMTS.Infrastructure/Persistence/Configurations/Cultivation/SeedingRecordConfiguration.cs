@@ -15,6 +15,7 @@ internal sealed class SeedingRecordConfiguration : IEntityTypeConfiguration<Seed
         builder.HasOne(x => x.SeedLotLine).WithMany().HasForeignKey(x => x.SeedLotLineId);
         builder.ReferencesAccount(nameof(SeedingRecord.RecordedByAccountId));
         builder.Property(x => x.Quantity).HasPrecision(18, 3);
+        builder.Property(x => x.OverPlanReason).HasMaxLength(1000);
         builder.HasIndex(x => new { x.CycleId, x.SeedingDate });
         builder.ToTable(t => t.HasCheckConstraint("CK_SeedingRecord_Quantity", "[Quantity] > 0"));
     }

@@ -56,6 +56,12 @@ public sealed class SeedingRecordService(
             return invalid;
         }
 
+        var others = (await records.ListByCycleAsync(cycle.Id, cancellationToken)).Sum(r => r.Quantity);
+        if (SeedingPlanRules.Check(new SeedingPlanInput(cycle.ExpectedSeedQuantity, others, request.ConfirmOverPlan, request.OverPlanReason), fields!.Quantity, out var overPlanReason) is { } overPlan)
+        {
+            return overPlan;
+        }
+
         var recorder = currentUser.AccountId ?? throw new InvalidOperationException("A seeding session needs an authenticated caller.");
         var record = new SeedingRecord
         {
@@ -65,6 +71,7 @@ public sealed class SeedingRecordService(
             SeedLotLineId = fields.Lot.Id,
             SeedLotLine = fields.Lot,
             Quantity = fields.Quantity,
+            OverPlanReason = overPlanReason,
             RecordedByAccountId = recorder,
             Lanes = fields.Lanes.Select(l => new SeedingRecordLane { LaneId = l.Id, Lane = l }).ToList(),
         };
