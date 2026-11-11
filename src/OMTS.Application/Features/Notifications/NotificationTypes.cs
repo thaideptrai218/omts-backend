@@ -39,6 +39,12 @@ public static class NotificationTypes
     /// <summary>MSG-LABOR-02, the reminder to lock a staff account after an end of employment: kept, never pushed (BR-LABOR-04).</summary>
     public const string StaffAccountLockReminder = "STAFF_ACCOUNT_LOCK_REMINDER";
 
+    /// <summary>
+    /// MSG-LABOR-08, the login code of the employee app, to the account that issued it (LABOR-03 step 4, BR-LABOR-02): a normal type,
+    /// kept in the list and pushed unless turned off, and never sent to the employee.
+    /// </summary>
+    public const string EmployeeLoginCode = "EMPLOYEE_LOGIN_CODE";
+
     /// <summary>MSG-SALE-01, a new purchase request, to the Owner (BR-SALE-03); mandatory (BR-ACCOUNT-11).</summary>
     public const string PurchaseRequestNew = "PURCHASE_REQUEST_NEW";
 
@@ -109,6 +115,9 @@ public static class NotificationTypes
         new(CooperativeCertificationExpiry, "Cooperative certification expiry reminder", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
             NotificationSmsRule.MessageTextTo(CooperativeOwner)),
         new(StaffAccountLockReminder, "Reminder to lock a staff account", NeverPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        // Issued by the Owner or a Zone Manager of the employee (BR-LABOR-02); the row opens nothing (the code is in its text).
+        new(EmployeeLoginCode, "Employee login code", Default, [CooperativeOwner, ZoneManager],
+            NotificationOpenAccess.InZone(PermissionFunctions.LaborWorkers, PermissionAction.Edit)),
         // Opens Respond to purchase request (SALE-03.2).
         new(PurchaseRequestNew, "New purchase request", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
             NotificationSmsRule.MessageTextTo(CooperativeOwner)),

@@ -23,6 +23,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtAuthentication();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+builder.Services.AddScoped<ICurrentEmployee, CurrentEmployee>();
 
 builder.Services.AddOmtsForwardedHeaders(builder.Configuration);
 builder.Services.AddOmtsBffClientHeaders(builder.Configuration);

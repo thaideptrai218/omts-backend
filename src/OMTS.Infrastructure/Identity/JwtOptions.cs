@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 
@@ -23,6 +24,15 @@ public sealed class JwtOptions
     public TimeSpan MobileSessionMaxLifetime { get; set; } = TimeSpan.FromDays(90);
 
     /// <summary>
+    /// Audience of the employee app tokens (BR-LABOR-02). It must differ from <see cref="Audience"/>: the staff scheme accepts the
+    /// one and the employee scheme the other, so a token of one never opens the other (checked at startup).
+    /// </summary>
+    public string EmployeeAudience { get; set; } = "omts-employee-app";
+
+    public TimeSpan EmployeeRefreshTokenLifetime { get; set; } = TimeSpan.FromDays(30);
+    public TimeSpan EmployeeSessionMaxLifetime { get; set; } = TimeSpan.FromDays(90);
+
+    /// <summary>
     /// How long the refresh token a rotation replaced still gets an access token (without a new refresh token), for a client
     /// whose rotation response was lost or raced with another request. Any other old token is replay and ends the session.
     /// </summary>
@@ -41,4 +51,12 @@ public sealed class JwtOptions
 
         return new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey));
     }
+
+    /// <summary>
+    /// The key the employee app tokens are signed with: derived from the signing key with a label of its own, so a staff token
+    /// fails the signature check of the employee scheme and the reverse, on top of the audience check.
+    /// </summary>
+    public SymmetricSecurityKey CreateEmployeeSigningKey() =>
+        new(HMACSHA256.HashData(CreateSigningKey().Key, "omts-employee-app-jwt"u8));
+
 }

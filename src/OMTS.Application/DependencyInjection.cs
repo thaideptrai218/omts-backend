@@ -8,6 +8,7 @@ using OMTS.Application.Features.Accounts;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.CashBook;
 using OMTS.Application.Features.Cooperatives;
+using OMTS.Application.Features.EmployeeApp;
 using OMTS.Application.Features.Employees;
 using OMTS.Application.Features.Cultivation.Closing;
 using OMTS.Application.Features.Cultivation.Cycles;
@@ -111,6 +112,15 @@ public static class DependencyInjection
         services.AddScoped<EmployeeWorkingZoneService>();
         services.AddScoped<EmploymentService>();
         services.AddScoped<EmploymentEndService>();
+
+        // LABOR-03 login codes, LABOR-06 log in to the employee app (a second kind of caller, apart from the staff accounts), employee push
+        services.AddScoped<EmployeeAppAccess>();
+        services.AddScoped<EmployeeAppTokenIssuer>();
+        services.AddScoped<EmployeeAppLoginService>();
+        services.AddScoped<EmployeeAppSessionService>();
+        services.AddScoped<EmployeeLoginCodeService>();
+        services.AddScoped<EmployeeDeviceService>();
+        services.AddScoped<IEmployeeNotifier, EmployeeNotifier>();
 
         // DEBT-01 receiving bank account
         services.AddScoped<ReceivingAccountAcceptance>();

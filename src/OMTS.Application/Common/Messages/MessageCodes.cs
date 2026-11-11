@@ -91,6 +91,11 @@ public static class MessageCodes
     public const string Labor02 = "MSG-LABOR-02";
     public const string Labor03 = "MSG-LABOR-03";
     public const string Labor04 = "MSG-LABOR-04";
+    public const string Labor08 = "MSG-LABOR-08";
+    public const string Labor09 = "MSG-LABOR-09";
+    public const string Labor17 = "MSG-LABOR-17";
+    public const string Labor18 = "MSG-LABOR-18";
+    public const string Labor19 = "MSG-LABOR-19";
     public const string Labor36 = "MSG-LABOR-36";
 
     public const string Debt01 = "MSG-DEBT-01";
@@ -131,7 +136,7 @@ public static class MessageCodes
     /// the transaction notification and the two payment confirmations (OMTS-218 P3); MSG-PURCHASE-02, the confirmation of the
     /// Owner's approval of a return (OMTS-218 P4); MSG-LABOR-01 and MSG-LABOR-02, the approval of a new employee and the
     /// reminder to lock a staff account, MSG-LABOR-04 and MSG-LABOR-36, the pay period lock and the question before saving
-    /// the payroll settings (OMTS-227); MSG-SALE-04 and MSG-SALE-05, the merge of customer profiles (SALE-04 is
+    /// the payroll settings (OMTS-227); MSG-LABOR-08/09/17/18/19, the login code of the employee app and the refusals around it (LABOR-03, LABOR-06); MSG-SALE-04 and MSG-SALE-05, the merge of customer profiles (SALE-04 is
     /// new); MSG-DEBT-01 and MSG-DEBT-02, the receiving bank account (DEBT-01); MSG-GEN-11, MSG-SALE-01, MSG-SALE-02 and
     /// MSG-SALE-03, the purchase requests (new in PR S4); MSG-CYCLE-01/02/03, the seeding questions and the notice (CYCLE-02);
     /// MSG-CYCLE-04, a cultivation log to review (CYCLE-04); MSG-CYCLE-08, MSG-HARVEST-01/03, the reminder to close a cycle,
@@ -151,7 +156,7 @@ public static class MessageCodes
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
         Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Harvest04, Harvest05, Trace01, Trace02, Trace03, Trace04, Trace05, Trace06,
-        Origin01, Origin02, Origin03, Origin04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04, Claim01, Claim02, Claim03, Cash01, Cash02,
+        Origin01, Origin02, Origin03, Origin04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor08, Labor09, Labor17, Labor18, Labor19, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04, Claim01, Claim02, Claim03, Cash01, Cash02,
     };
 
     /// <summary>

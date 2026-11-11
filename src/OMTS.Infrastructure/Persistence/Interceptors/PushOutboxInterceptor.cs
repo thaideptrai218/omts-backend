@@ -89,12 +89,12 @@ internal sealed class PushOutboxInterceptor(
                 if (!result.Succeeded)
                 {
                     logger.LogWarning(
-                        "Push {Type} to account {Recipient} failed: {Error}", message.Type, message.RecipientAccountId, result.ErrorCode);
+                        "Push {Type} to {Recipient} failed: {Error}", message.Type, message.RecipientAccountId ?? message.RecipientEmployeeId, result.ErrorCode);
                 }
             }
             catch (Exception exception)
             {
-                logger.LogError(exception, "Push {Type} to account {Recipient} failed", message.Type, message.RecipientAccountId);
+                logger.LogError(exception, "Push {Type} to {Recipient} failed", message.Type, message.RecipientAccountId ?? message.RecipientEmployeeId);
             }
         }
     }
