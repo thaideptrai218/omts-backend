@@ -12,7 +12,8 @@ public sealed record ReportChoice(Guid Id, string Name);
 
 /// <summary>
 /// The checked choices of a sales report: the period, the zones the report may read and what the user chose. <see cref="ZoneIds"/> is null for every zone, else the chosen zones or, when none
-/// is chosen, the zones of the user's pairs (BR-FARM-08); <see cref="Zones"/> is what the user chose, so the screen and the file can say it.
+/// is chosen, the zones of the user's pairs (BR-FARM-08); <see cref="Zones"/> names the zones the report covers, so the screen and the file can say it: the chosen ones, the zones of the
+/// user's pairs when none is chosen by a user limited to some zones, and none (read "All") for a user of every zone who chose none.
 /// </summary>
 public sealed record ReportFilter(
     DateOnly From, DateOnly To, IReadOnlyCollection<Guid>? ZoneIds, IReadOnlyList<ReportChoice> Zones, IReadOnlyList<ReportChoice> Customers, IReadOnlyList<ReportChoice> Products)
@@ -84,7 +85,20 @@ public sealed class ReportFilterResolver(ZoneAccessGuard zoneAccess, IReportFilt
 
         var (start, end) = period.Value;
         IReadOnlyCollection<Guid>? zoneFilter = chosenZones.Count > 0 ? chosenZones : zones.AllZones ? null : zones.ZoneIds;
-        return new ReportFilter(start, end, zoneFilter, Choices(chosenZones, names.Zones), Choices(chosenCustomers, names.Customers), Choices(chosenProducts, names.Products));
+        var zoneChoices = chosenZones.Count > 0 || zoneFilter is null
+            ? Choices(chosenZones, names.Zones)
+            : await ZonesOfPairsAsync(zoneFilter, cancellationToken);
+        return new ReportFilter(start, end, zoneFilter, zoneChoices, Choices(chosenCustomers, names.Customers), Choices(chosenProducts, names.Products));
+    }
+
+    /// <summary>
+    /// No zone chosen by a user who reads only some zones: the report covers the zones of their pairs, so these are named (on the screen and in the file) rather than "All".
+    /// </summary>
+    private async Task<IReadOnlyList<ReportChoice>> ZonesOfPairsAsync(IReadOnlyCollection<Guid> zoneIds, CancellationToken cancellationToken)
+    {
+        var ids = zoneIds.ToList();
+        var found = (await lookup.NamesAsync(ids, [], [], cancellationToken)).Zones;
+        return ids.Where(found.ContainsKey).Select(id => new ReportChoice(id, found[id])).OrderBy(c => c.Name, StringComparer.CurrentCulture).ToList();
     }
 
     private static void AddUnknown(List<string> invalid, string field, List<Guid> chosen, IReadOnlyDictionary<Guid, string> found)

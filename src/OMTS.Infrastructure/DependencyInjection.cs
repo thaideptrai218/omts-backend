@@ -138,6 +138,8 @@ public static class DependencyInjection
             .ValidateOnStart();
         services.AddScoped<ICustomerDebtQuery, CustomerDebtQuery>();
         services.AddScoped<ISalesPerformanceQuery, SalesPerformanceQuery>();
+        services.AddScoped<IPriceTrendsQuery, PriceTrendsQuery>();
+        services.AddScoped<IPostSaleIssuesQuery, PostSaleIssuesQuery>();
         services.AddScoped<IReportFilterLookup, ReportFilterLookup>();
         services.AddScoped<SeedLotRepository>();
         services.AddScoped<ISeedLotRepository>(provider => provider.GetRequiredService<SeedLotRepository>());

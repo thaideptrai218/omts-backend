@@ -26,13 +26,19 @@ internal sealed class SalesPerformanceQuery(OmtsDbContext db) : ISalesPerformanc
                 i.Returns.Where(r => r.StatusId == StatusIds.SalesReturn.Recorded).Sum(r => r.Value),
                 i.Returns.Any(r => r.StatusId == StatusIds.SalesReturn.Recorded)))
             .ToListAsync(cancellationToken);
-        // The kg a return took back are those of the return lines that stand, by the invoice line they name (a return takes back every line in full, BR-CLAIM-03).
-        var lines = await invoices
-            .SelectMany(i => i.Lines)
-            .Select(l => new SalesPerformanceLine(
-                l.InvoiceId, l.ProductId, l.Product.Name, l.Kg, l.Amount,
-                db.SalesReturnLines.Where(r => r.InvoiceLineId == l.Id && r.Return.StatusId == StatusIds.SalesReturn.Recorded).Sum(r => r.ReturnedKg)))
-            .ToListAsync(cancellationToken);
+        // The kg a return took back are those of the return lines that stand, by the invoice line they name (a return takes back every line in full, BR-CLAIM-03). They are found
+        // through the returns of the selected invoices (indexed by invoice), not one look-up per invoice line.
+        var returnedKg = await db.SalesReturnLines.AsNoTracking()
+            .Where(r => r.Return.StatusId == StatusIds.SalesReturn.Recorded && invoices.Any(i => i.Id == r.Return.InvoiceId))
+            .GroupBy(r => r.InvoiceLineId)
+            .Select(g => new { InvoiceLineId = g.Key, Kg = g.Sum(r => r.ReturnedKg) })
+            .ToDictionaryAsync(x => x.InvoiceLineId, x => x.Kg, cancellationToken);
+        var lines = (await invoices
+                .SelectMany(i => i.Lines)
+                .Select(l => new { l.Id, l.InvoiceId, l.ProductId, ProductName = l.Product.Name, l.Kg, l.Amount })
+                .ToListAsync(cancellationToken))
+            .Select(l => new SalesPerformanceLine(l.InvoiceId, l.ProductId, l.ProductName, l.Kg, l.Amount, returnedKg.GetValueOrDefault(l.Id)))
+            .ToList();
         return new SalesPerformanceFacts(rows, lines);
     }
 

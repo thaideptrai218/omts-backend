@@ -42,6 +42,8 @@ using OMTS.Application.Features.Purchasing.Receipts;
 using OMTS.Application.Features.Purchasing.Suppliers;
 using OMTS.Application.Features.ReceivingBankAccounts;
 using OMTS.Application.Features.Reports;
+using OMTS.Application.Features.Reports.PostSaleIssues;
+using OMTS.Application.Features.Reports.PriceTrends;
 using OMTS.Application.Features.Reports.SalesPerformance;
 using OMTS.Application.Features.Sales.Customers;
 using OMTS.Application.Features.Sales.Debts;
@@ -328,6 +330,11 @@ public static class DependencyInjection
         services.AddScoped<ReportFilterResolver>();
         services.AddScoped<SalesPerformanceService>();
         services.AddScoped<SalesPerformanceExportService>();
+        // REPORT-02 price trends and REPORT-03 post-sale issues (read only)
+        services.AddScoped<PriceTrendsService>();
+        services.AddScoped<PriceTrendsExportService>();
+        services.AddScoped<PostSaleIssuesService>();
+        services.AddScoped<PostSaleIssuesExportService>();
         // DEBT-02 customer payments, money paid back, confirmations and cancellations
         services.AddScoped<CustomerPaymentViews>();
         services.AddScoped<CustomerPaymentStatusChanges>();
