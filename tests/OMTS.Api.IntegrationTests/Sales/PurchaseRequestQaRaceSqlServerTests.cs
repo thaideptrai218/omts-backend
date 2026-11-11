@@ -95,7 +95,8 @@ public class PurchaseRequestQaRaceSqlServerTests
 
             var answers = await InParallelAsync(3, i => owner.AcceptAsync(request, 100));
 
-            await AssertAnswersAsync(answers, "200", "409 MSG-GEN-09", "409 MSG06");
+            // The unique employee assignment may detect the losing accept before the request rowversion does.
+            await AssertAnswersAsync(answers, "200", "409 MSG-GEN-09", "409 MSG06", "409 MSG-GEN-02");
             var winner = Assert.Single(answers, a => a.StatusCode == HttpStatusCode.OK);
             var stored = await host.Api.DbAsync(db => db.PurchaseRequests.AsNoTracking().SingleAsync(r => r.Id == request.Id()));
             Assert.Equal(100, stored.AcceptedCages);
