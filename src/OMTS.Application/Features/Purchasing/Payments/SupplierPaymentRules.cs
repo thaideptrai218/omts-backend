@@ -114,7 +114,15 @@ public static class SupplierPaymentRules
         }
 
         var date = request.PaymentDate!.Value;
-        return date == BusinessClock.ToBusinessDate(now) ? now.ToOffset(BusinessClock.UtcOffset) : BusinessClock.FromLocal(date.ToDateTime(TimeOnly.MinValue));
+        if (date == BusinessClock.ToBusinessDate(now))
+        {
+            return now.ToOffset(BusinessClock.UtcOffset);
+        }
+
+        // Local midnight of 01/01/0001 is before the first UTC instant, so that day starts at its first instant (07:00 local).
+        return BusinessClock.TryFromLocal(date.ToDateTime(TimeOnly.MinValue), out var midnight)
+            ? midnight
+            : DateTimeOffset.MinValue.ToOffset(BusinessClock.UtcOffset);
     }
 
     /// <summary>

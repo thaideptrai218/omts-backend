@@ -11,6 +11,7 @@ using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Domain.Enums;
 using OMTS.Infrastructure.Bootstrap;
+using OMTS.Infrastructure.Bootstrap.Demo;
 using OMTS.Infrastructure.Persistence;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 using static OMTS.Api.IntegrationTests.Purchasing.PurchasingSqlServerKit;
@@ -241,10 +242,11 @@ public class PurchaseCatalogueSqlServerQaTests
                 var proposal = await scope.ServiceProvider.GetRequiredService<FarmingInputItemService>().ProposeAsync(CancellationToken.None);
                 Assert.Equal(new NewFarmingInputItemProposal("VT016", "con"), proposal);
 
+                // The five demo suppliers and the extra ones for paging the list; every second and fifth of those has an email.
                 var suppliers = await db.Suppliers.AsNoTracking().ToListAsync();
-                Assert.Equal(5, suppliers.Count);
+                Assert.Equal(5 + DemoExtraSupplierStep.Total, suppliers.Count);
                 Assert.All(suppliers, s => Assert.False(string.IsNullOrWhiteSpace(s.Address)));
-                Assert.Equal(2, suppliers.Count(s => s.Email is not null));
+                Assert.Equal(2 + Enumerable.Range(0, DemoExtraSupplierStep.Total).Count(i => i % 5 is 0 or 2), suppliers.Count(s => s.Email is not null));
                 Assert.All(suppliers.Where(s => s.Email is not null), s => Assert.EndsWith("@example.com", s.Email));
 
                 // A database seeded before the VT codes: same names, other codes.
@@ -258,7 +260,7 @@ public class PurchaseCatalogueSqlServerQaTests
             var check = after.ServiceProvider.GetRequiredService<OmtsDbContext>();
             Assert.Equal(15, await check.FarmingInputItems.CountAsync());
             Assert.False(await check.FarmingInputItems.AnyAsync(i => i.Code.StartsWith("VT")));
-            Assert.Equal(20, await check.PurchaseReceipts.CountAsync());
+            Assert.Equal(DemoReceiptPlans.All.Count, await check.PurchaseReceipts.CountAsync());
         }
         finally
         {
