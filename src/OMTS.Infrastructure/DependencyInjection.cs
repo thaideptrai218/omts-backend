@@ -106,6 +106,7 @@ public static class DependencyInjection
         services.AddScoped<IWorkEmployeeReader, WorkEmployeeReader>();
         services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddScoped<IRaftRepository, RaftRepository>();
+        services.AddScoped<ILaneIncidentRepository, LaneIncidentRepository>();
         services.AddScoped<ICultivationCycleRepository, CultivationCycleRepository>();
         services.AddScoped<ICultivationLogRepository, CultivationLogRepository>();
         services.AddScoped<IMaterialUsageRepository, MaterialUsageRepository>();

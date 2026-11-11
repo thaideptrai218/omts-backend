@@ -34,7 +34,10 @@ public sealed class RaftReadService(
 
         var found = await rafts.ListByZoneAsync(zoneId, statusId, cancellationToken);
         return found.Select(r => new RaftListItem(
-            r.Id, r.ZoneId, r.Code, r.Latitude, r.Longitude, r.Size, RaftLaneChange.InUseCount(r.Lanes), r.StatusId, statusCatalog.DisplayNameOf(r.StatusId))).ToList();
+            r.Id, r.ZoneId, r.Code, r.Latitude, r.Longitude, r.Size, RaftLaneChange.InUseCount(r.Lanes), r.StatusId, statusCatalog.DisplayNameOf(r.StatusId),
+            r.LengthM, r.WidthM, r.AreaM2,
+            r.Lanes.Count(l => l.StatusId == OMTS.Domain.Constants.StatusIds.Lane.InUse && l.IsDamaged),
+            r.Lanes.Count(l => l.StatusId == OMTS.Domain.Constants.StatusIds.Lane.InUse && l.IsOutOfService))).ToList();
     }
 
     public async Task<Result<RaftView>> GetAsync(Guid raftId, CancellationToken cancellationToken)

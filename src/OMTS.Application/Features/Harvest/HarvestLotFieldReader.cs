@@ -19,7 +19,7 @@ internal sealed record HarvestLotFields(
 /// the correction adds must be In Use. HARVEST-01.1 passes none, as no lane of an Open cycle can be removed.
 /// </param>
 internal sealed record HarvestLotCorrectionInput(
-    string? Reason, string? FinishedHint, IReadOnlySet<Guid>? OwnLaneIds = null, decimal? ExistingCageCount = null, decimal? ExistingEstimatedKg = null);
+    string? Reason, string? FinishedHint, IReadOnlySet<Guid>? OwnLaneIds = null, decimal? ExistingCageCount = null, decimal? ExistingEstimatedKg = null, IReadOnlySet<Guid>? ExistingLaneIds = null);
 
 /// <summary>
 /// HARVEST-01 step 6: at least one lane Growing or Being harvested, the finished lanes among them, cages and estimated kg above 0 (BR-HARVEST-01, BR-HARVEST-02), and when recording the
@@ -49,7 +49,7 @@ internal static class HarvestLotFieldReader
         fields = null;
         var check = new FieldCheck();
         check.Check(correction is not null || request.PurchaseRequestId is not null, PurchaseRequestField);
-        var (lanes, laneHint) = Lanes(raft, request.LaneNumbers, states, correction?.OwnLaneIds);
+        var (lanes, laneHint) = Lanes(raft, request.LaneNumbers, states, correction?.OwnLaneIds, correction?.ExistingLaneIds);
         check.Check(lanes is not null && laneHint is null, LanesField);
         var finished = Finished(request, lanes);
         check.Check(finished is not null && correction?.FinishedHint is null, FinishedLanesField);
@@ -123,7 +123,7 @@ internal static class HarvestLotFieldReader
     /// One or more lanes of the raft, each In Use (or one of <paramref name="ownLaneIds"/>, whatever its status) and given once; a lane that is Not seeded or Harvested today is named in the hint.
     /// </summary>
     private static (IReadOnlyList<Lane>? Lanes, string? Hint) Lanes(
-        Raft raft, IReadOnlyList<int>? numbers, IReadOnlyDictionary<Guid, LaneState> states, IReadOnlySet<Guid>? ownLaneIds)
+        Raft raft, IReadOnlyList<int>? numbers, IReadOnlyDictionary<Guid, LaneState> states, IReadOnlySet<Guid>? ownLaneIds, IReadOnlySet<Guid>? existingLaneIds = null)
     {
         if (numbers is null || numbers.Count == 0 || numbers.Distinct().Count() != numbers.Count)
         {
@@ -138,7 +138,10 @@ internal static class HarvestLotFieldReader
             return (null, null);
         }
 
-        var refused = lanes.Where(l => !LaneStateRules.CanBeHarvested(states[l.Id])).Select(l => l.LaneNumber).Order().ToList();
+        // A damaged lane or one out of service cannot be added to a harvest (decision of 12/11/2026); a lane the lot already holds stays, so the lot can still be corrected.
+        var refused = lanes
+            .Where(l => !LaneStateRules.CanBeHarvested(states[l.Id]) || ((l.IsDamaged || l.IsOutOfService) && !(existingLaneIds?.Contains(l.Id) ?? false) && !(ownLaneIds?.Contains(l.Id) ?? false)))
+            .Select(l => l.LaneNumber).Order().ToList();
         return (lanes, refused.Count == 0 ? null : $"Lanes {string.Join(", ", refused)} cannot be harvested now.");
     }
 

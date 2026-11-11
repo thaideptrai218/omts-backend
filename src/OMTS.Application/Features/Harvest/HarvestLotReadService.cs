@@ -56,16 +56,19 @@ public sealed class HarvestLotReadService(
             .Select(l =>
             {
                 var state = day.States[l.Id];
-                var canHarvest = mayRecord && l.StatusId == StatusIds.Lane.InUse && LaneStateRules.CanBeHarvested(state);
+                var canHarvest = mayRecord && l.IsUsable && LaneStateRules.CanBeHarvested(state);
                 var ofLane = ofCycle.Where(lot => lot.Lanes.Any(x => x.LaneId == l.Id)).ToList();
-                var (reasonCode, reason) = canHarvest ? ((string?)null, (string?)null) : Refusal(l.StatusId, state, open is not null, raftIsEditable, mayCreate);
+                var (reasonCode, reason) = canHarvest ? ((string?)null, (string?)null) : Refusal(l, state, open is not null, raftIsEditable, mayCreate);
                 return new HarvestLaneView(
                     l.Id, l.LaneNumber, l.StatusId, statusCatalog.DisplayNameOf(l.StatusId), state, canHarvest, reason, reasonCode,
                     mayRecord && l.StatusId == StatusIds.Lane.InUse && state == LaneState.BeingHarvested,
                     ofLane.Count,
                     ofLane.Count == 0 ? null : ofLane.Max(lot => lot.HarvestDate),
                     seedLotCodes.GetValueOrDefault(l.Id, []),
-                    ofLane.Sum(lot => lot.CageCount / lot.Lanes.Count));
+                    ofLane.Sum(lot => lot.CageCount / lot.Lanes.Count),
+                    l.IsDamaged,
+                    l.IsOutOfService,
+                    Farming.Rafts.RaftGeometry.EffectiveLineLength(l, raft));
             })
             .ToList();
         var cooperative = await cooperatives.GetCurrentAsync(cancellationToken) ?? throw new InvalidOperationException("A harvest lot needs the cooperative created at deployment.");
@@ -105,8 +108,9 @@ public sealed class HarvestLotReadService(
     }
 
     /// <summary>Why a lane cannot be chosen for a harvest now, as a code for the client and a sentence.</summary>
-    private static (string Code, string Reason) Refusal(int laneStatusId, LaneState state, bool hasOpenCycle, bool raftIsEditable, bool mayCreate) =>
-        laneStatusId != StatusIds.Lane.InUse ? ("LaneRemoved", "The lane is removed.")
+    private static (string Code, string Reason) Refusal(Domain.Entities.Farming.Lane lane, LaneState state, bool hasOpenCycle, bool raftIsEditable, bool mayCreate) =>
+        lane.StatusId != StatusIds.Lane.InUse ? ("LaneRemoved", "The lane is removed.")
+        : Farming.Rafts.LaneReasonCodes.Of(lane) is { } flag ? (flag, Farming.Rafts.LaneReasonCodes.TextOf(flag))
         : !hasOpenCycle ? ("NoOpenCycle", "The raft has no Open cycle.")
         : !raftIsEditable ? ("ReadOnly", "The raft or its zone is not In Use.")
         : !mayCreate ? ("NoPermission", "You may not record a harvest on this raft.")

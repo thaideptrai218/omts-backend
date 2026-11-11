@@ -72,8 +72,10 @@ public sealed record SeedingRecordView(
 public sealed record SeedingRecordSaved(SeedingRecordView Record, bool OfferMarkComplete, string CycleRowVersion, string Message, string MessageCode);
 
 /// <summary>A lane on the Seeding screen.</summary>
-/// <param name="CanSeed">The lane can be chosen for a new session now (BR-CYCLE-02).</param>
-public sealed record SeedingLaneView(Guid Id, int LaneNumber, int StatusId, string Status, LaneState State, bool CanSeed);
+/// <param name="CanSeed">The lane can be chosen for a new session now (BR-CYCLE-02): not damaged and not out of service (decision of 12/11/2026).</param>
+/// <param name="ReasonCode"><c>LaneDamaged</c> or <c>LaneOutOfService</c> when a flag of the lane is why it cannot be seeded; null otherwise.</param>
+public sealed record SeedingLaneView(
+    Guid Id, int LaneNumber, int StatusId, string Status, LaneState State, bool CanSeed, bool IsDamaged = false, bool IsOutOfService = false, string? ReasonCode = null);
 
 /// <summary>The total quantity of the sessions of a cycle from one seed lot (CYCLE-05.2).</summary>
 public sealed record SeedLotTotal(Guid SeedLotId, string Code, string? ItemName, string Unit, decimal Quantity);

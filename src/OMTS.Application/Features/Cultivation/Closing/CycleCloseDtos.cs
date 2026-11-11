@@ -34,6 +34,8 @@ public enum EarlyCloseReason
 /// <param name="EarlyReason">Why <paramref name="ClosedEarly"/>, or null.</param>
 /// <param name="NotHarvestedLanes">The seeded lanes not Harvested on <paramref name="AsOf"/>, by number: after an early close they ended with no harvest weight.</param>
 /// <param name="Assessment">The assessment of a Closed cycle, else null.</param>
+/// <param name="LostLanes">The lanes put out of service with seed on them during the cycle, with the reason: they are finished, not "not harvested".</param>
+/// <param name="DamagedLanes">For an Open cycle, the lanes damaged now and not repaired, by number.</param>
 public sealed record CycleSummary(
     Guid CycleId,
     string RaftCode,
@@ -56,7 +58,12 @@ public sealed record CycleSummary(
     string? Assessment,
     decimal HarvestedCages = 0m,
     decimal? RemainingKg = null,
-    decimal? SeedPercent = null);
+    decimal? SeedPercent = null,
+    IReadOnlyList<LaneLossView>? LostLanes = null,
+    IReadOnlyList<int>? DamagedLanes = null);
+
+/// <summary>A lane put out of service while seed hung on it (decision of 12/11/2026): the loss event of that seed, with no quantity. The lane counts as finished at the close.</summary>
+public sealed record LaneLossView(int LaneNumber, DateOnly Date, string Reason, string? ReasonCode);
 
 /// <summary>What CYCLE-06 shows before the close (steps 1, 2 and 4).</summary>
 /// <param name="Summary">The summary if the cycle closed today.</param>

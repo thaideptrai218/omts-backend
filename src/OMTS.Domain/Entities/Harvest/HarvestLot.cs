@@ -84,6 +84,9 @@ public class HarvestLot : AuditableEntity, IHasStatus
     public ICollection<HarvestLotLane> Lanes { get; set; } = [];
     public ICollection<HarvestLotPhoto> Photos { get; set; } = [];
 
+    /// <summary>The employees who worked on the trip, optional (decision of 12/11/2026).</summary>
+    public ICollection<HarvestLotCrewMember> Crew { get; set; } = [];
+
     /// <summary>Open and Reopened lots can be chosen on a sales invoice (BR-HARVEST-04).</summary>
     public bool IsForSale => StatusId is StatusIds.HarvestLot.Open or StatusIds.HarvestLot.Reopened;
 

@@ -88,7 +88,8 @@ public sealed class HarvestLotViews(
             RowVersionGuard.Encode(lot.RowVersion),
             lot.OverPlanReason,
             lot.PurchaseRequestId,
-            lot.PurchaseRequest?.Code);
+            lot.PurchaseRequest?.Code,
+            HarvestCrewService.ViewOf(lot));
     }
 
     /// <summary>The lots of one cycle with their lanes: lots for sale first, then the latest harvest first (SCR-HARVEST-01). The raft comes with its zone.</summary>
@@ -112,7 +113,7 @@ public sealed class HarvestLotViews(
                     worked.InvoicedKg, worked.RemainingKg, lot.StatusId, statusCatalog.DisplayNameOf(lot.StatusId), lot.OriginState,
                     missing[lot.Id], LotPublishRules.Block(access, lot, raft.ZoneId, onCurrentInvoice.Contains(lot.Id)) is null,
                     canCorrect, canCorrect && !onInvoice.Contains(lot.Id), MayClose(access, lot, raft.ZoneId), RowVersionGuard.Encode(lot.RowVersion),
-                    lot.PurchaseRequestId, lot.PurchaseRequest?.Code);
+                    lot.PurchaseRequestId, lot.PurchaseRequest?.Code, HarvestCrewService.ViewOf(lot));
             })
             .ToList();
     }

@@ -84,7 +84,8 @@ public sealed class SeedingReadService(
                 .OrderBy(l => l.LaneNumber)
                 .Select(l => new SeedingLaneView(
                     l.Id, l.LaneNumber, l.StatusId, statusCatalog.DisplayNameOf(l.StatusId), day.States[l.Id],
-                    canRecord && l.StatusId == StatusIds.Lane.InUse && SeedingLaneRules.CanBeSeeded(day.States[l.Id], completed)))
+                    canRecord && l.IsUsable && SeedingLaneRules.CanBeSeeded(day.States[l.Id], completed),
+                    l.IsDamaged, l.IsOutOfService, Farming.Rafts.LaneReasonCodes.Of(l)))
                 .ToList(),
             await views.ListAsync(ofCycle, cycle, day.States, cancellationToken),
             ofCycle.GroupBy(r => r.SeedLotLineId)

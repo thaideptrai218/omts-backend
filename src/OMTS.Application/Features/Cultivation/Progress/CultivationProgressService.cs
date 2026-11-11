@@ -79,7 +79,7 @@ public sealed class CultivationProgressService(
             shown,
             cycle is null ? null : await cycleViews.ViewAsync(cycle, cancellationToken),
             lanes,
-            lanes.Where(l => l.StatusId == StatusIds.Lane.InUse && l.State == LaneState.NotSeeded).Select(l => l.LaneNumber).ToList(),
+            lanes.Where(l => l.StatusId == StatusIds.Lane.InUse && l.State == LaneState.NotSeeded && !l.IsOutOfService).Select(l => l.LaneNumber).ToList(),
             cycle is null ? [] : await seeding.LaneSeedLotsAsync(cycle.Id, shown, cancellationToken),
             cycle is null ? [] : await logViews.ListAsync(cycle, cancellationToken),
             cycle?.StatusId == StatusIds.CultivationCycle.Closed ? await summaries.ReadAsync(cycle, cancellationToken) : null);

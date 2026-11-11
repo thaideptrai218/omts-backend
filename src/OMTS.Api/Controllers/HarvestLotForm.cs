@@ -30,6 +30,14 @@ public class HarvestLotForm
     /// <summary>Left out when recording: cages times the average kg per cage. Left out when correcting: it stays, or when the cages changed, cages times the kg per cage of the lot.</summary>
     public string? EstimatedKg { get; set; }
 
+    /// <summary>
+    /// The employees who worked on the trip (decision of 12/11/2026): one field per employee id, none is fine. Not sent when correcting: the crew stays, unless <see cref="ReplaceCrew"/> is true.
+    /// </summary>
+    public string?[]? Crew { get; set; }
+
+    /// <summary>Send true to make the crew of a correction exactly the <c>crew</c> fields, none meaning an empty crew: a form cannot send an empty list, so this is how a crew is cleared.</summary>
+    public bool ReplaceCrew { get; set; }
+
     /// <summary>One part per photo, none is fine: JPEG or PNG, at most 10 MB each.</summary>
     public List<IFormFile>? Photos { get; set; }
 }

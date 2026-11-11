@@ -16,7 +16,7 @@ namespace OMTS.Api.Controllers;
 [Authorize]
 public sealed class HarvestLotsController(
     HarvestLotReadService reads, HarvestLotRecordingService recording, HarvestLotCorrectionService corrections, HarvestLotRemovalService removals, HarvestLotClosingService closing,
-    HarvestLotForSaleService forSale, HarvestLaneFinishService laneFinish) : ControllerBase
+    HarvestLotForSaleService forSale, HarvestLaneFinishService laneFinish, HarvestCrewService crews) : ControllerBase
 {
     private const string PhotosField = "Photos";
 
@@ -47,9 +47,46 @@ public sealed class HarvestLotsController(
         var request = new RecordHarvestRequest(
             Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, !estimatedIsRead, Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)),
             form.ConfirmOverPlan, form.OverPlanReason,
-            Guid.TryParse(form.PurchaseRequestId, out var requestId) && requestId != Guid.Empty ? requestId : null);
+            Guid.TryParse(form.PurchaseRequestId, out var requestId) && requestId != Guid.Empty ? requestId : null,
+            ReadCrew(form.Crew, form.ReplaceCrew, out var crewUnreadable), crewUnreadable);
         return (await recording.RecordAsync(raftId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
             .ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
+    }
+
+    /// <summary>
+    /// The employees assigned to the raft on a day (<c>date</c>, default today) as the suggested crew of a harvest there: read only, from the work assignments. Any other employee can still be chosen.
+    /// </summary>
+    [HttpGet("api/rafts/{raftId:guid}/crew-suggestions")]
+    [ProducesResponseType<HarvestCrewSuggestions>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> CrewSuggestions(Guid raftId, [FromQuery] DateOnly? date, CancellationToken cancellationToken) =>
+        (await crews.SuggestAsync(raftId, date, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// The crew of the form: one <c>crew</c> field per employee id. Null when no field was sent (a correction then leaves the crew as it is) unless <c>replaceCrew</c> is true, which makes it an empty crew. An id that is not
+    /// a GUID is reported as unreadable, so it is refused instead of dropped.
+    /// </summary>
+    private static IReadOnlyList<Guid>? ReadCrew(string?[]? values, bool replace, out bool unreadable)
+    {
+        unreadable = false;
+        if (values is null)
+        {
+            return replace ? [] : null;
+        }
+
+        var ids = new List<Guid>(values.Length);
+        foreach (var value in values.Where(v => !string.IsNullOrWhiteSpace(v)))
+        {
+            if (Guid.TryParse(value, out var id) && id != Guid.Empty)
+            {
+                ids.Add(id);
+            }
+            else
+            {
+                unreadable = true;
+            }
+        }
+
+        return ids;
     }
 
     /// <summary>
@@ -82,7 +119,7 @@ public sealed class HarvestLotsController(
         var estimatedIsRead = TryDecimal(form.EstimatedKg, out var estimatedKg);
         var request = new CorrectHarvestLotRequest(
             Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, form.KeepPhotoKeys, form.Reason, form.RowVersion, !estimatedIsRead,
-            Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)), form.ConfirmOverPlan, form.OverPlanReason);
+            Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)), form.ConfirmOverPlan, form.OverPlanReason, ReadCrew(form.Crew, form.ReplaceCrew, out var crewUnreadable), crewUnreadable);
         return (await corrections.CorrectAsync(lotId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken)).ToActionResult(Ok);
     }
 

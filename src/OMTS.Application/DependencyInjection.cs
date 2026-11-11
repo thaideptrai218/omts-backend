@@ -164,6 +164,11 @@ public static class DependencyInjection
         services.AddScoped<RaftReadService>();
         services.AddScoped<RaftViews>();
         services.AddScoped<RaftPhotoService>();
+        services.AddScoped<LaneIncidentViews>();
+        services.AddScoped<LaneIncidentNotifier>();
+        services.AddScoped<LaneIncidentService>();
+        services.AddScoped<LaneIncidentReadService>();
+        services.AddScoped<LaneIncidentPhotoService>();
         services.AddScoped<RaftStatusService>();
 
         // CYCLE – cultivation cycles and the lane states derived from their records
@@ -198,6 +203,7 @@ public static class DependencyInjection
         // HARVEST-01, HARVEST-03 and what SALE and CLAIM call on a lot
         services.AddScoped<HarvestLotViews>();
         services.AddScoped<HarvestLotNotifier>();
+        services.AddScoped<HarvestCrewService>();
         services.AddScoped<HarvestLotRecordingService>();
         services.AddScoped<HarvestLaneFinishService>();
         services.AddScoped<HarvestLotEditReader>();

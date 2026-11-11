@@ -22,20 +22,38 @@ public static class HarvestLotAudit
     };
 
     /// <summary>The lot with its lanes.</summary>
-    internal static object Snapshot(HarvestLot lot) => new
-    {
-        lot.LotCode,
-        lot.HarvestedAt,
-        lot.HarvestDate,
-        lot.PurchaseRequestId,
-        Lanes = lot.Lanes.Select(l => l.Lane.LaneNumber).Order().ToList(),
-        FinishedLanes = lot.Lanes.Where(l => l.IsFinished).Select(l => l.Lane.LaneNumber).Order().ToList(),
-        lot.CageCount,
-        lot.KgPerCage,
-        lot.EstimatedKg,
-        lot.OverPlanReason,
-        Photos = lot.Photos.OrderBy(p => p.SortOrder).Select(p => p.FileKey).ToList(),
-    };
+    internal static object Snapshot(HarvestLot lot, bool alwaysNameCrew = false) =>
+        // The crew (decision of 12/11/2026) is named only when the lot has one, so a lot with none reads exactly as before.
+        alwaysNameCrew || lot.Crew.Count > 0
+            ? (object)new
+            {
+                lot.LotCode,
+                lot.HarvestedAt,
+                lot.HarvestDate,
+                lot.PurchaseRequestId,
+                Lanes = lot.Lanes.Select(l => l.Lane.LaneNumber).Order().ToList(),
+                FinishedLanes = lot.Lanes.Where(l => l.IsFinished).Select(l => l.Lane.LaneNumber).Order().ToList(),
+                lot.CageCount,
+                lot.KgPerCage,
+                lot.EstimatedKg,
+                lot.OverPlanReason,
+                Photos = lot.Photos.OrderBy(p => p.SortOrder).Select(p => p.FileKey).ToList(),
+                Crew = HarvestCrewService.AuditNames(lot),
+            }
+            : new
+            {
+                lot.LotCode,
+                lot.HarvestedAt,
+                lot.HarvestDate,
+                lot.PurchaseRequestId,
+                Lanes = lot.Lanes.Select(l => l.Lane.LaneNumber).Order().ToList(),
+                FinishedLanes = lot.Lanes.Where(l => l.IsFinished).Select(l => l.Lane.LaneNumber).Order().ToList(),
+                lot.CageCount,
+                lot.KgPerCage,
+                lot.EstimatedKg,
+                lot.OverPlanReason,
+                Photos = lot.Photos.OrderBy(p => p.SortOrder).Select(p => p.FileKey).ToList(),
+            };
 
     /// <summary>The changed values of a correction; a Published lot is named, as its page shows the correction at once (BR-TRACE-05).</summary>
     internal static JsonObject WithAffectedPublishedLot(JsonObject changedAfter, HarvestLot lot)

@@ -30,7 +30,8 @@ public sealed class SeedingViews(
 
     public static SeedingFigures Figures(Raft raft, IReadOnlyDictionary<Guid, LaneState> states)
     {
-        var inUse = raft.Lanes.Where(l => l.StatusId == StatusIds.Lane.InUse).OrderBy(l => l.LaneNumber).ToList();
+        // A lane put out of service is no longer one of the lanes to seed (decision of 12/11/2026).
+        var inUse = raft.Lanes.Where(l => l.StatusId == StatusIds.Lane.InUse && !l.IsOutOfService).OrderBy(l => l.LaneNumber).ToList();
         var notSeeded = inUse.Where(l => states[l.Id] == LaneState.NotSeeded).Select(l => l.LaneNumber).ToList();
         return new SeedingFigures(inUse.Count, inUse.Count - notSeeded.Count, notSeeded);
     }

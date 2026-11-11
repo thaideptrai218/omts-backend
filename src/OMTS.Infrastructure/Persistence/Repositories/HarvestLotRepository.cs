@@ -18,7 +18,7 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
         WithAll(db.HarvestLots.AsNoTracking()).FirstOrDefaultAsync(l => l.Id == lotId, cancellationToken);
 
     public async Task<IReadOnlyList<HarvestLot>> ListByCycleAsync(Guid cycleId, CancellationToken cancellationToken) =>
-        await db.HarvestLots.AsNoTracking().Include(l => l.Lanes).ThenInclude(l => l.Lane).Include(l => l.PurchaseRequest)
+        await db.HarvestLots.AsNoTracking().Include(l => l.Lanes).ThenInclude(l => l.Lane).Include(l => l.PurchaseRequest).Include(l => l.Crew).ThenInclude(c => c.Employee)
             .Where(l => l.CycleId == cycleId)
             .OrderByDescending(l => l.HarvestedAt)
             .ToListAsync(cancellationToken);
@@ -178,6 +178,7 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
     {
         db.HarvestLotLanes.RemoveRange(lot.Lanes);
         db.HarvestLotPhotos.RemoveRange(lot.Photos);
+        db.HarvestLotCrew.RemoveRange(lot.Crew);
         db.HarvestLots.Remove(lot);
     }
 
@@ -189,12 +190,17 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
 
     public void RemovePhoto(HarvestLotPhoto photo) => db.HarvestLotPhotos.Remove(photo);
 
+    public void AddCrew(HarvestLotCrewMember member) => db.HarvestLotCrew.Add(member);
+
+    public void RemoveCrew(HarvestLotCrewMember member) => db.HarvestLotCrew.Remove(member);
+
     private static IQueryable<HarvestLot> ForSale(IQueryable<HarvestLot> lots) =>
         lots.Where(l => l.StatusId == StatusIds.HarvestLot.Open || l.StatusId == StatusIds.HarvestLot.Reopened);
 
     private static IQueryable<HarvestLot> WithAll(IQueryable<HarvestLot> lots) =>
         lots.Include(l => l.Lanes).ThenInclude(l => l.Lane)
             .Include(l => l.Photos)
+            .Include(l => l.Crew).ThenInclude(c => c.Employee)
             .Include(l => l.Cycle)
             .Include(l => l.PurchaseRequest)
             .Include(l => l.Raft).ThenInclude(r => r.Zone);

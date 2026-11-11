@@ -22,6 +22,12 @@ public sealed record HarvestFields
     public IReadOnlyList<byte[]> Photos { get; init; } = [];
     public string PhotoField { get; init; } = "photos";
 
+    /// <summary>The employees on the trip, one <c>crew</c> field each (decision of 12/11/2026); null sends none (a correction then keeps the crew); a single empty value clears it.</summary>
+    public IReadOnlyList<string>? Crew { get; init; }
+
+    /// <summary>Sends <c>replaceCrew=true</c>: the crew of a correction becomes exactly the <c>crew</c> fields, none clearing it.</summary>
+    public bool ReplaceCrew { get; init; }
+
     /// <summary>The purchase request the trip harvests for (decision of 11/11/2026).</summary>
     public Guid? Order { get; init; }
 
@@ -60,6 +66,16 @@ public sealed record HarvestFields
         if (Order is { } order && !WithoutOrder)
         {
             form.Add(new StringContent(order.ToString()), "purchaseRequestId");
+        }
+
+        if (ReplaceCrew)
+        {
+            form.Add(new StringContent("true"), "replaceCrew");
+        }
+
+        foreach (var employee in Crew ?? [])
+        {
+            form.Add(new StringContent(employee), "crew");
         }
 
         foreach (var photo in Photos)

@@ -12,9 +12,11 @@ namespace OMTS.Application.Features.Harvest;
 /// <param name="EstimatedKgIsUnreadable">A value was sent that is not a number, so it does not mean "work it out".</param>
 /// <param name="OtherFilePart">A file came in a part not named <c>photos</c>: refused after the access check, so no photo is dropped without a word.</param>
 /// <param name="PurchaseRequestId">The request the trip harvests for (decision of 11/11/2026): required when recording, never read by a correction; null when no id could be read.</param>
+/// <param name="Crew">The employees who worked on the trip (decision of 12/11/2026), optional: null when none was sent (a correction then leaves the crew as it is); an empty list clears it.</param>
+/// <param name="CrewUnreadable">An id was sent that is not a GUID.</param>
 public sealed record RecordHarvestRequest(
     IReadOnlyList<int>? LaneNumbers, IReadOnlyList<int>? FinishedLaneNumbers, decimal? CageCount, decimal? EstimatedKg, bool EstimatedKgIsUnreadable = false, bool OtherFilePart = false,
-    bool ConfirmOverPlan = false, string? OverPlanReason = null, Guid? PurchaseRequestId = null);
+    bool ConfirmOverPlan = false, string? OverPlanReason = null, Guid? PurchaseRequestId = null, IReadOnlyList<Guid>? Crew = null, bool CrewUnreadable = false);
 
 /// <summary>A photo of a lot, for staff.</summary>
 /// <param name="Key">The storage key.</param>
@@ -50,7 +52,8 @@ public sealed record HarvestLotListItem(
     bool CanClose,
     string RowVersion,
     Guid? PurchaseRequestId = null,
-    string? PurchaseRequestCode = null);
+    string? PurchaseRequestCode = null,
+    IReadOnlyList<HarvestCrewMemberView>? Crew = null);
 
 /// <summary>A harvest lot with its figures (BR-HARVEST-07): the record a notification opens.</summary>
 /// <param name="Photos">In slot order.</param>
@@ -99,7 +102,8 @@ public sealed record HarvestLotView(
     string RowVersion,
     string? OverPlanReason = null,
     Guid? PurchaseRequestId = null,
-    string? PurchaseRequestCode = null);
+    string? PurchaseRequestCode = null,
+    IReadOnlyList<HarvestCrewMemberView>? Crew = null);
 
 /// <summary>Answer of a recorded harvest.</summary>
 /// <param name="EverySeededLaneHarvested">Every seeded lane of the cycle shows Harvested now: the cycle can be closed normally (BR-CYCLE-07).</param>
@@ -112,7 +116,9 @@ public sealed record HarvestLotSaved(
 /// <summary>A lane on the Harvest lots screen, with its state today (BR-FARM-03).</summary>
 /// <param name="CanHarvest">The lane can be chosen for a new lot now: In Use, Growing or Being harvested, on a raft that can record.</param>
 /// <param name="Reason">Why <paramref name="CanHarvest"/> is false, or null.</param>
-/// <param name="ReasonCode">One of <c>LaneRemoved</c>, <c>NoOpenCycle</c>, <c>ReadOnly</c>, <c>NoPermission</c>, <c>NotSeeded</c>, <c>AlreadyHarvested</c>; null when the lane can be harvested.</param>
+/// <param name="ReasonCode">One of <c>LaneRemoved</c>, <c>LaneDamaged</c>, <c>LaneOutOfService</c>, <c>NoOpenCycle</c>, <c>ReadOnly</c>, <c>NoPermission</c>, <c>NotSeeded</c>, <c>AlreadyHarvested</c>; null when the lane can be harvested.</param>
+/// <param name="IsDamaged">The lane is damaged and waits for a repair (decision of 12/11/2026): it keeps its state and cannot be chosen.</param>
+/// <param name="IsOutOfService">The lane was put out of service: the web hides it from the pickers.</param>
 /// <param name="CanFinish">The lane is Being harvested and the caller may finish it with <c>finish-harvest</c>.</param>
 /// <param name="LotCount">Lots of the Open cycle that include the lane.</param>
 /// <param name="LastHarvestDate">The latest harvest date of those lots, or null.</param>
@@ -133,7 +139,10 @@ public sealed record HarvestLaneView(
     int LotCount = 0,
     DateOnly? LastHarvestDate = null,
     IReadOnlyList<string>? SeedLotCodes = null,
-    decimal HarvestedCages = 0m);
+    decimal HarvestedCages = 0m,
+    bool IsDamaged = false,
+    bool IsOutOfService = false,
+    decimal? LineLengthM = null);
 
 /// <summary>The Harvest lots screen of a raft (SCR-HARVEST-01).</summary>
 /// <param name="Cycle">The Open cycle, or null: no lot can be recorded.</param>

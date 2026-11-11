@@ -18,9 +18,7 @@ public sealed class LaneStateReader(ICultivationCycleQuery cycles, ISeedingRecor
         var cycle = await cycles.CycleOnDateAsync(raft.Id, date, cancellationToken);
         var seedings = cycle is null ? [] : await seedingRecords.LaneSeedingsAsync(cycle.Id, cancellationToken);
         var harvests = cycle is null ? [] : await harvestLots.LaneHarvestsAsync(cycle.Id, cancellationToken);
-        return new LaneDay(
-            cycle,
-            LaneStateRules.StatesOn(date, cycle, raft.Lanes.Select(l => l.Id), seedings, harvests),
-            LaneStateRules.LanesWithRecords(cycle, seedings, harvests));
+        var states = LaneStateRules.StatesOn(date, cycle, raft.Lanes.Select(l => l.Id), seedings, harvests);
+        return new LaneDay(cycle, LaneStateRules.WithOutOfService(states, raft.Lanes, date), LaneStateRules.LanesWithRecords(cycle, seedings, harvests));
     }
 }

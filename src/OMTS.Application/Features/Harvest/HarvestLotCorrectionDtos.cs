@@ -22,7 +22,9 @@ public sealed record CorrectHarvestLotRequest(
     bool EstimatedKgIsUnreadable = false,
     bool OtherFilePart = false,
     bool ConfirmOverPlan = false,
-    string? OverPlanReason = null);
+    string? OverPlanReason = null,
+    IReadOnlyList<Guid>? Crew = null,
+    bool CrewUnreadable = false);
 
 /// <summary>HARVEST-01.1 step 3; the client has asked with MSG-GEN-04.</summary>
 public sealed record RemoveHarvestLotRequest(string? Reason, string? RowVersion);

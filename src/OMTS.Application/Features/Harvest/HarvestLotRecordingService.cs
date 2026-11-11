@@ -42,6 +42,7 @@ public sealed class HarvestLotRecordingService(
     UploadedFileSaver fileSaver,
     HarvestLotNotifier notifier,
     HarvestLotViews views,
+    HarvestCrewService crews,
     ZoneAccessGuard zoneAccess,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
@@ -86,7 +87,12 @@ public sealed class HarvestLotRecordingService(
             return wrongRequest;
         }
 
-        var recorder = currentUser.AccountId ?? throw new InvalidOperationException("A harvest lot needs an authenticated caller.");
+        if ((await crews.ReadAsync(request.Crew, request.CrewUnreadable, cancellationToken)).Error is { } wrongCrew)
+        {
+            return wrongCrew;
+        }
+
+        var recorder =currentUser.AccountId ?? throw new InvalidOperationException("A harvest lot needs an authenticated caller.");
         var uploaded = await photoStore.UploadAllAsync(FileCategories.HarvestLotPhotos, files, cancellationToken);
         if (!uploaded.IsSuccess)
         {
@@ -183,8 +189,14 @@ public sealed class HarvestLotRecordingService(
             return wrongRequest;
         }
 
+        var (crew, crewError) = await crews.ReadAsync(request.Crew, request.CrewUnreadable, cancellationToken);
+        if (crewError is not null)
+        {
+            return crewError;
+        }
+
         var cycle = open.Cycle;
-        var baseCode = HarvestLotCodes.Base(raft.Zone.Code, raft.Code, harvestDate);
+        var baseCode =HarvestLotCodes.Base(raft.Zone.Code, raft.Code, harvestDate);
         var lot = new HarvestLot
         {
             LotCode = HarvestLotCodes.Next(baseCode, await lots.CodesFromAsync(baseCode, cancellationToken)),
@@ -205,6 +217,10 @@ public sealed class HarvestLotRecordingService(
             Photos = keys.Select((key, index) => new HarvestLotPhoto { SortOrder = index + 1, FileKey = key }).ToList(),
         };
         lots.Add(lot);
+        if (crew is not null)
+        {
+            crews.Apply(lot, crew);
+        }
 
         // The lane states depend on the cycle row: a parallel lot, close, cancel or seeding correction read it before this lot, so one of them fails with MSG06.
         unitOfWork.MarkChanged(cycle);

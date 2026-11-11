@@ -82,7 +82,10 @@ public sealed class SeedingSessionReader(ISeedLotRepository lots, IRaftRepositor
         var states = (await laneStates.ReadAsync(raft, today, cancellationToken)).States;
         var isOwn = (current?.Lanes ?? []).Select(l => l.LaneId).ToHashSet();
         var completed = cycle.SeedingCompletedOn is not null;
-        var refused = lanes.Where(l => !isOwn.Contains(l.Id) && !SeedingLaneRules.CanBeSeeded(states[l.Id], completed)).Select(l => l.LaneNumber).Order().ToList();
+        // A damaged lane or one out of service takes no new seed (decision of 12/11/2026); a lane the session already holds is judged as before.
+        var refused = lanes
+            .Where(l => !isOwn.Contains(l.Id) && (!l.IsUsable || !SeedingLaneRules.CanBeSeeded(states[l.Id], completed)))
+            .Select(l => l.LaneNumber).Order().ToList();
         return (lanes, refused.Count == 0 ? null : $"Lanes {string.Join(", ", refused)} cannot be seeded now.");
     }
 }

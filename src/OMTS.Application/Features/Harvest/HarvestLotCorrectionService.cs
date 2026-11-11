@@ -24,12 +24,14 @@ public sealed class HarvestLotCorrectionService(
     RowVersionGuard rowVersions,
     HarvestLotNotifier notifier,
     HarvestLotViews views,
+    HarvestCrewService crews,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
     TimeProvider timeProvider)
 {
-    private sealed record Checked(HarvestLot Lot, Raft Raft, HarvestLotFields Fields, HarvestLotLaneFacts Facts, List<HarvestLotPhoto> Kept, IReadOnlyList<ValidatedFile> Files);
+    private sealed record Checked(
+        HarvestLot Lot, Raft Raft, HarvestLotFields Fields, HarvestLotLaneFacts Facts, List<HarvestLotPhoto> Kept, IReadOnlyList<ValidatedFile> Files, IReadOnlyList<Domain.Entities.Identity.Employee>? Crew);
 
     private sealed record Applied(HarvestLot Lot, Raft Raft, List<string> RemovedKeys, bool Changed, bool EveryHarvested);
 
@@ -100,7 +102,7 @@ public sealed class HarvestLotCorrectionService(
         // BR-HARVEST-02: left out, the estimate stays, unless the cages changed: then it is worked out again with the kg per cage of the lot, never the current setting.
         var estimatedKg = request.EstimatedKg ?? (request.CageCount == lot.CageCount ? lot.EstimatedKg : null);
         var fields = new RecordHarvestRequest(request.LaneNumbers, request.FinishedLaneNumbers, request.CageCount, estimatedKg, request.EstimatedKgIsUnreadable, request.OtherFilePart);
-        var correction = new HarvestLotCorrectionInput(request.Reason, facts.FinishedHint(request.FinishedLaneNumbers), null, lot.CageCount, lot.EstimatedKg);
+        var correction = new HarvestLotCorrectionInput(request.Reason, facts.FinishedHint(request.FinishedLaneNumbers), null, lot.CageCount, lot.EstimatedKg, lot.Lanes.Select(l => l.LaneId).ToHashSet());
         // PM decision 11/11/2026: the cycle total, without this lot, is capped against the target yield when the correction raises the kg.
         var otherKg = (await lots.ListByCycleAsync(lot.CycleId, cancellationToken)).Where(l => l.Id != lot.Id).Sum(l => l.EstimatedKg);
         var plan = new HarvestPlanInput(lot.Cycle.TargetYieldKg, otherKg, request.ConfirmOverPlan, request.OverPlanReason);
@@ -109,12 +111,18 @@ public sealed class HarvestLotCorrectionService(
             return invalid;
         }
 
+        var (crew, crewError) = await crews.ReadAsync(request.Crew, request.CrewUnreadable, cancellationToken);
+        if (crewError is not null)
+        {
+            return crewError;
+        }
+
         if (version is not null)
         {
             return version;
         }
 
-        return new Checked(lot, raft, read!, facts, kept, files);
+        return new Checked(lot, raft, read!, facts, kept, files, crew);
     }
 
     /// <summary>Changes the row as it is after the uploads. The cap on photos still holds, as the kept photos can only be the same ones.</summary>
@@ -126,11 +134,11 @@ public sealed class HarvestLotCorrectionService(
             return current.Error!;
         }
 
-        var (lot, raft, fields, facts, kept, _) = current.Value!;
+        var (lot, raft, fields, facts, kept, _, crew) = current.Value!;
         var everyBefore = facts.EveryHarvestedNow();
         var everyAfter = facts.EveryHarvestedWith(fields);
         var takesALaneBack = facts.CorrectionTakesALaneOutOfHarvested(fields);
-        var before = HarvestLotAudit.Snapshot(lot);
+        var before = HarvestLotAudit.Snapshot(lot, alwaysNameCrew: true);
         (lot.CageCount, lot.EstimatedKg) = (fields.CageCount, fields.EstimatedKg);
         if (fields.PlanEvaluated)
         {
@@ -138,8 +146,13 @@ public sealed class HarvestLotCorrectionService(
         }
 
         HarvestLotCorrectionRows.ApplyLanes(lots, lot, fields);
+        if (crew is not null)
+        {
+            crews.Apply(lot, crew);
+        }
+
         var removedKeys = HarvestLotCorrectionRows.ApplyPhotos(lots, lot, kept, newKeys);
-        var (changedBefore, changedAfter) = AuditDiff.Changed(before, HarvestLotAudit.Snapshot(lot));
+        var (changedBefore, changedAfter) = AuditDiff.Changed(before, HarvestLotAudit.Snapshot(lot, alwaysNameCrew: true));
         if (changedAfter is null)
         {
             return new Applied(lot, raft, removedKeys, false, everyAfter);

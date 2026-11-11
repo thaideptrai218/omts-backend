@@ -939,8 +939,18 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("IsDamaged")
+                        .HasColumnType("bit");
+
                     b.Property<int>("LaneNumber")
                         .HasColumnType("int");
+
+                    b.Property<decimal?>("LineLengthM")
+                        .HasPrecision(7, 2)
+                        .HasColumnType("decimal(7,2)");
+
+                    b.Property<DateOnly?>("OutOfServiceOn")
+                        .HasColumnType("date");
 
                     b.Property<Guid>("RaftId")
                         .HasColumnType("uniqueidentifier");
@@ -967,7 +977,171 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("RaftId", "LaneNumber")
                         .IsUnique();
 
-                    b.ToTable("Lanes");
+                    b.ToTable("Lanes", t =>
+                        {
+                            t.HasCheckConstraint("CK_Lane_LineLength", "[LineLengthM] IS NULL OR [LineLengthM] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.LaneIncident", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CycleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("HadSeed")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("LaneId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateOnly>("OccurredOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ReasonCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("RecordedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ResolvesIncidentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("StateBefore")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CycleId");
+
+                    b.HasIndex("RecordedByAccountId");
+
+                    b.HasIndex("ResolvesIncidentId");
+
+                    b.HasIndex("LaneId", "OccurredAt");
+
+                    b.ToTable("LaneIncidents", t =>
+                        {
+                            t.HasCheckConstraint("CK_LaneIncident_Reason", "LEN([Reason]) > 0");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.LaneIncidentMaterial", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("IncidentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("IssueId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("MaterialUsageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IncidentId");
+
+                    b.HasIndex("IssueId");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("MaterialUsageId");
+
+                    b.ToTable("LaneIncidentMaterials");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.LaneIncidentPhoto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FileKey")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("IncidentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IncidentId", "SortOrder")
+                        .IsUnique();
+
+                    b.ToTable("LaneIncidentPhotos", t =>
+                        {
+                            t.HasCheckConstraint("CK_LaneIncidentPhoto_SortOrder", "[SortOrder] BETWEEN 1 AND 3");
+                        });
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Farming.Raft", b =>
@@ -994,6 +1168,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<decimal?>("Latitude")
                         .HasPrecision(9, 6)
                         .HasColumnType("decimal(9,6)");
+
+                    b.Property<decimal?>("LengthM")
+                        .HasPrecision(7, 2)
+                        .HasColumnType("decimal(7,2)");
 
                     b.Property<string>("Location")
                         .HasMaxLength(500)
@@ -1022,6 +1200,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal?>("WidthM")
+                        .HasPrecision(7, 2)
+                        .HasColumnType("decimal(7,2)");
+
                     b.Property<Guid>("ZoneId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1035,6 +1217,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("Rafts", t =>
                         {
                             t.HasCheckConstraint("CK_Raft_Coordinates", "([Latitude] IS NULL AND [Longitude] IS NULL) OR ([Latitude] BETWEEN -90 AND 90 AND [Longitude] BETWEEN -180 AND 180)");
+
+                            t.HasCheckConstraint("CK_Raft_Geometry", "([LengthM] IS NULL OR [LengthM] BETWEEN 1 AND 500) AND ([WidthM] IS NULL OR [WidthM] BETWEEN 1 AND 200)");
                         });
                 });
 
@@ -1287,6 +1471,21 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_HarvestLot_LeftoverKg", "[LeftoverKg] IS NULL OR [LeftoverKg] >= 0");
                         });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestLotCrewMember", b =>
+                {
+                    b.Property<Guid>("LotId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("LotId", "EmployeeId");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("HarvestLotCrew");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestLotLane", b =>
@@ -6987,6 +7186,72 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.LaneIncident", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.CultivationCycle", null)
+                        .WithMany()
+                        .HasForeignKey("CycleId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Farming.Lane", "Lane")
+                        .WithMany()
+                        .HasForeignKey("LaneId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("RecordedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Farming.LaneIncident", null)
+                        .WithMany()
+                        .HasForeignKey("ResolvesIncidentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Lane");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.LaneIncidentMaterial", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Farming.LaneIncident", "Incident")
+                        .WithMany("Materials")
+                        .HasForeignKey("IncidentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.InputIssue", null)
+                        .WithMany()
+                        .HasForeignKey("IssueId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.FarmingInputItem", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.MaterialUsage", null)
+                        .WithMany()
+                        .HasForeignKey("MaterialUsageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Incident");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.LaneIncidentPhoto", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Farming.LaneIncident", "Incident")
+                        .WithMany("Photos")
+                        .HasForeignKey("IncidentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Incident");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Farming.Raft", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
@@ -7078,6 +7343,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Raft");
 
                     b.Navigation("Status");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestLotCrewMember", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Harvest.HarvestLot", "Lot")
+                        .WithMany("Crew")
+                        .HasForeignKey("LotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("Lot");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestLotLane", b =>
@@ -8513,6 +8797,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("WaterMeasurements");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Farming.LaneIncident", b =>
+                {
+                    b.Navigation("Materials");
+
+                    b.Navigation("Photos");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Farming.Raft", b =>
                 {
                     b.Navigation("CultivationCycles");
@@ -8526,6 +8817,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestLot", b =>
                 {
+                    b.Navigation("Crew");
+
                     b.Navigation("Lanes");
 
                     b.Navigation("Photos");

@@ -34,25 +34,36 @@ public sealed class RaftViews(IRaftMaterialCostQuery materialCosts, IFileStorage
             RaftLaneChange.InUseCount(raft.Lanes),
             Lanes(raft),
             costs.GetValueOrDefault(raft.Id),
-            RowVersionGuard.Encode(raft.RowVersion));
+            RowVersionGuard.Encode(raft.RowVersion),
+            raft.LengthM,
+            raft.WidthM,
+            raft.AreaM2,
+            RaftGeometry.TotalLineLength(raft),
+            raft.Lanes.Count(l => l.StatusId == StatusIds.Lane.InUse && l.IsDamaged),
+            raft.Lanes.Count(l => l.StatusId == StatusIds.Lane.InUse && l.IsOutOfService));
     }
 
     public IReadOnlyList<LaneView> Lanes(Raft raft) => raft.Lanes
         .OrderBy(l => l.LaneNumber)
-        .Select(l => new LaneView(l.Id, l.LaneNumber, l.StatusId, statusCatalog.DisplayNameOf(l.StatusId)))
+        .Select(l => new LaneView(
+            l.Id, l.LaneNumber, l.StatusId, statusCatalog.DisplayNameOf(l.StatusId),
+            RaftGeometry.EffectiveLineLength(l, raft), l.LineLengthM is not null, l.IsDamaged, l.IsOutOfService, l.OutOfServiceOn))
         .ToList();
 
     /// <summary>Every lane of the raft in number order with its state on a date (BR-FARM-03).</summary>
     public IReadOnlyList<LaneDayView> LanesOn(Raft raft, IReadOnlyDictionary<Guid, LaneState> states) => raft.Lanes
         .OrderBy(l => l.LaneNumber)
-        .Select(l => new LaneDayView(l.Id, l.LaneNumber, l.StatusId, statusCatalog.DisplayNameOf(l.StatusId), states[l.Id]))
+        .Select(l => new LaneDayView(
+            l.Id, l.LaneNumber, l.StatusId, statusCatalog.DisplayNameOf(l.StatusId), states[l.Id],
+            l.IsDamaged, l.IsOutOfService, RaftGeometry.EffectiveLineLength(l, raft), LaneReasonCodes.Of(l)))
         .ToList();
 
     /// <summary>The raft with MSG-GEN-05 "{what} saved." (FARM-04.0 step 6).</summary>
     public async Task<RaftSaved> SavedAsync(Raft raft, string what, CancellationToken cancellationToken)
     {
         var saved = UserMessages.Saved(what);
-        return new RaftSaved(await ViewAsync(raft, cancellationToken), saved.Text, saved.Code, CoordinateRules.ForRaft(raft.Latitude, raft.Longitude, raft.Zone.Latitude, raft.Zone.Longitude));
+        var warnings = CoordinateRules.ForRaft(raft.Latitude, raft.Longitude, raft.Zone.Latitude, raft.Zone.Longitude).Concat(RaftGeometry.Warnings(raft)).ToList();
+        return new RaftSaved(await ViewAsync(raft, cancellationToken), saved.Text, saved.Code, warnings);
     }
 
     /// <summary>

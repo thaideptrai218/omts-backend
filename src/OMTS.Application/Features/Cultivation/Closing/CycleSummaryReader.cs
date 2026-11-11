@@ -17,6 +17,7 @@ public sealed class CycleSummaryReader(
     ISeedingRecordRepository seedingRecords,
     IHarvestLotRepository harvestLots,
     LaneStateReader laneStates,
+    ILaneIncidentRepository laneIncidents,
     TimeProvider timeProvider)
 {
     /// <summary>The summary of a cycle, which comes with its raft: of a Closed cycle as of its close date, of an Open one as if it closed today.</summary>
@@ -55,7 +56,9 @@ public sealed class CycleSummaryReader(
             isOpen ? null : cycle.Assessment,
             lots.Sum(l => l.CageCount),
             cycle.TargetYieldKg is { } target ? target - lots.Sum(l => l.EstimatedKg) : null,
-            Seeding.SeedingPlanRules.Percent(cycle.ExpectedSeedQuantity, sessions.Sum(s => s.Quantity)));
+            Seeding.SeedingPlanRules.Percent(cycle.ExpectedSeedQuantity, sessions.Sum(s => s.Quantity)),
+            (await laneIncidents.LossEventsOfCycleAsync(cycle.Id, cancellationToken)).Select(i => new LaneLossView(i.Lane.LaneNumber, i.OccurredOn, i.Reason, i.ReasonCode)).ToList(),
+            isOpen ? raft.Lanes.Where(l => l.StatusId == StatusIds.Lane.InUse && l.IsDamaged && !l.IsOutOfService).Select(l => l.LaneNumber).Order().ToList() : []);
     }
 
     /// <summary>

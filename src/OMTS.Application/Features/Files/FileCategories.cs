@@ -34,4 +34,7 @@ public static class FileCategories
 
     /// <summary>CLAIM-01 photos of a quality claim, <c>QualityClaimPhoto.FileKey</c>. Private: only their sender and the staff read them, never the provenance page (BR-CLAIM-01).</summary>
     public const string QualityClaimPhotos = "claim-photos";
+
+    /// <summary>Optional photos of a lane incident (damage or out of service), <c>LaneIncidentPhoto.FileKey</c>. Staff only.</summary>
+    public const string LaneIncidentPhotos = "lane-incident-photos";
 }

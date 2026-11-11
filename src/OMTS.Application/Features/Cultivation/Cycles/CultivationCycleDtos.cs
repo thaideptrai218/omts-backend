@@ -72,8 +72,16 @@ public sealed record ZoneCycleItem(
     bool CanCancel,
     bool CanClose);
 
-/// <summary>A lane on a date: its status In Use or Removed, and the state worked out for that date (BR-FARM-03).</summary>
-public sealed record LaneDayView(Guid Id, int LaneNumber, int StatusId, string Status, LaneState State);
+/// <summary>
+/// A lane on a date: its status In Use or Removed, and the state worked out for that date (BR-FARM-03).
+/// </summary>
+/// <param name="IsDamaged">Damaged now and not repaired: the state is the one it had, and no seeding or harvest is possible. <paramref name="ReasonCode"/> says why it cannot be used.</param>
+/// <param name="IsOutOfService">Put out of service (decision of 12/11/2026). The state shows <c>OutOfService</c> when seed hung on the lane in the cycle (the lane counts as finished at the close).</param>
+/// <param name="LineLengthM">The line length in effect (the lane's own, else the raft's); null when unknown.</param>
+/// <param name="ReasonCode">Why the lane cannot take seed or a harvest from its own flags: <c>LaneDamaged</c> or <c>LaneOutOfService</c>; null otherwise.</param>
+public sealed record LaneDayView(
+    Guid Id, int LaneNumber, int StatusId, string Status, LaneState State,
+    bool IsDamaged = false, bool IsOutOfService = false, decimal? LineLengthM = null, string? ReasonCode = null);
 
 /// <summary>CYCLE-05: the lanes of a raft on a date with the cycle that was open then.</summary>
 /// <param name="Cycle">The cycle open on <paramref name="Date"/>, or null: the raft had none, so every lane is Not seeded.</param>

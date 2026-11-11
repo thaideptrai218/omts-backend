@@ -62,3 +62,15 @@ internal sealed class HarvestLotPhotoConfiguration : IEntityTypeConfiguration<Ha
         builder.ToTable(t => t.HasCheckConstraint("CK_HarvestLotPhoto_SortOrder", $"[SortOrder] BETWEEN 1 AND {HarvestLot.MaxPhotos}"));
     }
 }
+
+internal sealed class HarvestLotCrewMemberConfiguration : IEntityTypeConfiguration<HarvestLotCrewMember>
+{
+    public void Configure(EntityTypeBuilder<HarvestLotCrewMember> builder)
+    {
+        // One row per employee on the lot; the same employee may be on lots of other rafts the same day (decision of 12/11/2026).
+        builder.HasKey(x => new { x.LotId, x.EmployeeId });
+        builder.HasOne(x => x.Lot).WithMany(l => l.Crew).HasForeignKey(x => x.LotId);
+        builder.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(x => x.EmployeeId);
+    }
+}
