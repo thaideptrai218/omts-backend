@@ -745,6 +745,9 @@ the refusal to `DemoSeedGate`.
 
 ## Design documents
 
+The current cage request, staffing, harvest completion and port weighing contract is documented in
+[docs/cage-order-harvest.md](docs/cage-order-harvest.md), including the remaining slices and deployment limits.
+
 `docs/sds/` holds the detailed design (SDS) of the modules, written from this code. A PR that changes a
 documented module updates its SDS part in the same PR.
 
