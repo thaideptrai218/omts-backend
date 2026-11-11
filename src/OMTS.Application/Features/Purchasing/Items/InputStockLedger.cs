@@ -212,7 +212,7 @@ public sealed class InputStockLedger(
         }
     }
 
-    private async Task<bool> AllowNegativeAsync(CancellationToken cancellationToken) =>
+    public async Task<bool> AllowNegativeAsync(CancellationToken cancellationToken) =>
         allowNegative ??= (await cooperatives.GetCurrentAsync(cancellationToken))?.AllowNegativeInputQuantity ?? true;
 
     private async Task<InputCostMethod> MethodAsync(CancellationToken cancellationToken) =>

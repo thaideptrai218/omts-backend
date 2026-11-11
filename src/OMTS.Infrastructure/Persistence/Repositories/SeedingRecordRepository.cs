@@ -48,7 +48,7 @@ internal sealed class SeedingRecordRepository(OmtsDbContext db) : ISeedingRecord
     }
 
     private static IQueryable<SeedingRecord> WithLot(IQueryable<SeedingRecord> records) =>
-        records.Include(r => r.Lanes).ThenInclude(l => l.Lane)
+        records.Include(r => r.Issue).Include(r => r.Lanes).ThenInclude(l => l.Lane)
             .Include(r => r.SeedLotLine).ThenInclude(l => l.Item)
             .Include(r => r.SeedLotLine).ThenInclude(l => l.Receipt).ThenInclude(r => r.Supplier);
 

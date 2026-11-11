@@ -48,6 +48,7 @@ internal sealed class InputIssueConfiguration : IEntityTypeConfiguration<InputIs
         builder.Property(x => x.CancelReason).HasMaxLength(Lengths.Reason);
         builder.HasIndex(x => new { x.Kind, x.IssuedAt });
         builder.HasIndex(x => x.ZoneId);
+        builder.HasIndex(x => new { x.SourceKind, x.SourceRecordId });
     }
 }
 

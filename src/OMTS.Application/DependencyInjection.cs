@@ -168,11 +168,13 @@ public static class DependencyInjection
         services.AddScoped<SeedingViews>();
         services.AddScoped<SeedingReadService>();
         services.AddScoped<SeedingRecordService>();
+        services.AddScoped<SeedingStockSync>();
         services.AddScoped<SeedingRecordCorrectionService>();
         services.AddScoped<SeedingCompletionService>();
         services.AddScoped<MaterialUsageCycleGuard>();
         services.AddScoped<MaterialUsageViews>();
         services.AddScoped<MaterialUsageService>();
+        services.AddScoped<MaterialUsageStockSync>();
         services.AddScoped<MaterialUsageEditService>();
         services.AddScoped<MaterialUsageReadService>();
         services.AddScoped<CultivationCycleService>();
@@ -236,6 +238,7 @@ public static class DependencyInjection
         services.AddScoped<InputIssueAccess>();
         services.AddScoped<InputIssueCodeService>();
         services.AddScoped<InputIssueService>();
+        services.AddScoped<FarmingStockIssuer>();
         services.AddScoped<InputIssueTypeService>();
         services.AddScoped<InputMovementService>();
         services.AddScoped<FarmingInputItemDeletionService>();

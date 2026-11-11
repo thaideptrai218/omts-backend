@@ -29,14 +29,18 @@ public sealed record SeedLotRef(
 /// <param name="BoughtForThisRaft">The receipt line names this raft.</param>
 public sealed record SeedLotOption(
     Guid Id, string Code, Guid ReceiptId, string ReceiptCode, DateOnly ReceivedDate, Guid? ItemId, string? ItemCode, string? ItemName, string Unit, Guid SupplierId, string SupplierName,
-    decimal QuantityReceived, decimal QuantitySeeded, bool BoughtForThisRaft);
+    decimal QuantityReceived, decimal QuantitySeeded, bool BoughtForThisRaft, decimal QuantityReturned = 0m, decimal QuantityConsumed = 0m)
+{
+    /// <summary>What is left to use: received, less returns and everything consumed (seeding, manual issues, disposals). Seeding is refused above it (MSG-INPUT-01) unless the cooperative allows a negative stock.</summary>
+    public decimal OnHand => QuantityReceived - QuantityReturned - QuantityConsumed;
+}
 
 /// <param name="Lots">Those bought for this raft first, then the others, the newest first.</param>
 /// <param name="Message">MSG-CYCLE-03 when there is no lot to choose.</param>
 /// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
 public sealed record SeedLotList(Guid RaftId, IReadOnlyList<SeedLotOption> Lots, string? Message, string? MessageCode);
 
-/// <summary>A seeding session (CYCLE-02, CYCLE-05).</summary>
+/// <summary>A seeding session (CYCLE-02, CYCLE-05). <c>issueId</c> / <c>issueCode</c> name the stock issue (Xuất dùng) it posted; null on a session recorded before stock was checked.</summary>
 /// <param name="LaneNumbers">In number order.</param>
 /// <param name="CanCorrect">The caller may correct or remove it now: the cycle is Open on a raft In Use, no lane of it is in a harvest lot, and the caller recorded it or is the Owner (BR-CYCLE-02).</param>
 public sealed record SeedingRecordView(
@@ -52,7 +56,9 @@ public sealed record SeedingRecordView(
     string? RecordedByName,
     DateTimeOffset RecordedAt,
     bool CanCorrect,
-    string RowVersion);
+    string RowVersion,
+    Guid? IssueId = null,
+    string? IssueCode = null);
 
 /// <summary>Answer of a saved session.</summary>
 /// <param name="OfferMarkComplete">No lane In Use is left Not seeded and the seeding is not yet marked complete (CYCLE-02.0 step 7).</param>

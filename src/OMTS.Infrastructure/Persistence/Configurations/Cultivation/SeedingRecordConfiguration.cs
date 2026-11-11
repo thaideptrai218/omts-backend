@@ -9,6 +9,8 @@ internal sealed class SeedingRecordConfiguration : IEntityTypeConfiguration<Seed
     public void Configure(EntityTypeBuilder<SeedingRecord> builder)
     {
         builder.HasOne(x => x.Cycle).WithMany().HasForeignKey(x => x.CycleId);
+        // The stock issue this session posted: one fact, linked both ways (the issue holds the session id); null on a legacy session.
+        builder.HasOne(x => x.Issue).WithMany().HasForeignKey(x => x.IssueId).OnDelete(DeleteBehavior.Restrict);
         // The seed lot is a Seed line of a purchase receipt (GBR-04); a seeded line can never be removed.
         builder.HasOne(x => x.SeedLotLine).WithMany().HasForeignKey(x => x.SeedLotLineId);
         builder.ReferencesAccount(nameof(SeedingRecord.RecordedByAccountId));

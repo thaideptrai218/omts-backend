@@ -83,7 +83,8 @@ public static class SeedingTestKit
     public static async Task<JsonElement> MarkSeedingCompleteAsync(this HttpClient client, Guid cycleId)
     {
         var list = await client.SeedingListAsync(cycleId);
-        return await (await client.PostSeedingCompleteAsync(cycleId, list.Text("cycleRowVersion"))).ReadAsync(HttpStatusCode.OK);
+        // A raft with no seeded lane needs the confirmation of the owner decision of 11/11/2026; a seeded one ignores the flag.
+        return await (await client.PostAsJsonAsync($"/api/cultivation-cycles/{cycleId}/seeding-complete", new { rowVersion = list.Text("cycleRowVersion"), confirmEmpty = true })).ReadAsync(HttpStatusCode.OK);
     }
 
     /// <summary>A return of part of the lot, by the Owner; answers the receipt.</summary>

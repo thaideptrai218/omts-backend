@@ -25,5 +25,9 @@ public class SeedingRecord : AuditableEntity
     /// <summary>Who recorded it: a Zone Manager corrects only the sessions they recorded (BR-CYCLE-02).</summary>
     public Guid RecordedByAccountId { get; set; }
 
+    /// <summary>The stock issue (Xuất dùng) this session posted, one fact with it: null on a session recorded before stock was checked (legacy, its seed is counted from the session itself).</summary>
+    public Guid? IssueId { get; set; }
+    public InputIssue? Issue { get; set; }
+
     public ICollection<SeedingRecordLane> Lanes { get; set; } = [];
 }

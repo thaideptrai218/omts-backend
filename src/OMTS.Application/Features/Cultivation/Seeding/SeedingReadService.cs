@@ -44,7 +44,7 @@ public sealed class SeedingReadService(
 
         var options = (await lots.ListOfferedAsync(raftId, cancellationToken)).Select(l => new SeedLotOption(
             l.LineId, DocumentCodes.SeedLotCode(l.ReceiptCode, l.LineNumber), l.ReceiptId, l.ReceiptCode, l.ReceivedDate, l.ItemId, l.ItemCode, l.ItemName, l.Unit, l.SupplierId, l.SupplierName,
-            l.QuantityReceived, l.QuantitySeeded, l.RaftId == raftId)).ToList();
+            l.QuantityReceived, l.QuantitySeeded, l.RaftId == raftId, l.QuantityReturned, l.QuantityConsumed)).ToList();
         var empty = options.Count == 0 ? UserMessages.NoSeedLot : null;
         return new SeedLotList(raftId, options, empty?.Text, empty?.Code);
     }

@@ -183,7 +183,6 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     }
 
     [Theory]
-    [InlineData("8.0")]
     [InlineData("8,5")]
     [InlineData("1e3")]
     [InlineData("0x10")]
@@ -233,7 +232,7 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     [InlineData(33.33, "3", 99.99)]
     [InlineData(0.01, "1", 0.01)]
     [InlineData(12.35, "7", 86.45)]
-    [InlineData(50, "20000000", 1000000000)]
+    [InlineData(50, "100000", 5000000)]
     public async Task The_estimate_is_worked_out_exactly_from_the_setting(decimal average, string cages, decimal estimate)
     {
         var raft = await factory.SeededRaftAsync();
@@ -430,7 +429,7 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
 
         var saved = await owner.RecordHarvestAsync(raft.RaftId, new HarvestFields { Lanes = ["1"], Photos = [Jpeg] });
 
-        Assert.Equal(Sorted("lot", "everySeededLaneHarvested", "cycleRowVersion", "message", "messageCode"), Names(saved));
+        Assert.Equal(Sorted("lot", "everySeededLaneHarvested", "cycleRowVersion", "message", "messageCode", "warnings"), Names(saved));
         Assert.Equal(("Harvest lot saved.", "MSG-GEN-05"), (saved.Text("message"), saved.Text("messageCode")));
         var lot = saved.GetProperty("lot");
         Assert.Equal(

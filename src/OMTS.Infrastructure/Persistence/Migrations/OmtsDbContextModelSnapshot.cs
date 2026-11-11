@@ -584,6 +584,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("IssueId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("ItemId")
                         .HasColumnType("uniqueidentifier");
 
@@ -619,6 +622,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("IssueId");
+
                     b.HasIndex("ItemId");
 
                     b.HasIndex("RecordedByAccountId");
@@ -644,6 +649,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("CycleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("IssueId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("Quantity")
@@ -672,6 +680,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("IssueId");
 
                     b.HasIndex("RecordedByAccountId");
 
@@ -4419,6 +4429,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("CycleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SourceKind")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("SourceRecordId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid?>("IssueTypeId")
                         .HasColumnType("uniqueidentifier");
 
@@ -4478,6 +4497,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("ZoneId");
 
                     b.HasIndex("Kind", "IssuedAt");
+
+                    b.HasIndex("SourceKind", "SourceRecordId");
 
                     b.ToTable("InputIssues");
                 });
@@ -6464,6 +6485,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.InputIssue", "Issue")
+                        .WithMany()
+                        .HasForeignKey("IssueId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Issue");
+
                     b.Navigation("Item");
 
                     b.Navigation("Raft");
@@ -6488,6 +6516,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("SeedLotLineId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.InputIssue", "Issue")
+                        .WithMany()
+                        .HasForeignKey("IssueId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Issue");
 
                     b.Navigation("Cycle");
 

@@ -31,7 +31,9 @@ public sealed record MaterialUsageView(
     string? RecordedByName,
     DateTimeOffset RecordedAt,
     bool CanEdit,
-    string RowVersion);
+    string RowVersion,
+    Guid? IssueId = null,
+    string? IssueCode = null);
 
 /// <summary>One repair on the screen: the records with the same date and reason (SCR-CYCLE-03).</summary>
 public sealed record MaterialUsageRepair(DateOnly UsageDate, string RepairReason, IReadOnlyList<MaterialUsageView> Records);

@@ -25,6 +25,7 @@ public sealed class SeedingRecordCorrectionService(
     SeedingViews views,
     LaneStateReader laneStates,
     RowVersionGuard rowVersions,
+    SeedingStockSync stockSync,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
@@ -56,6 +57,11 @@ public sealed class SeedingRecordCorrectionService(
         }
 
         var before = SeedingValues.Snapshot(record);
+        if (await stockSync.ReplaceAsync(record, fields!, raft, cancellationToken) is { } stockRefused)
+        {
+            return stockRefused;
+        }
+
         SeedingRecordRows.Apply(records, record, fields!);
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, SeedingValues.Snapshot(record));
         if (changedAfter is not null)
@@ -100,6 +106,7 @@ public sealed class SeedingRecordCorrectionService(
 
         audit.Record(SeedingValues.Entry(SeedingValues.Removed, record) with { Before = SeedingValues.Snapshot(record), Reason = reason });
         unitOfWork.MarkChanged(record.Cycle);
+        await stockSync.RemoveAsync(record, record.Cycle.Raft, reason, cancellationToken);
         records.Remove(record);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return true;

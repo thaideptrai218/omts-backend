@@ -11,6 +11,7 @@ using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Files;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Receipts;
@@ -76,6 +77,7 @@ public sealed class InputIssueService(
     IInputStockRepository stock,
     IFarmingZoneRepository zones,
     IRaftRepository rafts,
+    ICultivationCycleQuery cycleQuery,
     IAccountRepository accounts,
     InputIssueAccess access,
     InputIssueCodeService codes,
@@ -222,6 +224,11 @@ public sealed class InputIssueService(
             return WrongStatus(issue);
         }
 
+        if (FarmingOwned(issue) is { } owned)
+        {
+            return owned;
+        }
+
         if (request.Kind is { } kind && kind != issue.Kind)
         {
             return AppError.InvalidFields(["Kind"]);
@@ -283,6 +290,11 @@ public sealed class InputIssueService(
             return AppError.Forbidden;
         }
 
+        if (FarmingOwned(issue) is { } owned)
+        {
+            return owned;
+        }
+
         if (issue.StatusId != StatusIds.InputIssue.Completed)
         {
             return WrongStatus(issue);
@@ -328,6 +340,11 @@ public sealed class InputIssueService(
         if (!await access.MayWriteAsync(issue.Kind, issue.ZoneId, PermissionAction.Delete, cancellationToken))
         {
             return AppError.Forbidden;
+        }
+
+        if (FarmingOwned(issue) is { } owned)
+        {
+            return owned;
         }
 
         if (issue.StatusId != StatusIds.InputIssue.Draft)
@@ -550,6 +567,14 @@ public sealed class InputIssueService(
         }
 
         raft = request.RaftId is { } headerRaft ? (await rafts.GetByIdsAsync([headerRaft], cancellationToken)).FirstOrDefault() : null;
+        // PM decision 11/11/2026: seed and materials used on a raft with an Open cycle are recorded on the farming screens, which post this issue: one path, never counted twice.
+        if (kind == InputIssueKind.Use && raft is not null && lines.Any(l => l.Item.Group is InputItemGroup.Seed or InputItemGroup.Material)
+            && await cycleQuery.OpenCycleAsync(raft.Id, cancellationToken) is not null)
+        {
+            return (null, AppError.Invalid(
+                "Lines", $"Raft {raft.Code} has an Open cycle: record seed on its Seeding screen and materials on its Material usage screen, which post the issue."));
+        }
+
         var party = kind == InputIssueKind.Use ? JoinParty(zone?.Code, raft?.Code, receiverName) : reason ?? string.Empty;
         return (new Prepared(kind, issuedAt, zone, raft, type, request.ReceiverEmployeeId, receiverName, string.IsNullOrEmpty(reason) ? null : reason, string.IsNullOrEmpty(notes) ? null : notes, lines, party), null);
     }
@@ -752,6 +777,15 @@ public sealed class InputIssueService(
         Lines = i.Lines.OrderBy(l => l.LineNumber)
             .Select(l => new { l.LineNumber, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, l.SeedLotLineId, l.UnitCost, l.Value, l.Note }).ToList(),
     };
+
+    /// <summary>MSG-GEN-09 for an issue a seeding session or a material usage posted: it follows that record and is changed there (PM decision 11/11/2026).</summary>
+    private static AppError? FarmingOwned(InputIssue issue) => issue.SourceKind == InputIssueSource.None
+        ? null
+        : AppError.Conflict(
+            UserMessages.WrongStatus(
+                $"{ObjectName} {issue.Code}",
+                $"posted by a {(issue.SourceKind == InputIssueSource.Seeding ? "seeding session" : "material usage")}; change it on that record"),
+            new Dictionary<string, object?> { ["sourceKind"] = issue.SourceKind.ToString(), ["sourceRecordId"] = issue.SourceRecordId, ["cycleId"] = issue.CycleId });
 
     private AppError WrongStatus(InputIssue issue) =>
         AppError.Conflict(UserMessages.WrongStatus($"{ObjectName} {issue.Code}", statusCatalog.DisplayNameOf(issue.StatusId)));

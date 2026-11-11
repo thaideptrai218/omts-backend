@@ -22,6 +22,7 @@ public sealed class SeedingRecordService(
     IRaftRepository rafts,
     CycleWriteGuard writes,
     SeedingSessionReader reader,
+    SeedingStockSync stockSync,
     SeedingViews views,
     LaneStateReader laneStates,
     ZoneAccessGuard zoneAccess,
@@ -67,6 +68,11 @@ public sealed class SeedingRecordService(
             RecordedByAccountId = recorder,
             Lanes = fields.Lanes.Select(l => new SeedingRecordLane { LaneId = l.Id, Lane = l }).ToList(),
         };
+        if (await stockSync.PostAsync(record, fields!, cycle.Raft, cancellationToken) is { } stockRefused)
+        {
+            return stockRefused;
+        }
+
         records.Add(record);
         unitOfWork.MarkChanged(cycle);
         unitOfWork.MarkChanged(fields.Lot.Receipt);
