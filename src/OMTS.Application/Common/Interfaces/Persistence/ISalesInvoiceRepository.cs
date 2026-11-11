@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Models.Sales;
 using OMTS.Application.Features.Sales.Debts;
 using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
@@ -17,8 +18,14 @@ public interface ISalesInvoiceRepository
     /// <summary>The invoice with this code, cancelled ones included: what a transfer with its VietQR code pays (GFR-08). Null when no invoice was saved with it.</summary>
     Task<SalesInvoiceRef?> FindByCodeAsync(string code, CancellationToken cancellationToken);
 
-    /// <summary>The invoice with its zone, customer, lines (product and lot), price cuts and payments, read only.</summary>
+    /// <summary>The invoice with its zone, customer, linked request, weighing (cages), lines (product and lot), price cuts and payments, read only.</summary>
     Task<SalesInvoice?> GetAsync(Guid invoiceId, CancellationToken cancellationToken);
+
+    /// <summary>One page of the invoices of a customer profile, newest first, and how many it has in all.</summary>
+    Task<(IReadOnlyList<CustomerInvoiceRow> Rows, int Total)> ListOfCustomerAsync(Guid customerId, int page, int pageSize, CancellationToken cancellationToken);
+
+    /// <summary>The cages of the weighings on Completed invoices of each request; a request with none has no entry.</summary>
+    Task<IReadOnlyDictionary<Guid, int>> DeliveredCagesAsync(IReadOnlyCollection<Guid> requestIds, CancellationToken cancellationToken);
 
     /// <summary>The invoice with its customer, lines and payments, tracked: what sending it (SALE-06) and the end of the sale change and read.</summary>
     Task<SalesInvoice?> GetForSendingAsync(Guid invoiceId, CancellationToken cancellationToken);

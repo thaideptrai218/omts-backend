@@ -235,7 +235,9 @@ public class StackMergeQaTestsMigrations
         Assert.Equal(statuses.Count, statuses.Select(s => (s.Group, s.Code)).Distinct().Count());
         foreach (var group in statuses.GroupBy(s => s.Group))
         {
-            Assert.True(group.Count(s => s.IsInitial) == 1, $"group {group.Key} has {group.Count(s => s.IsInitial)} initial statuses");
+            // A purchase return starts as a Draft or is recorded at once (PURCHASE-02), so its group has two initial statuses.
+            var initials = group.Key == StatusGroups.PurchaseReturn ? 2 : 1;
+            Assert.True(group.Count(s => s.IsInitial) == initials, $"group {group.Key} has {group.Count(s => s.IsInitial)} initial statuses");
             Assert.Equal(group.Count(), group.Select(s => s.SortOrder).Distinct().Count());
             Assert.Single(group.Select(s => s.Id / 100).Distinct());
         }
@@ -270,13 +272,10 @@ public class StackMergeQaTestsMigrations
         var cycle = new CultivationCycle { Raft = new Raft { Zone = new FarmingZone { CooperativeId = await OldSchemaRows.CooperativeAsync(db), Code = "KV01", Name = "A" }, Code = "B01", Size = "1" }, StartDate = new DateOnly(2026, 1, 1) };
         var account = new Account { Username = "owner", DisplayName = "Owner", SubjectType = SubjectType.CooperativeOwner, StatusId = StatusIds.Account.Active };
         var item = new FarmingInputItem { Code = "VT001", Name = "Seed", Group = InputItemGroup.Seed, Unit = "con" };
-        var receipt = new PurchaseReceipt { Code = "PN000001", SupplierId = await OldSchemaRows.SupplierAsync(db), ReceiptDate = new DateOnly(2026, 1, 1), RecordedByAccountId = Guid.Empty, StatusId = StatusIds.PurchaseReceipt.Completed };
-        db.AddRange(cycle, account, item, receipt);
-        receipt.RecordedByAccountId = account.Id;
-        var line = new PurchaseReceiptLine { Receipt = receipt, LineNumber = 1, Item = item, Unit = "con", Quantity = 10, UnitPrice = 1 };
-        db.Add(line);
+        db.AddRange(cycle, account, item);
         await db.SaveChangesAsync();
-        await db.Database.ExecuteSqlAsync($"INSERT INTO SeedingEvents (Id, CycleId, SeedLotId, SeedingDate, RecordedByAccountId, EvidenceUrls, CreatedAt) VALUES (NEWID(), {cycle.Id}, {line.Id}, '2026-01-02', {account.Id}, N'[]', SYSDATETIMEOFFSET())");
+        var lineId = await OldSchemaRows.CompletedReceiptLineAsync(db, await OldSchemaRows.SupplierAsync(db), account.Id, item.Id, "con");
+        await db.Database.ExecuteSqlAsync($"INSERT INTO SeedingEvents (Id, CycleId, SeedLotId, SeedingDate, RecordedByAccountId, EvidenceUrls, CreatedAt) VALUES (NEWID(), {cycle.Id}, {lineId}, '2026-01-02', {account.Id}, N'[]', SYSDATETIMEOFFSET())");
         db.ChangeTracker.Clear();
 
         await migrator.MigrateAsync();

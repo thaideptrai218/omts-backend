@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Infrastructure.Persistence.Configurations.Sales;
@@ -13,6 +14,9 @@ internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<Sales
         builder.HasOne(x => x.Zone).WithMany().HasForeignKey(x => x.ZoneId);
         builder.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId);
         builder.HasOne(x => x.PurchaseRequest).WithMany().HasForeignKey(x => x.PurchaseRequestId);
+        builder.HasOne(x => x.PortWeighing).WithMany(w => w.Invoices).HasForeignKey(x => x.PortWeighingId);
+        // One Completed invoice per weighing; a cancelled one frees it.
+        builder.HasIndex(x => x.PortWeighingId).IsUnique().HasFilter($"[PortWeighingId] IS NOT NULL AND [StatusId] = {StatusIds.SalesInvoice.Completed}");
         builder.HasOne(x => x.Status).WithMany().HasForeignKey(x => x.StatusId);
         builder.ReferencesAccount(nameof(SalesInvoice.CreatedByAccountId));
 
@@ -37,6 +41,7 @@ internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<Sales
             t.HasCheckConstraint("CK_SalesInvoice_Amounts", "[DiscountAmount] >= 0 AND [OtherCharges] >= 0 AND [Subtotal] >= 0 AND [PriceCutTotal] >= 0");
             t.HasCheckConstraint("CK_SalesInvoice_Total", "[Total] >= 0 AND [Total] = [Subtotal] - [DiscountAmount] + [OtherCharges] - [PriceCutTotal]");
             t.HasCheckConstraint("CK_SalesInvoice_Request_Has_Customer", "[PurchaseRequestId] IS NULL OR [CustomerId] IS NOT NULL");
+            t.HasCheckConstraint("CK_SalesInvoice_Weighing_Has_Request", "[PortWeighingId] IS NULL OR [PurchaseRequestId] IS NOT NULL");
             t.HasCheckConstraint("CK_SalesInvoice_PayLater_Has_Customer", "[PaymentTerm] <> 'PayLater' OR [CustomerId] IS NOT NULL");
         });
     }

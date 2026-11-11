@@ -139,7 +139,7 @@ public class PurchaseReturnsSqlServerTests
 
         var group = await host.QueryAsync(db => db.Statuses.Where(s => s.Group == StatusGroups.PurchaseReturn).OrderBy(s => s.Id).Select(s => new { s.Id, s.Code, s.IsInitial, s.IsFinal }).ToListAsync());
         Assert.Equal(
-            [(StatusIds.PurchaseReturn.Recorded, "RECORDED", true, false), (StatusIds.PurchaseReturn.Cancelled, "CANCELLED", false, true)],
+            [(StatusIds.PurchaseReturn.Recorded, "RECORDED", true, false), (StatusIds.PurchaseReturn.Cancelled, "CANCELLED", false, true), (StatusIds.PurchaseReturn.Draft, "DRAFT", true, false)],
             group.Select(s => (s.Id, s.Code, s.IsInitial, s.IsFinal)).ToList());
         var transition = await host.QueryAsync(db => db.StatusTransitions.SingleAsync(t => t.FromStatusId == StatusIds.PurchaseReturn.Recorded));
         Assert.Equal((StatusIds.PurchaseReturn.Cancelled, "PURCHASE-02", "Cooperative Owner", true), (transition.ToStatusId, transition.UseCases, transition.AllowedPerformers, transition.ReasonRequired));

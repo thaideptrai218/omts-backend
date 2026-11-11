@@ -47,6 +47,8 @@ public class PurchaseRequestQaRaceSqlServerTests
         for (var round = 0; round < Rounds; round++)
         {
             var request = await trader.Client.PlaceAsync(productId);
+            await PurchaseRequestTestKit.StaffAsync(owner, request.Id(), 100, PurchaseRequestTestKit.Today.AddDays(2), request.RowVersion());
+            request = await trader.Client.MineAsync(request.Id());
 
             var answers = await InParallelAsync(2, i => i == 0 ? owner.AcceptAsync(request) : trader.Client.CancelAsync(request));
 
@@ -68,6 +70,8 @@ public class PurchaseRequestQaRaceSqlServerTests
         for (var round = 0; round < Rounds; round++)
         {
             var request = await trader.Client.PlaceAsync(productId);
+            await PurchaseRequestTestKit.StaffAsync(owner, request.Id(), 100, PurchaseRequestTestKit.Today.AddDays(2), request.RowVersion());
+            request = await trader.Client.MineAsync(request.Id());
 
             var answers = await InParallelAsync(2, i => i == 0 ? owner.AcceptAsync(request) : owner.DeclineAsync(request));
 
@@ -86,13 +90,16 @@ public class PurchaseRequestQaRaceSqlServerTests
         for (var round = 0; round < Rounds; round++)
         {
             var request = await trader.Client.PlaceAsync(productId);
+            await PurchaseRequestTestKit.StaffAsync(owner, request.Id(), 100, PurchaseRequestTestKit.Today.AddDays(2), request.RowVersion());
+            request = await trader.Client.MineAsync(request.Id());
 
-            var answers = await InParallelAsync(3, i => owner.AcceptAsync(request, 10m + i));
+            var answers = await InParallelAsync(3, i => owner.AcceptAsync(request, 100));
 
-            await AssertAnswersAsync(answers, "200", "409 MSG-GEN-09", "409 MSG06");
+            // The unique employee assignment may detect the losing accept before the request rowversion does.
+            await AssertAnswersAsync(answers, "200", "409 MSG-GEN-09", "409 MSG06", "409 MSG-GEN-02");
             var winner = Assert.Single(answers, a => a.StatusCode == HttpStatusCode.OK);
             var stored = await host.Api.DbAsync(db => db.PurchaseRequests.AsNoTracking().SingleAsync(r => r.Id == request.Id()));
-            Assert.Equal(10m + Array.IndexOf(answers, winner), stored.AcceptedKg);
+            Assert.Equal(100, stored.AcceptedCages);
             await AssertOneResponseAsync(host, trader, request.Id(), StatusIds.PurchaseRequest.Accepted);
         }
     }
@@ -101,10 +108,12 @@ public class PurchaseRequestQaRaceSqlServerTests
     public async Task Cancel_against_cancel()
     {
         await using var host = await FarmingHost.StartAsync();
-        var (_, trader, productId) = await PurchaseRequestSqlServerTests.WorldAsync(host);
+        var (owner, trader, productId) = await PurchaseRequestSqlServerTests.WorldAsync(host);
         for (var round = 0; round < Rounds; round++)
         {
             var request = await trader.Client.PlaceAsync(productId);
+            await PurchaseRequestTestKit.StaffAsync(owner, request.Id(), 100, PurchaseRequestTestKit.Today.AddDays(2), request.RowVersion());
+            request = await trader.Client.MineAsync(request.Id());
 
             var answers = await InParallelAsync(3, _ => trader.Client.CancelAsync(request, "Đổi lịch"));
 
@@ -174,6 +183,8 @@ public class PurchaseRequestQaRaceSqlServerTests
                 requests.Add(await trader.Client.PlaceAsync(productId));
             }
 
+            await PurchaseRequestTestKit.StaffAsync(owner, requests[0].Id(), 100, PurchaseRequestTestKit.Today.AddDays(2), requests[0].RowVersion());
+            requests[0] = await trader.Client.MineAsync(requests[0].Id());
             var answers = await InParallelAsync(6, i => i switch
             {
                 0 => owner.AcceptAsync(requests[0]),
