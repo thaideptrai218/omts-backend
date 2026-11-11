@@ -62,7 +62,8 @@ public sealed class PostSaleIssuesService(ReportFilterResolver filters, IPostSal
         var (f, groupBy) = (filter.Value!, grouping!.Value);
         var facts = await query.FactsAsync(f, cancellationToken);
         var calculation = PostSaleIssuesCalculator.Build(facts, groupBy);
-        var empty = facts.Events.Count == 0 ? UserMessages.NoDataForFilters("period and filters") : null;
+        // No row to show is no data (REPORT-03.1), whatever the grouping.
+        var empty = calculation.Groups.Count == 0 ? UserMessages.NoDataForFilters("period and filters") : null;
         return new PostSaleIssuesReport(
             computedAt, f.From, f.To, Name(groupBy), new PostSaleIssuesChoices(f.Zones, f.Customers), calculation.Groups, calculation.Totals, empty?.Text, empty?.Code);
     }

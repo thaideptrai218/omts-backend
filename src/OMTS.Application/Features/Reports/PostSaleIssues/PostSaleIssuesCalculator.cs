@@ -8,8 +8,9 @@ public sealed record PostSaleCalculation(IReadOnlyList<PostSaleGroup> Groups, Po
 
 /// <summary>
 /// BR-REPORT-03 as pure functions, so the figures are unit tested and one rule serves the report, its events and its file. The events are already dated and limited to the period and the
-/// zones by the query; this groups and adds them. By customer and by zone (the zone of the invoice) every figure is filled. By lot, only the returns (their number, returned kg and discarded
-/// kg, from the return lines of the lot) are: a claim, a price cut and a cancellation apply to the whole invoice, which may sell several lots, so they are not split between lots (null).
+/// zones by the query; this groups and adds them. By customer and by zone (the zone of the invoice) every figure is filled. By lot, the issues of the invoices that sell the lot are counted,
+/// and the returned and discarded kg are those of the return lines of the lot; the amounts (return value, price cuts, cancelled total) apply to the whole invoice, which may sell several
+/// lots, so they are not split between lots (null).
 /// </summary>
 public static class PostSaleIssuesCalculator
 {
@@ -26,6 +27,7 @@ public static class PostSaleIssuesCalculator
     public static PostSaleCalculation Build(PostSaleFacts facts, PostSaleGrouping grouping)
     {
         var returnLots = facts.ReturnLots.ToLookup(l => l.ReturnId);
+        var invoiceLots = facts.InvoiceLots.ToLookup(l => l.InvoiceId);
         var total = new Sums(TotalKey, "Total");
         var rows = new Dictionary<string, Sums>();
 
@@ -50,10 +52,21 @@ public static class PostSaleIssuesCalculator
                 continue;
             }
 
-            // By lot only the returns are counted, once for each lot they take back, with the kg of that lot.
-            foreach (var lot in lots.GroupBy(l => l.LotId))
+            // By lot: a return counts once for each lot it takes back, with the kg of that lot; a claim, a price cut or a cancellation counts once for each lot its invoice
+            // sells. Their amounts apply to the whole invoice and stay empty by lot (ToGroup).
+            if (e.Type == PostSaleEventType.Return)
             {
-                Row(lot.Key.ToString(), lot.First().LotCode).Add(e, lot.Sum(l => l.ReturnedKg), lot.Sum(l => l.DiscardedKg));
+                foreach (var lot in lots.GroupBy(l => l.LotId))
+                {
+                    Row(lot.Key.ToString(), lot.First().LotCode).Add(e, lot.Sum(l => l.ReturnedKg), lot.Sum(l => l.DiscardedKg));
+                }
+
+                continue;
+            }
+
+            foreach (var lot in invoiceLots[e.InvoiceId].GroupBy(l => l.LotId))
+            {
+                Row(lot.Key.ToString(), lot.First().LotCode).Add(e, 0m, 0m);
             }
         }
 
@@ -139,9 +152,9 @@ public static class PostSaleIssuesCalculator
             }
         }
 
-        /// <param name="wholeInvoiceFiguresUnknown">By lot: what applies to a whole invoice is not split between lots, so it is left empty.</param>
+        /// <param name="wholeInvoiceFiguresUnknown">By lot: the amounts of a whole invoice (return value, price cuts, cancelled total) are not split between lots, so they are left empty.</param>
         public PostSaleGroup ToGroup(bool wholeInvoiceFiguresUnknown) => wholeInvoiceFiguresUnknown
-            ? new PostSaleGroup(Key, Label, null, null, null, null, returns, returnedKg, discardedKg, null, null, null, null, null)
+            ? new PostSaleGroup(Key, Label, claims, awaiting, rejected, accepted, returns, returnedKg, discardedKg, null, priceCuts, null, cancelled, null)
             : new PostSaleGroup(Key, Label, claims, awaiting, rejected, accepted, returns, returnedKg, discardedKg, returnsValue, priceCuts, priceCutsAmount, cancelled, cancelledTotal);
     }
 }

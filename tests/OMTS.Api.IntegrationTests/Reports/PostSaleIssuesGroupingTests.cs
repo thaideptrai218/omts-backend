@@ -73,7 +73,8 @@ public class PostSaleIssuesGroupingTests
         Assert.Equal((0, 0, 1, 0), onlyB.Totals().EventCounts());
     }
 
-    // A claim, a price cut and a cancellation are of a whole invoice that may sell several lots, so by lot they are null; the lot has the kg of its own return line.
+    // Claims, price cuts and cancellations count for every lot their invoice sells, but their amounts (and the return value) are of a whole invoice that may sell several lots, so by
+    // lot they are null; the lot has the kg of its own return line.
     [Fact]
     public async Task Grouped_by_lot_the_returned_and_discarded_kg_are_those_of_the_lot_and_whole_invoice_figures_are_not_split()
     {
@@ -86,8 +87,12 @@ public class PostSaleIssuesGroupingTests
         Assert.Equal((await w.Api.LotOfAsync(w.A.LotId)).LotCode, one.Text("label"));
         Assert.Equal((1, 6m, 0m), (one.GetProperty("returnsCount").GetInt32(), one.Money("returnedKg"), one.Money("discardedKg")));
         Assert.Equal((1, 4m, 4m), (two.GetProperty("returnsCount").GetInt32(), two.Money("returnedKg"), two.Money("discardedKg")));
-        Assert.Equal(2, report.Groups().Count);
-        foreach (var figure in new[] { "claimsSent", "claimsAwaiting", "claimsRejected", "claimsAccepted", "returnsValue", "priceCutsCount", "priceCutsAmount", "cancelledCount", "cancelledTotal" })
+        // Lot 1: invoice 1 (claim) and invoice 2 (price cut); lot 2: invoice 1 (claim) and invoice 3 (cancelled); zone B's lot: its price cut.
+        Assert.Equal((1, 1, 0), (one.GetProperty("claimsSent").GetInt32(), one.GetProperty("priceCutsCount").GetInt32(), one.GetProperty("cancelledCount").GetInt32()));
+        Assert.Equal((1, 0, 1), (two.GetProperty("claimsSent").GetInt32(), two.GetProperty("priceCutsCount").GetInt32(), two.GetProperty("cancelledCount").GetInt32()));
+        Assert.Equal(1, report.Group(w.B.LotId.ToString()).GetProperty("priceCutsCount").GetInt32());
+        Assert.Equal(3, report.Groups().Count);
+        foreach (var figure in new[] { "returnsValue", "priceCutsAmount", "cancelledTotal" })
         {
             Assert.Equal(JsonValueKind.Null, one.GetProperty(figure).ValueKind);
             Assert.Equal(JsonValueKind.Null, two.GetProperty(figure).ValueKind);

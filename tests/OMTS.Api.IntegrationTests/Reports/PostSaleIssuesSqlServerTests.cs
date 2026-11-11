@@ -67,7 +67,8 @@ public class PostSaleIssuesSqlServerTests
         var byCustomer = await owner.PostSaleAsync();
         Assert.Equal((1, 1, 1, 1), byCustomer.Group(customerId.ToString()).EventCounts());
         var byLot = await owner.PostSaleAsync("groupBy=lot");
-        Assert.Equal(System.Text.Json.JsonValueKind.Null, byLot.Group(lotId.ToString()).GetProperty("claimsSent").ValueKind);
+        Assert.Equal((1, 1, 1, 1), byLot.Group(lotId.ToString()).EventCounts());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, byLot.Group(lotId.ToString()).GetProperty("priceCutsAmount").ValueKind);
 
         foreach (var grouping in new[] { ("customer", customerId), ("zone", zoneId), ("lot", lotId) })
         {

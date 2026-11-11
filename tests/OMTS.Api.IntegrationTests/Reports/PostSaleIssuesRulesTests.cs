@@ -132,7 +132,7 @@ public class PostSaleIssuesRulesTests
         Assert.Equal("All", choices["Products"].GetString());
     }
 
-    // By lot, what is not split between lots is an empty cell, not a 0 that would read as "none".
+    // By lot, an amount that is not split between lots is an empty cell, not a 0 that would read as "none".
     [Fact]
     public async Task The_export_by_lot_leaves_the_whole_invoice_figures_empty_and_an_empty_selection_exports_a_zero_total()
     {
@@ -148,7 +148,8 @@ public class PostSaleIssuesRulesTests
         using var book = new XLWorkbook(await byLot.Content.ReadAsStreamAsync());
         var figures = book.Worksheet("Post-sale issues");
         Assert.Equal((1d, 10d), (figures.Cell(2, 6).GetDouble(), figures.Cell(2, 7).GetDouble()));
-        Assert.True(figures.Cell(2, 2).IsEmpty());
+        // Counts are filled by lot (no claim: 0); the amounts of a whole invoice (return value, cancelled total) are empty.
+        Assert.Equal(0d, figures.Cell(2, 2).GetDouble());
         Assert.True(figures.Cell(2, 9).IsEmpty());
         Assert.True(figures.Cell(2, 13).IsEmpty());
         Assert.Equal(("Total", 0d, 300_000d), (figures.Cell(3, 1).GetString(), figures.Cell(3, 2).GetDouble(), figures.Cell(3, 9).GetDouble()));

@@ -71,26 +71,35 @@ public class PostSaleIssuesCalculatorTests
         Assert.Equal((1, 0, 1, 20_000m), (b.ClaimsSent, b.ReturnsCount, b.PriceCutsCount, b.PriceCutsAmount));
     }
 
-    // The return takes back lot 1 and lot 2: it is counted once for each, with the kg of that lot. Everything that applies to a whole invoice is not split: null.
+    // Lot 1 is sold by invoices A and B, lot 2 by A and C. The return takes back both lots: once for each, with the kg of that lot. Claims, price cuts and cancellations count for
+    // every lot their invoice sells; the amounts that apply to a whole invoice are not split: null.
     [Fact]
-    public void Grouped_by_lot_only_the_returns_are_counted_with_the_kg_of_the_lot_and_the_rest_is_not_split()
+    public void Grouped_by_lot_the_issues_of_the_invoices_of_the_lot_count_with_the_kg_of_the_lot_and_no_amount_is_split()
     {
         var groups = PostSaleIssuesCalculator.Build(Facts, PostSaleGrouping.Lot).Groups;
 
         Assert.Equal(["LOT-1", "LOT-2"], groups.Select(g => g.Label));
         var (one, two) = (groups[0], groups[1]);
-        Assert.Equal((1, 10m, 0m), (one.ReturnsCount, one.ReturnedKg, one.DiscardedKg));
-        Assert.Equal((1, 5m, 5m), (two.ReturnsCount, two.ReturnedKg, two.DiscardedKg));
+        Assert.Equal((3, 1, 1, 1, 1, 10m, 0m, 1, 0), (one.ClaimsSent, one.ClaimsAwaiting, one.ClaimsRejected, one.ClaimsAccepted, one.ReturnsCount, one.ReturnedKg, one.DiscardedKg, one.PriceCutsCount, one.CancelledCount));
+        Assert.Equal((2, 1, 0, 1, 1, 5m, 5m, 0, 1), (two.ClaimsSent, two.ClaimsAwaiting, two.ClaimsRejected, two.ClaimsAccepted, two.ReturnsCount, two.ReturnedKg, two.DiscardedKg, two.PriceCutsCount, two.CancelledCount));
         foreach (var group in groups)
         {
-            Assert.Null(group.ClaimsSent);
-            Assert.Null(group.ClaimsAwaiting);
             Assert.Null(group.ReturnsValue);
-            Assert.Null(group.PriceCutsCount);
             Assert.Null(group.PriceCutsAmount);
-            Assert.Null(group.CancelledCount);
             Assert.Null(group.CancelledTotal);
         }
+    }
+
+    [Fact]
+    public void A_lot_with_only_a_claim_has_a_row()
+    {
+        var claimOnly = new PostSaleFacts(
+            [Event(PostSaleEventType.Claim, Guid.NewGuid(), new DateOnly(2026, 11, 3), InvoiceB, "HD000002", ZoneB, "Zone B", Buyer, null, StatusIds.QualityClaim.AwaitingResponse)],
+            [new(InvoiceB, LotOne, "LOT-1")],
+            []);
+
+        var group = Assert.Single(PostSaleIssuesCalculator.Build(claimOnly, PostSaleGrouping.Lot).Groups);
+        Assert.Equal(("LOT-1", 1, 0), (group.Label, group.ClaimsSent, group.ReturnsCount));
     }
 
     [Fact]
