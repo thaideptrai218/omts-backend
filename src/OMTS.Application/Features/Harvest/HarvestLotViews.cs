@@ -85,7 +85,8 @@ public sealed class HarvestLotViews(
             canCorrect,
             canRemove,
             MayClose(access, lot, raft.ZoneId),
-            RowVersionGuard.Encode(lot.RowVersion));
+            RowVersionGuard.Encode(lot.RowVersion),
+            lot.OverPlanReason);
     }
 
     /// <summary>The lots of one cycle with their lanes: lots for sale first, then the latest harvest first (SCR-HARVEST-01). The raft comes with its zone.</summary>

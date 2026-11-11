@@ -124,6 +124,15 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
         return await chosen.Include(l => l.Raft).ThenInclude(r => r.Zone).Include(l => l.Cycle).ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, decimal>> KgByCycleAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken)
+    {
+        var rows = await db.HarvestLots.AsNoTracking()
+            .Where(l => cycleIds.Contains(l.CycleId))
+            .Select(l => new { l.CycleId, l.EstimatedKg })
+            .ToListAsync(cancellationToken);
+        return rows.GroupBy(r => r.CycleId).ToDictionary(g => g.Key, g => g.Sum(r => r.EstimatedKg));
+    }
+
     public Task<int> CountForSaleAsync(Guid? zoneId, CancellationToken cancellationToken)
     {
         var forSale = ForSale(db.HarvestLots.AsNoTracking());

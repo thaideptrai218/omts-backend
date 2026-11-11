@@ -25,6 +25,16 @@ internal sealed class SeedingRecordRepository(OmtsDbContext db) : ISeedingRecord
             .Select(l => new LaneSeeding(cycleId, l.LaneId, l.SeedingRecord.SeedingDate))
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyDictionary<Guid, CycleSeedTotal>> SeedTotalsByCycleAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken)
+    {
+        var rows = await db.SeedingRecords.AsNoTracking()
+            .Where(r => cycleIds.Contains(r.CycleId))
+            .Select(r => new { r.CycleId, r.Quantity, Unit = r.SeedLotLine.Item != null ? r.SeedLotLine.Item.Unit : r.SeedLotLine.Unit })
+            .ToListAsync(cancellationToken);
+        return rows.GroupBy(r => r.CycleId).ToDictionary(
+            g => g.Key, g => new CycleSeedTotal(g.Sum(r => r.Quantity), g.Select(r => r.Unit).FirstOrDefault(u => !string.IsNullOrWhiteSpace(u))));
+    }
+
     public void Add(SeedingRecord record) => db.SeedingRecords.Add(record);
 
     public void AddLane(SeedingRecordLane lane) => db.SeedingRecordLanes.Add(lane);

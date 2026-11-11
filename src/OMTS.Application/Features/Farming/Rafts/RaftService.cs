@@ -46,7 +46,7 @@ public sealed class RaftService(
         var check = RaftValues.Read(request, out var values);
         if (!check.IsValid)
         {
-            return AppError.InvalidFields(check.Invalid);
+            return check.ToError();
         }
 
         if (await rafts.FindByCodeAsync(zone.Id, values.Code, null, cancellationToken) is { } existing)
@@ -111,7 +111,7 @@ public sealed class RaftService(
         var check = RaftValues.Read(request, out var values);
         if (!check.IsValid)
         {
-            return AppError.InvalidFields(check.Invalid);
+            return check.ToError();
         }
 
         if (await rafts.FindByCodeAsync(raft.ZoneId, values.Code, raft.Id, cancellationToken) is { } existing)

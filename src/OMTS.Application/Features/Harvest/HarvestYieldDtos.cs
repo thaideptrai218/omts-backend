@@ -39,7 +39,9 @@ public sealed record HarvestYieldLot(
     decimal SoldKg,
     decimal LostKg,
     decimal DifferenceKg,
-    bool NotFinal);
+    bool NotFinal,
+    decimal CageCount = 0m,
+    decimal RemainingKg = 0m);
 
 /// <summary>One raft, zone or cycle of the report: each figure is the total of the same figure of its lots (POST-1).</summary>
 /// <param name="Key">The id of the raft, zone or cycle.</param>
@@ -67,10 +69,18 @@ public sealed record HarvestYieldGroup(
     decimal LostKg,
     decimal DifferenceKg,
     bool NotFinal,
-    IReadOnlyList<HarvestYieldLot> Lots);
+    IReadOnlyList<HarvestYieldLot> Lots,
+    decimal HarvestedCages = 0m,
+    decimal HarvestedKg = 0m,
+    decimal? TargetYieldKg = null,
+    decimal? RemainingKg = null,
+    decimal? SeedQuantity = null,
+    string? SeedUnit = null,
+    decimal AvailableKg = 0m);
 
 /// <summary>The totals of every lot of the report.</summary>
-public sealed record HarvestYieldTotals(int LotCount, decimal EstimatedKg, decimal SoldKg, decimal LostKg, decimal DifferenceKg, bool NotFinal);
+/// <param name="HarvestedCages">The cages of every lot of the report.</param>
+public sealed record HarvestYieldTotals(int LotCount, decimal EstimatedKg, decimal SoldKg, decimal LostKg, decimal DifferenceKg, bool NotFinal, decimal HarvestedCages = 0m);
 
 /// <summary>HARVEST-04 step 3 (SCR-HARVEST-03).</summary>
 /// <param name="From">The period applied, defaults resolved.</param>

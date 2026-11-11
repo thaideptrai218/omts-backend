@@ -30,6 +30,10 @@ public static class UserMessages
     /// <param name="action">What is done, in the words of the SRS, e.g. "correct traceability data".</param>
     public static UserMessage ConfirmAction(string action) => new(Gen04, $"Are you sure you want to {action}? This action is recorded in the audit log.", Legacy.Msg09);
 
+    /// <summary>MSG-GEN-04 for a harvest that takes the cycle above 110 % of its target yield: the client asks again with <c>confirmOverPlan</c> and a reason.</summary>
+    public static UserMessage HarvestOverPlanQuestion(decimal totalKg, decimal targetKg) => ConfirmAction(
+        $"record this harvest, which takes the cycle to {Quantity(totalKg)} kg, above its target yield of {Quantity(targetKg)} kg");
+
     /// <summary>MSG-GEN-05: a record is saved.</summary>
     public static UserMessage Saved(string what) => new(Gen05, $"{what} saved.", Legacy.Msg10);
 
@@ -305,6 +309,13 @@ public static class UserMessages
         };
     }
 
+    /// <summary>MSG-CYCLE-01 when no lane has seed yet: finishing the seeding of an empty raft needs <c>confirmEmpty</c> (PM decision 11/11/2026).</summary>
+    public static UserMessage FinishEmptySeedingQuestion(string raftCode) => new(
+        Cycle01, $"No lane of raft {raftCode} has seed yet. Finish the seeding anyway? The Cooperative Owner will be asked to review the seeding.")
+    {
+        Parameters = new Dictionary<string, object?> { ["raft_code"] = raftCode, ["count"] = 0 },
+    };
+
     /// <summary>MSG-CYCLE-02 (CYCLE-02.1): notification to the Cooperative Owner when the seeding of a raft is marked complete.</summary>
     public static UserMessage SeedingFinished(string raftCode, int seededCount, int laneCount) => new(
         Cycle02, $"Raft {raftCode}: seeding is finished; {seededCount} of {laneCount} lanes have seed. Please review the seeding sessions.")
@@ -380,15 +391,15 @@ public static class UserMessages
     };
 
     /// <summary>MSG-HARVEST-01 (BF-03 step 7): notification to the Cooperative Owner when a harvest lot is recorded.</summary>
-    public static UserMessage HarvestLotRecorded(string raftCode, DateOnly harvestDate, string lotCode, int cageCount, decimal estimatedKg) => new(
-        Harvest01, $"Raft {raftCode}: the harvest of {Date(harvestDate)} is recorded as lot {lotCode} ({cageCount.ToString(CultureInfo.InvariantCulture)} cages, about {Quantity(estimatedKg)} kg).")
+    public static UserMessage HarvestLotRecorded(string raftCode, DateOnly harvestDate, string lotCode, decimal cageCount, decimal estimatedKg) => new(
+        Harvest01, $"Raft {raftCode}: the harvest of {Date(harvestDate)} is recorded as lot {lotCode} ({Quantity(cageCount)} cages, about {Quantity(estimatedKg)} kg).")
     {
         Parameters = new Dictionary<string, object?>
         {
             ["raft_code"] = raftCode,
             ["harvest_date"] = harvestDate,
             ["lot_code"] = lotCode,
-            ["cage_count"] = cageCount,
+            ["cage_count"] = decimal.Parse(Quantity(cageCount), CultureInfo.InvariantCulture),
             ["estimated_kg"] = decimal.Parse(Quantity(estimatedKg), CultureInfo.InvariantCulture),
         },
     };

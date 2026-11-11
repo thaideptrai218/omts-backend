@@ -16,6 +16,8 @@ internal sealed class HarvestLotConfiguration : IEntityTypeConfiguration<Harvest
         builder.ReferencesAccount(nameof(HarvestLot.RecordedByAccountId));
         // The invoice whose "sold the whole lot" tick closed the lot (SALE-05); only that invoice reopens it (SALE-07, SALE-08).
         builder.HasOne<SalesInvoice>().WithMany().HasForeignKey(x => x.ClosedBySalesInvoiceId);
+        builder.Property(x => x.CageCount).HasPrecision(9, 2);
+        builder.Property(x => x.OverPlanReason).HasMaxLength(Lengths.Reason);
         builder.Property(x => x.KgPerCage).HasPrecision(9, 2);
         builder.Property(x => x.EstimatedKg).HasPrecision(18, 3);
         builder.Property(x => x.LeftoverKg).HasPrecision(18, 3);

@@ -52,7 +52,9 @@ public sealed class CycleSummaryReader(
             early,
             early ? sessions.Count == 0 ? EarlyCloseReason.NoSeedingSession : EarlyCloseReason.LanesNotHarvested : null,
             notHarvested,
-            isOpen ? null : cycle.Assessment);
+            isOpen ? null : cycle.Assessment,
+            lots.Sum(l => l.CageCount),
+            cycle.TargetYieldKg is { } target ? target - lots.Sum(l => l.EstimatedKg) : null);
     }
 
     /// <summary>

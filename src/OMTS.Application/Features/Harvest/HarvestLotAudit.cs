@@ -32,6 +32,7 @@ public static class HarvestLotAudit
         lot.CageCount,
         lot.KgPerCage,
         lot.EstimatedKg,
+        lot.OverPlanReason,
         Photos = lot.Photos.OrderBy(p => p.SortOrder).Select(p => p.FileKey).ToList(),
     };
 

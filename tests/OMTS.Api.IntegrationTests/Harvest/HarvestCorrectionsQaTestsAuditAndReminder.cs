@@ -63,7 +63,7 @@ public class HarvestCorrectionsQaTestsAuditAndReminder
 
         Assert.Empty(await AuditRowsAsync(api, "HarvestLot.Corrected", lot.Id()));
         Assert.Equal(keys, saved.GetProperty("lot").PhotoKeysOfLot());
-        Assert.Equal(8, saved.GetProperty("lot").GetProperty("cageCount").GetInt32());
+        Assert.Equal(8, saved.GetProperty("lot").GetProperty("cageCount").GetDecimal());
     }
 
     // The reason: required for all (BR-HARVEST-05), counted after the trim; the longest fits on SQL Server (see the SQL Server tests).

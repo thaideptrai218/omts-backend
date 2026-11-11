@@ -94,7 +94,7 @@ public sealed class FarmingZoneService(
         var check = Validate(request, out var values);
         if (!check.IsValid)
         {
-            return AppError.InvalidFields(check.Invalid);
+            return check.ToError();
         }
 
         if (await zones.FindByCodeAsync(values.Code, null, cancellationToken) is { } existing)
@@ -131,7 +131,7 @@ public sealed class FarmingZoneService(
         var check = Validate(request, out var values);
         if (!check.IsValid)
         {
-            return AppError.InvalidFields(check.Invalid);
+            return check.ToError();
         }
 
         if (await zones.FindByCodeAsync(values.Code, zone.Id, cancellationToken) is { } existing)
@@ -240,7 +240,7 @@ public sealed class FarmingZoneService(
     private async Task<FarmingZoneSaved> SavedAsync(FarmingZone zone, CancellationToken cancellationToken)
     {
         var saved = UserMessages.Saved("Farming zone");
-        return new FarmingZoneSaved(await ViewAsync(zone, cancellationToken), saved.Text, saved.Code);
+        return new FarmingZoneSaved(await ViewAsync(zone, cancellationToken), saved.Text, saved.Code, CoordinateRules.ForZone(zone.Latitude, zone.Longitude));
     }
 
     private static AppError Duplicate(Guid existingId) => new(

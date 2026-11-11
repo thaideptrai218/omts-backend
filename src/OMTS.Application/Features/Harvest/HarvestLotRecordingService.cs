@@ -44,7 +44,7 @@ public sealed class HarvestLotRecordingService(
 {
     private const int MaxCodeAttempts = 5;
 
-    private sealed record OpenRaft(CultivationCycle Cycle, IReadOnlyDictionary<Guid, LaneState> States, decimal KgPerCage);
+    private sealed record OpenRaft(CultivationCycle Cycle, IReadOnlyDictionary<Guid, LaneState> States, decimal KgPerCage, decimal OtherLotsKg);
 
     private sealed record PreparedLot(HarvestLot Lot, CultivationCycle Cycle, Raft Raft, bool EverySeededLaneHarvested);
 
@@ -69,7 +69,7 @@ public sealed class HarvestLotRecordingService(
         }
 
         var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(photos, request.OtherFilePart);
-        if (HarvestLotFieldReader.Read(request, raft, open!.States, open.KgPerCage, photoHint, out _) is { } invalid)
+        if (HarvestLotFieldReader.Read(request, raft, open!.States, open.KgPerCage, photoHint, out _, plan: PlanOf(open, request)) is { } invalid)
         {
             return invalid;
         }
@@ -118,7 +118,8 @@ public sealed class HarvestLotRecordingService(
                 done.EverySeededLaneHarvested,
                 Common.Concurrency.RowVersionGuard.Encode(done.Cycle.RowVersion),
                 saved.Text,
-                saved.Code);
+                saved.Code,
+                HarvestQuantityRules.KgWarnings(done.Lot.CageCount, done.Lot.KgPerCage, done.Lot.EstimatedKg));
         }
     }
 
@@ -138,7 +139,7 @@ public sealed class HarvestLotRecordingService(
             return refused;
         }
 
-        if (HarvestLotFieldReader.Read(request, raft, open!.States, open.KgPerCage, null, out var fields) is { } invalid)
+        if (HarvestLotFieldReader.Read(request, raft, open!.States, open.KgPerCage, null, out var fields, plan: PlanOf(open, request)) is { } invalid)
         {
             return invalid;
         }
@@ -157,6 +158,7 @@ public sealed class HarvestLotRecordingService(
             CageCount = fields!.CageCount,
             KgPerCage = open.KgPerCage,
             EstimatedKg = fields.EstimatedKg,
+            OverPlanReason = fields.OverPlanReason,
             RecordedByAccountId = recorder,
             Lanes = fields.Lanes.Select(l => new HarvestLotLane { LaneId = l.Id, Lane = l, IsFinished = fields.FinishedLaneIds.Contains(l.Id) }).ToList(),
             Photos = keys.Select((key, index) => new HarvestLotPhoto { SortOrder = index + 1, FileKey = key }).ToList(),
@@ -202,6 +204,11 @@ public sealed class HarvestLotRecordingService(
 
         var cooperative = await cooperatives.GetCurrentAsync(cancellationToken) ?? throw new InvalidOperationException("A harvest lot needs the cooperative created at deployment.");
         var day = await laneStates.ReadAsync(raft, today, cancellationToken);
-        return (new OpenRaft(cycle, day.States, cooperative.AverageKgPerCage), null);
+        var otherKg = (await lots.ListByCycleAsync(cycle.Id, cancellationToken)).Sum(l => l.EstimatedKg);
+        return (new OpenRaft(cycle, day.States, cooperative.AverageKgPerCage, otherKg), null);
     }
+
+    /// <summary>The cycle target and what its lots already hold: the new lot is capped against them (PM decision 11/11/2026).</summary>
+    private static HarvestPlanInput PlanOf(OpenRaft open, RecordHarvestRequest request) =>
+        new(open.Cycle.TargetYieldKg, open.OtherLotsKg, request.ConfirmOverPlan, request.OverPlanReason);
 }

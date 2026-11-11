@@ -1159,8 +1159,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly?>("AutoCloseWarnedFor")
                         .HasColumnType("date");
 
-                    b.Property<int>("CageCount")
-                        .HasColumnType("int");
+                    b.Property<decimal>("CageCount")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("decimal(9,2)");
 
                     b.Property<DateOnly?>("CloseDate")
                         .HasColumnType("date");
@@ -1203,6 +1204,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(120)
                         .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("OverPlanReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<DateTimeOffset?>("PublishedAt")
                         .HasColumnType("datetimeoffset");

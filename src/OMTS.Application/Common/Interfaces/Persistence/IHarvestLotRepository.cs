@@ -52,6 +52,9 @@ public interface IHarvestLotRepository
     /// <summary>How many lots are for sale now, of one zone or of every zone (BR-FARM-10).</summary>
     Task<int> CountForSaleAsync(Guid? zoneId, CancellationToken cancellationToken);
 
+    /// <summary>The estimated kg of every lot of each cycle (all lots, not only a period); a cycle with no lot is left out.</summary>
+    Task<IReadOnlyDictionary<Guid, decimal>> KgByCycleAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken);
+
     /// <summary>The date of the last harvest lot of the cycle, or null when it has none (BR-CYCLE-06).</summary>
     Task<DateOnly?> LastHarvestDateAsync(Guid cycleId, CancellationToken cancellationToken);
 

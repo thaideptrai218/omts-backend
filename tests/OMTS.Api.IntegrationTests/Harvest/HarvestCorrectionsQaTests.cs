@@ -40,7 +40,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
     private Task RevokeAsync(AuthApiFactory api, Guid grantId) =>
         api.UpdateAsync<AccessGrant>(grantId, g => { g.StatusId = StatusIds.AccessGrant.Revoked; g.RevokedAt = DateTimeOffset.UtcNow; });
 
-    private static Task<int> CagesAsync(HttpClient client, Guid lotId) => client.GetHarvestLotAsync(lotId).ContinueWith(t => t.Result.GetProperty("cageCount").GetInt32());
+    private static Task<decimal> CagesAsync(HttpClient client, Guid lotId) => client.GetHarvestLotAsync(lotId).ContinueWith(t => t.Result.GetProperty("cageCount").GetDecimal());
 
     private Task<int> AuditRowsAsync(string action, Guid lotId) => factory.QueryAsync(db => db.AuditEvents.CountAsync(e => e.Action == action && e.RecordId == lotId));
 
@@ -518,7 +518,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         await AssertFieldRefusedAsync(await factory.SendCorrectionAsync(owner, lot.Id(), new HarvestFields { Cages = cages, EstimatedKg = estimate }), field);
 
         var read = await owner.GetHarvestLotAsync(lot.Id());
-        Assert.Equal((8, 400m), (read.GetProperty("cageCount").GetInt32(), read.Kg("estimatedKg")));
+        Assert.Equal((8, 400m), (read.GetProperty("cageCount").GetDecimal(), read.Kg("estimatedKg")));
     }
 
     // The client list: "kgPerCage, lotCode, harvestedAt and harvestDate never change: sent values are ignored."

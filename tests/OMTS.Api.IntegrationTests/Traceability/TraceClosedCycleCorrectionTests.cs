@@ -69,7 +69,7 @@ public class TraceClosedCycleCorrectionTests(AuthApiFactory factory) : IClassFix
         var lot = saved.GetProperty("lot");
         Assert.Equal([1, 2], lot.Numbers("laneNumbers"));
         Assert.Equal([1, 2], lot.Numbers("finishedLaneNumbers"));
-        Assert.Equal(10, lot.GetProperty("cageCount").GetInt32());
+        Assert.Equal(10, lot.GetProperty("cageCount").GetDecimal());
         // BR-HARVEST-02: worked out again with the kg per cage copied at record time.
         Assert.Equal(10 * before.KgPerCage, lot.Kg("estimatedKg"));
         Assert.Equal([t.LotCode], saved.Strings("affectedPublishedLotCodes"));

@@ -179,7 +179,7 @@ public sealed class TraceHarvestLotCorrectionService(
         var fields = new RecordHarvestRequest(request.LaneNumbers, request.FinishedLaneNumbers, request.CageCount, estimatedKg, request.EstimatedKgIsUnreadable, request.OtherFilePart);
         // BR-FARM-04: a lane Removed after the close keeps its records, so the lot's own lanes stay allowed whatever their status; only a lane the correction adds must be In Use.
         var ownLaneIds = lot.Lanes.Select(l => l.LaneId).ToHashSet();
-        var correction = new HarvestLotCorrectionInput(request.Reason, facts.FinishedHint(request.FinishedLaneNumbers), ownLaneIds);
+        var correction = new HarvestLotCorrectionInput(request.Reason, facts.FinishedHint(request.FinishedLaneNumbers), ownLaneIds, lot.CageCount, lot.EstimatedKg);
         if (HarvestLotFieldReader.Read(fields, raft, facts.Choosable(), lot.KgPerCage, photoHint, out var read, correction) is { } invalid)
         {
             return invalid;
@@ -204,6 +204,7 @@ public sealed class TraceHarvestLotCorrectionService(
         fields.CageCount,
         lot.KgPerCage,
         fields.EstimatedKg,
+        lot.OverPlanReason,
         Photos = photoKeys.ToList(),
     };
 

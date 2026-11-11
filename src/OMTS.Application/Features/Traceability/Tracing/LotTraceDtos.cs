@@ -61,7 +61,7 @@ public sealed record LotTrace(
     string LotCode,
     DateTimeOffset HarvestedAt,
     DateOnly HarvestDate,
-    int CageCount,
+    decimal CageCount,
     decimal EstimatedKg,
     int StatusId,
     string Status,

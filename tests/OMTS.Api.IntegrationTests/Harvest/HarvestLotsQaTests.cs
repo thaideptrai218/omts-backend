@@ -246,16 +246,16 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     }
 
     [Fact]
-    public async Task A_worked_out_estimate_above_the_limit_is_refused_and_a_sent_one_decides_for_a_huge_count()
+    public async Task Cages_above_the_maximum_are_refused_and_a_sent_kg_far_from_the_cages_only_warns()
     {
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
 
-        var refused = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields { Cages = "20000001" })).ReadAsync(HttpStatusCode.BadRequest);
-        Assert.Equal("Estimated kg", refused.Text("field"));
+        var refused = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields { Cages = "100000.01" })).ReadAsync(HttpStatusCode.BadRequest);
+        Assert.Equal("Number of cages", refused.Text("field"));
 
-        var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Cages = "2147483647", EstimatedKg = "1" });
-        Assert.Equal((2147483647, 1m), (lot.GetProperty("cageCount").GetInt32(), lot.Kg("estimatedKg")));
+        var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Cages = "100000", EstimatedKg = "1" });
+        Assert.Equal((100000m, 1m), (lot.GetProperty("cageCount").GetDecimal(), lot.Kg("estimatedKg")));
     }
 
     // The preview is a query of a whole number of days: whatever else comes answers MSG-GEN-01.

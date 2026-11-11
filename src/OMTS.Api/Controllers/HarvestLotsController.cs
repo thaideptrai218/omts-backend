@@ -16,7 +16,7 @@ namespace OMTS.Api.Controllers;
 [Authorize]
 public sealed class HarvestLotsController(
     HarvestLotReadService reads, HarvestLotRecordingService recording, HarvestLotCorrectionService corrections, HarvestLotRemovalService removals, HarvestLotClosingService closing,
-    HarvestLotForSaleService forSale) : ControllerBase
+    HarvestLotForSaleService forSale, HarvestLaneFinishService laneFinish) : ControllerBase
 {
     private const string PhotosField = "Photos";
 
@@ -41,13 +41,23 @@ public sealed class HarvestLotsController(
     [ProducesResponseType<HarvestLotSaved>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Record(Guid raftId, [FromForm] HarvestLotForm form, CancellationToken cancellationToken)
     {
-        TryInt(form.CageCount, out var cageCount);
+        TryDecimal(form.CageCount, out var cageCount);
         var estimatedIsRead = TryDecimal(form.EstimatedKg, out var estimatedKg);
         var request = new RecordHarvestRequest(
-            Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, !estimatedIsRead, Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)));
+            Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, !estimatedIsRead, Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)),
+            form.ConfirmOverPlan, form.OverPlanReason);
         return (await recording.RecordAsync(raftId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
             .ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
     }
+
+    /// <summary>
+    /// Marks a lane Being harvested as finished without editing a lot (PM decision 11/11/2026): same access as recording a harvest, audited. 200 with <c>changed: false</c> when the lane is already
+    /// Harvested; 409 MSG-GEN-09 when it has no harvest lot to finish or the raft has no Open cycle. No body.
+    /// </summary>
+    [HttpPost("api/rafts/{raftId:guid}/lanes/{laneNumber:int}/finish-harvest")]
+    [ProducesResponseType<LaneHarvestFinished>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> FinishLane(Guid raftId, int laneNumber, CancellationToken cancellationToken) =>
+        (await laneFinish.FinishAsync(raftId, laneNumber, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>One lot with its figures and photos: the record a notification opens.</summary>
     [HttpGet("api/harvest-lots/{lotId:guid}")]
@@ -66,11 +76,11 @@ public sealed class HarvestLotsController(
     [ProducesResponseType<HarvestLotSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Correct(Guid lotId, [FromForm] HarvestLotForm form, CancellationToken cancellationToken)
     {
-        TryInt(form.CageCount, out var cageCount);
+        TryDecimal(form.CageCount, out var cageCount);
         var estimatedIsRead = TryDecimal(form.EstimatedKg, out var estimatedKg);
         var request = new CorrectHarvestLotRequest(
             Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, form.KeepPhotoKeys, form.Reason, form.RowVersion, !estimatedIsRead,
-            Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)));
+            Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)), form.ConfirmOverPlan, form.OverPlanReason);
         return (await corrections.CorrectAsync(lotId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken)).ToActionResult(Ok);
     }
 

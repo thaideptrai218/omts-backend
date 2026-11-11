@@ -17,7 +17,7 @@ namespace OMTS.Application.Features.Harvest;
 /// The sold kg come from the sales port (<see cref="IHarvestLotSalesQuery"/>), which subtracts nothing returned until CLAIM-03 fills its returned, back-for-sale and discarded kg.
 /// </summary>
 public sealed class HarvestYieldService(
-    IHarvestLotRepository lots, IHarvestLotSalesQuery sales, ZoneAccessGuard zoneAccess, IStatusCatalog statusCatalog, ISpreadsheetWriter spreadsheets, TimeProvider timeProvider)
+    IHarvestLotRepository lots, ISeedingRecordRepository seedingRecords, IHarvestLotSalesQuery sales, ZoneAccessGuard zoneAccess, IStatusCatalog statusCatalog, ISpreadsheetWriter spreadsheets, TimeProvider timeProvider)
 {
     public const string GroupingField = "Grouping";
 
@@ -74,7 +74,11 @@ public sealed class HarvestYieldService(
         IReadOnlyCollection<Guid>? zoneIds = chosen.Count > 0 ? chosen : zones.AllZones ? null : zones.ZoneIds;
         var selected = await lots.ListForYieldAsync(zoneIds, from, to, groupBy == HarvestYieldGrouping.Cycle, cancellationToken);
         var figures = await sales.FiguresAsync(selected.Select(l => l.Id).ToList(), cancellationToken);
-        var result = HarvestYieldCalculator.Build(selected, figures, groupBy, from, to, statusCatalog.DisplayNameOf);
+        var cycleIds = selected.Select(l => l.CycleId).Distinct().ToList();
+        var seeds = await seedingRecords.SeedTotalsByCycleAsync(cycleIds, cancellationToken);
+        var kgByCycle = await lots.KgByCycleAsync(cycleIds, cancellationToken);
+        var cycleFigures = cycleIds.ToDictionary(id => id, id => new YieldCycleFigures(seeds.GetValueOrDefault(id), kgByCycle.GetValueOrDefault(id)));
+        var result = HarvestYieldCalculator.Build(selected, figures, groupBy, from, to, statusCatalog.DisplayNameOf, cycleFigures);
         var notFinal = result.Totals.NotFinal ? UserMessages.YieldNotFinal : null;
         var empty = selected.Count == 0 ? UserMessages.NoDataForFilters("period and zones") : null;
         return new HarvestYieldReport(from, to, groupBy, result.Groups, result.Totals, notFinal?.Text, notFinal?.Code, empty?.Text, empty?.Code);

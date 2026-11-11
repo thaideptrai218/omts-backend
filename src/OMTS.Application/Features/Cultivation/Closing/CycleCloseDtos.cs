@@ -53,7 +53,9 @@ public sealed record CycleSummary(
     bool ClosedEarly,
     EarlyCloseReason? EarlyReason,
     IReadOnlyList<int> NotHarvestedLanes,
-    string? Assessment);
+    string? Assessment,
+    decimal HarvestedCages = 0m,
+    decimal? RemainingKg = null);
 
 /// <summary>What CYCLE-06 shows before the close (steps 1, 2 and 4).</summary>
 /// <param name="Summary">The summary if the cycle closed today.</param>

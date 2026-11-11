@@ -16,7 +16,13 @@ public class HarvestLotForm
     /// <summary>One field per lane marked finished; none is fine.</summary>
     public string?[]? FinishedLaneNumbers { get; set; }
 
+    /// <summary>Cages, a number with a dot and at most 2 decimals (0.5 is half a cage).</summary>
     public string? CageCount { get; set; }
+
+    /// <summary>The Zone Manager answers the over-plan warning (409, confirmFlag confirmOverPlan): send true with <see cref="OverPlanReason"/>.</summary>
+    public bool ConfirmOverPlan { get; set; }
+
+    public string? OverPlanReason { get; set; }
 
     /// <summary>Left out when recording: cages times the average kg per cage. Left out when correcting: it stays, or when the cages changed, cages times the kg per cage of the lot.</summary>
     public string? EstimatedKg { get; set; }

@@ -49,7 +49,7 @@ public class TraceCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         await (await t.Owner.Client.PutSeedingTraceAsync(t.SessionId, t.Session.SeedingCorrection(quantity: 12m))).ReadAsync(HttpStatusCode.OK);
 
         var saved = await (await factory.SendLotTraceAsync(t.Owner.Client, t.LotId, HarvestFields.OfLanes(1) with { Cages = "9" })).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(9, saved.GetProperty("lot").GetProperty("cageCount").GetInt32());
+        Assert.Equal(9, saved.GetProperty("lot").GetProperty("cageCount").GetDecimal());
     }
 
     /// <summary>

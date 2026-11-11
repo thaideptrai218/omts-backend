@@ -145,7 +145,7 @@ public class HarvestLotCorrectionPhotoTests
         Assert.Equal(("MSG-GEN-03", "MSG05"), (answer.Text("code"), answer.Text("legacyCode")));
         Assert.Equal(stored, StoredKeys(api, Category));
         var read = await owner.GetHarvestLotAsync(lot.Id());
-        Assert.Equal((8, lot.PhotoKeysOfLot()[0]), (read.GetProperty("cageCount").GetInt32(), read.PhotoKeysOfLot()[0]));
+        Assert.Equal((8, lot.PhotoKeysOfLot()[0]), (read.GetProperty("cageCount").GetDecimal(), read.PhotoKeysOfLot()[0]));
     }
 
     [Fact]
@@ -188,7 +188,7 @@ public class HarvestLotCorrectionPhotoTests
 
         Assert.Equal("MSG06", await (await pending).ErrorCodeAsync());
         Assert.Empty(StoredKeys(api, Category));
-        Assert.Equal(7, (await owner.GetHarvestLotAsync(lot.Id())).GetProperty("cageCount").GetInt32());
+        Assert.Equal(7, (await owner.GetHarvestLotAsync(lot.Id())).GetProperty("cageCount").GetDecimal());
     }
 
     [Fact]

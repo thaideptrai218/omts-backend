@@ -10,14 +10,16 @@ using OMTS.Domain.Entities.Harvest;
 namespace OMTS.Application.Features.Harvest;
 
 /// <summary>The checked fields of a lot; <paramref name="EstimatedKg"/> holds the worked-out value when none was sent.</summary>
-internal sealed record HarvestLotFields(IReadOnlyList<Lane> Lanes, IReadOnlySet<Guid> FinishedLaneIds, int CageCount, decimal EstimatedKg);
+internal sealed record HarvestLotFields(
+    IReadOnlyList<Lane> Lanes, IReadOnlySet<Guid> FinishedLaneIds, decimal CageCount, decimal EstimatedKg, string? OverPlanReason = null, bool PlanEvaluated = false);
 
 /// <summary>What a correction adds to the fields of a harvest: the reason, kept in the audit log, and why the finished lanes cannot be so.</summary>
 /// <param name="OwnLaneIds">
 /// The lanes of the lot that stay allowed whatever their status. TRACE-03.2 passes the lot's own lanes: a lane Removed after the close keeps its records (BR-FARM-04), so only a lane
 /// the correction adds must be In Use. HARVEST-01.1 passes none, as no lane of an Open cycle can be removed.
 /// </param>
-internal sealed record HarvestLotCorrectionInput(string? Reason, string? FinishedHint, IReadOnlySet<Guid>? OwnLaneIds = null);
+internal sealed record HarvestLotCorrectionInput(
+    string? Reason, string? FinishedHint, IReadOnlySet<Guid>? OwnLaneIds = null, decimal? ExistingCageCount = null, decimal? ExistingEstimatedKg = null);
 
 /// <summary>HARVEST-01 step 6: at least one lane Growing or Being harvested, the finished lanes among them, cages and estimated kg above 0 (BR-HARVEST-01, BR-HARVEST-02). Every invalid field is listed (MSG-GEN-01).</summary>
 internal static class HarvestLotFieldReader
@@ -35,8 +37,10 @@ internal static class HarvestLotFieldReader
     /// <param name="kgPerCage">What the estimated kg is worked out with when none was sent.</param>
     /// <param name="photoHint">Why the photos were refused, or null.</param>
     /// <param name="correction">The fields only a correction has.</param>
+    /// <param name="plan">The cycle's target and the other lots: the harvest is capped against it. Null for a lot of a Closed cycle (TRACE-03.2), which only fixes data.</param>
     public static AppError? Read(
-        RecordHarvestRequest request, Raft raft, IReadOnlyDictionary<Guid, LaneState> states, decimal kgPerCage, string? photoHint, out HarvestLotFields? fields, HarvestLotCorrectionInput? correction = null)
+        RecordHarvestRequest request, Raft raft, IReadOnlyDictionary<Guid, LaneState> states, decimal kgPerCage, string? photoHint, out HarvestLotFields? fields,
+        HarvestLotCorrectionInput? correction = null, HarvestPlanInput? plan = null)
     {
         fields = null;
         var check = new FieldCheck();
@@ -44,11 +48,17 @@ internal static class HarvestLotFieldReader
         check.Check(lanes is not null && laneHint is null, LanesField);
         var finished = Finished(request, lanes);
         check.Check(finished is not null && correction?.FinishedHint is null, FinishedLanesField);
-        check.Check(request.CageCount is > 0, CagesField);
-        var estimated = request.EstimatedKg ?? (request.CageCount is > 0 ? request.CageCount * kgPerCage : null);
+        var cagesAreValid = HarvestQuantityRules.CagesAreValid(request.CageCount);
+        check.Check(cagesAreValid, CagesField);
+        var worked = cagesAreValid ? HarvestQuantityRules.KgOf(request.CageCount!.Value, kgPerCage) : (decimal?)null;
+        var estimated = request.EstimatedKg ?? worked;
         var estimatedIsValid = !request.EstimatedKgIsUnreadable
             && (estimated is null || (estimated > 0 && estimated <= PurchaseReceiptValidator.MaxQuantity && PurchaseReceiptValidator.HasAllowedDecimals(estimated.Value)));
-        check.Check(estimatedIsValid, EstimatedKgField);
+        // A kg sent by hand stays near cages times the kg per cage; a correction that changes neither field is not judged again, so a lot saved before the rule can still be corrected.
+        var unchanged = correction is not null && request.CageCount == correction.ExistingCageCount && estimated == correction.ExistingEstimatedKg;
+        var kgIsSane = !estimatedIsValid || !cagesAreValid || unchanged || request.EstimatedKg is null
+            || HarvestQuantityRules.KgIsWithinCeiling(request.EstimatedKg.Value, request.CageCount!.Value, kgPerCage);
+        check.Check(estimatedIsValid && kgIsSane, EstimatedKgField);
         check.Check(photoHint is null, PhotosField);
         if (correction is not null)
         {
@@ -62,11 +72,21 @@ internal static class HarvestLotFieldReader
                 [LanesField] when laneHint is not null => AppError.Invalid(LanesField, laneHint),
                 [FinishedLanesField] when correction?.FinishedHint is { } finishedHint => AppError.Invalid(FinishedLanesField, finishedHint),
                 [PhotosField] => AppError.Invalid(PhotosField, photoHint),
+                [CagesField] => AppError.Invalid(CagesField, $"Enter more than 0 and at most {HarvestQuantityRules.MaxCages:0} cages, with at most 2 decimals (0.5 is half a cage)."),
+                [EstimatedKgField] when estimatedIsValid && !kgIsSane => AppError.Invalid(EstimatedKgField, HarvestQuantityRules.KgCeilingHint(request.CageCount!.Value, kgPerCage)),
                 var invalid => AppError.InvalidFields(invalid),
             };
         }
 
-        fields = new HarvestLotFields(lanes!, finished!, request.CageCount!.Value, estimated!.Value);
+        // The cap on the cycle plan judges what the save adds: a correction that does not raise the kg adds nothing, so it is not asked again.
+        var raisesKg = correction is null || estimated > correction.ExistingEstimatedKg;
+        string? overPlanReason = null;
+        if (plan is not null && raisesKg && HarvestQuantityRules.CheckPlan(plan, estimated!.Value, out overPlanReason) is { } overPlan)
+        {
+            return overPlan;
+        }
+
+        fields = new HarvestLotFields(lanes!, finished!, request.CageCount!.Value, estimated!.Value, overPlanReason, plan is not null && raisesKg);
         return null;
     }
 

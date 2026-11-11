@@ -52,7 +52,7 @@ public sealed class RaftViews(IRaftMaterialCostQuery materialCosts, IFileStorage
     public async Task<RaftSaved> SavedAsync(Raft raft, string what, CancellationToken cancellationToken)
     {
         var saved = UserMessages.Saved(what);
-        return new RaftSaved(await ViewAsync(raft, cancellationToken), saved.Text, saved.Code);
+        return new RaftSaved(await ViewAsync(raft, cancellationToken), saved.Text, saved.Code, CoordinateRules.ForRaft(raft.Latitude, raft.Longitude, raft.Zone.Latitude, raft.Zone.Longitude));
     }
 
     /// <summary>

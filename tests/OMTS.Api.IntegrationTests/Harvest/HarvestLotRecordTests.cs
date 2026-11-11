@@ -28,7 +28,6 @@ public class HarvestLotRecordTests(AuthApiFactory factory) : IClassFixture<AuthA
         { "Number of cages", new HarvestFields { Cages = null } },
         { "Number of cages", new HarvestFields { Cages = "0" } },
         { "Number of cages", new HarvestFields { Cages = "-8" } },
-        { "Number of cages", new HarvestFields { Cages = "8.5" } },
         { "Number of cages", new HarvestFields { Cages = "many" } },
         { "Number of cages", new HarvestFields { Cages = "99999999999" } },
         { "Estimated kg", new HarvestFields { EstimatedKg = "0" } },
@@ -36,7 +35,7 @@ public class HarvestLotRecordTests(AuthApiFactory factory) : IClassFixture<AuthA
         { "Estimated kg", new HarvestFields { EstimatedKg = "1.234" } },
         { "Estimated kg", new HarvestFields { EstimatedKg = "1000000000.01" } },
         { "Estimated kg", new HarvestFields { EstimatedKg = "about 400" } },
-        { "Estimated kg", new HarvestFields { Cages = "2147483647" } },
+        { "Number of cages", new HarvestFields { Cages = "2147483647" } },
         { "Photos", new HarvestFields { Photos = [FarmingTestKit.TextPretendingToBeAFile] } },
     };
 
@@ -64,7 +63,7 @@ public class HarvestLotRecordTests(AuthApiFactory factory) : IClassFixture<AuthA
 
     [Theory]
     [InlineData("8", "0.01", 0.01)]
-    [InlineData("1", "1000000000", 1000000000)]
+    [InlineData("100000", "50000000", 50000000)]
     [InlineData("8", "400.50", 400.5)]
     [InlineData("8", "", 400)]
     public async Task The_limits_of_the_estimate_are_saved(string cages, string sent, decimal saved)

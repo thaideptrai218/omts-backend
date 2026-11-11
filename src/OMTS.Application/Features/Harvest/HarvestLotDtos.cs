@@ -12,7 +12,8 @@ namespace OMTS.Application.Features.Harvest;
 /// <param name="EstimatedKgIsUnreadable">A value was sent that is not a number, so it does not mean "work it out".</param>
 /// <param name="OtherFilePart">A file came in a part not named <c>photos</c>: refused after the access check, so no photo is dropped without a word.</param>
 public sealed record RecordHarvestRequest(
-    IReadOnlyList<int>? LaneNumbers, IReadOnlyList<int>? FinishedLaneNumbers, int? CageCount, decimal? EstimatedKg, bool EstimatedKgIsUnreadable = false, bool OtherFilePart = false);
+    IReadOnlyList<int>? LaneNumbers, IReadOnlyList<int>? FinishedLaneNumbers, decimal? CageCount, decimal? EstimatedKg, bool EstimatedKgIsUnreadable = false, bool OtherFilePart = false,
+    bool ConfirmOverPlan = false, string? OverPlanReason = null);
 
 /// <summary>A photo of a lot, for staff.</summary>
 /// <param name="Key">The storage key.</param>
@@ -32,7 +33,7 @@ public sealed record HarvestLotListItem(
     DateOnly HarvestDate,
     IReadOnlyList<int> LaneNumbers,
     IReadOnlyList<int> FinishedLaneNumbers,
-    int CageCount,
+    decimal CageCount,
     decimal KgPerCage,
     decimal EstimatedKg,
     decimal InvoicedKg,
@@ -69,7 +70,7 @@ public sealed record HarvestLotView(
     DateOnly HarvestDate,
     IReadOnlyList<int> LaneNumbers,
     IReadOnlyList<int> FinishedLaneNumbers,
-    int CageCount,
+    decimal CageCount,
     decimal KgPerCage,
     decimal EstimatedKg,
     HarvestLotFigures Figures,
@@ -90,18 +91,42 @@ public sealed record HarvestLotView(
     bool CanCorrect,
     bool CanRemove,
     bool CanClose,
-    string RowVersion);
+    string RowVersion,
+    string? OverPlanReason = null);
 
 /// <summary>Answer of a recorded harvest.</summary>
 /// <param name="EverySeededLaneHarvested">Every seeded lane of the cycle shows Harvested now: the cycle can be closed normally (BR-CYCLE-07).</param>
 /// <param name="CycleRowVersion">The new version of the cycle, as every lot moves it.</param>
 /// <param name="Message">MSG-GEN-05 "Harvest lot saved.".</param>
 /// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
-public sealed record HarvestLotSaved(HarvestLotView Lot, bool EverySeededLaneHarvested, string CycleRowVersion, string Message, string MessageCode);
+public sealed record HarvestLotSaved(
+    HarvestLotView Lot, bool EverySeededLaneHarvested, string CycleRowVersion, string Message, string MessageCode, IReadOnlyList<Features.Farming.FarmingWarning>? Warnings = null);
 
-/// <summary>A lane on the Harvest lots screen, with its state today (BR-FARM-03). It never shows kg (AC-03).</summary>
+/// <summary>A lane on the Harvest lots screen, with its state today (BR-FARM-03).</summary>
 /// <param name="CanHarvest">The lane can be chosen for a new lot now: In Use, Growing or Being harvested, on a raft that can record.</param>
-public sealed record HarvestLaneView(Guid Id, int LaneNumber, int StatusId, string Status, LaneState State, bool CanHarvest);
+/// <param name="Reason">Why <paramref name="CanHarvest"/> is false, or null.</param>
+/// <param name="ReasonCode">One of <c>LaneRemoved</c>, <c>NoOpenCycle</c>, <c>ReadOnly</c>, <c>NoPermission</c>, <c>NotSeeded</c>, <c>AlreadyHarvested</c>; null when the lane can be harvested.</param>
+/// <param name="CanFinish">The lane is Being harvested and the caller may finish it with <c>finish-harvest</c>.</param>
+/// <param name="LotCount">Lots of the Open cycle that include the lane.</param>
+/// <param name="LastHarvestDate">The latest harvest date of those lots, or null.</param>
+/// <param name="SeedLotCodes">Codes (PN000001-1) of the seed lots hung on the lane in the cycle, in code order.</param>
+/// <param name="HarvestedCages">
+/// Cages harvested from the lane so far: each lot of the lane counts its cages divided by the number of lanes of that lot, as a lot is recorded for several lanes together.
+/// </param>
+public sealed record HarvestLaneView(
+    Guid Id,
+    int LaneNumber,
+    int StatusId,
+    string Status,
+    LaneState State,
+    bool CanHarvest,
+    string? Reason = null,
+    string? ReasonCode = null,
+    bool CanFinish = false,
+    int LotCount = 0,
+    DateOnly? LastHarvestDate = null,
+    IReadOnlyList<string>? SeedLotCodes = null,
+    decimal HarvestedCages = 0m);
 
 /// <summary>The Harvest lots screen of a raft (SCR-HARVEST-01).</summary>
 /// <param name="Cycle">The Open cycle, or null: no lot can be recorded.</param>
@@ -110,7 +135,17 @@ public sealed record HarvestLaneView(Guid Id, int LaneNumber, int StatusId, stri
 /// <param name="Lanes">Lanes In Use, and Removed lanes that have records in the cycle shown, in number order.</param>
 /// <param name="Lots">The lots of the Open cycle: lots for sale first, then the latest harvest first.</param>
 public sealed record HarvestLotsScreen(
-    Guid RaftId, string RaftCode, CycleListItem? Cycle, decimal AverageKgPerCage, bool CanRecordHarvest, IReadOnlyList<HarvestLaneView> Lanes, IReadOnlyList<HarvestLotListItem> Lots);
+    Guid RaftId,
+    string RaftCode,
+    CycleListItem? Cycle,
+    decimal AverageKgPerCage,
+    bool CanRecordHarvest,
+    IReadOnlyList<HarvestLaneView> Lanes,
+    IReadOnlyList<HarvestLotListItem> Lots,
+    decimal HarvestedCages = 0m,
+    decimal HarvestedKg = 0m,
+    decimal? TargetYieldKg = null,
+    decimal? RemainingKg = null);
 
 /// <summary>The harvest settings (HARVEST-03).</summary>
 public sealed record HarvestSettingsView(decimal AverageKgPerCage, int DaysBeforeAutoClose, string RowVersion);

@@ -15,7 +15,8 @@ public sealed record RemoveSeedingRequest(string? Reason, string? RowVersion);
 
 /// <summary>CYCLE-02.1.</summary>
 /// <param name="RowVersion">The version of the cycle.</param>
-public sealed record MarkSeedingCompleteRequest(string? RowVersion);
+/// <param name="ConfirmEmpty">The Zone Manager confirms finishing a seeding with no seeded lane (409 with <c>confirmFlag: "confirmEmpty"</c> otherwise).</param>
+public sealed record MarkSeedingCompleteRequest(string? RowVersion, bool ConfirmEmpty = false);
 
 /// <summary>A seed lot on a session: traced to its receipt and supplier (BR-FARM-03). It holds no price.</summary>
 public sealed record SeedLotRef(
