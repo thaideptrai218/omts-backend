@@ -238,8 +238,9 @@ public class PurchaseCatalogueSqlServerQaTests
                 Assert.Equal(Enumerable.Range(1, 15).Select(n => $"VT{n:D3}"), items.Select(i => i.Code));
                 Assert.Equal((4, 6, 5), (items.Count(i => i.Group == InputItemGroup.Seed), items.Count(i => i.Group == InputItemGroup.Material), items.Count(i => i.Group == InputItemGroup.Other)));
                 Assert.All(items.Where(i => i.Group == InputItemGroup.Seed), i => Assert.Equal("con", i.Unit));
-                var proposal = await scope.ServiceProvider.GetRequiredService<FarmingInputItemService>().ProposeAsync(CancellationToken.None);
-                Assert.Equal(new NewFarmingInputItemProposal("VT016", "con"), proposal);
+                // The demo items keep their VT001… codes; a new item of the type gets the next code of its own sequence.
+                var proposal = await scope.ServiceProvider.GetRequiredService<FarmingInputItemService>().ProposeAsync(InputItemGroup.Seed, CancellationToken.None);
+                Assert.Equal(new NewFarmingInputItemProposal("GI000001"), proposal);
 
                 var suppliers = await db.Suppliers.AsNoTracking().ToListAsync();
                 Assert.Equal(5, suppliers.Count);
@@ -323,3 +324,4 @@ public class PurchaseCatalogueSqlServerQaTests
         return await scope.ServiceProvider.GetRequiredService<DeploymentBootstrapper>().RunAsync(seedDemoData: true, CancellationToken.None);
     }
 }
+

@@ -33,7 +33,8 @@ internal sealed class SeedLotRepository(OmtsDbContext db) : ISeedLotRepository, 
                 l.ItemId,
                 ItemCode = l.Item!.Code,
                 ItemName = l.Item.Name,
-                l.Unit,
+                // Seeds are counted in base units, so a lot received in a bag still reads in the base unit of the item.
+                Unit = l.Item.Unit,
                 l.Receipt.SupplierId,
                 SupplierName = l.Receipt.Supplier.Name,
                 l.RaftId,
@@ -65,3 +66,4 @@ internal sealed class SeedLotRepository(OmtsDbContext db) : ISeedLotRepository, 
             .Where(r => lineIds.Contains(r.SeedLotLineId))
             .MinAsync(r => (DateOnly?)r.SeedingDate, cancellationToken);
 }
+

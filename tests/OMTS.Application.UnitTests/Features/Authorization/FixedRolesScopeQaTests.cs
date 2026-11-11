@@ -51,6 +51,8 @@ public class FixedRolesScopeQaTests
         { SalesReports, false },
         { CashBookOperations, true },
         { CashBookSettings, true },
+        { InputIssues, false },
+        { InputDisposals, true },
         { DashboardDailyRevenue, false },
         { DashboardReceivables, false },
         { DashboardOpenHarvestLots, false },
@@ -173,3 +175,4 @@ public class FixedRolesScopeQaTests
 
     private static AccountAccess Staff(params ZoneGrant[] grants) => new(Guid.NewGuid(), SubjectType.Staff, false, true, grants);
 }
+

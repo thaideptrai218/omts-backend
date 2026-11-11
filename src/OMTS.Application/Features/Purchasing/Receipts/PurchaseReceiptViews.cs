@@ -47,13 +47,14 @@ public sealed class PurchaseReceiptViews(
                 var seededQuantity = seeded.GetValueOrDefault(l.Id);
                 var lineReturned = returned.GetValueOrDefault(l.Id);
                 return new ReceiptLineView(
-                    l.Id, l.LineNumber, l.ItemId, l.Item?.Code, l.Item?.Name, l.Item?.Group, l.Unit, l.Quantity, l.UnitPrice,
+                    l.Id, l.LineNumber, l.ItemId, l.Item?.Code, l.Item?.Name, l.Item?.Group, l.Unit, l.EnteredQuantity, l.EnteredUnitPrice,
                     l.Quantity is null || l.UnitPrice is null ? null : l.LineAmount,
                     l.SupplierLotCode,
                     l.Raft is null ? null : new LineRaftRef(l.Raft.Id, l.Raft.Code, l.Raft.ZoneId, l.Raft.Zone.Code),
                     IsSeedLot(r, l) ? DocumentCodes.SeedLotCode(r.Code, l.LineNumber) : null,
-                    seededQuantity, lineReturned, Returnable(l, seededQuantity, lineReturned), l.Discount,
-                    l.UnitPrice is null ? null : PurchaseMoney.ReturnUnitPrice(r, l));
+                    seededQuantity, lineReturned, Returnable(l, seededQuantity, lineReturned), l.EnteredDiscount,
+                    l.EnteredUnitPrice is null ? null : PurchaseMoney.ReturnPriceInLineUnit(r, l),
+                    l.ItemUnitId, l.UnitFactor, l.Quantity, l.Item?.Unit);
             }).ToList(),
             r.Returns.Where(rt => rt.StatusId != StatusIds.PurchaseReturn.Draft).OrderBy(rt => rt.ReturnedAt).ThenBy(rt => rt.Code).Select(rt => new ReceiptReturnView(
                 rt.Id, rt.Code, rt.ReturnDate, rt.Reason, rt.Lines.Sum(l => l.ReturnValue), rt.StatusId, statusCatalog.DisplayNameOf(rt.StatusId),
@@ -81,3 +82,4 @@ public sealed class PurchaseReceiptViews(
     public static decimal Returnable(PurchaseReceiptLine line, decimal seeded, decimal returned) =>
         Math.Max(0, (line.Quantity ?? 0) - seeded - returned);
 }
+

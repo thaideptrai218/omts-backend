@@ -136,4 +136,12 @@ public static class StatusIds
         public const int Cancelled = 3603;
         public const int PendingTransfer = 3604;
     }
+
+    /// <summary>An input issue: a Draft holds no quantity and is removed; Completed writes the movements; Cancelled counts nowhere.</summary>
+    public static class InputIssue
+    {
+        public const int Draft = 3701;
+        public const int Completed = 3702;
+        public const int Cancelled = 3703;
+    }
 }

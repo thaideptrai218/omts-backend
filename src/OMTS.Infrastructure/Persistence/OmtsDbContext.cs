@@ -35,6 +35,14 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
 
     // Seed, cultivation and water measurements
     public DbSet<FarmingInputItem> FarmingInputItems => Set<FarmingInputItem>();
+    public DbSet<InputUnit> InputUnits => Set<InputUnit>();
+    public DbSet<InputItemUnit> InputItemUnits => Set<InputItemUnit>();
+    public DbSet<InputItemCategory> InputItemGroups => Set<InputItemCategory>();
+    public DbSet<InputItemPhoto> InputItemPhotos => Set<InputItemPhoto>();
+    public DbSet<InputStockMovement> InputStockMovements => Set<InputStockMovement>();
+    public DbSet<InputIssueType> InputIssueTypes => Set<InputIssueType>();
+    public DbSet<InputIssue> InputIssues => Set<InputIssue>();
+    public DbSet<InputIssueLine> InputIssueLines => Set<InputIssueLine>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
     public DbSet<PurchaseReceipt> PurchaseReceipts => Set<PurchaseReceipt>();
     public DbSet<PurchaseReceiptLine> PurchaseReceiptLines => Set<PurchaseReceiptLine>();
@@ -114,3 +122,5 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
         }
     }
 }
+
+

@@ -23,4 +23,6 @@ public static class StatusGroups
     public const string HarvestLot = "HARVEST_LOT";
     public const string SalesInvoice = "SALES_INVOICE";
     public const string CustomerPayment = "CUSTOMER_PAYMENT";
+    public const string InputIssue = "INPUT_ISSUE";
 }
+

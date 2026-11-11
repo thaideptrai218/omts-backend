@@ -125,6 +125,13 @@ public static class DependencyInjection
         services.AddScoped<IStoredFileReferenceQuery, StoredFileReferenceQuery>();
         services.AddScoped<ISupplierRepository, SupplierRepository>();
         services.AddScoped<IFarmingInputItemRepository, FarmingInputItemRepository>();
+        services.AddScoped<IInputStockRepository, InputStockRepository>();
+        services.AddScoped<IInputUnitRepository, InputUnitRepository>();
+        services.AddScoped<IInputItemCategoryRepository, InputItemCategoryRepository>();
+        services.AddScoped<IInputItemListQuery, InputItemListReader>();
+        services.AddScoped<IInputIssueRepository, InputIssueRepository>();
+        services.AddScoped<IInputIssueTypeRepository, InputIssueTypeRepository>();
+        services.AddScoped<IInputMovementQuery, InputMovementReader>();
         services.AddScoped<IPurchaseReceiptRepository, PurchaseReceiptRepository>();
         services.AddScoped<ISupplierPaymentRepository, SupplierPaymentRepository>();
         services.AddScoped<IPurchaseDocumentCodeQuery, PurchaseDocumentCodeQuery>();
@@ -402,3 +409,5 @@ public static class DependencyInjection
     private static string ToCheckName(ReadinessCheckKind kind) =>
         string.Concat(kind.ToString().Select((c, i) => i > 0 && char.IsUpper(c) ? $"-{char.ToLowerInvariant(c)}" : char.ToLowerInvariant(c).ToString()));
 }
+
+

@@ -124,6 +124,12 @@ public sealed class PurchaseReceiptValidator(
                 invalid.Add($"Line {i + 1} supplier lot code");
             }
 
+            // The unit is one of the item's; a line without an item has no unit yet.
+            if (lines[i].ItemUnitId is not null && (item is null || ReceiptLineUnits.Resolve(item, lines[i].ItemUnitId) is null))
+            {
+                invalid.Add($"Line {i + 1} unit");
+            }
+
             // A Draft line may have no item yet (BR-PURCHASE-03): its raft is then checked without the group, which needs the item.
             if (lines[i].RaftId is { } raftId && !RaftAllowed(item, refs.Rafts.GetValueOrDefault(raftId), raftZones, itemRequired: lines[i].ItemId is not null))
             {
@@ -205,7 +211,7 @@ public sealed class PurchaseReceiptValidator(
 
         // BR-PURCHASE-01: a quantity greater than 0 and a unit price of 0 or more; a Draft saved before the 2-decimal rule is refused here too.
         var incomplete = lines.FirstOrDefault(l =>
-            l.Quantity is not > 0 || !HasAllowedDecimals(l.Quantity.Value) || l.UnitPrice is not >= 0 || !DiscountAllowed(l.Discount, l.UnitPrice));
+            l.EnteredQuantity is not > 0 || !HasAllowedDecimals(l.EnteredQuantity.Value) || l.EnteredUnitPrice is not >= 0 || !DiscountAllowed(l.EnteredDiscount, l.EnteredUnitPrice));
         return incomplete is null ? null : InvalidLine(incomplete.LineNumber);
     }
 
@@ -234,7 +240,7 @@ public sealed class PurchaseReceiptValidator(
         var minimum = seeded + returned;
         return new AppError(
             ErrorKind.Validation,
-            UserMessages.QuantityBelowUsed(line.Item?.Name ?? field, minimum, line.Unit, seeded, returned),
+            UserMessages.QuantityBelowUsed(line.Item?.Name ?? field, minimum, line.Item?.Unit ?? line.Unit, seeded, returned),
             new Dictionary<string, object?>
             {
                 ["field"] = field, ["minQuantity"] = minimum, ["seededQuantity"] = seeded, ["returnedQuantity"] = returned,
@@ -249,3 +255,5 @@ public sealed class PurchaseReceiptValidator(
             ErrorKind.Validation, UserMessages.Invalid(field) with { LegacyCode = MessageCodes.Legacy.Msg59 }, new Dictionary<string, object?> { ["field"] = field });
     }
 }
+
+

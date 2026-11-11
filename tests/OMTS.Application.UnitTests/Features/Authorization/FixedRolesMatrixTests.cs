@@ -83,6 +83,9 @@ public class FixedRolesMatrixTests
         // The cash book is not a use case of the SRS matrix: the Accountant keeps it, Delete cancels a voucher.
         { "CASH-BOOK", No, Full, CashBookOperations, [View, Create, Edit, Delete, Export] },
         { "CASH-BOOK-SETTINGS", No, Full, CashBookSettings, [View, Edit] },
+        // Input issues are not a use case of the SRS matrix: the Zone Manager records the use issues of its zones; the Accountant reads and exports them and the disposals, which the Owner records.
+        { "INPUT-ISSUES", Full, R, InputIssues, [View, Create, Edit, Delete, Export] },
+        { "INPUT-DISPOSALS", No, Full, InputDisposals, [View, Export] },
     };
 
     /// <summary>
@@ -97,6 +100,7 @@ public class FixedRolesMatrixTests
         [("PURCHASE-03", StaffRole.Accountant)] = RExport,
         [("SALE-04", StaffRole.Accountant)] = Full,
         [("SALE-04.2", StaffRole.Accountant)] = RExport,
+        [("INPUT-ISSUES", StaffRole.Accountant)] = RExport,
     };
 
     [Theory]

@@ -37,7 +37,7 @@ public sealed class PurchaseReturnQueryService(
             found.ReturnDate, found.Reason, found.Discount, found.StatusId, statusCatalog.DisplayNameOf(found.StatusId),
             found.CancelledAt, found.CancelReason, new AccountRef(found.RecordedByAccountId, names.GetValueOrDefault(found.RecordedByAccountId) ?? string.Empty),
             value, value - found.Discount,
-            found.Lines.Select(l => new PurchaseReturnLineView(l.ReceiptLineId, l.ItemId, l.Item.Code, l.Item.Name, l.Unit, l.Quantity, l.UnitPrice, l.ReturnValue)).ToList(),
+            found.Lines.Select(l => new PurchaseReturnLineView(l.ReceiptLineId, l.ItemId, l.Item.Code, l.Item.Name, l.Unit, l.EnteredQuantity, l.EnteredUnitPrice, l.ReturnValue, l.ItemUnitId, l.UnitFactor, l.Quantity)).ToList(),
             refunds.Select(p => new ReturnRefundView(p.Id, p.Code, p.PaymentDate, p.Amount, p.Method, p.BankReference, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId), p.CancelledAt)).ToList(),
             RowVersionGuard.Encode(found.RowVersion),
             found.ReturnedAt);
@@ -140,3 +140,4 @@ public sealed class PurchaseReturnQueryService(
             RowVersionGuard.Encode(r.RowVersion), r.ReturnedAt)).ToList();
     }
 }
+

@@ -7,6 +7,7 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
@@ -34,6 +35,7 @@ public sealed class PurchaseReturnService(
     PurchaseReceiptAccess access,
     PurchaseReturnQueryService queries,
     PurchaseDocumentCodeService codes,
+    InputStockLedger ledger,
     ICurrentUser currentUser,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
@@ -106,6 +108,7 @@ public sealed class PurchaseReturnService(
         receipts.AddReturn(purchaseReturn);
         unitOfWork.MarkChanged(receipt);
         RecordCreated(purchaseReturn, !isOwner);
+        await ledger.PostReturnAsync(purchaseReturn, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return await views.ViewAsync(receipt.Id, cancellationToken);
     }
@@ -324,6 +327,7 @@ public sealed class PurchaseReturnService(
         }
 
         var before = EditSnapshot(purchaseReturn);
+        var ledgerBefore = LedgerKey(purchaseReturn);
         var lineError = purchaseReturn.ReceiptId is { } linkedReceiptId
             ? await EditLinkedLinesAsync(purchaseReturn, linkedReceiptId, inputs, cancellationToken)
             : await EditStandaloneLinesAsync(purchaseReturn, inputs, cancellationToken);
@@ -351,6 +355,13 @@ public sealed class PurchaseReturnService(
         if (request.ReturnedAt is { } returnedAt)
         {
             PurchaseReturnRules.SetReturned(purchaseReturn, returnedAt);
+        }
+
+        // The quantities of the return on the ledger follow the new lines and time: the old rows are undone, the new ones written.
+        if (LedgerKey(purchaseReturn) != ledgerBefore)
+        {
+            await ledger.ReverseAsync(purchaseReturn.Id, afterReceiptRemoved: false, cancellationToken);
+            await ledger.PostReturnAsync(purchaseReturn, cancellationToken);
         }
 
         unitOfWork.MarkChanged(purchaseReturn);
@@ -412,12 +423,10 @@ public sealed class PurchaseReturnService(
         {
             var line = stored[input.ReceiptLineId!.Value];
             // Left out, the price stays the one the return was recorded with: a correction of the receipt does not change it (PM 03/11).
-            var price = input.UnitPrice ?? line.UnitPrice;
-            if (line.Quantity != input.Quantity!.Value || line.UnitPrice != price)
+            var price = input.UnitPrice ?? line.EnteredUnitPrice;
+            if (line.EnteredQuantity != input.Quantity!.Value || line.EnteredUnitPrice != price)
             {
-                line.Quantity = input.Quantity.Value;
-                line.UnitPrice = price;
-                line.ReturnValue = PurchaseMoney.LineAmount(line.Quantity, line.UnitPrice);
+                ReceiptLineUnits.SetReturnValues(line, input.Quantity.Value, price);
             }
         }
 
@@ -435,7 +444,8 @@ public sealed class PurchaseReturnService(
         for (var i = 0; i < inputs.Count; i++)
         {
             var input = inputs[i];
-            var usable = input.ItemId is { } itemId && found.TryGetValue(itemId, out var item) && (item.StatusId == StatusIds.Usage.InUse || keptItems.Contains(itemId));
+            var usable = input.ItemId is { } itemId && found.TryGetValue(itemId, out var item) && (item.StatusId == StatusIds.Usage.InUse || keptItems.Contains(itemId))
+                && (input.ItemUnitId is null || ReceiptLineUnits.Resolve(item, input.ItemUnitId) is not null);
             if (!usable || input.ReceiptLineId is not null
                 || input.Quantity is not { } quantity || quantity <= 0 || quantity > PurchaseReceiptValidator.MaxQuantity || !PurchaseReceiptValidator.HasAllowedDecimals(quantity)
                 || input.UnitPrice is not { } price || !PurchaseReceiptValidator.IsWholeAmount(price) || quantity * price > PurchaseReceiptValidator.MaxAmount)
@@ -458,15 +468,8 @@ public sealed class PurchaseReturnService(
         foreach (var input in inputs)
         {
             var item = found[input.ItemId!.Value];
-            var line = new PurchaseReturnLine
-            {
-                ReturnId = purchaseReturn.Id,
-                ItemId = item.Id,
-                Unit = item.Unit,
-                Quantity = input.Quantity!.Value,
-                UnitPrice = input.UnitPrice!.Value,
-                ReturnValue = PurchaseMoney.LineAmount(input.Quantity, input.UnitPrice),
-            };
+            var line = StandaloneLine(item, input);
+            line.ReturnId = purchaseReturn.Id;
             purchaseReturn.Lines.Add(line);
             receipts.AddReturnLine(line);
         }
@@ -474,11 +477,15 @@ public sealed class PurchaseReturnService(
         return null;
     }
 
+    /// <summary>What the ledger rows of a return depend on: when it happened and, per line, the item, the base quantity and the price.</summary>
+    private static string LedgerKey(PurchaseReturn r) => string.Join(
+        ";", r.Lines.OrderBy(l => l.ReceiptLineId).ThenBy(l => l.ItemId).Select(l => $"{l.ItemId}|{l.Quantity}|{l.EnteredUnitPrice}|{l.UnitFactor}")) + $"@{r.ReturnedAt:O}";
+
     private static object EditSnapshot(PurchaseReturn r) => new
     {
         r.ReturnDate, r.ReturnedAt, r.ZoneId, r.Reason, r.Discount,
         Lines = r.Lines.OrderBy(l => l.ReceiptLineId).ThenBy(l => l.ItemId)
-            .Select(l => new { l.ReceiptLineId, l.ItemId, l.Quantity, l.UnitPrice, l.ReturnValue }).ToList(),
+            .Select(l => new { l.ReceiptLineId, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, l.ReturnValue }).ToList(),
         ReturnValue = r.Lines.Sum(l => l.ReturnValue),
         NetValue = r.Lines.Sum(l => l.ReturnValue) - r.Discount,
     };
@@ -548,6 +555,7 @@ public sealed class PurchaseReturnService(
         purchaseReturn.StatusId = StatusIds.PurchaseReturn.Cancelled;
         purchaseReturn.CancelledAt = timeProvider.GetUtcNow();
         purchaseReturn.CancelReason = reason;
+        await ledger.ReverseAsync(purchaseReturn.Id, afterReceiptRemoved: false, cancellationToken);
         if (receipt is not null)
         {
             unitOfWork.MarkChanged(receipt);
@@ -684,17 +692,17 @@ public sealed class PurchaseReturnService(
                 return LineFromReceipt(receipt, receipt.Lines.First(l => l.Id == input.ReceiptLineId), input.Quantity!.Value, input.UnitPrice);
             }
 
-            var item = sources.Items[input.ItemId!.Value];
-            var price = input.UnitPrice!.Value;
-            return new PurchaseReturnLine
-            {
-                ItemId = item.Id,
-                Unit = item.Unit,
-                Quantity = input.Quantity!.Value,
-                UnitPrice = price,
-                ReturnValue = PurchaseMoney.LineAmount(input.Quantity, price),
-            };
+            return StandaloneLine(sources.Items[input.ItemId!.Value], input);
         }).ToList();
+
+    /// <summary>A line of a return with no receipt, in the unit of the item that was chosen (the base unit by default).</summary>
+    private static PurchaseReturnLine StandaloneLine(FarmingInputItem item, PurchaseReturnLineInput input)
+    {
+        var unit = ReceiptLineUnits.Resolve(item, input.ItemUnitId);
+        var line = new PurchaseReturnLine { ItemId = item.Id };
+        ReceiptLineUnits.FillReturn(line, unit?.Unit?.Name ?? item.Unit, unit?.Id, unit?.Factor ?? 1m, input.Quantity!.Value, input.UnitPrice!.Value);
+        return line;
+    }
 
     /// <summary>
     /// BR-PURCHASE-02, PM 03/11: the line half up to the dong at the price entered or, left out, at what one unit of the receipt
@@ -702,16 +710,10 @@ public sealed class PurchaseReturnService(
     /// </summary>
     private static PurchaseReturnLine LineFromReceipt(PurchaseReceipt receipt, PurchaseReceiptLine line, decimal quantity, decimal? unitPrice)
     {
-        var price = unitPrice ?? PurchaseMoney.ReturnUnitPrice(receipt, line);
-        return new PurchaseReturnLine
-        {
-            ReceiptLineId = line.Id,
-            ItemId = line.ItemId!.Value,
-            Unit = line.Unit,
-            Quantity = quantity,
-            UnitPrice = price,
-            ReturnValue = PurchaseMoney.LineAmount(quantity, price),
-        };
+        var price = unitPrice ?? PurchaseMoney.ReturnPriceInLineUnit(receipt, line);
+        var returned = new PurchaseReturnLine { ReceiptLineId = line.Id, ItemId = line.ItemId!.Value };
+        ReceiptLineUnits.FillReturn(returned, line.Unit, line.ItemUnitId, line.UnitFactor, quantity, price);
+        return returned;
     }
 
     /// <summary>Everything needed to record the return, on its lines as they will be saved; the Owner's approval is asked last.</summary>
@@ -728,7 +730,7 @@ public sealed class PurchaseReturnService(
         if (sources.Receipt is { } receipt)
         {
             var seeded = await seedUsage.SeededAsync(receipt.Lines.Select(l => l.Id).ToList(), cancellationToken);
-            var inputs = purchaseReturn.Lines.Select(l => new ReturnLineInput(l.ReceiptLineId, l.Quantity)).ToList();
+            var inputs = purchaseReturn.Lines.Select(l => new ReturnLineInput(l.ReceiptLineId, l.EnteredQuantity)).ToList();
             if (PurchaseReturnRules.QuantityError(receipt, inputs, seeded, PurchaseReceiptViews.ReturnedQuantities(receipt)) is { } quantityError)
             {
                 return quantityError;
@@ -748,6 +750,7 @@ public sealed class PurchaseReturnService(
     {
         purchaseReturn.StatusId = StatusIds.PurchaseReturn.Recorded;
         audit.RecordStatusChange(RecordType, purchaseReturn.Id, purchaseReturn.Code, StatusIds.PurchaseReturn.Draft, StatusIds.PurchaseReturn.Recorded);
+        await ledger.PostReturnAsync(purchaseReturn, cancellationToken);
         if (sources.Receipt is { } receipt)
         {
             // The receipt row is part of the save, so two returns that read one remaining quantity cannot both be recorded.
@@ -808,7 +811,7 @@ public sealed class PurchaseReturnService(
             purchaseReturn.ReceiptId, purchaseReturn.SupplierId, purchaseReturn.ReturnDate, purchaseReturn.ReturnedAt, purchaseReturn.Discount,
             // The Zone Manager's answer to MSG-PURCHASE-02; the Owner is not asked.
             OwnerApprovalConfirmed = ownerApprovalConfirmed,
-            Lines = purchaseReturn.Lines.Select(l => new { l.ReceiptLineId, l.ItemId, l.Quantity, l.UnitPrice, l.ReturnValue }).ToList(),
+            Lines = purchaseReturn.Lines.Select(l => new { l.ReceiptLineId, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, l.ReturnValue }).ToList(),
         },
         Reason = purchaseReturn.Reason,
     });
@@ -816,7 +819,7 @@ public sealed class PurchaseReturnService(
     private static object Snapshot(PurchaseReturn r) => new
     {
         r.ReceiptId, r.SupplierId, r.ZoneId, r.Reason, r.Discount,
-        Lines = r.Lines.Select(l => new { l.ReceiptLineId, l.ItemId, l.Quantity, l.UnitPrice, l.ReturnValue }).ToList(),
+        Lines = r.Lines.Select(l => new { l.ReceiptLineId, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, l.ReturnValue }).ToList(),
     };
 
     private AppError WrongStatus(PurchaseReturn purchaseReturn) =>
@@ -825,3 +828,5 @@ public sealed class PurchaseReturnService(
     private AppError WrongReceiptStatus(PurchaseReceipt receipt) =>
         AppError.Conflict(UserMessages.WrongStatus($"Purchase receipt {receipt.Code}", statusCatalog.DisplayNameOf(receipt.StatusId)));
 }
+
+

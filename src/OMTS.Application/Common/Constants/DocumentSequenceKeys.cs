@@ -50,4 +50,20 @@ public static class DocumentSequenceKeys
 
     /// <summary>Cash book payment vouchers of the EWallet fund, CVD000123.</summary>
     public const string CashPaymentEWallet = "CVD";
+
+    /// <summary>Seed items of the input catalogue, GI000123.</summary>
+    public const string InputItemSeed = "GI";
+
+    /// <summary>Material items of the input catalogue, VT000123.</summary>
+    public const string InputItemMaterial = "VT";
+
+    /// <summary>Other items of the input catalogue, HK000123.</summary>
+    public const string InputItemOther = "HK";
+
+    /// <summary>Use issues of input items, XD000123.</summary>
+    public const string InputIssueUse = "XD";
+
+    /// <summary>Disposals of input items, XH000123.</summary>
+    public const string InputIssueDisposal = "XH";
 }
+

@@ -28,6 +28,7 @@ using OMTS.Application.Features.Traceability.Tracing;
 using OMTS.Application.Features.Traceability.Withdrawal;
 using OMTS.Application.Features.Labor;
 using OMTS.Application.Features.Purchasing;
+using OMTS.Application.Features.Purchasing.Issues;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
@@ -206,9 +207,25 @@ public static class DependencyInjection
         services.AddScoped<SupplierService>();
         services.AddScoped<SupplierFileService>();
         services.AddScoped<FarmingInputItemService>();
+        services.AddScoped<FarmingInputItemCodeService>();
+        services.AddScoped<FarmingInputItemFileService>();
+        services.AddScoped<InputItemAccess>();
+        services.AddScoped<InputStockLedger>();
+        services.AddScoped<InputUnitService>();
+        services.AddScoped<InputItemGroupService>();
+        services.AddScoped<InputInventorySettingsService>();
+        services.AddScoped<ReceiptPriceSetupService>();
+        services.AddScoped<InputIssueAccess>();
+        services.AddScoped<InputIssueCodeService>();
+        services.AddScoped<InputIssueService>();
+        services.AddScoped<InputIssueTypeService>();
+        services.AddScoped<InputMovementService>();
+        services.AddScoped<FarmingInputItemDeletionService>();
         services.AddScoped<ProductService>();
         services.AddScoped<ProductReadService>();
         services.AddScoped<CustomerService>();
+        services.AddScoped<CustomerSettingsService>();
+        services.AddScoped<CustomerDebtStandings>();
         services.AddScoped<CustomerCodeService>();
         services.AddScoped<CustomerFileService>();
         services.AddScoped<CustomerMergeService>();
@@ -301,3 +318,5 @@ public static class DependencyInjection
         return services;
     }
 }
+
+
