@@ -25,7 +25,10 @@ public interface IWorkAssignmentRepository
     /// </summary>
     Task<IReadOnlyList<WorkAssignment>> ListOfEmployeesOnAsync(IReadOnlyCollection<Guid> employeeIds, DateOnly date, bool tracked, CancellationToken cancellationToken);
 
-    /// <summary>Every job period of the date on a raft of the permitted zones, untracked, with employee, raft and job type.</summary>
+    /// <summary>
+    /// Every job period of the date of each employee who has one on a raft of the permitted zones (the periods on rafts of other
+    /// zones included, so the caller can see where a period ends), untracked, with employee, raft (and zone) and job type.
+    /// </summary>
     Task<IReadOnlyList<WorkAssignment>> ListOnAsync(DateOnly date, PermittedZones zones, CancellationToken cancellationToken);
 
     /// <summary>The rafts In Use of the permitted zones with their zones, by zone code and raft code.</summary>

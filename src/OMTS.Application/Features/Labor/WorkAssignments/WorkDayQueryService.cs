@@ -42,7 +42,11 @@ public sealed class WorkDayQueryService(
         var rules = AttendanceSettingsVersion.EffectiveOn(await settings.ListAsync(cancellationToken), date);
         var today = timeProvider.Today();
 
-        var members = periods.GroupBy(p => p.EmployeeId).Select(g => Member(g.ToList(), days.GetValueOrDefault(g.Key), date >= today, rules)).ToList();
+        var members = periods.GroupBy(p => p.EmployeeId)
+            .Select(g => Member(g.ToList(), zones, days.GetValueOrDefault(g.Key), date >= today, rules))
+            .Where(m => m.HasValue)
+            .Select(m => m!.Value)
+            .ToList();
         var rafts = (await assignments.ListRaftsInUseAsync(zones, cancellationToken)).ToList();
         // A raft discontinued after work was assigned on it still shows its crew.
         rafts.AddRange(members.Select(m => m.Raft).DistinctBy(r => r.Id).Where(r => rafts.All(x => x.Id != r.Id)).ToList());
@@ -59,22 +63,38 @@ public sealed class WorkDayQueryService(
         return new WorkDayView(date, date >= today, view, staffView);
     }
 
-    private static (Raft Raft, WorkDayCrewMember View) Member(IReadOnlyList<WorkAssignment> all, DayAttendance? day, bool notPast, AttendanceSettingsVersion? rules)
+    /// <summary>
+    /// The member as the caller sees them, from ALL job periods of the employee on the day (the repository returns the periods on
+    /// rafts outside the caller's zones too): a period ends where the next one starts, wherever that raft is, and the member is on the
+    /// crew of the raft of the latest period. When that raft is outside the caller's zones the member is not on their screen
+    /// (null); otherwise only the periods on rafts of the caller's zones are listed and counted in the hours.
+    /// </summary>
+    private static (Raft Raft, WorkDayCrewMember View)? Member(
+        IReadOnlyList<WorkAssignment> all, PermittedZones zones, DayAttendance? day, bool notPast, AttendanceSettingsVersion? rules)
     {
         var own = all.OrderBy(p => p.StartTime ?? DateTimeOffset.MinValue).ToList();
-        var (first, current) = (own.FirstOrDefault(p => p.IsFirstPeriod), own[^1]);
-        var addressed = first ?? current;
+        var current = own[^1];
+        if (!zones.Allows(current.Raft.ZoneId))
+        {
+            return null;
+        }
+
+        var visible = own.Where(p => zones.Allows(p.Raft.ZoneId)).ToList();
+        var first = own.FirstOrDefault(p => p.IsFirstPeriod);
+        var addressed = first is not null && zones.Allows(first.Raft.ZoneId) ? first : current;
         IReadOnlyList<WorkDayHours>? hours = null;
         if (day is { IsComplete: true } && WorkedHoursCalculator.PeriodsOf(day.CheckInAt, day.CheckOutAt, own) is { } worked)
         {
+            var visibleRafts = visible.Select(p => p.RaftId).ToHashSet();
             var names = own.Select(p => p.JobType).DistinctBy(j => j.Id).ToDictionary(j => j.Id, j => j.Name);
-            hours = WorkedHoursCalculator.HoursOf(worked, rules).Select(h => new WorkDayHours(h.JobTypeId, names[h.JobTypeId], h.RoundedMinutes)).ToList();
+            hours = WorkedHoursCalculator.HoursOf(worked.Where(p => visibleRafts.Contains(p.RaftId)), rules)
+                .Select(h => new WorkDayHours(h.JobTypeId, names[h.JobTypeId], h.RoundedMinutes)).ToList();
         }
 
         var view = new WorkDayCrewMember(
             current.EmployeeId, current.Employee.FullName, addressed.Id, current.JobTypeId, current.JobType.Name, day?.CheckInAt, day?.CheckOutAt,
             notPast && first is not null && own.Count == 1 && day?.IsCheckedIn != true, RowVersionGuard.Encode(addressed.RowVersion),
-            own.Select(p => new WorkDayPeriod(p.Id, p.RaftId, p.Raft.Code, p.JobTypeId, p.JobType.Name, p.StartTime)).ToList(), hours);
+            visible.Select(p => new WorkDayPeriod(p.Id, p.RaftId, p.Raft.Code, p.JobTypeId, p.JobType.Name, p.StartTime)).ToList(), hours);
         return (current.Raft, view);
     }
 }

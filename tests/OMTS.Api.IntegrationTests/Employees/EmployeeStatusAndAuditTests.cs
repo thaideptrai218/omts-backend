@@ -261,6 +261,8 @@ public class EmployeeStatusAndAuditTests(AuthApiFactory factory) : IClassFixture
             RemovedAfter.Add((employeeId, day));
             return Task.CompletedTask;
         }
+
+        public Task<int> RemoveAssignmentsAfterLastWorkingDaysAsync(CancellationToken cancellationToken) => Task.FromResult(0);
     }
 
     private sealed class WorkRecordsApiFactory(IEmployeeWorkRecords records) : AuthApiFactory

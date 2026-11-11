@@ -9,7 +9,6 @@ using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Domain.Entities.Farming;
-using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Labor;
 
 namespace OMTS.Application.Features.Labor.WorkAssignments;
@@ -22,7 +21,7 @@ namespace OMTS.Application.Features.Labor.WorkAssignments;
 /// </summary>
 public sealed class WorkAssignmentService(
     IWorkAssignmentRepository assignments,
-    IEmployeeRepository employees,
+    WorkAssignmentWorkingZones workingZones,
     WorkAssignmentGuard guard,
     WorkAssignmentViews views,
     ZoneAccessGuard zoneAccess,
@@ -118,7 +117,7 @@ public sealed class WorkAssignmentService(
                 continue;
             }
 
-            AddWorkingZone(employee, raft);
+            workingZones.Ensure(employee, raft);
             saved.Add(current);
             notices.Add(WorkAssignmentViews.Assigned(current));
         }
@@ -146,19 +145,6 @@ public sealed class WorkAssignmentService(
             ["confirmationField"] = "moveConfirmed",
             ["moves"] = moves.Select(m => new { employeeId = m.EmployeeId, employeeName = m.Employee.FullName, raftCode = m.Raft.Code, newRaftCode = raft.Code }).ToList(),
         });
-
-    /// <summary>The zone of the raft joins the working zones of the employee (LABOR-02 step 9); the row version of the employee moves with it.</summary>
-    private void AddWorkingZone(Employee employee, Raft raft)
-    {
-        if (employee.WorkingZones.Any(w => w.ZoneId == raft.ZoneId))
-        {
-            return;
-        }
-
-        employees.AddWorkingZone(new EmployeeWorkingZone { EmployeeId = employee.Id, ZoneId = raft.ZoneId });
-        unitOfWork.MarkChanged(employee);
-        audit.Record(new AuditEntry("Employee.WorkingZoneAdded", nameof(Employee)) { RecordId = employee.Id, ZoneId = raft.ZoneId, After = new { raft.ZoneId } });
-    }
 
     private static AuditEntry Entry(string action, WorkAssignment a) =>
         new(action, nameof(WorkAssignment)) { RecordId = a.Id, RecordCode = a.Raft.Code, ZoneId = a.Raft.ZoneId };

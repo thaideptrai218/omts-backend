@@ -23,6 +23,7 @@ public sealed class WorkAssignmentEditService(
     IWorkAssignmentRepository assignments,
     WorkAssignmentGuard guard,
     WorkAssignmentViews views,
+    WorkAssignmentWorkingZones workingZones,
     ZoneAccessGuard zoneAccess,
     RowVersionGuard rowVersions,
     IStatusCatalog statusCatalog,
@@ -68,6 +69,8 @@ public sealed class WorkAssignmentEditService(
             var action = raft.Id != assignment.RaftId ? "WorkAssignment.Moved" : "WorkAssignment.Updated";
             (assignment.RaftId, assignment.Raft, assignment.JobTypeId, assignment.JobType) = (raft.Id, raft, jobType.Id, jobType);
             audit.Record(Entry(action, assignment) with { Before = before, After = WorkAssignmentViews.Snapshot(assignment) });
+            // LABOR-02.2 step 3 returns to step 9: the zone of the new raft joins the working zones, as the assign does.
+            workingZones.Ensure(assignment.Employee, raft);
             await unitOfWork.SaveChangesAsync(cancellationToken);
             await views.NotifyAsync([WorkAssignmentViews.Assigned(assignment)], cancellationToken);
         }

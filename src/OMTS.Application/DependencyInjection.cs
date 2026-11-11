@@ -128,6 +128,7 @@ public static class DependencyInjection
         // LABOR-02 assign work, change job for crew and the work day
         services.AddScoped<WorkAssignmentGuard>();
         services.AddScoped<WorkAssignmentViews>();
+        services.AddScoped<WorkAssignmentWorkingZones>();
         services.AddScoped<WorkAssignmentService>();
         services.AddScoped<WorkAssignmentEditService>();
         services.AddScoped<CrewJobChangeService>();

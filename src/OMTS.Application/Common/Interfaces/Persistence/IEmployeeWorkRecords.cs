@@ -15,4 +15,11 @@ public interface IEmployeeWorkRecords
     /// job (<c>EmploymentEndService</c>), as an employee ended today can still be assigned until then: L4 must cover both.
     /// </summary>
     Task RemoveAssignmentsAfterAsync(Guid employeeId, DateOnly day, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Adds to the unit of work the removal of every work assignment dated after the last working day of its employee, for each
+    /// employee who has one, whatever the status (an assign that raced an end in the past leaves such a row on a Left employee).
+    /// Returns how many; nothing to remove changes nothing, so the daily job can run it again and again.
+    /// </summary>
+    Task<int> RemoveAssignmentsAfterLastWorkingDaysAsync(CancellationToken cancellationToken);
 }

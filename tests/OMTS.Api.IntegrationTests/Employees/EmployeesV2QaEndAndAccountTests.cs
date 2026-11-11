@@ -297,6 +297,8 @@ public class EmployeesV2QaEndAndAccountTests(AuthApiFactory factory) : IClassFix
             RemovedAfter.Add((employeeId, day));
             return Task.CompletedTask;
         }
+
+        public Task<int> RemoveAssignmentsAfterLastWorkingDaysAsync(CancellationToken cancellationToken) => Task.FromResult(0);
     }
 
     private sealed class WorkRecordsFactory(IEmployeeWorkRecords records) : AuthApiFactory

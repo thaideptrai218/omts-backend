@@ -16,4 +16,14 @@ internal sealed class EmployeeWorkRecords(OmtsDbContext db) : IEmployeeWorkRecor
     // Tracked, so the caller's own save deletes them together with the end of the employment; the job periods of a later day go too.
     public async Task RemoveAssignmentsAfterAsync(Guid employeeId, DateOnly day, CancellationToken cancellationToken) =>
         db.WorkAssignments.RemoveRange(await db.WorkAssignments.Where(a => a.EmployeeId == employeeId && a.WorkDate > day).ToListAsync(cancellationToken));
+
+    // Tracked rows, not a set-based delete: the audit and row-version interceptors see them, and the in-memory provider used by the tests has no bulk delete.
+    public async Task<int> RemoveAssignmentsAfterLastWorkingDaysAsync(CancellationToken cancellationToken)
+    {
+        var stray = await db.WorkAssignments
+            .Where(a => a.Employee.LastWorkingDay != null && a.WorkDate > a.Employee.LastWorkingDay)
+            .ToListAsync(cancellationToken);
+        db.WorkAssignments.RemoveRange(stray);
+        return stray.Count;
+    }
 }

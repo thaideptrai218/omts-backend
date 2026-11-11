@@ -50,7 +50,26 @@ public sealed class EmploymentEndJob(IServiceScopeFactory scopes, ILogger<Employ
             }
         }
 
+        await RemoveStrayAssignmentsAsync(cancellationToken);
         return ended;
+    }
+
+    /// <summary>After the ends, so an employee who became Left today is covered too; a failure is logged and tried again on the next run.</summary>
+    private async Task RemoveStrayAssignmentsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var scope = scopes.CreateScope();
+            var removed = await scope.ServiceProvider.GetRequiredService<EmploymentEndService>().RemoveStrayAssignmentsAsync(cancellationToken);
+            if (removed > 0)
+            {
+                logger.LogInformation("Removed {Count} work assignment(s) dated after the last working day of their employee.", removed);
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogError(exception, "Removing work assignments after the last working day failed; tried again on the next run.");
+        }
     }
 
     private async Task<bool> EndWithOneRetryAsync(Guid employeeId, DateOnly today, CancellationToken cancellationToken)

@@ -91,6 +91,9 @@ public sealed class CrewJobChangeService(
                     return AppError.Conflict(UserMessages.ConcurrentUpdateByAnotherUser);
                 }
 
+                // The period in force is saved as changed, so its row version is checked: a parallel change of the same member loses
+                // (MSG06) instead of adding a second period milliseconds after this one (BR-LABOR-05). It also meets a correction (L5).
+                unitOfWork.MarkChanged(current);
                 assignments.Add(period);
                 audit.Record(Entry("WorkAssignment.JobPeriodAdded", period) with { Before = WorkAssignmentViews.Snapshot(current), After = WorkAssignmentViews.Snapshot(period) });
                 changes.Add(new CrewMemberChange(current.EmployeeId, name, CrewChangeResults.PeriodAdded, period.Id));

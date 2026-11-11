@@ -15,6 +15,21 @@ public sealed class EmploymentEndService(IEmployeeRepository employees, IEmploye
     public Task<IReadOnlyList<Guid>> DueIdsAsync(DateOnly today, CancellationToken cancellationToken) =>
         employees.ListEmployedWithLastWorkingDayBeforeAsync(today, cancellationToken);
 
+    /// <summary>
+    /// BR-LABOR-01 safety net: removes the assignments after the last working day of any employee who has one, Left or not. An assign
+    /// that read the employee as Employed and saved after an end in the past leaves such a row, and no other step would find it.
+    /// </summary>
+    public async Task<int> RemoveStrayAssignmentsAsync(CancellationToken cancellationToken)
+    {
+        var removed = await workRecords.RemoveAssignmentsAfterLastWorkingDaysAsync(cancellationToken);
+        if (removed > 0)
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        return removed;
+    }
+
     /// <summary>Whether the employee became Left; false when someone resumed or changed them meanwhile.</summary>
     public async Task<bool> EndAsync(Guid employeeId, DateOnly today, CancellationToken cancellationToken)
     {

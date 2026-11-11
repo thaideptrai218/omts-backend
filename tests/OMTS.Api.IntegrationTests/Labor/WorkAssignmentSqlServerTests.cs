@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Infrastructure;
@@ -168,6 +169,51 @@ public class WorkAssignmentSqlServerTests
         // Whichever saves first wins; a late one finds the row gone (404) or changed (MSG06), never a server error.
         Assert.All(responses, r => Assert.True((int)r.StatusCode < 500, r.StatusCode.ToString()));
         Assert.Single(responses, r => r.IsSuccessStatusCode);
+    }
+
+    // QA M4: the job period in force is saved as changed, so its row version serializes parallel changes of one member: a loser that read
+    // the same period answers MSG06, and every saved change started from the period of the one before it. (Which loser reads late and
+    // succeeds in turn depends on timing, so the test holds the invariants and not a fixed count.)
+    [SqlServerFact]
+    public async Task Parallel_job_changes_of_one_member_save_a_period_only_from_the_period_they_read()
+    {
+        await using var database = SqlServerTestDatabase.Create();
+        await using var api = await StartAsync(database);
+        var w = await WorldAsync(api);
+        var (raft, employee) = (await RaftAsync(w), await EmployeeAsync(w));
+        var jobs = new List<JobType>();
+        for (var i = 0; i < Parallel; i++)
+        {
+            var job = new JobType { Name = $"Job {NewCode()}" };
+            await ChangeAsync(api, db => db.JobTypes.Add(job));
+            jobs.Add(job);
+        }
+
+        await w.Owner.AssignAsync(raft, Today(), w.Job, [employee]).BodyAsync(HttpStatusCode.Created);
+        // The attendance of this test: the member checked in two hours ago. The other tests of this class use the empty reader.
+        var attendance = new FakeAttendanceDayReader();
+        attendance.CheckIn(employee.Id, Today(), DateTimeOffset.UtcNow.AddHours(-2));
+        using var host = api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IAttendanceDayReader>();
+            services.AddSingleton<IAttendanceDayReader>(attendance);
+        }));
+        using var crew = host.CreateClient();
+        crew.DefaultRequestHeaders.Authorization = w.Owner.DefaultRequestHeaders.Authorization;
+
+        var responses = await InParallelAsync(Parallel, i => crew.ChangeJobAsync(raft, jobs[i], [employee]));
+
+        await AssertNo500Async(responses);
+        var saved = responses.Count(r => r.StatusCode == HttpStatusCode.OK);
+        Assert.True(saved >= 1);
+        foreach (var loser in responses.Where(r => r.StatusCode != HttpStatusCode.OK))
+        {
+            Assert.Equal("MSG06", await loser.ErrorCodeAsync());
+        }
+
+        var rows = await QueryAsync(api, db => db.WorkAssignments.Where(a => a.EmployeeId == employee.Id && a.WorkDate == Today()).ToListAsync());
+        Assert.Equal(1 + saved, rows.Count);
+        Assert.Equal(rows.Count - 1, rows.Where(a => a.StartTime is not null).Select(a => a.StartTime).Distinct().Count());
     }
 
     // BR-LABOR-13: an assignment and the send of the payroll of its period cannot both pass unseen, whichever saves first.

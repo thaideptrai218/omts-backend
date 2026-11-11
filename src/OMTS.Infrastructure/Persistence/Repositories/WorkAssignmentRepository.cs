@@ -18,7 +18,7 @@ internal sealed class WorkAssignmentRepository(OmtsDbContext db) : IWorkAssignme
 
     public Task<WorkAssignment?> GetForEditAsync(Guid id, CancellationToken cancellationToken) =>
         db.WorkAssignments
-            .Include(a => a.Employee)
+            .Include(a => a.Employee).ThenInclude(e => e.WorkingZones)
             .Include(a => a.Raft).ThenInclude(r => r.Zone)
             .Include(a => a.JobType)
             .FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
@@ -41,8 +41,10 @@ internal sealed class WorkAssignmentRepository(OmtsDbContext db) : IWorkAssignme
         var query = db.WorkAssignments.AsNoTracking().Where(a => a.WorkDate == date);
         if (!zones.AllZones)
         {
+            // Every period of an employee who has one in the zones: the periods on other rafts decide where a period ends.
             var zoneIds = zones.ZoneIds.ToList();
-            query = query.Where(a => zoneIds.Contains(a.Raft.ZoneId));
+            var employeeIds = db.WorkAssignments.Where(a => a.WorkDate == date && zoneIds.Contains(a.Raft.ZoneId)).Select(a => a.EmployeeId);
+            query = query.Where(a => employeeIds.Contains(a.EmployeeId));
         }
 
         return await query
