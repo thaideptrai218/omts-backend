@@ -133,6 +133,10 @@ public static class DependencyInjection
         services.AddScoped<IStoredFileReferenceQuery, StoredFileReferenceQuery>();
         services.AddScoped<ISupplierRepository, SupplierRepository>();
         services.AddScoped<IFarmingInputItemRepository, FarmingInputItemRepository>();
+        services.AddScoped<IProductStockRepository, ProductStockRepository>();
+        services.AddScoped<IProductCategoryRepository, ProductCategoryRepository>();
+        services.AddScoped<IProductListQuery, ProductListReader>();
+        services.AddScoped<IProductDisposalRepository, ProductDisposalRepository>();
         services.AddScoped<IInputStockRepository, InputStockRepository>();
         services.AddScoped<IInputUnitRepository, InputUnitRepository>();
         services.AddScoped<IInputItemCategoryRepository, InputItemCategoryRepository>();

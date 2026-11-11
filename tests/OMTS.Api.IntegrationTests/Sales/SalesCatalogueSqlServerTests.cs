@@ -57,8 +57,8 @@ public class SalesCatalogueSqlServerTests
         await using var host = await FarmingHost.StartAsync();
         var product = await host.Owner.Client.CreateProductAsync(unitPrice: 60_000);
 
-        await Assert.ThrowsAsync<DbUpdateException>(() => host.UseDbAsync(db => db.Products.Add(new Product { Name = NewCode(), UnitPrice = 0 })));
-        await Assert.ThrowsAsync<DbUpdateException>(() => host.UseDbAsync(db => db.Products.Add(new Product { Name = product.Text("name")!, UnitPrice = 1 })));
+        await Assert.ThrowsAsync<DbUpdateException>(() => host.UseDbAsync(db => db.Products.Add(new Product { Code = Guid.NewGuid().ToString("N")[..12], Name = NewCode(), UnitPrice = 0 })));
+        await Assert.ThrowsAsync<DbUpdateException>(() => host.UseDbAsync(db => db.Products.Add(new Product { Code = Guid.NewGuid().ToString("N")[..12], Name = product.Text("name")!, UnitPrice = 1 })));
     }
 
     // BR-SALE-04 and the design question Q17: the check is strict for staff saves, also when they race.

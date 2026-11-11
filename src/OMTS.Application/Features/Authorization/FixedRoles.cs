@@ -46,6 +46,7 @@ public static class FixedRoles
             new(LaborWorkers, [View, Create, Edit]),
             Full(WorkAssignments), Full(Attendance),
             Full(InputIssues),
+            Full(ProductDisposals),
         ]);
 
     /// <summary>Office work, usually granted at All zones; views sales invoices and lot traces, views and exports purchase receipts.</summary>
@@ -59,6 +60,8 @@ public static class FixedRoles
             // The Accountant views and exports every input issue (the use issues of any zone, and the disposals); recording one is the Zone Manager's (use) or the Owner's.
             new(InputIssues, [View, Export]),
             Full(InputDisposals),
+            // The Accountant views and exports the product disposals of every zone it is granted; recording one is the Zone Manager's or the Owner's.
+            new(ProductDisposals, [View, Export]),
             new(SalesInvoices, [View]),
             // PURCHASE-03 is R for the Accountant but "includes exporting to a file": view and export (lead decision, QA P2 Q1).
             new(PurchaseReceipts, [View, Export]),

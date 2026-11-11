@@ -71,6 +71,9 @@ public class HarvestLot : AuditableEntity, IHasStatus
     public ICollection<HarvestLotLane> Lanes { get; set; } = [];
     public ICollection<HarvestLotPhoto> Photos { get; set; } = [];
 
+    /// <summary>The products the lot is split into; empty for a lot recorded before products. <see cref="CageCount"/> and <see cref="EstimatedKg"/> are the sums of the lines when there are any.</summary>
+    public ICollection<HarvestLotProductLine> ProductLines { get; set; } = [];
+
     /// <summary>Open and Reopened lots can be chosen on a sales invoice (BR-HARVEST-04).</summary>
     public bool IsForSale => StatusId is StatusIds.HarvestLot.Open or StatusIds.HarvestLot.Reopened;
 

@@ -19,6 +19,7 @@ namespace OMTS.Application.Features.Harvest;
 public sealed class HarvestLotCorrectionService(
     IHarvestLotRepository lots,
     HarvestLotEditReader edits,
+    HarvestLotProductLineService productLines,
     RecordPhotoStore photoStore,
     UploadedFileSaver fileSaver,
     RowVersionGuard rowVersions,
@@ -29,7 +30,8 @@ public sealed class HarvestLotCorrectionService(
     ICurrentUser currentUser,
     TimeProvider timeProvider)
 {
-    private sealed record Checked(HarvestLot Lot, Raft Raft, HarvestLotFields Fields, HarvestLotLaneFacts Facts, List<HarvestLotPhoto> Kept, IReadOnlyList<ValidatedFile> Files);
+    private sealed record Checked(
+        HarvestLot Lot, Raft Raft, HarvestLotFields Fields, HarvestLotLaneFacts Facts, List<HarvestLotPhoto> Kept, IReadOnlyList<ValidatedFile> Files, IReadOnlyList<ResolvedProductLine>? Lines);
 
     private sealed record Applied(HarvestLot Lot, Raft Raft, List<string> RemovedKeys, bool Changed, bool EveryHarvested);
 
@@ -97,13 +99,36 @@ public sealed class HarvestLotCorrectionService(
         var kept = lot.Photos.Where(p => keep.Contains(p.FileKey)).ToList();
         var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(newPhotos, request.OtherFilePart, kept.Count, kept.Count == keep.Count);
 
+        // The product lines replace the lines of the lot, and the cages and kg of the lot are their sums; a lot that has lines is never left without them.
+        var (lines, lineError) = await productLines.ResolveAsync(
+            request.ProductLines, request.ProductLinesAreUnreadable, lot.KgPerCage, lot.ProductLines.Select(l => l.ProductId).ToHashSet(), cancellationToken);
+        if (lineError is null && lines is null && lot.ProductLines.Count > 0)
+        {
+            lineError = AppError.InvalidFields([HarvestLotProductLineService.LinesField]);
+        }
+
         // BR-HARVEST-02: left out, the estimate stays, unless the cages changed: then it is worked out again with the kg per cage of the lot, never the current setting.
         var estimatedKg = request.EstimatedKg ?? (request.CageCount == lot.CageCount ? lot.EstimatedKg : null);
         var fields = new RecordHarvestRequest(request.LaneNumbers, request.FinishedLaneNumbers, request.CageCount, estimatedKg, request.EstimatedKgIsUnreadable, request.OtherFilePart);
+        if (lines is not null)
+        {
+            var (cages, kg) = HarvestLotProductLineService.Totals(lines);
+            fields = fields with { CageCount = cages, EstimatedKg = kg, EstimatedKgIsUnreadable = false };
+        }
         var correction = new HarvestLotCorrectionInput(request.Reason, facts.FinishedHint(request.FinishedLaneNumbers));
         if (HarvestLotFieldReader.Read(fields, raft, facts.Choosable(), lot.KgPerCage, photoHint, out var read, correction) is { } invalid)
         {
             return invalid;
+        }
+
+        if (lineError is null && lines is not null)
+        {
+            lineError = await productLines.GuardAsync(lot, lines, cancellationToken);
+        }
+
+        if (lineError is not null)
+        {
+            return lineError;
         }
 
         if (version is not null)
@@ -111,7 +136,7 @@ public sealed class HarvestLotCorrectionService(
             return version;
         }
 
-        return new Checked(lot, raft, read!, facts, kept, files);
+        return new Checked(lot, raft, read!, facts, kept, files, lines);
     }
 
     /// <summary>Changes the row as it is after the uploads. The cap on photos still holds, as the kept photos can only be the same ones.</summary>
@@ -123,13 +148,18 @@ public sealed class HarvestLotCorrectionService(
             return current.Error!;
         }
 
-        var (lot, raft, fields, facts, kept, _) = current.Value!;
+        var (lot, raft, fields, facts, kept, _, lines) = current.Value!;
         var everyBefore = facts.EveryHarvestedNow();
         var everyAfter = facts.EveryHarvestedWith(fields);
         var takesALaneBack = facts.CorrectionTakesALaneOutOfHarvested(fields);
         var before = HarvestLotAudit.Snapshot(lot);
         (lot.CageCount, lot.EstimatedKg) = (fields.CageCount, fields.EstimatedKg);
         HarvestLotCorrectionRows.ApplyLanes(lots, lot, fields);
+        if (lines is not null)
+        {
+            await productLines.ReplaceAsync(lot, raft.Code, lines, cancellationToken);
+        }
+
         var removedKeys = HarvestLotCorrectionRows.ApplyPhotos(lots, lot, kept, newKeys);
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, HarvestLotAudit.Snapshot(lot));
         if (changedAfter is null)

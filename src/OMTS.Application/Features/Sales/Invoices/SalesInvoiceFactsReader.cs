@@ -176,6 +176,12 @@ public sealed class SalesInvoiceFactsReader(
                 return AppError.Forbidden;
             }
 
+            // A lot split per product sells only those products: the stock of the others on it would go down with nothing harvested. A lot recorded before products has no lines and stays sellable.
+            if (lot.ProductLines.Count > 0 && entries.Lines.FirstOrDefault(l => l.LotId == lotId && lot.ProductLines.All(p => p.ProductId != l.ProductId)) is { } stranger)
+            {
+                return AppError.Invalid($"Line {stranger.LineNumber} product", "The product is not one of the products of the harvest lot.");
+            }
+
             ordered.Add(lot);
         }
 

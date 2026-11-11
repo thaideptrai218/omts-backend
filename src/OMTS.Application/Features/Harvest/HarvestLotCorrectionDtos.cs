@@ -11,6 +11,8 @@ namespace OMTS.Application.Features.Harvest;
 /// <param name="RowVersion">The version of the lot the form was read at (NFR-09).</param>
 /// <param name="EstimatedKgIsUnreadable">A value was sent that is not a number, so it does not mean "leave it".</param>
 /// <param name="OtherFilePart">A file came in a part not named <c>photos</c>: refused after the access check, so no photo is dropped without a word.</param>
+/// <param name="ProductLines">The share of each product on the lot, replacing the lines it has (the cages and kg of the lot are then their sums); null leaves a lot with no lines as it is, and is refused for a lot that has lines.</param>
+/// <param name="ProductLinesAreUnreadable">A line value was sent that is not a number.</param>
 public sealed record CorrectHarvestLotRequest(
     IReadOnlyList<int>? LaneNumbers,
     IReadOnlyList<int>? FinishedLaneNumbers,
@@ -20,7 +22,9 @@ public sealed record CorrectHarvestLotRequest(
     string? Reason,
     string? RowVersion,
     bool EstimatedKgIsUnreadable = false,
-    bool OtherFilePart = false);
+    bool OtherFilePart = false,
+    IReadOnlyList<HarvestProductLineInput>? ProductLines = null,
+    bool ProductLinesAreUnreadable = false);
 
 /// <summary>HARVEST-01.1 step 3; the client has asked with MSG-GEN-04.</summary>
 public sealed record RemoveHarvestLotRequest(string? Reason, string? RowVersion);
@@ -41,7 +45,8 @@ public sealed record HarvestLotForSale(
     int StatusId,
     string Status,
     HarvestLotOriginState OriginState,
-    DateTimeOffset? WithdrawnAt);
+    DateTimeOffset? WithdrawnAt,
+    IReadOnlyList<HarvestLotProductStock> Products);
 
 /// <summary>The lots for sale in the zones of the caller.</summary>
 /// <param name="Message">MSG-GEN-10 when there is none, else null.</param>

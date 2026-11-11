@@ -11,8 +11,17 @@ namespace OMTS.Application.Features.Harvest;
 /// <param name="EstimatedKg">Without it the system works it out: cages times the average kg per cage.</param>
 /// <param name="EstimatedKgIsUnreadable">A value was sent that is not a number, so it does not mean "work it out".</param>
 /// <param name="OtherFilePart">A file came in a part not named <c>photos</c>: refused after the access check, so no photo is dropped without a word.</param>
+/// <param name="ProductLines">The share of each product on the lot (null: the form sent none, the lot is not split per product). With lines, the cages and estimated kg of the lot are their sums and any <c>CageCount</c> or <c>EstimatedKg</c> sent is ignored.</param>
+/// <param name="ProductLinesAreUnreadable">A line value was sent that is not a number.</param>
 public sealed record RecordHarvestRequest(
-    IReadOnlyList<int>? LaneNumbers, IReadOnlyList<int>? FinishedLaneNumbers, int? CageCount, decimal? EstimatedKg, bool EstimatedKgIsUnreadable = false, bool OtherFilePart = false);
+    IReadOnlyList<int>? LaneNumbers, IReadOnlyList<int>? FinishedLaneNumbers, int? CageCount, decimal? EstimatedKg, bool EstimatedKgIsUnreadable = false, bool OtherFilePart = false,
+    IReadOnlyList<HarvestProductLineInput>? ProductLines = null, bool ProductLinesAreUnreadable = false);
+
+/// <summary>A product line of a lot, with the code of the product.</summary>
+public sealed record HarvestLotProductLineView(Guid ProductId, string ProductCode, string ProductName, int CageCount, decimal Kg);
+
+/// <summary>The kg of a product on a lot for sale: what the lot gave and what is left on the ledger (sales and disposals taken off).</summary>
+public sealed record HarvestLotProductStock(Guid ProductId, string ProductCode, string ProductName, decimal HarvestedKg, decimal RemainingKg);
 
 /// <summary>A photo of a lot, for staff.</summary>
 /// <param name="Key">The storage key.</param>
@@ -45,7 +54,8 @@ public sealed record HarvestLotListItem(
     bool CanCorrect,
     bool CanRemove,
     bool CanClose,
-    string RowVersion);
+    string RowVersion,
+    IReadOnlyList<HarvestLotProductLineView> ProductLines);
 
 /// <summary>A harvest lot with its figures (BR-HARVEST-07): the record a notification opens.</summary>
 /// <param name="Photos">In slot order.</param>
@@ -90,7 +100,8 @@ public sealed record HarvestLotView(
     bool CanCorrect,
     bool CanRemove,
     bool CanClose,
-    string RowVersion);
+    string RowVersion,
+    IReadOnlyList<HarvestLotProductLineView> ProductLines);
 
 /// <summary>Answer of a recorded harvest.</summary>
 /// <param name="EverySeededLaneHarvested">Every seeded lane of the cycle shows Harvested now: the cycle can be closed normally (BR-CYCLE-07).</param>

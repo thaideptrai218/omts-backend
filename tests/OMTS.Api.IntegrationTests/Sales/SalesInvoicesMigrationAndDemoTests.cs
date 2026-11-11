@@ -65,7 +65,7 @@ public class SalesInvoicesMigrationAndDemoTests
             LotCode = "KV01-B01-20260102", Raft = cycle.Raft, Cycle = cycle, HarvestedAt = DateTimeOffset.UtcNow, HarvestDate = new DateOnly(2026, 1, 2), CageCount = 1, KgPerCage = 50,
             EstimatedKg = 50, RecordedByAccountId = account.Id,
         };
-        var product = new Product { Name = "Oyster", UnitPrice = 30_000m };
+        var product = new Product { Code = "SP000001", Name = "Oyster", UnitPrice = 30_000m };
         var invoice = new SalesInvoice
         {
             Code = "HD000001", InvoicedAt = DateTimeOffset.UtcNow, InvoiceDate = new DateOnly(2026, 1, 2), Zone = zone, Subtotal = 6_000_000m, Total = 6_000_000m, CreatedByAccountId = account.Id,

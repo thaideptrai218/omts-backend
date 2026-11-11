@@ -67,6 +67,14 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
 
     // Products and customers
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProductUnit> ProductUnits => Set<ProductUnit>();
+    public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
+    public DbSet<ProductPhoto> ProductPhotos => Set<ProductPhoto>();
+    public DbSet<ProductPriceChange> ProductPriceChanges => Set<ProductPriceChange>();
+    public DbSet<ProductStockMovement> ProductStockMovements => Set<ProductStockMovement>();
+    public DbSet<ProductDisposal> ProductDisposals => Set<ProductDisposal>();
+    public DbSet<ProductDisposalLine> ProductDisposalLines => Set<ProductDisposalLine>();
+    public DbSet<HarvestLotProductLine> HarvestLotProductLines => Set<HarvestLotProductLine>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<PurchaseRequest> PurchaseRequests => Set<PurchaseRequest>();
     public DbSet<QualityClaim> QualityClaims => Set<QualityClaim>();

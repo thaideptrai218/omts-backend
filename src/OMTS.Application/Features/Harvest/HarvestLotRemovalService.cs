@@ -16,6 +16,8 @@ namespace OMTS.Application.Features.Harvest;
 public sealed class HarvestLotRemovalService(
     IHarvestLotRepository lots,
     IHarvestLotSalesQuery sales,
+    IProductDisposalRepository disposals,
+    HarvestLotProductLineService productLines,
     PendingSaleLotQuery pendingSales,
     HarvestLotEditReader edits,
     RowVersionGuard rowVersions,
@@ -42,6 +44,12 @@ public sealed class HarvestLotRemovalService(
         if (await sales.IsOnAnyInvoiceAsync(lot.Id, cancellationToken))
         {
             return AppError.Conflict(UserMessages.WrongStatus($"Harvest lot {lot.LotCode}", "on a sales invoice"));
+        }
+
+        // Oysters of the lot written off on a disposal (a draft too) stay on the books of that document.
+        if (await disposals.IsLotOnDisposalAsync(lot.Id, cancellationToken))
+        {
+            return AppError.Conflict(UserMessages.WrongStatus($"Harvest lot {lot.LotCode}", "on a product disposal"));
         }
 
         // A sale awaiting its VietQR transfer will invoice the lot when the money arrives (SALE-05 step 8), so it is as good as on an invoice. A sale created at this moment marks
@@ -75,6 +83,8 @@ public sealed class HarvestLotRemovalService(
 
         // The lane states depend on the cycle row: a parallel lot, close, cancel or seeding correction read it before this removal, so one of them fails with MSG06.
         unitOfWork.MarkChanged(lot.Cycle);
+        // The kg the lot gave to its products go back: its Harvest rows are undone by reversal rows, which keep the lot's code and id.
+        await productLines.ReverseAsync(lot, cancellationToken);
         lots.Remove(lot);
         await fileSaver.SaveAsync([], keys, cancellationToken);
         return true;

@@ -74,4 +74,8 @@ public interface IHarvestLotRepository
     void AddPhoto(HarvestLotPhoto photo);
 
     void RemovePhoto(HarvestLotPhoto photo);
+
+    void AddProductLine(HarvestLotProductLine line);
+
+    void RemoveProductLine(HarvestLotProductLine line);
 }

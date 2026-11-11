@@ -103,6 +103,9 @@ internal static class StatusCatalogSeed
         NewStatus(S.InputIssue.Draft, G.InputIssue, "DRAFT", "Draft", "Being prepared; holds no quantity. Removed, never cancelled.", initial: true),
         NewStatus(S.InputIssue.Completed, G.InputIssue, "COMPLETED", "Completed", "The quantities have left the stock; may still be edited, which writes them again."),
         NewStatus(S.InputIssue.Cancelled, G.InputIssue, "CANCELLED", "Cancelled", "Recorded by mistake; the quantities are back in the stock and it counts nowhere.", final: true),
+        NewStatus(S.ProductDisposal.Draft, G.ProductDisposal, "DRAFT", "Draft", "Being prepared; holds no kg. Removed, never cancelled.", initial: true),
+        NewStatus(S.ProductDisposal.Completed, G.ProductDisposal, "COMPLETED", "Completed", "The kg have left the stock of their products; may still be edited, which writes them again."),
+        NewStatus(S.ProductDisposal.Cancelled, G.ProductDisposal, "CANCELLED", "Cancelled", "Recorded by mistake; the kg are back in the stock and it counts nowhere.", final: true),
     ];
 
     public static readonly StatusTransition[] Transitions =
@@ -160,6 +163,8 @@ internal static class StatusCatalogSeed
         NewTransition(30079, S.CustomerPayment.PendingTransfer, S.CustomerPayment.Cancelled, "DEBT-02", $"{Accountant}; {Owner}", Action, "The customer did not transfer, or the code was made by mistake.", true),
         NewTransition(30080, S.InputIssue.Draft, S.InputIssue.Completed, "INPUT-ISSUE", $"{OwnerOrZoneManager}", Action, "The issue is complete and no item or seed lot would go below zero when that is not allowed.", false),
         NewTransition(30081, S.InputIssue.Completed, S.InputIssue.Cancelled, "INPUT-ISSUE", $"{OwnerOrZoneManager}", Action, "An issue recorded by mistake; its quantities go back in the stock.", true),
+        NewTransition(30082, S.ProductDisposal.Draft, S.ProductDisposal.Completed, "PRODUCT-DISPOSAL", $"{OwnerOrZoneManager}", Action, "The disposal has a reason and its lines are complete.", false),
+        NewTransition(30083, S.ProductDisposal.Completed, S.ProductDisposal.Cancelled, "PRODUCT-DISPOSAL", $"{OwnerOrZoneManager}", Action, "A disposal recorded by mistake; its kg go back in the stock.", true),
 
         // STD-EMPLOYEE-REQUEST (BR-LABOR-08, LABOR-05, LABOR-10.2).
         NewTransition(230, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Approved, "LABOR-05", Owner, Action, "The payroll of the pay period of the day is not Awaiting finalization or Finalized, and the times stay in order.", false),

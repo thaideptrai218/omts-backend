@@ -53,6 +53,7 @@ public class FixedRolesScopeQaTests
         { CashBookSettings, true },
         { InputIssues, false },
         { InputDisposals, true },
+        { ProductDisposals, false },
         { DashboardDailyRevenue, false },
         { DashboardReceivables, false },
         { DashboardOpenHarvestLots, false },

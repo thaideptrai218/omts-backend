@@ -88,6 +88,8 @@ public class FixedRolesMatrixTests
         // Input issues are not a use case of the SRS matrix: the Zone Manager records the use issues of its zones; the Accountant reads and exports them and the disposals, which the Owner records.
         { "INPUT-ISSUES", Full, R, InputIssues, [View, Create, Edit, Delete, Export] },
         { "INPUT-DISPOSALS", No, Full, InputDisposals, [View, Export] },
+        // Product disposals (Xuất hủy hàu) are not a use case of the SRS matrix either: the Zone Manager records those of its zones, the Owner any; the Accountant reads and exports them.
+        { "PRODUCT-DISPOSALS", Full, R, ProductDisposals, [View, Create, Edit, Delete, Export] },
     };
 
     /// <summary>
@@ -103,6 +105,7 @@ public class FixedRolesMatrixTests
         [("SALE-04", StaffRole.Accountant)] = Full,
         [("SALE-04.2", StaffRole.Accountant)] = RExport,
         [("INPUT-ISSUES", StaffRole.Accountant)] = RExport,
+        [("PRODUCT-DISPOSALS", StaffRole.Accountant)] = RExport,
     };
 
     [Theory]

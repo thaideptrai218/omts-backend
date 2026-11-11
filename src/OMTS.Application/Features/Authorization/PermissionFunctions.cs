@@ -46,6 +46,9 @@ public static class PermissionFunctions
     /// <summary>The disposals of input items (Xuất hủy): no zone, written by the Owner only.</summary>
     public const string InputDisposals = "INPUT_DISPOSALS";
 
+    /// <summary>The disposals of products (Xuất hủy hàu), which have a zone: the Owner and the Zone Managers of the zone record them; the Accountant views and exports.</summary>
+    public const string ProductDisposals = "PRODUCT_DISPOSALS";
+
     public const string DashboardDailyRevenue = "DASHBOARD_DAILY_REVENUE";
     public const string DashboardReceivables = "DASHBOARD_RECEIVABLES";
     public const string DashboardOpenHarvestLots = "DASHBOARD_OPEN_HARVEST_LOTS";
@@ -85,6 +88,7 @@ public static class PermissionFunctions
         new(CashBookSettings, "Cash book settings: bank accounts, e-wallets and voucher types", true, [View, Edit]),
         new(InputIssues, "Input item use issues in a zone: Create saves a draft or an issue, Edit changes and completes one, Delete cancels or removes one", false, [View, Create, Edit, Delete, Export]),
         new(InputDisposals, "Input item disposals (view and export only; recording and cancelling one is Owner-only)", true, [View, Export]),
+        new(ProductDisposals, "Product (oyster) disposals in a zone: Create saves a draft or a disposal, Edit changes and completes one, Delete cancels or removes one", false, [View, Create, Edit, Delete, Export]),
 
         new(DashboardDailyRevenue, "Dashboard tile: daily revenue (FARM-06, Owner only)", false, [View], IsDashboardTile: true),
         new(DashboardReceivables, "Dashboard tile: receivables (FARM-06, Owner only)", false, [View], IsDashboardTile: true),

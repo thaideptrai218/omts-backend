@@ -74,5 +74,11 @@ public static class DocumentSequenceKeys
 
     /// <summary>Disposals of input items, XH000123.</summary>
     public const string InputIssueDisposal = "XH";
+
+    /// <summary>Products of the sales catalogue, SP000123.</summary>
+    public const string Product = "SP";
+
+    /// <summary>Disposals of products (oysters), XHS000123.</summary>
+    public const string ProductDisposal = "XHS";
 }
 

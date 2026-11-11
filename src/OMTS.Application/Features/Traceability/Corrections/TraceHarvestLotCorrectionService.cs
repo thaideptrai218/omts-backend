@@ -174,6 +174,12 @@ public sealed class TraceHarvestLotCorrectionService(
         var kept = lot.Photos.Where(p => keep.Contains(p.FileKey)).ToList();
         var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(newPhotos, request.OtherFilePart, kept.Count, kept.Count == keep.Count);
 
+        // The cages and kg of a lot split per product are the sums of its product lines, which write the stock of the products: they are not corrected here.
+        if (lot.ProductLines.Count > 0 && (request.CageCount != lot.CageCount || (request.EstimatedKg is { } sent && sent != lot.EstimatedKg)))
+        {
+            return AppError.Invalid(HarvestLotFieldReader.CagesField, "The cages and kg of a lot split per product change on its product lines.");
+        }
+
         // BR-HARVEST-02: left out, the estimate stays, unless the cages changed: then it is worked out again with the kg per cage of the lot, never the current setting.
         var estimatedKg = request.EstimatedKg ?? (request.CageCount == lot.CageCount ? lot.EstimatedKg : null);
         var fields = new RecordHarvestRequest(request.LaneNumbers, request.FinishedLaneNumbers, request.CageCount, estimatedKg, request.EstimatedKgIsUnreadable, request.OtherFilePart);
@@ -205,6 +211,7 @@ public sealed class TraceHarvestLotCorrectionService(
         lot.KgPerCage,
         fields.EstimatedKg,
         Photos = photoKeys.ToList(),
+        ProductLines = HarvestLotProductLineService.Snapshot(lot),
     };
 
     /// <summary>

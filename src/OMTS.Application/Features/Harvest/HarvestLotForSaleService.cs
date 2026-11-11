@@ -12,7 +12,8 @@ namespace OMTS.Application.Features.Harvest;
 /// The lots for sale (Open or Reopened, BR-HARVEST-04): the list SALE-05 chooses from, in the zones the caller can access, and the count of the operations dashboard. A lot of a closed
 /// cycle or a discontinued raft is still for sale, as BR-CYCLE-04 locks cultivation records, not sales. §I.4.4: the Owner and Zone Managers, not an Accountant.
 /// </summary>
-public sealed class HarvestLotForSaleService(IHarvestLotRepository lots, IHarvestLotSalesQuery sales, ZoneAccessGuard zoneAccess, IStatusCatalog statusCatalog)
+public sealed class HarvestLotForSaleService(
+    IHarvestLotRepository lots, IHarvestLotSalesQuery sales, IProductStockRepository productStock, ZoneAccessGuard zoneAccess, IStatusCatalog statusCatalog)
 {
     /// <param name="zoneId">One zone the caller can access, or null for all of them.</param>
     public async Task<Result<HarvestLotsForSale>> ListAsync(Guid? zoneId, CancellationToken cancellationToken)
@@ -25,6 +26,9 @@ public sealed class HarvestLotForSaleService(IHarvestLotRepository lots, IHarves
 
         var forSale = await lots.ListForSaleAsync(ZoneIds(zones, zoneId), cancellationToken);
         var figures = await sales.FiguresAsync(forSale.Select(l => l.Id).ToList(), cancellationToken);
+        // The kg left of each product on each lot, from the product ledger: a lot recorded before products has no lines and lists none.
+        var balances = await productStock.LotBalancesAsync(
+            forSale.SelectMany(l => l.ProductLines).Select(p => p.ProductId).Distinct().ToList(), forSale.Where(l => l.ProductLines.Count > 0).Select(l => l.Id).ToList(), cancellationToken);
         var views = forSale.Select(l => new HarvestLotForSale(
             l.Id,
             l.LotCode,
@@ -38,7 +42,9 @@ public sealed class HarvestLotForSaleService(IHarvestLotRepository lots, IHarves
             l.StatusId,
             statusCatalog.DisplayNameOf(l.StatusId),
             l.OriginState,
-            l.OriginState == HarvestLotOriginState.Withdrawn ? l.WithdrawnAt : null)).ToList();
+            l.OriginState == HarvestLotOriginState.Withdrawn ? l.WithdrawnAt : null,
+            l.ProductLines.OrderBy(p => p.LineNumber)
+                .Select(p => new HarvestLotProductStock(p.ProductId, p.Product.Code, p.Product.Name, p.Kg, balances.GetValueOrDefault((p.ProductId, l.Id)))).ToList())).ToList();
         var empty = views.Count == 0 ? UserMessages.NoDataForFilters(zoneId is null ? "zones" : "zone") : null;
         return new HarvestLotsForSale(views, empty?.Text, empty?.Code);
     }

@@ -19,6 +19,11 @@ public sealed record HarvestFields
     public IReadOnlyList<byte[]> Photos { get; init; } = [];
     public string PhotoField { get; init; } = "photos";
 
+    /// <summary>The share of each product on the lot (product, cages, kg left empty to work it out); none keeps the old way of recording a lot.</summary>
+    public IReadOnlyList<(Guid ProductId, int Cages, decimal? Kg)> ProductLines { get; init; } = [];
+
+    public HarvestFields WithProducts(params (Guid ProductId, int Cages, decimal? Kg)[] lines) => this with { ProductLines = lines };
+
     public static HarvestFields OfLanes(params int[] lanes) => new() { Lanes = lanes.Select(n => n.ToString()).ToList() };
 
     public HarvestFields FinishedLanes(params int[] lanes) => this with { Finished = lanes.Select(n => n.ToString()).ToList() };
@@ -44,6 +49,17 @@ public sealed record HarvestFields
         if (EstimatedKg is not null)
         {
             form.Add(new StringContent(EstimatedKg), "estimatedKg");
+        }
+
+        for (var i = 0; i < ProductLines.Count; i++)
+        {
+            var (productId, cages, kg) = ProductLines[i];
+            form.Add(new StringContent(productId.ToString()), $"productLines[{i}].productId");
+            form.Add(new StringContent(cages.ToString()), $"productLines[{i}].cageCount");
+            if (kg is { } typed)
+            {
+                form.Add(new StringContent(typed.ToString(System.Globalization.CultureInfo.InvariantCulture)), $"productLines[{i}].kg");
+            }
         }
 
         foreach (var photo in Photos)

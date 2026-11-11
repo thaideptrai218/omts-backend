@@ -139,7 +139,7 @@ public class SalesCatalogueQaProductTests(AuthApiFactory factory) : IClassFixtur
         Assert.Equal((product.Text("name"), 60_000m), (before.GetProperty("Name").GetString(), before.GetProperty("UnitPrice").GetDecimal()));
         Assert.Equal((newName, 61_000m), (after.GetProperty("Name").GetString(), after.GetProperty("UnitPrice").GetDecimal()));
         Assert.NotNull(audit.ActorAccountId);
-        Assert.Equal(newName, audit.RecordCode);
+        Assert.Equal(product.Text("code"), audit.RecordCode);
     }
 
     // BR-SALE-04/05: "name mandatory" means a name a person can read.

@@ -162,4 +162,12 @@ public static class StatusIds
         public const int Completed = 3902;
         public const int Cancelled = 3903;
     }
+
+    /// <summary>A product disposal (XHS): a Draft holds no kg and is removed; Completed writes the product ledger; Cancelled counts nowhere.</summary>
+    public static class ProductDisposal
+    {
+        public const int Draft = 4001;
+        public const int Completed = 4002;
+        public const int Cancelled = 4003;
+    }
 }

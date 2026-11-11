@@ -33,6 +33,7 @@ public static class HarvestLotAudit
         lot.KgPerCage,
         lot.EstimatedKg,
         Photos = lot.Photos.OrderBy(p => p.SortOrder).Select(p => p.FileKey).ToList(),
+        ProductLines = HarvestLotProductLineService.Snapshot(lot),
     };
 
     /// <summary>The changed values of a correction; a Published lot is named, as its page shows the correction at once (BR-TRACE-05).</summary>

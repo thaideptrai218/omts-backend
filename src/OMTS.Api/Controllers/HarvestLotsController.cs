@@ -31,7 +31,9 @@ public sealed class HarvestLotsController(
 
     /// <summary>
     /// Records a harvest trip while the raft has an Open cycle. Multipart: one <c>laneNumbers</c> field per lane, one <c>finishedLaneNumbers</c> field per finished lane, <c>cageCount</c>,
-    /// optional <c>estimatedKg</c>, and one <c>photos</c> part per photo (none to 10). A failed upload answers 502 MSG-GEN-03 and saves nothing. Notifies the Cooperative Owner
+    /// optional <c>estimatedKg</c>, and one <c>photos</c> part per photo (none to 10). The share of each product is sent as <c>productLines[i].productId</c>, <c>productLines[i].cageCount</c> and
+    /// optional <c>productLines[i].kg</c> (i from 0, no gap): the lot's cages and kg are then the sums of the lines (<c>cageCount</c> and <c>estimatedKg</c> are ignored) and each line adds its kg to the
+    /// stock of its product. A failed upload answers 502 MSG-GEN-03 and saves nothing. Notifies the Cooperative Owner
     /// (MSG-HARVEST-01), and when every seeded lane is now Harvested sends the reminder to close the cycle (MSG-CYCLE-08).
     /// </summary>
     [HttpPost("api/rafts/{raftId:guid}/harvest-lots")]
@@ -43,8 +45,10 @@ public sealed class HarvestLotsController(
     {
         TryInt(form.CageCount, out var cageCount);
         var estimatedIsRead = TryDecimal(form.EstimatedKg, out var estimatedKg);
+        var (productLines, linesAreUnreadable) = ReadProductLines(form);
         var request = new RecordHarvestRequest(
-            Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, !estimatedIsRead, Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)));
+            Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, !estimatedIsRead, Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)),
+            productLines, linesAreUnreadable);
         return (await recording.RecordAsync(raftId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
             .ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
     }
@@ -68,10 +72,38 @@ public sealed class HarvestLotsController(
     {
         TryInt(form.CageCount, out var cageCount);
         var estimatedIsRead = TryDecimal(form.EstimatedKg, out var estimatedKg);
+        var (productLines, linesAreUnreadable) = ReadProductLines(form);
         var request = new CorrectHarvestLotRequest(
             Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, form.KeepPhotoKeys, form.Reason, form.RowVersion, !estimatedIsRead,
-            Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)));
+            Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)), productLines, linesAreUnreadable);
         return (await corrections.CorrectAsync(lotId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken)).ToActionResult(Ok);
+    }
+
+    /// <summary>The product lines of the form; null when it sent none. A value that cannot be read marks the lines unreadable, so the request is refused, not dropped.</summary>
+    private (List<HarvestProductLineInput>? Lines, bool Unreadable) ReadProductLines(HarvestLotForm form)
+    {
+        // MVC binds the indexes 0, 1, 2… and stops at the first gap: a later index would be dropped without a word, so it makes the lines unreadable.
+        var posted = Request.HasFormContentType
+            ? Request.Form.Keys.Select(k => System.Text.RegularExpressions.Regex.Match(k, @"^productLines\[(\d+)\]\.", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                .Where(m => m.Success).Select(m => int.Parse(m.Groups[1].Value)).Distinct().ToList()
+            : [];
+        if (form.ProductLines is not { Count: > 0 } sent)
+        {
+            return (null, posted.Count > 0);
+        }
+
+        var lines = new List<HarvestProductLineInput>(sent.Count);
+        var unreadable = false;
+        foreach (var line in sent)
+        {
+            Guid? productId = Guid.TryParse(line?.ProductId?.Trim(), out var id) ? id : null;
+            var cagesRead = TryInt(line?.CageCount, out var cages);
+            var kgRead = TryDecimal(line?.Kg, out var kg);
+            unreadable |= !cagesRead || !kgRead || (line?.ProductId is { Length: > 0 } && productId is null);
+            lines.Add(new HarvestProductLineInput(productId, cages, kg));
+        }
+
+        return (lines, unreadable || posted.Count != sent.Count);
     }
 
     /// <summary>Removes a lot and its photos while its cycle is Open and it is on no sales invoice; ask with MSG-GEN-04 first. 204; the audit log keeps it with the reason.</summary>

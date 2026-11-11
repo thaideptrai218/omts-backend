@@ -35,6 +35,7 @@ public sealed class HarvestLotRecordingService(
     RecordPhotoStore photoStore,
     UploadedFileSaver fileSaver,
     HarvestLotNotifier notifier,
+    HarvestLotProductLineService productLines,
     HarvestLotViews views,
     ZoneAccessGuard zoneAccess,
     AuditLogService audit,
@@ -69,7 +70,13 @@ public sealed class HarvestLotRecordingService(
         }
 
         var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(photos, request.OtherFilePart);
-        if (HarvestLotFieldReader.Read(request, raft, open!.States, open.KgPerCage, photoHint, out _) is { } invalid)
+        var (_, split, lineError) = await WithProductLinesAsync(request, open!.KgPerCage, cancellationToken);
+        if (lineError is not null)
+        {
+            return lineError;
+        }
+
+        if (HarvestLotFieldReader.Read(split, raft, open.States, open.KgPerCage, photoHint, out _) is { } invalid)
         {
             return invalid;
         }
@@ -138,7 +145,13 @@ public sealed class HarvestLotRecordingService(
             return refused;
         }
 
-        if (HarvestLotFieldReader.Read(request, raft, open!.States, open.KgPerCage, null, out var fields) is { } invalid)
+        var (resolved, split, lineError) = await WithProductLinesAsync(request, open!.KgPerCage, cancellationToken);
+        if (lineError is not null)
+        {
+            return lineError;
+        }
+
+        if (HarvestLotFieldReader.Read(split, raft, open.States, open.KgPerCage, null, out var fields) is { } invalid)
         {
             return invalid;
         }
@@ -162,6 +175,10 @@ public sealed class HarvestLotRecordingService(
             Photos = keys.Select((key, index) => new HarvestLotPhoto { SortOrder = index + 1, FileKey = key }).ToList(),
         };
         lots.Add(lot);
+        if (resolved is not null)
+        {
+            productLines.Add(lot, raft.Code, resolved);
+        }
 
         // The lane states depend on the cycle row: a parallel lot, close, cancel or seeding correction read it before this lot, so one of them fails with MSG06.
         unitOfWork.MarkChanged(cycle);
@@ -178,6 +195,23 @@ public sealed class HarvestLotRecordingService(
         }
 
         return new PreparedLot(lot, cycle, raft, everyHarvested);
+    }
+
+    /// <summary>
+    /// The product lines of the form, checked against the catalogue. With lines the cages and estimated kg are their sums, whatever the form sent; without them the form is read as before and the lot is
+    /// not split per product.
+    /// </summary>
+    private async Task<(IReadOnlyList<ResolvedProductLine>? Resolved, RecordHarvestRequest Request, AppError? Error)> WithProductLinesAsync(
+        RecordHarvestRequest request, decimal kgPerCage, CancellationToken cancellationToken)
+    {
+        var (resolved, error) = await productLines.ResolveAsync(request.ProductLines, request.ProductLinesAreUnreadable, kgPerCage, new HashSet<Guid>(), cancellationToken);
+        if (error is not null || resolved is null)
+        {
+            return (null, request, error);
+        }
+
+        var (cages, kg) = HarvestLotProductLineService.Totals(resolved);
+        return (resolved, request with { CageCount = cages, EstimatedKg = kg, EstimatedKgIsUnreadable = false }, null);
     }
 
     private static AppError NoOpenCycle(Raft raft) => AppError.Conflict(UserMessages.WrongStatus($"Raft {raft.Code}", "without an Open cycle"));

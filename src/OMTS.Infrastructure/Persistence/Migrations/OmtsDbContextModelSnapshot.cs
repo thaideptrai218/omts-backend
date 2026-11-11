@@ -1329,6 +1329,43 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestLotProductLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("CageCount")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Kg")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<int>("LineNumber")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("LotId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("LotId", "LineNumber")
+                        .IsUnique();
+
+                    b.ToTable("HarvestLotProductLines", t =>
+                        {
+                            t.HasCheckConstraint("CK_HarvestLotProductLine_CageCount", "[CageCount] > 0");
+
+                            t.HasCheckConstraint("CK_HarvestLotProductLine_Kg", "[Kg] > 0");
+                        });
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.AccessGrant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3746,6 +3783,39 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             IsInitial = false,
                             Meaning = "Recorded by mistake; the quantities are back in the stock and it counts nowhere.",
                             SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 4001,
+                            Code = "DRAFT",
+                            DisplayName = "Draft",
+                            Group = "PRODUCT_DISPOSAL",
+                            IsFinal = false,
+                            IsInitial = true,
+                            Meaning = "Being prepared; holds no kg. Removed, never cancelled.",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 4002,
+                            Code = "COMPLETED",
+                            DisplayName = "Completed",
+                            Group = "PRODUCT_DISPOSAL",
+                            IsFinal = false,
+                            IsInitial = false,
+                            Meaning = "The kg have left the stock of their products; may still be edited, which writes them again.",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 4003,
+                            Code = "CANCELLED",
+                            DisplayName = "Cancelled",
+                            Group = "PRODUCT_DISPOSAL",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "Recorded by mistake; the kg are back in the stock and it counts nowhere.",
+                            SortOrder = 3
                         });
                 });
 
@@ -4176,6 +4246,28 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             ToStatusId = 3903,
                             TriggerEvent = "Action",
                             UseCases = "INPUT-ISSUE"
+                        },
+                        new
+                        {
+                            Id = 30082,
+                            AllowedPerformers = "Cooperative Owner; Zone Manager",
+                            FromStatusId = 4001,
+                            GuardCondition = "The disposal has a reason and its lines are complete.",
+                            ReasonRequired = false,
+                            ToStatusId = 4002,
+                            TriggerEvent = "Action",
+                            UseCases = "PRODUCT-DISPOSAL"
+                        },
+                        new
+                        {
+                            Id = 30083,
+                            AllowedPerformers = "Cooperative Owner; Zone Manager",
+                            FromStatusId = 4002,
+                            GuardCondition = "A disposal recorded by mistake; its kg go back in the stock.",
+                            ReasonRequired = true,
+                            ToStatusId = 4003,
+                            TriggerEvent = "Action",
+                            UseCases = "PRODUCT-DISPOSAL"
                         },
                         new
                         {
@@ -5890,16 +5982,43 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool>("IsHidden")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("MaxKg")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal?>("MinKg")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -5922,6 +6041,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("IsHidden");
+
                     b.HasIndex("Name")
                         .IsUnique();
 
@@ -5930,6 +6056,360 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("Products", t =>
                         {
                             t.HasCheckConstraint("CK_Product_UnitPrice_Positive", "[UnitPrice] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.ProductCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("ParentId");
+
+                    b.ToTable("ProductCategories");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.ProductDisposal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("DisposedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("StatusId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ZoneId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("DisposedAt");
+
+                    b.HasIndex("StatusId");
+
+                    b.HasIndex("ZoneId");
+
+                    b.ToTable("ProductDisposals");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.ProductDisposalLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DisposalId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("HarvestLotId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Kg")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<int>("LineNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HarvestLotId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("DisposalId", "LineNumber")
+                        .IsUnique();
+
+                    b.ToTable("ProductDisposalLines");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.ProductPhoto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("ProductPhotos");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.ProductPriceChange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ChangedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ChangedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("NewPrice")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<decimal?>("OldPrice")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("UnitCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("UnitName")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChangedByAccountId");
+
+                    b.HasIndex("ProductId", "ChangedAt");
+
+                    b.HasIndex("ProductId", "UnitId");
+
+                    b.ToTable("ProductPriceChanges");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.ProductStockMovement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DocumentCode")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<Guid?>("DocumentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("HarvestLotId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("LotCode")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("PartyCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PartyName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("QuantityKg")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("RecordedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ReversesMovementId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("Sequence")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Sequence"));
+
+                    b.Property<decimal?>("TransactionPrice")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("HarvestLotId");
+
+                    b.HasIndex("RecordedByAccountId");
+
+                    b.HasIndex("ReversesMovementId");
+
+                    b.HasIndex("Sequence")
+                        .IsUnique();
+
+                    b.HasIndex("ProductId", "OccurredAt");
+
+                    b.ToTable("ProductStockMovements");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.ProductUnit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal>("Factor")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<bool>("IsBase")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("SalePrice")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("ProductId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ProductUnits_ProductId_Base")
+                        .HasFilter("[IsBase] = 1");
+
+                    b.HasIndex("UnitId");
+
+                    b.HasIndex("ProductId", "UnitId")
+                        .IsUnique();
+
+                    b.ToTable("ProductUnits", t =>
+                        {
+                            t.HasCheckConstraint("CK_ProductUnit_SalePrice_Positive", "[SalePrice] > 0");
                         });
                 });
 
@@ -6694,6 +7174,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Lot");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestLotProductLine", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Harvest.HarvestLot", "Lot")
+                        .WithMany("ProductLines")
+                        .HasForeignKey("LotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Lot");
+
+                    b.Navigation("Product");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.AccessGrant", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Identity.Account", "Account")
@@ -7290,16 +7789,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.InputItemCategory", b =>
-                {
-                    b.HasOne("OMTS.Domain.Entities.Purchasing.InputItemCategory", "Parent")
-                        .WithMany()
-                        .HasForeignKey("ParentId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Parent");
-                });
-
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.InputIssue", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Purchasing.InputIssueType", "IssueType")
@@ -7370,6 +7859,16 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("ItemUnit");
 
                     b.Navigation("SeedLotLine");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.InputItemCategory", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.InputItemCategory", "Parent")
+                        .WithMany()
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Parent");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.InputItemPhoto", b =>
@@ -7797,13 +8296,138 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.Product", b =>
                 {
+                    b.HasOne("OMTS.Domain.Entities.Sales.ProductCategory", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.Navigation("Category");
+
                     b.Navigation("Status");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.ProductCategory", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Sales.ProductCategory", "Parent")
+                        .WithMany()
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Parent");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.ProductDisposal", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
+                        .WithMany()
+                        .HasForeignKey("StatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Farming.FarmingZone", "Zone")
+                        .WithMany()
+                        .HasForeignKey("ZoneId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Status");
+
+                    b.Navigation("Zone");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.ProductDisposalLine", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Sales.ProductDisposal", "Disposal")
+                        .WithMany("Lines")
+                        .HasForeignKey("DisposalId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Harvest.HarvestLot", "HarvestLot")
+                        .WithMany()
+                        .HasForeignKey("HarvestLotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Disposal");
+
+                    b.Navigation("HarvestLot");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.ProductPhoto", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Sales.Product", "Product")
+                        .WithMany("Photos")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.ProductPriceChange", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ChangedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.ProductStockMovement", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Sales.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("RecordedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.ProductUnit", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Sales.Product", "Product")
+                        .WithMany("Units")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.InputUnit", "Unit")
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Unit");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.PurchaseRequest", b =>
@@ -7999,6 +8623,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Lanes");
 
                     b.Navigation("Photos");
+
+                    b.Navigation("ProductLines");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.Account", b =>
@@ -8098,6 +8724,18 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.CustomerPayment", b =>
                 {
                     b.Navigation("Allocations");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.Product", b =>
+                {
+                    b.Navigation("Photos");
+
+                    b.Navigation("Units");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.ProductDisposal", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.QualityClaim", b =>

@@ -4,6 +4,7 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Harvest;
+using OMTS.Application.Features.Sales.Products;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
@@ -17,6 +18,7 @@ namespace OMTS.Application.Features.Sales.Invoices;
 public sealed class SalesInvoiceWriter(
     ISalesInvoiceRepository invoices,
     HarvestLotStatusService lotStatuses,
+    ProductStockLedger productLedger,
     IStatusCatalog statusCatalog,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
@@ -77,6 +79,9 @@ public sealed class SalesInvoiceWriter(
         }
 
         invoices.Add(invoice);
+        // The kg of every line leave the stock of their product on their lot, in the same save as the invoice. A correction or cancellation of the invoice undoes them with
+        // ProductStockLedger.ReverseAsync(invoice.Id).
+        productLedger.PostSale(invoice, facts.Customer);
         MarkReferencesChanged(facts);
         audit.Record(new AuditEntry(CreatedAction, RecordType)
         {

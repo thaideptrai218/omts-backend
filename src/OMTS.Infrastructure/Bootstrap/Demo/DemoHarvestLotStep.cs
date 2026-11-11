@@ -64,11 +64,17 @@ internal sealed class DemoHarvestLotStep : IDemoSeedStep
             return 0;
         }
 
+        // The lots of the first raft of the first zone are split per product, so the products have stock; the others stay as lots recorded before products, which count in no stock.
+        var products = await db.Products.AsNoTracking().Where(p => p.Name == "Hàu sữa" || p.Name == "Hàu béo").ToDictionaryAsync(p => p.Name, p => p.Id, cancellationToken);
+        var split = number == 1 && zoneCode == DemoFarmingZoneStep.ZoneOne && products.Count == 2;
         var trips = number == 1
             ? new[]
             {
-                new RecordHarvestRequest(lanes.Take(2).ToList(), [], CagesOfATrip, null),
-                new RecordHarvestRequest([lanes[1]], [lanes[1]], CagesOfATrip / 2, 180m),
+                new RecordHarvestRequest(
+                    lanes.Take(2).ToList(), [], CagesOfATrip, null,
+                    ProductLines: split ? [new(products["Hàu sữa"], 5, null), new(products["Hàu béo"], CagesOfATrip - 5, null)] : null),
+                new RecordHarvestRequest(
+                    [lanes[1]], [lanes[1]], CagesOfATrip / 2, 180m, ProductLines: split ? [new(products["Hàu sữa"], CagesOfATrip / 2, 180m)] : null),
             }
             : [new RecordHarvestRequest(lanes, lanes, CagesOfATrip * lanes.Count, null)];
         var service = context.Get<HarvestLotRecordingService>();
