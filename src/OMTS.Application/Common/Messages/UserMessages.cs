@@ -794,14 +794,14 @@ public static class UserMessages
     public static readonly UserMessage NothingToShowYet = new(Gen11, "There is nothing to show yet.");
 
     /// <summary>MSG-SALE-01 (BR-SALE-03): a new purchase request, to the Cooperative Owner; a mandatory type.</summary>
-    public static UserMessage PurchaseRequestNew(string customerName, decimal requestedKg, string productName, DateOnly pickupDate, string? note) => new(
+    public static UserMessage PurchaseRequestNew(string customerName, int requestedCages, string productName, DateOnly pickupDate, string? note) => new(
         Sale01,
-        $"{customerName} asks to buy about {Kg(requestedKg)} kg of {productName}, pickup on {Date(pickupDate)}. {(note is null ? "" : note + " ")}Please ask the Zone Manager to check the oysters, then respond.")
+        $"{customerName} asks to buy {requestedCages} cages of {productName}, pickup on {Date(pickupDate)}. {(note is null ? "" : note + " ")}Please ask the Zone Manager to check the oysters, then respond.")
     {
         Parameters = new Dictionary<string, object?>
         {
             ["customer_name"] = customerName,
-            ["requested_kg"] = KgValue(requestedKg),
+            ["requested_cages"] = requestedCages,
             ["product_name"] = productName,
             ["pickup_date"] = pickupDate,
             ["note"] = note,
@@ -810,15 +810,15 @@ public static class UserMessages
 
     /// <summary>MSG-SALE-02 (BR-SALE-03): a trader cancelled a purchase request, to the Cooperative Owner.</summary>
     /// <param name="requestDate">The business day the request was sent.</param>
-    public static UserMessage PurchaseRequestCancelled(string customerName, DateOnly requestDate, decimal requestedKg, string productName, string? reason) => new(
+    public static UserMessage PurchaseRequestCancelled(string customerName, DateOnly requestDate, int requestedCages, string productName, string? reason) => new(
         Sale02,
-        $"{customerName} cancelled the purchase request of {Date(requestDate)} for about {Kg(requestedKg)} kg of {productName}.{(reason is null ? "" : " " + reason)}")
+        $"{customerName} cancelled the purchase request of {Date(requestDate)} for {requestedCages} cages of {productName}.{(reason is null ? "" : " " + reason)}")
     {
         Parameters = new Dictionary<string, object?>
         {
             ["customer_name"] = customerName,
             ["request_date"] = requestDate,
-            ["requested_kg"] = KgValue(requestedKg),
+            ["requested_cages"] = requestedCages,
             ["product_name"] = productName,
             ["reason"] = reason,
         },
@@ -826,17 +826,17 @@ public static class UserMessages
 
     /// <summary>MSG-SALE-03 (BR-SALE-03): the response "accepted", to the trader account and the phone number of the profile.</summary>
     public static UserMessage PurchaseRequestAccepted(
-        string cooperativeShortName, decimal requestedKg, string productName, decimal acceptedKg, DateOnly pickupDate, bool payLater, string? note) => new(
+        string cooperativeShortName, int requestedCages, string productName, int acceptedCages, DateOnly pickupDate, bool payLater, string? note) => new(
         Sale03,
-        $"{cooperativeShortName}: your request for {Kg(requestedKg)} kg of {productName} is accepted for {Kg(acceptedKg)} kg, pickup on {Date(pickupDate)}{(payLater ? "; you may pay later" : "")}.{(note is null ? "" : " " + note)}")
+        $"{cooperativeShortName}: your request for {requestedCages} cages of {productName} is accepted for {acceptedCages} cages, pickup on {Date(pickupDate)}{(payLater ? "; you may pay later" : "")}.{(note is null ? "" : " " + note)}")
     {
         Parameters = new Dictionary<string, object?>
         {
             ["cooperative_short_name"] = cooperativeShortName,
-            ["requested_kg"] = KgValue(requestedKg),
+            ["requested_cages"] = requestedCages,
             ["product_name"] = productName,
             ["accepted"] = true,
-            ["accepted_kg"] = KgValue(acceptedKg),
+            ["accepted_cages"] = acceptedCages,
             ["pickup_date"] = pickupDate,
             ["pay_later"] = payLater,
             ["note"] = note,
@@ -844,14 +844,14 @@ public static class UserMessages
     };
 
     /// <summary>MSG-SALE-03 (BR-SALE-03): the response "declined", with the note that gives the reason.</summary>
-    public static UserMessage PurchaseRequestDeclined(string cooperativeShortName, decimal requestedKg, string productName, string note) => new(
+    public static UserMessage PurchaseRequestDeclined(string cooperativeShortName, int requestedCages, string productName, string note) => new(
         Sale03,
-        $"{cooperativeShortName}: your request for {Kg(requestedKg)} kg of {productName} is declined. {note}")
+        $"{cooperativeShortName}: your request for {requestedCages} cages of {productName} is declined. {note}")
     {
         Parameters = new Dictionary<string, object?>
         {
             ["cooperative_short_name"] = cooperativeShortName,
-            ["requested_kg"] = KgValue(requestedKg),
+            ["requested_cages"] = requestedCages,
             ["product_name"] = productName,
             ["accepted"] = false,
             ["note"] = note,
@@ -1194,7 +1194,11 @@ public static class UserMessages
         Legacy.PasswordChangeRequired, "Please change your temporary password before using other functions.");
 
     /// <summary>Not in the SRS list: a notice of the Zalo Mini App flows, whose text is built by the module.</summary>
-    public static UserMessage MiniAppNotification(string text) => new(Legacy.MiniAppNotification, text);
+    /// <remarks>The text is also its only parameter, so that every notification carries its parameters as the others do.</remarks>
+    public static UserMessage MiniAppNotification(string text) => new(Legacy.MiniAppNotification, text)
+    {
+        Parameters = new Dictionary<string, object?> { ["text"] = text },
+    };
 
     public static UserMessage ServiceNotResponding(string service) => new(
         Legacy.Msg04, $"The {service} service is not responding. The action has not been completed and the data in OMTS is unchanged; please try again later.");

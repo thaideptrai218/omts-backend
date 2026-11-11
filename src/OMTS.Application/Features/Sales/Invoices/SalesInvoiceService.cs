@@ -27,6 +27,7 @@ public sealed class SalesInvoiceService(
     IPendingSaleRepository pendingSales,
     ICooperativeRepository cooperatives,
     SalesInvoiceFactsReader factsReader,
+    SalesInvoiceWeighingReader weighingReader,
     SalesInvoiceWriter writer,
     PendingSaleWriter pendingWriter,
     SalesInvoiceNotifications notifications,
@@ -55,8 +56,15 @@ public sealed class SalesInvoiceService(
             return first;
         }
 
-        var (entries, invalid) = SalesInvoiceEntryReader.Read(request);
-        return invalid.Count > 0 ? AppError.InvalidFields(invalid) : await SaveAsync(request, entries!, key, pendingCode: null, cancellationToken);
+        // Một hóa đơn lập từ lần cân đã chốt lấy số kg của lần cân đó.
+        var weighed = await weighingReader.FillKgAsync(request, cancellationToken);
+        if (!weighed.IsSuccess)
+        {
+            return weighed.Error!;
+        }
+
+        var (entries, invalid) = SalesInvoiceEntryReader.Read(weighed.Value!);
+        return invalid.Count > 0 ? AppError.InvalidFields(invalid) : await SaveAsync(weighed.Value!, entries!, key, pendingCode: null, cancellationToken);
     }
 
     /// <summary>

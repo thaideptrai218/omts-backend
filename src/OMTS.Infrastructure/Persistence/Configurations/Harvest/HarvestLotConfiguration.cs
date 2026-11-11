@@ -14,6 +14,8 @@ internal sealed class HarvestLotConfiguration : IEntityTypeConfiguration<Harvest
         builder.HasOne(x => x.Cycle).WithMany().HasForeignKey(x => x.CycleId);
         builder.HasOne(x => x.Status).WithMany().HasForeignKey(x => x.StatusId);
         builder.ReferencesAccount(nameof(HarvestLot.RecordedByAccountId));
+        // The purchase request the trip harvested for (decision of 11/11/2026); the lots of a request are listed by it.
+        builder.HasOne(x => x.PurchaseRequest).WithMany().HasForeignKey(x => x.PurchaseRequestId);
         // The invoice whose "sold the whole lot" tick closed the lot (SALE-05); only that invoice reopens it (SALE-07, SALE-08).
         builder.HasOne<SalesInvoice>().WithMany().HasForeignKey(x => x.ClosedBySalesInvoiceId);
         builder.Property(x => x.CageCount).HasPrecision(9, 2);

@@ -11,7 +11,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
     /// check "CageCount &gt; 0" depends on the column, so it is dropped and created again around the change. A lot also keeps the reason given when the cycle's harvest went over its target yield.
     /// </summary>
     [DbContext(typeof(OmtsDbContext))]
-    [Migration("20261111120000_HarvestLotFractionalCagesAndOverPlanReason")]
+    [Migration("20261111140000_HarvestLotFractionalCagesAndOverPlanReason")]
     public partial class HarvestLotFractionalCagesAndOverPlanReason : Migration
     {
         /// <inheritdoc />

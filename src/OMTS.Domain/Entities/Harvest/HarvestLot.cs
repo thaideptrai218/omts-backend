@@ -3,6 +3,7 @@ using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Platform;
+using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Domain.Entities.Harvest;
@@ -10,6 +11,7 @@ namespace OMTS.Domain.Entities.Harvest;
 /// <summary>
 /// The oysters of one harvest trip to one raft (BR-HARVEST-03), with the whole lanes harvested and the estimated kg. Its code and harvest time never change.
 /// It is for sale while Open or Reopened (BR-HARVEST-04). The estimated kg is for following the harvest and limits no sale (BR-HARVEST-02).
+/// A trip harvests for one purchase request, and a request gathers the lots of every raft it needs (decision of 11/11/2026).
 /// </summary>
 public class HarvestLot : AuditableEntity, IHasStatus
 {
@@ -46,6 +48,13 @@ public class HarvestLot : AuditableEntity, IHasStatus
 
     /// <summary>Who recorded it: a Zone Manager corrects or removes only the lots they recorded (BR-HARVEST-05).</summary>
     public Guid RecordedByAccountId { get; set; }
+
+    /// <summary>
+    /// The purchase request this trip harvested for (decision of 11/11/2026): required when a lot is recorded, never changed, and one request at most. Null only on lots
+    /// recorded before that decision.
+    /// </summary>
+    public Guid? PurchaseRequestId { get; set; }
+    public PurchaseRequest? PurchaseRequest { get; set; }
 
     public int StatusId { get; set; } = StatusIds.HarvestLot.Open;
     public Status Status { get; set; } = null!;

@@ -64,6 +64,12 @@ public interface IHarvestLotRepository
     /// <summary>The ids of the same lots, oldest first: what the daily close check looks at (GFR-05).</summary>
     Task<IReadOnlyList<Guid>> ListForSaleSinceAtMostAsync(DateOnly lastDay, CancellationToken cancellationToken);
 
+    /// <summary>The lots harvested for a purchase request with their raft and zone, read only, the earliest harvest first (decision of 11/11/2026).</summary>
+    Task<IReadOnlyList<HarvestLot>> ListOfPurchaseRequestAsync(Guid purchaseRequestId, CancellationToken cancellationToken);
+
+    /// <summary>How many cages the lots of each request hold; a request with no lot is left out.</summary>
+    Task<IReadOnlyDictionary<Guid, decimal>> CagesOfPurchaseRequestsAsync(IReadOnlyCollection<Guid> purchaseRequestIds, CancellationToken cancellationToken);
+
     /// <summary>Adds the lot with the lanes and photos it holds.</summary>
     void Add(HarvestLot lot);
 

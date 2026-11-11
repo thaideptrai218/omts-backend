@@ -6,6 +6,7 @@ namespace OMTS.Domain.Constants;
 /// </summary>
 public static class StatusIds
 {
+
     public static class Usage
     {
         public const int InUse = 101;
@@ -129,6 +130,7 @@ public static class StatusIds
         public const int Accepted = 3202;
         public const int Declined = 3203;
         public const int Cancelled = 3204;
+        public const int AwaitingStaff = 3205;
     }
 
     /// <summary>STD-QUALITY-CLAIM (BR-CLAIM-02): a response cannot be changed.</summary>

@@ -195,7 +195,7 @@ public class SeedingQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         var refused = await (await owner.CancelAsync(receipt.Id(), "Wrong")).ProblemAsync(HttpStatusCode.Conflict, "MSG-PURCHASE-09");
 
         Assert.Equal(("Seeded", $"{code}-2"), (refused.Text("cause"), refused.Text("causeCode")));
-        Assert.Equal($"Receipt {code} cannot be cancelled: seed lot {code}-2 has already been seeded. The Cooperative Owner can correct it instead.", refused.Text("detail"));
+        Assert.Equal($"Receipt {code} cannot be cancelled: seed lot {code}-2 has already been used. The Cooperative Owner can correct it instead.", refused.Text("detail"));
 
         await (await owner.RemoveSeedingAsync(record.Id())).ReadAsync(HttpStatusCode.NoContent);
         Assert.Equal("Returned", (await (await owner.CancelAsync(receipt.Id(), "Wrong")).ProblemAsync(HttpStatusCode.Conflict, "MSG-PURCHASE-09")).Text("cause"));

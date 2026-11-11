@@ -147,7 +147,7 @@ To set up the server:
    and the API refuse to start), the secrets of "Deployment" step 1 for an **empty** database, one storage folder or
    container of its own, `Demo__AllowOutsideDevelopment=true` and `Demo__Password`. Use fake data in `Bootstrap:*`.
 2. Run `dotnet OMTS.Api.dll seed --bootstrap --demo`, start the API and check `GET /health/ready`.
-3. Give the password to the testers privately. The nine logins of "Run with Docker" all use it, the Owner included, and
+3. Give the password to the testers privately. The eleven logins of "Run with Docker" all use it, the Owner included, and
    land in the same branches. Put the server behind HTTPS: the image itself listens on plain HTTP.
 
 **Which database.** The demo only runs on a database with no accounts, or on one it seeded itself: the first run writes a

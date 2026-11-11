@@ -1,8 +1,10 @@
+using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Accounts.Dtos;
 using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Notifications;
 using OMTS.Domain.Entities.Identity;
 
@@ -15,6 +17,7 @@ namespace OMTS.Application.Features.Accounts;
 /// </summary>
 public sealed class NotificationPreferenceService(
     IAccountRepository accounts,
+    IEmployeeRepository employees,
     PermissionService permissions,
     IPushDeviceRepository devices,
     IUnitOfWork unitOfWork,
@@ -77,7 +80,10 @@ public sealed class NotificationPreferenceService(
     private async Task<IReadOnlyList<NotificationTypeDefinition>> OfferedTypesAsync(Account account, CancellationToken cancellationToken)
     {
         var access = await permissions.GetAccessAsync(account.Id, cancellationToken);
-        return NotificationTypes.OfferedTo(NotificationRoles.Of(account.SubjectType, access?.Grants ?? []));
+        var roles = NotificationRoles.Of(account.SubjectType, access?.Grants ?? []).ToHashSet();
+        if (await employees.GetByAccountIdAsync(account.Id, cancellationToken) is not null)
+            roles.Add(NotificationRole.Employee);
+        return NotificationTypes.OfferedTo(roles);
     }
 
     private static IReadOnlyList<NotificationTypePreferenceView> Views(Account account, IEnumerable<NotificationTypeDefinition> types) =>

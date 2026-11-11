@@ -60,10 +60,10 @@ public class PurchaseRequestReadTests(AuthApiFactory factory) : IClassFixture<Au
         var view = await trader.Client.MineAsync(request.Id());
 
         Assert.Equal(
-            new[] { "cancelReason", "cancelledAt", "canCancel", "fulfilled", "id", "note", "pickupDate", "productId", "productName", "requestedKg", "response", "rowVersion", "sentAt", "status", "statusId" }.Order(),
+            new[] { "cancelReason", "cancelledAt", "canCancel", "code", "fulfilled", "harvestCompletedAt", "id", "note", "pickupDate", "productId", "productName", "requestedCages", "response", "rowVersion", "sentAt", "status", "statusId" }.Order(),
             view.EnumerateObject().Select(p => p.Name).Order());
         Assert.Equal(
-            new[] { "acceptedKg", "note", "payLaterAgreed", "pickupDate", "respondedAt" }.Order(),
+            new[] { "acceptedCages", "note", "payLaterAgreed", "pickupDate", "respondedAt" }.Order(),
             view.GetProperty("response").EnumerateObject().Select(p => p.Name).Order());
     }
 
@@ -87,7 +87,7 @@ public class PurchaseRequestReadTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal([awaiting.Id(), answered.Id(), newest.Id()], ids);
         var row = ofCustomer.GetProperty("items")[0];
         var customer = row.GetProperty("customer");
-        Assert.Equal(("Chị Hoa", trader.Profile.PhoneNumber, 0m), (customer.Text("name"), customer.Text("phoneNumber"), customer.GetProperty("currentDebt").GetDecimal()));
+        Assert.Equal(("Chị Hoa", trader.Profile.PhoneNumber, 0), (customer.Text("name"), customer.Text("phoneNumber"), customer.GetProperty("currentDebt").GetDecimal()));
         Assert.Equal(trader.Profile.Id, customer.Id());
 
         var declined = await (await owner.GetAsync($"/api/purchase-requests?customerId={trader.Profile.Id}&statusId={StatusIds.PurchaseRequest.Declined}")).ReadAsync(HttpStatusCode.OK);
@@ -109,7 +109,7 @@ public class PurchaseRequestReadTests(AuthApiFactory factory) : IClassFixture<Au
         var product = await owner.CreateProductAsync();
         var trader = await factory.TraderAsync();
         var offline = await owner.CreateCustomerAsync();
-        var row = new PurchaseRequest { CustomerId = offline.Id(), ProductId = product.Id(), RequestedKg = 10, PickupDate = PurchaseRequestTestKit.Today, SentAt = DateTimeOffset.UtcNow };
+        var row = new PurchaseRequest { CustomerId = offline.Id(), ProductId = product.Id(), RequestedCages = 10, PickupDate = PurchaseRequestTestKit.Today, SentAt = DateTimeOffset.UtcNow };
         await factory.UseDbAsync(db => db.PurchaseRequests.Add(row));
 
         var preview = await (await owner.GetAsync($"/api/customers/{trader.Profile.Id}/merge-preview?mergedCustomerId={offline.Id()}")).ReadAsync(HttpStatusCode.OK);

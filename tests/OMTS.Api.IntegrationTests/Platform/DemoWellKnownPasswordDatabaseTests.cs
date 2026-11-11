@@ -72,7 +72,7 @@ public class DemoWellKnownPasswordDatabaseTests
         await using var staging = Host(new AuthApiFactory(), "Staging", "true", secret);
         await RunAsync(staging, demo: true);
         var usernames = (await SnapshotAsync(staging)).Accounts.Split('\n').Select(a => a.Split('|')[0]).ToList();
-        Assert.Equal(9, usernames.Count);
+        Assert.Equal(11, usernames.Count);
 
         foreach (var username in usernames)
         {

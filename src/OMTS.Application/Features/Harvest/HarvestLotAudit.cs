@@ -27,6 +27,7 @@ public static class HarvestLotAudit
         lot.LotCode,
         lot.HarvestedAt,
         lot.HarvestDate,
+        lot.PurchaseRequestId,
         Lanes = lot.Lanes.Select(l => l.Lane.LaneNumber).Order().ToList(),
         FinishedLanes = lot.Lanes.Where(l => l.IsFinished).Select(l => l.Lane.LaneNumber).Order().ToList(),
         lot.CageCount,

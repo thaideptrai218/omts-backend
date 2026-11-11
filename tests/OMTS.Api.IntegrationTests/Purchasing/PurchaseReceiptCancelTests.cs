@@ -84,7 +84,7 @@ public class PurchaseReceiptCancelTests(AuthApiFactory factory) : IClassFixture<
 
         // The block is checked first (step 1): a missing reason does not hide it.
         var problem = await (await world.Owner.CancelAsync(seeded.Id(), null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-PURCHASE-09");
-        Assert.Equal($"Receipt {seeded.GetProperty("code").GetString()} cannot be cancelled: seed lot {lot} has already been seeded. The Cooperative Owner can correct it instead.",
+        Assert.Equal($"Receipt {seeded.GetProperty("code").GetString()} cannot be cancelled: seed lot {lot} has already been used. The Cooperative Owner can correct it instead.",
             problem.GetProperty("detail").GetString());
         Assert.Equal(("Seeded", lot), (problem.GetProperty("cause").GetString(), problem.GetProperty("causeCode").GetString()));
         var preview = await (await world.Owner.GetAsync($"/api/purchase-receipts/{seeded.Id()}/cancel-preview")).ReadAsync(HttpStatusCode.OK);

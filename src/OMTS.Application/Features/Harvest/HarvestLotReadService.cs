@@ -7,6 +7,7 @@ using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Cultivation.Progress;
+using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Domain.Constants;
 
 namespace OMTS.Application.Features.Harvest;
@@ -18,6 +19,8 @@ public sealed class HarvestLotReadService(
     ICultivationCycleQuery cycleQuery,
     IHarvestLotRepository lots,
     ISeedingRecordRepository seedingRecords,
+    IPurchaseRequestRepository requests,
+    IPurchaseRequestFulfilment fulfilment,
     ICooperativeRepository cooperatives,
     LaneStateReader laneStates,
     HarvestLotViews views,
@@ -76,10 +79,29 @@ public sealed class HarvestLotReadService(
             lanes.Any(l => l.CanHarvest),
             lanes,
             open is null ? [] : await views.ListAsync(ofCycle, open, raft, cancellationToken),
+            mayRecord ? await OrdersAsync(raft.Id, cancellationToken) : [],
             ofCycle.Sum(lot => lot.CageCount),
             harvestedKg,
             open?.TargetYieldKg,
             open?.TargetYieldKg is { } target ? target - harvestedKg : null);
+    }
+
+    /// <summary>
+    /// What a new lot on the raft can be recorded for (decision of 11/11/2026): the requests planned on this raft first, then the earliest agreed pickup. A request taken in
+    /// full before that decision is left out.
+    /// </summary>
+    private async Task<IReadOnlyList<HarvestOrderOption>> OrdersAsync(Guid raftId, CancellationToken cancellationToken)
+    {
+        var accepted = await requests.ListOpenForHarvestAsync(cancellationToken);
+        var fulfilled = await fulfilment.FulfilledAmongAsync(accepted.Select(r => r.Id).ToList(), cancellationToken);
+        var open = accepted.Where(r => !fulfilled.Contains(r.Id)).ToList();
+        var harvested = await lots.CagesOfPurchaseRequestsAsync(open.Select(r => r.Id).ToList(), cancellationToken);
+        return open
+            .Select(r => new HarvestOrderOption(
+                r.Id, r.Code, r.Customer.Name, r.ProductName, r.AcceptedCages ?? 0, harvested.GetValueOrDefault(r.Id), r.AgreedPickupDate ?? r.PickupDate,
+                r.WorkDayPlan?.WorkDate ?? r.WorkDate, r.WorkDayPlan?.RaftId == raftId))
+            .OrderByDescending(o => o.PlannedOnRaft)
+            .ToList();
     }
 
     /// <summary>Why a lane cannot be chosen for a harvest now, as a code for the client and a sentence.</summary>

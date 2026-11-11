@@ -27,7 +27,7 @@ public sealed class PurchaseRequestNotifications(
         new NotificationContent(
             NotificationTypes.PurchaseRequestNew,
             "New purchase request",
-            UserMessages.PurchaseRequestNew(request.Customer.Name, request.RequestedKg, request.Product.Name, request.PickupDate, request.Note),
+            UserMessages.PurchaseRequestNew(request.Customer.Name, request.RequestedCages, request.Product.Name, request.PickupDate, request.Note),
             Record(request)),
         cancellationToken);
 
@@ -38,7 +38,7 @@ public sealed class PurchaseRequestNotifications(
             NotificationTypes.PurchaseRequestCancelled,
             "Purchase request cancelled",
             UserMessages.PurchaseRequestCancelled(
-                request.Customer.Name, BusinessClock.ToBusinessDate(request.SentAt), request.RequestedKg, request.Product.Name, request.CancelReason),
+                request.Customer.Name, BusinessClock.ToBusinessDate(request.SentAt), request.RequestedCages, request.Product.Name, request.CancelReason),
             Record(request)),
         cancellationToken);
 
@@ -68,10 +68,10 @@ public sealed class PurchaseRequestNotifications(
     private static NotificationContent Content(PurchaseRequest request, string cooperativeName, string? note) => new(
         NotificationTypes.PurchaseRequestResponse,
         "Response to your purchase request",
-        request.AcceptedKg is { } acceptedKg
+        request.AcceptedCages is { } acceptedCages
             ? UserMessages.PurchaseRequestAccepted(
-                cooperativeName, request.RequestedKg, request.Product.Name, acceptedKg, request.AgreedPickupDate!.Value, request.PayLaterAgreed == true, note)
-            : UserMessages.PurchaseRequestDeclined(cooperativeName, request.RequestedKg, request.Product.Name, note!),
+                cooperativeName, request.RequestedCages, request.Product.Name, acceptedCages, request.AgreedPickupDate!.Value, request.PayLaterAgreed == true, note)
+            : UserMessages.PurchaseRequestDeclined(cooperativeName, request.RequestedCages, request.Product.Name, note!),
         Record(request));
 
     private static RelatedRecord Record(PurchaseRequest request) => new(RelatedRecordTypes.PurchaseRequest, request.Id);

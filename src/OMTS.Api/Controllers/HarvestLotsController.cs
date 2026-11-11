@@ -31,7 +31,8 @@ public sealed class HarvestLotsController(
 
     /// <summary>
     /// Records a harvest trip while the raft has an Open cycle. Multipart: one <c>laneNumbers</c> field per lane, one <c>finishedLaneNumbers</c> field per finished lane, <c>cageCount</c>,
-    /// optional <c>estimatedKg</c>, and one <c>photos</c> part per photo (none to 10). A failed upload answers 502 MSG-GEN-03 and saves nothing. Notifies the Cooperative Owner
+    /// optional <c>estimatedKg</c>, <c>purchaseRequestId</c> of an Accepted request whose harvest is not marked done, and one <c>photos</c> part per photo (none to 10).
+    /// A failed upload answers 502 MSG-GEN-03 and saves nothing. Notifies the Cooperative Owner
     /// (MSG-HARVEST-01), and when every seeded lane is now Harvested sends the reminder to close the cycle (MSG-CYCLE-08).
     /// </summary>
     [HttpPost("api/rafts/{raftId:guid}/harvest-lots")]
@@ -45,7 +46,8 @@ public sealed class HarvestLotsController(
         var estimatedIsRead = TryDecimal(form.EstimatedKg, out var estimatedKg);
         var request = new RecordHarvestRequest(
             Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, !estimatedIsRead, Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)),
-            form.ConfirmOverPlan, form.OverPlanReason);
+            form.ConfirmOverPlan, form.OverPlanReason,
+            Guid.TryParse(form.PurchaseRequestId, out var requestId) && requestId != Guid.Empty ? requestId : null);
         return (await recording.RecordAsync(raftId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
             .ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
     }

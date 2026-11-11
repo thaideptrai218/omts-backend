@@ -77,6 +77,8 @@ Every account below uses the password `Demo@1234`. It exists only in this local 
 | `nhanvien.doimk` | Zone Manager | DEMO-01 | Logged in with `mustChangePassword = true` (change it first) |
 | `nhanvien.chuaxacthuc` | Zone Manager | DEMO-02 | Logged in with `phoneVerificationRequired = true` (verify the phone first) |
 | `nhanvien.hethan` | Zone Manager | DEMO-01, pair revoked | Refused: no Effective zone–role pair (MSG-ACCOUNT-07) |
+| `nhanvien1` | Employee, no zone–role pair | – | Normal login to the employee's own area (purchase shifts, own work); the demo marks a made-up Zalo link, which such an employee needs to log in |
+| `nhanvien2` | Employee, no zone–role pair | – | As `nhanvien1` |
 
 Login accepts a phone number or a username with the password (the web form too). A changed password stays changed; to get every demo login back, reset the environment with `docker compose down -v` (this deletes the database and stored files).
 
@@ -171,6 +173,7 @@ A shared server runs in **Staging**, with an empty database, `seed --bootstrap -
 |---|---|
 | [docs/api-behaviour-reference.md](docs/api-behaviour-reference.md) | Detailed rules: authentication and sessions, roles, notifications, provenance, sales, claims, workforce, audit, VietQR, background jobs |
 | [docs/operations-reference.md](docs/operations-reference.md) | Demo data, external-service adapters, deployment, configuration keys, shared server |
+| [docs/cage-order-harvest.md](docs/cage-order-harvest.md) | Cage requests, staffing, harvest completion and port weighing: workflow, persistence, remaining slices |
 | [docs/SRS_DEVIATIONS.md](docs/SRS_DEVIATIONS.md) | Backend-side differences from SRS v8 (summary; the master list is in the web repository) |
 | [docs/sds/](docs/sds/) | Detailed design (SDS) of the modules; a PR that changes a documented module updates its SDS part |
 

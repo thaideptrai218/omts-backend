@@ -31,6 +31,9 @@ internal sealed class DemoInputItemStep : IDemoSeedStep
 
     public string Name => "farming input items";
 
+    /// <summary>The name of a demo item: a database seeded before the VT codes knows it by this name only.</summary>
+    public static string NameOf(string code) => Items.Single(i => i.Code == code).Name;
+
     public async Task<int> RunAsync(DemoSeedContext context, CancellationToken cancellationToken)
     {
         var service = context.Get<FarmingInputItemService>();

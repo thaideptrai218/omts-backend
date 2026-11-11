@@ -21,9 +21,13 @@ internal sealed record HarvestLotFields(
 internal sealed record HarvestLotCorrectionInput(
     string? Reason, string? FinishedHint, IReadOnlySet<Guid>? OwnLaneIds = null, decimal? ExistingCageCount = null, decimal? ExistingEstimatedKg = null);
 
-/// <summary>HARVEST-01 step 6: at least one lane Growing or Being harvested, the finished lanes among them, cages and estimated kg above 0 (BR-HARVEST-01, BR-HARVEST-02). Every invalid field is listed (MSG-GEN-01).</summary>
+/// <summary>
+/// HARVEST-01 step 6: at least one lane Growing or Being harvested, the finished lanes among them, cages and estimated kg above 0 (BR-HARVEST-01, BR-HARVEST-02), and when recording the
+/// purchase request it harvests for (decision of 11/11/2026). Every invalid field is listed (MSG-GEN-01).
+/// </summary>
 internal static class HarvestLotFieldReader
 {
+    public const string PurchaseRequestField = "Purchase request";
     public const string LanesField = "Lanes";
     public const string FinishedLanesField = "Finished lanes";
     public const string CagesField = "Number of cages";
@@ -44,6 +48,7 @@ internal static class HarvestLotFieldReader
     {
         fields = null;
         var check = new FieldCheck();
+        check.Check(correction is not null || request.PurchaseRequestId is not null, PurchaseRequestField);
         var (lanes, laneHint) = Lanes(raft, request.LaneNumbers, states, correction?.OwnLaneIds);
         check.Check(lanes is not null && laneHint is null, LanesField);
         var finished = Finished(request, lanes);

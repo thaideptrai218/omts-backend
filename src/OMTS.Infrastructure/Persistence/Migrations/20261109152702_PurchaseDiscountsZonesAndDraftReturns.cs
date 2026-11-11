@@ -204,6 +204,16 @@ FROM PurchaseReturns r JOIN PurchaseReceipts pr ON pr.Id = r.ReceiptId;
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // The older schema has no drafts and no return without a receipt: such returns, their lines and the refunds
+            // recorded on them are removed, or the draft status and the NOT NULL receipt columns below would fail.
+            migrationBuilder.Sql(@"
+DELETE FROM SupplierPayments WHERE PurchaseReturnId IN (SELECT Id FROM PurchaseReturns WHERE StatusId = 1903 OR ReceiptId IS NULL);
+
+DELETE rl FROM PurchaseReturnLines rl JOIN PurchaseReturns r ON r.Id = rl.ReturnId
+WHERE r.StatusId = 1903 OR r.ReceiptId IS NULL OR rl.ReceiptLineId IS NULL;
+
+DELETE FROM PurchaseReturns WHERE StatusId = 1903 OR ReceiptId IS NULL;");
+
             migrationBuilder.DropForeignKey(
                 name: "FK_PurchaseReceipts_FarmingZones_ZoneId",
                 table: "PurchaseReceipts");

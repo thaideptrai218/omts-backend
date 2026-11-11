@@ -148,6 +148,12 @@ public sealed class ReceivingBankAccountSqlServerTests
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
     }
 
+    // The longest wait the options allow: the scripted service waits for the test, and on a loaded runner the profile save in
+    // between can take longer than the default 15 s, which would end the request with 503 instead of the conflict under test.
     private static WebApplicationFactory<Program> WithService(SqlServerApiFactory api, IPaymentNotificationService service) =>
-        api.WithWebHostBuilder(b => b.ConfigureTestServices(services => services.AddSingleton(service)));
+        api.WithWebHostBuilder(b =>
+        {
+            b.UseSetting("Payments:TimeoutSeconds", PaymentNotificationOptions.MaxTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            b.ConfigureTestServices(services => services.AddSingleton(service));
+        });
 }

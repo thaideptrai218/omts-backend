@@ -18,7 +18,7 @@ public class TraderMessageServiceTests
     private static readonly NotificationContent Content = new(
         NotificationTypes.PurchaseRequestResponse,
         "Response",
-        UserMessages.PurchaseRequestDeclined("HTX", 10m, "Hàu sữa", "Chưa đủ"),
+        UserMessages.PurchaseRequestDeclined("HTX", 10, "Hàu sữa", "Chưa đủ"),
         new RelatedRecord(RelatedRecordTypes.PurchaseRequest, Guid.NewGuid()));
 
     private static (TraderMessageService Service, Stubs Stubs) Build(Func<CancellationToken, Task<DeliveryResult>> send)

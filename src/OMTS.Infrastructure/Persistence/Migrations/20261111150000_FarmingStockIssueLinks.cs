@@ -12,7 +12,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
     /// ledger would have to be written back in time at costs that were never recorded. Seed from a legacy session is still counted from the session itself.
     /// </summary>
     [DbContext(typeof(OmtsDbContext))]
-    [Migration("20261111130000_FarmingStockIssueLinks")]
+    [Migration("20261111150000_FarmingStockIssueLinks")]
     public partial class FarmingStockIssueLinks : Migration
     {
         /// <inheritdoc />

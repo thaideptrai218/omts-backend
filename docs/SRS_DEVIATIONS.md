@@ -20,7 +20,7 @@
 | PAY-03 | Trạng thái Đang tạo (3405), Đã hủy (3406); Tạm tính là Nháp (3401); tạo đồng bộ | Đã làm trên nhánh |
 | PAY-05 | Tạm ứng (khoản Advance) trừ vào lần chốt kế tiếp; phiếu chi vào Sổ quỹ | Đã làm trên nhánh; cần xác nhận (Q4) |
 | PAY-08 | Thiết lập kỳ lương và cờ tự động tạo bảng lương lưu được nhưng chưa có tác dụng (GFR-07 chưa làm) | Chờ backend |
-| FARM-01 | `CageCount` chuyển từ `int` sang `decimal` (migration `20261111120000_HarvestLotFractionalCagesAndOverPlanReason`) | Đang làm (chưa commit) |
+| FARM-01 | `CageCount` chuyển từ `int` sang `decimal` (migration `20261111140000_HarvestLotFractionalCagesAndOverPlanReason`) | Đang làm (chưa commit) |
 | FARM-02, FARM-03 | Không có hao hụt, khối lượng mỗi con, tỷ lệ sống; không có thực thể kế hoạch thu hoạch (`HarvestPlan`) | Chờ quyết định (D3, D4, D5) |
 | FARM-04 | Cảnh báo mềm khi vượt 110% mục tiêu chu kỳ (`confirmOverPlan`, `OverPlanReason`, MSG-GEN-04); từ chối khi vượt 150% (`HarvestQuantityRules`) | Đang làm (chưa commit); ngưỡng chờ Q7 |
 | FARM-05 | "Thu xong làn": `POST /api/rafts/{raftId}/lanes/{laneNumber}/finish-harvest` | Đang làm (chưa commit) |

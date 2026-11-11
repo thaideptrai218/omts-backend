@@ -29,6 +29,8 @@ using OMTS.Infrastructure.Persistence;
 using OMTS.Infrastructure.Persistence.Interceptors;
 using OMTS.Infrastructure.Persistence.Queries;
 using OMTS.Infrastructure.Persistence.Repositories;
+using OMTS.Infrastructure.Persistence.Repositories.Sales;
+using OMTS.Infrastructure.Persistence.Repositories.Workforce;
 using OMTS.Infrastructure.Persistence.Seed;
 using OMTS.Infrastructure.Reports;
 using OMTS.Infrastructure.Storage;
@@ -68,6 +70,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IDocumentNumberAllocator, DocumentNumberAllocator>();
         services.AddScoped<IAccountRepository, AccountRepository>();
+        services.AddScoped<IWorkDayPlanRepository, WorkDayPlanRepository>();
         services.AddScoped<ILoginSessionRepository, LoginSessionRepository>();
         services.AddScoped<IAccessGrantRepository, AccessGrantRepository>();
         services.AddScoped<IFarmingZoneRepository, FarmingZoneRepository>();
@@ -88,6 +91,7 @@ public static class DependencyInjection
         services.AddScoped<ICooperativeRepository, CooperativeRepository>();
         services.AddScoped<IPushDeviceRepository, PushDeviceRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
+        services.AddScoped<ISalesProductRepository, SalesProductRepository>();
         services.AddScoped<IEmployeeWorkRecords, EmployeeWorkRecords>();
         services.AddScoped<IJobTypeRepository, JobTypeRepository>();
         services.AddScoped<IAttendanceSettingsRepository, AttendanceSettingsRepository>();
@@ -110,11 +114,13 @@ public static class DependencyInjection
         services.AddScoped<IHarvestLotSalesQuery, HarvestLotSalesQuery>();
         services.AddScoped<ILotTraceQuery, LotTraceQuery>();
         services.AddScoped<IProvenancePageQuery, ProvenancePageQuery>();
+        services.AddScoped<IPublicOriginQuery, PublicOriginQuery>();
         services.AddScoped<IWithdrawalNoticeQuery, WithdrawalNoticeQuery>();
         services.AddScoped<IPurchaseRequestFulfilment, PurchaseRequestFulfilmentQuery>();
         services.AddScoped<IQualityClaimRepository, QualityClaimRepository>();
         services.AddScoped<IInvoiceSalesReturnCheck, NoSalesReturnsYetCheck>();
         services.AddScoped<ISalesInvoiceRepository, SalesInvoiceRepository>();
+        services.AddScoped<IPortWeighingRepository, Persistence.Repositories.Sales.PortWeighingRepository>();
         services.AddScoped<ISalesInvoiceSearchReader, SalesInvoiceSearchReader>();
         services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();
         services.AddScoped<ICustomerDebtAdjustmentRepository, CustomerDebtAdjustmentRepository>();
@@ -163,6 +169,7 @@ public static class DependencyInjection
         services.AddMessaging(configuration);
         services.AddFileStorage(configuration);
         services.AddOcr(configuration);
+        services.AddZalo(configuration);
         services.AddPayments(configuration);
         services.AddZalo(configuration);
         services.AddSingleton<ISpreadsheetWriter, ClosedXmlSpreadsheetWriter>();

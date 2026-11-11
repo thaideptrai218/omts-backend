@@ -1222,6 +1222,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("PublishedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<Guid?>("PurchaseRequestId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("RaftId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1261,6 +1264,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("LotCode")
                         .IsUnique();
+
+                    b.HasIndex("PurchaseRequestId");
 
                     b.HasIndex("RecordedByAccountId");
 
@@ -2923,6 +2928,86 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.ToTable("WorkAssignments");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.WorkDayPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool?>("Approved")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("ClientOperationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatorAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("JobTypeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid?>("PurchaseRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("RaftId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("RespondedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ResponseReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("ResponsibleAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("WorkDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JobTypeId");
+
+                    b.HasIndex("PurchaseRequestId")
+                        .IsUnique()
+                        .HasFilter("[PurchaseRequestId] IS NOT NULL");
+
+                    b.HasIndex("RaftId");
+
+                    b.HasIndex("CreatorAccountId", "ClientOperationId")
+                        .IsUnique();
+
+                    b.HasIndex("ResponsibleAccountId", "WorkDate");
+
+                    b.ToTable("WorkDayPlans", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_WorkDayPlan_Response", "([Approved] IS NULL AND [RespondedAt] IS NULL) OR ([Approved] IS NOT NULL AND [RespondedAt] IS NOT NULL AND ([Approved] = 1 OR ([ResponseReason] IS NOT NULL AND LEN(LTRIM(RTRIM([ResponseReason]))) > 0)))");
+                        });
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Platform.AuditEvent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3462,7 +3547,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Group = "PURCHASE_REQUEST",
                             IsFinal = false,
                             IsInitial = false,
-                            Meaning = "Accepted by the Cooperative Owner, possibly for fewer kg; invoices may be linked to it.",
+                            Meaning = "Accepted by the Cooperative Owner, possibly for fewer cages; invoices may be linked to it.",
                             SortOrder = 2
                         },
                         new
@@ -3717,6 +3802,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             IsInitial = false,
                             Meaning = "Recorded by mistake or never received; no longer counts.",
                             SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 3205,
+                            Code = "AWAITING_STAFF",
+                            DisplayName = "Awaiting staff confirmation",
+                            Group = "PURCHASE_REQUEST",
+                            IsFinal = false,
+                            IsInitial = false,
+                            Meaning = "User decision 31/10/2026: employees approve their shift before the Owner accepts the request.",
+                            SortOrder = 5
                         },
                         new
                         {
@@ -4010,7 +4106,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Id = 180,
                             AllowedPerformers = "Cooperative Owner",
                             FromStatusId = 3201,
-                            GuardCondition = "The accepted kg is above 0 and not more than the requested kg; the pickup date is not before today.",
+                            GuardCondition = "The accepted cages are above 0 and not more than the requested cages; the pickup date is not before today.",
                             ReasonRequired = false,
                             ToStatusId = 3202,
                             TriggerEvent = "Action",
@@ -4268,6 +4364,50 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             ToStatusId = 3406,
                             TriggerEvent = "Action",
                             UseCases = "LABOR-12"
+                        },
+                        new
+                        {
+                            Id = 30082,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 3201,
+                            GuardCondition = "The Owner sends dated shift invitations with a cage capacity.",
+                            ReasonRequired = false,
+                            ToStatusId = 3205,
+                            TriggerEvent = "Action",
+                            UseCases = "SALE-03"
+                        },
+                        new
+                        {
+                            Id = 30083,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 3205,
+                            GuardCondition = "The Owner declines with a reason.",
+                            ReasonRequired = true,
+                            ToStatusId = 3203,
+                            TriggerEvent = "Action",
+                            UseCases = "SALE-03"
+                        },
+                        new
+                        {
+                            Id = 30084,
+                            AllowedPerformers = "Trader",
+                            FromStatusId = 3205,
+                            GuardCondition = "Only the requesting customer may cancel; release shift reservations.",
+                            ReasonRequired = false,
+                            ToStatusId = 3204,
+                            TriggerEvent = "Action",
+                            UseCases = "SALE-02"
+                        },
+                        new
+                        {
+                            Id = 30085,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 3205,
+                            GuardCondition = "Enough distinct employees have approved the dated shift; cages and pickup match the staffing plan.",
+                            ReasonRequired = false,
+                            ToStatusId = 3202,
+                            TriggerEvent = "Action",
+                            UseCases = "SALE-03"
                         },
                         new
                         {
@@ -5910,10 +6050,16 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Sales.Product", b =>
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.PortWeighing", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("ConfirmedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ConfirmedByAccountId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset>("CreatedAt")
@@ -5921,6 +6067,97 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PurchaseRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("WeighedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("WeighedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConfirmedByAccountId");
+
+                    b.HasIndex("WeighedByAccountId");
+
+                    b.HasIndex("PurchaseRequestId", "WeighedAt");
+
+                    b.HasIndex(new[] { "PurchaseRequestId" }, "UX_PortWeighing_One_Unconfirmed_Per_Request")
+                        .IsUnique()
+                        .HasFilter("[ConfirmedAt] IS NULL");
+
+                    b.ToTable("PortWeighings");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.PortWeighingCage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("CageNumber")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("HarvestLotId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Kg")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<Guid>("PortWeighingId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HarvestLotId");
+
+                    b.HasIndex("PortWeighingId", "CageNumber")
+                        .IsUnique();
+
+                    b.ToTable("PortWeighingCages", t =>
+                        {
+                            t.HasCheckConstraint("CK_PortWeighingCage_Kg", "[Kg] > 0");
+
+                            t.HasCheckConstraint("CK_PortWeighingCage_Number", "[CageNumber] >= 1");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.Product", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -5946,7 +6183,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateOnly?>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasFilter("[Code] <> N''");
 
                     b.HasIndex("Name")
                         .IsUnique();
@@ -5955,7 +6202,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.ToTable("Products", t =>
                         {
-                            t.HasCheckConstraint("CK_Product_UnitPrice_Positive", "[UnitPrice] > 0");
+                            t.HasCheckConstraint("CK_Product_UnitPrice_Positive", "[UnitPrice] > 0 OR ([Code] <> N'' AND [UnitPrice] = 0)");
                         });
                 });
 
@@ -5965,12 +6212,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal?>("AcceptedKg")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
+                    b.Property<int?>("AcceptedCages")
+                        .HasColumnType("int");
 
                     b.Property<DateOnly?>("AgreedPickupDate")
                         .HasColumnType("date");
+
+                    b.Property<int?>("CagesPerEmployeePerDay")
+                        .HasColumnType("int");
 
                     b.Property<string>("CancelReason")
                         .HasMaxLength(1000)
@@ -5979,6 +6228,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("CancelledAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<Guid>("ClientOperationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -5986,6 +6243,12 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("HarvestCompletedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("HarvestCompletedByAccountId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Note")
@@ -5998,12 +6261,22 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly>("PickupDate")
                         .HasColumnType("date");
 
+                    b.Property<int?>("PlannedCages")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("PlannedPickupDate")
+                        .HasColumnType("date");
+
                     b.Property<Guid>("ProductId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal>("RequestedKg")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("RequestedCages")
+                        .HasColumnType("int");
 
                     b.Property<DateTimeOffset?>("RespondedAt")
                         .HasColumnType("datetimeoffset");
@@ -6024,6 +6297,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("SentAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("StaffingNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<int>("StatusId")
                         .HasColumnType("int");
 
@@ -6033,25 +6310,102 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateOnly?>("WorkDate")
+                        .HasColumnType("date");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasFilter("[Code] <> N''");
+
+                    b.HasIndex("HarvestCompletedByAccountId");
 
                     b.HasIndex("ProductId");
 
                     b.HasIndex("RespondedByAccountId");
 
+                    b.HasIndex("CustomerId", "ClientOperationId")
+                        .IsUnique()
+                        .HasFilter("[ClientOperationId] <> '00000000-0000-0000-0000-000000000000'");
+
+                    b.HasIndex("CustomerId", "CreatedAt");
+
                     b.HasIndex("CustomerId", "SentAt");
+
+                    b.HasIndex("StatusId", "CreatedAt");
 
                     b.HasIndex("StatusId", "SentAt");
 
                     b.ToTable("PurchaseRequests", t =>
                         {
-                            t.HasCheckConstraint("CK_PurchaseRequest_AcceptedKg_Range", "[AcceptedKg] IS NULL OR ([AcceptedKg] > 0 AND [AcceptedKg] <= [RequestedKg])");
+                            t.HasCheckConstraint("CK_PurchaseRequest_Accepted_Has_Response", "[StatusId] <> 3202 OR ([AcceptedCages] IS NOT NULL AND [AgreedPickupDate] IS NOT NULL AND [PayLaterAgreed] IS NOT NULL)");
 
-                            t.HasCheckConstraint("CK_PurchaseRequest_Accepted_Has_Response", "[StatusId] <> 3202 OR ([AcceptedKg] IS NOT NULL AND [AgreedPickupDate] IS NOT NULL AND [PayLaterAgreed] IS NOT NULL)");
+                            t.HasCheckConstraint("CK_PurchaseRequest_Cages", "[RequestedCages] > 0 AND ([AcceptedCages] IS NULL OR ([AcceptedCages] > 0 AND [AcceptedCages] <= [RequestedCages]))");
 
                             t.HasCheckConstraint("CK_PurchaseRequest_Declined_Has_Note", "[StatusId] <> 3203 OR [ResponseNote] IS NOT NULL");
 
-                            t.HasCheckConstraint("CK_PurchaseRequest_RequestedKg_Positive", "[RequestedKg] > 0");
+                            t.HasCheckConstraint("CK_PurchaseRequest_HarvestCompleted", "([HarvestCompletedAt] IS NULL AND [HarvestCompletedByAccountId] IS NULL) OR ([HarvestCompletedAt] IS NOT NULL AND [HarvestCompletedByAccountId] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_PurchaseRequest_Staffing", "([PlannedCages] IS NULL AND [WorkDate] IS NULL AND [PlannedPickupDate] IS NULL AND [CagesPerEmployeePerDay] IS NULL) OR ([PlannedCages] IS NOT NULL AND [PlannedCages] > 0 AND [PlannedCages] <= [RequestedCages] AND [WorkDate] IS NOT NULL AND [PlannedPickupDate] IS NOT NULL AND [WorkDate] <= [PlannedPickupDate] AND [CagesPerEmployeePerDay] IS NOT NULL AND [CagesPerEmployeePerDay] > 0)");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.PurchaseShiftInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool?>("Approved")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PurchaseRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateOnly?>("ReservedWorkDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset?>("RespondedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId", "ReservedWorkDate")
+                        .IsUnique()
+                        .HasFilter("[ReservedWorkDate] IS NOT NULL");
+
+                    b.HasIndex("PurchaseRequestId", "EmployeeId")
+                        .IsUnique();
+
+                    b.ToTable("PurchaseShiftInvitations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PurchaseShiftInvitation_Reservation", "[ReservedWorkDate] IS NULL OR ([Approved] IS NOT NULL AND [Approved] = 1 AND [RespondedAt] IS NOT NULL)");
                         });
                 });
 
@@ -6217,6 +6571,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<Guid?>("PortWeighingId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<decimal>("PriceCutTotal")
                         .HasPrecision(18)
                         .HasColumnType("decimal(18,0)");
@@ -6274,6 +6631,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("[DeduplicationKey] IS NOT NULL");
 
+                    b.HasIndex("PortWeighingId")
+                        .IsUnique()
+                        .HasFilter("[PortWeighingId] IS NOT NULL AND [StatusId] = 3501");
+
                     b.HasIndex("PurchaseRequestId");
 
                     b.HasIndex("QrToken")
@@ -6297,6 +6658,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_SalesInvoice_Request_Has_Customer", "[PurchaseRequestId] IS NULL OR [CustomerId] IS NOT NULL");
 
                             t.HasCheckConstraint("CK_SalesInvoice_Total", "[Total] >= 0 AND [Total] = [Subtotal] - [DiscountAmount] + [OtherCharges] - [PriceCutTotal]");
+
+                            t.HasCheckConstraint("CK_SalesInvoice_Weighing_Has_Request", "[PortWeighingId] IS NULL OR [PurchaseRequestId] IS NOT NULL");
                         });
                 });
 
@@ -6679,6 +7042,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OMTS.Domain.Entities.Sales.PurchaseRequest", "PurchaseRequest")
+                        .WithMany()
+                        .HasForeignKey("PurchaseRequestId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
                         .WithMany()
                         .HasForeignKey("RaftId")
@@ -6698,6 +7066,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Cycle");
+
+                    b.Navigation("PurchaseRequest");
 
                     b.Navigation("Raft");
 
@@ -7259,6 +7629,48 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Raft");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.WorkDayPlan", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", "CreatorAccount")
+                        .WithMany()
+                        .HasForeignKey("CreatorAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Labor.JobType", "JobType")
+                        .WithMany()
+                        .HasForeignKey("JobTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.PurchaseRequest", "PurchaseRequest")
+                        .WithOne("WorkDayPlan")
+                        .HasForeignKey("OMTS.Domain.Entities.Labor.WorkDayPlan", "PurchaseRequestId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
+                        .WithMany()
+                        .HasForeignKey("RaftId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", "ResponsibleAccount")
+                        .WithMany()
+                        .HasForeignKey("ResponsibleAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatorAccount");
+
+                    b.Navigation("JobType");
+
+                    b.Navigation("PurchaseRequest");
+
+                    b.Navigation("Raft");
+
+                    b.Navigation("ResponsibleAccount");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Platform.AuditEvent", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Identity.Account", "ActorAccount")
@@ -7328,16 +7740,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("ItemGroup");
 
                     b.Navigation("Status");
-                });
-
-            modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.InputItemCategory", b =>
-                {
-                    b.HasOne("OMTS.Domain.Entities.Purchasing.InputItemCategory", "Parent")
-                        .WithMany()
-                        .HasForeignKey("ParentId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Parent");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.InputIssue", b =>
@@ -7410,6 +7812,16 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("ItemUnit");
 
                     b.Navigation("SeedLotLine");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.InputItemCategory", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.InputItemCategory", "Parent")
+                        .WithMany()
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Parent");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Purchasing.InputItemPhoto", b =>
@@ -7835,6 +8247,47 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Zone");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.PortWeighing", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ConfirmedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.PurchaseRequest", "PurchaseRequest")
+                        .WithMany()
+                        .HasForeignKey("PurchaseRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("WeighedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PurchaseRequest");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.PortWeighingCage", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Harvest.HarvestLot", "HarvestLot")
+                        .WithMany()
+                        .HasForeignKey("HarvestLotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.PortWeighing", "PortWeighing")
+                        .WithMany("Cages")
+                        .HasForeignKey("PortWeighingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("HarvestLot");
+
+                    b.Navigation("PortWeighing");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.Product", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
@@ -7853,6 +8306,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("HarvestCompletedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("OMTS.Domain.Entities.Sales.Product", "Product")
                         .WithMany()
@@ -7876,6 +8334,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Product");
 
                     b.Navigation("Status");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.PurchaseShiftInvitation", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.PurchaseRequest", "PurchaseRequest")
+                        .WithMany("ShiftInvitations")
+                        .HasForeignKey("PurchaseRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("PurchaseRequest");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.QualityClaim", b =>
@@ -7934,6 +8411,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("OMTS.Domain.Entities.Sales.PortWeighing", "PortWeighing")
+                        .WithMany("Invoices")
+                        .HasForeignKey("PortWeighingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Sales.PurchaseRequest", "PurchaseRequest")
                         .WithMany()
                         .HasForeignKey("PurchaseRequestId")
@@ -7952,6 +8434,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Customer");
+
+                    b.Navigation("PortWeighing");
 
                     b.Navigation("PurchaseRequest");
 
@@ -8138,6 +8622,20 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.CustomerPayment", b =>
                 {
                     b.Navigation("Allocations");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.PortWeighing", b =>
+                {
+                    b.Navigation("Cages");
+
+                    b.Navigation("Invoices");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.PurchaseRequest", b =>
+                {
+                    b.Navigation("ShiftInvitations");
+
+                    b.Navigation("WorkDayPlan");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.QualityClaim", b =>

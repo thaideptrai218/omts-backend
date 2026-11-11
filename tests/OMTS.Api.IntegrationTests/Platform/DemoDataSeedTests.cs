@@ -190,8 +190,9 @@ public class DemoDataSeedTests
         Assert.True(await db.SupplierPayments.AnyAsync(p => p.StatusId == StatusIds.SupplierPayment.Recorded && p.Kind == SupplierPaymentKind.PaidBack));
         Assert.Equal(1, await db.SupplierPayments.CountAsync(p => p.StatusId == StatusIds.SupplierPayment.Cancelled));
         Assert.True(await db.SupplierPayments.AllAsync(p => p.Code.StartsWith("TT")));
-        // Each transaction told the Owner (MSG-PURCHASE-04), the cancellation apart from its payment.
-        var payments = await db.SupplierPayments.CountAsync();
+        // Each transaction told the Owner (MSG-PURCHASE-04), the cancellation apart from its payment. The money paid back
+        // with a return is saved by the return and sends no MSG-PURCHASE-04 of its own.
+        var payments = await db.SupplierPayments.CountAsync(p => p.PurchaseReturnId == null);
         Assert.Equal(payments + 1, await db.Notifications.CountAsync(n => n.Type == NotificationTypes.SupplierTransaction));
         // PN codes; Material lines name their raft, seed lines may; one amount keeps its dongs (BR-PURCHASE-02).
         Assert.True(await db.PurchaseReceipts.AllAsync(r => r.Code.StartsWith("PN")));

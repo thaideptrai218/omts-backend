@@ -10,9 +10,10 @@ namespace OMTS.Api.IntegrationTests.Harvest;
 /// The two migrations of 11/11/2026 on SQL Server (cages as decimal(9,2) with the over-plan reason, and the stock issue links): Up, Down and Up again, with the model equal to the last schema.
 /// Runs only with OMTS_TEST_SQLSERVER set, like the other migration tests.
 /// </summary>
+#pragma warning disable EF1002 // raw SQL below only interpolates constant table and column names of this test
 public class FarmingRulesMigrationSqlServerTests
 {
-    private const string Before = "20261111080000_InputGroupParentsIssueHeaderRaftAndMovementCodes";
+    private const string Before = "20261111135229_CageOrdersWorkPlansHarvestAndWeighing";
 
     [SqlServerFact]
     public async Task Up_down_and_up_again_change_the_cage_column_and_the_issue_links()

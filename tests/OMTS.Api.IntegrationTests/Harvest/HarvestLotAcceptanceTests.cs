@@ -147,7 +147,7 @@ public class HarvestLotAcceptanceTests
         using var api = new CyclesQaClockApiFactory();
         var (owner, _, raftId, _) = await KV01Async(api, "KV01-B01");
         api.Clock.At = InVietnam(10, 26);
-        var form = new HarvestFields().ToForm();
+        var form = new HarvestFields().For(await HarvestOrderKit.DefaultOrderAsync(owner)).ToForm();
         form.Add(new StringContent("2026-10-01"), "harvestDate");
         form.Add(new StringContent("2026-10-01T08:00:00+07:00"), "harvestedAt");
 
