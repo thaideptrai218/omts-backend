@@ -3101,7 +3101,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
-                            Id = 3701,
+                            Id = 3801,
                             Code = "DRAFT",
                             DisplayName = "Draft",
                             Group = "INPUT_ISSUE",
@@ -3112,7 +3112,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
-                            Id = 3702,
+                            Id = 3802,
                             Code = "COMPLETED",
                             DisplayName = "Completed",
                             Group = "INPUT_ISSUE",
@@ -3123,7 +3123,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
-                            Id = 3703,
+                            Id = 3803,
                             Code = "CANCELLED",
                             DisplayName = "Cancelled",
                             Group = "INPUT_ISSUE",
@@ -3522,10 +3522,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         {
                             Id = 30080,
                             AllowedPerformers = "Cooperative Owner; Zone Manager",
-                            FromStatusId = 3701,
+                            FromStatusId = 3801,
                             GuardCondition = "The issue is complete and no item or seed lot would go below zero when that is not allowed.",
                             ReasonRequired = false,
-                            ToStatusId = 3702,
+                            ToStatusId = 3802,
                             TriggerEvent = "Action",
                             UseCases = "INPUT-ISSUE"
                         },
@@ -3533,10 +3533,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         {
                             Id = 30081,
                             AllowedPerformers = "Cooperative Owner; Zone Manager",
-                            FromStatusId = 3702,
+                            FromStatusId = 3802,
                             GuardCondition = "An issue recorded by mistake; its quantities go back in the stock.",
                             ReasonRequired = true,
-                            ToStatusId = 3703,
+                            ToStatusId = 3803,
                             TriggerEvent = "Action",
                             UseCases = "INPUT-ISSUE"
                         },

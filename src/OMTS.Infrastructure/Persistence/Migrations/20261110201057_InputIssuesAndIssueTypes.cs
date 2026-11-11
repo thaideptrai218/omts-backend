@@ -160,9 +160,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 columns: new[] { "Id", "Code", "DisplayColor", "DisplayName", "Group", "IsFinal", "IsInitial", "Meaning", "SortOrder" },
                 values: new object[,]
                 {
-                    { 3701, "DRAFT", null, "Draft", "INPUT_ISSUE", false, true, "Being prepared; holds no quantity. Removed, never cancelled.", 1 },
-                    { 3702, "COMPLETED", null, "Completed", "INPUT_ISSUE", false, false, "The quantities have left the stock; may still be edited, which writes them again.", 2 },
-                    { 3703, "CANCELLED", null, "Cancelled", "INPUT_ISSUE", true, false, "Recorded by mistake; the quantities are back in the stock and it counts nowhere.", 3 }
+                    { 3801, "DRAFT", null, "Draft", "INPUT_ISSUE", false, true, "Being prepared; holds no quantity. Removed, never cancelled.", 1 },
+                    { 3802, "COMPLETED", null, "Completed", "INPUT_ISSUE", false, false, "The quantities have left the stock; may still be edited, which writes them again.", 2 },
+                    { 3803, "CANCELLED", null, "Cancelled", "INPUT_ISSUE", true, false, "Recorded by mistake; the quantities are back in the stock and it counts nowhere.", 3 }
                 });
 
             migrationBuilder.InsertData(
@@ -170,8 +170,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 columns: new[] { "Id", "AllowedPerformers", "FromStatusId", "GuardCondition", "ReasonRequired", "ToStatusId", "TriggerEvent", "UseCases" },
                 values: new object[,]
                 {
-                    { 30080, "Cooperative Owner; Zone Manager", 3701, "The issue is complete and no item or seed lot would go below zero when that is not allowed.", false, 3702, "Action", "INPUT-ISSUE" },
-                    { 30081, "Cooperative Owner; Zone Manager", 3702, "An issue recorded by mistake; its quantities go back in the stock.", true, 3703, "Action", "INPUT-ISSUE" }
+                    { 30080, "Cooperative Owner; Zone Manager", 3801, "The issue is complete and no item or seed lot would go below zero when that is not allowed.", false, 3802, "Action", "INPUT-ISSUE" },
+                    { 30081, "Cooperative Owner; Zone Manager", 3802, "An issue recorded by mistake; its quantities go back in the stock.", true, 3803, "Action", "INPUT-ISSUE" }
                 });
 
             migrationBuilder.CreateIndex(
@@ -267,17 +267,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             migrationBuilder.DeleteData(
                 table: "Statuses",
                 keyColumn: "Id",
-                keyValue: 3701);
+                keyValue: 3801);
 
             migrationBuilder.DeleteData(
                 table: "Statuses",
                 keyColumn: "Id",
-                keyValue: 3702);
+                keyValue: 3802);
 
             migrationBuilder.DeleteData(
                 table: "Statuses",
                 keyColumn: "Id",
-                keyValue: 3703);
+                keyValue: 3803);
         }
     }
 }

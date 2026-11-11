@@ -140,8 +140,8 @@ public static class StatusIds
     /// <summary>An input issue: a Draft holds no quantity and is removed; Completed writes the movements; Cancelled counts nowhere.</summary>
     public static class InputIssue
     {
-        public const int Draft = 3701;
-        public const int Completed = 3702;
-        public const int Cancelled = 3703;
+        public const int Draft = 3801;
+        public const int Completed = 3802;
+        public const int Cancelled = 3803;
     }
 }
