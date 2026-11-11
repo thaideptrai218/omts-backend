@@ -142,7 +142,8 @@ public class PurchaseRequestQaContractSqlServerTests
         Assert.Contains("AWAITING_RESPONSE", sent.After);
         var accept = rows.Single(e => e.Action == "PurchaseRequest.Accepted");
         Assert.Equal(host.Owner.Account.Id, accept.ActorAccountId);
-        Assert.Contains("AWAITING_RESPONSE", accept.Before);
+        // An accept follows the staffing plan whose staff agreed (decision of 31/10/2026), so the request was Awaiting staff.
+        Assert.Contains("AWAITING_STAFF", accept.Before);
         var values = JsonDocument.Parse(accept.After!).RootElement;
         Assert.Equal(("ACCEPTED", 50, true), (values.GetProperty("Status").GetString(), values.GetProperty("AcceptedCages").GetDecimal(), values.GetProperty("PayLaterAgreed").GetBoolean()));
         var cancel = rows.Single(e => e.Action == "PurchaseRequest.Cancelled");

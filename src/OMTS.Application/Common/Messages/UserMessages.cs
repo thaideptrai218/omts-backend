@@ -1183,7 +1183,11 @@ public static class UserMessages
         Legacy.PasswordChangeRequired, "Please change your temporary password before using other functions.");
 
     /// <summary>Not in the SRS list: a notice of the Zalo Mini App flows, whose text is built by the module.</summary>
-    public static UserMessage MiniAppNotification(string text) => new(Legacy.MiniAppNotification, text);
+    /// <remarks>The text is also its only parameter, so that every notification carries its parameters as the others do.</remarks>
+    public static UserMessage MiniAppNotification(string text) => new(Legacy.MiniAppNotification, text)
+    {
+        Parameters = new Dictionary<string, object?> { ["text"] = text },
+    };
 
     public static UserMessage ServiceNotResponding(string service) => new(
         Legacy.Msg04, $"The {service} service is not responding. The action has not been completed and the data in OMTS is unchanged; please try again later.");

@@ -80,6 +80,9 @@ internal sealed class DemoPurchaseRequestStep : IDemoSeedStep
 
         var awaiting = Place(milky, 10, 2, "Xin lấy hàng sáng sớm ở cảng Cái Rồng");
         await notices.NewRequestAsync(awaiting, cancellationToken);
+        // Saved on its own, as the API saves each request it is sent: a seed that fails on a later request keeps this one, and a rerun
+        // sees the trader's first request and adds nothing.
+        await context.Db.SaveChangesAsync(cancellationToken);
 
         var accepted = Place(fat, 6, 1, "Cần cho quán dịp cuối tuần");
         await notices.NewRequestAsync(accepted, cancellationToken);

@@ -623,21 +623,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             migrationBuilder.DeleteData(
                 table: "StatusTransitions",
                 keyColumn: "Id",
+                keyColumnType: "int",
                 keyValue: 30082);
 
             migrationBuilder.DeleteData(
                 table: "StatusTransitions",
                 keyColumn: "Id",
+                keyColumnType: "int",
                 keyValue: 30083);
 
             migrationBuilder.DeleteData(
                 table: "StatusTransitions",
                 keyColumn: "Id",
+                keyColumnType: "int",
                 keyValue: 30084);
 
             migrationBuilder.DeleteData(
                 table: "StatusTransitions",
                 keyColumn: "Id",
+                keyColumnType: "int",
                 keyValue: 30085);
 
             migrationBuilder.Sql("UPDATE [PurchaseRequests] SET [StatusId] = 3201 WHERE [StatusId] = 3205;");
@@ -645,6 +649,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             migrationBuilder.DeleteData(
                 table: "Statuses",
                 keyColumn: "Id",
+                keyColumnType: "int",
                 keyValue: 3205);
 
             migrationBuilder.DropColumn(
@@ -746,17 +751,21 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             migrationBuilder.UpdateData(
                 table: "StatusTransitions",
-                keyColumn: "Id",
-                keyValue: 180,
-                column: "GuardCondition",
-                value: "The accepted kg is above 0 and not more than the requested kg; the pickup date is not before today.");
+                keyColumns: ["Id"],
+                keyColumnTypes: ["int"],
+                keyValues: [180],
+                columns: ["GuardCondition"],
+                columnTypes: ["nvarchar(1000)"],
+                values: ["The accepted kg is above 0 and not more than the requested kg; the pickup date is not before today."]);
 
             migrationBuilder.UpdateData(
                 table: "Statuses",
-                keyColumn: "Id",
-                keyValue: 3202,
-                column: "Meaning",
-                value: "Accepted by the Cooperative Owner, possibly for fewer kg; invoices may be linked to it.");
+                keyColumns: ["Id"],
+                keyColumnTypes: ["int"],
+                keyValues: [3202],
+                columns: ["Meaning"],
+                columnTypes: ["nvarchar(1000)"],
+                values: ["Accepted by the Cooperative Owner, possibly for fewer kg; invoices may be linked to it."]);
 
             migrationBuilder.AddCheckConstraint(
                 name: "CK_PurchaseRequest_Accepted_Has_Response",
