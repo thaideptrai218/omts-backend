@@ -101,10 +101,10 @@ public class HarvestFarmingRulesTests(AuthApiFactory factory) : IClassFixture<Au
             warning.GetProperty("newKg").GetDecimal(), warning.GetProperty("totalKg").GetDecimal(), warning.GetProperty("overPlanPercent").GetDecimal()));
         Assert.Equal(1, await factory.LotCountAsync(raft.RaftId));
 
-        var noReason = await owner.PostAsync($"/api/rafts/{raft.RaftId}/harvest-lots", WithConfirmation(new HarvestFields { Cages = "8" }, "true", null));
+        var noReason = await owner.PostAsync($"/api/rafts/{raft.RaftId}/harvest-lots", await WithConfirmationAsync(owner, new HarvestFields { Cages = "8" }, "true", null));
         Assert.Equal("Over plan reason", (await noReason.ReadAsync(HttpStatusCode.BadRequest)).Text("field"));
 
-        var saved = await owner.PostAsync($"/api/rafts/{raft.RaftId}/harvest-lots", WithConfirmation(new HarvestFields { Cages = "8" }, "true", " Late harvest, good price "));
+        var saved = await owner.PostAsync($"/api/rafts/{raft.RaftId}/harvest-lots", await WithConfirmationAsync(owner, new HarvestFields { Cages = "8" }, "true", " Late harvest, good price "));
         var lot = (await saved.ReadAsync(HttpStatusCode.Created)).GetProperty("lot");
         Assert.Equal("Late harvest, good price", lot.Text("overPlanReason"));
         Assert.Equal(2, await factory.LotCountAsync(raft.RaftId));
@@ -118,7 +118,7 @@ public class HarvestFarmingRulesTests(AuthApiFactory factory) : IClassFixture<Au
         var raft = await factory.SeededRaftAsync();
         await factory.UpdateAsync<CultivationCycle>(raft.CycleId, c => c.TargetYieldKg = 1000m);
 
-        var answer = await raft.Owner.Client.PostAsync($"/api/rafts/{raft.RaftId}/harvest-lots", WithConfirmation(new HarvestFields { Cages = "31" }, "true", "big"));
+        var answer = await raft.Owner.Client.PostAsync($"/api/rafts/{raft.RaftId}/harvest-lots", await WithConfirmationAsync(raft.Owner.Client, new HarvestFields { Cages = "31" }, "true", "big"));
 
         var error = await answer.ReadAsync(HttpStatusCode.BadRequest); // 31 cages = 1550 kg: above +50 %
         Assert.Equal("MSG-GEN-01", error.Text("code"));
@@ -335,9 +335,9 @@ public class HarvestFarmingRulesTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal(125m, closedBody.GetProperty("summary").Kg("kgHarvested"));
     }
 
-    private static MultipartFormDataContent WithConfirmation(HarvestFields fields, string confirm, string? reason)
+    private static async Task<MultipartFormDataContent> WithConfirmationAsync(HttpClient client, HarvestFields fields, string confirm, string? reason)
     {
-        var form = fields.ToForm();
+        var form = fields.For(await HarvestOrderKit.DefaultOrderAsync(client)).ToForm();
         form.Add(new StringContent(confirm), "confirmOverPlan");
         if (reason is not null)
         {

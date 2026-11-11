@@ -4572,12 +4572,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CycleId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<int>("SourceKind")
-                        .HasColumnType("int");
-
-                    b.Property<Guid?>("SourceRecordId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<Guid?>("IssueTypeId")
                         .HasColumnType("uniqueidentifier");
 
@@ -4608,6 +4602,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
+
+                    b.Property<string>("SourceKind")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid?>("SourceRecordId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("StatusId")
                         .HasColumnType("int");
@@ -6830,6 +6832,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.MaterialUsage", b =>
                 {
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.InputIssue", "Issue")
+                        .WithMany()
+                        .HasForeignKey("IssueId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Purchasing.FarmingInputItem", "Item")
                         .WithMany()
                         .HasForeignKey("ItemId")
@@ -6848,11 +6855,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Purchasing.InputIssue", "Issue")
-                        .WithMany()
-                        .HasForeignKey("IssueId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("Issue");
 
                     b.Navigation("Item");
@@ -6868,6 +6870,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.InputIssue", "Issue")
+                        .WithMany()
+                        .HasForeignKey("IssueId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("RecordedByAccountId")
@@ -6880,14 +6887,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OMTS.Domain.Entities.Purchasing.InputIssue", "Issue")
-                        .WithMany()
-                        .HasForeignKey("IssueId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                    b.Navigation("Cycle");
 
                     b.Navigation("Issue");
-
-                    b.Navigation("Cycle");
 
                     b.Navigation("SeedLotLine");
                 });

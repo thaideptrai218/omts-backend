@@ -19,7 +19,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<Guid>(name: "CycleId", table: "InputIssues", type: "uniqueidentifier", nullable: true);
-            migrationBuilder.AddColumn<int>(name: "SourceKind", table: "InputIssues", type: "int", nullable: false, defaultValue: 0);
+            migrationBuilder.AddColumn<string>(name: "SourceKind", table: "InputIssues", type: "nvarchar(50)", maxLength: 50, nullable: false, defaultValue: "None");
             migrationBuilder.AddColumn<Guid>(name: "SourceRecordId", table: "InputIssues", type: "uniqueidentifier", nullable: true);
             migrationBuilder.AddColumn<Guid>(name: "IssueId", table: "SeedingRecords", type: "uniqueidentifier", nullable: true);
             migrationBuilder.AddColumn<Guid>(name: "IssueId", table: "MaterialUsages", type: "uniqueidentifier", nullable: true);
