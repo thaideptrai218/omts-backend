@@ -9,8 +9,9 @@ namespace OMTS.Application.Features.EmployeeApp;
 
 /// <summary>
 /// Ends the access of an employee to the employee app (BR-LABOR-02): every open session is revoked and the linked device is
-/// unlinked, so a new login code is needed. Used when another device is linked, when the phone number of the profile changes
-/// and when the employment ends. Logging out is not this: it ends one session and keeps the device.
+/// unlinked, so a new login code is needed; a phone number change or an end of employment also cancels the open login codes. Used when
+/// another device is linked, when the phone number of the profile changes, when the employment ends and when a copy of the app is
+/// detected. Logging out is not this: it ends one session and keeps the device.
 /// </summary>
 public sealed class EmployeeAppAccess(IEmployeeAppRepository app, AuditLogService audit, TimeProvider timeProvider)
 {
@@ -32,6 +33,17 @@ public sealed class EmployeeAppAccess(IEmployeeAppRepository app, AuditLogServic
             session.Revoke(now, reason.ToString());
         }
 
+        // An open code outlives nothing that ends the access: a code issued for the old phone number must not link a device on the new
+        // one, and one issued before an end of employment must not work again after a resume. Not for a new device (that code is the one
+        // being spent) nor for a suspected copy (a code issued since is the way back in).
+        if (reason is EmployeeDeviceUnlinkReason.PhoneChanged or EmployeeDeviceUnlinkReason.EmploymentEnded)
+        {
+            foreach (var code in await app.ListOpenCodesAsync(employeeId, cancellationToken))
+            {
+                code.CancelledAt = now;
+            }
+        }
+
         if (await app.GetLinkedDeviceAsync(employeeId, cancellationToken) is not { } device)
         {
             return;
@@ -48,6 +60,7 @@ public sealed class EmployeeAppAccess(IEmployeeAppRepository app, AuditLogServic
             {
                 EmployeeDeviceUnlinkReason.NewDevice => "A login code was entered on another device.",
                 EmployeeDeviceUnlinkReason.PhoneChanged => "The phone number of the profile changed.",
+                EmployeeDeviceUnlinkReason.CloneSuspected => "A device secret that was already replaced was presented again: the app was probably copied to another phone.",
                 _ => "The employment ended.",
             },
             ActorEmployeeId = actorEmployeeId,

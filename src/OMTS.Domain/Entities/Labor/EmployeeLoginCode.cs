@@ -11,6 +11,7 @@ namespace OMTS.Domain.Entities.Labor;
 /// </summary>
 public class EmployeeLoginCode : Entity
 {
+    public const int CodeLength = 6;
     public const int MaxFailedAttempts = 5;
     public static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(5);
 

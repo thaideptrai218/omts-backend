@@ -141,7 +141,7 @@ public static class DependencyInjection
         services.AddOptions<JwtOptions>()
             .Bind(configuration.GetSection(JwtOptions.SectionName))
             .Validate(
-                o => !string.IsNullOrWhiteSpace(o.EmployeeAudience) && !string.Equals(o.EmployeeAudience, o.Audience, StringComparison.Ordinal),
+                o => !string.IsNullOrWhiteSpace(o.EmployeeAudience) && !string.Equals(o.EmployeeAudience.TrimEnd('/'), o.Audience.TrimEnd('/'), StringComparison.OrdinalIgnoreCase),
                 $"{JwtOptions.SectionName}:EmployeeAudience must be set and differ from {JwtOptions.SectionName}:Audience.")
             .ValidateOnStart();
         services.AddSingleton<ITokenService, JwtTokenService>();

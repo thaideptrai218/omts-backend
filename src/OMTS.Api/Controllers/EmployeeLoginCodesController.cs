@@ -24,7 +24,8 @@ public sealed class EmployeeLoginCodesController(EmployeeLoginCodeService loginC
     /// to the caller's own account. 409 MSG-LABOR-09 (<c>reason</c> <c>Left</c> or <c>NoPhone</c>) when the employee has left or has no phone
     /// number; 403 for a Zone Manager who does not maintain the employee.
     /// </summary>
-    [EnableRateLimiting(RateLimitingExtensions.CodeRequests)]
+    [EnableRateLimiting(RateLimitingExtensions.EmployeeLoginCodes)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)] // carries the code: never stored
     [HttpPost]
     [RequirePermission(PermissionFunctions.LaborWorkers, PermissionAction.Create, PermissionScope.AnyZone)]
     [ProducesResponseType<EmployeeLoginCodeIssued>(StatusCodes.Status201Created)]

@@ -163,5 +163,39 @@ public class EmployeeAppSqlServerTests
         Assert.NotNull(row.CancelledAt);
         Assert.Equal("MSG-LABOR-19", await (await EnterCodeAsync(api.CreateClient(), phone, code)).ErrorCodeAsync());
         Assert.Equal(0, await QueryAsync(api, db => db.EmployeeSessions.CountAsync(s => s.EmployeeId == employeeId)));
+        // M2: the cancellation is audited once and the issuer told once, however many entries ran in parallel.
+        Assert.Equal(1, await QueryAsync(api, db => db.AuditEvents.CountAsync(e => e.RecordId == employeeId && e.Action == "Employee.LoginCodeCancelled")));
+        Assert.Equal(1, await QueryAsync(api, db => db.Notifications.CountAsync(n => n.MessageCode == "MSG-LABOR-19" && n.Type == "EMPLOYEE_LOGIN_CODE")));
+    }
+
+    // M3: the same device secret presented by several requests at once: only one is the next secret in line, the others are a copy.
+    // One login, no 500, and afterwards the device is unlinked and no session is open.
+    [SqlServerFact]
+    public async Task Parallel_code_less_logins_with_one_secret_leave_one_login_and_an_unlinked_device()
+    {
+        await using var database = SqlServerTestDatabase.Create();
+        var (api, owner, zoneId) = await StartOwnerAsync(database);
+        await using var host = api;
+        var (employeeId, phone) = await NewWorkerAsync(owner, zoneId);
+        var linkResponse = await EnterCodeAsync(api.CreateClient(), phone, await IssueCodeAsync(owner, employeeId));
+        Assert.Equal(HttpStatusCode.OK, linkResponse.StatusCode);
+        var linked = await linkResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var (deviceId, secret) = (linked.GetProperty("deviceId").GetGuid(), linked.GetProperty("deviceSecret").GetString());
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ =>
+            api.CreateClient().PostAsJsonAsync(Login, new { phoneNumber = phone, deviceId, deviceSecret = secret })));
+
+        await AssertNoServerErrorAsync(responses);
+        Assert.Single(responses, r => r.StatusCode == HttpStatusCode.OK);
+        foreach (var loser in responses.Where(r => r.StatusCode != HttpStatusCode.OK))
+        {
+            Assert.Equal(HttpStatusCode.Unauthorized, loser.StatusCode);
+            Assert.Equal("MSG-LABOR-17", await loser.ErrorCodeAsync());
+        }
+
+        var device = await QueryAsync(api, db => db.EmployeeDevices.AsNoTracking().SingleAsync(d => d.Id == deviceId));
+        Assert.False(device.IsLinked);
+        Assert.Equal(OMTS.Domain.Enums.EmployeeDeviceUnlinkReason.CloneSuspected, device.UnlinkReason);
+        Assert.Equal(0, await QueryAsync(api, db => db.EmployeeSessions.CountAsync(s => s.EmployeeId == employeeId && s.RevokedAt == null)));
     }
 }

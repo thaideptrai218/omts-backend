@@ -9,6 +9,7 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Common.Validation;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.Notifications;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Labor;
 using OMTS.Domain.Enums;
@@ -25,6 +26,7 @@ public sealed class EmployeeAppLoginService(
     IVerificationCodeHasher codeHasher,
     EmployeeAppAccess access,
     EmployeeAppTokenIssuer issuer,
+    INotificationDispatcher notifications,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
@@ -72,30 +74,59 @@ public sealed class EmployeeAppLoginService(
             return AppError.Invalid("Platform");
         }
 
-        return await LoginWithCodeAsync(employee, request.LoginCode.Trim(), platform, request.DeviceName, cancellationToken);
+        var loginCode = request.LoginCode.Trim();
+        if (!IsWellFormed(loginCode))
+        {
+            // A typo that cannot be a code (the format is public) is a bad request, not a wrong entry: it uses up no try of the code (L5).
+            return AppError.Invalid("Login code");
+        }
+
+        return await LoginWithCodeAsync(employee, loginCode, platform, request.DeviceName, cancellationToken);
     }
 
-    /// <summary>LABOR-06.1: the linked device with its secret; null when this is not the linked device, so the code is asked for.</summary>
+    /// <summary>
+    /// LABOR-06.1: the linked device with its secret; null when this is not the linked device, so the code is asked for. Every such login
+    /// rotates the secret (the answer carries the new one), ends the device's earlier sessions (one session per device) and, when the secret
+    /// that comes back is the one the last login replaced, treats the app as copied: the device is unlinked and its sessions end.
+    /// </summary>
     private async Task<Result<EmployeeAppTokens>?> LoginOnLinkedDeviceAsync(
         Employee employee, Guid deviceId, string deviceSecret, CancellationToken cancellationToken)
     {
+        var presented = SecretHashing.Sha256Hex(deviceSecret);
         for (var attempt = 1; ; attempt++)
         {
             try
             {
                 var device = await app.GetLinkedDeviceAsync(employee.Id, cancellationToken);
-                if (device is null || device.Id != deviceId
-                    || !CryptographicOperations.FixedTimeEquals(
-                        Encoding.ASCII.GetBytes(SecretHashing.Sha256Hex(deviceSecret)), Encoding.ASCII.GetBytes(device.DeviceSecretHash)))
+                if (device is null || device.Id != deviceId)
                 {
                     return null;
                 }
 
+                if (!SameHash(presented, device.DeviceSecretHash))
+                {
+                    if (device.PreviousDeviceSecretHash is not null && SameHash(presented, device.PreviousDeviceSecretHash))
+                    {
+                        // A secret the device no longer has: the app was copied and the copy (or the original) is using the old one.
+                        await access.RevokeAsync(employee.Id, EmployeeDeviceUnlinkReason.CloneSuspected, cancellationToken);
+                        await unitOfWork.SaveChangesAsync(cancellationToken);
+                    }
+
+                    return null;
+                }
+
                 var now = timeProvider.GetUtcNow();
+                var newSecret = SecretHashing.NewToken();
+                device.RotateSecret(SecretHashing.Sha256Hex(newSecret));
                 device.LastSeenAt = now;
+                foreach (var earlier in await app.ListOpenSessionsAsync(employee.Id, cancellationToken))
+                {
+                    earlier.Revoke(now, "Superseded by a new login on the device.");
+                }
+
                 var (session, refreshToken) = issuer.OpenSession(employee.Id, device.Id, now);
                 await unitOfWork.SaveChangesAsync(cancellationToken);
-                return issuer.Tokens(employee, session, device.Id, refreshToken);
+                return issuer.Tokens(employee, session, device.Id, refreshToken, deviceSecret: newSecret);
             }
             catch (ConcurrencyConflictException) when (attempt < MaxSaveAttempts)
             {
@@ -128,6 +159,7 @@ public sealed class EmployeeAppLoginService(
                     if (open.IsLocked)
                     {
                         open.CancelledAt = now;
+                        await RecordLockoutAsync(employee, open, cancellationToken);
                     }
 
                     await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -156,7 +188,7 @@ public sealed class EmployeeAppLoginService(
             EmployeeId = employee.Id,
             DeviceSecretHash = SecretHashing.Sha256Hex(deviceSecret),
             Platform = platform,
-            DeviceName = deviceName is { Length: > MaxDeviceNameLength } ? deviceName[..MaxDeviceNameLength] : deviceName,
+            DeviceName = CleanDeviceName(deviceName),
             LinkedAt = now,
             LinkedByLoginCodeId = code.Id,
             LastSeenAt = now,
@@ -181,6 +213,40 @@ public sealed class EmployeeAppLoginService(
         }
 
         return issuer.Tokens(employee, session, device.Id, refreshToken, deviceSecret: deviceSecret);
+    }
+
+    /// <summary>Exactly 6 ASCII digits (not <c>char.IsDigit</c>, which accepts digits of other scripts).</summary>
+    public static bool IsWellFormed(string loginCode) => loginCode.Length == EmployeeLoginCode.CodeLength && loginCode.All(c => c is >= '0' and <= '9');
+
+    /// <summary>L8: the name of the phone as the Zone Manager will see it: no control characters, trimmed, at most 200 characters; null when nothing is left.</summary>
+    public static string? CleanDeviceName(string? deviceName)
+    {
+        var cleaned = new string((deviceName ?? string.Empty).Where(c => !char.IsControl(c)).ToArray()).Trim();
+        if (cleaned.Length == 0)
+        {
+            return null;
+        }
+
+        return cleaned.Length > MaxDeviceNameLength ? cleaned[..MaxDeviceNameLength] : cleaned;
+    }
+
+    private static bool SameHash(string a, string b) =>
+        CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(a), Encoding.ASCII.GetBytes(b));
+
+    /// <summary>The 5th wrong entry cancelled the code: say so in the audit log (no code in it) and tell the issuer, who otherwise sees nothing but a worker who cannot log in.</summary>
+    private async Task RecordLockoutAsync(Employee employee, EmployeeLoginCode code, CancellationToken cancellationToken)
+    {
+        audit.Record(new AuditEntry("Employee.LoginCodeCancelled", nameof(Employee))
+        {
+            RecordId = employee.Id,
+            After = new { code.IssuedAt, code.ExpiresAt, code.FailedAttempts },
+            Reason = "The login code was cancelled by the 5th wrong entry.",
+        });
+        await notifications.NotifyAsync(
+            [code.IssuedByAccountId],
+            new NotificationContent(
+                NotificationTypes.EmployeeLoginCode, "Employee login code cancelled", UserMessages.LoginCodeCancelledByWrongEntries(employee.FullName)),
+            cancellationToken);
     }
 
     // MSG-LABOR-19: a wrong, expired, spent or cancelled code all answer the same, so the answer says nothing about which.

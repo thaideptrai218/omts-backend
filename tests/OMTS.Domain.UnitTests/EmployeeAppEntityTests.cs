@@ -79,6 +79,18 @@ public class EmployeeAppEntityTests
         Assert.True(new EmployeeDevice().IsLinked);
     }
 
+    [Fact]
+    public void Rotating_the_device_secret_keeps_only_the_one_replaced()
+    {
+        var device = new EmployeeDevice { DeviceSecretHash = "first" };
+
+        device.RotateSecret("second");
+        Assert.Equal(("second", "first"), (device.DeviceSecretHash, device.PreviousDeviceSecretHash));
+
+        device.RotateSecret("third");
+        Assert.Equal(("third", "second"), (device.DeviceSecretHash, device.PreviousDeviceSecretHash));
+    }
+
     private static EmployeeSession NewSession() => new()
     {
         RefreshTokenHash = "first",

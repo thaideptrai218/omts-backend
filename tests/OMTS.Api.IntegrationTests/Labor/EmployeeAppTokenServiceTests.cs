@@ -123,7 +123,12 @@ public class EmployeeAppTokenServiceTests
     [Fact]
     public void The_host_refuses_to_start_when_the_two_audiences_are_the_same_or_empty()
     {
-        foreach (var settings in new[] { ("Jwt:EmployeeAudience", "omts-clients"), ("Jwt:EmployeeAudience", " ") })
+        foreach (var settings in new[]
+        {
+            ("Jwt:EmployeeAudience", "omts-clients"), ("Jwt:EmployeeAudience", " "),
+            // L7: the audience validator of IdentityModel ignores a trailing slash, and so does the guard.
+            ("Jwt:EmployeeAudience", "omts-clients/"), ("Jwt:EmployeeAudience", "OMTS-Clients"),
+        })
         {
             using var baseApi = new AuthApiFactory();
             using var api = baseApi.WithWebHostBuilder(b => b.UseSetting(settings.Item1, settings.Item2));

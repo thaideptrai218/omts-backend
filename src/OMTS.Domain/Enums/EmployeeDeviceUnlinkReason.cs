@@ -11,4 +11,7 @@ public enum EmployeeDeviceUnlinkReason
 
     /// <summary>The day after the last working day came, or the employment was ended with a day before today (LABOR-01.3).</summary>
     EmploymentEnded,
+
+    /// <summary>The device secret that the last code-less login replaced was presented again: the app was probably copied to another phone (BR-LABOR-02).</summary>
+    CloneSuspected,
 }

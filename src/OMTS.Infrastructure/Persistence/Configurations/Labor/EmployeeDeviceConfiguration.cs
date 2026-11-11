@@ -11,6 +11,7 @@ internal sealed class EmployeeDeviceConfiguration : IEntityTypeConfiguration<Emp
         builder.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId);
         builder.HasOne(x => x.LinkedByLoginCode).WithMany().HasForeignKey(x => x.LinkedByLoginCodeId);
         builder.Property(x => x.DeviceSecretHash).HasMaxLength(Lengths.Hash);
+        builder.Property(x => x.PreviousDeviceSecretHash).HasMaxLength(Lengths.Hash);
         builder.Property(x => x.Platform).HasMaxLength(Lengths.Code);
         builder.Property(x => x.DeviceName).HasMaxLength(Lengths.Name);
         builder.Property(x => x.PushToken).HasMaxLength(500);

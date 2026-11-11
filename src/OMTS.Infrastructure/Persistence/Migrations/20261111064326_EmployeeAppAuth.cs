@@ -50,6 +50,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     EmployeeId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     DeviceSecretHash = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: false),
+                    PreviousDeviceSecretHash = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: true),
                     Platform = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     DeviceName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
                     PushToken = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),

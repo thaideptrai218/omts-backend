@@ -4,7 +4,9 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Employees;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Application.Features.Notifications;
 using OMTS.Domain.Entities.Labor;
+using OMTS.Domain.Entities.Platform;
 using OMTS.Domain.Enums;
 using static OMTS.Api.IntegrationTests.Employees.EmployeeRequests;
 using static OMTS.Api.IntegrationTests.Employees.EmployeesV2QaKit;
@@ -193,7 +195,9 @@ public class EmployeeAppLoginTests(AuthApiFactory factory) : IClassFixture<AuthA
         var again = await (await LoginOnDeviceAsync(factory.CreateClient(), worker.Phone, linked)).JsonAsync(HttpStatusCode.OK);
 
         Assert.Equal(linked.GetProperty("deviceId").GetGuid(), again.GetProperty("deviceId").GetGuid());
-        Assert.Equal(JsonValueKind.Null, again.GetProperty("deviceSecret").ValueKind);
+        // M3: the secret is rotated at every code-less login, and the answer carries the new one.
+        Assert.Matches("^[0-9a-fA-F]{64}$", again.GetProperty("deviceSecret").GetString()!);
+        Assert.NotEqual(linked.GetProperty("deviceSecret").GetString(), again.GetProperty("deviceSecret").GetString());
         Assert.Equal(linked.GetProperty("qrKey").GetString(), again.GetProperty("qrKey").GetString());
         Assert.NotEqual(linked.GetProperty("refreshToken").GetString(), again.GetProperty("refreshToken").GetString());
         Assert.Equal(2, (await factory.SessionsAsync(worker.Id)).Count);
@@ -213,7 +217,8 @@ public class EmployeeAppLoginTests(AuthApiFactory factory) : IClassFixture<AuthA
         var oldDevice = await LinkDeviceAsync(factory, world, worker);
         var oldPhone = factory.AsEmployee(oldDevice);
         var secondSession = await (await LoginOnDeviceAsync(factory.CreateClient(), worker.Phone, oldDevice)).JsonAsync(HttpStatusCode.OK);
-        Assert.Equal(HttpStatusCode.NoContent, (await oldPhone.PutAsJsonAsync(PushToken, new { pushToken = "old-phone-token", pushPermissionGranted = true })).StatusCode);
+        // The code-less login ended the first session (one session per device): only the second one is open.
+        Assert.Equal(HttpStatusCode.NoContent, (await factory.AsEmployee(secondSession).PutAsJsonAsync(PushToken, new { pushToken = "old-phone-token", pushPermissionGranted = true })).StatusCode);
 
         var newDevice = await LinkDeviceAsync(factory, world, worker);
 
@@ -233,5 +238,113 @@ public class EmployeeAppLoginTests(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(HttpStatusCode.NoContent, (await factory.AsEmployee(newDevice).PostAsync(Logout, null)).StatusCode);
         var unlinked = Assert.Single(await factory.AuditAsync(worker.Id, "Employee.DeviceUnlinked"));
         Assert.Equal(worker.Id, unlinked.ActorEmployeeId);
+    }
+
+    // M3: each code-less login replaces the secret. The one just replaced coming back is a copy of the app; one older than that is only wrong.
+    [Fact]
+    public async Task A_replaced_device_secret_that_comes_back_unlinks_the_device_and_ends_its_sessions()
+    {
+        var world = await WorldAsync(factory);
+        var worker = await AddWorkerAsync(world);
+        var first = await LinkDeviceAsync(factory, world, worker);
+        var second = await (await LoginOnDeviceAsync(factory.CreateClient(), worker.Phone, first)).JsonAsync(HttpStatusCode.OK);
+        var third = await (await LoginOnDeviceAsync(factory.CreateClient(), worker.Phone, second)).JsonAsync(HttpStatusCode.OK);
+        var stored = await factory.DeviceAsync(third);
+        Assert.NotNull(stored.PreviousDeviceSecretHash);
+        Assert.NotEqual(stored.DeviceSecretHash, stored.PreviousDeviceSecretHash);
+
+        // Two secrets back is not the previous one: asked for a code, nothing unlinked.
+        Assert.Equal("MSG-LABOR-17", await CodeOfAsync(await LoginOnDeviceAsync(factory.CreateClient(), worker.Phone, first)));
+        Assert.True((await factory.DeviceAsync(third)).IsLinked);
+        Assert.Equal(HttpStatusCode.NoContent, (await factory.AsEmployee(third).PutAsJsonAsync(PushToken, new { pushToken = (string?)null, pushPermissionGranted = false })).StatusCode);
+
+        // The previous one is a clone: the device is unlinked, every session ends, and the current secret is worth nothing now.
+        Assert.Equal("MSG-LABOR-17", await CodeOfAsync(await LoginOnDeviceAsync(factory.CreateClient(), worker.Phone, second)));
+
+        var device = await factory.DeviceAsync(third);
+        Assert.Equal((false, (EmployeeDeviceUnlinkReason?)EmployeeDeviceUnlinkReason.CloneSuspected), (device.IsLinked, device.UnlinkReason));
+        Assert.All(await factory.SessionsAsync(worker.Id), s => Assert.NotNull(s.RevokedAt));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await factory.AsEmployee(third).PostAsync(Logout, null)).StatusCode);
+        Assert.Equal("MSG-LABOR-17", await CodeOfAsync(await LoginOnDeviceAsync(factory.CreateClient(), worker.Phone, third)));
+        var audited = Assert.Single(await factory.AuditAsync(worker.Id, "Employee.DeviceUnlinked"));
+        Assert.Contains("copied", audited.Reason);
+        // The way back is a new code, as for any unlinked device.
+        var code = await IssueCodeAsync(world.Manager, worker.Id);
+        Assert.Equal(HttpStatusCode.OK, (await LoginWithCodeAsync(factory.CreateClient(), worker.Phone, code)).StatusCode);
+    }
+
+    // M3: one session per device: a code-less login ends the session the device had.
+    [Fact]
+    public async Task A_code_less_login_ends_the_earlier_session_of_the_device()
+    {
+        var world = await WorldAsync(factory);
+        var worker = await AddWorkerAsync(world);
+        var linked = await LinkDeviceAsync(factory, world, worker);
+
+        var again = await (await LoginOnDeviceAsync(factory.CreateClient(), worker.Phone, linked)).JsonAsync(HttpStatusCode.OK);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await factory.AsEmployee(linked).PostAsync(Logout, null)).StatusCode);
+        var refresh = await RefreshAsync(factory.CreateClient(), linked.GetProperty("refreshToken").GetString()!);
+        Assert.Equal(HttpStatusCode.Unauthorized, refresh.StatusCode);
+        Assert.Equal("revoked", await ReasonAsync(refresh));
+        Assert.Single(await factory.SessionsAsync(worker.Id), s => s.RevokedAt is null);
+        Assert.True((await factory.DeviceAsync(linked)).IsLinked);
+        Assert.Equal(HttpStatusCode.NoContent, (await factory.AsEmployee(again).PostAsync(Logout, null)).StatusCode);
+    }
+
+    // M2: the 5th wrong entry leaves a trace without the code, and the issuer hears of it.
+    [Fact]
+    public async Task The_fifth_wrong_entry_is_audited_without_the_code_and_the_issuer_is_notified()
+    {
+        var world = await WorldAsync(factory);
+        var worker = await AddWorkerAsync(world);
+        var code = await IssueCodeAsync(world.Manager, worker.Id);
+        var wrong = code == "000000" ? "111111" : "000000";
+        var phone = factory.CreateClient();
+        var asNumber = $"(?<!\\d){code}(?!\\d)";
+        Task<List<Notification>> TellingsAsync(Guid account) => factory.QueryAsync(db => db.Notifications.AsNoTracking()
+            .Where(n => n.RecipientAccountId == account && n.MessageCode == "MSG-LABOR-19").ToListAsync());
+
+        for (var entry = 1; entry <= 4; entry++)
+        {
+            await LoginWithCodeAsync(phone, worker.Phone, wrong);
+        }
+
+        Assert.Empty(await factory.AuditAsync(worker.Id, "Employee.LoginCodeCancelled"));
+        Assert.Empty(await TellingsAsync(world.ManagerAccount.Id));
+        await LoginWithCodeAsync(phone, worker.Phone, wrong);
+        // The dead code and more wrong entries add nothing: one cancellation, one notice.
+        await LoginWithCodeAsync(phone, worker.Phone, code);
+        await LoginWithCodeAsync(phone, worker.Phone, wrong);
+
+        var cancelled = Assert.Single(await factory.AuditAsync(worker.Id, "Employee.LoginCodeCancelled"));
+        Assert.Equal(((Guid?)null, (Guid?)null), (cancelled.ActorAccountId, cancelled.ActorEmployeeId));
+        Assert.DoesNotMatch(asNumber, $"{cancelled.Before}{cancelled.After}{cancelled.Reason}");
+        var told = Assert.Single(await TellingsAsync(world.ManagerAccount.Id));
+        Assert.Equal(NotificationTypes.EmployeeLoginCode, told.Type);
+        Assert.Contains(worker.Name, told.Body);
+        Assert.DoesNotMatch(asNumber, told.Body);
+        // Only the account that issued the code is told.
+        Assert.Empty(await TellingsAsync(world.OwnerAccount.Id));
+    }
+
+    // L5: an entry that cannot be a code is a bad request (MSG-GEN-01) and uses up no try.
+    [Fact]
+    public async Task A_malformed_entry_is_a_bad_request_and_uses_up_no_try()
+    {
+        var world = await WorldAsync(factory);
+        var worker = await AddWorkerAsync(world);
+        var code = await IssueCodeAsync(world.Manager, worker.Id);
+
+        foreach (var typo in new[] { code[..5], code + "0", "abcdef", "12-345", "١٢٣٤٥٦" })
+        {
+            var refused = await LoginWithCodeAsync(factory.CreateClient(), worker.Phone, typo);
+
+            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+            Assert.Equal("MSG-GEN-01", await CodeOfAsync(refused));
+        }
+
+        Assert.Equal(0, Assert.Single(await factory.CodesAsync(worker.Id)).FailedAttempts);
+        Assert.Equal(HttpStatusCode.OK, (await LoginWithCodeAsync(factory.CreateClient(), worker.Phone, code)).StatusCode);
     }
 }

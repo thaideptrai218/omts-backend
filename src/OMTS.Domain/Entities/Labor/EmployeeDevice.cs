@@ -18,6 +18,12 @@ public class EmployeeDevice : Entity
     /// <summary>SHA-256 of a 256-bit random value; a random value of that size needs no slow hash.</summary>
     public string DeviceSecretHash { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Hash of the secret that <see cref="DeviceSecretHash"/> replaced at the last code-less login. The secret is rotated at every such login, so
+    /// a login that presents this one again comes from a copy of the app: the device is unlinked (clone detection).
+    /// </summary>
+    public string? PreviousDeviceSecretHash { get; set; }
+
     /// <summary>"ios" or "android".</summary>
     public string Platform { get; set; } = string.Empty;
 
@@ -45,6 +51,13 @@ public class EmployeeDevice : Entity
     public byte[] RowVersion { get; set; } = [];
 
     public bool IsLinked => UnlinkedAt is null;
+
+    /// <summary>Replaces the secret with a new one's hash, keeping the one replaced so its return can be told from a wrong guess.</summary>
+    public void RotateSecret(string newSecretHash)
+    {
+        PreviousDeviceSecretHash = DeviceSecretHash;
+        DeviceSecretHash = newSecretHash;
+    }
 
     public void Unlink(DateTimeOffset now, EmployeeDeviceUnlinkReason reason)
     {

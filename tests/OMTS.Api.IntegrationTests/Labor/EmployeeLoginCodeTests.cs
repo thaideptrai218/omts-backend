@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Employees;
@@ -147,8 +148,10 @@ public class EmployeeLoginCodeTests(AuthApiFactory factory) : IClassFixture<Auth
         Assert.Equal(world.ManagerAccount.Id, issued.ActorAccountId);
         Assert.Null(issued.ActorEmployeeId);
         var everyRow = await host.QueryAsync(db => db.AuditEvents.AsNoTracking().ToListAsync());
-        Assert.DoesNotContain(everyRow, e => $"{e.Before}{e.After}{e.Reason}{e.RecordCode}".Contains(code, StringComparison.Ordinal));
-        Assert.DoesNotContain(host.Logs.Lines, line => line.Contains(code, StringComparison.Ordinal));
+        // As a whole number only: timestamps hold 7-digit fractions, so the same 6 digits can occur inside one by chance.
+        var asNumber = new Regex($"(?<!\\d){code}(?!\\d)");
+        Assert.DoesNotContain(everyRow, e => asNumber.IsMatch($"{e.Before}{e.After}{e.Reason}{e.RecordCode}"));
+        Assert.DoesNotContain(host.Logs.Lines, line => asNumber.IsMatch(line));
         Assert.DoesNotContain(code, await host.QueryAsync(db => db.EmployeeLoginCodes.AsNoTracking().Select(c => c.CodeHash).SingleAsync()));
     }
 

@@ -24,7 +24,8 @@ public sealed class EmployeeAppController(
     /// before is logged out). Without a code 401 MSG-LABOR-17 with <c>loginCodeRequired</c>; an unknown phone number 401 MSG-LABOR-18; a
     /// wrong, expired, spent or cancelled code 401 MSG-LABOR-19. The answer that linked a device carries its <c>deviceSecret</c> once.
     /// </summary>
-    [EnableRateLimiting(RateLimitingExtensions.Logins)]
+    [EnableRateLimiting(RateLimitingExtensions.EmployeeAppLogins)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)] // carries tokens and the device secret: never stored (Cache-Control no-store, Pragma no-cache)
     [HttpPost("login")]
     [AllowAnonymous]
     [ProducesResponseType<EmployeeAppTokens>(StatusCodes.Status200OK)]
@@ -37,6 +38,7 @@ public sealed class EmployeeAppController(
     /// Exchanges a refresh token for new tokens, as <c>POST /api/auth/refresh</c> does for a staff session (rotation, a 30 second grace for
     /// the replaced token, replay ends the session). A refusal is 401 with the problem extension <c>reason</c>: <c>expired</c>, <c>reuse</c> or <c>revoked</c>.
     /// </summary>
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [HttpPost("refresh")]
     [AllowAnonymous]
     [ProducesResponseType<EmployeeAppTokens>(StatusCodes.Status200OK)]

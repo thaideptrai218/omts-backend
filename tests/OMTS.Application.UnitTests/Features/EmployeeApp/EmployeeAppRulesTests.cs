@@ -57,6 +57,43 @@ public class EmployeeAppRulesTests
             (UserMessages.LoginCodeRejected.Code, UserMessages.LoginCodeRejected.Text));
     }
 
+    // L5: only exactly 6 ASCII digits can be a code; anything else is refused before the code is read and costs no try.
+    [Theory]
+    [InlineData("123456", true)]
+    [InlineData("000000", true)]
+    [InlineData("12345", false)]
+    [InlineData("1234567", false)]
+    [InlineData("abcdef", false)]
+    [InlineData("12-345", false)]
+    [InlineData("12 456", false)]
+    [InlineData("١٢٣٤٥٦", false)] // Arabic-Indic digits are digits to char.IsDigit but not codes
+    [InlineData("", false)]
+    public void Only_six_ascii_digits_are_a_well_formed_login_code(string entry, bool expected) =>
+        Assert.Equal(expected, EmployeeAppLoginService.IsWellFormed(entry));
+
+    // L8: the device name is shown to the Zone Manager: no control characters, trimmed, capped.
+    [Fact]
+    public void A_device_name_loses_control_characters_and_outer_spaces_and_is_capped()
+    {
+        Assert.Equal("Pixel 7", EmployeeAppLoginService.CleanDeviceName("  Pixel\u0000 7\r\n "));
+        Assert.Null(EmployeeAppLoginService.CleanDeviceName(null));
+        Assert.Null(EmployeeAppLoginService.CleanDeviceName(" \t\n"));
+        Assert.Equal(200, EmployeeAppLoginService.CleanDeviceName(new string('a', 300))!.Length);
+    }
+
+    // M2: the issuer is told, under the code of a code that cannot be used, and the text holds no code.
+    [Fact]
+    public void The_message_to_the_issuer_of_a_cancelled_code_names_the_employee_and_no_code()
+    {
+        var message = UserMessages.LoginCodeCancelledByWrongEntries("Nguyen Van A");
+
+        Assert.Equal("MSG-LABOR-19", message.Code);
+        Assert.Contains("Nguyen Van A", message.Text);
+        Assert.Contains("5 wrong entries", message.Text);
+        Assert.DoesNotContain(message.Text.Split(' '), word => word.Length >= 6 && word.All(char.IsDigit));
+        Assert.Equal(["employee_name", "reason"], message.Parameters!.Keys);
+    }
+
     // BR-LABOR-02, BR-LABOR-04: the code goes to the issuer's account as a normal type (push unless turned off), never by SMS and never to the employee.
     [Fact]
     public void The_notification_of_the_code_is_a_normal_type_of_the_owner_and_the_zone_manager_with_no_sms()

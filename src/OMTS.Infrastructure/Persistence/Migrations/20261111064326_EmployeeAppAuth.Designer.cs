@@ -12,7 +12,7 @@ using OMTS.Infrastructure.Persistence;
 namespace OMTS.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(OmtsDbContext))]
-    [Migration("20261111060424_EmployeeAppAuth")]
+    [Migration("20261111064326_EmployeeAppAuth")]
     partial class EmployeeAppAuth
     {
         /// <inheritdoc />
@@ -2131,6 +2131,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PreviousDeviceSecretHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<bool>("PushPermissionGranted")
                         .HasColumnType("bit");

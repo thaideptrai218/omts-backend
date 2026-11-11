@@ -162,16 +162,16 @@ public class EmployeeAppSessionTests(AuthApiFactory factory) : IClassFixture<Aut
         Assert.Equal(2, (await factory.SessionsAsync(worker.Id)).Count(s => s.RevokedAt is not null));
     }
 
-    // Two phones logged in at once cannot happen: one device, but two sessions of it can; a logout ends only its own.
+    // M3: one device has one session: a code-less login ends the earlier one, so a logout of the old tokens is refused and the new session is untouched.
     [Fact]
-    public async Task A_logout_ends_only_its_own_session()
+    public async Task A_second_login_on_the_device_replaces_its_session_and_a_logout_ends_only_the_open_one()
     {
         var world = await WorldAsync(factory);
         var worker = await AddWorkerAsync(world);
         var linked = await LinkDeviceAsync(factory, world, worker);
         var other = await (await LoginOnDeviceAsync(factory.CreateClient(), worker.Phone, linked)).JsonAsync(HttpStatusCode.OK);
 
-        Assert.Equal(HttpStatusCode.NoContent, (await factory.AsEmployee(linked).PostAsync(Logout, null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await factory.AsEmployee(linked).PostAsync(Logout, null)).StatusCode);
 
         Assert.Equal(HttpStatusCode.NoContent, (await factory.AsEmployee(other).PostAsync(Logout, null)).StatusCode);
         Assert.Equal(2, (await factory.SessionsAsync(worker.Id)).Count(s => s.RevokedAt is not null));

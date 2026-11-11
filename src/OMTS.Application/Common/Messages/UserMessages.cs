@@ -786,6 +786,17 @@ public static class UserMessages
         Parameters = new Dictionary<string, object?> { ["employee_name"] = employeeName, ["reason"] = reason },
     };
 
+    /// <summary>
+    /// What the issuer is told when the 5th wrong entry cancelled the code. The SRS has no message for it, so it goes out under MSG-LABOR-19
+    /// (the code could not be used) with its own text and parameters; it holds no code. A PM decision may give it a code of its own.
+    /// </summary>
+    public static UserMessage LoginCodeCancelledByWrongEntries(string employeeName) => new(
+        Labor19,
+        $"The login code for {employeeName} was cancelled after 5 wrong entries. If it was not {employeeName} who entered them, someone else may know their phone number: issue a new code and give it in person.")
+    {
+        Parameters = new Dictionary<string, object?> { ["employee_name"] = employeeName, ["reason"] = "TooManyWrongEntries" },
+    };
+
     /// <summary>MSG-LABOR-17 (LABOR-06 step 4): this device is not linked to the employee yet.</summary>
     public static readonly UserMessage DeviceNotLinked = new(
         Labor17, "This phone is not linked to you yet. Ask your Zone Manager for a login code, then enter it here.");
