@@ -34,7 +34,8 @@ internal sealed partial record CustomerEntries(
     private const int MaxShortLength = 100;
     private const int MaxFacebookLength = 500;
 
-    public static (CustomerEntries Entries, List<string> Invalid) From(SaveCustomerRequest request, bool phoneLocked, DateOnly today)
+    /// <param name="required">The optional fields the cooperative makes required; null: none.</param>
+    public static (CustomerEntries Entries, List<string> Invalid) From(SaveCustomerRequest request, bool phoneLocked, DateOnly today, CustomerRequiredFields? required = null)
     {
         var invalid = new List<string>();
         var name = DisplayNames.Normalize(request.Name);
@@ -118,10 +119,34 @@ internal sealed partial record CustomerEntries(
         }
 
         var hasBank = !string.IsNullOrEmpty(bin) && !string.IsNullOrEmpty(number);
+        if (required is not null)
+        {
+            Require(required.PhoneNumber2, !string.IsNullOrWhiteSpace(request.PhoneNumber2), "Second phone number", invalid);
+            Require(required.Email, !string.IsNullOrWhiteSpace(request.Email), "Email", invalid);
+            Require(required.Gender, request.Gender is not null, "Gender", invalid);
+            Require(required.BirthDate, request.BirthDate is not null, "Birth date", invalid);
+            Require(required.Address, address is not null, "Address", invalid);
+            Require(required.Address, province is not null, "Province", invalid);
+            Require(required.Address, ward is not null, "Ward", invalid);
+            Require(required.Facebook, facebook is not null, "Facebook", invalid);
+            Require(required.Bank, hasBank, "Bank", invalid);
+            Require(required.Bank, hasBank, "Bank account number", invalid);
+            Require(required.TaxCode, !string.IsNullOrEmpty(taxCode), "Tax code", invalid);
+        }
+
         return (new CustomerEntries(
             name, phone, address, note, request.CustomerType ?? Domain.Enums.CustomerType.Individual, request.Gender, request.BirthDate, phone2, email, facebook,
             province, ward, company, string.IsNullOrEmpty(taxCode) ? null : taxCode, string.IsNullOrEmpty(identity) ? null : identity,
             hasBank ? bin : null, hasBank ? bankName : null, hasBank ? number : null), invalid);
+    }
+
+    /// <summary>A required field that is missing is invalid, once: a field already invalid for another reason is not named twice.</summary>
+    private static void Require(bool required, bool present, string field, List<string> invalid)
+    {
+        if (required && !present && !invalid.Contains(field))
+        {
+            invalid.Add(field);
+        }
     }
 
     /// <summary>Trimmed; null when empty; its name is added to <paramref name="invalid"/> when it is longer than <paramref name="max"/>.</summary>

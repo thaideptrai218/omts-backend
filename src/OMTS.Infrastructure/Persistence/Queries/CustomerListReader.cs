@@ -48,6 +48,12 @@ internal sealed class CustomerListReader(OmtsDbContext db) : ICustomerListQuery
                 || (c.PhoneNumber2 != null && c.PhoneNumber2.Contains(text)));
         }
 
+        if (filter.OnlyIds is { } onlyIds)
+        {
+            var ids = onlyIds.ToList();
+            customers = customers.Where(c => ids.Contains(c.Id));
+        }
+
         if (filter.Type is { } type)
         {
             customers = customers.Where(c => c.CustomerType == type);

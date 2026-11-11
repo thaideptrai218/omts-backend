@@ -47,6 +47,7 @@ public sealed record SaveCustomerRequest(
 /// <param name="CreatedFrom">Business dates of the creation.</param>
 /// <param name="SortBy">code (the default, newest first), name, phone, type, province, createdAt, status, totalSales, netSales, currentDebt or lastTransaction.</param>
 /// <param name="SortDir">asc or desc; the default is desc for the code and asc for the others.</param>
+/// <param name="OverDebtLimit">True: only the customers over the debt limit of the settings (none while the warning is off).</param>
 public sealed record CustomerListQuery(
     string? Search = null,
     CustomerType? Type = null,
@@ -69,7 +70,8 @@ public sealed record CustomerListQuery(
     string? SortBy = null,
     string? SortDir = null,
     int Page = 1,
-    int PageSize = 20);
+    int PageSize = 20,
+    bool? OverDebtLimit = null);
 
 public enum CustomerStatusFilter
 {
@@ -84,6 +86,10 @@ public enum CustomerStatusFilter
 /// <param name="TotalSales">Null without CUSTOMER_DEBTS View: the invoices not cancelled in the period, before their price cuts.</param>
 /// <param name="NetSales">Null without CUSTOMER_DEBTS View: the same, after the price cuts.</param>
 /// <param name="LastTransactionAt">The time of the last invoice that is not cancelled.</param>
+/// <param name="OverDebtLimit">The debt warning is on and the customer is above its amount limit or has owed longer than its days limit; given to every caller, the invoice form flags the customer with it.</param>
+/// <param name="OverDebtAmount">The debt is above the amount limit.</param>
+/// <param name="OverDebtDays">The debt has stood longer than the days limit.</param>
+/// <param name="DebtDays">Days since the oldest unpaid debt invoice; null without a debt, and without CUSTOMER_DEBTS View.</param>
 public sealed record CustomerListItem(
     Guid Id,
     string Code,
@@ -111,7 +117,11 @@ public sealed record CustomerListItem(
     string? CreatedBy,
     decimal? CurrentDebt,
     decimal? TotalSales,
-    decimal? NetSales);
+    decimal? NetSales,
+    bool OverDebtLimit,
+    bool OverDebtAmount,
+    bool OverDebtDays,
+    int? DebtDays);
 
 /// <summary>The sums over every customer that matches the filters, not only the page. Null without CUSTOMER_DEBTS View.</summary>
 /// <param name="TotalSales">Σ the sales before the price cuts.</param>

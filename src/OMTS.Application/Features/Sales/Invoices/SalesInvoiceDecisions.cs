@@ -82,6 +82,12 @@ internal static class SalesInvoiceDecisions
                 return AppError.Invalid("Cash amount", "The cash is less than the total: choose VietQR or Pay later for the rest, or take the whole total.");
             }
 
+            // The debt warning of the settings: a customer over the limit gets no more debt, not even with the Owner's agreement.
+            if (facts is { AllowMoreDebtOverLimit: false, Standing: { Over: true } standing })
+            {
+                return AppError.Conflict(UserMessages.CustomerOverDebtLimit(customerName, facts.DebtBefore, standing.DebtDays, standing.OverAmount, standing.OverDays));
+            }
+
             if (facts.Request?.PayLaterAgreed != true && !entries.PayLaterOwnerAgreed)
             {
                 return Question(

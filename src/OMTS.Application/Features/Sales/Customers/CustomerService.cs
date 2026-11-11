@@ -35,6 +35,7 @@ public sealed class CustomerService(
     ICooperativeRepository cooperatives,
     CustomerCodeService codes,
     CustomerDebtReader debts,
+    CustomerDebtStandings standings,
     IAccountRepository accounts,
     ZoneAccessGuard zoneAccess,
     IFileStorage storage,
@@ -106,7 +107,9 @@ public sealed class CustomerService(
 
     public async Task<Result<CustomerSaved>> CreateAsync(SaveCustomerRequest request, CancellationToken cancellationToken)
     {
-        var (values, invalid) = CustomerEntries.From(request, phoneLocked: false, timeProvider.Today());
+        var cooperative = await cooperatives.GetCurrentAsync(cancellationToken)
+            ?? throw new InvalidOperationException("The cooperative has not been created yet (run the bootstrap command).");
+        var (values, invalid) = CustomerEntries.From(request, phoneLocked: false, timeProvider.Today(), CustomerSettingsService.RequiredOf(cooperative));
         if (!CustomerEntries.CodeAllowed(request.Code))
         {
             invalid.Add("Code");
@@ -128,8 +131,6 @@ public sealed class CustomerService(
             return codeError;
         }
 
-        var cooperative = await cooperatives.GetCurrentAsync(cancellationToken)
-            ?? throw new InvalidOperationException("The cooperative has not been created yet (run the bootstrap command).");
         var customer = new Customer { CooperativeId = cooperative.Id, Code = code! };
         Apply(customer, values);
         customers.Add(customer);
@@ -168,8 +169,10 @@ public sealed class CustomerService(
             return AppError.Invalid("Phone number", "The phone number of a profile linked to a trader account is changed only by the trader.");
         }
 
-        var (values, invalid) = CustomerEntries.From(request, locked, timeProvider.Today());
-        if (invalid.Count > 0 || !CustomerEntries.CodeAllowed(request.Code))
+        var required = CustomerSettingsService.RequiredOf(
+            await cooperatives.GetCurrentAsync(cancellationToken) ?? throw new InvalidOperationException("The cooperative has not been created yet (run the bootstrap command)."));
+        var (values, invalid) = CustomerEntries.From(request, locked, timeProvider.Today(), required);
+        if (invalid.Count > 0 ||!CustomerEntries.CodeAllowed(request.Code))
         {
             if (!CustomerEntries.CodeAllowed(request.Code))
             {
@@ -305,9 +308,12 @@ public sealed class CustomerService(
         var phonesInFile = new HashSet<string>();
         var codesInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var today = timeProvider.Today();
+        var cooperative = await cooperatives.GetCurrentAsync(cancellationToken)
+            ?? throw new InvalidOperationException("The cooperative has not been created yet (run the bootstrap command).");
+        var required = CustomerSettingsService.RequiredOf(cooperative);
         foreach (var (row, request) in rows)
         {
-            var (values, invalid) = CustomerEntries.From(request, phoneLocked: false, today);
+            var (values, invalid) = CustomerEntries.From(request, phoneLocked: false, today, required);
             if (!CustomerEntries.CodeAllowed(request.Code))
             {
                 invalid.Add("Code");
@@ -346,8 +352,6 @@ public sealed class CustomerService(
             return new CustomerImportResult(0, errors.OrderBy(e => e.Row).ToList());
         }
 
-        var cooperative = await cooperatives.GetCurrentAsync(cancellationToken)
-            ?? throw new InvalidOperationException("The cooperative has not been created yet (run the bootstrap command).");
         foreach (var (_, request, values) in valid)
         {
             var customer = new Customer { CooperativeId = cooperative.Id, Code = DocumentCodes.Typed(request.Code) ?? await codes.NextAsync(cancellationToken) };
@@ -578,15 +582,18 @@ public sealed class CustomerService(
         var creators = rows.Select(r => r.Customer.CreatedBy).OfType<Guid>().Distinct().ToList();
         var names = creators.Count == 0 ? new Dictionary<Guid, string>() : await accounts.GetDisplayNamesAsync(creators, cancellationToken);
         var items = new List<CustomerListItem>(rows.Count);
+        var standingOf = await standings.ForAsync(rows.Select(r => r.Customer.Id).ToList(), await standings.PolicyAsync(cancellationToken), cancellationToken);
         foreach (var r in rows)
         {
             var c = r.Customer;
+            var standing = standingOf[c.Id];
             var photo = withPhotos && c.PhotoUrl is { } key ? await storage.GetReadUrlAsync(key, cancellationToken: cancellationToken) : null;
             items.Add(new CustomerListItem(
                 c.Id, c.Code, c.Name, c.PhoneNumber, c.Address, c.AccountId is not null, RowVersionGuard.Encode(c.RowVersion), c.StatusId, statusCatalog.DisplayNameOf(c.StatusId),
                 c.CustomerType, c.Gender, c.BirthDate, c.PhoneNumber2, c.Email, c.Facebook, c.Province, c.Ward, c.CompanyName, c.TaxCode, c.Note, photo,
                 r.LastTransactionAt, c.CreatedAt, c.CreatedBy is { } id ? names.GetValueOrDefault(id) : null,
-                access.Debt ? r.Debt : null, access.Debt ? r.TotalSales : null, access.Debt ? r.NetSales : null));
+                access.Debt ? r.Debt : null, access.Debt ? r.TotalSales : null, access.Debt ? r.NetSales : null,
+                standing.Over, standing.OverAmount, standing.OverDays, access.Debt ? standing.DebtDays : null));
         }
 
         return items;
@@ -656,10 +663,13 @@ public sealed class CustomerService(
             _ => null,
         };
         var descending = sort == CustomerSort.Code ? query.SortDir != "asc" : query.SortDir == "desc";
+        var overLimit = query.OverDebtLimit == true
+            ? await standings.OverLimitIdsAsync(await standings.PolicyAsync(cancellationToken), cancellationToken)
+            : null;
         return (new CustomerSearchFilter(
             text.Length == 0 ? null : text, PhoneNumbers.Normalize(text), query.Type, query.Gender, query.BirthdayFrom, query.BirthdayTo,
             query.LastTransactionFrom, query.LastTransactionTo, query.TotalSalesFrom, query.TotalSalesTo, query.SalesFrom, query.SalesTo,
-            query.CurrentDebtFrom, query.CurrentDebtTo, query.Province, statusId, query.CreatedById, query.CreatedFrom, query.CreatedTo, sort, descending), access);
+            query.CurrentDebtFrom, query.CurrentDebtTo, query.Province, statusId, query.CreatedById, query.CreatedFrom, query.CreatedTo, sort, descending, overLimit), access);
     }
 
     private static (CustomerSort Sort, bool Known) SortOf(string? sortBy) => sortBy switch

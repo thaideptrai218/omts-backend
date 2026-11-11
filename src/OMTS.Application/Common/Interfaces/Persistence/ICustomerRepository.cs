@@ -48,6 +48,7 @@ public enum CustomerSort
 /// <param name="BirthdayFrom">With <paramref name="BirthdayTo"/>: customers whose birthday (month and day, the year is ignored) falls in the range; a range that ends before it starts wraps over the new year.</param>
 /// <param name="SalesFrom">With <paramref name="SalesTo"/>: the period the total sales and the net sales are summed over; all time when neither is given.</param>
 /// <param name="StatusId">Null: every status.</param>
+/// <param name="OnlyIds">Null: no restriction; otherwise only these profiles (the ones over the debt limit).</param>
 public sealed record CustomerSearchFilter(
     string? Search = null,
     string? PhoneSearch = null,
@@ -69,7 +70,8 @@ public sealed record CustomerSearchFilter(
     DateOnly? CreatedFrom = null,
     DateOnly? CreatedTo = null,
     CustomerSort Sort = CustomerSort.Code,
-    bool Descending = true);
+    bool Descending = true,
+    IReadOnlyCollection<Guid>? OnlyIds = null);
 
 /// <summary>A profile with its figures: the sales in the period (before and after the price cuts), the debt now and the time of the last sale.</summary>
 public sealed record CustomerFigureRow(Customer Customer, decimal TotalSales, decimal NetSales, decimal Debt, DateTimeOffset? LastTransactionAt);

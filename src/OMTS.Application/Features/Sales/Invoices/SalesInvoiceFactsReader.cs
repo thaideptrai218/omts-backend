@@ -16,8 +16,11 @@ using OMTS.Domain.Entities.Sales;
 namespace OMTS.Application.Features.Sales.Invoices;
 
 /// <summary>What the entries name, read tracked as the save will write it, and the debt of the customer before the invoice (BR-SALE-07 (4)).</summary>
+/// <param name="Standing">Where the customer stands against the debt limit; null for a walk-in customer, or while the debt warning is off.</param>
+/// <param name="AllowMoreDebtOverLimit">False: an invoice that leaves a debt for a customer over the limit is refused.</param>
 internal sealed record SalesInvoiceFacts(
-    Customer? Customer, PurchaseRequest? Request, IReadOnlyDictionary<Guid, Product> Products, IReadOnlyList<HarvestLot> Lots, Guid ZoneId, bool ByOwner, decimal DebtBefore);
+    Customer? Customer, PurchaseRequest? Request, IReadOnlyDictionary<Guid, Product> Products, IReadOnlyList<HarvestLot> Lots, Guid ZoneId, bool ByOwner, decimal DebtBefore,
+    CustomerDebtStanding? Standing = null, bool AllowMoreDebtOverLimit = true);
 
 /// <summary>
 /// SALE-05 steps 2 to 6 against the database: the profile, the request (SALE-05.3), the products In Use (GBR-01), the lots for sale in zones the user can access (BR-SALE-06, BR-FARM-08)
@@ -33,6 +36,7 @@ public sealed class SalesInvoiceFactsReader(
     HarvestLotStatusService lotStatuses,
     ZoneAccessGuard zoneAccess,
     CustomerDebtReader debts,
+    CustomerDebtStandings standings,
     IStatusCatalog statusCatalog,
     TimeProvider timeProvider)
 {
@@ -95,7 +99,9 @@ public sealed class SalesInvoiceFactsReader(
 
         var byOwner = await zoneAccess.IsCooperativeOwnerAsync(cancellationToken);
         var debt = customer is null ? 0m : await debts.DebtAsync(customer.Id, cancellationToken);
-        return new SalesInvoiceFacts(customer, request.Value, lineProducts.Value!, lineLots.Value!, zoneId, byOwner, debt);
+        var policy = await standings.PolicyAsync(cancellationToken);
+        var standing = customer is not null && policy.Enabled ? (await standings.ForAsync([customer.Id], policy, cancellationToken))[customer.Id] : null;
+        return new SalesInvoiceFacts(customer, request.Value, lineProducts.Value!, lineLots.Value!, zoneId, byOwner, debt, standing, policy.AllowMoreOverLimit);
     }
 
     private async Task<Result<PurchaseRequest?>> ReadRequestAsync(SalesInvoiceEntries entries, Customer? customer, CancellationToken cancellationToken)
