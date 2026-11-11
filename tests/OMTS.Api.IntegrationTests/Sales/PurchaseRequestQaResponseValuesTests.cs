@@ -16,12 +16,18 @@ public class PurchaseRequestQaResponseValuesTests(PurchaseRequestStubsFactory fa
         return (owner, await factory.TraderAsync(), (await owner.CreateProductAsync()).Id());
     }
 
+    private static async Task<Guid> PrepareAsync(HttpClient owner, JsonElement request, int cages)
+    {
+        await PurchaseRequestTestKit.StaffAsync(owner, request.Id(), cages, PurchaseRequestTestKit.Today, request.RowVersion());
+        return request.Id();
+    }
+
     // BR-SALE-02: the accepted kg is the requested kg or a smaller kg, above 0.
     [Theory]
     [InlineData("100", true)]
-    [InlineData("100.000", true)]
-    [InlineData("99.999", true)]
-    [InlineData("0.001", true)]
+    [InlineData("100.000", false)]
+    [InlineData("99", true)]
+    [InlineData("0.001", false)]
     [InlineData("100.001", false)]
     [InlineData("101", false)]
     [InlineData("0", false)]
@@ -33,6 +39,7 @@ public class PurchaseRequestQaResponseValuesTests(PurchaseRequestStubsFactory fa
     {
         var (owner, trader, productId) = await WorldAsync();
         var request = await trader.Client.PlaceAsync(productId, 100);
+        if (valid) request = await owner.ViewedByStaffAsync(await PrepareAsync(owner, request, int.Parse(kg!, System.Globalization.CultureInfo.InvariantCulture)));
         var body = $$"""{ "acceptedCages": {{kg ?? "null"}}, "pickupDate": "{{PurchaseRequestTestKit.Today:yyyy-MM-dd}}", "payLaterAgreed": false, "rowVersion": {{JsonSerializer.Serialize(request.RowVersion())}} }""";
 
         var response = await owner.PostAsJsonRawAsync($"/api/purchase-requests/{request.Id()}/accept", body);
@@ -43,7 +50,7 @@ public class PurchaseRequestQaResponseValuesTests(PurchaseRequestStubsFactory fa
         }
         else
         {
-            Assert.Equal(["Accepted cages"], await response.InvalidFieldsAsync());
+            Assert.Equal([int.TryParse(kg, out _) || kg is null ? "Accepted cages" : "request"], await response.InvalidFieldsAsync());
             Assert.Equal(StatusIds.PurchaseRequest.AwaitingResponse, (await trader.Client.MineAsync(request.Id())).GetProperty("statusId").GetInt32());
         }
     }

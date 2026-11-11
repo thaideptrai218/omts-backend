@@ -37,7 +37,7 @@ public class PurchaseRequestCancelTests(PurchaseRequestStubsFactory factory) : I
         Assert.False(row.IsMandatory);
         var sentOn = await factory.DbAsync(db => db.PurchaseRequests.FindAsync(request.Id()).AsTask());
         var day = OMTS.Application.Common.BusinessClock.ToBusinessDate(sentOn!.SentAt);
-        Assert.StartsWith($"Anh Tùng cancelled the purchase request of {day:dd/MM/yyyy} for about 200 kg of Hàu ", row.Body);
+        Assert.StartsWith($"Anh Tùng cancelled the purchase request of {day:dd/MM/yyyy} for 200 cages of Hàu ", row.Body);
         Assert.EndsWith(". Khách đổi lịch", row.Body);
 
         var audit = (await factory.AuditRowsAsync(request.Id())).Single(e => e.Action == "PurchaseRequest.Cancelled");
@@ -72,7 +72,7 @@ public class PurchaseRequestCancelTests(PurchaseRequestStubsFactory factory) : I
         var cancelled = await (await trader.Client.CancelAsync(accepted)).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal(StatusIds.PurchaseRequest.Cancelled, cancelled.GetProperty("statusId").GetInt32());
-        Assert.Equal(50m, cancelled.GetProperty("response").GetProperty("acceptedCages").GetDecimal());
+        Assert.Equal(50, cancelled.GetProperty("response").GetProperty("acceptedCages").GetDecimal());
     }
 
     // SALE-02.0.E1.

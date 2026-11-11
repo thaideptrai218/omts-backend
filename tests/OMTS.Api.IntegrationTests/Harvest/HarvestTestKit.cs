@@ -9,7 +9,10 @@ using OMTS.Domain.Entities.Platform;
 
 namespace OMTS.Api.IntegrationTests.Harvest;
 
-/// <summary>The multipart fields of a recorded harvest; by default one lane, eight cages, no estimate and no photo.</summary>
+/// <summary>
+/// The multipart fields of a recorded harvest; by default one lane, eight cages, no estimate, no photo, and the request the host's lots harvest for
+/// (<see cref="HarvestOrderKit"/>) unless <see cref="Order"/> names one or <see cref="WithoutOrder"/> sends none.
+/// </summary>
 public sealed record HarvestFields
 {
     public IReadOnlyList<string> Lanes { get; init; } = ["1"];
@@ -18,6 +21,14 @@ public sealed record HarvestFields
     public string? EstimatedKg { get; init; }
     public IReadOnlyList<byte[]> Photos { get; init; } = [];
     public string PhotoField { get; init; } = "photos";
+
+    /// <summary>The purchase request the trip harvests for (decision of 11/11/2026).</summary>
+    public Guid? Order { get; init; }
+
+    /// <summary>Sends no purchase request, to see it refused.</summary>
+    public bool WithoutOrder { get; init; }
+
+    public HarvestFields For(Guid order) => this with { Order = order };
 
     public static HarvestFields OfLanes(params int[] lanes) => new() { Lanes = lanes.Select(n => n.ToString()).ToList() };
 
@@ -46,6 +57,11 @@ public sealed record HarvestFields
             form.Add(new StringContent(EstimatedKg), "estimatedKg");
         }
 
+        if (Order is { } order && !WithoutOrder)
+        {
+            form.Add(new StringContent(order.ToString()), "purchaseRequestId");
+        }
+
         foreach (var photo in Photos)
         {
             form.Add(FarmingTestKit.FileContent(photo, "image/jpeg"), PhotoField, "harvest.jpg");
@@ -61,8 +77,16 @@ public sealed record SeededRaft(Actor Owner, Guid ZoneId, Guid RaftId, Guid Cycl
 /// <summary>HARVEST-01 and HARVEST-03 calls and what they should have left behind.</summary>
 public static class HarvestTestKit
 {
-    public static Task<HttpResponseMessage> PostHarvestAsync(this HttpClient client, Guid raftId, HarvestFields? fields = null) =>
-        client.PostAsync($"/api/rafts/{raftId}/harvest-lots", (fields ?? new HarvestFields()).ToForm());
+    public static async Task<HttpResponseMessage> PostHarvestAsync(this HttpClient client, Guid raftId, HarvestFields? fields = null)
+    {
+        fields ??= new HarvestFields();
+        if (fields.Order is null && !fields.WithoutOrder)
+        {
+            fields = fields.For(await HarvestOrderKit.DefaultOrderAsync(client));
+        }
+
+        return await client.PostAsync($"/api/rafts/{raftId}/harvest-lots", fields.ToForm());
+    }
 
     /// <summary>Records a harvest and returns the whole answer.</summary>
     public static async Task<JsonElement> RecordHarvestAsync(this HttpClient client, Guid raftId, HarvestFields? fields = null) =>

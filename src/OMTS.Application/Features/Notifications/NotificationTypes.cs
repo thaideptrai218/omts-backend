@@ -103,8 +103,6 @@ public static class NotificationTypes
         new("PAYROLL_SENT_BACK", "payroll sent back", NeverPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         new("NEW_ORDER", "new order", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         new("TRACE_QR_SENT", "trace qr sent", NeverPush, [Trader], NotificationOpenAccess.TraderOfTheRecord),
-        new("TRADER_ACCESS_REQUESTED", "trader access requested", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
-        new("TRADER_ACCESS_APPROVED", "trader access approved", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
         new("WORK_PLAN_REQUESTED", "work plan requested", Default, [ZoneManager], NotificationOpenAccess.InZone(PermissionFunctions.WorkAssignments, PermissionAction.View)),
         new("WORK_PLAN_RESPONDED", "work plan responded", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         new("WORK_PLAN_STAFF_RESPONDED", "work plan staff responded", Default, [ZoneManager], NotificationOpenAccess.InZone(PermissionFunctions.WorkAssignments, PermissionAction.View)),

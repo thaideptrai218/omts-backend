@@ -59,7 +59,7 @@ public class PurchaseRequestQaMalformedRequestTests(AuthApiFactory factory) : IC
             Assert.Equal("MSG-GEN-01", JsonDocument.Parse(text).RootElement.Text("code"));
         }
 
-        Assert.Equal(1, (await (await trader.Client.GetAsync("/api/me/purchase-requests")).ReadAsync(HttpStatusCode.OK)).GetProperty("total").GetInt32());
+        Assert.Equal(1, (await (await trader.Client.GetAsync("/api/me/purchases")).ReadAsync(HttpStatusCode.OK)).GetProperty("total").GetInt32());
     }
 
     // The client list, §1: "text that cannot be read as the field's type". Pinned, an observation: only a crafted client sends it, and the field then
@@ -83,7 +83,7 @@ public class PurchaseRequestQaMalformedRequestTests(AuthApiFactory factory) : IC
 
         var request = (await (await trader.Client.PostAsJsonAsync("/api/me/purchase-requests", new
         {
-            productId, requestedCages = 5m, pickupDate = PurchaseRequestTestKit.Today, customerId = other.Profile.Id, statusId = 3202, acceptedCages = 5m, payLaterAgreed = true, id = Guid.Empty,
+            productId, requestedCages = 5, pickupDate = PurchaseRequestTestKit.Today, customerId = other.Profile.Id, statusId = 3202, acceptedCages = 5, payLaterAgreed = true, id = Guid.Empty,
         })).ReadAsync(HttpStatusCode.Created)).GetProperty("request");
 
         var view = await owner.ViewedByStaffAsync(request.Id());
@@ -115,7 +115,7 @@ public class PurchaseRequestQaMalformedRequestTests(AuthApiFactory factory) : IC
     {
         var (owner, trader, _) = await WorldAsync();
 
-        Assert.Equal(expected, (await trader.Client.GetAsync($"/api/me/purchase-requests?{query}")).StatusCode);
+        Assert.Equal(expected, (await trader.Client.GetAsync($"/api/me/purchases?{query}")).StatusCode);
         Assert.Equal(expected, (await owner.GetAsync($"/api/purchase-requests?{query}")).StatusCode);
     }
 

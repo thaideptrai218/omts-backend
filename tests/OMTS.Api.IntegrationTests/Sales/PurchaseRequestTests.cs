@@ -6,6 +6,8 @@ using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Sales.Products.Dtos;
 using OMTS.Application.Features.Sales.Requests.Dtos;
+using OMTS.Application.Features.Sales.PurchaseRequests;
+using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Sales;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Platform;
@@ -29,24 +31,24 @@ public sealed class PurchaseRequestTests(AuthApiFactory factory) : IClassFixture
         var input = Input(product);
         var response = await trader.PostAsJsonAsync("/api/me/purchase-requests", input);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var row = (await response.Content.ReadFromJsonAsync<PurchaseRequestView>())!;
-        Assert.Equal("Cage", row.QuantityUnit); Assert.Equal(12, row.RequestedCages); Assert.Equal("AWAITING_RESPONSE", row.Status);
-        Assert.EndsWith(row.Id.ToString(), response.Headers.Location!.ToString());
+        var row = (await response.Content.ReadFromJsonAsync<PurchaseRequestSaved>())!.Request;
+        Assert.Equal(12, row.RequestedCages); Assert.Equal(StatusIds.PurchaseRequest.AwaitingResponse, row.StatusId);
+        Assert.False((await response.Content.ReadFromJsonAsync<PurchaseRequestSaved>())!.Replayed);
         var saved = await factory.QueryAsync(db => db.Set<PurchaseRequest>().SingleAsync(r => r.Id == row.Id));
         Assert.Equal(customer.Id, saved.CustomerId); Assert.Equal(product.Name, saved.ProductName);
-        Assert.True(await factory.QueryAsync(db => db.Set<Notification>().AnyAsync(n => n.RecipientAccountId == owner.Id && n.RelatedRecordCode == row.Code && n.Type == "NEW_ORDER")));
+        Assert.True(await factory.QueryAsync(db => db.Set<Notification>().AnyAsync(n => n.RecipientAccountId == owner.Id && n.RelatedRecordCode == row.Code && n.Type == "PURCHASE_REQUEST_NEW")));
         // Retrying is safe even after a catalogue change: return the original persisted operation.
         await factory.UpdateAsync<Product>(product.Id, p => { p.StatusId = StatusIds.Usage.Discontinued; p.Name = "Renamed"; });
         var replay = await trader.PostAsJsonAsync("/api/me/purchase-requests", input);
         Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
-        Assert.Equal(row.Id, (await replay.Content.ReadFromJsonAsync<PurchaseRequestView>())!.Id);
+        Assert.Equal(row.Id, (await replay.Content.ReadFromJsonAsync<PurchaseRequestSaved>())!.Request.Id);
         Assert.Equal(1, await factory.QueryAsync(db => db.Set<PurchaseRequest>().CountAsync(r => r.CustomerId == customer.Id)));
         Assert.Equal(1, await factory.QueryAsync(db => db.Set<Notification>().CountAsync(n => n.RecipientAccountId == owner.Id && n.RelatedRecordCode == row.Code && n.Type == "NEW_ORDER")));
         Assert.Equal(HttpStatusCode.BadRequest, (await trader.PostAsJsonAsync("/api/me/purchase-requests", input with { RequestedCages = 13 })).StatusCode);
-        var list = await trader.GetFromJsonAsync<PurchaseRequestPage>("/api/me/purchase-requests");
-        Assert.Equal(row.ProductName, Assert.Single(list!.Items).ProductName);
+        var list = await trader.GetFromJsonAsync<MyPurchases>("/api/me/purchases");
+        Assert.Equal(row.ProductName, Assert.Single(list!.Requests).ProductName);
         var manager = await factory.LoginAsync(owner.Username);
-        var inbox = await manager.GetFromJsonAsync<PurchaseRequestPage>("/api/purchase-requests?status=AWAITING_RESPONSE");
+        var inbox = await manager.GetFromJsonAsync<Paged<PurchaseRequestView>>("/api/purchase-requests?statusId=3201");
         Assert.Contains(inbox!.Items, r => r.Id == row.Id);
         // Requesting does not fabricate a weighed sale or invoice.
         Assert.False(await factory.QueryAsync(db => db.SalesInvoices.AnyAsync(o => o.CustomerId == customer.Id)));
@@ -69,7 +71,7 @@ public sealed class PurchaseRequestTests(AuthApiFactory factory) : IClassFixture
     {
         var (trader, _, product) = await BuyerAsync();
         var input = Input(product);
-        foreach (var invalid in new[] { input with { ProductId = Guid.NewGuid() }, input with { PickupDate = Today.AddDays(-1) }, input with { ClientOperationId = Guid.Empty }, input with { Note = new string('x', 501) } })
+        foreach (var invalid in new[] { input with { ProductId = Guid.NewGuid() }, input with { PickupDate = Today.AddDays(-1) }, input with { Note = new string('x', 1001) } })
             Assert.Equal(HttpStatusCode.BadRequest, (await trader.PostAsJsonAsync("/api/me/purchase-requests", invalid)).StatusCode);
         await factory.UpdateAsync<Product>(product.Id, p => p.StatusId = StatusIds.Usage.Discontinued);
         Assert.Equal(HttpStatusCode.BadRequest, (await trader.PostAsJsonAsync("/api/me/purchase-requests", input)).StatusCode);
@@ -84,13 +86,13 @@ public sealed class PurchaseRequestTests(AuthApiFactory factory) : IClassFixture
     {
         var (trader, customer, product) = await BuyerAsync(); var (other, otherCustomer, _) = await BuyerAsync();
         var response = await trader.PostAsJsonAsync("/api/me/purchase-requests", new { productId = product.Id, requestedCages = 3, pickupDate = Today, clientOperationId = Guid.NewGuid(), customerId = otherCustomer.Id });
-        var row = (await response.Content.ReadFromJsonAsync<PurchaseRequestView>())!;
+        var row = (await response.Content.ReadFromJsonAsync<PurchaseRequestSaved>())!.Request;
         Assert.Equal(customer.Id, await factory.QueryAsync(db => db.Set<PurchaseRequest>().Where(r => r.Id == row.Id).Select(r => r.CustomerId).SingleAsync()));
-        Assert.Equal(HttpStatusCode.Forbidden, (await other.GetAsync($"/api/me/purchase-requests/{row.Id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await other.PostAsJsonAsync($"/api/me/purchase-requests/{row.Id}/cancel", new CancelPurchaseRequest(null, row.RowVersion))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync($"/api/me/purchase-requests/{row.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.PostAsJsonAsync($"/api/me/purchase-requests/{row.Id}/cancel", new CancelPurchaseRequest(null, row.RowVersion))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await trader.GetAsync("/api/purchase-requests")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await trader.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/response", Accept(row))).StatusCode);
-        var others = await other.GetFromJsonAsync<PurchaseRequestPage>("/api/me/purchase-requests"); Assert.Empty(others!.Items);
+        Assert.Equal(HttpStatusCode.Forbidden, (await trader.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/accept", Accept(row))).StatusCode);
+        var others = await other.GetFromJsonAsync<MyPurchases>("/api/me/purchases"); Assert.Empty(others!.Requests);
         var anon = factory.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await anon.PostAsJsonAsync("/api/me/purchase-requests", Input(product))).StatusCode);
     }
@@ -101,7 +103,7 @@ public sealed class PurchaseRequestTests(AuthApiFactory factory) : IClassFixture
         var (trader, _, product) = await BuyerAsync(); var row = await SubmitAsync(trader, product);
         var owner = await OwnerClientAsync();
         Assert.Equal(HttpStatusCode.Forbidden, (await owner.PostAsJsonAsync("/api/me/purchase-requests", Input(product))).StatusCode);
-        var reply = Accept(row) with { AcceptedCages = 8, PickupDate = Today.AddDays(2), AllowPayLater = true, Note = "Morning" };
+        var reply = Accept(row) with { AcceptedCages = 8, PickupDate = Today.AddDays(2), PayLaterAgreed = true, Note = "Morning" };
         var employeeAccount = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Staff, configure: a => a.ZaloAccountId = NewCode());
         var employee = new Employee { CooperativeId = (await factory.EnsureCooperativeAsync()).Id, AccountId = employeeAccount.Id, FullName = NewCode() };
         await factory.UseDbAsync(db => db.Employees.Add(employee));
@@ -110,7 +112,7 @@ public sealed class PurchaseRequestTests(AuthApiFactory factory) : IClassFixture
         var workJob = new OMTS.Domain.Entities.Labor.JobType { Name = NewCode() };
         await factory.UseDbAsync(db => { db.Rafts.Add(workRaft); db.Set<OMTS.Domain.Entities.Labor.JobType>().Add(workJob); });
         await WorkPlanTestKit.SelfPlanAsync(owner, workRaft.Id, workJob.Id, Today.AddDays(1), row.Id, 8, 20, Today.AddDays(2));
-        row = (await owner.GetFromJsonAsync<PurchaseRequestView>($"/api/purchase-requests/{row.Id}"))!;
+        row = (await trader.GetFromJsonAsync<TraderPurchaseRequestView>($"/api/me/purchase-requests/{row.Id}"))!;
         var plan = await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/staffing",
             new PlanPurchaseStaffing(8, Today.AddDays(1), Today.AddDays(2), 20, [employee.Id], null, row.RowVersion));
         Assert.True(plan.IsSuccessStatusCode, await plan.Content.ReadAsStringAsync());
@@ -118,17 +120,17 @@ public sealed class PurchaseRequestTests(AuthApiFactory factory) : IClassFixture
         var invite = Assert.Single((await worker.GetFromJsonAsync<List<MyPurchaseShiftView>>($"/api/me/purchase-shifts?from={Today:yyyy-MM-dd}&to={Today.AddDays(2):yyyy-MM-dd}"))!);
         var approval = await worker.PostAsJsonAsync($"/api/me/purchase-shifts/{invite.Id}/response", new RespondPurchaseShift(true, null, invite.RowVersion));
         Assert.True(approval.IsSuccessStatusCode, await approval.Content.ReadAsStringAsync());
-        row = (await owner.GetFromJsonAsync<PurchaseRequestView>($"/api/purchase-requests/{row.Id}"))!;
+        row = (await trader.GetFromJsonAsync<TraderPurchaseRequestView>($"/api/me/purchase-requests/{row.Id}"))!;
         reply = reply with { RowVersion = row.RowVersion };
-        var response = await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/response", reply);
+        var response = await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/accept", reply);
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-        var confirmed = (await trader.GetFromJsonAsync<PurchaseRequestView>($"/api/me/purchase-requests/{row.Id}"))!;
-        Assert.Equal("ACCEPTED", confirmed.Status); Assert.Equal(8, confirmed.AcceptedCages); Assert.Equal(Today.AddDays(2), confirmed.AcceptedPickupDate); Assert.True(confirmed.AllowPayLater);
-        Assert.True(await factory.QueryAsync(db => db.Set<Notification>().AnyAsync(n => n.RelatedRecordCode == row.Code && n.Type == "PURCHASE_REQUEST_RESPONDED")));
-        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/response", reply)).StatusCode);
+        var confirmed = (await trader.GetFromJsonAsync<TraderPurchaseRequestView>($"/api/me/purchase-requests/{row.Id}"))!;
+        Assert.Equal(StatusIds.PurchaseRequest.Accepted, confirmed.StatusId); Assert.Equal(8, confirmed.Response!.AcceptedCages); Assert.Equal(Today.AddDays(2), confirmed.Response!.PickupDate); Assert.True(confirmed.Response!.PayLaterAgreed);
+        Assert.True(await factory.QueryAsync(db => db.Set<Notification>().AnyAsync(n => n.RelatedRecordCode == row.Code && n.Type == "PURCHASE_REQUEST_RESPONSE")));
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/accept", reply)).StatusCode);
         var cancelled = await trader.PostAsJsonAsync($"/api/me/purchase-requests/{row.Id}/cancel", new CancelPurchaseRequest("Changed pickup", confirmed.RowVersion));
-        Assert.Equal("CANCELLED", (await cancelled.Content.ReadFromJsonAsync<PurchaseRequestView>())!.Status);
-        Assert.Equal(HttpStatusCode.OK, (await trader.PostAsJsonAsync($"/api/me/purchase-requests/{row.Id}/cancel", new CancelPurchaseRequest(null, confirmed.RowVersion))).StatusCode);
+        Assert.Equal(StatusIds.PurchaseRequest.Cancelled, (await cancelled.Content.ReadFromJsonAsync<TraderPurchaseRequestView>())!.StatusId);
+        Assert.Equal(HttpStatusCode.Conflict, (await trader.PostAsJsonAsync($"/api/me/purchase-requests/{row.Id}/cancel", new CancelPurchaseRequest(null, confirmed.RowVersion))).StatusCode);
         var ownerId = await factory.QueryAsync(db => db.Set<PurchaseRequest>().Where(r => r.Id == row.Id).Select(r => r.RespondedByAccountId!.Value).SingleAsync());
         Assert.Equal(1, await factory.QueryAsync(db => db.Set<Notification>().CountAsync(n => n.RelatedRecordCode == row.Code && n.Type == "PURCHASE_REQUEST_CANCELLED" && n.RecipientAccountId == ownerId)));
     }
@@ -138,12 +140,12 @@ public sealed class PurchaseRequestTests(AuthApiFactory factory) : IClassFixture
     {
         var (trader, _, product) = await BuyerAsync(); var row = await SubmitAsync(trader, product); var owner = await OwnerClientAsync();
         var valid = Accept(row);
-        foreach (var invalid in new[] { valid with { AcceptedCages = 13 }, valid with { AcceptedCages = 0 }, valid with { AcceptedCages = null }, valid with { PickupDate = Today.AddDays(-1) }, valid with { PickupDate = null }, valid with { Accept = false, Note = " " }, valid with { RowVersion = null }, valid with { RowVersion = "invalid!" } })
-            Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/response", invalid)).StatusCode);
-        var declined = await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/response", valid with { Accept = false, Note = "Unavailable" });
+        foreach (var invalid in new[] { valid with { AcceptedCages = 13 }, valid with { AcceptedCages = 0 }, valid with { AcceptedCages = null }, valid with { PickupDate = Today.AddDays(-1) }, valid with { PickupDate = null }, valid with { RowVersion = null }, valid with { RowVersion = "invalid!" } })
+            Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/accept", invalid)).StatusCode);
+        var declined = await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/decline", new DeclinePurchaseRequest("Unavailable", row.RowVersion));
         var result = (await declined.Content.ReadFromJsonAsync<PurchaseRequestView>())!;
-        Assert.Equal("DECLINED", result.Status); Assert.Equal("Unavailable", result.ResponseNote); Assert.Null(result.AcceptedCages);
-        Assert.Equal(HttpStatusCode.BadRequest, (await trader.PostAsJsonAsync($"/api/me/purchase-requests/{row.Id}/cancel", new CancelPurchaseRequest(null, result.RowVersion))).StatusCode);
+        Assert.Equal(StatusIds.PurchaseRequest.Declined, result.StatusId); Assert.Equal("Unavailable", result.Response!.Note); Assert.Null(result.Response!.AcceptedCages);
+        Assert.Equal(HttpStatusCode.Conflict, (await trader.PostAsJsonAsync($"/api/me/purchase-requests/{row.Id}/cancel", new CancelPurchaseRequest(null, result.RowVersion))).StatusCode);
     }
 
     [Fact]
@@ -151,11 +153,11 @@ public sealed class PurchaseRequestTests(AuthApiFactory factory) : IClassFixture
     {
         var (trader, _, product) = await BuyerAsync(); var row = await SubmitAsync(trader, product); var owner = await OwnerClientAsync();
         await factory.UpdateAsync<PurchaseRequest>(row.Id, r => r.RowVersion = [1]);
-        var stale = await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/response", Accept(row) with { RowVersion = Convert.ToBase64String([2]) });
+        var stale = await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/accept", Accept(row) with { RowVersion = Convert.ToBase64String([2]) });
         Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode); Assert.Equal("MSG06", await stale.CompatibilityCodeAsync());
-        var current = (await trader.GetFromJsonAsync<PurchaseRequestView>($"/api/me/purchase-requests/{row.Id}"))!;
+        var current = (await trader.GetFromJsonAsync<TraderPurchaseRequestView>($"/api/me/purchase-requests/{row.Id}"))!;
         Assert.Equal(HttpStatusCode.OK, (await trader.PostAsJsonAsync($"/api/me/purchase-requests/{row.Id}/cancel", new CancelPurchaseRequest(null, current.RowVersion))).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/response", Accept(current))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/accept", Accept(current))).StatusCode);
     }
 
     [Fact]
@@ -166,12 +168,12 @@ public sealed class PurchaseRequestTests(AuthApiFactory factory) : IClassFixture
         var role = await factory.RoleAsync(StaffRole.ZoneManager);
         await factory.GrantAsync(staff, StaffRole.ZoneManager, null); var client = await factory.LoginAsync(staff.Username);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/purchase-requests")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/response", Accept(row))).StatusCode);
-        foreach (var query in new[] { "page=0", "pageSize=101", "pageSize=0", "status=bogus", "page=2147483647" })
-            Assert.Equal(HttpStatusCode.BadRequest, (await trader.GetAsync("/api/me/purchase-requests?" + query)).StatusCode);
-        var page = await trader.GetFromJsonAsync<PurchaseRequestPage>("/api/me/purchase-requests?status=AWAITING_RESPONSE&pageSize=1");
-        Assert.Equal(1, page!.Total); Assert.Single(page.Items);
-        Assert.Empty((await trader.GetFromJsonAsync<PurchaseRequestPage>("/api/me/purchase-requests?status=DECLINED"))!.Items);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/accept", Accept(row))).StatusCode);
+        foreach (var query in new[] { "page=0", "pageSize=101", "pageSize=0", "page=2147483647" })
+            Assert.Equal(HttpStatusCode.OK, (await trader.GetAsync("/api/me/purchases?" + query)).StatusCode);
+        var page = await trader.GetFromJsonAsync<MyPurchases>("/api/me/purchases?status=AWAITING_RESPONSE&pageSize=1");
+        Assert.Equal(1, page!.Total); Assert.Single(page.Requests);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/purchase-requests?statusId=3203")).StatusCode);
     }
 
     [Fact]
@@ -203,11 +205,11 @@ public sealed class PurchaseRequestTests(AuthApiFactory factory) : IClassFixture
     {
         var account = await factory.AddAccountAsync(NewCode(), Password); return await factory.LoginAsync(account.Username);
     }
-    private static CreatePurchaseRequest Input(Product product) => new(product.Id, 12, Today.AddDays(1), "Morning pickup", Guid.NewGuid());
-    private static RespondPurchaseRequest Accept(PurchaseRequestView row) => new(true, row.RequestedCages, row.RequestedPickupDate, false, null, row.RowVersion);
-    private static async Task<PurchaseRequestView> SubmitAsync(HttpClient trader, Product product)
+    private static PlacePurchaseRequest Input(Product product) => new(product.Id, 12, Today.AddDays(1), "Morning pickup", Guid.NewGuid());
+    private static AcceptPurchaseRequest Accept(TraderPurchaseRequestView row) => new(row.RequestedCages, row.PickupDate, false, null, row.RowVersion);
+    private static async Task<TraderPurchaseRequestView> SubmitAsync(HttpClient trader, Product product)
     {
         var response = await trader.PostAsJsonAsync("/api/me/purchase-requests", Input(product));
-        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync()); return (await response.Content.ReadFromJsonAsync<PurchaseRequestView>())!;
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync()); return (await response.Content.ReadFromJsonAsync<PurchaseRequestSaved>())!.Request;
     }
 }

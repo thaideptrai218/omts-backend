@@ -118,7 +118,7 @@ public class PurchaseRequestQaContractSqlServerTests
         var filtered = await (await owner.GetAsync($"/api/purchase-requests?customerId={other.Profile.Id}&statusId=3201")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(1, filtered.GetProperty("total").GetInt32());
 
-        var mine = await (await trader.Client.GetAsync("/api/me/purchase-requests?page=1&pageSize=4")).ReadAsync(HttpStatusCode.OK);
+        var mine = await (await trader.Client.GetAsync("/api/me/purchases?page=1&pageSize=4")).ReadAsync(HttpStatusCode.OK);
         var times = mine.GetProperty("requests").EnumerateArray().Select(r => r.GetProperty("sentAt").GetDateTimeOffset()).ToList();
         Assert.Equal((6, 4), (mine.GetProperty("total").GetInt32(), times.Count));
         Assert.Equal(times.OrderByDescending(t => t), times);
@@ -144,7 +144,7 @@ public class PurchaseRequestQaContractSqlServerTests
         Assert.Equal(host.Owner.Account.Id, accept.ActorAccountId);
         Assert.Contains("AWAITING_RESPONSE", accept.Before);
         var values = JsonDocument.Parse(accept.After!).RootElement;
-        Assert.Equal(("ACCEPTED", 50m, true), (values.GetProperty("Status").GetString(), values.GetProperty("AcceptedCages").GetDecimal(), values.GetProperty("PayLaterAgreed").GetBoolean()));
+        Assert.Equal(("ACCEPTED", 50, true), (values.GetProperty("Status").GetString(), values.GetProperty("AcceptedCages").GetDecimal(), values.GetProperty("PayLaterAgreed").GetBoolean()));
         var cancel = rows.Single(e => e.Action == "PurchaseRequest.Cancelled");
         Assert.Equal((trader.Account.Id, "Đổi lịch"), (cancel.ActorAccountId, cancel.Reason));
         Assert.Contains("ACCEPTED", cancel.Before);

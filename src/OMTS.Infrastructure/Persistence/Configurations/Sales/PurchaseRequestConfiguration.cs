@@ -21,6 +21,7 @@ internal sealed class PurchaseRequestConfiguration : IEntityTypeConfiguration<Pu
         b.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId);
         b.HasOne(x => x.Status).WithMany().HasForeignKey(x => x.StatusId);
         b.ReferencesAccount(nameof(PurchaseRequest.RespondedByAccountId));
+        b.ReferencesAccount(nameof(PurchaseRequest.HarvestCompletedByAccountId));
         b.HasIndex(x => x.Code).IsUnique().HasFilter("[Code] <> N''");
         b.HasIndex(x => new { x.CustomerId, x.ClientOperationId }).IsUnique().HasFilter("[ClientOperationId] <> '00000000-0000-0000-0000-000000000000'");
         b.HasIndex(x => new { x.StatusId, x.CreatedAt });
@@ -31,6 +32,9 @@ internal sealed class PurchaseRequestConfiguration : IEntityTypeConfiguration<Pu
                 $"[StatusId] <> {StatusIds.PurchaseRequest.Accepted} OR ([AcceptedCages] IS NOT NULL AND [AgreedPickupDate] IS NOT NULL AND [PayLaterAgreed] IS NOT NULL)");
             t.HasCheckConstraint("CK_PurchaseRequest_Declined_Has_Note", $"[StatusId] <> {StatusIds.PurchaseRequest.Declined} OR [ResponseNote] IS NOT NULL");
         });
+        // Who marked the harvest done is kept with the time, and both are cleared together (decision of 11/11/2026).
+        b.ToTable(t => t.HasCheckConstraint("CK_PurchaseRequest_HarvestCompleted",
+            "([HarvestCompletedAt] IS NULL AND [HarvestCompletedByAccountId] IS NULL) OR ([HarvestCompletedAt] IS NOT NULL AND [HarvestCompletedByAccountId] IS NOT NULL)"));
         b.ToTable(t => t.HasCheckConstraint("CK_PurchaseRequest_Cages",
             "[RequestedCages] > 0 AND ([AcceptedCages] IS NULL OR ([AcceptedCages] > 0 AND [AcceptedCages] <= [RequestedCages]))"));
         b.ToTable(t => t.HasCheckConstraint("CK_PurchaseRequest_Staffing",

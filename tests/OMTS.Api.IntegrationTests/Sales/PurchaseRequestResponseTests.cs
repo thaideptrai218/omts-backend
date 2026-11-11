@@ -28,17 +28,17 @@ public class PurchaseRequestResponseTests(AuthApiFactory factory) : IClassFixtur
         var request = await trader.Client.PlaceAsync(productId, 300);
         var pickup = Today.AddDays(5);
 
-        var view = await (await owner.AcceptAsync(request, 251, pickup, payLater: true, note: "  Đủ 250 kg ")).ReadAsync(HttpStatusCode.OK);
+        var view = await (await owner.AcceptAsync(request, 250, pickup, payLater: true, note: "  Đủ 250 kg ")).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal(StatusIds.PurchaseRequest.Accepted, view.GetProperty("statusId").GetInt32());
         var response = view.GetProperty("response");
-        Assert.Equal(250.5m, response.GetProperty("acceptedCages").GetDecimal());
+        Assert.Equal(250, response.GetProperty("acceptedCages").GetDecimal());
         Assert.Equal(pickup, response.GetProperty("pickupDate").GetFromJson<DateOnly>());
         Assert.True(response.GetProperty("payLaterAgreed").GetBoolean());
         Assert.Equal("Đủ 250 kg", response.Text("note"));
-        Assert.Equal(300m, view.GetProperty("requestedCages").GetDecimal());
+        Assert.Equal(300, view.GetProperty("requestedCages").GetDecimal());
         var audit = (await factory.AuditRowsAsync(request.Id())).Single(e => e.Action == "PurchaseRequest.Accepted");
-        Assert.Contains("250.5", audit.After);
+        Assert.Contains("250", audit.After);
         Assert.Contains("ACCEPTED", audit.After);
         Assert.Contains("AWAITING_RESPONSE", audit.Before);
         Assert.NotNull(audit.ActorAccountId);
@@ -51,9 +51,9 @@ public class PurchaseRequestResponseTests(AuthApiFactory factory) : IClassFixtur
         var (owner, trader, productId, _) = await WorldAsync();
         var request = await trader.Client.PlaceAsync(productId, 100);
 
-        foreach (var kg in new[] { 100.001m, 0m, -1m, 0.0001m })
+        foreach (var cages in new[] { 101, 0, -1 })
         {
-            Assert.Equal(["Accepted cages"], await (await owner.AcceptAsync(request, (int)kg)).InvalidFieldsAsync());
+            Assert.Equal(["Accepted cages"], await (await owner.AcceptAsync(request, cages)).InvalidFieldsAsync());
         }
 
         Assert.Equal(StatusIds.PurchaseRequest.AwaitingResponse, (await owner.ViewedByStaffAsync(request.Id())).GetProperty("statusId").GetInt32());

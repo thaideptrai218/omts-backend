@@ -22,14 +22,14 @@ public class PurchaseRequestPlaceTests(AuthApiFactory factory) : IClassFixture<A
         var trader = await factory.TraderAsync();
         var pickup = Today.AddDays(3);
 
-        var response = await trader.Client.PostRequestAsync(product.Id(), 151, pickup, "  Sáng sớm  ");
+        var response = await trader.Client.PostRequestAsync(product.Id(), 150, pickup, "  Sáng sớm  ");
 
         var body = await response.ReadAsync(HttpStatusCode.Created);
         Assert.Equal(("Purchase request saved.", "MSG-GEN-05"), (body.Text("message"), body.Text("messageCode")));
         var request = body.GetProperty("request");
         Assert.Equal(StatusIds.PurchaseRequest.AwaitingResponse, request.GetProperty("statusId").GetInt32());
         Assert.Equal("Awaiting response", request.Text("status"));
-        Assert.Equal(150.5m, request.GetProperty("requestedCages").GetDecimal());
+        Assert.Equal(150, request.GetProperty("requestedCages").GetDecimal());
         Assert.Equal(pickup, request.GetProperty("pickupDate").GetFromJson<DateOnly>());
         Assert.Equal("Sáng sớm", request.Text("note"));
         Assert.True(request.GetProperty("canCancel").GetBoolean());
@@ -62,17 +62,17 @@ public class PurchaseRequestPlaceTests(AuthApiFactory factory) : IClassFixture<A
     }
 
     [Theory]
-    [InlineData(0.001)]
-    [InlineData(1500.125)]
-    [InlineData(999999999999.999)]
-    public async Task Any_weight_above_zero_with_three_decimals_is_a_requested_cages(double kg)
+    [InlineData(1)]
+    [InlineData(1500)]
+    [InlineData(int.MaxValue)]
+    public async Task Any_positive_whole_cage_count_fits_the_request(int cages)
     {
         var product = await (await factory.PurchasingOwnerAsync()).CreateProductAsync();
         var trader = await factory.TraderAsync();
 
-        var request = await trader.Client.PlaceAsync(product.Id(), (int)kg);
+        var request = await trader.Client.PlaceAsync(product.Id(), cages);
 
-        Assert.Equal((decimal)kg, request.GetProperty("requestedCages").GetDecimal());
+        Assert.Equal(cages, request.GetProperty("requestedCages").GetDecimal());
     }
 
     [Theory]
@@ -92,7 +92,7 @@ public class PurchaseRequestPlaceTests(AuthApiFactory factory) : IClassFixture<A
             System.Text.Encoding.UTF8,
             "application/json"));
 
-        Assert.Equal(["Requested cages"], await response.InvalidFieldsAsync());
+        Assert.Equal([int.TryParse(kg, out _) || kg == "null" ? "Requested cages" : "request"], await response.InvalidFieldsAsync());
     }
 
     [Fact]

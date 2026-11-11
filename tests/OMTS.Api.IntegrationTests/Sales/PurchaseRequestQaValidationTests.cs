@@ -19,12 +19,12 @@ public class PurchaseRequestQaValidationTests(AuthApiFactory factory) : IClassFi
     private static string Date(DateOnly date) => date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 
     [Theory]
-    [InlineData("0.001", true)]
+    [InlineData("0.001", false)]
     [InlineData("1", true)]
-    [InlineData("1.500", true)]
-    [InlineData("1.5000", true)]
-    [InlineData("1e2", true)]
-    [InlineData("999999999999999.999", true)]
+    [InlineData("1500", true)]
+    [InlineData("1.5000", false)]
+    [InlineData("1e2", false)]
+    [InlineData("2147483647", true)]
     [InlineData("0", false)]
     [InlineData("-0.001", false)]
     [InlineData("0.0001", false)]
@@ -44,7 +44,7 @@ public class PurchaseRequestQaValidationTests(AuthApiFactory factory) : IClassFi
         }
         else
         {
-            Assert.Equal(["Requested cages"], await response.InvalidFieldsAsync());
+            Assert.Equal([int.TryParse(kg, out _) || kg == "null" ? "Requested cages" : "request"], await response.InvalidFieldsAsync());
         }
     }
 
@@ -54,7 +54,7 @@ public class PurchaseRequestQaValidationTests(AuthApiFactory factory) : IClassFi
         var (owner, trader, productId) = await WorldAsync();
 
         Assert.Equal(["Pickup date"], await (await trader.Client.PostRequestAsync(productId, pickupDate: PurchaseRequestTestKit.Today.AddDays(-1))).InvalidFieldsAsync());
-        var missing = await trader.Client.PostAsJsonAsync("/api/me/purchase-requests", new { productId, requestedCages = 1m });
+        var missing = await trader.Client.PostAsJsonAsync("/api/me/purchase-requests", new { productId, requestedCages = 1 });
         Assert.Equal(["Pickup date"], await missing.InvalidFieldsAsync());
         await (await trader.Client.PostRequestAsync(productId, pickupDate: PurchaseRequestTestKit.Today)).ReadAsync(HttpStatusCode.Created);
 
@@ -68,7 +68,7 @@ public class PurchaseRequestQaValidationTests(AuthApiFactory factory) : IClassFi
     {
         var (_, trader, _) = await WorldAsync();
 
-        var fields = await (await trader.Client.PostAsJsonAsync("/api/me/purchase-requests", new { productId = Guid.NewGuid(), requestedCages = 0m, pickupDate = "2000-01-01", note = new string('a', 1001) })).InvalidFieldsAsync();
+        var fields = await (await trader.Client.PostAsJsonAsync("/api/me/purchase-requests", new { productId = Guid.NewGuid(), requestedCages = 0, pickupDate = "2000-01-01", note = new string('a', 1001) })).InvalidFieldsAsync();
 
         Assert.Equal(["Product", "Requested cages", "Pickup date", "Note"], fields);
     }
@@ -84,7 +84,7 @@ public class PurchaseRequestQaValidationTests(AuthApiFactory factory) : IClassFi
         var refused = await (await trader.Client.PostRequestAsync(productId)).ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-09");
         Assert.Equal(($"Product {name} is Discontinued and cannot be used for this action.", "Product"), (refused.GetProperty("detail").GetString(), refused.Text("field")));
         Assert.Equal(["Requested cages"], await (await trader.Client.PostRequestAsync(productId, cages: 0)).InvalidFieldsAsync());
-        Assert.Equal(0, (await (await trader.Client.GetAsync("/api/me/purchase-requests")).ReadAsync(HttpStatusCode.OK)).GetProperty("total").GetInt32());
+        Assert.Equal(0, (await (await trader.Client.GetAsync("/api/me/purchases")).ReadAsync(HttpStatusCode.OK)).GetProperty("total").GetInt32());
 
         (await owner.PostAsync($"/api/products/{productId}/resume", null)).EnsureSuccessStatusCode();
         await (await trader.Client.PostRequestAsync(productId)).ReadAsync(HttpStatusCode.Created);

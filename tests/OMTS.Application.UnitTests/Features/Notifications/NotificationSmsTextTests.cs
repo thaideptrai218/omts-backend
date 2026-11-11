@@ -118,20 +118,20 @@ public class NotificationSmsTextTests
         var text = RenderRequest("Chị Lan", 301, "Hàu sữa", "Lấy sớm");
 
         Assert.Equal([NotificationRole.CooperativeOwner], NotificationTypes.Find(NotificationTypes.PurchaseRequestNew)!.Sms!.To);
-        Assert.Equal("Chi Lan asks to buy about 300.5 kg of Hau sua, pickup on 07/11/2026. Lay som Please ask the Zone Manager to check the oysters, then respond.", text);
+        Assert.Equal("Chi Lan asks to buy 301 cages of Hau sua, pickup on 07/11/2026. Lay som Please ask the Zone Manager to check the oysters, then respond.", text);
     }
 
     [Theory]
     [InlineData(40, 40, 400)]
     [InlineData(40, 200, 0)]
     [InlineData(200, 200, 2000)]
-    public void A_long_new_purchase_request_keeps_the_kg_and_the_date_and_fits_one_sms(int customerLength, int productLength, int noteLength)
+    public void A_long_new_purchase_request_keeps_the_cages_and_the_date_and_fits_one_sms(int customerLength, int productLength, int noteLength)
     {
         var text = RenderRequest(new string('Ư', customerLength), 2147483647, new string('à', productLength), noteLength == 0 ? null : new string('Đ', noteLength));
 
         Assert.True(text.Length <= NotificationSmsText.MaxLength, text);
         Assert.All(text, c => Assert.Contains(c, NotificationSmsText.Alphabet));
-        Assert.Contains("123456789012345.125 kg", text);
+        Assert.Contains("2147483647 cages", text);
         Assert.Contains("07/11/2026", text);
     }
 
@@ -142,22 +142,22 @@ public class NotificationSmsTextTests
         var text = RenderRequest("Chị Lan", 301, "Hàu sữa", string.Join(' ', Enumerable.Repeat("lấy sớm ở cảng", 20)));
 
         Assert.True(text.Length <= NotificationSmsText.MaxLength, text);
-        Assert.Contains("Chi Lan asks to buy about 300.5 kg of Hau sua, pickup on 07/11/2026.", text);
+        Assert.Contains("Chi Lan asks to buy 301 cages of Hau sua, pickup on 07/11/2026.", text);
         Assert.Contains("lay som", text);
         Assert.Contains("...", text);
         Assert.EndsWith("Please ask the Zone Manager to check the oysters, then respond.", text);
     }
 
-    // At their minimums the closing sentence no longer leaves room: it goes, and then the three fields have what is left.
+    // A request counts whole cages, so even the largest count leaves room for the closing sentence once the three fields are at their minimums.
     [Fact]
-    public void The_closing_sentence_goes_when_the_free_text_at_its_minimum_does_not_fit_with_it()
+    public void The_closing_sentence_stays_when_the_free_text_shrinks_to_its_minimum()
     {
         var text = RenderRequest(new string('C', 200), 2147483647, new string('P', 200), new string('N', 400));
 
         Assert.True(text.Length <= NotificationSmsText.MaxLength, text);
-        Assert.DoesNotContain("Please ask", text);
+        Assert.EndsWith("Please ask the Zone Manager to check the oysters, then respond.", text);
         Assert.Contains("C...", text);
-        Assert.Contains("123456789012345.125 kg of P", text);
+        Assert.Contains("2147483647 cages of P", text);
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public class NotificationSmsTextTests
         var text = RenderRequest(new string('C', 200), 300, new string('P', 20), null);
 
         Assert.True(text.Length <= NotificationSmsText.MaxLength, text);
-        Assert.Contains("C... asks to buy about 300 kg of " + new string('P', 20) + ", pickup on 07/11/2026.", text);
+        Assert.Contains("C... asks to buy 300 cages of " + new string('P', 20) + ", pickup on 07/11/2026.", text);
     }
 
     [Theory]

@@ -39,7 +39,6 @@ public static partial class AcsTestKit
         var client = factory.CreateClient();
         var tokens = await LoginTokensAsync(client, identifier, password);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.GetProperty("accessToken").GetString());
-        OMTS.Api.IntegrationTests.Sales.PurchaseRequestTestKit.Remember(client, factory);
         return client;
     }
 

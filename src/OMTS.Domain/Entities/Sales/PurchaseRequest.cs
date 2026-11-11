@@ -35,6 +35,13 @@ public class PurchaseRequest : AuditableEntity, IHasStatus
     public DateTimeOffset? CancelledAt { get; set; }
     public string? CancelReason { get; set; }
     public DateTimeOffset SentAt { get; set; }
+
+    /// <summary>
+    /// When the Cooperative Owner marked the harvest of the request done (decision of 11/11/2026): no harvest lot is added to it after this, and only then is it
+    /// weighed at the port. Not a status: it is cleared again while the request has no weighing.
+    /// </summary>
+    public DateTimeOffset? HarvestCompletedAt { get; set; }
+    public Guid? HarvestCompletedByAccountId { get; set; }
     public int? PlannedCages { get; set; }
     public DateOnly? WorkDate { get; set; }
     public DateOnly? PlannedPickupDate { get; set; }

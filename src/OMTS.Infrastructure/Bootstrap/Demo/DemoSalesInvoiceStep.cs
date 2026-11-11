@@ -4,6 +4,7 @@ using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Sales;
 using OMTS.Infrastructure.Messaging;
 
 namespace OMTS.Infrastructure.Bootstrap.Demo;
@@ -52,10 +53,11 @@ internal sealed class DemoSalesInvoiceStep : IDemoSeedStep
             var request = await db.PurchaseRequests.AsNoTracking()
                 .Where(r => r.CustomerId == trader && r.StatusId == StatusIds.PurchaseRequest.Accepted && r.PayLaterAgreed == true && r.AgreedPickupDate >= context.Today)
                 .Select(r => (Guid?)r.Id).FirstOrDefaultAsync(cancellationToken);
+            var weighing = request is { } requestId ? await ConfirmedWeighingAsync(context, requestId, lotTwo.Id, cancellationToken) : (Guid?)null;
             await SellAsync(context, DemoFarmingZoneStep.ZoneTwo, "quanlyvung2", new CreateSalesInvoiceRequest(
                 trader, false, lotTwo.ZoneId, [new SalesInvoiceLineEntry(fat, lotTwo.Id, 80m)],
                 new SalesInvoicePaymentEntry(1_000_000m, SalesInvoiceRestPayment.PayLater, PayLaterOwnerAgreed: request is null),
-                PurchaseRequestId: request, TakesRequestInFull: request is null ? null : false, NotSoldWholeLotIds: [lotTwo.Id]), cancellationToken);
+                PurchaseRequestId: request, TakesRequestInFull: request is null ? null : false, NotSoldWholeLotIds: [lotTwo.Id], PortWeighingId: weighing), cancellationToken);
             created++;
         }
 
@@ -79,6 +81,21 @@ internal sealed class DemoSalesInvoiceStep : IDemoSeedStep
         using var acting = context.Get<AmbientActor>().Use(actor);
         DemoSeedContext.Ensure(
             await context.Get<SalesInvoiceSendingService>().FinishAsync(invoiceId, new FinishSalesInvoiceRequest(WantsQrCode: true), cancellationToken), "the end of the demo cash sale");
+    }
+
+    /// <summary>The weighing the pay-later sale is made from: two cages of the 80 kg, already confirmed by the demo trader.</summary>
+    private static async Task<Guid> ConfirmedWeighingAsync(DemoSeedContext context, Guid requestId, Guid lotId, CancellationToken cancellationToken)
+    {
+        var db = context.Db;
+        var manager = await db.Accounts.Where(a => a.Username == "quanlyvung2").Select(a => a.Id).FirstAsync(cancellationToken);
+        var traderAccount = await db.Accounts.Where(a => a.Username == TraderUsername).Select(a => a.Id).FirstAsync(cancellationToken);
+        var now = context.Get<TimeProvider>().GetUtcNow();
+        var weighing = new PortWeighing { PurchaseRequestId = requestId, WeighedAt = now, WeighedByAccountId = manager, ConfirmedAt = now, ConfirmedByAccountId = traderAccount };
+        weighing.Cages.Add(new PortWeighingCage { CageNumber = 1, HarvestLotId = lotId, Kg = 42.5m });
+        weighing.Cages.Add(new PortWeighingCage { CageNumber = 2, HarvestLotId = lotId, Kg = 37.5m });
+        db.PortWeighings.Add(weighing);
+        await db.SaveChangesAsync(cancellationToken);
+        return weighing.Id;
     }
 
     /// <summary>The first lot of the first raft of the zone, still for sale: the newest one of the raft is left alone, so it can still be removed.</summary>

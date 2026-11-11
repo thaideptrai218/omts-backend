@@ -64,8 +64,9 @@ public static class DependencyInjection
         services.AddScoped<SessionManagementService>();
         services.AddScoped<ZaloLinkService>();
         services.AddScoped<ZaloLocationService>();
-        services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseRequestService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseHarvestService>();
         services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseStaffingService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseHarvestReader>();
         services.AddScoped<OMTS.Application.Features.Sales.Products.SalesProductService>();
         services.AddOptions<OMTS.Application.Features.Testing.Options.TestRoleOptions>();
         services.AddScoped<OMTS.Application.Features.Testing.TestRoleService>();
@@ -207,6 +208,7 @@ public static class DependencyInjection
         services.AddScoped<LotTraceService>();
         // ORIGIN-01 – the public provenance page of an invoice QR code (anonymous)
         services.AddScoped<ProvenancePageService>();
+        services.AddScoped<PublicOriginService>();
         // TRACE-04 – withdraw the origin information of a lot and tell its traders
         services.AddScoped<WithdrawalNotices>();
         services.AddScoped<LotWithdrawalService>();
@@ -223,7 +225,11 @@ public static class DependencyInjection
         services.AddScoped<ProductReadService>();
         services.AddScoped<CustomerService>();
         services.AddScoped<CustomerMergeService>();
+        services.AddScoped<PurchaseRequestViews>();
         services.AddScoped<PurchaseRequestNotifications>();
+        services.AddScoped<PurchaseRequestReadService>();
+        services.AddScoped<TraderPurchaseRequestService>();
+        services.AddScoped<PurchaseRequestResponseService>();
         services.AddScoped<TraderMessageService>();
         // CLAIM-01 and CLAIM-02
         services.AddScoped<QualityClaimViews>();
@@ -258,6 +264,10 @@ public static class DependencyInjection
         services.AddScoped<BankTransferNoticeService>();
         services.AddScoped<SalesInvoiceSearchService>();
         services.AddScoped<SalesInvoiceExportService>();
+        services.AddScoped<MyInvoiceService>();
+        services.AddScoped<SalesInvoiceWeighingReader>();
+        services.AddScoped<OMTS.Application.Features.Sales.Weighings.PortWeighingService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Weighings.MyPortWeighingService>();
         // SALE-06 sending the invoice, and the end of the sale with the QR code
         services.AddScoped<SalesInvoiceMessages>();
         services.AddScoped<SalesInvoiceSendingService>();

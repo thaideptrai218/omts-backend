@@ -63,11 +63,11 @@ public class PurchaseRequestQaMergeTests(AuthApiFactory factory) : IClassFixture
 
         (await owner.MergeAsync(trader.Profile.Id, offline.Id())).EnsureSuccessStatusCode();
 
-        var list = await trader.Client.GetAsync("/api/me/purchase-requests");
+        var list = await trader.Client.GetAsync("/api/me/purchases");
         Assert.DoesNotContain(offline.Text("phoneNumber")!, await list.Content.ReadAsStringAsync());
         Assert.Contains((await list.ReadAsync(HttpStatusCode.OK)).GetProperty("requests").EnumerateArray(), r => r.Id() == row.Id);
         Assert.Equal(HttpStatusCode.NotFound, (await other.Client.GetAsync($"/api/me/purchase-requests/{row.Id}")).StatusCode);
-        Assert.Equal(0, (await (await other.Client.GetAsync("/api/me/purchase-requests")).ReadAsync(HttpStatusCode.OK)).GetProperty("total").GetInt32());
+        Assert.Equal(0, (await (await other.Client.GetAsync("/api/me/purchases")).ReadAsync(HttpStatusCode.OK)).GetProperty("total").GetInt32());
         Assert.Equal(0, (await (await owner.GetAsync($"/api/purchase-requests?customerId={offline.Id()}")).ReadAsync(HttpStatusCode.OK)).GetProperty("total").GetInt32());
         Assert.Equal(1, (await (await owner.GetAsync($"/api/purchase-requests?customerId={trader.Profile.Id}")).ReadAsync(HttpStatusCode.OK)).GetProperty("total").GetInt32());
 

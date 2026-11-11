@@ -91,12 +91,12 @@ public class PurchaseRequestQaAccessTests(AuthApiFactory factory) : IClassFixtur
 
         // The two without an id: the trader's own list and form, 403 or 401 for everybody else.
         var ownRouteOutsideTrader = caller == Caller.Trader ? 200 : traderRoute;
-        Assert.Equal(ownRouteOutsideTrader, (int)(await client.GetAsync("/api/me/purchase-requests")).StatusCode);
+        Assert.Equal(ownRouteOutsideTrader, (int)(await client.GetAsync("/api/me/purchases")).StatusCode);
         Assert.Equal(caller == Caller.Trader ? 201 : traderRoute, (int)(await client.PostRequestAsync(productId)).StatusCode);
 
         if (traderRoute == 403 && caller != Caller.Anonymous)
         {
-            await (await client.GetAsync("/api/me/purchase-requests")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+            await (await client.GetAsync("/api/me/purchases")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
         }
     }
 

@@ -39,17 +39,17 @@ public class PurchaseRequestQaNotificationTests(AuthApiFactory factory) : IClass
         var w = await WorldAsync();
         var pickup = PurchaseRequestTestKit.Today.AddDays(2);
 
-        var withNote = await w.Trader.Client.PlaceAsync(w.ProductId, 1501, pickup, "Sáng sớm.");
-        var without = await w.Trader.Client.PlaceAsync(w.ProductId, 1501, pickup);
+        var withNote = await w.Trader.Client.PlaceAsync(w.ProductId, 1500, pickup, "Sáng sớm.");
+        var without = await w.Trader.Client.PlaceAsync(w.ProductId, 1500, pickup);
 
         var row = Assert.Single((await factory.NotificationRowsAsync(withNote.Id())).Where(n => n.RecipientAccountId == w.OwnerAccount.Id));
         Assert.Equal(("MSG-SALE-01", NotificationTypes.PurchaseRequestNew, true), (row.MessageCode, row.Type, row.IsMandatory));
-        Assert.Equal($"Chị Hoa asks to buy about 1500.5 kg of {w.ProductName}, pickup on {Dmy(pickup)}. Sáng sớm. Please ask the Zone Manager to check the oysters, then respond.", row.Body);
+        Assert.Equal($"Chị Hoa asks to buy 1500 cages of {w.ProductName}, pickup on {Dmy(pickup)}. Sáng sớm. Please ask the Zone Manager to check the oysters, then respond.", row.Body);
         Assert.Equal(["customer_name", "note", "pickup_date", "product_name", "requested_cages"], Parameters(row.MessageParams).Keys.Order().ToList());
-        Assert.Equal((1500.5m, "Sáng sớm.", pickup.ToString("yyyy-MM-dd")), (Parameters(row.MessageParams)["requested_cages"].GetDecimal(), Parameters(row.MessageParams)["note"].GetString(), Parameters(row.MessageParams)["pickup_date"].GetString()));
+        Assert.Equal((1500, "Sáng sớm.", pickup.ToString("yyyy-MM-dd")), (Parameters(row.MessageParams)["requested_cages"].GetDecimal(), Parameters(row.MessageParams)["note"].GetString(), Parameters(row.MessageParams)["pickup_date"].GetString()));
 
         var plain = Assert.Single((await factory.NotificationRowsAsync(without.Id())).Where(n => n.RecipientAccountId == w.OwnerAccount.Id));
-        Assert.Equal($"Chị Hoa asks to buy about 1500.5 kg of {w.ProductName}, pickup on {Dmy(pickup)}. Please ask the Zone Manager to check the oysters, then respond.", plain.Body);
+        Assert.Equal($"Chị Hoa asks to buy 1500 cages of {w.ProductName}, pickup on {Dmy(pickup)}. Please ask the Zone Manager to check the oysters, then respond.", plain.Body);
         Assert.Equal(JsonValueKind.Null, Parameters(plain.MessageParams)["note"].ValueKind);
         Assert.Null(plain.RelatedRecordCode);
     }
@@ -67,10 +67,10 @@ public class PurchaseRequestQaNotificationTests(AuthApiFactory factory) : IClass
         var today = Dmy(PurchaseRequestTestKit.Today);
         var row = Assert.Single((await factory.NotificationRowsAsync(first.Id())).OfType(NotificationTypes.PurchaseRequestCancelled).Where(n => n.RecipientAccountId == w.OwnerAccount.Id));
         Assert.Equal(("MSG-SALE-02", false), (row.MessageCode, row.IsMandatory));
-        Assert.Equal($"Chị Hoa cancelled the purchase request of {today} for about 200 kg of {w.ProductName}. Khách đổi lịch", row.Body);
+        Assert.Equal($"Chị Hoa cancelled the purchase request of {today} for 200 cages of {w.ProductName}. Khách đổi lịch", row.Body);
         Assert.Equal(["customer_name", "product_name", "reason", "request_date", "requested_cages"], Parameters(row.MessageParams).Keys.Order().ToList());
         var plain = Assert.Single((await factory.NotificationRowsAsync(second.Id())).OfType(NotificationTypes.PurchaseRequestCancelled).Where(n => n.RecipientAccountId == w.OwnerAccount.Id));
-        Assert.Equal($"Chị Hoa cancelled the purchase request of {today} for about 200 kg of {w.ProductName}.", plain.Body);
+        Assert.Equal($"Chị Hoa cancelled the purchase request of {today} for 200 cages of {w.ProductName}.", plain.Body);
     }
 
     [Fact]
@@ -82,9 +82,9 @@ public class PurchaseRequestQaNotificationTests(AuthApiFactory factory) : IClass
 
         var cases = new (Func<JsonElement, Task<HttpResponseMessage>> Answer, string Text)[]
         {
-            (r => w.Owner.AcceptAsync(r, 250, date, true, "Đủ 250 kg"), $"{coop}: your request for 300 kg of {w.ProductName} is accepted for 250 kg, pickup on {Dmy(date)}; you may pay later. Đủ 250 kg"),
-            (r => w.Owner.AcceptAsync(r, 300, date, false), $"{coop}: your request for 300 kg of {w.ProductName} is accepted for 300 kg, pickup on {Dmy(date)}."),
-            (r => w.Owner.DeclineAsync(r, "Chưa đủ cỡ"), $"{coop}: your request for 300 kg of {w.ProductName} is declined. Chưa đủ cỡ"),
+            (r => w.Owner.AcceptAsync(r, 250, date, true, "Đủ 250 kg"), $"{coop}: your request for 300 cages of {w.ProductName} is accepted for 250 cages, pickup on {Dmy(date)}; you may pay later. Đủ 250 kg"),
+            (r => w.Owner.AcceptAsync(r, 300, date, false), $"{coop}: your request for 300 cages of {w.ProductName} is accepted for 300 cages, pickup on {Dmy(date)}."),
+            (r => w.Owner.DeclineAsync(r, "Chưa đủ cỡ"), $"{coop}: your request for 300 cages of {w.ProductName} is declined. Chưa đủ cỡ"),
         };
         foreach (var (answer, text) in cases)
         {
@@ -112,8 +112,8 @@ public class PurchaseRequestQaNotificationTests(AuthApiFactory factory) : IClass
         {
             var cases = new (Func<JsonElement, Task<HttpResponseMessage>> Answer, string Text)[]
             {
-                (r => w.Owner.AcceptAsync(r, 250, date, false), $"{shortName}: your request for 300 kg of {w.ProductName} is accepted for 250 kg, pickup on {Dmy(date)}."),
-                (r => w.Owner.DeclineAsync(r, "Chưa đủ cỡ"), $"{shortName}: your request for 300 kg of {w.ProductName} is declined. Chưa đủ cỡ"),
+                (r => w.Owner.AcceptAsync(r, 250, date, false), $"{shortName}: your request for 300 cages of {w.ProductName} is accepted for 250 cages, pickup on {Dmy(date)}."),
+                (r => w.Owner.DeclineAsync(r, "Chưa đủ cỡ"), $"{shortName}: your request for 300 cages of {w.ProductName} is declined. Chưa đủ cỡ"),
             };
             foreach (var (answer, text) in cases)
             {

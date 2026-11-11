@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Application.Features.Sales.Requests.Dtos;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
@@ -25,20 +26,20 @@ public sealed class PurchaseStaffingTests(AuthApiFactory factory) : IClassFixtur
         var crew = await CrewAsync(5);
         await PlanAsync(owner, row, crew.Select(c => c.Employee.Id).ToArray());
         row = await GetAsync(owner, row.Id);
-        Assert.Equal("AWAITING_STAFF", row.Status); Assert.Equal(5, row.Staffing!.RequiredEmployees);
+        Assert.Equal(StatusIds.PurchaseRequest.AwaitingStaff, row.StatusId); Assert.Equal(5, row.Staffing!.RequiredEmployees);
         for (var i = 0; i < 4; i++) await ReplyAsync(crew[i].Client, true);
         row = await GetAsync(owner, row.Id);
         Assert.Equal(4, row.Staffing!.ApprovedEmployees); Assert.False(row.Staffing.HasEnoughStaff);
         Assert.Equal(HttpStatusCode.BadRequest, (await AcceptAsync(owner, row)).StatusCode);
         await ReplyAsync(crew[4].Client, true);
         row = await GetAsync(owner, row.Id);
-        Assert.Equal("AWAITING_STAFF", row.Status); Assert.True(row.Staffing!.HasEnoughStaff);
-        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/response",
-            new RespondPurchaseRequest(true, 80, Day, false, null, row.RowVersion))).StatusCode);
+        Assert.Equal(StatusIds.PurchaseRequest.AwaitingStaff, row.StatusId); Assert.True(row.Staffing!.HasEnoughStaff);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/accept",
+            new AcceptPurchaseRequest(80, Day, false, null, row.RowVersion))).StatusCode);
         var accepted = await AcceptAsync(owner, row); await Success(accepted);
-        var result = (await trader.GetFromJsonAsync<PurchaseRequestView>($"/api/me/purchase-requests/{row.Id}"))!;
-        Assert.Equal("ACCEPTED", result.Status); Assert.Equal(100, result.AcceptedCages);
-        Assert.Equal(5, result.Staffing!.ApprovedEmployees);
+        var result = (await trader.GetFromJsonAsync<TraderPurchaseRequestView>($"/api/me/purchase-requests/{row.Id}"))!;
+        Assert.Equal(StatusIds.PurchaseRequest.Accepted, result.StatusId); Assert.Equal(100, result.Response!.AcceptedCages);
+        Assert.Equal(5, (await GetAsync(owner, row.Id)).Staffing!.ApprovedEmployees);
         var invitations = (await owner.GetFromJsonAsync<List<PurchaseShiftInvitationView>>($"/api/purchase-requests/{row.Id}/staffing"))!;
         Assert.Equal(5, invitations.Count); Assert.All(invitations, i => Assert.True(i.Approved));
         Assert.Equal(5, await factory.QueryAsync(db => db.Set<PurchaseShiftInvitation>().CountAsync(i => i.PurchaseRequestId == row.Id && i.ReservedWorkDate == Day)));
@@ -54,20 +55,20 @@ public sealed class PurchaseStaffingTests(AuthApiFactory factory) : IClassFixtur
         await ReplyAsync(crew[0].Client, false, "Bận việc gia đình");
         for (var i = 1; i < 5; i++) await ReplyAsync(crew[i].Client, true);
         row = await GetAsync(owner, row.Id);
-        Assert.Equal("AWAITING_STAFF", row.Status); Assert.Equal(4, row.Staffing!.ApprovedEmployees);
+        Assert.Equal(StatusIds.PurchaseRequest.AwaitingStaff, row.StatusId); Assert.Equal(4, row.Staffing!.ApprovedEmployees);
         Assert.Equal(1, row.Staffing.DeclinedEmployees); Assert.False(row.Staffing.HasEnoughStaff);
         Assert.Equal(HttpStatusCode.BadRequest, (await AcceptAsync(owner, row)).StatusCode);
         await PlanAsync(owner, row, [crew[5].Employee.Id]);
         var options = (await owner.GetFromJsonAsync<List<PurchaseShiftInvitationView>>($"/api/purchase-requests/{row.Id}/staffing"))!;
         Assert.Equal("Bận việc gia đình", options.Single(i => i.EmployeeId == crew[0].Employee.Id).Reason);
         row = await GetAsync(owner, row.Id);
-        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/response",
-            new RespondPurchaseRequest(false, null, null, false, " ", row.RowVersion))).StatusCode);
-        var reject = await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/response",
-            new RespondPurchaseRequest(false, null, null, false, "Không đủ nhân viên cho ngày nhận", row.RowVersion));
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/decline",
+            new DeclinePurchaseRequest(" ", row.RowVersion))).StatusCode);
+        var reject = await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/decline",
+            new DeclinePurchaseRequest("Không đủ nhân viên cho ngày nhận", row.RowVersion));
         await Success(reject);
-        var result = (await trader.GetFromJsonAsync<PurchaseRequestView>($"/api/me/purchase-requests/{row.Id}"))!;
-        Assert.Equal("DECLINED", result.Status); Assert.Equal("Không đủ nhân viên cho ngày nhận", result.ResponseNote);
+        var result = (await trader.GetFromJsonAsync<TraderPurchaseRequestView>($"/api/me/purchase-requests/{row.Id}"))!;
+        Assert.Equal(StatusIds.PurchaseRequest.Declined, result.StatusId); Assert.Equal("Không đủ nhân viên cho ngày nhận", result.Response!.Note);
         Assert.False(await factory.QueryAsync(db => db.Set<PurchaseShiftInvitation>().AnyAsync(i => i.PurchaseRequestId == row.Id && i.ReservedWorkDate != null)));
         var pending = await InvitationAsync(crew[5].Client);
         Assert.False(pending.CanRespond);
@@ -161,9 +162,10 @@ public sealed class PurchaseStaffingTests(AuthApiFactory factory) : IClassFixtur
         var product = new Product { Code = NewCode(), Name = NewCode() };
         await factory.UseDbAsync(db => { db.Customers.Add(customer); db.Products.Add(product); });
         var trader = await factory.LoginAsync(buyer.Username);
-        var response = await trader.PostAsJsonAsync("/api/me/purchase-requests", new CreatePurchaseRequest(product.Id, cages, Day, null, Guid.NewGuid()));
+        var response = await trader.PostAsJsonAsync("/api/me/purchase-requests", new PlacePurchaseRequest(product.Id, cages, Day, null, Guid.NewGuid()));
         await Success(response);
-        return (await factory.LoginAsync(owner.Username), trader, (await response.Content.ReadFromJsonAsync<PurchaseRequestView>())!);
+        var ownerClient = await factory.LoginAsync(owner.Username);
+        return (ownerClient, trader, await GetAsync(ownerClient, (await response.Content.ReadFromJsonAsync<PurchaseRequestSaved>())!.Request.Id));
     }
     private async Task<List<(Employee Employee, HttpClient Client)>> CrewAsync(int count)
     {
@@ -189,7 +191,7 @@ public sealed class PurchaseStaffingTests(AuthApiFactory factory) : IClassFixtur
         await Success(await owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/staffing", Plan(row, ids, cages, capacity)));
     }
     private static async Task<PurchaseRequestView> GetAsync(HttpClient owner, Guid id) => (await owner.GetFromJsonAsync<PurchaseRequestView>($"/api/purchase-requests/{id}"))!;
-    private static Task<HttpResponseMessage> AcceptAsync(HttpClient owner, PurchaseRequestView row) => owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/response", new RespondPurchaseRequest(true, row.Staffing?.Cages ?? row.RequestedCages, Day, false, null, row.RowVersion));
+    private static Task<HttpResponseMessage> AcceptAsync(HttpClient owner, PurchaseRequestView row) => owner.PostAsJsonAsync($"/api/purchase-requests/{row.Id}/accept", new AcceptPurchaseRequest(row.Staffing?.Cages ?? row.RequestedCages, Day, false, null, row.RowVersion));
     private static async Task<MyPurchaseShiftView> InvitationAsync(HttpClient client) => Assert.Single((await client.GetFromJsonAsync<List<MyPurchaseShiftView>>(Range))!);
     private static async Task ReplyAsync(HttpClient client, bool approve, string? reason = null)
     {

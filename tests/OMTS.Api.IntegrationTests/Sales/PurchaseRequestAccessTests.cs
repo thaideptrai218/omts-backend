@@ -35,7 +35,7 @@ public class PurchaseRequestAccessTests(AuthApiFactory factory) : IClassFixture<
 
     private static IEnumerable<Task<HttpResponseMessage>> TraderRoutes(HttpClient client, System.Text.Json.JsonElement request)
     {
-        yield return client.GetAsync("/api/me/purchase-requests");
+        yield return client.GetAsync("/api/me/purchases");
         yield return client.GetAsync($"/api/me/purchase-requests/{request.Id()}");
         yield return client.PostAsJsonAsync("/api/me/purchase-requests", new { productId = Guid.NewGuid(), requestedCages = 1, pickupDate = "2030-01-01" });
         yield return client.CancelAsync(request);
@@ -138,7 +138,7 @@ public class PurchaseRequestAccessTests(AuthApiFactory factory) : IClassFixture<
 
         Assert.Equal(HttpStatusCode.NotFound, (await other.Client.GetAsync($"/api/me/purchase-requests/{request.Id()}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await other.Client.CancelAsync(request)).StatusCode);
-        var list = await (await other.Client.GetAsync("/api/me/purchase-requests")).ReadAsync(HttpStatusCode.OK);
+        var list = await (await other.Client.GetAsync("/api/me/purchases")).ReadAsync(HttpStatusCode.OK);
         Assert.Empty(list.GetProperty("requests").EnumerateArray());
         Assert.Equal(request.Id(), (await trader.Client.MineAsync(request.Id())).Id());
     }
@@ -197,6 +197,6 @@ public class PurchaseRequestAccessTests(AuthApiFactory factory) : IClassFixture<
         Assert.DoesNotContain(NotificationTypes.PurchaseRequestResponse, offeredToOwner.Keys);
         // BR-ACCOUNT-11: the trader's types are the response to a request, the withdrawal of a provenance record (TRACE-04), the approval of a Zalo access request and the response to a quality claim (CLAIM-02), none mandatory.
         var offeredToTrader = traderTypes.GetProperty("types").EnumerateArray().Select(t => (t.Text("type"), t.GetProperty("mandatory").GetBoolean())).ToList();
-        Assert.Equal([(NotificationTypes.PurchaseRequestResponse, false), (NotificationTypes.ProvenanceWithdrawn, false), (NotificationTypes.TraderAccessApproved, false), (NotificationTypes.QualityClaimResponse, false)], offeredToTrader);
+        Assert.Equal([("PURCHASE_REQUEST_RESPONDED", false), (NotificationTypes.PurchaseRequestResponse, false), (NotificationTypes.ProvenanceWithdrawn, false), (NotificationTypes.TraderAccessApproved, false), (NotificationTypes.QualityClaimResponse, false)], offeredToTrader);
     }
 }

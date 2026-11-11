@@ -119,17 +119,17 @@ public class PurchaseRequestRulesSqlServerTests
     }
 
     [SqlServerFact]
-    public async Task The_columns_hold_three_decimals_and_the_answer_comes_back_with_a_new_version()
+    public async Task The_columns_hold_whole_cages_and_the_answer_comes_back_with_a_new_version()
     {
         await using var host = await FarmingHost.StartAsync();
         var (owner, trader, productId) = await PurchaseRequestSqlServerTests.WorldAsync(host);
-        var request = await trader.Client.PlaceAsync(productId, 2147483647);
-        Assert.Equal(999_999_999_999_999.999m, request.GetProperty("requestedCages").GetDecimal());
+        var request = await trader.Client.PlaceAsync(productId, int.MaxValue);
+        Assert.Equal(int.MaxValue, request.GetProperty("requestedCages").GetDecimal());
 
-        var small = await trader.Client.PlaceAsync(productId, 1);
+        var small = await trader.Client.PlaceAsync(productId, 2);
         var answer = await (await owner.AcceptAsync(small, 1)).ReadAsync(HttpStatusCode.OK);
 
-        Assert.Equal(0.001m, answer.GetProperty("response").GetProperty("acceptedCages").GetDecimal());
+        Assert.Equal(1, answer.GetProperty("response").GetProperty("acceptedCages").GetDecimal());
         Assert.NotEqual(small.RowVersion(), answer.RowVersion());
         Assert.Equal(StatusIds.MessageDelivery.Sent, answer.GetProperty("sendings")[0].GetProperty("deliveryStatusId").GetInt32());
     }

@@ -153,7 +153,7 @@ public class PurchaseRequestQaSqlServerTests
         var (owner, trader, productId) = await PurchaseRequestSqlServerTests.WorldAsync(host);
         var note = "Sáng\u0000 sớm\n😀 <b>\"x\"</b>";
 
-        var request = await trader.Client.PlaceAsync(productId, 2147483647, DateOnly.MaxValue, note);
+        var request = await trader.Client.PlaceAsync(productId, int.MaxValue, DateOnly.MaxValue, note);
 
         Assert.Equal(note, (await trader.Client.MineAsync(request.Id())).Text("note"));
         var answer = await (await owner.AcceptAsync(request, pickupDate: DateOnly.MaxValue, note: note)).ReadAsync(HttpStatusCode.OK);

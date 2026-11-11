@@ -10,11 +10,15 @@ using Microsoft.Extensions.Options;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Api.IntegrationTests.Purchasing;
 using OMTS.Application.Common;
+using OMTS.Application.Common.Interfaces.Identity;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Common.Models;
 using OMTS.Application.Features.Notifications;
 using OMTS.Application.Features.Sales.PurchaseRequests;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Entities.Labor;
 using OMTS.Domain.Entities.Platform;
 using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
@@ -40,72 +44,95 @@ public static class PurchaseRequestTestKit
         return new TraderActor(await factory.LoginAsync(account.Username), account, profile);
     }
 
-    public static Task<HttpResponseMessage> PostRequestAsync(this HttpClient trader, Guid? productId, int? cages = 10, DateOnly? pickupDate = null, string? note = null) =>
-        trader.PostAsJsonAsync(Mine, new { productId, requestedCages = cages, pickupDate = pickupDate ?? Today.AddDays(2), note, clientOperationId = Guid.NewGuid() });
+    public static Task<HttpResponseMessage> PostRequestAsync(this HttpClient trader, Guid? productId, int? cages = 100, DateOnly? pickupDate = null, string? note = null) =>
+        trader.PostAsJsonAsync(Mine, new { productId, requestedCages = cages, pickupDate = pickupDate ?? Today.AddDays(2), note });
 
     /// <summary>Places a request and answers its view.</summary>
-    public static async Task<JsonElement> PlaceAsync(this HttpClient trader, Guid productId, int cages = 10, DateOnly? pickupDate = null, string? note = null) =>
-        await (await trader.PostRequestAsync(productId, cages, pickupDate, note)).ReadAsync(HttpStatusCode.Created);
+    public static async Task<JsonElement> PlaceAsync(this HttpClient trader, Guid productId, int cages = 100, DateOnly? pickupDate = null, string? note = null) =>
+        (await (await trader.PostRequestAsync(productId, cages, pickupDate, note)).ReadAsync(HttpStatusCode.Created)).GetProperty("request");
 
     /// <summary>
-    /// Accepting needs an approved work plan and enough staff (SALE-03), so a valid answer first puts them in place the short way:
-    /// the staffing rules have their own tests. A stale row version stays stale, so its conflict is still seen.
+    /// Accepting needs a staffing plan whose staff agreed (decision of 31/10/2026), so an answer the Owner could give first puts one in
+    /// place the short way, for the cages and the date it accepts: the staffing rules have their own tests. A stale row version, or a
+    /// request no longer to be answered, is left as it is, so its refusal is still what the test sees.
     /// </summary>
-    public static async Task<HttpResponseMessage> AcceptAsync(this HttpClient owner, JsonElement request, int? cages = null, DateOnly? pickupDate = null, bool payLater = false, string? note = null)
+    public static async Task<HttpResponseMessage> AcceptAsync(this HttpClient owner, JsonElement request, int? cages = null, DateOnly? pickupDate = null, bool? payLater = false, string? note = null)
     {
         var accepted = cages ?? request.GetProperty("requestedCages").GetInt32();
         var pickup = pickupDate ?? Today.AddDays(2);
         var rowVersion = request.RowVersion();
-        if (Factories.TryGetValue(owner, out var factory) && accepted > 0 && accepted <= request.GetProperty("requestedCages").GetInt32() && pickup >= Today)
+        if (accepted > 0 && accepted <= request.GetProperty("requestedCages").GetInt32() && pickup >= Today)
         {
-            rowVersion = await StaffAsync(factory, owner, request.Id(), accepted, pickup, rowVersion);
+            rowVersion = await StaffAsync(owner, request.Id(), accepted, pickup, rowVersion);
         }
 
-        return await owner.PostAsJsonAsync($"/api/purchase-requests/{request.Id()}/response", new { accept = true, acceptedCages = accepted, pickupDate = pickup, allowPayLater = payLater, note, rowVersion });
-    }
-
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<HttpClient, AuthApiFactory> Factories = new();
-
-    /// <summary>Lets <see cref="AcceptAsync"/> reach the database of the host this client talks to.</summary>
-    public static HttpClient Remember(this HttpClient client, AuthApiFactory factory)
-    {
-        Factories.AddOrUpdate(client, factory);
-        return client;
-    }
-
-    private static async Task<string> StaffAsync(AuthApiFactory factory, HttpClient owner, Guid requestId, int cages, DateOnly pickup, string rowVersion)
-    {
-        var ownerId = (await (await owner.GetAsync("/api/me")).ReadAsync(HttpStatusCode.OK)).GetProperty("accountId").GetGuid();
-        var zone = await factory.AddZoneAsync(NewCode());
-        var cooperative = await factory.EnsureCooperativeAsync();
-        return await factory.DbAsync(async db =>
+        return await owner.PostAsJsonAsync($"/api/purchase-requests/{request.Id()}/accept", new
         {
-            var row = await db.PurchaseRequests.FirstAsync(r => r.Id == requestId);
-            if (Convert.ToBase64String(row.RowVersion) != rowVersion || row.StatusId != OMTS.Domain.Constants.StatusIds.PurchaseRequest.AwaitingResponse)
-            {
-                return rowVersion;
-            }
-
-            var raft = new OMTS.Domain.Entities.Farming.Raft { ZoneId = zone.Id, Code = NewCode() };
-            var job = new OMTS.Domain.Entities.Labor.JobType { Name = NewCode() };
-            var employee = new OMTS.Domain.Entities.Identity.Employee { CooperativeId = cooperative.Id, FullName = NewCode() };
-            db.AddRange(raft, job, employee);
-            db.Add(new OMTS.Domain.Entities.Labor.WorkDayPlan { CreatorAccountId = ownerId, ResponsibleAccountId = ownerId, Raft = raft, JobType = job, WorkDate = Today, PurchaseRequestId = requestId, ClientOperationId = Guid.NewGuid(), Approved = true, RespondedAt = DateTimeOffset.UtcNow });
-            db.Add(new PurchaseShiftInvitation { PurchaseRequestId = requestId, Employee = employee, Approved = true, RespondedAt = DateTimeOffset.UtcNow, ReservedWorkDate = Today });
-            row.StatusId = OMTS.Domain.Constants.StatusIds.PurchaseRequest.AwaitingStaff;
-            row.PlannedCages = cages;
-            row.WorkDate = Today;
-            row.PlannedPickupDate = pickup;
-            row.CagesPerEmployeePerDay = cages;
-            await db.SaveChangesAsync();
-            return Convert.ToBase64String(row.RowVersion);
+            acceptedCages = cages ?? request.GetProperty("requestedCages").GetInt32(),
+            pickupDate = pickup,
+            payLaterAgreed = payLater,
+            note,
+            rowVersion,
         });
+    }
+
+    /// <summary>
+    /// Puts in place what an accept checks of the staffing (SALE-03, decision of 31/10/2026): an approved work day plan of the Owner on a raft
+    /// in use, and one staff member with an active account who agreed to the shift of today, enough for <paramref name="cages"/>. Answers the
+    /// new row version, or <paramref name="rowVersion"/> unchanged when it is stale or the request is no longer awaiting a response.
+    /// </summary>
+    public static async Task<string> StaffAsync(HttpClient owner, Guid requestId, int cages, DateOnly pickup, string rowVersion)
+    {
+        var identity = await owner.GetAsync("/api/me");
+        if (!identity.IsSuccessStatusCode) return rowVersion;
+        var ownerId = (await identity.ReadAsync(HttpStatusCode.OK)).GetProperty("accountId").GetGuid();
+        return await StaffAsync(TestHosts.ServicesOf(owner), ownerId, requestId, cages, pickup, rowVersion);
+    }
+
+    public static async Task<string> StaffAsync(IServiceProvider services, Guid ownerId, Guid requestId, int cages, DateOnly pickup, string rowVersion)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
+        var day = scope.ServiceProvider.GetRequiredService<TimeProvider>().Today();
+        var row = await db.PurchaseRequests.FirstAsync(r => r.Id == requestId);
+        if (Convert.ToBase64String(row.RowVersion) != rowVersion || row.StatusId != StatusIds.PurchaseRequest.AwaitingResponse)
+        {
+            return rowVersion;
+        }
+
+        var cooperative = await db.Cooperatives.FirstOrDefaultAsync() ?? db.Cooperatives.Add(new Cooperative { FullName = "HTX Trung Nam" }).Entity;
+        var zone = new FarmingZone { CooperativeId = cooperative.Id, Code = NewCode(), Name = "Zone of the plan" };
+        var raft = new Raft { Zone = zone, Code = NewCode() };
+        var job = new JobType { Name = NewCode() };
+        var staff = new Account
+        {
+            Username = "s" + NewCode(),
+            DisplayName = "Staff of the plan",
+            PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher>().Hash(Guid.NewGuid().ToString("N")),
+            SubjectType = SubjectType.Staff,
+            StatusId = StatusIds.Account.Active,
+        };
+        var employee = new Employee { Cooperative = cooperative, FullName = "Staff of the plan", Account = staff };
+        db.AddRange(zone, raft, job, staff, employee);
+        db.Add(new WorkDayPlan
+        {
+            CreatorAccountId = ownerId, ResponsibleAccountId = ownerId, Raft = raft, JobType = job, WorkDate = day, PurchaseRequestId = requestId,
+            ClientOperationId = Guid.NewGuid(), Approved = true, RespondedAt = DateTimeOffset.UtcNow,
+        });
+        db.Add(new PurchaseShiftInvitation { PurchaseRequestId = requestId, Employee = employee, Approved = true, RespondedAt = DateTimeOffset.UtcNow, ReservedWorkDate = day });
+        row.StatusId = StatusIds.PurchaseRequest.AwaitingStaff;
+        row.PlannedCages = cages;
+        row.WorkDate = day;
+        row.PlannedPickupDate = pickup;
+        row.CagesPerEmployeePerDay = cages;
+        await db.SaveChangesAsync();
+        return Convert.ToBase64String(row.RowVersion);
     }
 
     private static string NewCode() => Guid.NewGuid().ToString("N")[..12];
 
     public static Task<HttpResponseMessage> DeclineAsync(this HttpClient owner, JsonElement request, string? note = "Not enough oysters this week") =>
-        owner.PostAsJsonAsync($"/api/purchase-requests/{request.Id()}/response", new { accept = false, acceptedCages = (int?)null, pickupDate = (DateOnly?)null, allowPayLater = false, note, rowVersion = request.RowVersion() });
+        owner.PostAsJsonAsync($"/api/purchase-requests/{request.Id()}/decline", new { note, rowVersion = request.RowVersion() });
 
     public static Task<HttpResponseMessage> CancelAsync(this HttpClient trader, JsonElement request, string? reason = null) =>
         trader.PostAsJsonAsync($"{Mine}/{request.Id()}/cancel", new { reason, rowVersion = request.RowVersion() });

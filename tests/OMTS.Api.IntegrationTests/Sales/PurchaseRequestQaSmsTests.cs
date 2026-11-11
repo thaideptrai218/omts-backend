@@ -74,7 +74,7 @@ public class PurchaseRequestQaSmsTests(PurchaseRequestQaSendFactory factory) : I
         factory.Gate.FailSaveNumber = 0;
         Assert.Equal(0, calls);
         Assert.Empty((await factory.NotificationRowsAsync(request.Id())).Sendings());
-        Assert.Equal(StatusIds.PurchaseRequest.AwaitingResponse, (await trader.Client.MineAsync(request.Id())).GetProperty("statusId").GetInt32());
+        Assert.Equal(StatusIds.PurchaseRequest.AwaitingStaff, (await trader.Client.MineAsync(request.Id())).GetProperty("statusId").GetInt32());
     }
 
     // The second save fails after the service took the message. GFR-06 holds: 200, saved. The row stays Sending, and nothing ends that (the code says so).
@@ -133,6 +133,7 @@ public class PurchaseRequestQaSmsTests(PurchaseRequestQaSendFactory factory) : I
     public async Task A_client_that_gives_up_during_the_send_does_not_leave_the_row_at_sending()
     {
         var (owner, _, request) = await RequestAsync();
+        var staffedVersion = await PurchaseRequestTestKit.StaffAsync(owner, request.Id(), 100, PurchaseRequestTestKit.Today, request.RowVersion());
         var started = new TaskCompletionSource();
         var release = new TaskCompletionSource();
         factory.Sender.Send = async _ =>
@@ -142,7 +143,7 @@ public class PurchaseRequestQaSmsTests(PurchaseRequestQaSendFactory factory) : I
             return DeliveryResult.Sent("after-abort");
         };
         using var abort = new CancellationTokenSource();
-        var call = owner.PostAsJsonAsync($"/api/purchase-requests/{request.Id()}/accept", new { acceptedCages = 100m, pickupDate = PurchaseRequestTestKit.Today, payLaterAgreed = false, rowVersion = request.RowVersion() }, abort.Token);
+        var call = owner.PostAsJsonAsync($"/api/purchase-requests/{request.Id()}/accept", new { acceptedCages = 100, pickupDate = PurchaseRequestTestKit.Today, payLaterAgreed = false, rowVersion = staffedVersion }, abort.Token);
 
         await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
         abort.Cancel();
