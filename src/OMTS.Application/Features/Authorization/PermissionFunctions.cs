@@ -40,6 +40,12 @@ public static class PermissionFunctions
     public const string CashBookOperations = "CASH_BOOK";
     public const string CashBookSettings = "CASH_BOOK_SETTINGS";
 
+    /// <summary>The use issues of input items (Xuất dùng), which have a zone; the disposals are <see cref="InputDisposals"/>.</summary>
+    public const string InputIssues = "INPUT_ISSUES";
+
+    /// <summary>The disposals of input items (Xuất hủy): no zone, written by the Owner only.</summary>
+    public const string InputDisposals = "INPUT_DISPOSALS";
+
     public const string DashboardDailyRevenue = "DASHBOARD_DAILY_REVENUE";
     public const string DashboardReceivables = "DASHBOARD_RECEIVABLES";
     public const string DashboardOpenHarvestLots = "DASHBOARD_OPEN_HARVEST_LOTS";
@@ -62,14 +68,14 @@ public static class PermissionFunctions
         new(Suppliers, "Suppliers (PURCHASE-07)", true, [View, Create, Edit, Export]),
         new(PurchaseReceipts, "Purchase receipts, returns and cancellations (PURCHASE-01, PURCHASE-02, PURCHASE-03, PURCHASE-06; correcting a receipt is Owner-only)", true, [View, Create, Edit, Delete, Export]),
         new(SupplierPayments, "Supplier payments and supplier debts (PURCHASE-04, PURCHASE-05)", true, [View, Create, Export]),
-        new(Customers, "Customers (SALE-04)", true, [View, Create, Edit]),
+        new(Customers, "Customers (SALE-04); Delete removes a customer nothing refers to", true, [View, Create, Edit, Delete, Export]),
         new(PurchaseRequests, "Purchase requests (SALE-03; responding is Owner-only)", true, [View, Edit]),
         new(SalesInvoices, "Sales invoices (SALE-05, SALE-06, SALE-09; correcting and cancelling, SALE-07 and SALE-08, are Owner-only)", false, [View, Create, Edit, Delete, Export]),
         new(QualityClaims, "Quality claims (CLAIM-02; responding is Owner-only)", false, [View, Edit]),
         new(SalesReturns, "Sales returns (CLAIM-03; cancelling one is Owner-only)", false, [View, Create, Delete]),
         new(CustomerPayments, "Customer payments and money paid back (DEBT-02)", true, [View, Create, Edit, Export]),
         new(CustomerDebts, "Customer debts (DEBT-03)", true, [View, Export]),
-        new(LaborWorkers, "Employees (LABOR-01)", false, [View, Create, Edit]),
+        new(LaborWorkers, "Employees (LABOR-01; Export lists employees to a file and is held by the Cooperative Owner only, who alone imports a file)", false, [View, Create, Edit, Export]),
         new(WorkAssignments, "Work assignment (LABOR-02)", false, Crud),
         new(Attendance, "Attendance (LABOR-04)", false, [View, Create, Edit]),
         new(PayRules, "Job types and pay rates (LABOR-11)", true, [View, Create, Edit]),
@@ -77,6 +83,8 @@ public static class PermissionFunctions
         new(SalesReports, "Sales, price and post-sale reports (REPORT-01…REPORT-03)", false, [View, Export]),
         new(CashBookOperations, "Cash book: vouchers, parties and the book of each fund; Delete cancels a voucher", true, [View, Create, Edit, Delete, Export]),
         new(CashBookSettings, "Cash book settings: bank accounts, e-wallets and voucher types", true, [View, Edit]),
+        new(InputIssues, "Input item use issues in a zone: Create saves a draft or an issue, Edit changes and completes one, Delete cancels or removes one", false, [View, Create, Edit, Delete, Export]),
+        new(InputDisposals, "Input item disposals (view and export only; recording and cancelling one is Owner-only)", true, [View, Export]),
 
         new(DashboardDailyRevenue, "Dashboard tile: daily revenue (FARM-06, Owner only)", false, [View], IsDashboardTile: true),
         new(DashboardReceivables, "Dashboard tile: receivables (FARM-06, Owner only)", false, [View], IsDashboardTile: true),

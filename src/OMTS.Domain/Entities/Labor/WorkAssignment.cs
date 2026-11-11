@@ -1,5 +1,4 @@
 using OMTS.Domain.Common;
-using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
@@ -7,44 +6,32 @@ using OMTS.Domain.Enums;
 namespace OMTS.Domain.Entities.Labor;
 
 /// <summary>
-/// E40 – Who does what work, where and when. Daily wage: exactly one of EmployeeId/WorkerId.
-/// Task contract: a contractor and contract amount; a passed acceptance generates one PayLine.
+/// One job period of an employee: a job type on a raft on a date (LABOR-02, BR-LABOR-03). The first period of a day is the work
+/// assigned for it and starts at the check-in (<see cref="StartsAt"/> is null); each change of job during the day adds one that
+/// starts at the time of the change. A period lasts until the next one or the check-out, which gives the hours of each job type
+/// and the labour cost of each raft (BR-LABOR-05, BR-LABOR-07).
 /// </summary>
 public class WorkAssignment : AuditableEntity
 {
-    public Guid? WorkDayPlanId { get; set; }
-    public WorkDayPlan? WorkDayPlan { get; set; }
-    public Guid ZoneId { get; set; }
-    public FarmingZone Zone { get; set; } = null!;
+    public Guid EmployeeId { get; set; }
+    public Employee Employee { get; set; } = null!;
 
-    public Guid? RaftId { get; set; }
-    public Raft? Raft { get; set; }
+    /// <summary>Business date (UTC+7). Work is assigned for today or a later date.</summary>
+    public DateOnly Date { get; set; }
 
-    public Guid? CycleId { get; set; }
-    public CultivationCycle? Cycle { get; set; }
+    public Guid RaftId { get; set; }
+    public Raft Raft { get; set; } = null!;
 
-    public Guid? EmployeeId { get; set; }
-    public Employee? Employee { get; set; }
+    public Guid JobTypeId { get; set; }
+    public JobType JobType { get; set; } = null!;
 
-    public Guid? WorkerId { get; set; }
+    /// <summary>Empty for the first period of the day.</summary>
+    public DateTimeOffset? StartsAt { get; set; }
 
-    public Guid? ContractorId { get; set; }
+    public Guid AssignedByAccountId { get; set; }
 
-    public string Task { get; set; } = string.Empty;
-    public Guid? JobTypeId { get; set; }
-    public JobType? JobType { get; set; }
-    public DateOnly WorkDate { get; set; }
-    public WorkPaymentType PaymentType { get; set; }
+    /// <summary><see cref="AttendanceMethod.Correction"/> when the Cooperative Owner corrected this period (LABOR-04.4); otherwise null.</summary>
+    public AttendanceMethod? Method { get; set; }
 
-    /// <summary>Task contract only; VND, multiple of 1,000.</summary>
-    public decimal? ContractAmount { get; set; }
-    public DateOnly? ExpectedCompletionDate { get; set; }
-
-    public DateOnly? AcceptanceDate { get; set; }
-    public bool? AcceptancePassed { get; set; }
-    public List<string> AcceptanceEvidenceUrls { get; set; } = [];
-
-    public DateTimeOffset? CancelledAt { get; set; }
-    public Guid? CancelledByAccountId { get; set; }
-    public string? CancellationReason { get; set; }
+    public string? CorrectionReason { get; set; }
 }

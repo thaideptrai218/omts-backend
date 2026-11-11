@@ -13,4 +13,5 @@ public static class CashVoucherTypeIds
     public static readonly Guid PaymentToSupplier = new("5d6c1a10-0000-4c3a-9a10-000000000005");
     public static readonly Guid PaymentPayroll = new("5d6c1a10-0000-4c3a-9a10-000000000006");
     public static readonly Guid PaymentOther = new("5d6c1a10-0000-4c3a-9a10-000000000007");
+    public static readonly Guid PaymentToCustomer = new("5d6c1a10-0000-4c3a-9a10-000000000008");
 }

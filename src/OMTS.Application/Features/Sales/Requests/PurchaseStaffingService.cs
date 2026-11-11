@@ -21,7 +21,8 @@ namespace OMTS.Application.Features.Sales.Requests;
 
 /// <summary>Yêu cầu 31/10/2026: nhân viên xác nhận ca trước khi Chủ HTX nhận đơn theo lồng.</summary>
 public sealed class PurchaseStaffingService(
-    IPurchaseRequestRepository requests, IWorkforceRepository workforce, IAccountRepository accounts,
+    IPurchaseRequestRepository requests, IWorkAssignmentRepository assignments, IAttendanceRepository attendances,
+    IEmployeeRequestRepository employeeRequests, IAccountRepository accounts,
     ICurrentUser user, PermissionService permissions, RowVersionGuard versions, IStatusCatalog statuses,
     AuditLogService audit, INotificationDispatcher notifications, IUnitOfWork uow, TimeProvider clock,
     IWorkDayPlanRepository plans, WorkPlanAccessService planAccess, IEmployeeRepository employeeProfiles)
@@ -114,14 +115,14 @@ public sealed class PurchaseStaffingService(
     public async Task<Result<IReadOnlyList<MyPurchaseShiftView>>> MineAsync(DateOnly from, DateOnly to, CancellationToken ct)
     {
         if (from == default || to < from || to.DayNumber - from.DayNumber > 62) return AppError.Invalid("Work date");
-        var employee = user.AccountId is { } id ? await workforce.MyEmployeeAsync(id, ct) : null;
+        var employee = user.AccountId is { } id ? await employeeProfiles.GetByAccountIdAsync(id, ct) : null;
         if (employee is null) return AppError.Forbidden;
         return Result<IReadOnlyList<MyPurchaseShiftView>>.Success((await requests.EmployeeInvitationsAsync(employee.Id, from, to, ct)).Select(MyView).ToList());
     }
 
     public async Task<Result<MyPurchaseShiftView>> RespondAsync(Guid id, RespondPurchaseShift input, CancellationToken ct)
     {
-        var employee = user.AccountId is { } accountId ? await workforce.MyEmployeeAsync(accountId, ct) : null;
+        var employee = user.AccountId is { } accountId ? await employeeProfiles.GetByAccountIdAsync(accountId, ct) : null;
         if (employee is null) return AppError.Forbidden;
         var invite = await requests.InvitationAsync(id, ct);
         if (invite is null) return AppError.NotFound;
@@ -179,30 +180,56 @@ public sealed class PurchaseStaffingService(
         return null;
     }
 
+    /// <summary>
+    /// Nhận đơn: mỗi nhân viên đã đồng ý ca có phân công đầu ngày của LABOR-02 (OMTS-132) trên bè, loại việc và ngày của kế hoạch, lưu cùng câu
+    /// trả lời của Chủ HTX. Vùng của bè thêm vào vùng làm việc của nhân viên chưa có, như LABOR-02 bước 9.
+    /// </summary>
     public async Task ActivateAssignmentsAsync(PurchaseRequest row, CancellationToken ct)
     {
         var plan = (await plans.ForPurchaseAsync(row.Id, ct))!;
+        // The Owner who accepts assigns the work; without a caller (a job of the system) the planner of the work day plan does.
+        var owner = user.AccountId ?? plan.CreatorAccountId;
         foreach (var invite in row.ShiftInvitations.Where(i => i.Approved == true && i.ReservedWorkDate == row.WorkDate))
         {
-            var assignment = new WorkAssignment { WorkDayPlanId = plan.Id, WorkDayPlan = plan,
-                ZoneId = plan.Raft.ZoneId, RaftId = plan.RaftId, Raft = plan.Raft, JobTypeId = plan.JobTypeId, JobType = plan.JobType,
-                EmployeeId = invite.EmployeeId, Employee = invite.Employee, WorkDate = plan.WorkDate, Task = plan.JobType.Name,
-                PaymentType = WorkPaymentType.DailyWage };
-            workforce.AddAssignment(assignment);
+            var assignment = new WorkAssignment
+            {
+                EmployeeId = invite.EmployeeId, Date = plan.WorkDate, RaftId = plan.RaftId, JobTypeId = plan.JobTypeId, AssignedByAccountId = owner,
+            };
+            assignments.Add(assignment);
             var profile = (await employeeProfiles.GetForEditAsync(invite.EmployeeId, ct))!;
             if (!profile.WorkingZones.Any(w => w.ZoneId == plan.Raft.ZoneId))
+            {
                 employeeProfiles.AddWorkingZone(new EmployeeWorkingZone { EmployeeId = invite.EmployeeId, ZoneId = plan.Raft.ZoneId });
-            audit.Record(new AuditEntry("WorkAssignment.Saved", nameof(WorkAssignment))
-            { RecordId = assignment.Id, ZoneId = assignment.ZoneId, After = new { assignment.WorkDayPlanId, assignment.EmployeeId, assignment.WorkDate } });
+                uow.MarkChanged(profile);
+            }
+
+            audit.Record(new AuditEntry("WorkAssignment.Created", nameof(WorkAssignment))
+            {
+                RecordId = assignment.Id, RecordCode = profile.Code, ZoneId = plan.Raft.ZoneId,
+                After = new { assignment.EmployeeId, assignment.Date, assignment.RaftId, assignment.JobTypeId, PurchaseRequest = row.Code },
+            });
         }
+
         uow.MarkChanged(plan);
     }
+
+    /// <summary>Các phân công mà việc nhận đơn đã tạo: phân công đầu ngày của người đã đồng ý ca, trên đúng bè và loại việc của kế hoạch.</summary>
+    private async Task<IReadOnlyList<WorkAssignment>> PlannedAssignmentsAsync(PurchaseRequest row, WorkDayPlan plan, CancellationToken ct)
+    {
+        var ids = row.ShiftInvitations.Where(i => i.Approved == true && i.ReservedWorkDate == plan.WorkDate).Select(i => i.EmployeeId).ToList();
+        return ids.Count == 0
+            ? []
+            : (await assignments.ListOfEmployeesAsync(ids, plan.WorkDate, ct))
+                .Where(a => a.StartsAt is null && a.RaftId == plan.RaftId && a.JobTypeId == plan.JobTypeId).ToList();
+    }
+
+    /// <summary>Đơn chỉ hủy được khi chưa ai vào hoặc ra ca theo phân công của nó: LABOR-02.2 chỉ bỏ phân công trước khi vào ca.</summary>
     public async Task<AppError?> CanReleaseAsync(PurchaseRequest row, CancellationToken ct)
     {
         var plan = await plans.ForPurchaseAsync(row.Id, ct);
         if (plan is null) return null;
-        foreach (var assignment in plan.Assignments.Where(a => a.CancelledAt is null))
-            if (await workforce.AttendanceAsync(assignment.EmployeeId!.Value, assignment.WorkDate, ct) is { CheckedInAt: not null } or { CheckedOutAt: not null })
+        foreach (var assignment in await PlannedAssignmentsAsync(row, plan, ct))
+            if (await attendances.GetAsync(assignment.EmployeeId, assignment.Date, ct) is { CheckInAt: not null } or { CheckOutAt: not null })
                 return AppError.Invalid("Attendance already recorded");
         return null;
     }
@@ -212,8 +239,17 @@ public sealed class PurchaseStaffingService(
         var plan = await plans.ForPurchaseAsync(row.Id, ct);
         if (plan is not null)
         {
-            foreach (var assignment in plan.Assignments.Where(a => a.CancelledAt is null))
-            { assignment.CancelledAt = clock.GetUtcNow(); assignment.CancelledByAccountId = user.AccountId; assignment.CancellationReason = "Purchase request closed"; }
+            // Bỏ các phân công của đơn khi chưa vào ca (LABOR-02.2); CanReleaseAsync đã chặn đơn có người vào ca.
+            foreach (var assignment in await PlannedAssignmentsAsync(row, plan, ct))
+            {
+                assignments.Remove(assignment);
+                audit.Record(new AuditEntry("WorkAssignment.Removed", nameof(WorkAssignment))
+                {
+                    RecordId = assignment.Id, ZoneId = plan.Raft.ZoneId,
+                    Before = new { assignment.EmployeeId, assignment.Date, assignment.RaftId, assignment.JobTypeId, PurchaseRequest = row.Code },
+                });
+            }
+
             uow.MarkChanged(plan);
         }
         foreach (var i in row.ShiftInvitations) i.ReservedWorkDate = null;
@@ -228,9 +264,9 @@ public sealed class PurchaseStaffingService(
     {
         if (employee.StatusId != StatusIds.Employee.Working || employee.Account is not { StatusId: StatusIds.Account.Active, SubjectType: SubjectType.Staff })
             return "Chưa có tài khoản nhân viên đang hoạt động";
-        if (await workforce.HasApprovedLeaveAsync(employee.Id, day, ct)) return "Đã được duyệt nghỉ phép";
+        if ((await employeeRequests.ListApprovedLeaveAsync([employee.Id], day, ct)).Count > 0) return "Đã được duyệt nghỉ phép";
         if (await requests.HasShiftReservationAsync(employee.Id, day, exceptRequestId, ct)) return "Đã đồng ý ca của đơn khác";
-        if (await workforce.EmployeeAssignmentAsync(employee.Id, day, ct) is not null) return "Đã có phân công trong ngày";
+        if (await assignments.FindFirstAsync(employee.Id, day, ct) is not null) return "Đã có phân công trong ngày";
         return null;
     }
 

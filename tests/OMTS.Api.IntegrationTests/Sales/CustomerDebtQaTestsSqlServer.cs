@@ -34,7 +34,7 @@ public class CustomerDebtQaTestsSqlServer
 
         async Task<(Guid Id, decimal Debt, int Rows)> CustomerAsync(int invoiceCount)
         {
-            var customer = new Customer { CooperativeId = host.CooperativeId, Name = "QA many " + AcsTestKit.NewCode() };
+            var customer = new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = host.CooperativeId, Name = "QA many " + AcsTestKit.NewCode() };
             var invoices = new List<SalesInvoice>();
             var payments = new List<CustomerPayment>();
             for (var i = 0; i < invoiceCount; i++)
@@ -55,12 +55,12 @@ public class CustomerDebtQaTestsSqlServer
                 }
                 else if (i % 4 == 1)
                 {
-                    payments.Add(Payment(customer, total / 2, invoice, date, StatusIds.CustomerPayment.Confirmed));
+                    payments.Add(Payment(customer, total / 2, invoice, date, StatusIds.CustomerPayment.Completed));
                 }
 
                 if (i % 5 == 0)
                 {
-                    payments.Add(Payment(customer, 150_000m, null, date, StatusIds.CustomerPayment.Confirmed));
+                    payments.Add(Payment(customer, 150_000m, null, date, StatusIds.CustomerPayment.Completed));
                 }
 
                 if (i % 9 == 0)

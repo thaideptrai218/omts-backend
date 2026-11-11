@@ -114,6 +114,7 @@ public sealed class HarvestLotRecordingService(
             }
 
             var cycleRead = prepared.Value!.Cycle.RowVersion.ToArray();
+            var requestRead = prepared.Value!.Lot.PurchaseRequest!.RowVersion.ToArray();
             try
             {
                 var mayRetry = attempt < MaxCodeAttempts;
@@ -129,9 +130,12 @@ public sealed class HarvestLotRecordingService(
             }
             catch (ConcurrencyConflictException) when (attempt < MaxCodeAttempts)
             {
+                // Only a conflict that a parallel lot of the same request explains is tried again: the request changed and the cycle did not.
                 unitOfWork.DiscardChanges();
                 var cycleNow = await cycles.GetAsync(prepared.Value!.Cycle.Id, cancellationToken);
-                if (cycleNow is not null && cycleNow.RowVersion.AsSpan().SequenceEqual(cycleRead))
+                var requestNow = await requests.GetForEditAsync(prepared.Value!.Lot.PurchaseRequestId!.Value, cancellationToken);
+                if (cycleNow is not null && cycleNow.RowVersion.AsSpan().SequenceEqual(cycleRead)
+                    && requestNow is not null && !requestNow.RowVersion.AsSpan().SequenceEqual(requestRead))
                 {
                     continue;
                 }

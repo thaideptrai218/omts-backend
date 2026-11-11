@@ -53,10 +53,10 @@ internal sealed class CashBookReader(OmtsDbContext db) : ICashBookQuery
         {
             case CashPartyKind.Customer:
                 return (await db.Customers.AsNoTracking()
-                    .Where(c => c.MergedIntoCustomerId == null && (text == "" || c.Name.Contains(text) || (c.PhoneNumber != null && c.PhoneNumber.Contains(text))))
+                    .Where(c => c.MergedIntoCustomerId == null && (text == "" || c.Name.Contains(text) || c.Code.Contains(text) || (c.PhoneNumber != null && c.PhoneNumber.Contains(text))))
                     .OrderBy(c => c.Name).Take(take)
-                    .Select(c => new { c.Id, c.Name, c.PhoneNumber }).ToListAsync(cancellationToken))
-                    .Select(c => new CashPartyView(c.Id, kind, null, c.Name, c.PhoneNumber)).ToList();
+                    .Select(c => new { c.Id, c.Code, c.Name, c.PhoneNumber }).ToListAsync(cancellationToken))
+                    .Select(c => new CashPartyView(c.Id, kind, c.Code, c.Name, c.PhoneNumber)).ToList();
             case CashPartyKind.Supplier:
                 return (await db.Suppliers.AsNoTracking()
                     .Where(s => s.StatusId == StatusIds.Usage.InUse && (text == "" || s.Name.Contains(text) || s.PhoneNumber.Contains(text) || s.Code.Contains(text)))
@@ -86,9 +86,9 @@ internal sealed class CashBookReader(OmtsDbContext db) : ICashBookQuery
 
         if (IdsOf(CashPartyKind.Customer) is { Count: > 0 } customerIds)
         {
-            foreach (var c in await db.Customers.AsNoTracking().Where(c => customerIds.Contains(c.Id)).Select(c => new { c.Id, c.Name, c.PhoneNumber }).ToListAsync(cancellationToken))
+            foreach (var c in await db.Customers.AsNoTracking().Where(c => customerIds.Contains(c.Id)).Select(c => new { c.Id, c.Code, c.Name, c.PhoneNumber }).ToListAsync(cancellationToken))
             {
-                found[(CashPartyKind.Customer, c.Id)] = new CashPartyView(c.Id, CashPartyKind.Customer, null, c.Name, c.PhoneNumber);
+                found[(CashPartyKind.Customer, c.Id)] = new CashPartyView(c.Id, CashPartyKind.Customer, c.Code, c.Name, c.PhoneNumber);
             }
         }
 
@@ -120,7 +120,7 @@ internal sealed class CashBookReader(OmtsDbContext db) : ICashBookQuery
     }
 
     /// <summary>
-    /// Every voucher and every supplier payment with money (amount above zero) as a line. The supplier payment of a cancelled status is
+    /// Every voucher, every supplier payment with money (amount above zero) and every customer payment that moved money as a line. The supplier payment of a cancelled status is
     /// a Cancelled line; its type is the system type of its kind and it never counts in the business result by itself.
     /// </summary>
     private IQueryable<CashBookEntry> Entries()
@@ -178,7 +178,36 @@ internal sealed class CashBookReader(OmtsDbContext db) : ICashBookQuery
             SourceDocumentId = p.PurchaseReturnId ?? p.Id,
             SourceDocumentCode = p.PurchaseReturn != null ? p.PurchaseReturn.Code : p.Code,
         });
-        return vouchers.Concat(payments);
+        // Customer payments with money that has arrived or left (Completed), and the ones cancelled after that (they were confirmed once): a payment waiting for its transfer, one Awaiting
+        // confirmation and one that is all discount are no line. A payment is money in, money paid back money out; cash is the Cash fund, any transfer the Bank fund.
+        var customerPayments = db.CustomerPayments.AsNoTracking()
+            .Where(p => p.Amount > 0 && (p.StatusId == StatusIds.CustomerPayment.Completed || (p.StatusId == StatusIds.CustomerPayment.Cancelled && p.ConfirmedAt != null)))
+            .Select(p => new CashBookEntry
+            {
+                Source = p.Kind == CustomerPaymentKind.Payment ? "CustomerPayment" : "CustomerPaidBack",
+                Id = p.Id,
+                Code = p.Code,
+                OccurredAt = p.PaidAt,
+                Date = p.PaymentDate,
+                CreatedAt = p.CreatedAt,
+                Direction = p.Kind == CustomerPaymentKind.Payment ? "Receipt" : "Payment",
+                Fund = p.Method == CustomerPaymentMethod.Cash ? "Cash" : p.Method == CustomerPaymentMethod.EWallet ? "EWallet" : "Bank",
+                CashAccountId = p.CashAccountId,
+                TypeId = p.Kind == CustomerPaymentKind.Payment ? CashVoucherTypeIds.ReceiptFromCustomer : CashVoucherTypeIds.PaymentToCustomer,
+                PartyKind = p.CustomerId != null ? "Customer" : null,
+                PartyId = p.CustomerId,
+                PartyName = p.Customer != null ? p.Customer.Name : null,
+                Amount = p.Amount,
+                CollectorId = p.CollectedByAccountId,
+                CreatedById = p.RecordedByAccountId,
+                Note = p.Note,
+                CountsInResult = false,
+                Cancelled = p.StatusId == StatusIds.CustomerPayment.Cancelled,
+                SourceDocumentKind = "CustomerPayment",
+                SourceDocumentId = p.Id,
+                SourceDocumentCode = p.Code,
+            });
+        return vouchers.Concat(payments).Concat(customerPayments);
     }
 
     /// <summary>The lines of one fund, and of one account when named.</summary>

@@ -24,8 +24,8 @@ public class LaborSettingsQaInputTests(AuthApiFactory factory) : IClassFixture<A
 
     private async Task<HttpResponseMessage> SaveAttendanceRawAsync(HttpClient owner, string fields)
     {
-        var version = (await owner.GetFromJsonAsync<JsonElement>(LaborSettingsTestKit.AttendanceSettings)).VersionOf();
-        return await owner.PostRawAsync(LaborSettingsTestKit.AttendanceSettings, $"{{{fields},\"rowVersion\":\"{version}\"}}");
+        var version = (await owner.GetFromJsonAsync<JsonElement>(AttendanceSettings)).VersionOf();
+        return await owner.PostRawAsync(AttendanceSettings, $"{{{fields},\"rowVersion\":\"{version}\"}}");
     }
 
     [Theory]
@@ -160,7 +160,7 @@ public class LaborSettingsQaInputTests(AuthApiFactory factory) : IClassFixture<A
             await owner.PostRawAsync($"{JobTypes}/{jobType.IdOf()}/rates", ""),
             await owner.PutRawAsync($"{JobTypes}/{jobType.IdOf()}/name", ""),
             await owner.PostRawAsync($"{JobTypes}/{jobType.IdOf()}/discontinue", ""),
-            await owner.PostRawAsync(LaborSettingsTestKit.AttendanceSettings, ""),
+            await owner.PostRawAsync(AttendanceSettings, ""),
             await owner.PutRawAsync(PayrollSettings, ""),
         };
 
@@ -282,7 +282,7 @@ public class LaborSettingsQaSharedVersionTests
 {
     private static async Task<string> ProfileVersionAsync(HttpClient owner) => (await CooperativeProfileRequests.RowVersionAsync(owner))!;
 
-    private static async Task<string> AttendanceVersionAsync(HttpClient owner) => (await owner.GetFromJsonAsync<JsonElement>(LaborSettingsTestKit.AttendanceSettings)).VersionOf();
+    private static async Task<string> AttendanceVersionAsync(HttpClient owner) => (await owner.GetFromJsonAsync<JsonElement>(AttendanceSettings)).VersionOf();
 
     // The client list says so and the SRS keeps the settings on the Cooperative (LABOR-15 step 1, LABOR-16 step 1): not a defect. A test keeps it known.
     [SqlServerFact]
@@ -294,7 +294,7 @@ public class LaborSettingsQaSharedVersionTests
         var stale = await AttendanceVersionAsync(owner);
         Assert.Equal(stale, await ProfileVersionAsync(owner));
 
-        await (await owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = "2020-03-01", rowVersion = stale })).BodyAsync(HttpStatusCode.OK);
+        await (await owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = "2020-03-01", rowVersion = stale })).BodyAsync(HttpStatusCode.OK);
 
         var profile = await owner.PutAsJsonAsync("/api/cooperative/profile", CooperativeProfileRequests.Valid(stale));
         var payroll = await owner.PutAsJsonAsync(PayrollSettings, new { payPeriodStartDay = 26, automaticPayroll = false, rowVersion = stale });
@@ -306,7 +306,7 @@ public class LaborSettingsQaSharedVersionTests
 
         var staleAgain = await AttendanceVersionAsync(owner);
         await (await owner.PutAsJsonAsync("/api/cooperative/profile", CooperativeProfileRequests.Valid(staleAgain))).BodyAsync(HttpStatusCode.OK);
-        var refused = await owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { roundingUnit = "Hour1", effectiveFrom = "2021-03-01", rowVersion = staleAgain });
+        var refused = await owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "Hour1", effectiveFrom = "2021-03-01", rowVersion = staleAgain });
         await refused.SrsProblemAsync(HttpStatusCode.Conflict, "MSG06", null);
         Assert.Equal(1, await QueryAsync(api, db => db.AttendanceSettingsVersions.CountAsync()));
     }
@@ -334,7 +334,7 @@ public class LaborSettingsQaSharedVersionTests
         await using var database = SqlServerTestDatabase.Create();
         await using var api = await StartAsync(database);
         var (owner, account, _) = await OwnerWithCooperativeAsync(api);
-        async Task<JsonElement> SaveAsync(object body) => (await (await owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, body)).BodyAsync(HttpStatusCode.OK)).GetProperty("settings").Clone();
+        async Task<JsonElement> SaveAsync(object body) => (await (await owner.PostAsJsonAsync(AttendanceSettings, body)).BodyAsync(HttpStatusCode.OK)).GetProperty("settings").Clone();
         var one = await SaveAsync(new { breakStart = "11:30", breakEnd = "12:30", roundingUnit = "Minutes15", effectiveFrom = "2020-03-01", rowVersion = await AttendanceVersionAsync(owner) });
         var two = await SaveAsync(new { breakStart = "11:00", breakEnd = "12:00", roundingUnit = "Minutes30", effectiveFrom = "2021-03-01", rowVersion = one.VersionOf() });
         var rows = await QueryAsync(api, db => db.AttendanceSettingsVersions.AsNoTracking().OrderBy(v => v.EffectiveFrom).ToListAsync());

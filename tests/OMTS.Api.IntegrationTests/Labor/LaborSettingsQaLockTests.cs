@@ -33,8 +33,8 @@ public class LaborSettingsQaLockTests
 
     private static async Task<HttpResponseMessage> WriteAttendanceSettingsAsync(HttpClient owner, string date)
     {
-        var version = (await owner.GetFromJsonAsync<JsonElement>(LaborSettingsTestKit.AttendanceSettings)).VersionOf();
-        return await owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = date, rowVersion = version });
+        var version = (await owner.GetFromJsonAsync<JsonElement>(AttendanceSettings)).VersionOf();
+        return await owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = date, rowVersion = version });
     }
 
     private static async Task<(string Name, string Phone, JsonElement Saved, Guid Zone)> AddEmployeeAsync(AuthApiFactory factory, HttpClient owner, string firstDate = "2019-01-01")

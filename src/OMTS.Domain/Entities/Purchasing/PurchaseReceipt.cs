@@ -62,17 +62,35 @@ public class PurchaseReceiptLine : Entity
     public Guid? ItemId { get; set; }
     public FarmingInputItem? Item { get; set; }
 
-    /// <summary>Copied from the item when saved; empty while the line has no item.</summary>
+    /// <summary>The unit the line was entered in, from the item's units; null on a line saved before units existed (read as the base unit).</summary>
+    public Guid? ItemUnitId { get; set; }
+    public InputItemUnit? ItemUnit { get; set; }
+
+    /// <summary>Base units in one unit of the line, as it was when saved (1 for the base unit); later changes of the item's units do not touch it.</summary>
+    public decimal UnitFactor { get; set; } = 1m;
+
+    /// <summary>The name of the unit the line was entered in, kept for history; empty while the line has no item.</summary>
     public string Unit { get; set; } = string.Empty;
+
+    /// <summary>Quantity in BASE units: <see cref="EnteredQuantity"/> × <see cref="UnitFactor"/>. Seed lots, returns and the movement ledger count in it.</summary>
     public decimal? Quantity { get; set; }
 
-    /// <summary>Whole VND, 0 or more.</summary>
+    /// <summary>Whole VND of one BASE unit: the entered price divided by the factor, half up to the dong. The line amount comes from the entered values, not from this.</summary>
     public decimal? UnitPrice { get; set; }
 
-    /// <summary>Whole VND taken off each unit, 0 to <see cref="UnitPrice"/>.</summary>
+    /// <summary>Whole VND of one BASE unit taken off, from the entered discount like <see cref="UnitPrice"/>.</summary>
     public decimal Discount { get; set; }
 
-    /// <summary>Quantity × (unit price − discount) rounded half up to the dong, never to thousands (BR-PURCHASE-02); 0 while incomplete.</summary>
+    /// <summary>The quantity as typed, in the unit of the line.</summary>
+    public decimal? EnteredQuantity { get; set; }
+
+    /// <summary>The price as typed, whole VND per unit of the line.</summary>
+    public decimal? EnteredUnitPrice { get; set; }
+
+    /// <summary>The discount as typed, whole VND off each unit of the line.</summary>
+    public decimal EnteredDiscount { get; set; }
+
+    /// <summary>Entered quantity × (entered price − entered discount) rounded half up to the dong, never to thousands (BR-PURCHASE-02); 0 while incomplete.</summary>
     public decimal LineAmount { get; set; }
 
     /// <summary>The supplier's lot code, on Seed lines only.</summary>
@@ -82,3 +100,4 @@ public class PurchaseReceiptLine : Entity
     public Guid? RaftId { get; set; }
     public Raft? Raft { get; set; }
 }
+

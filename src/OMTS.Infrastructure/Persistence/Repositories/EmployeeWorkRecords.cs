@@ -1,28 +1,18 @@
 using Microsoft.EntityFrameworkCore;
-using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
-using OMTS.Domain.Entities.Sales;
-using OMTS.Infrastructure.Persistence.Repositories.Sales;
 
 namespace OMTS.Infrastructure.Persistence.Repositories;
 
 /// <summary>
-/// Employment ending preserves recorded attendance and cancels future assignments and shift reservations.
+/// What ending an employment needs from attendance (LABOR-04) and work assignments (LABOR-02): the end action and the daily job
+/// both call <see cref="RemoveAssignmentsAfterAsync"/>, so a person ended today loses the assignments of later days on either path.
 /// </summary>
-internal sealed class EmployeeWorkRecords(OmtsDbContext db, TimeProvider clock, ICurrentUser user) : IEmployeeWorkRecords
+internal sealed class EmployeeWorkRecords(OmtsDbContext db) : IEmployeeWorkRecords
 {
-    public Task<DateOnly?> LastAttendanceDayAsync(Guid employeeId, CancellationToken cancellationToken) =>
-        db.AttendanceRecords.Where(a => a.EmployeeId == employeeId).Select(a => (DateOnly?)a.WorkDate).MaxAsync(cancellationToken);
+    public async Task<DateOnly?> LastAttendanceDayAsync(Guid employeeId, CancellationToken cancellationToken) =>
+        await db.Attendances.AsNoTracking().Where(a => a.EmployeeId == employeeId).MaxAsync(a => (DateOnly?)a.Date, cancellationToken);
 
-    public async Task RemoveAssignmentsAfterAsync(Guid employeeId, DateOnly day, CancellationToken cancellationToken)
-    {
-        foreach (var assignment in await db.WorkAssignments.Where(a => a.EmployeeId == employeeId && a.WorkDate > day && a.CancelledAt == null).ToListAsync(cancellationToken))
-        {
-            assignment.CancelledAt = clock.GetUtcNow();
-            assignment.CancelledByAccountId = user.AccountId;
-            assignment.CancellationReason = "Employment ended";
-        }
-        foreach (var invite in await db.Set<PurchaseShiftInvitation>().Where(i => i.EmployeeId == employeeId && i.ReservedWorkDate > day).ToListAsync(cancellationToken))
-            invite.ReservedWorkDate = null;
-    }
+    /// <summary>Tracked removal, saved with the caller's change; their attendance and pay records stay (BR-LABOR-01).</summary>
+    public async Task RemoveAssignmentsAfterAsync(Guid employeeId, DateOnly day, CancellationToken cancellationToken) =>
+        db.WorkAssignments.RemoveRange(await db.WorkAssignments.Where(w => w.EmployeeId == employeeId && w.Date > day).ToListAsync(cancellationToken));
 }

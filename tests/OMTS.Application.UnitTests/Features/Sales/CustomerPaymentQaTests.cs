@@ -9,6 +9,7 @@ namespace OMTS.Application.UnitTests.Features.Sales;
 public class CustomerPaymentQaTests
 {
     private static readonly DateOnly Today = new(2026, 11, 8);
+    private static readonly DateTimeOffset Now = new(2026, 11, 8, 12, 0, 0, TimeSpan.FromHours(7));
 
     // The Notification row keeps Body and MessageParams in nvarchar(2000) (Lengths.LongText); NotificationDispatcher cuts a longer body and drops longer parameters.
     private const int NotificationColumnLength = 2000;
@@ -28,7 +29,7 @@ public class CustomerPaymentQaTests
     [InlineData("1000.5", false)]
     public void An_amount_is_a_whole_number_of_VND_above_zero_that_the_column_holds(string amount, bool valid)
     {
-        var invalid = CustomerPaymentRules.InvalidFields(Cash(decimal.Parse(amount, System.Globalization.CultureInfo.InvariantCulture)), Today);
+        var invalid = CustomerPaymentRules.InvalidFields(Cash(decimal.Parse(amount, System.Globalization.CultureInfo.InvariantCulture)), Now);
 
         Assert.Equal(valid ? Array.Empty<string>() : new[] { "Amount" }, invalid);
     }
@@ -36,9 +37,9 @@ public class CustomerPaymentQaTests
     [Fact]
     public void A_payment_dated_today_is_taken_and_tomorrow_is_refused()
     {
-        Assert.Empty(CustomerPaymentRules.InvalidFields(Cash(1_000m, Today), Today));
-        Assert.Empty(CustomerPaymentRules.InvalidFields(Cash(1_000m, Today.AddYears(-3)), Today));
-        Assert.Equal(["Payment date"], CustomerPaymentRules.InvalidFields(Cash(1_000m, Today.AddDays(1)), Today));
+        Assert.Empty(CustomerPaymentRules.InvalidFields(Cash(1_000m, Today), Now));
+        Assert.Empty(CustomerPaymentRules.InvalidFields(Cash(1_000m, Today.AddYears(-3)), Now));
+        Assert.Equal(["Payment date"], CustomerPaymentRules.InvalidFields(Cash(1_000m, Today.AddDays(1)), Now));
     }
 
     // DEBT-02.1 at its edges: a payment equal to the debt is no question; one VND above it is, with 1 VND owed back. DEBT-02.3.E1: exactly the money owed back is allowed.

@@ -24,7 +24,7 @@ public sealed record DeclinePurchaseRequest(string? Note, string? RowVersion);
 public sealed record PurchaseRequestResponseView(int? AcceptedCages, DateOnly? PickupDate, bool? PayLaterAgreed, string? Note, DateTimeOffset RespondedAt);
 
 /// <summary>The profile of a request, as the Owner decides with it (SCR-SALE-02). The debt is 0 until invoices exist.</summary>
-public sealed record PurchaseRequestCustomerView(Guid Id, string Name, string? PhoneNumber, decimal CurrentDebt);
+public sealed record PurchaseRequestCustomerView(Guid Id, string Name, string? PhoneNumber, decimal CurrentDebt, string? Code = null);
 
 /// <summary>One SMS or Zalo OA sending of the response, kept with its delivery status (BR-SALE-09).</summary>
 public sealed record PurchaseRequestSendingView(string Channel, string? PhoneNumber, int? DeliveryStatusId, string? DeliveryStatus, DateTimeOffset? DeliveryStatusAt);

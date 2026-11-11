@@ -1107,6 +1107,44 @@ public static class UserMessages
     public static readonly UserMessage CashSystemVoucherType = new(
         Cash02, "Loại thu chi của hệ thống không thể sửa hoặc xóa.");
 
+    // ---- MSG-INPUT ----
+
+    /// <summary>MSG-INPUT-01: the issue would take an item, or one of its seed lots, below zero while the cooperative does not allow it. <c>lot_code</c> is empty for the quantity that has no lot.</summary>
+    public static UserMessage InputQuantityBelowZero(string itemName, string? lotCode, decimal balanceAfter, string unit) => new(
+        Input01,
+        lotCode is null
+            ? $"Không đủ {itemName} để xuất: số lượng còn lại sẽ là {balanceAfter.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)} {unit}."
+            : $"Không đủ {itemName} lô {lotCode} để xuất: số lượng còn lại sẽ là {balanceAfter.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)} {unit}.")
+    {
+        Parameters = new Dictionary<string, object?> { ["item_name"] = itemName, ["lot_code"] = lotCode, ["balance_after"] = balanceAfter, ["unit"] = unit },
+    };
+
+    /// <summary>MSG-INPUT-02: a system issue type cannot be edited or deleted.</summary>
+    public static readonly UserMessage InputSystemIssueType = new(
+        Input02, "Loại xuất của hệ thống không thể sửa hoặc xóa.");
+
+    // ---- MSG-CUSTOMER ----
+
+    /// <summary>
+    /// MSG-CUSTOMER-01: the customer is over the debt limit and the settings do not allow more debt, so an invoice that leaves a debt is refused. <c>reason</c> says which limit:
+    /// the amount, the days, or both.
+    /// </summary>
+    public static UserMessage CustomerOverDebtLimit(string customerName, decimal debtAmount, int? debtDays, bool overAmount, bool overDays) => new(
+        Customer01,
+        $"{customerName} đang nợ {Vnd(debtAmount)} VND" + (debtDays is { } days ? $", nợ {days} ngày" : string.Empty)
+            + (overAmount && overDays ? ", vượt cả hạn mức số tiền nợ và số ngày nợ" : overAmount ? ", vượt hạn mức số tiền nợ" : ", vượt hạn mức số ngày nợ")
+            + ". Hóa đơn này không được để lại công nợ: vui lòng thu đủ tiền, hoặc thu bớt công nợ cũ trước.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["customer_name"] = customerName,
+            ["debt_amount"] = debtAmount,
+            ["debt_days"] = debtDays,
+            ["over_amount"] = overAmount,
+            ["over_days"] = overDays,
+        },
+    };
+
     // ---- Old codes still sent as the code (Legacy.KeptAsCode) ----
 
     /// <summary>MSG05: an export file could not be generated, or a stored file could not be read.</summary>

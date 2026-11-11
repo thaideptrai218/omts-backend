@@ -42,10 +42,7 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
                 .Select(p => new RelatedRecordLocation(p.Raft.ZoneId, null, null, p.ResponsibleAccountId, null)).FirstOrDefaultAsync(cancellationToken);
         if (recordType == nameof(WorkAssignment))
             return db.WorkAssignments.Where(p => p.Id == recordId)
-                .Select(p => new RelatedRecordLocation(p.ZoneId, null, p.Employee!.AccountId, null, null)).FirstOrDefaultAsync(cancellationToken);
-        if (recordType == nameof(EmployeeLeaveRequest))
-            return db.Set<EmployeeLeaveRequest>().Where(p => p.Id == recordId)
-                .Select(p => new RelatedRecordLocation(null, null, p.Employee.AccountId, null, null)).FirstOrDefaultAsync(cancellationToken);
+                .Select(p => new RelatedRecordLocation(p.Raft.ZoneId, null, p.Employee.AccountId, null, null)).FirstOrDefaultAsync(cancellationToken);
         if (recordType == RelatedRecordTypes.Account)
             return db.Accounts.Where(a => a.Id == recordId)
                 .Select(a => new RelatedRecordLocation(null, a.SubjectType == SubjectType.Trader ? a.Id : null, null, null, null)).FirstOrDefaultAsync(cancellationToken);

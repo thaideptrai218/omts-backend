@@ -13,7 +13,7 @@ internal sealed class PurchaseShiftInvitationConfiguration : IEntityTypeConfigur
         b.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId);
         b.HasIndex(x => new { x.PurchaseRequestId, x.EmployeeId }).IsUnique();
         b.HasIndex(x => new { x.EmployeeId, x.ReservedWorkDate }).IsUnique().HasFilter("[ReservedWorkDate] IS NOT NULL");
-        b.ToTable(t => t.HasCheckConstraint("CK_PurchaseShiftInvitation_Reservation",
+        b.ToTable("PurchaseShiftInvitations", t => t.HasCheckConstraint("CK_PurchaseShiftInvitation_Reservation",
             "[ReservedWorkDate] IS NULL OR ([Approved] IS NOT NULL AND [Approved] = 1 AND [RespondedAt] IS NOT NULL)"));
     }
 }

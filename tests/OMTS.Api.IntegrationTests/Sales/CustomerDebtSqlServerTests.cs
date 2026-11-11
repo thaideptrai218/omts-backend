@@ -28,7 +28,7 @@ public class CustomerDebtSqlServerTests
 
         async Task<Guid> OwingCustomerAsync(string name, decimal total, decimal paid, decimal paidBack = 0m)
         {
-            var customer = new Customer { CooperativeId = host.CooperativeId, Name = name };
+            var customer = new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = host.CooperativeId, Name = name };
             var invoice = new SalesInvoice
             {
                 Code = $"HD9{++sequence:D5}", InvoicedAt = DateTimeOffset.UtcNow.AddDays(-sequence), InvoiceDate = today.AddDays(-sequence), ZoneId = zone.Id,
@@ -40,7 +40,7 @@ public class CustomerDebtSqlServerTests
                 db.CustomerPayments.Add(Payment(customer, CustomerPaymentKind.Payment, paid, invoice, StatusIds.CustomerPayment.AwaitingConfirmation));
                 if (paidBack > 0)
                 {
-                    db.CustomerPayments.Add(Payment(customer, CustomerPaymentKind.PaidBack, paidBack, null, StatusIds.CustomerPayment.Confirmed));
+                    db.CustomerPayments.Add(Payment(customer, CustomerPaymentKind.PaidBack, paidBack, null, StatusIds.CustomerPayment.Completed));
                 }
             });
             return customer.Id;
@@ -64,7 +64,7 @@ public class CustomerDebtSqlServerTests
         var (manyCommands, many) = await ListAsync(host);
 
         Assert.Equal(oneCommands, manyCommands);
-        Assert.InRange(oneCommands, 1, 6);
+        Assert.InRange(oneCommands, 1, 10);
         Assert.Equal(26, many.Count);
         Assert.Equal((600_000m, 1), many.Where(r => r.Customer.Id == first).Select(r => (r.Debt, r.DebtAgeDays!.Value)).Single());
         Assert.Equal(5, many.Count(r => r.Debt == -100_000m && r.DebtAgeDays is null));

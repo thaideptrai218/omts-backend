@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Sales.Payments;
 using OMTS.Application.Common.Constants;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
@@ -34,6 +35,7 @@ public sealed class SalesInvoiceService(
     PendingSaleViews pendingViews,
     SalesInvoiceReadService reads,
     IDocumentNumberAllocator numbers,
+    CustomerPaymentCodeService paymentCodes,
     ICurrentUser currentUser,
     IUnitOfWork unitOfWork)
 {
@@ -139,7 +141,7 @@ public sealed class SalesInvoiceService(
             code ??= SalesDocumentCodes.InvoiceCode(await numbers.NextAsync(DocumentSequenceKeys.SalesInvoice, cancellationToken));
             if (decision.Cash.Recorded > 0m && !decision.AwaitsTransfer)
             {
-                paymentCode ??= SalesDocumentCodes.PaymentCode(await numbers.NextAsync(DocumentSequenceKeys.CustomerPayment, cancellationToken));
+                paymentCode ??= await paymentCodes.NextAsync(cancellationToken);
             }
 
             Func<Task<SalesInvoiceCreated>> answer;

@@ -139,7 +139,7 @@ public class LaborSettingsQaRaceTests
 
         for (var round = 0; round < 8; round++)
         {
-            var version = (await owner.GetFromJsonAsync<JsonElement>(LaborSettingsTestKit.AttendanceSettings)).VersionOf();
+            var version = (await owner.GetFromJsonAsync<JsonElement>(AttendanceSettings)).VersionOf();
             var date = new DateOnly(2020, 9, 1).AddDays(round);
             var day = date.ToString("yyyy-MM-dd");
             var currentTypes = new List<JsonElement>();
@@ -158,7 +158,7 @@ public class LaborSettingsQaRaceTests
             var calls = new List<Task<HttpResponseMessage>>();
             calls.AddRange(currentTypes.Select((j, i) => owner.PostRateAsync(j, 50_000 + round + i, day)));
             calls.AddRange(currentEmployees.Select(e => PutTypeAsync(owner, e, day)));
-            calls.Add(owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = day, rowVersion = version }));
+            calls.Add(owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = day, rowVersion = version }));
             calls.Add(owner.PutAsJsonAsync(PayrollSettings, new { payPeriodStartDay = 2 + round, automaticPayroll = false, rowVersion = version }));
             calls.Add(owner.PostAsJsonAsync(JobTypes, new { name = $"Song song {round} {NewCode()}", hourlyRate = 1, effectiveFrom = day }));
             calls.Add(owner.PutAsJsonAsync($"{JobTypes}/{currentTypes[0].IdOf()}/name", new { name = $"Đổi {NewCode()}", rowVersion = currentTypes[0].VersionOf() }));
@@ -287,16 +287,16 @@ public class LaborSettingsQaRaceTests
         await using var app = api.WithMoments(moments);
         await EnsureCooperativeAsync(app);
         var (owner, _) = await LoginNewAsync(app);
-        var version = (await owner.GetFromJsonAsync<JsonElement>(LaborSettingsTestKit.AttendanceSettings)).VersionOf();
+        var version = (await owner.GetFromJsonAsync<JsonElement>(AttendanceSettings)).VersionOf();
         var body = new { roundingUnit = "Minutes15", effectiveFrom = "2020-03-01", rowVersion = version };
         HttpResponseMessage? first = null;
-        moments.BeforeVersionsRead = async () => first = await owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, body);
+        moments.BeforeVersionsRead = async () => first = await owner.PostAsJsonAsync(AttendanceSettings, body);
 
-        var second = await owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, body);
+        var second = await owner.PostAsJsonAsync(AttendanceSettings, body);
 
         Assert.Equal(HttpStatusCode.OK, first!.StatusCode);
         var firstVersion = (await first.BodyAsync(HttpStatusCode.OK)).GetProperty("settings").VersionOf();
-        var current = (await owner.GetFromJsonAsync<JsonElement>(LaborSettingsTestKit.AttendanceSettings)).VersionOf();
+        var current = (await owner.GetFromJsonAsync<JsonElement>(AttendanceSettings)).VersionOf();
         Assert.Equal(current, firstVersion);
         // Either MSG06, as any other parallel save, or a 200 that hands back the version the record has now.
         if (second.StatusCode == HttpStatusCode.OK)
@@ -319,10 +319,10 @@ public class LaborSettingsQaRaceTests
         await using var app = api.WithMoments(moments);
         await EnsureCooperativeAsync(app);
         var (owner, _) = await LoginNewAsync(app);
-        var version = (await owner.GetFromJsonAsync<JsonElement>(LaborSettingsTestKit.AttendanceSettings)).VersionOf();
-        moments.BeforeVersionsRead = async () => await (await owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = "2020-03-01", rowVersion = version })).BodyAsync(HttpStatusCode.OK);
+        var version = (await owner.GetFromJsonAsync<JsonElement>(AttendanceSettings)).VersionOf();
+        moments.BeforeVersionsRead = async () => await (await owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = "2020-03-01", rowVersion = version })).BodyAsync(HttpStatusCode.OK);
 
-        var second = await owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { roundingUnit = "Hour1", effectiveFrom = "2020-03-01", rowVersion = version });
+        var second = await owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "Hour1", effectiveFrom = "2020-03-01", rowVersion = version });
 
         await second.SrsProblemAsync(HttpStatusCode.Conflict, "MSG06", null);
         using var scope = app.Services.CreateScope();

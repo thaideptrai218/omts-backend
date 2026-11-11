@@ -17,7 +17,7 @@ internal sealed class WorkDayPlanConfiguration : IEntityTypeConfiguration<WorkDa
         b.HasOne(x => x.PurchaseRequest).WithOne(x => x.WorkDayPlan).HasForeignKey<WorkDayPlan>(x => x.PurchaseRequestId);
         b.HasIndex(x => new { x.CreatorAccountId, x.ClientOperationId }).IsUnique();
         b.HasIndex(x => new { x.ResponsibleAccountId, x.WorkDate });
-        b.ToTable(t => t.HasCheckConstraint("CK_WorkDayPlan_Response",
+        b.ToTable("WorkDayPlans", t => t.HasCheckConstraint("CK_WorkDayPlan_Response",
             "([Approved] IS NULL AND [RespondedAt] IS NULL) OR ([Approved] IS NOT NULL AND [RespondedAt] IS NOT NULL AND ([Approved] = 1 OR ([ResponseReason] IS NOT NULL AND LEN(LTRIM(RTRIM([ResponseReason]))) > 0)))"));
     }
 }

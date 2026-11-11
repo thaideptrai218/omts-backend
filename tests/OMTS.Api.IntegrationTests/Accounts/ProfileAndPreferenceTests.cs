@@ -74,9 +74,9 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
     {
         var cooperative = await factory.EnsureCooperativeAsync();
         var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
-        var own = new Customer { CooperativeId = cooperative.Id, AccountId = trader.Id, Name = "Own", PhoneNumber = trader.PhoneNumber };
+        var own = new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = cooperative.Id, AccountId = trader.Id, Name = "Own", PhoneNumber = trader.PhoneNumber };
         var phone = NewPhone();
-        var offline = new Customer { CooperativeId = cooperative.Id, Name = "Offline", PhoneNumber = phone };
+        var offline = new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = cooperative.Id, Name = "Offline", PhoneNumber = phone };
         await factory.UseDbAsync(db => db.Customers.AddRange(own, offline));
         var client = await factory.LoginAsync(trader.Username);
 

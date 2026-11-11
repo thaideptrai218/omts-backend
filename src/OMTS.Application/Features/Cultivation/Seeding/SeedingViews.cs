@@ -36,7 +36,7 @@ public sealed class SeedingViews(
     }
 
     public static SeedLotRef LotRef(PurchaseReceiptLine lot) => new(
-        lot.Id, SeedingValues.LotCode(lot), lot.ReceiptId, lot.Receipt.Code, lot.Receipt.ReceiptDate, lot.ItemId, lot.Item?.Code, lot.Item?.Name, lot.Unit, lot.Receipt.SupplierId, lot.Receipt.Supplier.Name);
+        lot.Id, SeedingValues.LotCode(lot), lot.ReceiptId, lot.Receipt.Code, lot.Receipt.ReceiptDate, lot.ItemId, lot.Item?.Code, lot.Item?.Name, lot.Item?.Unit ?? lot.Unit, lot.Receipt.SupplierId, lot.Receipt.Supplier.Name);
 
     public async Task<AccountAccess?> AccessAsync(CancellationToken cancellationToken) =>
         currentUser.AccountId is { } accountId ? await permissions.GetAccessAsync(accountId, cancellationToken) : null;
@@ -92,3 +92,4 @@ public sealed class SeedingViews(
             saved.Code);
     }
 }
+

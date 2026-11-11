@@ -15,7 +15,7 @@ public sealed record SalesInvoiceSearchKey(Guid Id, Guid? CustomerId, decimal To
 
 public sealed record SalesInvoiceSearchRow(
     Guid Id, string Code, DateTimeOffset InvoicedAt, DateOnly InvoiceDate, Guid ZoneId, string ZoneCode, string ZoneName, Guid? CustomerId, string? CustomerName, string? CustomerPhone,
-    decimal Total, int StatusId, SalesPaymentTerm PaymentTerm);
+    decimal Total, int StatusId, SalesPaymentTerm PaymentTerm, string? CustomerCode = null);
 
 /// <summary>The latest sending of an invoice as its Notification row keeps it.</summary>
 public sealed record SalesInvoiceLatestSending(int? DeliveryStatusId, DateTimeOffset? DeliveryStatusAt);

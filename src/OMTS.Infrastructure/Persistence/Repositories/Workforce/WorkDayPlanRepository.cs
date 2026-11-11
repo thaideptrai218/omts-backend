@@ -10,7 +10,7 @@ internal sealed class WorkDayPlanRepository(OmtsDbContext db) : IWorkDayPlanRepo
 {
     private IQueryable<WorkDayPlan> Plans => db.Set<WorkDayPlan>()
         .Include(p => p.Raft).ThenInclude(r => r.Zone).Include(p => p.JobType)
-        .Include(p => p.CreatorAccount).Include(p => p.ResponsibleAccount).Include(p => p.Assignments)
+        .Include(p => p.CreatorAccount).Include(p => p.ResponsibleAccount)
         .Include(p => p.PurchaseRequest!).ThenInclude(r => r.ShiftInvitations).ThenInclude(i => i.Employee).ThenInclude(e => e.Account);
     public Task<WorkDayPlan?> GetAsync(Guid id, CancellationToken ct) => Plans.FirstOrDefaultAsync(p => p.Id == id, ct);
     public Task<WorkDayPlan?> ForPurchaseAsync(Guid purchaseRequestId, CancellationToken ct) => Plans.FirstOrDefaultAsync(p => p.PurchaseRequestId == purchaseRequestId, ct);

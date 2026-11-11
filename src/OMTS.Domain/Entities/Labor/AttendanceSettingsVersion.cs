@@ -9,8 +9,6 @@ namespace OMTS.Domain.Entities.Labor;
 /// </summary>
 public class AttendanceSettingsVersion : AuditableEntity
 {
-    public AttendanceSettingsVersion() { }
-    public AttendanceSettingsVersion(Guid id) => Id = id;
     public DateOnly EffectiveFrom { get; set; }
 
     /// <summary>Both times or neither: no break.</summary>

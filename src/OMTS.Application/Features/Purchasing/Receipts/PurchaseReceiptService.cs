@@ -7,6 +7,7 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Platform;
 using OMTS.Domain.Entities.Purchasing;
@@ -28,6 +29,7 @@ public sealed class PurchaseReceiptService(
     PurchaseReceiptNotifications notifications,
     PurchaseReceiptEditService edits,
     PurchaseDocumentCodeService codes,
+    InputStockLedger ledger,
     ICurrentUser currentUser,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
@@ -73,7 +75,7 @@ public sealed class PurchaseReceiptService(
         audit.Record(new AuditEntry("PurchaseReceipt.Created", RecordType) { RecordId = receipt.Id, RecordCode = receipt.Code, After = Snapshot(receipt) });
         if (request.Complete)
         {
-            MarkCompleted(receipt);
+            await MarkCompletedAsync(receipt, cancellationToken);
             await notifications.CompletedAsync(receipt, cancellationToken);
         }
 
@@ -134,7 +136,7 @@ public sealed class PurchaseReceiptService(
                 return error;
             }
 
-            MarkCompleted(receipt);
+            await MarkCompletedAsync(receipt, cancellationToken);
             await notifications.CompletedAsync(receipt, cancellationToken);
         }
 
@@ -171,7 +173,7 @@ public sealed class PurchaseReceiptService(
             return error;
         }
 
-        MarkCompleted(receipt);
+        await MarkCompletedAsync(receipt, cancellationToken);
         await notifications.CompletedAsync(receipt, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return await views.ViewAsync(receipt.Id, cancellationToken);
@@ -195,11 +197,13 @@ public sealed class PurchaseReceiptService(
     }
 
     /// <summary>Draft → Completed (BR-PURCHASE-03): from now on each Seed line is a seed lot and the total counts in the supplier debt.</summary>
-    private void MarkCompleted(PurchaseReceipt receipt)
+    private async Task MarkCompletedAsync(PurchaseReceipt receipt, CancellationToken cancellationToken)
     {
         receipt.StatusId = StatusIds.PurchaseReceipt.Completed;
         receipt.CompletedAt = timeProvider.GetUtcNow();
         audit.RecordStatusChange(RecordType, receipt.Id, receipt.Code, StatusIds.PurchaseReceipt.Draft, StatusIds.PurchaseReceipt.Completed);
+        // The quantities go on the ledger in the same save as the receipt.
+        await ledger.PostReceiptAsync(receipt, cancellationToken);
     }
 
     /// <summary>The fields and lines of the request; lines are numbered 1…n in the order entered (GBR-04).</summary>
@@ -220,14 +224,11 @@ public sealed class PurchaseReceiptService(
                 ReceiptId = receipt.Id,
                 LineNumber = ++lineNumber,
                 ItemId = item?.Id,
-                Unit = item?.Unit ?? string.Empty,
-                Quantity = input.Quantity,
-                UnitPrice = input.UnitPrice,
-                Discount = input.Discount ?? 0,
-                LineAmount = PurchaseMoney.LineAmount(input.Quantity, input.UnitPrice, input.Discount ?? 0),
                 SupplierLotCode = item?.Group == InputItemGroup.Seed ? Trimmed(input.SupplierLotCode) : null,
                 RaftId = input.RaftId,
             };
+            ReceiptLineUnits.SetUnit(line, item, item is null ? null : ReceiptLineUnits.Resolve(item, input.ItemUnitId));
+            ReceiptLineUnits.Fill(line, input.Quantity, input.UnitPrice, input.Discount ?? 0);
             receipt.Lines.Add(line);
             receipts.AddLine(line);
         }
@@ -268,6 +269,7 @@ public sealed class PurchaseReceiptService(
     {
         r.Code, r.SupplierId, r.ReceiptDate, r.ReceivedAt, r.ReceivedByAccountId, r.Notes, r.Discount, r.ZoneId,
         Lines = r.Lines.OrderBy(l => l.LineNumber)
-            .Select(l => new { l.LineNumber, l.ItemId, l.Quantity, l.UnitPrice, l.Discount, l.LineAmount, l.SupplierLotCode, l.RaftId }).ToList(),
+            .Select(l => new { l.LineNumber, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, Discount = l.EnteredDiscount, l.LineAmount, l.SupplierLotCode, l.RaftId }).ToList(),
     };
 }
+

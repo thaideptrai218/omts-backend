@@ -95,6 +95,9 @@ public static partial class AcsTestKit
         return cooperative;
     }
 
+    /// <summary>A customer code no other row of the test uses: rows made straight in the database get one, as the services give theirs.</summary>
+    public static string NewCustomerCode() => $"TC{NewCode()}";
+
     public static async Task<T> QueryAsync<T>(this AuthApiFactory factory, Func<OmtsDbContext, Task<T>> query)
     {
         using var scope = factory.Services.CreateScope();

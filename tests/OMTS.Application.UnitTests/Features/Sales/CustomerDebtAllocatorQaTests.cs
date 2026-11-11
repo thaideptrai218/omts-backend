@@ -47,7 +47,7 @@ public class CustomerDebtAllocatorQaTests
                     {
                         0 => StatusIds.CustomerPayment.Cancelled,
                         1 => StatusIds.CustomerPayment.AwaitingConfirmation,
-                        _ => StatusIds.CustomerPayment.Confirmed,
+                        _ => StatusIds.CustomerPayment.Completed,
                     }))
                 .ToList();
             var received = payments.Where(p => !p.Cancelled).Sum(p => p.Amount);

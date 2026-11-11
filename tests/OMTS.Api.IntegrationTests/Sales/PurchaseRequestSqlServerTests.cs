@@ -33,7 +33,7 @@ public class PurchaseRequestSqlServerTests
             PhoneNumber = NewPhone(), PhoneVerifiedAt = DateTimeOffset.UtcNow,
         };
         await host.UseDbAsync(db => db.Accounts.Add(account));
-        var profile = new Customer { CooperativeId = host.CooperativeId, AccountId = account.Id, Name = name, PhoneNumber = account.PhoneNumber };
+        var profile = new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = host.CooperativeId, AccountId = account.Id, Name = name, PhoneNumber = account.PhoneNumber };
         await host.UseDbAsync(db => db.Customers.Add(profile));
         return new TraderActor(await host.LoginAsync(account.Username), account, profile);
     }

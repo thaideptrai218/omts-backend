@@ -9,7 +9,7 @@ namespace OMTS.Api.IntegrationTests.Purchasing;
 
 /// <summary>
 /// PURCHASE-08 of SRS 27/10: code and name unique with discontinued items included (GBR-03, BR-PURCHASE-10), one unit
-/// for all Seed items, the code proposal VT001…, groups Seed/Material/Other, edit only while In Use, and Resume.
+/// per item (Seed items included), the code proposal by type (GI/VT/HK000001), groups Seed/Material/Other, edit only while In Use, and Resume.
 /// Tests that need an empty catalogue start their own host.
 /// </summary>
 public class FarmingInputItemSrsRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
@@ -49,41 +49,19 @@ public class FarmingInputItemSrsRulesTests(AuthApiFactory factory) : IClassFixtu
     }
 
     [Fact]
-    public async Task Every_seed_item_takes_the_unit_of_the_first_one_and_the_proposal_fills_it_in()
+    public async Task Seed_items_may_count_in_different_units_and_an_item_has_a_base_unit_with_a_code()
     {
         using var api = new AuthApiFactory();
         var owner = await api.PurchasingOwnerAsync();
-        Assert.Equal(JsonValueKind.Null, (await ProposalAsync(owner)).GetProperty("seedUnit").ValueKind);
 
-        // The first Seed item chooses the unit.
-        var first = await CreatedAsync(owner, new { code = "VT001", name = "Hàu giống 3 cm", group = "Seed", unit = "con" });
-        Assert.Equal("con", (await ProposalAsync(owner)).GetProperty("seedUnit").GetString());
+        var con = await (await owner.PostAsJsonAsync(Items, new { code = "VT001", name = "Hàu giống 3 cm", group = "Seed", unit = "con" })).ReadAsync(HttpStatusCode.Created);
+        var kg = await (await owner.PostAsJsonAsync(Items, new { code = "VT002", name = "Hàu giống 5 cm", group = "Seed", unit = "kg" })).ReadAsync(HttpStatusCode.Created);
 
-        var kg = await owner.PostAsJsonAsync(Items, new { code = "VT002", name = "Hàu giống 5 cm", group = "Seed", unit = "kg" });
-        var problem = await kg.ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
-        Assert.Equal(("Unit", "con"), (problem.GetProperty("field").GetString(), problem.GetProperty("seedUnit").GetString()));
-        await CreatedAsync(owner, new { code = "VT002", name = "Hàu giống 5 cm", group = "Seed", unit = "con" });
-
-        // Other groups choose their own unit; a Material item turned into a Seed item must take the seed unit.
-        var rope = await CreatedAsync(owner, new { code = "VT003", name = "Dây thừng 14 mm", group = "Material", unit = "cuộn" });
-        var ropeView = await owner.GetFromJsonAsync<JsonElement>($"{Items}/{rope}");
-        var toSeed = await owner.PutAsJsonAsync($"{Items}/{rope}", new
-        {
-            code = "VT003", name = "Dây thừng 14 mm", group = "Seed", unit = "cuộn", rowVersion = ropeView.GetProperty("rowVersion").GetString(),
-        });
-        Assert.Equal("Unit", await toSeed.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
-
-        // Discontinued Seed items keep their history, so they still set the unit.
-        var seeds = await api.QueryAsync(db => db.FarmingInputItems.Where(i => i.Group == Domain.Enums.InputItemGroup.Seed).Select(i => i.Id).ToListAsync());
-        Assert.Equal(2, seeds.Count);
-        Assert.Contains(first, seeds);
-        foreach (var seed in seeds)
-        {
-            await (await owner.PostAsync($"{Items}/{seed}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
-        }
-
-        var afterDiscontinue = await owner.PostAsJsonAsync(Items, new { code = "VT004", name = "Hàu giống Cổ Trai", group = "Seed", unit = "kg" });
-        Assert.Equal("Unit", await afterDiscontinue.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("con", con.GetProperty("unit").GetString());
+        Assert.Equal("kg", kg.GetProperty("unit").GetString());
+        var units = con.GetProperty("units").EnumerateArray().ToList();
+        Assert.Single(units);
+        Assert.Equal(("con", 1m, "VT001-C", true), (units[0].GetProperty("name").GetString(), units[0].GetProperty("factor").GetDecimal(), units[0].GetProperty("code").GetString(), units[0].GetProperty("isBase").GetBoolean()));
     }
 
     [Fact]
@@ -96,37 +74,41 @@ public class FarmingInputItemSrsRulesTests(AuthApiFactory factory) : IClassFixtu
 
         var edited = await (await owner.PutAsJsonAsync($"{Items}/{seed}", new
         {
-            code = "VT001", name = "Hàu giống", group = "Seed", unit = "con", rowVersion = view.GetProperty("rowVersion").GetString(),
+            code = "VT001", name = "Hàu giống", group = "Seed", unit = "con",
+            units = new[] { new { id = (Guid?)null, unitId = (Guid?)null, unitName = "con", factor = 1m, code = (string?)null, isBase = true } },
+            rowVersion = view.GetProperty("rowVersion").GetString(),
         })).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal("con", edited.GetProperty("unit").GetString());
-        Assert.Equal("con", (await ProposalAsync(owner)).GetProperty("seedUnit").GetString());
+        Assert.Equal("con", edited.GetProperty("units")[0].GetProperty("name").GetString());
     }
 
     [Fact]
-    public async Task The_proposed_code_follows_VT001_keeps_discontinued_codes_reserved_and_may_be_replaced()
+    public async Task The_proposed_code_follows_the_type_and_the_Owner_may_replace_it()
     {
         using var api = new AuthApiFactory();
         var owner = await api.PurchasingOwnerAsync();
-        Assert.Equal("VT001", (await ProposalAsync(owner)).GetProperty("code").GetString());
+        Assert.Equal("GI000001", (await ProposalAsync(owner, "Seed")).GetProperty("code").GetString());
+        Assert.Equal("VT000001", (await ProposalAsync(owner, "Material")).GetProperty("code").GetString());
+        Assert.Equal("HK000001", (await ProposalAsync(owner, "Other")).GetProperty("code").GetString());
 
-        await owner.CreateItemAsync("Other", code: "VT001");
-        Assert.Equal("VT002", (await ProposalAsync(owner)).GetProperty("code").GetString());
+        // An empty code takes the next one of the type's sequence; the numbers of the other types are not spent.
+        var first = await (await owner.PostAsJsonAsync(Items, new { name = "Phao nhựa", group = "Material", unit = "cái" })).ReadAsync(HttpStatusCode.Created);
+        Assert.Equal("VT000001", first.GetProperty("code").GetString());
+        Assert.Equal("VT000002", (await ProposalAsync(owner, "Material")).GetProperty("code").GetString());
+        Assert.Equal("GI000001", (await ProposalAsync(owner, "Seed")).GetProperty("code").GetString());
 
-        // The Owner may enter a code of their own; it does not move the proposal.
+        // A code typed by the Owner is kept as typed and is unique regardless of case; the code of a unit counts too.
         await owner.CreateItemAsync("Other", code: "PHAO-01");
-        Assert.Equal("VT002", (await ProposalAsync(owner)).GetProperty("code").GetString());
-
-        // A code of the pattern in another case counts, and stays reserved once discontinued.
-        var high = await owner.CreateItemAsync("Other", code: "vt012");
-        await (await owner.PostAsync($"{Items}/{high}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal("VT013", (await ProposalAsync(owner)).GetProperty("code").GetString());
+        var clash = await owner.PostAsJsonAsync(Items, new { code = "phao-01", name = "Khác", group = "Other", unit = "kg" });
+        Assert.Equal("Code", (await clash.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("field").GetString());
+        var unitCode = await owner.PostAsJsonAsync(Items, new { code = "VT000001-C", name = "Dây", group = "Material", unit = "cuộn" });
+        Assert.Equal("Code", (await unitCode.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("field").GetString());
 
         // The proposal belongs to the Add item form of the Owner.
         var (zone, _) = await api.ZoneWithRaftAsync();
-        await (await (await api.ZoneManagerAsync(zone)).GetAsync($"{Items}/next-code")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        await (await (await api.ZoneManagerAsync(zone)).GetAsync($"{Items}/next-code?group=Seed")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
     }
-
     [Fact]
     public async Task A_discontinued_item_is_not_edited_until_it_is_resumed()
     {
@@ -173,6 +155,6 @@ public class FarmingInputItemSrsRulesTests(AuthApiFactory factory) : IClassFixtu
     private static async Task<Guid> CreatedAsync(HttpClient owner, object body) =>
         (await (await owner.PostAsJsonAsync(Items, body)).ReadAsync(HttpStatusCode.Created)).Id();
 
-    private static async Task<JsonElement> ProposalAsync(HttpClient owner) =>
-        await (await owner.GetAsync($"{Items}/next-code")).ReadAsync(HttpStatusCode.OK);
+    private static async Task<JsonElement> ProposalAsync(HttpClient owner, string group) =>
+        await (await owner.GetAsync($"{Items}/next-code?group={group}")).ReadAsync(HttpStatusCode.OK);
 }

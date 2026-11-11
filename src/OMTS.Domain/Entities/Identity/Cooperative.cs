@@ -1,6 +1,7 @@
 using OMTS.Domain.Common;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Sales;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Domain.Entities.Identity;
 
@@ -63,8 +64,41 @@ public class Cooperative : AuditableEntity
     /// <summary>HARVEST-03: a whole number of at least 1, 3 when OMTS is first set up. Applies to every lot still for sale from the next daily close check (BR-HARVEST-06).</summary>
     public int DaysBeforeAutoClose { get; set; } = 3;
 
+    /// <summary>How the cost of input items is kept; Fixed when OMTS is first set up.</summary>
+    public InputCostMethod InputCostMethod { get; set; } = InputCostMethod.Fixed;
+
+    /// <summary>Whether a document may take an input item or seed lot below zero; true when OMTS is first set up.</summary>
+    public bool AllowNegativeInputQuantity { get; set; } = true;
+
+    /// <summary>Customers over the debt limit are flagged on the customer list and the invoice form; off when OMTS is first set up.</summary>
+    public bool CustomerDebtWarningEnabled { get; set; }
+
+    /// <summary>The most a customer may owe (VND, whole); null: the amount is not a limit. Only read while the warning is on.</summary>
+    public decimal? CustomerMaxDebtAmount { get; set; }
+
+    /// <summary>The most days a customer may owe, counted from the oldest unpaid debt invoice; null: the days are not a limit. Only read while the warning is on.</summary>
+    public int? CustomerMaxDebtDays { get; set; }
+
+    /// <summary>True: over the limit is only a warning. False: an invoice that leaves a debt for a customer over the limit is refused.</summary>
+    public bool CustomerAllowMoreDebtOverLimit { get; set; } = true;
+
+    /// <summary>A walk-in invoice must be paid in full; true when OMTS is first set up.</summary>
+    public bool CustomerNoDebtForWalkIn { get; set; } = true;
+
+    /// <summary>Optional fields of a customer profile the cooperative makes required (the name and the first phone number always are).</summary>
+    public bool CustomerRequirePhoneNumber2 { get; set; }
+    public bool CustomerRequireEmail { get; set; }
+    public bool CustomerRequireGender { get; set; }
+    public bool CustomerRequireBirthDate { get; set; }
+    public bool CustomerRequireAddress { get; set; }
+    public bool CustomerRequireFacebook { get; set; }
+    public bool CustomerRequireBank { get; set; }
+    public bool CustomerRequireTaxCode { get; set; }
+
     public ICollection<FarmingZone> FarmingZones { get; set; } = [];
     public ICollection<Employee> Employees { get; set; } = [];
     public ICollection<Customer> Customers { get; set; } = [];
     public ICollection<CooperativeCertification> Certifications { get; set; } = [];
 }
+
+

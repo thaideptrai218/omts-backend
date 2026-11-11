@@ -87,7 +87,9 @@ public class StackMergeQaTestsMigrations
 
         Assert.Empty(await chain.Database.GetPendingMigrationsAsync());
         Assert.False(chain.Database.HasPendingModelChanges());
-        Assert.Equal(Interleave, (await chain.Database.GetAppliedMigrationsAsync()).TakeLast(Interleave.Length));
+        // The interleave is a run of the chain, not its tail: later migrations (employees, work, payroll) come after it.
+        var applied = (await chain.Database.GetAppliedMigrationsAsync()).ToList();
+        Assert.Equal(Interleave, applied.Skip(applied.IndexOf(Interleave[0])).Take(Interleave.Length));
         AssertSameLines(await ReadAsync(model, SchemaQuery), await ReadAsync(chain, SchemaQuery), "schema");
         AssertSameLines(await ReadAsync(model, CatalogQuery), await ReadAsync(chain, CatalogQuery), "status catalog");
 

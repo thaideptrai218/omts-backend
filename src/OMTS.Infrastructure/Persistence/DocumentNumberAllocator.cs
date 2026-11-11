@@ -23,6 +23,13 @@ internal sealed class DocumentNumberAllocator(DbContextOptions<OmtsDbContext> op
         return db.Database.IsRelational() ? await NextRelationalAsync(db, key, cancellationToken) : await NextInMemoryAsync(db, key, cancellationToken);
     }
 
+    public async Task<long> PeekAsync(string key, CancellationToken cancellationToken)
+    {
+        await using var db = new OmtsDbContext(options);
+        var last = await db.DocumentSequences.AsNoTracking().Where(s => s.Key == key).Select(s => (long?)s.LastValue).FirstOrDefaultAsync(cancellationToken);
+        return (last ?? 0) + 1;
+    }
+
     private static async Task<long> NextRelationalAsync(OmtsDbContext db, string key, CancellationToken cancellationToken)
     {
         await db.Database.OpenConnectionAsync(cancellationToken);
@@ -87,3 +94,4 @@ internal sealed class DocumentNumberAllocator(DbContextOptions<OmtsDbContext> op
         return command;
     }
 }
+

@@ -107,7 +107,7 @@ public class SalesCatalogueSqlServerTests
         var offline = await owner.CreateCustomerAsync(phone: phone);
 
         // Registration made a second profile with this number (the database takes it).
-        var registered = new Customer { CooperativeId = host.CooperativeId, Name = "Registered", PhoneNumber = phone };
+        var registered = new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = host.CooperativeId, Name = "Registered", PhoneNumber = phone };
         await host.UseDbAsync(db => db.Customers.Add(registered));
         Assert.Equal(2, await host.QueryAsync(db => db.Customers.CountAsync(c => c.PhoneNumber == phone)));
 

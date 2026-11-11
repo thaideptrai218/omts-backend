@@ -18,8 +18,8 @@ public sealed class MessageCatalogueTests
     [Fact]
     public void The_checked_in_catalogue_has_the_codes_of_the_srs()
     {
-        Assert.Equal(147, SrsCodes.Value.Count);
-        Assert.All(SrsCodes.Value, code => Assert.Matches("^MSG-(GEN|FARM|CYCLE|WATER|HARVEST|TRACE|ORIGIN|ACCOUNT|PURCHASE|LABOR|SALE|DEBT|CLAIM|CASH)-[0-9]{2}$", code));
+        Assert.Equal(150, SrsCodes.Value.Count);
+        Assert.All(SrsCodes.Value, code => Assert.Matches("^MSG-(GEN|FARM|CYCLE|WATER|HARVEST|TRACE|ORIGIN|ACCOUNT|PURCHASE|LABOR|SALE|DEBT|CLAIM|CASH|INPUT|CUSTOMER)-[0-9]{2}$", code));
     }
 
     [Fact]
@@ -105,7 +105,7 @@ public sealed class MessageCatalogueTests
     {
         { Name: "legacyCode" } => MessageCodes.Legacy.Msg03,
         { ParameterType: var t } when t == typeof(string) => "Sample",
-        { ParameterType: var t } when t == typeof(int) => 3,
+        { ParameterType: var t } when t == typeof(int) || t == typeof(int?) => 3,
         { ParameterType: var t } when t == typeof(decimal) || t == typeof(decimal?) => 1_250_500.5m,
         { ParameterType: var t } when t == typeof(IReadOnlyList<(string, decimal)>) => new[] { ("Sample", 1_250_500.5m) },
         { ParameterType: var t } when t == typeof(bool) => true,

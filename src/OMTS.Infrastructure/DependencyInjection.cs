@@ -84,6 +84,7 @@ public static class DependencyInjection
         services.AddScoped<IVerificationCodeRepository, VerificationCodeRepository>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<ICustomerReferences, CustomerReferences>();
+        services.AddScoped<ICustomerListQuery, CustomerListReader>();
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<IPurchaseRequestRepository, PurchaseRequestRepository>();
         services.AddScoped<ICooperativeOwnerQuery, CooperativeOwnerQuery>();
@@ -91,11 +92,18 @@ public static class DependencyInjection
         services.AddScoped<IPushDeviceRepository, PushDeviceRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
         services.AddScoped<ISalesProductRepository, SalesProductRepository>();
-        services.AddScoped<IWorkforceRepository, WorkforceRepository>();
         services.AddScoped<IEmployeeWorkRecords, EmployeeWorkRecords>();
         services.AddScoped<IJobTypeRepository, JobTypeRepository>();
         services.AddScoped<IAttendanceSettingsRepository, AttendanceSettingsRepository>();
         services.AddScoped<IPayrollRepository, PayrollRepository>();
+        services.AddScoped<IPayrollSheetRepository, PayrollSheetRepository>();
+        services.AddScoped<IPayrollWorkReader, PayrollWorkReader>();
+        services.AddScoped<IWagePaymentRepository, WagePaymentRepository>();
+        services.AddScoped<IPayrollReader, PayrollReader>();
+        services.AddScoped<IWorkAssignmentRepository, WorkAssignmentRepository>();
+        services.AddScoped<IAttendanceRepository, AttendanceRepository>();
+        services.AddScoped<IEmployeeRequestRepository, EmployeeRequestRepository>();
+        services.AddScoped<IWorkEmployeeReader, WorkEmployeeReader>();
         services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddScoped<IRaftRepository, RaftRepository>();
         services.AddScoped<ICultivationCycleRepository, CultivationCycleRepository>();
@@ -115,6 +123,7 @@ public static class DependencyInjection
         services.AddScoped<IPortWeighingRepository, Persistence.Repositories.Sales.PortWeighingRepository>();
         services.AddScoped<ISalesInvoiceSearchReader, SalesInvoiceSearchReader>();
         services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();
+        services.AddScoped<ICustomerDebtAdjustmentRepository, CustomerDebtAdjustmentRepository>();
         services.AddScoped<IPendingSaleRepository, PendingSaleRepository>();
         services.AddOptions<ProvenanceOptions>()
             .Bind(configuration.GetSection(ProvenanceOptions.SectionName))
@@ -130,6 +139,13 @@ public static class DependencyInjection
         services.AddScoped<IStoredFileReferenceQuery, StoredFileReferenceQuery>();
         services.AddScoped<ISupplierRepository, SupplierRepository>();
         services.AddScoped<IFarmingInputItemRepository, FarmingInputItemRepository>();
+        services.AddScoped<IInputStockRepository, InputStockRepository>();
+        services.AddScoped<IInputUnitRepository, InputUnitRepository>();
+        services.AddScoped<IInputItemCategoryRepository, InputItemCategoryRepository>();
+        services.AddScoped<IInputItemListQuery, InputItemListReader>();
+        services.AddScoped<IInputIssueRepository, InputIssueRepository>();
+        services.AddScoped<IInputIssueTypeRepository, InputIssueTypeRepository>();
+        services.AddScoped<IInputMovementQuery, InputMovementReader>();
         services.AddScoped<IPurchaseReceiptRepository, PurchaseReceiptRepository>();
         services.AddScoped<ISupplierPaymentRepository, SupplierPaymentRepository>();
         services.AddScoped<IPurchaseDocumentCodeQuery, PurchaseDocumentCodeQuery>();
@@ -146,6 +162,7 @@ public static class DependencyInjection
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddSessionRevocation(configuration);
         services.AddSingleton<IVerificationCodeHasher, HmacVerificationCodeHasher>();
+        services.AddSingleton<IAttendanceQrCodes, HmacAttendanceQrCodes>();
         services.AddOptions<VerificationLimitOptions>().Bind(configuration.GetSection(VerificationLimitOptions.SectionName));
         services.AddSingleton<IPasswordHasher, PasswordHasher>();
 
@@ -408,3 +425,5 @@ public static class DependencyInjection
     private static string ToCheckName(ReadinessCheckKind kind) =>
         string.Concat(kind.ToString().Select((c, i) => i > 0 && char.IsUpper(c) ? $"-{char.ToLowerInvariant(c)}" : char.ToLowerInvariant(c).ToString()));
 }
+
+

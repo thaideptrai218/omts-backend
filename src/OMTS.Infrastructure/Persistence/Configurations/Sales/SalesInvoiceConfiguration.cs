@@ -96,6 +96,9 @@ internal sealed class CustomerPaymentConfiguration : IEntityTypeConfiguration<Cu
         builder.ReferencesAccount(nameof(CustomerPayment.ConfirmedByAccountId));
         builder.ReferencesAccount(nameof(CustomerPayment.CancelledByAccountId));
         builder.Property(x => x.Amount).HasPrecision(18, 0);
+        builder.Property(x => x.DiscountAmount).HasPrecision(18, 0);
+        builder.HasOne(x => x.CashAccount).WithMany().HasForeignKey(x => x.CashAccountId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(x => x.CashAccountId);
         builder.Property(x => x.BankReference).HasMaxLength(Lengths.ShortText);
         // Not unique: the Accountant may save a second payment with the same reference after MSG-DEBT-05 (BR-DEBT-03).
         builder.HasIndex(x => x.BankReference);
@@ -114,6 +117,37 @@ internal sealed class CustomerPaymentConfiguration : IEntityTypeConfiguration<Cu
         builder.HasIndex(x => new { x.CustomerId, x.StatusId });
         builder.HasIndex(x => x.InvoiceId);
         builder.HasIndex(x => new { x.StatusId, x.PaymentDate });
-        builder.ToTable(t => t.HasCheckConstraint("CK_CustomerPayment_Amount", "[Amount] > 0"));
+        // Zero only when the payment is all discount.
+        builder.ToTable(t => t.HasCheckConstraint("CK_CustomerPayment_Amount", "[Amount] >= 0 AND [DiscountAmount] >= 0 AND ([Amount] > 0 OR [DiscountAmount] > 0)"));
+    }
+}
+
+internal sealed class CustomerPaymentAllocationConfiguration : IEntityTypeConfiguration<CustomerPaymentAllocation>
+{
+    public void Configure(EntityTypeBuilder<CustomerPaymentAllocation> builder)
+    {
+        builder.HasOne(x => x.Payment).WithMany(p => p.Allocations).HasForeignKey(x => x.PaymentId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.Invoice).WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+        // One part per invoice on a payment.
+        builder.HasIndex(x => new { x.PaymentId, x.InvoiceId }).IsUnique();
+        builder.HasIndex(x => x.InvoiceId);
+        builder.Property(x => x.Amount).HasPrecision(18, 0);
+        builder.ToTable(t => t.HasCheckConstraint("CK_CustomerPaymentAllocation_Amount", "[Amount] > 0"));
+    }
+}
+
+internal sealed class CustomerDebtAdjustmentConfiguration : IEntityTypeConfiguration<CustomerDebtAdjustment>
+{
+    public void Configure(EntityTypeBuilder<CustomerDebtAdjustment> builder)
+    {
+        builder.Property(x => x.Code).HasMaxLength(Lengths.Code);
+        builder.HasIndex(x => x.Code).IsUnique();
+        builder.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
+        builder.ReferencesAccount(nameof(CustomerDebtAdjustment.RecordedByAccountId), nameof(CustomerDebtAdjustment.CancelledByAccountId));
+        builder.Property(x => x.Amount).HasPrecision(18, 0);
+        builder.Property(x => x.Reason).HasMaxLength(Lengths.Reason);
+        builder.Property(x => x.CancelReason).HasMaxLength(Lengths.Reason);
+        builder.HasIndex(x => new { x.CustomerId, x.AdjustmentDate });
+        builder.ToTable(t => t.HasCheckConstraint("CK_CustomerDebtAdjustment_Amount", "[Amount] <> 0"));
     }
 }

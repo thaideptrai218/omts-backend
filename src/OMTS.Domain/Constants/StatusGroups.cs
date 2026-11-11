@@ -20,7 +20,10 @@ public static class StatusGroups
     public const string Lane = "LANE";
     public const string QualityClaim = "QUALITY_CLAIM";
     public const string Payroll = "PAYROLL";
+    public const string EmployeeRequest = "EMPLOYEE_REQUEST";
     public const string HarvestLot = "HARVEST_LOT";
     public const string SalesInvoice = "SALES_INVOICE";
     public const string CustomerPayment = "CUSTOMER_PAYMENT";
+    public const string InputIssue = "INPUT_ISSUE";
 }
+

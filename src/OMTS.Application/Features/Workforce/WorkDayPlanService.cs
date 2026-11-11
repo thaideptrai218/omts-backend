@@ -8,6 +8,7 @@ using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
+using OMTS.Application.Features.Labor.Work;
 using OMTS.Application.Features.Sales.Requests;
 using OMTS.Application.Features.Sales.Requests.Dtos;
 using OMTS.Application.Features.Workforce.Dtos;
@@ -19,11 +20,15 @@ using S = OMTS.Domain.Constants.StatusIds.PurchaseRequest;
 
 namespace OMTS.Application.Features.Workforce;
 
-/// <summary>Yêu cầu 06/11/2026: kế hoạch qua người phụ trách; quản lý nhận/từ chối trước khi phân công.</summary>
+/// <summary>
+/// Yêu cầu 06/11/2026: kế hoạch qua người phụ trách; quản lý nhận/từ chối trước khi phân công. Phân công là của LABOR-02 (OMTS-132): một kế hoạch
+/// tạo phân công cho bè, loại việc và ngày của nó, nên các phân công đó là những phân công đầu ngày của đúng bè, loại việc và ngày ấy.
+/// </summary>
 public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
-    IRaftRepository rafts, IWorkforceRepository workforce, IPurchaseRequestRepository purchases,
+    IRaftRepository rafts, IJobTypeRepository jobTypes, IWorkAssignmentRepository assignments, IEmployeeRequestRepository employeeRequests,
+    IPurchaseRequestRepository purchases,
     IAccountRepository accounts, ICurrentUser user, PermissionService permissions, WorkPlanAccessService access,
-    PurchaseStaffingService staffing, WorkforceService work, RowVersionGuard versions,
+    PurchaseStaffingService staffing, WorkAssignmentService work, RowVersionGuard versions,
     AuditLogService audit, INotificationDispatcher notifications, IUnitOfWork uow, TimeProvider clock)
 {
     private DateOnly Today => DateOnly.FromDateTime(clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime);
@@ -72,7 +77,7 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
         if (input.ClientOperationId == Guid.Empty || input.WorkDate < Today || input.WorkDate == default || input.Note?.Length > 500)
             return AppError.Invalid("Work plan");
         var raft = await rafts.GetForEditAsync(input.RaftId, ct);
-        var job = await workforce.JobAsync(input.JobTypeId, ct);
+        var job = await jobTypes.GetForEditAsync(input.JobTypeId, ct);
         if (raft?.StatusId != StatusIds.Usage.InUse || raft.Zone.StatusId != StatusIds.Usage.InUse || job?.StatusId != StatusIds.Usage.InUse)
             return AppError.Invalid("Job type");
         var responsible = await accounts.GetByIdAsync(input.ResponsibleAccountId, ct);
@@ -89,7 +94,7 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
             p = await plans.GetAsync(planId, ct);
             if (p is null) return AppError.NotFound;
             if (await versions.CheckAsync(p, input.RowVersion, ct) is { } stale) return stale;
-            if (p.Assignments.Any(a => a.CancelledAt is null) || p.PurchaseRequest?.ShiftInvitations.Count > 0)
+            if (await AssignedCountAsync(p, ct) > 0 || p.PurchaseRequest?.ShiftInvitations.Count > 0)
                 return AppError.Invalid("Work plan already assigned");
             if (p.PurchaseRequestId != input.PurchaseRequestId) return AppError.Invalid("Purchase request");
         }
@@ -164,8 +169,8 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
         foreach (var e in await purchases.StaffingEmployeesAsync(ct))
         {
             var reason = e.Account is not { StatusId: StatusIds.Account.Active, SubjectType: SubjectType.Staff } ? "Chưa có tài khoản nhân viên đang hoạt động"
-                : await workforce.HasApprovedLeaveAsync(e.Id, p.WorkDate, ct) ? "Đã duyệt nghỉ trong ngày này"
-                : await workforce.EmployeeAssignmentAsync(e.Id, p.WorkDate, ct) is not null || await purchases.HasShiftReservationAsync(e.Id, p.WorkDate, null, ct) ? "Đã có ca khác trong ngày" : null;
+                : (await employeeRequests.ListApprovedLeaveAsync([e.Id], p.WorkDate, ct)).Count > 0 ? "Đã duyệt nghỉ trong ngày này"
+                : await assignments.FindFirstAsync(e.Id, p.WorkDate, ct) is not null || await purchases.HasShiftReservationAsync(e.Id, p.WorkDate, null, ct) ? "Đã có ca khác trong ngày" : null;
             options.Add(new(e.Id, e.FullName, reason is null, reason));
         }
         return Result<IReadOnlyList<StaffingEmployeeOption>>.Success(options);
@@ -184,7 +189,8 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
         }
         else
         {
-            var result = await work.AssignAsync(new AssignWorkRequest(p.RaftId, p.JobTypeId, p.WorkDate, input.EmployeeIds, false, p.Id), ct);
+            // LABOR-02.0 với bè, loại việc và ngày của kế hoạch: cùng quy tắc và cùng câu hỏi chuyển bè (MSG-LABOR-06) như phân công trực tiếp.
+            var result = await work.AssignAsync(new AssignWorkRequest(p.RaftId, p.JobTypeId, p.WorkDate, input.EmployeeIds), ct);
             if (!result.IsSuccess) return result.Error!;
         }
         return await ViewAsync(p, ct);
@@ -193,7 +199,7 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
     {
         var staffingSummary = p.PurchaseRequest is { } order ? PurchaseStaffingService.Summary(order) : null;
         var closed = p.PurchaseRequest?.StatusId is S.Declined or S.Cancelled;
-        var assigned = p.Assignments.Count(a => a.CancelledAt is null);
+        var assigned = await AssignedCountAsync(p, ct);
         var state = closed ? "CLOSED" : p.Approved is null ? "PENDING_MANAGER" : p.Approved == false ? "DECLINED"
             : p.PurchaseRequest?.StatusId == S.Accepted || assigned > 0 ? "ASSIGNED" : staffingSummary?.InvitedEmployees > 0 ? "AWAITING_STAFF" : "READY_TO_ASSIGN";
         return new(p.Id, p.WorkDate, p.RaftId, p.Raft.Code, p.Raft.ZoneId, p.Raft.Zone.Name, p.JobTypeId, p.JobType.Name,
@@ -203,4 +209,8 @@ public sealed class WorkDayPlanService(IWorkDayPlanRepository plans,
             p.PurchaseRequestId, p.PurchaseRequest?.Code, staffingSummary?.Cages, staffingSummary?.RequiredEmployees,
             staffingSummary?.InvitedEmployees ?? 0, staffingSummary?.ApprovedEmployees ?? 0, assigned, p.Note, RowVersionGuard.Encode(p.RowVersion));
     }
+
+    /// <summary>Số nhân viên có phân công đầu ngày trên đúng bè và loại việc của kế hoạch, vào ngày của kế hoạch.</summary>
+    private async Task<int> AssignedCountAsync(WorkDayPlan p, CancellationToken ct) =>
+        (await assignments.ListDayAsync(p.WorkDate, ct)).Count(a => a.RaftId == p.RaftId && a.JobTypeId == p.JobTypeId && a.StartsAt is null);
 }

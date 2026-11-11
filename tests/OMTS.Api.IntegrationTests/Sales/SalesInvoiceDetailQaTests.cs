@@ -193,7 +193,7 @@ public class SalesInvoiceDetailQaTests
         await api.UseDbAsync(db => db.CustomerPayments.AddRange(
             Extra(StatusIds.CustomerPayment.AwaitingConfirmation, manager.Account.Id, 10_000m),
             Extra(StatusIds.CustomerPayment.Cancelled, manager.Account.Id, 1_000m),
-            Extra(StatusIds.CustomerPayment.Confirmed, manager.Account.Id, 2_000m),
+            Extra(StatusIds.CustomerPayment.Completed, manager.Account.Id, 2_000m),
             Extra(StatusIds.CustomerPayment.AwaitingConfirmation, other.Account.Id, 4_000m)));
 
         Assert.Equal(110_000m, (await manager.Client.InvoiceListAsync("?cashCollectedByMe=true")).Rows()[0].Money("cashAwaitingConfirmation"));

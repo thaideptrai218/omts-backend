@@ -17,6 +17,7 @@ public sealed class EmployeeViewBuilder(IStatusCatalog statusCatalog, TimeProvid
         var maintains = caller.Maintains(e);
         return new EmployeeView(
             e.Id,
+            e.Code,
             e.FullName,
             e.PhoneNumber,
             EmployeeTypePeriod.TypeOn(e.TypePeriods, timeProvider.Today()),
@@ -28,6 +29,9 @@ public sealed class EmployeeViewBuilder(IStatusCatalog statusCatalog, TimeProvid
             maintains,
             hasStaffAccount,
             maintains ? e.Birthday : null,
+            maintains ? e.Gender : null,
+            maintains ? e.IdNumber : null,
+            maintains ? e.StartDate : null,
             maintains ? e.Address : null,
             maintains ? e.Area : null,
             maintains ? e.Ward : null,
@@ -40,6 +44,7 @@ public sealed class EmployeeViewBuilder(IStatusCatalog statusCatalog, TimeProvid
 
     public EmployeeListItem ListItem(Employee e, EmployeeCaller caller) => new(
         e.Id,
+        e.Code,
         e.FullName,
         e.PhoneNumber,
         EmployeeTypePeriod.TypeOn(e.TypePeriods, timeProvider.Today()),

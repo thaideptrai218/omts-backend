@@ -23,9 +23,9 @@ public class PhoneAndPasswordTests(AuthApiFactory factory) : IClassFixture<AuthA
     {
         var cooperative = await factory.EnsureCooperativeAsync();
         var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader, a => { a.PhoneNumber = null; a.PhoneVerifiedAt = null; });
-        var own = new Customer { CooperativeId = cooperative.Id, AccountId = trader.Id, Name = "Own" };
+        var own = new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = cooperative.Id, AccountId = trader.Id, Name = "Own" };
         var phone = NewPhone();
-        var offline = Enumerable.Range(0, offlineProfiles).Select(i => new Customer { CooperativeId = cooperative.Id, Name = $"Offline {i}", PhoneNumber = phone }).ToList();
+        var offline = Enumerable.Range(0, offlineProfiles).Select(i => new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = cooperative.Id, Name = $"Offline {i}", PhoneNumber = phone }).ToList();
         await factory.UseDbAsync(db => { db.Customers.Add(own); db.Customers.AddRange(offline); });
         var client = await factory.LoginAsync(trader.Username);
 

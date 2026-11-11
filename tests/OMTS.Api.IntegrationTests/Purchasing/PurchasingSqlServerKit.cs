@@ -91,6 +91,12 @@ public static class PurchasingSqlServerKit
     public static async Task<string?> CodeOrStatusAsync(this HttpResponseMessage response)
     {
         var text = await response.Content.ReadAsStringAsync();
+        if (response.IsSuccessStatusCode)
+        {
+            // A body that succeeded may hold a "code" of its own (a customer or supplier code): only an error carries a message code.
+            return $"{(int)response.StatusCode}";
+        }
+
         try
         {
             return JsonDocument.Parse(text).RootElement.TryGetProperty("code", out var code) && code.ValueKind == JsonValueKind.String

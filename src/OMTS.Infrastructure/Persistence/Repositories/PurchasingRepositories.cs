@@ -126,10 +126,18 @@ internal sealed class SupplierRepository(OmtsDbContext db) : ISupplierRepository
 internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInputItemRepository
 {
     public Task<FarmingInputItem?> GetForEditAsync(Guid itemId, CancellationToken cancellationToken) =>
-        db.FarmingInputItems.FirstOrDefaultAsync(i => i.Id == itemId, cancellationToken);
+        db.FarmingInputItems
+            .Include(i => i.Units).ThenInclude(u => u.Unit)
+            .Include(i => i.Photos)
+            .Include(i => i.ItemGroup)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(i => i.Id == itemId, cancellationToken);
 
     public async Task<IReadOnlyList<FarmingInputItem>> GetByIdsAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken) =>
-        await db.FarmingInputItems.AsNoTracking().Where(i => itemIds.Contains(i.Id)).ToListAsync(cancellationToken);
+        await db.FarmingInputItems.AsNoTracking().Include(i => i.Units).ThenInclude(u => u.Unit).Where(i => itemIds.Contains(i.Id)).AsSplitQuery().ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<FarmingInputItem>> GetByIdsForUpdateAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken) =>
+        await db.FarmingInputItems.Include(i => i.Units).ThenInclude(u => u.Unit).Where(i => itemIds.Contains(i.Id)).AsSplitQuery().ToListAsync(cancellationToken);
 
     public Task<FarmingInputItem?> FindByCodeAsync(string code, Guid? exceptItemId, CancellationToken cancellationToken)
     {
@@ -143,26 +151,25 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
         return db.FarmingInputItems.AsNoTracking().FirstOrDefaultAsync(i => i.Name.ToUpper() == upper && i.Id != exceptItemId, cancellationToken);
     }
 
-    public Task<string?> SeedUnitAsync(Guid? exceptItemId, CancellationToken cancellationToken) =>
-        db.FarmingInputItems.AsNoTracking()
-            .Where(i => i.Group == InputItemGroup.Seed && i.Id != exceptItemId)
-            .OrderBy(i => i.CreatedAt).ThenBy(i => i.Id)
-            .Select(i => (string?)i.Unit)
-            .FirstOrDefaultAsync(cancellationToken);
-
-    public async Task<IReadOnlyList<string>> CodesStartingWithAsync(string prefix, CancellationToken cancellationToken)
+    public async Task<CodeOwner?> FindCodeOwnerAsync(string code, Guid? exceptItemId, Guid? exceptItemUnitId, CancellationToken cancellationToken)
     {
-        var upper = prefix.ToUpperInvariant();
-        return await db.FarmingInputItems.AsNoTracking().Where(i => i.Code.ToUpper().StartsWith(upper)).Select(i => i.Code).ToListAsync(cancellationToken);
+        var upper = code.ToUpperInvariant();
+        if (await db.FarmingInputItems.AsNoTracking().Where(i => i.Code.ToUpper() == upper && i.Id != exceptItemId).Select(i => (Guid?)i.Id).FirstOrDefaultAsync(cancellationToken) is { } itemId)
+        {
+            return new CodeOwner(itemId, false);
+        }
+
+        var unitOwner = await db.InputItemUnits.AsNoTracking().Where(u => u.Code.ToUpper() == upper && u.Id != exceptItemUnitId).Select(u => (Guid?)u.ItemId).FirstOrDefaultAsync(cancellationToken);
+        return unitOwner is { } owner ? new CodeOwner(owner, true) : null;
     }
 
     public async Task<IReadOnlyList<FarmingInputItem>> ListAsync(string? search, InputItemGroup? group, int? statusId, CancellationToken cancellationToken)
     {
-        var query = db.FarmingInputItems.AsNoTracking();
+        var query = db.FarmingInputItems.AsNoTracking().Where(i => !i.IsHidden);
         if (!string.IsNullOrWhiteSpace(search))
         {
             var text = search.Trim();
-            query = query.Where(i => i.Code.Contains(text) || i.Name.Contains(text));
+            query = query.Where(i => i.Code.Contains(text) || i.Name.Contains(text) || i.Units.Any(u => u.Code.Contains(text)));
         }
 
         if (group is not null)
@@ -175,7 +182,7 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
             query = query.Where(i => i.StatusId == statusId);
         }
 
-        return await query.OrderBy(i => i.Code).ToListAsync(cancellationToken);
+        return await query.Include(i => i.Units).ThenInclude(u => u.Unit).Include(i => i.ItemGroup).AsSplitQuery().OrderBy(i => i.Code).ToListAsync(cancellationToken);
     }
 
     public async Task<bool> IsUsedAsync(Guid itemId, CancellationToken cancellationToken) =>
@@ -194,9 +201,51 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
         return (await onReceipts.Union(onUsages).ToListAsync(cancellationToken)).ToHashSet();
     }
 
-    public void Add(FarmingInputItem item) => db.FarmingInputItems.Add(item);
-}
+    public async Task<IReadOnlySet<Guid>> UsedUnitsAmongAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken)
+    {
+        if (itemIds.Count == 0)
+        {
+            return new HashSet<Guid>();
+        }
 
+        var onReceipts = db.PurchaseReceiptLines.Where(l => l.ItemUnitId != null && l.ItemId != null && itemIds.Contains(l.ItemId.Value)).Select(l => l.ItemUnitId!.Value);
+        var onReturns = db.PurchaseReturnLines.Where(l => l.ItemUnitId != null && itemIds.Contains(l.ItemId)).Select(l => l.ItemUnitId!.Value);
+        return (await onReceipts.Union(onReturns).ToListAsync(cancellationToken)).ToHashSet();
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, decimal>> LatestPurchasePricesAsync(
+        IReadOnlyCollection<Guid> itemIds, Guid? exceptReceiptId, CancellationToken cancellationToken)
+    {
+        if (itemIds.Count == 0)
+        {
+            return new Dictionary<Guid, decimal>();
+        }
+
+        var rows = await db.PurchaseReceiptLines.AsNoTracking()
+            .Where(l => l.ItemId != null && itemIds.Contains(l.ItemId.Value) && l.EnteredUnitPrice != null && l.Receipt.StatusId == StatusIds.PurchaseReceipt.Completed && l.ReceiptId != exceptReceiptId)
+            .Select(l => new { ItemId = l.ItemId!.Value, l.Receipt.ReceivedAt, l.LineNumber, Price = l.EnteredUnitPrice!.Value, l.EnteredDiscount, l.UnitFactor })
+            .ToListAsync(cancellationToken);
+        return rows.GroupBy(r => r.ItemId).ToDictionary(
+            g => g.Key,
+            g => g.OrderByDescending(r => r.ReceivedAt).ThenByDescending(r => r.LineNumber).Select(r => decimal.Round((r.Price - r.EnteredDiscount) / r.UnitFactor, 4)).First());
+    }
+
+    public async Task<bool> HasMovementsAsync(Guid itemId, CancellationToken cancellationToken) =>
+        await db.InputStockMovements.AnyAsync(m => m.ItemId == itemId, cancellationToken)
+        || await db.PurchaseReceiptLines.AnyAsync(l => l.ItemId == itemId, cancellationToken)
+        || await db.PurchaseReturnLines.AnyAsync(l => l.ItemId == itemId, cancellationToken)
+        || await db.MaterialUsages.AnyAsync(u => u.ItemId == itemId, cancellationToken);
+
+    public void Add(FarmingInputItem item) => db.FarmingInputItems.Add(item);
+
+    public void AddUnit(InputItemUnit unit) => db.InputItemUnits.Add(unit);
+
+    public void RemoveUnit(InputItemUnit unit) => db.InputItemUnits.Remove(unit);
+
+    public void AddPhoto(InputItemPhoto photo) => db.InputItemPhotos.Add(photo);
+
+    public void RemovePhoto(InputItemPhoto photo) => db.InputItemPhotos.Remove(photo);
+}
 internal sealed partial class PurchaseReceiptRepository(OmtsDbContext db) : IPurchaseReceiptRepository
 {
     public Task<PurchaseReceipt?> GetForEditAsync(Guid receiptId, CancellationToken cancellationToken) =>
@@ -288,3 +337,4 @@ internal sealed class SupplierPaymentRepository(OmtsDbContext db) : ISupplierPay
 
     public void Add(SupplierPayment payment) => db.SupplierPayments.Add(payment);
 }
+

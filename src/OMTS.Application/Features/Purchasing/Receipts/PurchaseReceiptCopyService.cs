@@ -60,7 +60,7 @@ public sealed class PurchaseReceiptCopyService(
                 }
             }
 
-            copied.Add(new ReceiptLineInput(copiedItem, line.Quantity, line.UnitPrice, line.SupplierLotCode, copiedRaft, line.Discount));
+            copied.Add(new ReceiptLineInput(copiedItem, line.EnteredQuantity, line.EnteredUnitPrice, line.SupplierLotCode, copiedRaft, line.EnteredDiscount, ItemUnitId: copiedItem is null ? null : line.ItemUnitId));
         }
 
         // The receiver is left out: the new receipt is taken in by whoever saves it unless they choose someone.
@@ -70,3 +70,4 @@ public sealed class PurchaseReceiptCopyService(
             leftEmpty);
     }
 }
+

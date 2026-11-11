@@ -115,16 +115,20 @@ public sealed class PurchaseStaffingTests(AuthApiFactory factory) : IClassFixtur
         var (owner, _, row) = await SetupAsync(); var crew = await CrewAsync(5);
         await PlanAsync(owner, row, crew.Select(c => c.Employee.Id).ToArray());
         foreach (var c in crew) await ReplyAsync(c.Client, true);
-        await factory.UseDbAsync(db => db.Set<EmployeeLeaveRequest>().Add(new EmployeeLeaveRequest
-        { EmployeeId = crew[0].Employee.Id, From = Day, To = Day, Reason = "Nghỉ phép", Approved = true, ClientOperationId = Guid.NewGuid() }));
+        // An approved leave of LABOR-05 (OMTS-132) makes the employee unavailable that day.
+        await factory.UseDbAsync(db => db.EmployeeRequests.Add(new EmployeeRequest
+        {
+            EmployeeId = crew[0].Employee.Id, Type = EmployeeRequestType.Leave, FromDate = Day, ToDate = Day, Reason = "Nghỉ phép",
+            SentAt = DateTimeOffset.UtcNow, StatusId = StatusIds.EmployeeRequest.Approved, ClientOperationId = Guid.NewGuid(),
+        }));
         row = await GetAsync(owner, row.Id);
         Assert.Equal(HttpStatusCode.BadRequest, (await AcceptAsync(owner, row)).StatusCode);
         var options = (await owner.GetFromJsonAsync<List<StaffingEmployeeOption>>($"/api/purchase-requests/staffing-employees?day={Day:yyyy-MM-dd}"))!;
         Assert.False(options.Single(e => e.Id == crew[0].Employee.Id).Available);
         await factory.UseDbAsync(db =>
         {
-            var leave = db.Set<EmployeeLeaveRequest>().Single(r => r.EmployeeId == crew[0].Employee.Id);
-            leave.Approved = false;
+            var leave = db.EmployeeRequests.Single(r => r.EmployeeId == crew[0].Employee.Id);
+            leave.StatusId = StatusIds.EmployeeRequest.Rejected;
             db.Accounts.Single(a => a.Id == crew[1].Employee.AccountId).StatusId = StatusIds.Account.Locked;
         });
         Assert.Equal(HttpStatusCode.BadRequest, (await AcceptAsync(owner, await GetAsync(owner, row.Id))).StatusCode);

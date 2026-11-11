@@ -54,7 +54,7 @@ public sealed record CreateSalesInvoiceRequest(
 
 public sealed record SalesInvoiceZoneView(Guid Id, string Code, string Name);
 
-public sealed record SalesInvoiceCustomerView(Guid Id, string Name, string? PhoneNumber);
+public sealed record SalesInvoiceCustomerView(Guid Id, string Name, string? PhoneNumber, string? Code = null);
 
 /// <param name="CageKgs">The kg of each cage in the order weighed; empty for a line sold by the kg.</param>
 public sealed record SalesInvoiceLineView(

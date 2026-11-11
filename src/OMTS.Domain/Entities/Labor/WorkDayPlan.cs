@@ -24,5 +24,4 @@ public class WorkDayPlan : AuditableEntity
     public bool? Approved { get; set; }
     public DateTimeOffset? RespondedAt { get; set; }
     public string? ResponseReason { get; set; }
-    public ICollection<WorkAssignment> Assignments { get; set; } = [];
 }

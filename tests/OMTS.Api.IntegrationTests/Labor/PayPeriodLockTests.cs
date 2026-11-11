@@ -162,10 +162,10 @@ public class PayPeriodLockTests
         await using var factory = new AuthApiFactory();
         var owner = await OwnerAsync(factory);
         await factory.AddAwaitingPayrollAsync(October, OctoberEnd);
-        var version = (await owner.GetFromJsonAsync<JsonElement>(LaborSettingsTestKit.AttendanceSettings)).VersionOf();
+        var version = (await owner.GetFromJsonAsync<JsonElement>(AttendanceSettings)).VersionOf();
 
-        var refused = await owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = OctoberEnd, rowVersion = version });
-        var saved = await owner.PostAsJsonAsync(LaborSettingsTestKit.AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = NovemberFirst, rowVersion = version });
+        var refused = await owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = OctoberEnd, rowVersion = version });
+        var saved = await owner.PostAsJsonAsync(AttendanceSettings, new { roundingUnit = "Minutes15", effectiveFrom = NovemberFirst, rowVersion = version });
 
         await refused.SrsProblemAsync(HttpStatusCode.Conflict, "MSG-LABOR-04", null);
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);

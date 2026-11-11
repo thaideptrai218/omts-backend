@@ -29,7 +29,10 @@ using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Application.Features.Traceability.Tracing;
 using OMTS.Application.Features.Traceability.Withdrawal;
 using OMTS.Application.Features.Labor;
+using OMTS.Application.Features.Labor.Payrolls;
+using OMTS.Application.Features.Labor.Work;
 using OMTS.Application.Features.Purchasing;
+using OMTS.Application.Features.Purchasing.Issues;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
@@ -70,11 +73,8 @@ public static class DependencyInjection
         services.AddScoped<OMTS.Application.Features.Sales.Products.SalesProductService>();
         services.AddOptions<OMTS.Application.Features.Testing.Options.TestRoleOptions>();
         services.AddScoped<OMTS.Application.Features.Testing.TestRoleService>();
-        services.AddScoped<OMTS.Application.Features.Workforce.WorkforceService>();
         services.AddScoped<OMTS.Application.Features.Workforce.WorkPlanAccessService>();
         services.AddScoped<OMTS.Application.Features.Workforce.WorkDayPlanService>();
-        services.AddScoped<OMTS.Application.Features.Workforce.LeaveService>();
-        services.AddScoped<OMTS.Application.Features.Workforce.WorkforceSettingsService>();
 
         services.AddSingleton<PermissionCache>();
         services.AddSingleton<IPermissionCacheInvalidator>(provider => provider.GetRequiredService<PermissionCache>());
@@ -120,7 +120,10 @@ public static class DependencyInjection
         services.AddScoped<EmployeeCallerAccess>();
         services.AddScoped<EmployeeViewBuilder>();
         services.AddScoped<EmployeeProfileValidator>();
+        services.AddScoped<EmployeeCodeAllocator>();
         services.AddScoped<EmployeeQueryService>();
+        services.AddScoped<EmployeeFileService>();
+        services.AddScoped<EmployeeImportService>();
         services.AddScoped<EmployeeService>();
         services.AddScoped<EmployeeWorkingZoneService>();
         services.AddScoped<EmploymentService>();
@@ -132,6 +135,18 @@ public static class DependencyInjection
 
         // LABOR-11 job types and rates, LABOR-15 attendance settings, LABOR-16 payroll settings, the pay period lock (BR-LABOR-13)
         services.AddScoped<PayPeriodLock>();
+
+        // LABOR-02 work assignment, LABOR-04 attendance, LABOR-05 and LABOR-10 employee requests, LABOR-08 my work
+        services.AddScoped<WorkAssignmentService>();
+        services.AddScoped<AttendanceRecordingService>();
+        services.AddScoped<AttendanceCorrectionService>();
+        services.AddScoped<EmployeeRequestService>();
+        services.AddScoped<WorkQueryService>();
+        services.AddScoped<PayrollLineSync>();
+        services.AddScoped<PayrollQueryService>();
+        services.AddScoped<PayrollService>();
+        services.AddScoped<PayrollPaymentService>();
+        services.AddScoped<PayrollExportService>();
         services.AddScoped<JobTypeQueryService>();
         services.AddScoped<JobTypeService>();
         services.AddScoped<PayRateService>();
@@ -221,9 +236,27 @@ public static class DependencyInjection
         services.AddScoped<SupplierService>();
         services.AddScoped<SupplierFileService>();
         services.AddScoped<FarmingInputItemService>();
+        services.AddScoped<FarmingInputItemCodeService>();
+        services.AddScoped<FarmingInputItemFileService>();
+        services.AddScoped<InputItemAccess>();
+        services.AddScoped<InputStockLedger>();
+        services.AddScoped<InputUnitService>();
+        services.AddScoped<InputItemGroupService>();
+        services.AddScoped<InputInventorySettingsService>();
+        services.AddScoped<ReceiptPriceSetupService>();
+        services.AddScoped<InputIssueAccess>();
+        services.AddScoped<InputIssueCodeService>();
+        services.AddScoped<InputIssueService>();
+        services.AddScoped<InputIssueTypeService>();
+        services.AddScoped<InputMovementService>();
+        services.AddScoped<FarmingInputItemDeletionService>();
         services.AddScoped<ProductService>();
         services.AddScoped<ProductReadService>();
         services.AddScoped<CustomerService>();
+        services.AddScoped<CustomerSettingsService>();
+        services.AddScoped<CustomerDebtStandings>();
+        services.AddScoped<CustomerCodeService>();
+        services.AddScoped<CustomerFileService>();
         services.AddScoped<CustomerMergeService>();
         services.AddScoped<PurchaseRequestViews>();
         services.AddScoped<PurchaseRequestNotifications>();
@@ -247,6 +280,8 @@ public static class DependencyInjection
         services.AddScoped<CustomerPaymentStatusChanges>();
         services.AddScoped<CustomerPaymentNotifications>();
         services.AddScoped<CustomerPaymentService>();
+        services.AddScoped<CustomerPaymentCodeService>();
+        services.AddScoped<CustomerDebtAdjustmentService>();
         services.AddScoped<CustomerPaymentStatusService>();
         services.AddScoped<SalesInvoiceFactsReader>();
         services.AddScoped<SalesInvoiceWriter>();
@@ -316,3 +351,5 @@ public static class DependencyInjection
         return services;
     }
 }
+
+

@@ -60,8 +60,8 @@ public class ZaloLinkTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader, a => a.PhoneVerifiedAt = null);
         await factory.UseDbAsync(db =>
         {
-            db.Customers.Add(new Customer { CooperativeId = cooperative.Id, AccountId = trader.Id, Name = "Own" });
-            db.Customers.AddRange(Enumerable.Range(0, 2).Select(i => new Customer { CooperativeId = cooperative.Id, Name = $"Offline {i}", PhoneNumber = trader.PhoneNumber }));
+            db.Customers.Add(new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = cooperative.Id, AccountId = trader.Id, Name = "Own" });
+            db.Customers.AddRange(Enumerable.Range(0, 2).Select(i => new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = cooperative.Id, Name = $"Offline {i}", PhoneNumber = trader.PhoneNumber }));
         });
 
         var body = await (await LinkAsync(NewCode(), trader.PhoneNumber!)).Content.ReadFromJsonAsync<JsonElement>();

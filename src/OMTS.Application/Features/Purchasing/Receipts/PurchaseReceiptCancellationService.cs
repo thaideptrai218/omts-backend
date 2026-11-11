@@ -25,6 +25,7 @@ public sealed class PurchaseReceiptCancellationService(
     PurchaseReceiptAccess access,
     PurchaseReceiptNotifications notifications,
     SupplierDebtService debts,
+    Items.InputStockLedger ledger,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
     AuditLogService audit,
@@ -124,6 +125,9 @@ public sealed class PurchaseReceiptCancellationService(
             await notifications.PaidInAdvanceAsync(receipt, receipt.Supplier.Name, -debtAfter, cancellationToken);
         }
 
+        // The quantities leave the ledger with the receipt (it still counts as Completed in the database until this save).
+        await ledger.ReverseAsync(receipt.Id, afterReceiptRemoved: true, cancellationToken);
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return await views.ViewAsync(receipt.Id, cancellationToken);
     }
@@ -186,3 +190,4 @@ public sealed class PurchaseReceiptCancellationService(
     private AppError WrongStatus(PurchaseReceipt receipt) =>
         AppError.Conflict(UserMessages.WrongStatus($"Purchase receipt {receipt.Code}", statusCatalog.DisplayNameOf(receipt.StatusId)));
 }
+
