@@ -1,17 +1,19 @@
+using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
 
 namespace OMTS.Infrastructure.Persistence.Repositories;
 
 /// <summary>
-/// There are no attendance or work assignment rows yet: the old tables are gone and their replacements come later. LABOR-04
-/// (L5) reads its Attendance table in <see cref="LastAttendanceDayAsync"/>, and LABOR-02 (L4) removes its WorkAssignment rows in
-/// <see cref="RemoveAssignmentsAfterAsync"/>, which both the end action and the daily job call.
+/// What ending an employment needs from work assignments (LABOR-02, done) and attendance (LABOR-04, L5). There is no Attendance
+/// table yet, so <see cref="LastAttendanceDayAsync"/> answers no attendance until L5 reads it. The assignments after the last
+/// working day are removed by the end action and again by the daily job, which both call <see cref="RemoveAssignmentsAfterAsync"/>.
 /// </summary>
-internal sealed class EmployeeWorkRecords : IEmployeeWorkRecords
+internal sealed class EmployeeWorkRecords(OmtsDbContext db) : IEmployeeWorkRecords
 {
     public Task<DateOnly?> LastAttendanceDayAsync(Guid employeeId, CancellationToken cancellationToken) =>
         Task.FromResult<DateOnly?>(null);
 
-    public Task RemoveAssignmentsAfterAsync(Guid employeeId, DateOnly day, CancellationToken cancellationToken) =>
-        Task.CompletedTask;
+    // Tracked, so the caller's own save deletes them together with the end of the employment; the job periods of a later day go too.
+    public async Task RemoveAssignmentsAfterAsync(Guid employeeId, DateOnly day, CancellationToken cancellationToken) =>
+        db.WorkAssignments.RemoveRange(await db.WorkAssignments.Where(a => a.EmployeeId == employeeId && a.WorkDate > day).ToListAsync(cancellationToken));
 }

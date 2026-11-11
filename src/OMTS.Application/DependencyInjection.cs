@@ -27,6 +27,7 @@ using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Application.Features.Traceability.Tracing;
 using OMTS.Application.Features.Traceability.Withdrawal;
 using OMTS.Application.Features.Labor;
+using OMTS.Application.Features.Labor.WorkAssignments;
 using OMTS.Application.Features.Purchasing;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
@@ -123,6 +124,15 @@ public static class DependencyInjection
         services.AddScoped<PayRateService>();
         services.AddScoped<AttendanceSettingsService>();
         services.AddScoped<PayrollSettingsService>();
+
+        // LABOR-02 assign work, change job for crew and the work day
+        services.AddScoped<WorkAssignmentGuard>();
+        services.AddScoped<WorkAssignmentViews>();
+        services.AddScoped<WorkAssignmentService>();
+        services.AddScoped<WorkAssignmentEditService>();
+        services.AddScoped<CrewJobChangeService>();
+        services.AddScoped<WorkDayQueryService>();
+        services.AddScoped<AssignableEmployeeQueryService>();
 
         // FARM-02 zones, FARM-03 zone licenses, FARM-04 rafts
         services.AddScoped<FarmingLookupAccess>();

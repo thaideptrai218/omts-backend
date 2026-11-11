@@ -765,6 +765,29 @@ public static class UserMessages
         };
     }
 
+    /// <summary>MSG-LABOR-05 (LABOR-02; BR-LABOR-04): the notice to an employee whose work is assigned, edited or removed. <c>work_text</c> says what the work is now.</summary>
+    public static UserMessage WorkAssignmentNotice(DateOnly date, string workText) => new(Labor05, $"Your work on {Date(date)}: {workText}.")
+    {
+        Parameters = new Dictionary<string, object?> { ["date"] = date, ["work_text"] = workText },
+    };
+
+    /// <summary>MSG-LABOR-06 (LABOR-02.4, LABOR-04.5; BR-LABOR-03): asked before an employee not checked in yet is moved to another raft.</summary>
+    public static UserMessage MoveToRaft(string employeeName, string raftCode, DateOnly date, string newRaftCode) => new(
+        Labor06, $"{employeeName} is already assigned to raft {raftCode} on {Date(date)}. Move {employeeName} to raft {newRaftCode}?")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["employee_name"] = employeeName, ["raft_code"] = raftCode, ["date"] = date, ["new_raft_code"] = newRaftCode,
+        },
+    };
+
+    /// <summary>MSG-LABOR-07 (LABOR-02.0.E2; BR-LABOR-03): an employee already checked in that day is moved only with Change job for crew.</summary>
+    public static UserMessage AlreadyCheckedIn(string employeeName) => new(
+        Labor07, $"{employeeName} is already checked in today. To move {employeeName} to another raft, use Change job for crew.")
+    {
+        Parameters = new Dictionary<string, object?> { ["employee_name"] = employeeName },
+    };
+
     /// <summary>MSG-LABOR-36 (LABOR-16 step 3): asked before saving the payroll settings.</summary>
     /// <param name="period1">The next pay period as shown to the user.</param>
     /// <param name="automatic">Automatic payroll is on: the note about it is added.</param>

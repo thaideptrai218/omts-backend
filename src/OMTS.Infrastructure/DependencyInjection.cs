@@ -91,6 +91,10 @@ public static class DependencyInjection
         services.AddScoped<IJobTypeRepository, JobTypeRepository>();
         services.AddScoped<IAttendanceSettingsRepository, AttendanceSettingsRepository>();
         services.AddScoped<IPayrollRepository, PayrollRepository>();
+        services.AddScoped<IWorkAssignmentRepository, WorkAssignmentRepository>();
+        // LABOR-04 (L5) reads the Attendance table; LABOR-03 (L3) has the employee push. Until they land: nobody checked in, no push.
+        services.AddScoped<IAttendanceDayReader, EmptyAttendanceDayReader>();
+        services.AddScoped<IEmployeeWorkNotifier, NoEmployeePushYetNotifier>();
         services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddScoped<IRaftRepository, RaftRepository>();
         services.AddScoped<ICultivationCycleRepository, CultivationCycleRepository>();

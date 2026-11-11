@@ -63,7 +63,8 @@ public class EmployeesV2MigrationTests
 
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
         Assert.False(db.Database.HasPendingModelChanges());
-        Assert.Empty(Dropped.Intersect(await TablesAsync(db)));
+        // At the head the table of the old name is back: LABOR-02 (OMTS-227 L4) made WorkAssignments again, with the job period shape.
+        Assert.Empty(Dropped.Except(["WorkAssignments"]).Intersect(await TablesAsync(db)));
         Assert.Equal(4, await db.Employees.CountAsync());
         Assert.Equal(4, await db.EmployeeTypePeriods.CountAsync());
     }

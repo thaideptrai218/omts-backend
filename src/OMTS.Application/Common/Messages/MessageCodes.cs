@@ -91,6 +91,9 @@ public static class MessageCodes
     public const string Labor02 = "MSG-LABOR-02";
     public const string Labor03 = "MSG-LABOR-03";
     public const string Labor04 = "MSG-LABOR-04";
+    public const string Labor05 = "MSG-LABOR-05";
+    public const string Labor06 = "MSG-LABOR-06";
+    public const string Labor07 = "MSG-LABOR-07";
     public const string Labor36 = "MSG-LABOR-36";
 
     public const string Debt01 = "MSG-DEBT-01";
@@ -146,12 +149,15 @@ public static class MessageCodes
     /// to a trader and a withdrawal with no trader to notify (TRACE-04 is new in PR T3);
     /// MSG-SALE-13/14, VietQR without a receiving bank account and the question before Stop sale (the VietQR sale is new in PR 7);
     /// MSG-CLAIM-01/02/03, the new quality claim, its response and a claim that cannot be accepted (CLAIM-01 and CLAIM-02 are new in PR 12);
-    /// MSG-CASH-01/02, the cash book refusals: the VietQR account and the system voucher types are protected.
+    /// MSG-CASH-01/02, the cash book refusals: the VietQR account and the system voucher types are protected;
+    /// MSG-LABOR-05/06/07, the notice of a work assignment, the question before moving an employee to another raft and the
+    /// refusal of an employee already checked in (LABOR-02 is new in OMTS-227 L4).
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
         Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Harvest04, Harvest05, Trace01, Trace02, Trace03, Trace04, Trace05, Trace06,
         Origin01, Origin02, Origin03, Origin04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04, Claim01, Claim02, Claim03, Cash01, Cash02,
+        Labor05, Labor06, Labor07,
     };
 
     /// <summary>

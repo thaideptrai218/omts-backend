@@ -437,6 +437,32 @@ A trader reports a quality problem on one of their invoices with photos; the Coo
 - `GET /api/quality-claims` (`statusId`, `page`, `pageSize`; Awaiting response first) and `GET /api/quality-claims/{id}` (customer with phone number, invoice with lines, lots, kg, amounts, status and price cuts, the SMS sendings, `rowVersion`): QUALITY_CLAIMS View, so the Owner and the Zone Managers, who see the claims of invoices in their zones only (PM default; another zone answers 403). An Accountant has no access.
 - `POST /api/quality-claims/{id}/accept` (`{ offer: "ReturnAllGoods" | "PriceCutWholeInvoice", note?, rowVersion }`) and `POST /api/quality-claims/{id}/reject` (`{ note, rowVersion }`): Owner only, while Awaiting response; a response cannot be changed (409 MSG-GEN-09, or MSG06 when the form is stale). Accepting answers 409 MSG-CLAIM-03 when the invoice was cancelled or has a sales return (it can still be rejected). The offer only records what was proposed: the return is CLAIM-03 and the price cut SALE-07 (`PUT /api/sales-invoices/{id}/correction`, PriceCutAfterClaim), which the Owner runs after the trader chooses. Neither changes here. The trader gets a push and an SMS with MSG-CLAIM-02; a message that cannot be sent undoes nothing (GFR-06), it stays in the trader's list and the sending is listed Not sent on the claim; a profile without a phone number gets a Not sent row (`NO_PHONE_NUMBER`).
 
+### Work assignments (LABOR-02)
+
+A Zone Manager of the raft's zone and the Owner (`WORK_ASSIGNMENTS`; not the Accountant, §I.4.4) give employees a raft and a job type for a
+date. One row of `WorkAssignments` is one job period (BR-LABOR-03): the first of the day has `startTime` null and starts at the check-in, each
+job change after the check-in adds one with its start time. The zone is the raft's zone and the cycle is the one Open on the date, so neither is
+stored. A filtered unique index keeps one assignment before the check-in per employee and date. Every route checks the zone of the raft
+(MSG-GEN-08 for another zone); the work-day view and the list of employees show only the caller's own zones.
+
+| Request | What it does |
+|---|---|
+| `GET /api/work-days/{date}` | The rafts In Use of the caller's zones with their crews (a member is on the raft of their latest job period: job type now, every period, `checkInAt`, `checkOutAt`, `canEdit`, `rowVersion`, the rounded `hours` per job type of a complete day, BR-LABOR-05), `canChangeJob` per raft, and `staff`: the Staff employees of those zones with their check-in and check-out. Any date, `canAssign` is false for a past one |
+| `GET /api/work-days/{date}/assignable-employees?raftId&jobTypeId&search` | The Employed employees with a working zone among the caller's zones, those whose profile has `jobTypeId` first; each has `type`, the raft and job of the assignment on the date, `checkedIn`. With `search` (name or phone number) every Employed employee of the cooperative, `inYourZones` false for those outside. At most 200, `truncated` says more match |
+| `POST /api/rafts/{raftId}/work-assignments` | `{ date, jobTypeId, employeeIds[], moveConfirmed }` → 201 `{ assignments[], message }`. Date today or later (MSG-GEN-01 `Date`), raft and job type In Use, employees Employed and not past their last working day, all or nothing. The raft's zone joins each employee's working zones. 409 MSG-LABOR-07 (`employeeIds`) for an employee already checked in; 409 MSG-LABOR-06 (`moves[]`, `confirmationField` = `moveConfirmed`) for one assigned to another raft, until sent again with `moveConfirmed: true`, which moves them (the Edit right in the old raft's zone is needed too) |
+| `PUT /api/work-assignments/{id}` | `{ raftId?, jobTypeId?, rowVersion }`: today or later, until the employee is checked in (MSG-LABOR-07 after; a job period is never editable). The new raft needs the Edit right in its zone |
+| `DELETE /api/work-assignments/{id}?rowVersion=` | 204; the audit log keeps it. Same rules. Ask MSG-GEN-04 first |
+| `POST /api/rafts/{raftId}/crew-job-changes` | Change job for crew, today: `{ jobTypeId, newRaftId?, employeeIds[] }`. A member checked in and not checked out gets a new job period from now (`JobPeriodAdded`), one not checked in has the assignment changed (`AssignmentChanged`), one who keeps the job is `Unchanged`. Members must be on this raft's crew and not checked out (MSG-GEN-01 `Employees`); 409 MSG-GEN-09 when no selected member is checked in. No push (BR-LABOR-04) |
+
+Every date-bound change asks the pay period lock (`PayPeriodLock`, BR-LABOR-13): a date on or before the last day of a payroll Awaiting finalization or Finalized,
+or of a later one, answers 409 MSG-LABOR-04; a payroll still Draft or Sent back is touched by the same save, so a parallel send or finalize meets MSG06.
+The employee push of MSG-LABOR-05 (assign, edit, remove) goes through `IEmployeeWorkNotifier`; it is sent only after the save and a failed push undoes nothing (GFR-06).
+Until the employee app (LABOR-03) exists the registered notifier sends nothing, and until the Attendance table (LABOR-04) exists `IAttendanceDayReader` answers that nobody is
+checked in: those two ports are where those PRs plug in. Ending an employment removes the assignments after the last working day (`IEmployeeWorkRecords`, called by the
+end action and by the daily job). `WorkedHoursCalculator` is the pure BR-LABOR-05 calculation: job periods from the check-in, the job changes and the check-out, the break of
+the settings of the day taken off, the minutes of one job type over every raft added, then rounded down to the unit (AC-10 and the raft example are unit tests).
+Staff employees may be assigned to a raft too (design Q17); their hours have no cost.
+
 ### Audit log
 
 Every create, edit and status change writes one `AuditEvent` in the same save as the change (GBR-02, NFR-02): who acted
