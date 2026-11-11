@@ -40,7 +40,7 @@ public class PurchaseRequestResponseTests(AuthApiFactory factory) : IClassFixtur
         var audit = (await factory.AuditRowsAsync(request.Id())).Single(e => e.Action == "PurchaseRequest.Accepted");
         Assert.Contains("250", audit.After);
         Assert.Contains("ACCEPTED", audit.After);
-        Assert.Contains("AWAITING_RESPONSE", audit.Before);
+        Assert.Contains("AWAITING_STAFF", audit.Before);
         Assert.NotNull(audit.ActorAccountId);
         Assert.NotEqual(trader.Account.Id, audit.ActorAccountId);
     }

@@ -64,20 +64,20 @@ namespace OMTS.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "FK_WorkAssignments_WorkDayPlan_WorkDayPlanId",
-                table: "WorkAssignments");
-
-            migrationBuilder.DropTable(
-                name: "WorkDayPlan");
-
-            migrationBuilder.DropIndex(
-                name: "IX_WorkAssignments_WorkDayPlanId",
-                table: "WorkAssignments");
-
-            migrationBuilder.DropColumn(
-                name: "WorkDayPlanId",
-                table: "WorkAssignments");
+            // Up skips this legacy plan when EmployeesV2 has already retired its parent.
+            migrationBuilder.Sql("""
+                IF OBJECT_ID(N'dbo.WorkAssignments', N'U') IS NOT NULL
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_WorkAssignments_WorkDayPlan_WorkDayPlanId')
+                        ALTER TABLE [WorkAssignments] DROP CONSTRAINT [FK_WorkAssignments_WorkDayPlan_WorkDayPlanId];
+                    IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.WorkAssignments') AND name = N'IX_WorkAssignments_WorkDayPlanId')
+                        DROP INDEX [IX_WorkAssignments_WorkDayPlanId] ON [WorkAssignments];
+                    IF COL_LENGTH(N'dbo.WorkAssignments', N'WorkDayPlanId') IS NOT NULL
+                        ALTER TABLE [WorkAssignments] DROP COLUMN [WorkDayPlanId];
+                END;
+                IF OBJECT_ID(N'dbo.WorkDayPlan', N'U') IS NOT NULL
+                    DROP TABLE [WorkDayPlan];
+                """);
         }
     }
 }
