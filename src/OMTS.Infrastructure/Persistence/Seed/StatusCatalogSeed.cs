@@ -77,6 +77,15 @@ internal static class StatusCatalogSeed
         NewStatus(S.Payroll.AwaitingFinalization, G.Payroll, "AWAITING_FINALIZATION", "Awaiting finalization", "Sent to the Cooperative Owner; the records of the period are locked."),
         NewStatus(S.Payroll.SentBack, G.Payroll, "SENT_BACK", "Sent back", "Returned with a note for correction; the records of the period can change again."),
         NewStatus(S.Payroll.Finalized, G.Payroll, "FINALIZED", "Finalized", "The amounts are saved; never changed or reopened.", final: true),
+        // The web contract's Creating and Cancelled (PAYROLL_API_CONTRACT); its Provisional is the Draft above.
+        NewStatus(S.Payroll.Creating, G.Payroll, "CREATING", "Creating", "The sheet is being made."),
+        NewStatus(S.Payroll.Cancelled, G.Payroll, "CANCELLED", "Cancelled", "Dropped before it was finalized; it no longer counts.", final: true),
+
+        // STD-EMPLOYEE-REQUEST (BR-LABOR-08): a reviewed or cancelled request does not change any more.
+        NewStatus(S.EmployeeRequest.AwaitingReview, G.EmployeeRequest, "AWAITING_REVIEW", "Awaiting review", "Sent by the employee; not reviewed yet.", initial: true),
+        NewStatus(S.EmployeeRequest.Approved, G.EmployeeRequest, "APPROVED", "Approved", "Approved by the Cooperative Owner; leave is recorded, a missed time is in the attendance.", final: true),
+        NewStatus(S.EmployeeRequest.Rejected, G.EmployeeRequest, "REJECTED", "Rejected", "Rejected by the Cooperative Owner with a note.", final: true),
+        NewStatus(S.EmployeeRequest.Cancelled, G.EmployeeRequest, "CANCELLED", "Cancelled", "Cancelled by the employee while it was awaiting review; kept in the list.", final: true),
 
         NewStatus(S.HarvestLot.Open, G.HarvestLot, "OPEN", "Open", "For sale: it can be chosen on a sales invoice.", initial: true),
         NewStatus(S.HarvestLot.Reopened, G.HarvestLot, "REOPENED", "Reopened", "Closed earlier and for sale again; the days before automatic close count from the day it was reopened."),
@@ -151,6 +160,17 @@ internal static class StatusCatalogSeed
         NewTransition(30079, S.CustomerPayment.PendingTransfer, S.CustomerPayment.Cancelled, "DEBT-02", $"{Accountant}; {Owner}", Action, "The customer did not transfer, or the code was made by mistake.", true),
         NewTransition(30080, S.InputIssue.Draft, S.InputIssue.Completed, "INPUT-ISSUE", $"{OwnerOrZoneManager}", Action, "The issue is complete and no item or seed lot would go below zero when that is not allowed.", false),
         NewTransition(30081, S.InputIssue.Completed, S.InputIssue.Cancelled, "INPUT-ISSUE", $"{OwnerOrZoneManager}", Action, "An issue recorded by mistake; its quantities go back in the stock.", true),
+
+        // STD-EMPLOYEE-REQUEST (BR-LABOR-08, LABOR-05, LABOR-10.2).
+        NewTransition(230, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Approved, "LABOR-05", Owner, Action, "The payroll of the pay period of the day is not Awaiting finalization or Finalized, and the times stay in order.", false),
+        NewTransition(231, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Rejected, "LABOR-05", Owner, Action, "A note gives the reason.", true),
+        NewTransition(232, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Cancelled, "LABOR-10", "Employee", Action, "The employee cancels their own request before it is reviewed.", false),
+
+        // Payroll sheets (LABOR-12, LABOR-13; the Draft is the web contract's Provisional). Not in SRS v8, which sends a payroll to the Owner and back.
+        NewTransition(233, S.Payroll.Creating, S.Payroll.Draft, "LABOR-12", Owner, Action, "The lines of the period are calculated.", false),
+        NewTransition(234, S.Payroll.Draft, S.Payroll.Finalized, "LABOR-13", Owner, Action, "The period has ended, no attendance of it is incomplete, no hours lack a rate and no request for it awaits review.", false),
+        NewTransition(235, S.Payroll.Draft, S.Payroll.Cancelled, "LABOR-12", Owner, Action, "A payroll sheet dropped before it is finalized.", false),
+        NewTransition(236, S.Payroll.Creating, S.Payroll.Cancelled, "LABOR-12", Owner, Action, "A sheet still being made is dropped.", false),
 
         // Trader accounts requested from the Zalo Mini App (not in the SRS table yet, decision of 28/10/2026).
         NewTransition(30074, S.Account.PendingApproval, S.Account.Active, "ACS-01 (Zalo)", Owner, Action, "Approve the trader's request.", false),

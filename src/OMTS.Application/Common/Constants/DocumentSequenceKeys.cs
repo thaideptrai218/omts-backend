@@ -9,6 +9,9 @@ public static class DocumentSequenceKeys
     /// <summary>Suppliers, NCC000123.</summary>
     public const string Supplier = "NCC";
 
+    /// <summary>Employees, NV000123 (LABOR-01).</summary>
+    public const string Employee = "NV";
+
     /// <summary>Purchase receipts, PN000123 (GBR-04).</summary>
     public const string PurchaseReceipt = "PN";
 
@@ -32,6 +35,12 @@ public static class DocumentSequenceKeys
 
     /// <summary>Customer debt adjustments, DC000123.</summary>
     public const string CustomerDebtAdjustment = "DC";
+
+    /// <summary>Payroll sheets, BL000123 (LABOR-12).</summary>
+    public const string PayrollSheet = "BL";
+
+    /// <summary>Payslips, PL000123 (LABOR-12).</summary>
+    public const string PayrollLine = "PL";
 
     /// <summary>Cash book receipt vouchers of the Cash fund, TTM000123.</summary>
     public const string CashReceiptCash = "TTM";

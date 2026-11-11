@@ -39,6 +39,9 @@ public static class NotificationTypes
     /// <summary>MSG-LABOR-02, the reminder to lock a staff account after an end of employment: kept, never pushed (BR-LABOR-04).</summary>
     public const string StaffAccountLockReminder = "STAFF_ACCOUNT_LOCK_REMINDER";
 
+    /// <summary>MSG-LABOR-23, a new employee request, to the Owner (LABOR-10 step 6, BR-LABOR-04); push can be turned off.</summary>
+    public const string EmployeeRequestNew = "EMPLOYEE_REQUEST_NEW";
+
     /// <summary>MSG-SALE-01, a new purchase request, to the Owner (BR-SALE-03); mandatory (BR-ACCOUNT-11).</summary>
     public const string PurchaseRequestNew = "PURCHASE_REQUEST_NEW";
 
@@ -109,6 +112,8 @@ public static class NotificationTypes
         new(CooperativeCertificationExpiry, "Cooperative certification expiry reminder", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
             NotificationSmsRule.MessageTextTo(CooperativeOwner)),
         new(StaffAccountLockReminder, "Reminder to lock a staff account", NeverPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        // Opens Review employee request (LABOR-05.1).
+        new(EmployeeRequestNew, "New employee request", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         // Opens Respond to purchase request (SALE-03.2).
         new(PurchaseRequestNew, "New purchase request", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
             NotificationSmsRule.MessageTextTo(CooperativeOwner)),

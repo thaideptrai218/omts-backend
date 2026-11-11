@@ -80,7 +80,7 @@ bootstrap temporary password. To get every demo login back, reset the environmen
 The demo data also holds the cooperative profile (with a logo, a cover photo and two certifications: one Valid, one
 expiring within 30 days), a fictional receiving bank account (`DEMO00000001`; skipped with a message when `Payments:Provider` does not accept it, as `None` does not), the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued), zone licenses (`DEMO-01`:
 an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid license and an older expired one), about 10 rafts with lanes per zone (the first five of each In Use zone with an Open cultivation cycle, the first three with cultivation logs by the zone manager), 4 job types with hourly rates (one with a rate still
-to come, one Discontinued), two versions of the attendance settings, 9 employees (one Left, one without a phone number; the 3 seasonal workers have job types),
+to come, one Discontinued), two versions of the attendance settings, 9 employees (codes NV000001–NV000009; one Left, one without a phone number; the 3 seasonal workers have job types),
 payroll headers of the last two months without lines (Finalized, Awaiting finalization: a date up to the end of last month answers `MSG-LABOR-04`),
 5 suppliers, 15 farming input items (codes VT001–VT015, every seed item counted in `con`) and 20 purchase receipts of the last 3 months
 (16 Completed, 2 Cancelled, 2 Draft): Material lines and two seed receipts name the raft they were bought for, one line has a
@@ -309,6 +309,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | `ZONE_LICENSE_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
 | `COOPERATIVE_CERTIFICATION_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
 | `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (LABOR-01.3) | never: list only | Owner |
+| `EMPLOYEE_REQUEST_NEW` | MSG-LABOR-23 (LABOR-10), when an employee sends a request (leave, missed check-in or check-out) | unless turned off | Owner |
 | `CULTIVATION_LOG_RECORDED` | MSG-CYCLE-04, when a cultivation log is saved, not on a correction, not to the Owner who recorded it | unless turned off | Owner |
 | `CYCLE_SEEDING_COMPLETED` | MSG-CYCLE-02, when the seeding of a raft is marked complete (once per cycle), not to the Owner who marked it | unless turned off | Owner |
 | `HARVEST_LOT_RECORDED` | MSG-HARVEST-01, when a harvest lot is recorded, not on a correction, not to the Owner who recorded it | unless turned off | Owner |
@@ -436,6 +437,29 @@ A trader reports a quality problem on one of their invoices with photos; the Coo
 - `GET /api/me/quality-claims` (own claims, newest first, MSG-GEN-11 when none) and `GET /api/me/quality-claims/{id}` (404 for another trader's): the description, photo links, status, offer and response note. The photos are private (BR-CLAIM-01): signed links for 1 hour, never on the provenance page.
 - `GET /api/quality-claims` (`statusId`, `page`, `pageSize`; Awaiting response first) and `GET /api/quality-claims/{id}` (customer with phone number, invoice with lines, lots, kg, amounts, status and price cuts, the SMS sendings, `rowVersion`): QUALITY_CLAIMS View, so the Owner and the Zone Managers, who see the claims of invoices in their zones only (PM default; another zone answers 403). An Accountant has no access.
 - `POST /api/quality-claims/{id}/accept` (`{ offer: "ReturnAllGoods" | "PriceCutWholeInvoice", note?, rowVersion }`) and `POST /api/quality-claims/{id}/reject` (`{ note, rowVersion }`): Owner only, while Awaiting response; a response cannot be changed (409 MSG-GEN-09, or MSG06 when the form is stale). Accepting answers 409 MSG-CLAIM-03 when the invoice was cancelled or has a sales return (it can still be rejected). The offer only records what was proposed: the return is CLAIM-03 and the price cut SALE-07 (`PUT /api/sales-invoices/{id}/correction`, PriceCutAfterClaim), which the Owner runs after the trader chooses. Neither changes here. The trader gets a push and an SMS with MSG-CLAIM-02; a message that cannot be sent undoes nothing (GFR-06), it stays in the trader's list and the sending is listed Not sent on the claim; a profile without a phone number gets a Not sent row (`NO_PHONE_NUMBER`).
+
+### Work assignment, attendance and employee requests (LABOR-02, LABOR-04, LABOR-05, LABOR-10)
+
+`WorkAssignment` holds one job period of an employee and day (the first one has no start time, each change of job adds one),
+`Attendance` the check-in and check-out of one employee and day with their recording method, `EmployeeRequest` a leave or a missed
+check-in or check-out. Hours are worked out when shown (`WorkHoursCalculator`, BR-LABOR-05) from the attendance settings in force
+on the day; nothing is recorded in a pay period whose payroll is Awaiting finalization or Finalized (`MSG-LABOR-04`, BR-LABOR-13).
+Zone Manager (in the zone of the raft) and Owner, except where marked Owner:
+
+- `GET /api/workforce/assignments?day=`, `GET /api/workforce/lookups?day=`; `POST /api/workforce/assignments` (409 `MSG-LABOR-06`
+  asks to move an employee, resend with `moveExisting`), `PUT`/`DELETE /api/workforce/assignments/{id}` until the employee is
+  checked in (`MSG-LABOR-07`), `POST /api/workforce/crew-job` (Change job for crew, 204).
+- `POST /api/workforce/assignments/{id}/check-in` and `/check-out` with `qrCode` (the code of `GET /api/me/attendance-qr`, valid
+  60 seconds, else `MSG-LABOR-13`) or null to mark by hand; `POST /api/workforce/crew-start`; Staff employees:
+  `GET /api/workforce/staff-attendance`, `POST /api/workforce/staff/{employeeId}/check-in|check-out`.
+- Owner: `GET`/`PUT /api/workforce/attendance/{employeeId}/{day}` corrects times and job periods with a reason;
+  `POST /api/workforce/leave-requests/{id}/review` approves or rejects (a rejection needs a note); `GET /api/workforce/leave-requests`
+  is also read by the Zone Manager.
+- The employee linked to the caller's account (`Employee.AccountId`): `GET /api/me/workforce?from=&to=` (at most 62 days),
+  `GET /api/me/attendance-qr`, `POST /api/me/leave-requests` (leave, or `type` MissedCheckIn / MissedCheckOut with `day` and
+  `requestedTime`), `DELETE /api/me/leave-requests/{id}` (cancel while Awaiting review).
+
+Not here yet: the employee app login with login codes (LABOR-03, LABOR-06) and the pushes to the employee (MSG-LABOR-05, MSG-LABOR-15).
 
 ### Audit log
 

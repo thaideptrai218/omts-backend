@@ -65,6 +65,24 @@ public static class StatusIds
         public const int AwaitingFinalization = 3402;
         public const int SentBack = 3403;
         public const int Finalized = 3404;
+
+        /// <summary>The web contract's "Creating": a sheet being made. Sheets are made in one step, so a stored one is never in it.</summary>
+        public const int Creating = 3405;
+
+        /// <summary>The web contract's "Cancelled": a sheet dropped before it was finalized; it no longer counts anywhere.</summary>
+        public const int Cancelled = 3406;
+
+        /// <summary>The web contract's "Provisional" is the catalog's Draft: lines follow the current records and nothing is locked.</summary>
+        public const int Provisional = Draft;
+    }
+
+    /// <summary>STD-EMPLOYEE-REQUEST (BR-LABOR-08): a reviewed or cancelled request does not change any more.</summary>
+    public static class EmployeeRequest
+    {
+        public const int AwaitingReview = 3801;
+        public const int Approved = 3802;
+        public const int Rejected = 3803;
+        public const int Cancelled = 3804;
     }
 
     public static class PurchaseReturn
@@ -140,8 +158,8 @@ public static class StatusIds
     /// <summary>An input issue: a Draft holds no quantity and is removed; Completed writes the movements; Cancelled counts nowhere.</summary>
     public static class InputIssue
     {
-        public const int Draft = 3801;
-        public const int Completed = 3802;
-        public const int Cancelled = 3803;
+        public const int Draft = 3901;
+        public const int Completed = 3902;
+        public const int Cancelled = 3903;
     }
 }

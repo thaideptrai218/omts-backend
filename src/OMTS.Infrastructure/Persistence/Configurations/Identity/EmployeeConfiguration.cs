@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using OMTS.Domain.Constants;
+using OMTS.Application.Features.Employees;
 using OMTS.Domain.Entities.Identity;
 
 namespace OMTS.Infrastructure.Persistence.Configurations.Identity;
@@ -17,6 +18,14 @@ internal sealed class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
             .IsUnique()
             .HasDatabaseName("UX_Employees_PhoneNumber_Employed")
             .HasFilter($"[PhoneNumber] IS NOT NULL AND [StatusId] = {StatusIds.Employee.Working}");
+        builder.Property(x => x.Code).HasMaxLength(EmployeeCodes.MaxLength);
+        // The code is unique within the cooperative, whatever its letter case (the database collation is case-insensitive). Rows
+        // older than the column have none until the migration fills them, hence the filter.
+        builder.HasIndex(x => new { x.CooperativeId, x.Code })
+            .IsUnique()
+            .HasDatabaseName("UX_Employees_Cooperative_Code")
+            .HasFilter("[Code] IS NOT NULL");
+        builder.Property(x => x.IdNumber).HasMaxLength(12);
         builder.Property(x => x.Address).HasMaxLength(Lengths.Address);
         builder.Property(x => x.Area).HasMaxLength(Lengths.Name);
         builder.Property(x => x.Ward).HasMaxLength(Lengths.Name);

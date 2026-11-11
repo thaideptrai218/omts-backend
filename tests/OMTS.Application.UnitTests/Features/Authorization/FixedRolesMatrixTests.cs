@@ -57,6 +57,8 @@ public class FixedRolesMatrixTests
         { "PURCHASE-06", Full, No, PurchaseReceipts, [Delete] },
         { "PURCHASE-07", Full, No, Suppliers, [View, Create, Edit, Export] },
         { "LABOR-01", Full, No, LaborWorkers, [View, Create, Edit] },
+        // Exporting the employee list and importing a file (EMP-API-03, EMP-API-04) belong to the Cooperative Owner: no fixed role holds Export.
+        { "LABOR-01-EXPORT", No, No, LaborWorkers, [Export] },
         { "LABOR-02", Full, No, WorkAssignments, [View, Create, Edit, Delete] },
         { "LABOR-04", Full, No, Attendance, [View, Create, Edit] },
         { "LABOR-11", No, Full, PayRules, [View, Create, Edit] },

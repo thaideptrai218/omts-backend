@@ -6,6 +6,7 @@ using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Employees;
+using OMTS.Application.Features.Files;
 
 namespace OMTS.Api.Controllers;
 
@@ -17,14 +18,53 @@ namespace OMTS.Api.Controllers;
 [Route("api/employees")]
 [Authorize]
 public sealed class EmployeesController(
-    EmployeeService employees, EmployeeQueryService queries, EmployeeWorkingZoneService workingZones, EmploymentService employment) : ControllerBase
+    EmployeeService employees,
+    EmployeeQueryService queries,
+    EmployeeFileService files,
+    EmployeeWorkingZoneService workingZones,
+    EmploymentService employment) : ControllerBase
 {
+    /// <summary>
+    /// Filters: <c>search</c> (name, code or phone), <c>statusId</c>, <c>zoneId</c>, <c>employeeType</c> (SeasonalWorker or Staff, the
+    /// type in force today) and <c>jobTypeId</c>. <c>sortBy</c> is name, code, phone, type, status or lastWorkingDay with
+    /// <c>sortDir</c> asc or desc, over the whole result before paging (then by id); without it, the employees of the caller's
+    /// zones come first, then by name. A value that does not exist is 400 MSG-GEN-01.
+    /// </summary>
     [HttpGet]
     [RequirePermission(PermissionFunctions.LaborWorkers, PermissionAction.View, PermissionScope.AnyZone)]
     [ProducesResponseType<Paged<EmployeeListItem>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Search(
-        string? search, int? statusId, Guid? zoneId, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default) =>
-        Ok(await queries.SearchAsync(search, statusId, zoneId, page, pageSize, cancellationToken));
+    public async Task<IActionResult> Search([FromQuery] EmployeeListQuery query, CancellationToken cancellationToken) =>
+        (await queries.SearchAsync(query, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// The list as filtered and sorted (the same parameters, no paging), as <c>employees-yyyyMMdd.xlsx</c>: at most 5000 rows (400
+    /// otherwise, narrow the filter). <c>ids</c> (at most 200) exports only those employees and ignores the other filters. The
+    /// personal and bank columns are there only for a caller who maintains employees, and filled only on the rows they maintain;
+    /// the bank account number and the ID number are never exported.
+    /// </summary>
+    [HttpGet("export")]
+    [RequirePermission(PermissionFunctions.LaborWorkers, PermissionAction.Export, PermissionScope.AnyZone)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Export([FromQuery] EmployeeExportQuery query, CancellationToken cancellationToken) =>
+        (await files.ExportAsync(query, cancellationToken)).ToActionResult(f => File(f.Content, f.ContentType, f.FileName));
+
+    /// <summary>The import file with its header row and no data (<c>employees-import-template.xlsx</c>). Cooperative Owner only.</summary>
+    [HttpGet("import/template")]
+    [RequireCooperativeOwner]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult ImportTemplate() => files.Template().ToActionResult(f => File(f.Content, f.ContentType, f.FileName));
+
+    /// <summary>
+    /// Multipart field <c>file</c>: .xlsx, at most 2 MB and 1000 rows. Each row is checked like a new employee; rows with an error are
+    /// skipped and listed in <c>errors</c> (row, fields, message), the others are imported. Cooperative Owner only.
+    /// </summary>
+    [HttpPost("import")]
+    [RequireCooperativeOwner]
+    [RequestSizeLimit(3 * 1024 * 1024)]
+    [UploadField("File")]
+    [ProducesResponseType<EmployeeImportResult>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Import(IFormFile? file, CancellationToken cancellationToken) =>
+        (await files.ImportAsync(file is null ? null : await file.ToIncomingFileAsync(cancellationToken), cancellationToken)).ToActionResult(Ok);
 
     [HttpGet("{id:guid}")]
     [RequirePermission(PermissionFunctions.LaborWorkers, PermissionAction.View, PermissionScope.AnyZone)]
@@ -33,7 +73,8 @@ public sealed class EmployeesController(
         (await queries.GetAsync(id, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>
-    /// A Zone Manager sends <c>ownerApproved</c>: true (MSG-LABOR-01 otherwise). With an optional <c>account</c> block, for the
+    /// A Zone Manager sends <c>ownerApproved</c>: true (MSG-LABOR-01 otherwise). <c>code</c> is optional: left empty it is NV000001…
+    /// (MSG-GEN-02 when a typed one is taken). With an optional <c>account</c> block, for the
     /// Cooperative Owner only, the staff account is created in the same save; its temporary password is returned once.
     /// </summary>
     [HttpPost]

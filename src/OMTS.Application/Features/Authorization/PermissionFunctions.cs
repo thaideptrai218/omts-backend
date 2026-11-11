@@ -75,7 +75,7 @@ public static class PermissionFunctions
         new(SalesReturns, "Sales returns (CLAIM-03; cancelling one is Owner-only)", false, [View, Create, Delete]),
         new(CustomerPayments, "Customer payments and money paid back (DEBT-02)", true, [View, Create, Edit, Export]),
         new(CustomerDebts, "Customer debts (DEBT-03)", true, [View, Export]),
-        new(LaborWorkers, "Employees (LABOR-01)", false, [View, Create, Edit]),
+        new(LaborWorkers, "Employees (LABOR-01; Export lists employees to a file and is held by the Cooperative Owner only, who alone imports a file)", false, [View, Create, Edit, Export]),
         new(WorkAssignments, "Work assignment (LABOR-02)", false, Crud),
         new(Attendance, "Attendance (LABOR-04)", false, [View, Create, Edit]),
         new(PayRules, "Job types and pay rates (LABOR-11)", true, [View, Create, Edit]),

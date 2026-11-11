@@ -1,5 +1,6 @@
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Labor;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
@@ -16,13 +17,17 @@ public interface IEmployeeRepository
     Task<IReadOnlyDictionary<Guid, Guid?>> GetIdsByAccountIdsAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Employees by name or phone (contains), optional status and working zone, with their rows loaded. Those with a working
-    /// zone among <paramref name="firstZoneIds"/> come first, then by name.
+    /// Employees matching the filter, with their rows loaded, one page. Without a sort, those with a working zone among
+    /// <paramref name="firstZoneIds"/> come first, then by name; with one, only that order counts. Always ending by id.
     /// </summary>
-    /// <param name="search">The text as typed.</param>
-    /// <param name="phoneNumber">The text read as a whole phone number in its stored form, if it is one: it also finds that number.</param>
     Task<(IReadOnlyList<Employee> Items, int Total)> SearchAsync(
-        string? search, string? phoneNumber, int? statusId, Guid? zoneId, IReadOnlyCollection<Guid>? firstZoneIds, int page, int pageSize, CancellationToken cancellationToken);
+        EmployeeSearchFilter filter, IReadOnlyCollection<Guid>? firstZoneIds, int page, int pageSize, CancellationToken cancellationToken);
+
+    /// <summary>The same employees and order as <see cref="SearchAsync"/>, no paging: at most <paramref name="limit"/> + 1 rows (one more than allowed tells a caller the result is too long).</summary>
+    Task<IReadOnlyList<Employee>> ListAsync(EmployeeSearchFilter filter, IReadOnlyCollection<Guid>? firstZoneIds, int limit, CancellationToken cancellationToken);
+
+    /// <summary>Another employee of the cooperative with this code, whatever its letter case.</summary>
+    Task<Employee?> FindByCodeAsync(string code, Guid? exceptEmployeeId, CancellationToken cancellationToken);
 
     /// <summary>The Employed employee who has this number (at most one, BR-LABOR-01), other than <paramref name="exceptEmployeeId"/>.</summary>
     Task<Employee?> FindEmployedWithPhoneAsync(string phoneNumber, Guid? exceptEmployeeId, CancellationToken cancellationToken);
@@ -45,3 +50,32 @@ public interface IEmployeeRepository
 
     void AddTypePeriod(EmployeeTypePeriod period);
 }
+
+/// <summary>How the employee list is ordered; <see cref="Default"/> is the zone-first name order.</summary>
+public enum EmployeeSort
+{
+    Default,
+    Name,
+    Code,
+    Phone,
+    Type,
+    Status,
+    LastWorkingDay,
+}
+
+/// <summary>The employee list filters; null means "any".</summary>
+/// <param name="Search">Name, code or phone (contains).</param>
+/// <param name="PhoneNumber">The search read as a whole phone number in its stored form, if it is one: it also finds that number.</param>
+/// <param name="Today">The day the employee type in force is read at.</param>
+/// <param name="Ids">Only these employees (the export of selected rows); the filters above are then left empty by the caller.</param>
+public sealed record EmployeeSearchFilter(
+    string? Search,
+    string? PhoneNumber,
+    int? StatusId,
+    Guid? ZoneId,
+    EmployeeType? Type,
+    Guid? JobTypeId,
+    DateOnly Today,
+    EmployeeSort Sort = EmployeeSort.Default,
+    bool Descending = false,
+    IReadOnlyCollection<Guid>? Ids = null);

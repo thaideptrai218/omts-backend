@@ -91,6 +91,19 @@ public static class MessageCodes
     public const string Labor02 = "MSG-LABOR-02";
     public const string Labor03 = "MSG-LABOR-03";
     public const string Labor04 = "MSG-LABOR-04";
+    public const string Labor06 = "MSG-LABOR-06";
+    public const string Labor07 = "MSG-LABOR-07";
+    public const string Labor12 = "MSG-LABOR-12";
+    public const string Labor13 = "MSG-LABOR-13";
+    public const string Labor14 = "MSG-LABOR-14";
+    public const string Labor16 = "MSG-LABOR-16";
+    public const string Labor22 = "MSG-LABOR-22";
+    public const string Labor23 = "MSG-LABOR-23";
+    public const string Labor25 = "MSG-LABOR-25";
+    public const string Labor26 = "MSG-LABOR-26";
+    public const string Labor28 = "MSG-LABOR-28";
+    public const string Labor31 = "MSG-LABOR-31";
+    public const string Labor34 = "MSG-LABOR-34";
     public const string Labor36 = "MSG-LABOR-36";
 
     public const string Debt01 = "MSG-DEBT-01";
@@ -158,7 +171,7 @@ public static class MessageCodes
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
         Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Harvest04, Harvest05, Trace01, Trace02, Trace03, Trace04, Trace05, Trace06,
-        Origin01, Origin02, Origin03, Origin04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04, Claim01, Claim02, Claim03, Cash01, Cash02, Input01, Input02, Customer01,
+        Origin01, Origin02, Origin03, Origin04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor06, Labor07, Labor12, Labor13, Labor14, Labor16, Labor22, Labor23, Labor25, Labor26, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04, Claim01, Claim02, Claim03, Cash01, Cash02, Input01, Input02, Customer01,
     };
 
     /// <summary>
