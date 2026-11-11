@@ -91,6 +91,10 @@ public static class DependencyInjection
         services.AddScoped<IJobTypeRepository, JobTypeRepository>();
         services.AddScoped<IAttendanceSettingsRepository, AttendanceSettingsRepository>();
         services.AddScoped<IPayrollRepository, PayrollRepository>();
+        services.AddScoped<IPayrollSheetRepository, PayrollSheetRepository>();
+        services.AddScoped<IPayrollWorkReader, PayrollWorkReader>();
+        services.AddScoped<IWagePaymentRepository, WagePaymentRepository>();
+        services.AddScoped<IPayrollReader, PayrollReader>();
         services.AddScoped<IWorkAssignmentRepository, WorkAssignmentRepository>();
         services.AddScoped<IAttendanceRepository, AttendanceRepository>();
         services.AddScoped<IEmployeeRequestRepository, EmployeeRequestRepository>();

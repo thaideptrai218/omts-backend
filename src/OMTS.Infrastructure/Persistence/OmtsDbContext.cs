@@ -76,6 +76,11 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<PayRate> PayRates => Set<PayRate>();
     public DbSet<AttendanceSettingsVersion> AttendanceSettingsVersions => Set<AttendanceSettingsVersion>();
     public DbSet<Payroll> Payrolls => Set<Payroll>();
+    public DbSet<PayrollLine> PayrollLines => Set<PayrollLine>();
+    public DbSet<PayrollLineJob> PayrollLineJobs => Set<PayrollLineJob>();
+    public DbSet<PayrollSelectedEmployee> PayrollSelectedEmployees => Set<PayrollSelectedEmployee>();
+    public DbSet<WagePayment> WagePayments => Set<WagePayment>();
+    public DbSet<PayrollAdvanceDeduction> PayrollAdvanceDeductions => Set<PayrollAdvanceDeduction>();
     public DbSet<WorkAssignment> WorkAssignments => Set<WorkAssignment>();
     public DbSet<Attendance> Attendances => Set<Attendance>();
     public DbSet<EmployeeRequest> EmployeeRequests => Set<EmployeeRequest>();

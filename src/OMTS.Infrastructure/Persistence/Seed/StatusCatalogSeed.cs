@@ -77,6 +77,9 @@ internal static class StatusCatalogSeed
         NewStatus(S.Payroll.AwaitingFinalization, G.Payroll, "AWAITING_FINALIZATION", "Awaiting finalization", "Sent to the Cooperative Owner; the records of the period are locked."),
         NewStatus(S.Payroll.SentBack, G.Payroll, "SENT_BACK", "Sent back", "Returned with a note for correction; the records of the period can change again."),
         NewStatus(S.Payroll.Finalized, G.Payroll, "FINALIZED", "Finalized", "The amounts are saved; never changed or reopened.", final: true),
+        // The web contract's Creating and Cancelled (PAYROLL_API_CONTRACT); its Provisional is the Draft above.
+        NewStatus(S.Payroll.Creating, G.Payroll, "CREATING", "Creating", "The sheet is being made."),
+        NewStatus(S.Payroll.Cancelled, G.Payroll, "CANCELLED", "Cancelled", "Dropped before it was finalized; it no longer counts.", final: true),
 
         // STD-EMPLOYEE-REQUEST (BR-LABOR-08): a reviewed or cancelled request does not change any more.
         NewStatus(S.EmployeeRequest.AwaitingReview, G.EmployeeRequest, "AWAITING_REVIEW", "Awaiting review", "Sent by the employee; not reviewed yet.", initial: true),
@@ -154,6 +157,12 @@ internal static class StatusCatalogSeed
         NewTransition(230, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Approved, "LABOR-05", Owner, Action, "The payroll of the pay period of the day is not Awaiting finalization or Finalized, and the times stay in order.", false),
         NewTransition(231, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Rejected, "LABOR-05", Owner, Action, "A note gives the reason.", true),
         NewTransition(232, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Cancelled, "LABOR-10", "Employee", Action, "The employee cancels their own request before it is reviewed.", false),
+
+        // Payroll sheets (LABOR-12, LABOR-13; the Draft is the web contract's Provisional). Not in SRS v8, which sends a payroll to the Owner and back.
+        NewTransition(233, S.Payroll.Creating, S.Payroll.Draft, "LABOR-12", Owner, Action, "The lines of the period are calculated.", false),
+        NewTransition(234, S.Payroll.Draft, S.Payroll.Finalized, "LABOR-13", Owner, Action, "The period has ended, no attendance of it is incomplete, no hours lack a rate and no request for it awaits review.", false),
+        NewTransition(235, S.Payroll.Draft, S.Payroll.Cancelled, "LABOR-12", Owner, Action, "A payroll sheet dropped before it is finalized.", false),
+        NewTransition(236, S.Payroll.Creating, S.Payroll.Cancelled, "LABOR-12", Owner, Action, "A sheet still being made is dropped.", false),
 
         // Trader accounts requested from the Zalo Mini App (not in the SRS table yet, decision of 28/10/2026).
         NewTransition(30074, S.Account.PendingApproval, S.Account.Active, "ACS-01 (Zalo)", Owner, Action, "Approve the trader's request.", false),

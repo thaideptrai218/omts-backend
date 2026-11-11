@@ -65,6 +65,15 @@ public static class StatusIds
         public const int AwaitingFinalization = 3402;
         public const int SentBack = 3403;
         public const int Finalized = 3404;
+
+        /// <summary>The web contract's "Creating": a sheet being made. Sheets are made in one step, so a stored one is never in it.</summary>
+        public const int Creating = 3405;
+
+        /// <summary>The web contract's "Cancelled": a sheet dropped before it was finalized; it no longer counts anywhere.</summary>
+        public const int Cancelled = 3406;
+
+        /// <summary>The web contract's "Provisional" is the catalog's Draft: lines follow the current records and nothing is locked.</summary>
+        public const int Provisional = Draft;
     }
 
     /// <summary>STD-EMPLOYEE-REQUEST (BR-LABOR-08): a reviewed or cancelled request does not change any more.</summary>

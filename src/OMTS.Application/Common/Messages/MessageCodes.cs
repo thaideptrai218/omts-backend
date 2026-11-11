@@ -101,6 +101,9 @@ public static class MessageCodes
     public const string Labor23 = "MSG-LABOR-23";
     public const string Labor25 = "MSG-LABOR-25";
     public const string Labor26 = "MSG-LABOR-26";
+    public const string Labor28 = "MSG-LABOR-28";
+    public const string Labor31 = "MSG-LABOR-31";
+    public const string Labor34 = "MSG-LABOR-34";
     public const string Labor36 = "MSG-LABOR-36";
 
     public const string Debt01 = "MSG-DEBT-01";

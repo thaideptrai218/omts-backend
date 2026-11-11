@@ -73,8 +73,8 @@ internal sealed class AttendanceSettingsRepository(OmtsDbContext db) : IAttendan
 internal sealed class PayrollRepository(OmtsDbContext db) : IPayrollRepository
 {
     public async Task<IReadOnlyList<Payroll>> ListEndingOnOrAfterAsync(DateOnly date, CancellationToken cancellationToken) =>
-        await db.Payrolls.Where(p => p.PeriodEnd >= date).OrderBy(p => p.PeriodEnd).ToListAsync(cancellationToken);
+        await db.Payrolls.Where(p => p.PeriodEnd >= date && p.StatusId != StatusIds.Payroll.Cancelled).OrderBy(p => p.PeriodEnd).ToListAsync(cancellationToken);
 
     public async Task<DateOnly?> LastPeriodEndAsync(CancellationToken cancellationToken) =>
-        await db.Payrolls.MaxAsync(p => (DateOnly?)p.PeriodEnd, cancellationToken);
+        await db.Payrolls.Where(p => p.StatusId != StatusIds.Payroll.Cancelled).MaxAsync(p => (DateOnly?)p.PeriodEnd, cancellationToken);
 }

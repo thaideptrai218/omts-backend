@@ -44,7 +44,7 @@ public interface IAttendanceSettingsRepository
 /// <summary>The payroll headers the pay period lock and the calendar read (BR-LABOR-13).</summary>
 public interface IPayrollRepository
 {
-    /// <summary>The payrolls whose last day is <paramref name="date"/> or later, tracked, so a change dated before them can touch them.</summary>
+    /// <summary>The payrolls that are not Cancelled whose last day is <paramref name="date"/> or later, tracked, so a change dated before them can touch them.</summary>
     Task<IReadOnlyList<Payroll>> ListEndingOnOrAfterAsync(DateOnly date, CancellationToken cancellationToken);
 
     /// <summary>The last day of the latest pay period that has a payroll; null when there is none.</summary>

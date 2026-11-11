@@ -13,10 +13,9 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 /// <summary>
 /// LABOR-11, LABOR-15: job types with rates, one with an earlier rate, one with a rate still to come and one discontinued, and
 /// two versions of the attendance settings; before the employees, whose profiles name the job types. The payroll settings stay
-/// as set up (start day 1, automatic payroll off). Two payroll headers, the month before last Finalized and last month Awaiting
-/// finalization, so that a date up to the end of last month answers MSG-LABOR-04: they have no lines until LABOR-12. A job type
-/// is matched by its name and by the audit row of its adding, which a rename leaves as it is; settings and payrolls are added
-/// only when there are none, and this order keeps the rates before the lock. Dates are relative to today, in whole months, so
+/// as set up (start day 1, automatic payroll off). The payroll sheets come with <see cref="DemoPayrollStep"/>, after the attendance they
+/// are calculated from. A job type is matched by its name and by the audit row of its adding, which a rename leaves as it is; settings
+/// are added only when there are none, and this order keeps the rates before the lock. Dates are relative to today, in whole months, so
 /// no month end moves them.
 /// </summary>
 internal sealed class DemoLaborSettingsStep : IDemoSeedStep
@@ -26,7 +25,7 @@ internal sealed class DemoLaborSettingsStep : IDemoSeedStep
     public const string CleaningLines = "Vệ sinh dây giàn";
     private const string OldPacking = "Đóng gói tại bè";
 
-    public string Name => "job types, attendance settings and payroll headers";
+    public string Name => "job types and attendance settings";
 
     public async Task<int> RunAsync(DemoSeedContext context, CancellationToken cancellationToken)
     {
@@ -37,7 +36,6 @@ internal sealed class DemoLaborSettingsStep : IDemoSeedStep
         created += await AddJobTypeAsync(context, CleaningLines, 30_000, thisMonth.AddMonths(-6), null, cancellationToken);
         created += await AddOldJobTypeAsync(context, thisMonth, cancellationToken);
         created += await AddAttendanceSettingsAsync(context, thisMonth, cancellationToken);
-        created += await AddPayrollsAsync(context, thisMonth, cancellationToken);
         return created;
     }
 
@@ -111,46 +109,5 @@ internal sealed class DemoLaborSettingsStep : IDemoSeedStep
             await service.SaveAsync(new SaveAttendanceSettingsRequest(breakStart, breakEnd, AttendanceRoundingUnit.Minutes15, thisMonth.AddMonths(-3), saved.Settings.RowVersion), cancellationToken),
             "the attendance settings");
         return 1;
-    }
-
-    private static async Task<int> AddPayrollsAsync(DemoSeedContext context, DateOnly thisMonth, CancellationToken cancellationToken)
-    {
-        if (await context.Db.Payrolls.AnyAsync(cancellationToken))
-        {
-            return 0;
-        }
-
-        var (lastMonth, monthBefore) = (thisMonth.AddMonths(-1), thisMonth.AddMonths(-2));
-        var finalized = new Payroll
-        {
-            PeriodStart = monthBefore,
-            PeriodEnd = lastMonth.AddDays(-1),
-            StatusId = StatusIds.Payroll.Finalized,
-            SentAt = context.Now,
-            SentByAccountId = context.OwnerId,
-            FinalizedAt = context.Now,
-            FinalizedByAccountId = context.OwnerId,
-        };
-        var awaiting = new Payroll
-        {
-            PeriodStart = lastMonth,
-            PeriodEnd = thisMonth.AddDays(-1),
-            StatusId = StatusIds.Payroll.AwaitingFinalization,
-            SentAt = context.Now,
-            SentByAccountId = context.OwnerId,
-        };
-        foreach (var payroll in new[] { finalized, awaiting })
-        {
-            context.Db.Payrolls.Add(payroll);
-            context.Get<AuditLogService>().Record(new AuditEntry("Payroll.Created", nameof(Payroll))
-            {
-                RecordId = payroll.Id,
-                RecordCode = PayPeriod.NameOf(payroll.PeriodEnd),
-                After = new { payroll.PeriodStart, payroll.PeriodEnd, payroll.StatusId },
-            });
-        }
-
-        await context.Db.SaveChangesAsync(cancellationToken);
-        return 2;
     }
 }
