@@ -16,7 +16,7 @@ namespace OMTS.Api.Controllers;
 [Authorize]
 public sealed class HarvestLotsController(
     HarvestLotReadService reads, HarvestLotRecordingService recording, HarvestLotCorrectionService corrections, HarvestLotRemovalService removals, HarvestLotClosingService closing,
-    HarvestLotForSaleService forSale, HarvestLaneFinishService laneFinish, HarvestCrewService crews) : ControllerBase
+    HarvestLotForSaleService forSale, HarvestLaneFinishService laneFinish, HarvestLanesFinishService lanesFinish, HarvestCrewService crews) : ControllerBase
 {
     private const string PhotosField = "Photos";
 
@@ -97,6 +97,15 @@ public sealed class HarvestLotsController(
     [ProducesResponseType<LaneHarvestFinished>(StatusCodes.Status200OK)]
     public async Task<IActionResult> FinishLane(Guid raftId, int laneNumber, CancellationToken cancellationToken) =>
         (await laneFinish.FinishAsync(raftId, laneNumber, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// Finishes several lanes in one transaction (owner decision 12/11/2026). Body <c>{ laneNumbers: [1..200 distinct], rowVersion? }</c>. 200 lists <c>finished</c> and <c>alreadyFinished</c>;
+    /// 409 MSG-GEN-09 with <c>lanes: [{ laneNumber, reasonCode, message }]</c> when any lane cannot be finished (nothing changes); 400 for a bad list.
+    /// </summary>
+    [HttpPost("api/rafts/{raftId:guid}/finish-harvest")]
+    [ProducesResponseType<LanesHarvestFinished>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> FinishLanes(Guid raftId, [FromBody] FinishLanesRequest request, CancellationToken cancellationToken) =>
+        (await lanesFinish.FinishAsync(raftId, request, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>One lot with its figures and photos: the record a notification opens.</summary>
     [HttpGet("api/harvest-lots/{lotId:guid}")]

@@ -76,6 +76,7 @@ internal static partial class RecordHistoryLabels
         ["TraceCorrected"] = "Hiệu chỉnh truy xuất",
         ["Removed"] = "Xóa",
         ["LaneFinished"] = "Kết thúc thu hoạch làn",
+        ["HarvestLanesFinished"] = "Hoàn tất thu hoạch nhiều làn",
         ["Started"] = "Bắt đầu vụ",
         ["SeedingCompleted"] = "Hoàn tất thả giống",
         ["Closed"] = "Chốt",

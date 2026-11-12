@@ -118,6 +118,6 @@ public sealed class HarvestLaneFinishService(
         return new LaneHarvestFinished(laneNumber, LaneState.Harvested, true, lot.LotCode, every, RowVersionGuard.Encode(cycle.RowVersion), saved.Text, saved.Code);
     }
 
-    private static bool EveryHarvested(Raft raft, IReadOnlyDictionary<Guid, LaneState> states) =>
+    internal static bool EveryHarvested(Raft raft, IReadOnlyDictionary<Guid, LaneState> states) =>
         LaneStateRules.EverySeededLaneHarvested(raft.Lanes.Where(l => l.StatusId == StatusIds.Lane.InUse).Select(l => states[l.Id]));
 }

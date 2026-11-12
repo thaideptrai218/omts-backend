@@ -206,6 +206,7 @@ public static class DependencyInjection
         services.AddScoped<HarvestCrewService>();
         services.AddScoped<HarvestLotRecordingService>();
         services.AddScoped<HarvestLaneFinishService>();
+        services.AddScoped<HarvestLanesFinishService>();
         services.AddScoped<HarvestLotEditReader>();
         services.AddScoped<HarvestLotCorrectionService>();
         services.AddScoped<HarvestLotRemovalService>();
