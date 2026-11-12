@@ -8,9 +8,9 @@ namespace OMTS.Domain.Entities.Cultivation;
 
 /// <summary>
 /// One nursery batch (ươm giống, decision of 12/11/2026): seed pieces ("mảnh") of ONE seed lot taken out of the stock for one zone to get used to the water before they are hung on lanes.
-/// It starts Nursing and the stock leaves at once (a use issue, <see cref="IssueId"/>). Completing it records the survivors (counted by eye, so an estimate) and gives each chosen raft of
-/// the zone a cultivation cycle holding its share of the survivors (<see cref="NurseryBatchAllocation"/>): everything that survived is farmed, so the shares add up to the survivors exactly.
-/// A Completed batch cannot be cancelled; the survivors and the shares can still be corrected before the seed is hung.
+/// It starts Nursing and the stock leaves at once (a use issue, <see cref="IssueId"/>). Completing it (v2, 13/11/2026) records only the survivors (counted by eye, so an estimate): the batch is then a
+/// "kho ươm" pool that any number of cycles draw from, piece by piece, through their seeding records (<c>SeedingRecord.NurseryBatchId</c>); seeded = the sum of those records, remaining = survivors - seeded.
+/// A Completed batch cannot be cancelled; the survivors can be corrected (not below what is seeded). The Owner or Zone Manager can Close it: the remainder is then written off as a loss estimate.
 /// </summary>
 public class NurseryBatch : AuditableEntity, IHasStatus
 {
@@ -52,11 +52,21 @@ public class NurseryBatch : AuditableEntity, IHasStatus
     public Guid? IssueId { get; set; }
     public InputIssue? Issue { get; set; }
 
+    /// <summary>The day the batch was closed (Closed, v2): the pieces left in the pool were written off.</summary>
+    public DateOnly? ClosedOn { get; set; }
+
+    /// <summary>The pieces left in the pool when it was closed: a loss estimate. Null until closed.</summary>
+    public decimal? CloseLossPieces { get; set; }
+
+    public Guid? ClosedByAccountId { get; set; }
+    public string? CloseReason { get; set; }
+
+    /// <summary>Kept in the database for the cycles completed before v2 (13/11/2026) but neither read nor written any more: the pool is the seeding records of the batch.</summary>
     public ICollection<NurseryBatchAllocation> Allocations { get; set; } = [];
     public ICollection<NurseryBatchPhoto> Photos { get; set; } = [];
 }
 
-/// <summary>The share of the survivors of a batch given to one raft, and the cycle created for it. The shares of a batch add up to its survivors.</summary>
+/// <summary>Legacy (before v2, 13/11/2026): the share of the survivors of a batch given to one raft, and the cycle created for it. Kept as rows, never written or read by the code any more.</summary>
 public class NurseryBatchAllocation : AuditableEntity
 {
     public Guid NurseryBatchId { get; set; }

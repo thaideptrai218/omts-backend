@@ -12,8 +12,17 @@ namespace OMTS.Application.Features.Cultivation.Cycles;
 /// </summary>
 public sealed record StartCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, decimal? TargetYieldKg, bool OtherFilePart = false);
 
-/// <summary>CYCLE-01.1: the start date and the plan estimates as they should be; a plan estimate sent empty is cleared.</summary>
-public sealed record EditCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, decimal? TargetYieldKg, string? RowVersion);
+/// <summary>
+/// CYCLE-01.0 (v2, 13/11/2026): a cycle is started by hand from a nursery batch that is ready. Without <see cref="StartDate"/> the cycle starts today; <see cref="NurseryBatchId"/> and a <see cref="TargetYieldKg"/> above
+/// 0 are required. The plan carries 1 to 3 photos beside it. <see cref="RaftId"/> is read from the form, or from the route of the raft.
+/// </summary>
+public sealed record CreateCycleRequest(Guid? RaftId, Guid? NurseryBatchId, DateOnly? StartDate, decimal? TargetYieldKg, string? Note, bool OtherFilePart = false);
+
+/// <summary>
+/// CYCLE-01.1: the start date and the plan estimates as they should be; a plan estimate sent empty is cleared. A cycle that draws from a nursery batch (v2) keeps what is left out (null) and takes only the target yield,
+/// the start date, the <paramref name="Note"/> (sent empty to clear) and the <paramref name="NurseryBatchId"/> (only before the first seeding record, 409 CYCLE_SEED_LOCKED).
+/// </summary>
+public sealed record EditCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, decimal? TargetYieldKg, string? RowVersion, string? Note = null, Guid? NurseryBatchId = null);
 
 /// <summary>CYCLE-01.2.</summary>
 public sealed record CancelCycleRequest(string? RowVersion);
@@ -21,8 +30,10 @@ public sealed record CancelCycleRequest(string? RowVersion);
 /// <param name="DaysOfFarming">Both the first and the last day count; the last day of an Open cycle is today, of a closed one its last harvest lot, or else the close date.</param>
 /// <param name="CanEdit">The cycle is Open on a raft In Use in a zone In Use (CYCLE-01 PRE-3).</param>
 /// <param name="CanCancel">The cycle can be edited and has no record yet (CYCLE-01 PRE-3).</param>
-/// <param name="NurseryBatchId">The nursery batch the cycle was created from; null on a cycle started the old way (no nursery), whose other nursery fields are null too.</param>
-/// <param name="NurseryAllocated">The pieces of the batch given to this cycle: seeding is capped by it. <paramref name="NurserySeeded"/> is what is hung so far, <paramref name="NurseryRemaining"/> what can still be.</param>
+/// <param name="NurseryBatchId">The nursery batch the cycle draws its seed from; null on a cycle started the old way (no nursery), whose other nursery fields are null too.</param>
+/// <param name="NurserySeeded">The pieces this cycle has seeded from the batch; <paramref name="NurseryRemaining"/> what is left in the pool of the batch for every cycle.</param>
+/// <param name="SeedLot">The seed lot of the batch (read only), traced to its receipt and supplier.</param>
+/// <param name="CanChangeNursery">The cycle is Open and has no seeding record yet: the batch can still be changed (CYCLE-01.1, v2).</param>
 public sealed record CycleView(
     Guid Id,
     Guid RaftId,
@@ -42,17 +53,19 @@ public sealed record CycleView(
     string RowVersion,
     Guid? NurseryBatchId = null,
     string? NurseryCode = null,
-    decimal? NurseryAllocated = null,
     decimal? NurserySeeded = null,
     decimal? NurseryRemaining = null,
     IReadOnlyList<CyclePlanPhotoView>? PlanPhotos = null,
-    bool PlanPhotosFromNursery = false);
+    bool PlanPhotosFromNursery = false,
+    string? Note = null,
+    SeedLotRef? SeedLot = null,
+    bool CanChangeNursery = false);
 
 /// <summary>A photo of the plan of a cycle: <paramref name="Url"/> is a signed link that expires.</summary>
 public sealed record CyclePlanPhotoView(Guid Id, int SortOrder, string Url);
 
 /// <summary>
-/// Change the photos of the plan of a cycle started without a nursery batch (decision of 12/11/2026): the plan then keeps exactly the photos of <paramref name="KeepPhotoIds"/> and the new ones, 1 to 3.
+/// Change the photos of the plan of a cycle (decision of 12/11/2026): the plan then keeps exactly the photos of <paramref name="KeepPhotoIds"/> and the new ones, 1 to 3.
 /// <paramref name="RowVersion"/> is the version of the cycle; <paramref name="OtherFilePart"/>: a file came in a part not named <c>photos</c>.
 /// </summary>
 public sealed record ChangePlanPhotosRequest(string? RowVersion, IReadOnlyList<Guid>? KeepPhotoIds, bool OtherFilePart = false);

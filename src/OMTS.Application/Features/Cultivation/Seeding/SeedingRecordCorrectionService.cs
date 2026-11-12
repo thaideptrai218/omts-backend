@@ -21,6 +21,7 @@ namespace OMTS.Application.Features.Cultivation.Seeding;
 /// </summary>
 public sealed class SeedingRecordCorrectionService(
     ISeedingRecordRepository records,
+    INurseryBatchRepository nurseries,
     IRaftRepository rafts,
     CycleWriteGuard writes,
     SeedingSessionReader reader,
@@ -50,23 +51,15 @@ public sealed class SeedingRecordCorrectionService(
             return refused;
         }
 
-        // Owner decision of 13/11/2026: a session from a nursery keeps hanging all that is left of the share (the share less the other sessions), so a correction cannot change its quantity by hand:
-        // left out or equal, it takes that figure (which follows a share the Owner raised after seeding); another quantity is 400.
-        var quantity = request.Quantity;
-        if (record.NurseryBatchId is not null)
+        // A record of a cycle that draws from a nursery batch (v2, 13/11/2026) takes any quantity up to what the pool of the batch has left once this record is set aside; it is not corrected after the seeding of the cycle is
+        // marked complete. The pool is the sum of the records, so a correction gives back or takes the difference by itself.
+        var batch = record.NurseryBatchId is { } batchId ? await nurseries.GetForPoolAsync(batchId, cancellationToken) : null;
+        if (batch is not null && record.Cycle.SeedingCompletedOn is not null)
         {
-            var others = (await records.ListByCycleAsync(record.CycleId, cancellationToken)).Where(r => r.Id != record.Id).Sum(r => r.Quantity);
-            var full = NurseryRules.FullSeeding(record.Cycle.NurseryAllocatedQuantity ?? 0m, others, request.Quantity);
-            if (full.Error is not null)
-            {
-                return full.Error;
-            }
-
-            quantity = full.Quantity;
+            return NurseryRules.SeedingCompletedRefusal(record.Cycle.Raft.Code);
         }
 
-        var input = new SeedingInput(request.SeedingDate, request.SeedLotId, request.LaneNumbers, quantity);
-        var (fields, invalid) = await reader.ReadAsync(record.Cycle, input, record, request.Reason, reasonRequired: true, cancellationToken);
+        var input = new SeedingInput(request.SeedingDate, request.SeedLotId, request.LaneNumbers, request.Quantity);        var (fields, invalid) = await reader.ReadAsync(record.Cycle, input, record, request.Reason, reasonRequired: true, cancellationToken);
         if (invalid is not null)
         {
             return invalid;
@@ -96,21 +89,24 @@ public sealed class SeedingRecordCorrectionService(
             return shares.Error!;
         }
 
-        // Judged only when the correction raises the seed (the other sessions and this one's new quantity against the plan), as for a harvest lot.
+        // A record from a nursery is capped by the pool of its batch (the other records of every cycle taken off); the others keep the plan rules, judged only when the correction raises the seed, as for a harvest lot.
         string? overPlanReason = null;
-        if (fields!.Quantity > record.Quantity)
+        if (batch is not null)
+        {
+            var seededByOthers = (await nurseries.SeededByBatchAsync([batch.Id], record.Id, cancellationToken)).GetValueOrDefault(batch.Id);
+            if (NurseryRules.CheckPool(batch, seededByOthers, fields!.Quantity) is { } overPool)
+            {
+                return overPool;
+            }
+        }
+        else if (fields!.Quantity > record.Quantity)
         {
             var others = (await records.ListByCycleAsync(record.CycleId, cancellationToken)).Where(r => r.Id != record.Id).Sum(r => r.Quantity);
-            // A session from a nursery batch is capped by the share of its cycle (hard cap, no plan percentages); the others keep the plan rules.
-            var overPlan = record.NurseryBatchId is not null
-                ? NurseryRules.CheckSeeding(record.Cycle.NurseryAllocatedQuantity ?? 0m, others, fields.Quantity)
-                : SeedingPlanRules.Check(new SeedingPlanInput(record.Cycle.ExpectedSeedQuantity, others, request.ConfirmOverPlan, request.OverPlanReason), fields.Quantity, out overPlanReason);
-            if (overPlan is not null)
+            if (SeedingPlanRules.Check(new SeedingPlanInput(record.Cycle.ExpectedSeedQuantity, others, request.ConfirmOverPlan, request.OverPlanReason), fields.Quantity, out overPlanReason) is { } overPlan)
             {
                 return overPlan;
             }
         }
-
         var uploaded = await photoStore.UploadAllAsync(FileCategories.SeedingPhotos, files.Value!, cancellationToken);
         if (!uploaded.IsSuccess)
         {
@@ -143,7 +139,11 @@ public sealed class SeedingRecordCorrectionService(
             // Lanes and photos are rows of their own: a change of them only must still give the session a new version.
             unitOfWork.MarkChanged(record);
             unitOfWork.MarkChanged(record.Cycle);
-            if (record.NurseryBatchId is null)
+            if (batch is not null)
+            {
+                unitOfWork.MarkChanged(batch);
+            }
+            else
             {
                 unitOfWork.MarkChanged(fields!.Lot.Receipt);
             }
@@ -168,6 +168,11 @@ public sealed class SeedingRecordCorrectionService(
         if (await RefusalAsync(record, states, cancellationToken) is { } refused)
         {
             return refused;
+        }
+
+        if (record.NurseryBatchId is not null && record.Cycle.SeedingCompletedOn is not null)
+        {
+            return NurseryRules.SeedingCompletedRefusal(record.Cycle.Raft.Code);
         }
 
         var check = new FieldCheck();

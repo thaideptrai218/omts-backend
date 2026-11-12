@@ -61,7 +61,8 @@ public sealed class NurseryReadService(
             query.ZoneId, zonesAllowed.AllZones ? null : zonesAllowed.ZoneIds.ToHashSet(), statuses.Ids, query.From, query.To, query.Search, SortOf(query.SortBy),
             !string.Equals(query.SortDir, "asc", StringComparison.OrdinalIgnoreCase));
         var (rows, total, totals) = await nurseries.SearchAsync(filter, page, pageSize, cancellationToken);
-        return new NurseryBatchPage(rows.Select(views.ListItem).ToList(), page, pageSize, total, NurseryBatchViews.Summary(totals));
+        var seeded = await nurseries.SeededByBatchAsync(rows.Select(r => r.Id).ToList(), null, cancellationToken);
+        return new NurseryBatchPage(rows.Select(r => views.ListItem(r, seeded)).ToList(), page, pageSize, total, NurseryBatchViews.Summary(totals));
     }
 
     public async Task<Result<NurseryBatchView>> GetAsync(Guid batchId, CancellationToken cancellationToken)
@@ -77,7 +78,7 @@ public sealed class NurseryReadService(
             : AppError.Forbidden;
     }
 
-    /// <summary>The Completed batches that still have seed to hang in a cycle that is Open, with each such share; a share fully hung, or of a Closed cycle, is left out.</summary>
+    /// <summary>The batches ready to start a cycle from (v2): Completed ("đã ươm xong") with pieces left in the pool, the one completed last listed first.</summary>
     public async Task<Result<AvailableNurseryList>> AvailableAsync(Guid? zoneId, CancellationToken cancellationToken)
     {
         var allowed = await zoneAccess.PermittedZonesAsync(PermissionFunctions.CultivationCycles, PermissionAction.View, cancellationToken);
@@ -87,25 +88,16 @@ public sealed class NurseryReadService(
         }
 
         var completed = await nurseries.CompletedAsync(zoneId, allowed.AllZones ? null : allowed.ZoneIds.ToHashSet(), cancellationToken);
-        var seeded = await nurseries.SeededByCycleAsync(completed.SelectMany(b => b.Allocations).Select(a => a.CycleId).ToList(), cancellationToken);
-        var batches = new List<AvailableNurseryBatch>();
-        foreach (var batch in completed)
-        {
-            var open = batch.Allocations
-                .Where(a => a.Cycle.StatusId == StatusIds.CultivationCycle.Open)
-                .Select(a => new AvailableNurseryAllocation(
-                    a.Id, a.CycleId, a.RaftId, a.Raft.Code, a.Quantity, seeded.GetValueOrDefault(a.CycleId), NurseryRules.Remaining(a.Quantity, seeded.GetValueOrDefault(a.CycleId))))
-                .Where(a => a.Remaining > 0)
-                .OrderBy(a => a.RaftCode, StringComparer.Ordinal)
-                .ToList();
-            if (open.Count > 0)
-            {
-                batches.Add(new AvailableNurseryBatch(
-                    batch.Id, batch.Code, batch.ZoneId, batch.Zone.Code, SeedingValues.LotCode(batch.SeedLotLine), batch.SeedLotLine.Item?.Name, NurseryBatchViews.UnitOf(batch.SeedLotLine),
-                    batch.QuantityIn, batch.Survivors ?? 0m, batch.CompletedOn, open.Sum(a => a.Remaining), open));
-            }
-        }
-
+        var seeded = await nurseries.SeededByBatchAsync(completed.Select(b => b.Id).ToList(), null, cancellationToken);
+        var batches = completed
+            .Select(b => (Batch: b, Seeded: seeded.GetValueOrDefault(b.Id)))
+            .Select(x => (x.Batch, x.Seeded, Remaining: NurseryRules.Remaining(x.Batch.Survivors ?? 0m, x.Seeded)))
+            .Where(x => x.Remaining > 0)
+            .OrderByDescending(x => x.Batch.CompletedOn).ThenByDescending(x => x.Batch.Code, StringComparer.Ordinal)
+            .Select(x => new AvailableNurseryBatch(
+                x.Batch.Id, x.Batch.Code, x.Batch.ZoneId, x.Batch.Zone.Code, SeedingValues.LotCode(x.Batch.SeedLotLine), x.Batch.SeedLotLine.Item?.Name, NurseryBatchViews.UnitOf(x.Batch.SeedLotLine),
+                x.Batch.QuantityIn, x.Batch.Survivors ?? 0m, x.Seeded, x.Remaining, x.Batch.CompletedOn))
+            .ToList();
         return new AvailableNurseryList(batches);
     }
 
@@ -115,7 +107,8 @@ public sealed class NurseryReadService(
         "nursing" => ([StatusIds.NurseryBatch.Nursing], null),
         "completed" => ([StatusIds.NurseryBatch.Completed], null),
         "cancelled" => ([StatusIds.NurseryBatch.Cancelled], null),
-        _ => (null, AppError.Invalid("Status", "Use all, nursing, completed or cancelled.")),
+        "closed" => ([StatusIds.NurseryBatch.Closed], null),
+        _ => (null, AppError.Invalid("Status", "Use all, nursing, completed, closed or cancelled.")),
     };
 
     private static NurseryBatchSort SortOf(string? sortBy) => sortBy?.Trim().ToLowerInvariant() switch

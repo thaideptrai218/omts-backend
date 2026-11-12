@@ -21,15 +21,17 @@ public sealed class NurseryNotifier(IZoneRecipientQuery recipients, OwnerActorRe
 
     public Task CompletedAsync(NurseryBatch batch, Guid actor, CancellationToken cancellationToken) => NotifyAsync(
         "Nursery completed",
-        $"Nursery batch {batch.Code} in zone {batch.Zone.Code} completed: about {batch.Survivors:0.###} of {batch.QuantityIn:0.###} pieces survived (counted by eye); {batch.Allocations.Count} cycles started.",
+        $"Nursery batch {batch.Code} in zone {batch.Zone.Code} is done: about {batch.Survivors:0.###} of {batch.QuantityIn:0.###} pieces survived (counted by eye) and are ready to be seeded.",
+        batch, actor, cancellationToken);
+
+    public Task ClosedAsync(NurseryBatch batch, string? reason, Guid actor, CancellationToken cancellationToken) => NotifyAsync(
+        "Nursery closed",
+        $"Nursery batch {batch.Code} in zone {batch.Zone.Code} was closed: {batch.CloseLossPieces:0.###} pieces left were written off as an estimated loss{(string.IsNullOrWhiteSpace(reason) ? string.Empty : $" ({reason})")}.",
         batch, actor, cancellationToken);
 
     public Task SurvivorsCorrectedAsync(NurseryBatch batch, decimal from, string reason, Guid actor, CancellationToken cancellationToken) => NotifyAsync(
         "Nursery survivors corrected",
         $"Nursery batch {batch.Code} in zone {batch.Zone.Code}: survivors corrected from {from:0.###} to {batch.Survivors:0.###} pieces ({reason}).", batch, actor, cancellationToken);
-
-    public Task AllocationsChangedAsync(NurseryBatch batch, string reason, Guid actor, CancellationToken cancellationToken) => NotifyAsync(
-        "Nursery shares changed", $"The shares of the rafts of nursery batch {batch.Code} in zone {batch.Zone.Code} were changed ({reason}).", batch, actor, cancellationToken);
 
     private async Task NotifyAsync(string title, string body, NurseryBatch batch, Guid actor, CancellationToken cancellationToken)
     {

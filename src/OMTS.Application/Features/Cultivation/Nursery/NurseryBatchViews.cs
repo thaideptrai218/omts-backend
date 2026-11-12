@@ -31,7 +31,13 @@ public sealed class NurseryBatchViews(
         var completed = batch.StatusId == StatusIds.NurseryBatch.Completed;
         var mayEdit = zoneInUse && await zoneAccess.AllowsAsync(PermissionFunctions.CultivationCycles, PermissionAction.Edit, batch.ZoneId, cancellationToken);
         var mayCreate = zoneInUse && await zoneAccess.AllowsAsync(PermissionFunctions.CultivationCycles, PermissionAction.Create, batch.ZoneId, cancellationToken);
-        var seeded = await nurseries.SeededByCycleAsync(batch.Allocations.Select(a => a.CycleId).ToList(), cancellationToken);
+        var pooled = completed || batch.StatusId == StatusIds.NurseryBatch.Closed;
+        var seeded = pooled ? (await nurseries.SeededByBatchAsync([batch.Id], null, cancellationToken)).GetValueOrDefault(batch.Id) : (decimal?)null;
+        var remaining = pooled ? NurseryRules.PoolRemaining(batch, seeded!.Value) : null;
+        var usage = pooled
+            ? (await nurseries.UsageAsync(batch.Id, cancellationToken))
+                .Select(u => new NurseryUsageView(u.CycleId, u.CycleStartDate, u.CycleStatusId == StatusIds.CultivationCycle.Open ? "Open" : "Closed", u.RaftId, u.RaftCode, u.Seeded, u.LastSeedingOn)).ToList()
+            : [];
         var recordedBy = batch.CreatedBy is { } creator ? (await accounts.GetDisplayNamesAsync([creator], cancellationToken)).GetValueOrDefault(creator) : null;
         var loss = LossOf(batch);
         return new NurseryBatchView(
@@ -39,29 +45,29 @@ public sealed class NurseryBatchViews(
             DaysNursing(batch), batch.StatusId, statusCatalog.DisplayNameOf(batch.StatusId), NurseryValues.StatusLabel(batch.StatusId), batch.CompletedOn, batch.Survivors, loss?.Pieces, loss?.Percent, loss is not null,
             batch.IssueId, batch.Issue?.Code, batch.CancelReason, batch.CancelledAt, batch.CreatedBy, recordedBy, batch.CreatedAt,
             await PhotosAsync(batch, NurseryPhotoPhase.Start, cancellationToken), await PhotosAsync(batch, NurseryPhotoPhase.Completion, cancellationToken),
-            batch.Allocations.OrderBy(a => a.Raft.Code, StringComparer.Ordinal).Select(a => Allocation(a, seeded.GetValueOrDefault(a.CycleId))).ToList(),
-            nursing && mayEdit, nursing && mayCreate, completed && mayEdit, RowVersionGuard.Encode(batch.RowVersion));
+            nursing && mayEdit, nursing && mayCreate, completed && mayEdit, RowVersionGuard.Encode(batch.RowVersion),
+            seeded, remaining, batch.ClosedOn, batch.CloseLossPieces, batch.CloseReason, completed && mayEdit && remaining > 0, usage);
     }
 
-    /// <summary>A row of the list: the batch comes with its zone, seed lot (item, receipt, supplier) and allocations.</summary>
-    public NurseryBatchListItem ListItem(NurseryBatch batch)
+    /// <summary>A row of the list: the batch comes with its zone and seed lot (item, receipt, supplier); <paramref name="seededByBatch"/> holds what every batch of the page had seeded.</summary>
+    public NurseryBatchListItem ListItem(NurseryBatch batch, IReadOnlyDictionary<Guid, decimal> seededByBatch)
     {
         var lot = batch.SeedLotLine;
         var loss = LossOf(batch);
+        var pooled = batch.StatusId is StatusIds.NurseryBatch.Completed or StatusIds.NurseryBatch.Closed;
+        var seeded = pooled ? seededByBatch.GetValueOrDefault(batch.Id) : (decimal?)null;
         return new NurseryBatchListItem(
             batch.Id, batch.Code, batch.ZoneId, batch.Zone.Code, batch.Zone.Name, SeedingValues.LotCode(lot), lot.Item?.Name, UnitOf(lot), lot.Receipt.Supplier.Name, batch.QuantityIn, batch.StartDate,
             DaysNursing(batch), batch.StatusId, statusCatalog.DisplayNameOf(batch.StatusId), NurseryValues.StatusLabel(batch.StatusId), batch.CompletedOn, batch.Survivors, loss?.Pieces, loss?.Percent, loss is not null,
-            batch.Allocations.Count, RowVersionGuard.Encode(batch.RowVersion));
+            RowVersionGuard.Encode(batch.RowVersion), seeded, pooled ? NurseryRules.PoolRemaining(batch, seeded!.Value) : null, batch.ClosedOn, batch.CloseLossPieces);
     }
 
+    /// <summary>The totals of the filtered list: "completed" counts the batches done nursing (Completed and Closed), so the survivors and the loss cover both and the loss includes what the closes wrote off.</summary>
     public static NurseryListSummary Summary(NurseryListTotals totals) => new(
         totals.QuantityIn, totals.NursingQuantityIn, totals.CompletedQuantityIn, totals.Survivors,
-        NurseryRules.LossPieces(totals.CompletedQuantityIn, totals.Survivors), totals.CompletedQuantityIn > 0 ? NurseryRules.LossPercent(totals.CompletedQuantityIn, totals.Survivors) : null,
-        totals.NursingCount, totals.CompletedCount);
-
-    public NurseryAllocationView Allocation(NurseryBatchAllocation a, decimal seeded) => new(
-        a.Id, a.RaftId, a.Raft.Code, a.CycleId, a.Cycle.StartDate, a.Cycle.StatusId == StatusIds.CultivationCycle.Open ? "Open" : "Closed", a.Quantity, seeded, NurseryRules.Remaining(a.Quantity, seeded),
-        a.Cycle.TargetYieldKg, a.Cycle.StatusId == StatusIds.CultivationCycle.Open);
+        NurseryRules.TotalLoss(totals.CompletedQuantityIn, totals.Survivors, totals.CloseLossPieces),
+        totals.CompletedQuantityIn > 0 ? NurseryRules.TotalLossPercent(totals.CompletedQuantityIn, totals.Survivors, totals.CloseLossPieces) : null,
+        totals.NursingCount, totals.CompletedCount, totals.ClosedCount);
 
     public static string UnitOf(PurchaseReceiptLine lot) => lot.Item?.Unit ?? lot.Unit;
 
@@ -72,10 +78,10 @@ public sealed class NurseryBatchViews(
         return (lot.Quantity ?? 0m) - await lots.ReturnedAsync(lot.Id, cancellationToken) - consumed;
     }
 
-    /// <summary>The loss is known once the survivors are (Completed); an estimate, as the survivors are counted by eye.</summary>
+    /// <summary>The loss is known once the survivors are (Completed, Closed): put in less survivors, plus what a close wrote off; an estimate, as the survivors are counted by eye.</summary>
     private static (decimal Pieces, decimal Percent)? LossOf(NurseryBatch batch) =>
-        batch.Survivors is { } survivors && batch.StatusId == StatusIds.NurseryBatch.Completed
-            ? (NurseryRules.LossPieces(batch.QuantityIn, survivors), NurseryRules.LossPercent(batch.QuantityIn, survivors))
+        batch.Survivors is { } survivors && batch.StatusId is StatusIds.NurseryBatch.Completed or StatusIds.NurseryBatch.Closed
+            ? (NurseryRules.TotalLoss(batch.QuantityIn, survivors, batch.CloseLossPieces), NurseryRules.TotalLossPercent(batch.QuantityIn, survivors, batch.CloseLossPieces))
             : null;
 
     private int DaysNursing(NurseryBatch batch)

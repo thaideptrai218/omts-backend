@@ -1,12 +1,11 @@
 using System.Globalization;
-using System.Text.Json;
 using OMTS.Api.Common;
 using OMTS.Application.Features.Cultivation.Nursery;
 
 namespace OMTS.Api.Controllers;
 
 /// <summary>
-/// Multipart fields of the nursery (NURSERY-01 to NURSERY-03): the numbers are read with a dot, the dates as <c>yyyy-MM-dd</c>, and the shares of the survivors travel as one field holding a JSON array.
+/// Multipart fields of the nursery (NURSERY-01 to NURSERY-03): the numbers are read with a dot, the dates as <c>yyyy-MM-dd</c>. A field sent for the shares of the survivors (before v2) is ignored.
 /// A value that cannot be read becomes one the service refuses by name (a number: none; a date: the smallest date), never a silent default.
 /// </summary>
 public sealed class NurseryBatchForm
@@ -26,16 +25,11 @@ public sealed class NurseryBatchForm
 
     public string? CompletedOn { get; set; }
 
-    /// <summary>When completing: a JSON array of <c>{ raftId, quantity, targetYieldKg? }</c>.</summary>
-    public string? Allocations { get; set; }
-
     /// <summary>When editing: one field per start photo to keep (its id); a photo left out is removed. Sending this or <c>photos</c> replaces the photos.</summary>
     public string?[]? KeepPhotoIds { get; set; }
 
     /// <summary>One part per photo, 1 to 3 when starting or completing: JPEG or PNG, at most 10 MB each.</summary>
     public List<IFormFile>? Photos { get; set; }
-
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public StartNurseryRequest ToStart(bool otherFilePart)
     {
@@ -53,8 +47,7 @@ public sealed class NurseryBatchForm
     public CompleteNurseryRequest ToComplete(bool otherFilePart)
     {
         FormNumbers.TryDecimal(Survivors, out var survivors);
-        var allocations = ReadAllocations(out var unreadable);
-        return new CompleteNurseryRequest(survivors, Date(CompletedOn), allocations, RowVersion, otherFilePart, unreadable);
+        return new CompleteNurseryRequest(survivors, Date(CompletedOn), RowVersion, otherFilePart);
     }
 
     /// <summary>A blank date is none (the service takes today); one that cannot be read is the smallest date, which no check accepts.</summary>
@@ -66,24 +59,5 @@ public sealed class NurseryBatchForm
         }
 
         return DateOnly.TryParseExact(value.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : DateOnly.MinValue;
-    }
-
-    private List<NurseryAllocationInput>? ReadAllocations(out bool unreadable)
-    {
-        unreadable = false;
-        if (string.IsNullOrWhiteSpace(Allocations))
-        {
-            return null;
-        }
-
-        try
-        {
-            return JsonSerializer.Deserialize<List<NurseryAllocationInput>>(Allocations, Json);
-        }
-        catch (JsonException)
-        {
-            unreadable = true;
-            return null;
-        }
     }
 }

@@ -14,6 +14,7 @@ internal sealed class CultivationCycleConfiguration : IEntityTypeConfiguration<C
         builder.Property(x => x.TargetYieldKg).HasPrecision(18, 2);
         builder.Property(x => x.Assessment).HasMaxLength(Lengths.LongText);
         builder.Property(x => x.NurseryAllocatedQuantity).HasPrecision(18, 3);
+        builder.Property(x => x.Note).HasMaxLength(CultivationCycle.MaxNoteLength);
 
         // The nursery batch the cycle was created from (completing it); the allocation row points back to the cycle.
         builder.HasOne<NurseryBatch>().WithMany().HasForeignKey(x => x.NurseryBatchId);

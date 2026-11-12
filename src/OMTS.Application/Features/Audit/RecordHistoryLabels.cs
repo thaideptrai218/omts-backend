@@ -76,6 +76,8 @@ internal static partial class RecordHistoryLabels
         ["EarlyReason"] = ("Lý do chốt sớm", null),
         ["Status"] = ("Trạng thái", null),
         ["SeedingCompletedOn"] = ("Ngày hoàn tất thả giống", null),
+        ["Note"] = ("Ghi chú", null),
+        ["NurseryBatch"] = ("Đợt ươm", null),
         ["Photos"] = ("Ảnh kế hoạch", null),
     };
 
@@ -87,7 +89,9 @@ internal static partial class RecordHistoryLabels
         ["Quantity"] = ("Số mảnh vào ươm", "mảnh"),
         ["Note"] = ("Ghi chú", null),
         ["Survivors"] = ("Số mảnh sống sót (ước tính)", "mảnh"),
-        ["CompletedOn"] = ("Ngày hoàn tất ươm", null),
+        ["CompletedOn"] = ("Ngày ươm xong", null),
+        ["ClosedOn"] = ("Ngày đóng đợt ươm", null),
+        ["CloseLossPieces"] = ("Hao hụt khi đóng đợt (ước tính)", "mảnh"),
         ["Allocations"] = ("Phân bổ cho bè", null),
         ["Photos"] = ("Ảnh", null),
     };
@@ -96,7 +100,7 @@ internal static partial class RecordHistoryLabels
     {
         ["SurvivorsCorrected"] = "Sửa số sống sót",
         ["AllocationsChanged"] = "Chuyển phần chia giữa các bè",
-        ["Completed"] = "Hoàn tất ươm",
+        ["Completed"] = "Ươm xong",
         ["Created"] = "Tạo mới",
         ["Edited"] = "Chỉnh sửa",
         ["TraceCorrected"] = "Hiệu chỉnh truy xuất",
@@ -148,7 +152,9 @@ internal static partial class RecordHistoryLabels
         return name is "Corrected" or "Updated" ? "Edited" : name;
     }
 
-    public static string ActionLabel(string action) => Actions.GetValueOrDefault(action, action);
+    /// <summary>The Vietnamese label of an action; a nursery batch is "closed" (Đóng đợt ươm) where a cycle is "chốt".</summary>
+    public static string ActionLabel(string action, string? recordType = null) =>
+        recordType == "NurseryBatch" && action == "Closed" ? "Đóng đợt ươm" : Actions.GetValueOrDefault(action, action);
 
     public static string? RoleLabel(string? roleCode) => roleCode is null ? null : Roles.GetValueOrDefault(roleCode, roleCode);
 

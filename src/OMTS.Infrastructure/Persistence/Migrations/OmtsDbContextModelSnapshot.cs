@@ -438,6 +438,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
 
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<decimal?>("NurseryAllocatedQuantity")
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
@@ -775,6 +779,20 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("CancelledAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<decimal?>("CloseLossPieces")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<string>("CloseReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid?>("ClosedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("ClosedOn")
+                        .HasColumnType("date");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -832,6 +850,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ClosedByAccountId");
 
                     b.HasIndex("Code")
                         .IsUnique();
@@ -4467,9 +4487,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Code = "COMPLETED",
                             DisplayName = "Completed",
                             Group = "NURSERY_BATCH",
-                            IsFinal = true,
+                            IsFinal = false,
                             IsInitial = false,
-                            Meaning = "The survivors are recorded and each raft has its cycle; the survivors and shares can still be corrected before the seed is hung.",
+                            Meaning = "The survivors are recorded (Đã ươm xong): the batch is a pool that cycles seed from; the survivors can still be corrected, not below what is seeded. It is closed once the rafts are seeded.",
                             SortOrder = 2
                         },
                         new
@@ -4482,6 +4502,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             IsInitial = false,
                             Meaning = "Recorded by mistake before it was completed; the pieces are back in the stock.",
                             SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 4004,
+                            Code = "CLOSED",
+                            DisplayName = "Closed",
+                            Group = "NURSERY_BATCH",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "Closed with pieces left in the pool: the remainder is written off as an estimated loss; nothing is seeded from it any more.",
+                            SortOrder = 4
                         });
                 });
 
@@ -4918,7 +4949,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Id = 30090,
                             AllowedPerformers = "Cooperative Owner; Zone Manager",
                             FromStatusId = 4001,
-                            GuardCondition = "The survivors are not above the pieces put in, and the shares of the rafts of the zone, none with an Open cycle, add up to the survivors exactly.",
+                            GuardCondition = "The survivors are not above the pieces put in; no share and no cycle is created (v2, 13/11/2026).",
                             ReasonRequired = false,
                             ToStatusId = 4002,
                             TriggerEvent = "Action",
@@ -4934,6 +4965,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             ToStatusId = 4003,
                             TriggerEvent = "Action",
                             UseCases = "NURSERY-02"
+                        },
+                        new
+                        {
+                            Id = 30092,
+                            AllowedPerformers = "Cooperative Owner; Zone Manager",
+                            FromStatusId = 4002,
+                            GuardCondition = "The batch is Completed and pieces are left in the pool; they are written off as an estimated loss.",
+                            ReasonRequired = false,
+                            ToStatusId = 4004,
+                            TriggerEvent = "Action",
+                            UseCases = "NURSERY-05"
                         },
                         new
                         {
@@ -7557,6 +7599,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.NurseryBatch", b =>
                 {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ClosedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("CompletedByAccountId")

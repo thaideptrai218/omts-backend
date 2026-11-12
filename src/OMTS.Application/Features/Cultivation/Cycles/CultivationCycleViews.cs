@@ -4,6 +4,7 @@ using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Interfaces.Storage;
 using OMTS.Application.Features.Cultivation.Nursery;
+using OMTS.Application.Features.Cultivation.Seeding;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
@@ -20,17 +21,22 @@ public sealed class CultivationCycleViews(
         var hasRecords = (await cycles.WithRecordsAsync([cycle.Id], cancellationToken)).Count > 0;
         var lastLotDate = cycle.CloseDate is null ? null : await harvestLots.LastHarvestDateAsync(cycle.Id, cancellationToken);
         var zoneInUse = cycle.Raft.Zone.StatusId == StatusIds.Usage.InUse;
-        var nursery = cycle.NurseryBatchId is null ? null : (await nurseries.FactsByCycleAsync([cycle.Id], cancellationToken)).GetValueOrDefault(cycle.Id);
-        // A cycle from a nursery batch shows the completion photos of its batch; any other shows its own plan photos (decision of 12/11/2026).
+        var batch = cycle.NurseryBatchId is { } batchId ? await nurseries.GetForPoolAsync(batchId, cancellationToken) : null;
+        var seededByCycle = (await nurseries.SeededByCycleAsync([cycle.Id], cancellationToken)).GetValueOrDefault(cycle.Id);
+        var poolSeeded = batch is null ? 0m : (await nurseries.SeededByBatchAsync([batch.Id], null, cancellationToken)).GetValueOrDefault(batch.Id);
+        // A cycle shows its own plan photos (v2); an older cycle from a nursery that has none shows the completion photos of its batch (decision of 12/11/2026).
+        var own = await cycles.PlanPhotosAsync(cycle.Id, cancellationToken);
+        var fromNursery = own.Count == 0 && cycle.NurseryBatchId is not null;
+        var rows = fromNursery
+            ? (await nurseries.CompletionPhotosAsync(cycle.NurseryBatchId!.Value, cancellationToken)).Select(p => (p.Id, p.SortOrder, p.FileKey)).ToList()
+            : own.Select(p => (p.Id, p.SortOrder, p.FileKey)).ToList();
         var photos = new List<CyclePlanPhotoView>();
-        var rows = cycle.NurseryBatchId is { } batchId
-            ? (await nurseries.CompletionPhotosAsync(batchId, cancellationToken)).Select(p => (p.Id, p.SortOrder, p.FileKey)).ToList()
-            : (await cycles.PlanPhotosAsync(cycle.Id, cancellationToken)).Select(p => (p.Id, p.SortOrder, p.FileKey)).ToList();
         foreach (var (id, sortOrder, key) in rows)
         {
             photos.Add(new CyclePlanPhotoView(id, sortOrder, await storage.GetReadUrlAsync(key, cancellationToken: cancellationToken)));
         }
 
+        var canEdit = CanEdit(cycle, cycle.Raft, zoneInUse);
         return new CycleView(
             cycle.Id,
             cycle.RaftId,
@@ -45,18 +51,19 @@ public sealed class CultivationCycleViews(
             CycleDaysOfFarming.Count(cycle.StartDate, lastLotDate, cycle.CloseDate, timeProvider.Today()),
             cycle.StatusId,
             statusCatalog.DisplayNameOf(cycle.StatusId),
-            CanEdit(cycle, cycle.Raft, zoneInUse),
+            canEdit,
             CanCancel(cycle, cycle.Raft, zoneInUse, hasRecords),
             RowVersionGuard.Encode(cycle.RowVersion),
             cycle.NurseryBatchId,
-            nursery?.BatchCode,
-            nursery?.Allocated,
-            nursery?.Seeded,
-            nursery is null ? null : NurseryRules.Remaining(nursery.Allocated, nursery.Seeded),
+            batch?.Code,
+            batch is null ? null : seededByCycle,
+            batch is null ? null : NurseryRules.PoolRemaining(batch, poolSeeded) ?? 0m,
             photos,
-            cycle.NurseryBatchId is not null);
+            fromNursery,
+            cycle.Note,
+            batch is null ? null : SeedingViews.LotRef(batch.SeedLotLine),
+            canEdit && seededByCycle <= 0m);
     }
-
     public CycleListItem ListItem(CultivationCycle cycle) => new(
         cycle.Id, cycle.StartDate, cycle.CloseDate, cycle.StatusId, statusCatalog.DisplayNameOf(cycle.StatusId), RowVersionGuard.Encode(cycle.RowVersion), cycle.ClosedEarly, cycle.NurseryBatchId);
 

@@ -28,7 +28,7 @@ public sealed class NurseryBatchesController(
     public async Task<IActionResult> SeedLots([FromQuery] Guid zoneId, CancellationToken cancellationToken) =>
         (await reads.SeedLotsAsync(zoneId, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>The Completed batches that still have seed to hang in an Open cycle, for the seeding screen.</summary>
+    /// <summary>The Completed (ready) batches with pieces left in the pool, to choose from when a cycle is started (v2).</summary>
     [HttpGet("api/nursery-batches/available")]
     [ProducesResponseType<AvailableNurseryList>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Available([FromQuery] Guid? zoneId, CancellationToken cancellationToken) =>
@@ -75,8 +75,8 @@ public sealed class NurseryBatchesController(
         (await edits.CancelAsync(batchId, request, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>
-    /// Completes a Nursing batch and creates one cycle per raft, in one save. Multipart: <c>survivors</c>, optional <c>completedOn</c>, <c>rowVersion</c>, <c>allocations</c> (a JSON array of
-    /// <c>{ raftId, quantity, targetYieldKg? }</c> adding up to the survivors) and 1 to 3 <c>photos</c> parts.
+    /// Completes a Nursing batch (v2, 13/11/2026): it becomes the pool ("kho ươm", Đã ươm xong) cycles seed from. Multipart: <c>survivors</c>, optional <c>completedOn</c>, <c>rowVersion</c> and 1 to 3 <c>photos</c> parts.
+    /// No shares and no cycle: a field sent for them is ignored.
     /// </summary>
     [HttpPost("api/nursery-batches/{batchId:guid}/complete")]
     [RequestSizeLimit(MaxUploadBytes)]
@@ -87,15 +87,21 @@ public sealed class NurseryBatchesController(
         (await completions.CompleteAsync(batchId, form.ToComplete(Request.Form.Files.HasPartOtherThan(PhotosField)), await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
             .ToActionResult(Ok);
 
-    /// <summary>Corrects the survivors of a Completed batch (old to new in the history, with a reason), not below the seed hung.</summary>
+    /// <summary>Corrects the survivors of a Completed batch (old to new in the history, with a reason), not below the seed already taken from the pool.</summary>
     [HttpPost("api/nursery-batches/{batchId:guid}/survivors")]
     [ProducesResponseType<NurseryBatchSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> CorrectSurvivors(Guid batchId, CorrectSurvivorsRequest request, CancellationToken cancellationToken) =>
         (await completions.CorrectSurvivorsAsync(batchId, request, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Moves the shares of the survivors between the rafts of a Completed batch (one raft, or many); the total stays the survivors.</summary>
-    [HttpPost("api/nursery-batches/{batchId:guid}/allocations")]
+    /// <summary>Closes a Completed batch with pieces left in its pool: they are written off as a loss estimate and nothing is seeded from it any more. Notifies the Owner when a Zone Manager does it.</summary>
+    [HttpPost("api/nursery-batches/{batchId:guid}/close")]
     [ProducesResponseType<NurseryBatchSaved>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ChangeAllocations(Guid batchId, ChangeNurseryAllocationsRequest request, CancellationToken cancellationToken) =>
-        (await completions.ChangeAllocationsAsync(batchId, request, cancellationToken)).ToActionResult(Ok);
+    public async Task<IActionResult> Close(Guid batchId, CloseNurseryRequest request, CancellationToken cancellationToken) =>
+        (await completions.CloseAsync(batchId, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>The transfer of shares between rafts is gone since v2 (13/11/2026): the pool is drawn from by every cycle through its seeding records. 410.</summary>
+    [HttpPost("api/nursery-batches/{batchId:guid}/allocations")]
+    [ProducesResponseType(StatusCodes.Status410Gone)]
+    public IActionResult ChangeAllocations(Guid batchId) =>
+        StatusCode(StatusCodes.Status410Gone, new { status = StatusCodes.Status410Gone, reasonCode = NurseryReasonCodes.AllocationsRemoved, message = "Đã bỏ việc chia số mảnh ươm cho từng bè: đợt ươm là kho chung, mỗi chu kỳ lấy giống khi thả." });
 }

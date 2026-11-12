@@ -193,11 +193,10 @@ public static class DependencyInjection
         services.AddScoped<SeedingRecordCorrectionService>();
         services.AddScoped<SeedingCompletionService>();
 
-        // NURSERY – ươm giống: batches of one seed lot per zone, completed into one cycle per raft
+        // NURSERY – ươm giống: batches of one seed lot per zone, completed into a pool the cycles seed from (v2)
         services.AddScoped<NurseryBatchViews>();
         services.AddScoped<NurseryNotifier>();
         services.AddScoped<NurseryStockSync>();
-        services.AddScoped<NurseryAllocationApplier>();
         services.AddScoped<NurseryBatchService>();
         services.AddScoped<NurseryBatchEditService>();
         services.AddScoped<NurseryCompletionService>();

@@ -69,10 +69,13 @@ public sealed class SeedingReadService(
         var day = await laneStates.ReadAsync(raft, cycle.CloseDate ?? timeProvider.Today(), cancellationToken);
         var ofCycle = await records.ListByCycleAsync(cycle.Id, cancellationToken);
         var figures = SeedingViews.Figures(raft, day.States);
-        var canRecord = CultivationCycleViews.CanEdit(cycle, cycle.Raft, cycle.Raft.Zone.StatusId == StatusIds.Usage.InUse)
-            && await zoneAccess.AllowsAsync(PermissionFunctions.CultivationCycles, PermissionAction.Create, cycle.Raft.ZoneId, cancellationToken);
+        var batch = cycle.NurseryBatchId is { } batchId ? await nurseries.GetForPoolAsync(batchId, cancellationToken) : null;
+        var poolSeeded = batch is null ? 0m : (await nurseries.SeededByBatchAsync([batch.Id], null, cancellationToken)).GetValueOrDefault(batch.Id);
         var completed = cycle.SeedingCompletedOn is not null;
-        var nursery = cycle.NurseryBatchId is null ? null : (await nurseries.FactsByCycleAsync([cycle.Id], cancellationToken)).GetValueOrDefault(cycle.Id);
+        // A cycle that draws from a nursery takes no new session once its seeding is marked complete (v2).
+        var canRecord = CultivationCycleViews.CanEdit(cycle, cycle.Raft, cycle.Raft.Zone.StatusId == StatusIds.Usage.InUse)
+            && !(batch is not null && completed)
+            && await zoneAccess.AllowsAsync(PermissionFunctions.CultivationCycles, PermissionAction.Create, cycle.Raft.ZoneId, cancellationToken);
         var progress = await laneProgress.InfoAsync(day, cancellationToken);
         return new SeedingList(
             cycle.Id,
@@ -91,7 +94,8 @@ public sealed class SeedingReadService(
                     l.Id, l.LaneNumber, l.StatusId, statusCatalog.DisplayNameOf(l.StatusId), day.States[l.Id],
                     canRecord && l.IsUsable && SeedingLaneRules.CanBeSeeded(day.States[l.Id], completed),
                     l.IsDamaged, l.IsOutOfService, Farming.Rafts.LaneReasonCodes.Of(l),
-                    progress[l.Id].SeededPercent, progress[l.Id].HarvestedPercent, progress[l.Id].LastModifiedByName, progress[l.Id].LastModifiedAt, progress[l.Id].ProgressHistory))
+                    progress[l.Id].SeededPercent, progress[l.Id].HarvestedPercent, progress[l.Id].LastModifiedByName, progress[l.Id].LastModifiedAt, progress[l.Id].ProgressHistory,
+                    Math.Max(0m, 100m - progress[l.Id].SeededPercent)))
                 .ToList(),
             await views.ListAsync(ofCycle, cycle, day.States, cancellationToken),
             ofCycle.GroupBy(r => r.SeedLotLineId)
@@ -103,10 +107,13 @@ public sealed class SeedingReadService(
             ofCycle.Sum(r => r.Quantity),
             SeedingPlanRules.Percent(cycle.ExpectedSeedQuantity, ofCycle.Sum(r => r.Quantity)),
             cycle.NurseryBatchId,
-            nursery?.BatchCode,
-            nursery?.Allocated,
-            nursery?.Seeded,
-            nursery is null ? null : NurseryRules.Remaining(nursery.Allocated, nursery.Seeded));
+            batch?.Code,
+            batch is null ? null : ofCycle.Sum(r => r.Quantity),
+            batch is null ? null : NurseryRules.PoolRemaining(batch, poolSeeded) ?? 0m,
+            batch is null ? null : SeedingViews.LotRef(batch.SeedLotLine),
+            raft.Lanes
+                .Where(l => l.StatusId == StatusIds.Lane.InUse && l.IsUsable && SeedingLaneRules.CanBeSeeded(day.States[l.Id], completed) && progress[l.Id].SeededPercent < 100m)
+                .OrderBy(l => l.LaneNumber).Select(l => l.LaneNumber).ToList());
     }
 
     public async Task<Result<SeedingRecordView>> GetAsync(Guid recordId, CancellationToken cancellationToken)

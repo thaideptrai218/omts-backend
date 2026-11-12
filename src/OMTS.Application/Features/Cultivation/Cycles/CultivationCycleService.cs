@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Options;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Exceptions;
@@ -17,14 +16,15 @@ using OMTS.Domain.Entities.Farming;
 namespace OMTS.Application.Features.Cultivation.Cycles;
 
 /// <summary>
-/// CYCLE-01 start, edit and cancel, for a Zone Manager of the raft's zone and the Cooperative Owner. These writes notify nobody.
+/// CYCLE-01 start (<see cref="CreateAsync"/>, from a nursery batch), edit and cancel, for a Zone Manager of the raft's zone and the Cooperative Owner. These writes notify nobody.
 /// A raft holds at most one Open cycle and its cycles never overlap (BR-CYCLE-01); the filtered unique index holds that against
 /// parallel starts.
 /// </summary>
-public sealed class CultivationCycleService(
+public sealed partial class CultivationCycleService(
     ICultivationCycleRepository cycles,
     ICultivationCycleQuery cycleQuery,
     IRaftRepository rafts,
+    INurseryBatchRepository nurseries,
     RaftViews raftViews,
     CultivationCycleViews views,
     CycleWriteGuard writes,
@@ -32,23 +32,17 @@ public sealed class CultivationCycleService(
     RowVersionGuard rowVersions,
     RecordPhotoStore photoStore,
     UploadedFileSaver fileSaver,
-    IOptions<CycleStartOptions> startOptions,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
 {
-    /// <summary>The <c>reasonCode</c> of the refusal to start a cycle by hand (owner decision of 12/11/2026, Q21).</summary>
-    public const string RequiresNurseryCode = "CYCLE_REQUIRES_NURSERY";
-
-    /// <summary>The text shown for <see cref="RequiresNurseryCode"/>.</summary>
-    public const string RequiresNurseryMessage = "Chu kỳ mới được tạo khi hoàn tất ươm.";
-
     private const string RecordType = nameof(CultivationCycle);
     private const string Saved = "Cultivation cycle";
 
-    /// <param name="photos">The photos of the plan (owner decision of 12/11/2026): 1 to 3, else 400 on <c>Photos</c> and nothing is saved.</param>
+    /// <param name="photos">The photos of the plan (owner decision of 12/11/2026): 1 to 3 unless <paramref name="bootstrap"/>, else 400 on <c>Photos</c> and nothing is saved.</param>
     /// <param name="bootstrap">
-    /// True only for the demo bootstrap, which writes demo cycles directly like the rest of its data: no photos, and the nursery rule does not apply. No request can send it.
+    /// The OLD way of starting a cycle, with no nursery batch (the legacy free-lot path): no public route reaches it since v2 (13/11/2026), where a cycle is started with <see cref="CreateAsync"/>. Only the demo bootstrap and the test seam
+    /// call it, and they write cycles directly like the rest of their data: no photos are required.
     /// </param>
     public async Task<Result<CycleStarted>> StartAsync(
         Guid raftId, StartCycleRequest request, IReadOnlyList<IncomingFile> photos, CancellationToken cancellationToken, bool bootstrap = false)
@@ -68,16 +62,6 @@ public sealed class CultivationCycleService(
         if (raftViews.EditRefusal(raft) is { } refused)
         {
             return refused;
-        }
-
-        // A new cycle is created by completing a nursery batch (owner decision of 12/11/2026, Q21): the old way (a start by hand, then a seed lot picked per session with the 110 % and 150 % plan tiers
-        // and a stock issue) is closed for new cycles. Cycles already running keep working; the rule is checked after access and read-only, before anything is stored.
-        if (!bootstrap && !startOptions.Value.AllowManualStart)
-        {
-            return new AppError(
-                ErrorKind.Validation,
-                UserMessages.NurseryRefused(RequiresNurseryMessage),
-                new Dictionary<string, object?> { ["reasonCode"] = RequiresNurseryCode, ["field"] = "Cycle", ["hint"] = RequiresNurseryMessage });
         }
 
         if (await cycleQuery.OpenCycleAsync(raft.Id, cancellationToken) is { } open)
@@ -142,7 +126,7 @@ public sealed class CultivationCycleService(
         return new CycleStarted(await views.ViewAsync(cycle, cancellationToken), previousClose, raftViews.Lanes(raft), saved.Text, saved.Code);
     }
 
-    /// <summary>CYCLE-01.1: only an Open cycle, on a raft In Use; the start date stays within the limits of BR-CYCLE-01.</summary>
+    /// <summary>CYCLE-01.1: only an Open cycle, on a raft In Use; the start date stays within the limits of BR-CYCLE-01. A cycle without a nursery batch (legacy) keeps the old edit; the others <see cref="EditNurseryCycleAsync"/>.</summary>
     public async Task<Result<CycleSaved>> EditAsync(Guid cycleId, EditCycleRequest request, CancellationToken cancellationToken)
     {
         var cycle = await cycles.GetForEditAsync(cycleId, cancellationToken);
@@ -159,6 +143,12 @@ public sealed class CultivationCycleService(
         if (writes.Refusal(cycle) is { } refused)
         {
             return refused;
+        }
+
+        // A cycle that draws from a nursery batch (v2), or is given one now, has its own edit rules.
+        if (cycle.NurseryBatchId is not null || request.NurseryBatchId is not null)
+        {
+            return await EditNurseryCycleAsync(cycle, request, cancellationToken);
         }
 
         var limits = new CycleDateLimits(
@@ -233,8 +223,7 @@ public sealed class CultivationCycleService(
     }
 
     /// <summary>
-    /// Changes the plan photos of a cycle started without a nursery batch (decision of 12/11/2026): exactly the kept ones and the new ones remain, 1 to 3 (a cycle saved before the photos may stay with none until
-    /// it is given some, but never ends above three). A cycle from a nursery batch shows the completion photos of its batch, so they change there: 409 <c>PLAN_PHOTOS_FROM_NURSERY</c>.
+    /// Changes the plan photos of a cycle (decision of 12/11/2026): exactly the kept ones and the new ones remain, 1 to 3 (a cycle saved before the photos may stay with none until it is given some, but never ends above three).
     /// </summary>
     public async Task<Result<CycleSaved>> ChangePlanPhotosAsync(Guid cycleId, ChangePlanPhotosRequest request, IReadOnlyList<IncomingFile> newPhotos, CancellationToken cancellationToken)
     {
@@ -252,13 +241,6 @@ public sealed class CultivationCycleService(
         if (writes.Refusal(cycle) is { } refused)
         {
             return refused;
-        }
-
-        if (cycle.NurseryBatchId is not null)
-        {
-            return AppError.Conflict(
-                UserMessages.WrongStatus($"The cultivation cycle of raft {cycle.Raft.Code}", "created from a nursery batch: its plan photos are the completion photos of the batch"),
-                new Dictionary<string, object?> { ["reasonCode"] = "PLAN_PHOTOS_FROM_NURSERY", ["nurseryBatchId"] = cycle.NurseryBatchId });
         }
 
         var current = await cycles.PlanPhotosForEditAsync(cycle.Id, cancellationToken);

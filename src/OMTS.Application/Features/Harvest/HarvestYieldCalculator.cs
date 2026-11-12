@@ -71,9 +71,9 @@ public static class HarvestYieldCalculator
         decimal? target = withTarget.Count == 0 ? null : withTarget.Sum(c => c.TargetYieldKg!.Value);
         var seeds = cycles.Select(c => cycleFigures?.GetValueOrDefault(c.Id)?.Seed).OfType<CycleSeedTotal>().ToList();
         var units = seeds.Select(s => s.Unit).Where(u => !string.IsNullOrWhiteSpace(u)).Distinct().ToList();
-        // The nursery of the cycles of the group (estimates, counted by eye): the pieces put in in proportion to the share of each cycle; null when no cycle came from a nursery.
+        // The nursery of the cycles of the group (estimates, counted by eye): the pieces put in, the survivors and the loss of each batch shared by what each cycle seeded (v2); null when no cycle came from a nursery.
         var nurseries = cycles.Select(c => cycleFigures?.GetValueOrDefault(c.Id)?.Nursery).OfType<NurseryCycleFacts>().Select(NurseryRules.SummaryOf).ToList();
-        var (nurseryIn, nurserySurvivors) = (nurseries.Sum(n => n.QuantityIn), nurseries.Sum(n => n.Survivors));
+        var (nurseryIn, nurserySurvivors, nurseryLoss) = (nurseries.Sum(n => n.QuantityIn), nurseries.Sum(n => n.Survivors), nurseries.Sum(n => n.LossPieces));
         return new HarvestYieldGroup(
             KeyOf(first, groupBy),
             label,
@@ -104,7 +104,7 @@ public static class HarvestYieldCalculator
             lots.Where(l => l.NotFinal).Sum(l => l.RemainingKg),
             nurseries.Count == 0 ? null : nurseryIn,
             nurseries.Count == 0 ? null : nurserySurvivors,
-            nurseries.Count == 0 ? null : NurseryRules.LossPieces(nurseryIn, nurserySurvivors),
-            nurseries.Count == 0 ? null : NurseryRules.LossPercent(nurseryIn, nurserySurvivors));
+            nurseries.Count == 0 ? null : nurseryLoss,
+            nurseries.Count == 0 ? null : (nurseryIn > 0 ? decimal.Round(nurseryLoss / nurseryIn * 100, 1) : 0m));
     }
 }

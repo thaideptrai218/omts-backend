@@ -1,4 +1,5 @@
 using OMTS.Application.Common;
+using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Cultivation.Nursery;
 using OMTS.Application.Features.Cultivation.Progress;
@@ -18,7 +19,7 @@ namespace OMTS.Application.Features.Traceability.Corrections;
 /// A lane the correction adds, or every lane when the date moves, must be free to seed on that date without the session itself: Not seeded, or Growing (re-hanging) while the
 /// seeding was not yet marked complete; never Being harvested or Harvested. Lanes the session keeps stay allowed, also one Removed since the close (BR-FARM-04).
 /// </summary>
-public sealed class TraceSeedingReader(SeedingSessionReader sessions, TimeProvider timeProvider)
+public sealed class TraceSeedingReader(SeedingSessionReader sessions, INurseryBatchRepository nurseries, TimeProvider timeProvider)
 {
     /// <param name="ofCycle">Every session of the cycle, the corrected one among them.</param>
     /// <param name="lots">Every lot of the cycle with its lanes.</param>
@@ -30,25 +31,12 @@ public sealed class TraceSeedingReader(SeedingSessionReader sessions, TimeProvid
         var lastDay = cycle.CloseDate is { } closed && closed < today ? closed : today;
         var lot = await sessions.LotAsync(request.SeedLotId, record, cancellationToken);
 
-        // Owner decision of 13/11/2026: a session from a nursery hangs all that is left of the share of its cycle; its quantity is not chosen here either.
-        var wanted = request.Quantity;
-        if (record.NurseryBatchId is not null)
-        {
-            var full = NurseryRules.FullSeeding(cycle.NurseryAllocatedQuantity ?? 0m, ofCycle.Where(s => s.Id != record.Id).Sum(s => s.Quantity), request.Quantity);
-            if (full.Error is not null)
-            {
-                return (null, full.Error);
-            }
-
-            wanted = full.Quantity;
-        }
-
         var check = new FieldCheck();
         var dateIsValid = request.SeedingDate is { } date && date >= cycle.StartDate && date <= lastDay && (lot is null || date >= lot.Receipt.ReceiptDate);
         check.Check(dateIsValid, SeedingValues.DateField);
         check.Check(lot is not null, SeedingValues.SeedLotField);
         check.Check(
-            wanted is { } quantity && quantity > 0 && quantity <= PurchaseReceiptValidator.MaxQuantity && PurchaseReceiptValidator.HasAllowedDecimals(quantity),
+            request.Quantity is { } quantity && quantity > 0 && quantity <= PurchaseReceiptValidator.MaxQuantity && PurchaseReceiptValidator.HasAllowedDecimals(quantity),
             SeedingValues.QuantityField);
         var (lanes, laneHint) = Lanes(record, raft, request.LaneNumbers, dateIsValid ? request.SeedingDate : null, ofCycle, lots);
         check.Check(lanes is not null && laneHint is null, SeedingValues.LanesField);
@@ -58,7 +46,14 @@ public sealed class TraceSeedingReader(SeedingSessionReader sessions, TimeProvid
             return (null, laneHint is not null && check.Invalid is [SeedingValues.LanesField] ? AppError.Invalid(SeedingValues.LanesField, laneHint) : AppError.InvalidFields(check.Invalid));
         }
 
-        return (new SeedingFields(request.SeedingDate!.Value, lot!, wanted!.Value, lanes!, reason), null);
+        // A session from a nursery (v2, 13/11/2026) stays within the pool of its batch once this session is set aside.
+        if (record.NurseryBatchId is { } batchId && await nurseries.GetForPoolAsync(batchId, cancellationToken) is { } batch
+            && NurseryRules.CheckPool(batch, (await nurseries.SeededByBatchAsync([batch.Id], record.Id, cancellationToken)).GetValueOrDefault(batch.Id), request.Quantity!.Value) is { } overPool)
+        {
+            return (null, overPool);
+        }
+
+        return (new SeedingFields(request.SeedingDate!.Value, lot!, request.Quantity!.Value, lanes!, reason), null);
     }
 
     /// <param name="date">The corrected date when it is valid, else null: the lanes are then checked only as lanes of the raft.</param>

@@ -163,6 +163,9 @@ public static class StatusIds
         public const int Nursing = 4001;
         public const int Completed = 4002;
         public const int Cancelled = 4003;
+
+        /// <summary>v2 (13/11/2026): the batch was closed, the pieces left in the pool are written off as loss.</summary>
+        public const int Closed = 4004;
     }
 
     /// <summary>An input issue: a Draft holds no quantity and is removed; Completed writes the movements; Cancelled counts nowhere.</summary>

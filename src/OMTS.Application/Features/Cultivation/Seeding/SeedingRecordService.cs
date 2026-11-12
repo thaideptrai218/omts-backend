@@ -58,24 +58,18 @@ public sealed class SeedingRecordService(
             return refused;
         }
 
-        // A cycle created from a nursery batch seeds the batch's lot, from its share (hard cap), with no stock movement and no plan percentages (owner decision of 12/11/2026).
+        // A cycle that draws from a nursery batch (v2, 13/11/2026) seeds the lot of the batch, any quantity up to what is left in the pool of the batch (every cycle together), with no stock movement
+        // (the pieces left the stock when the nursery started) and no plan percentages. The seeding of the cycle must not be marked complete.
         var fromNursery = cycle.NurseryBatchId is not null;
-        var nurseryLot = fromNursery ? await nurseries.SeedLotOfAsync(cycle.NurseryBatchId!.Value, cancellationToken) ?? throw new InvalidOperationException($"Nursery batch {cycle.NurseryBatchId} has no seed lot.") : null;
-        var others = (await records.ListByCycleAsync(cycle.Id, cancellationToken)).Sum(r => r.Quantity);
-        // Owner decision of 13/11/2026: a nursery session hangs all that is left of the share, so its quantity is not chosen (left out, or equal to it).
-        var quantity = request.Quantity;
-        if (fromNursery)
+        var batch = fromNursery ? await nurseries.GetForPoolAsync(cycle.NurseryBatchId!.Value, cancellationToken) ?? throw new InvalidOperationException($"Nursery batch {cycle.NurseryBatchId} not found.") : null;
+        if (fromNursery && cycle.SeedingCompletedOn is not null)
         {
-            var full = NurseryRules.FullSeeding(cycle.NurseryAllocatedQuantity ?? 0m, others, request.Quantity);
-            if (full.Error is not null)
-            {
-                return full.Error;
-            }
-
-            quantity = full.Quantity;
+            return NurseryRules.SeedingCompletedRefusal(cycle.Raft.Code);
         }
 
-        var input = new SeedingInput(request.SeedingDate, request.SeedLotId, request.LaneNumbers, quantity, nurseryLot);
+        var others = (await records.ListByCycleAsync(cycle.Id, cancellationToken)).Sum(r => r.Quantity);
+
+        var input = new SeedingInput(request.SeedingDate, request.SeedLotId, request.LaneNumbers, request.Quantity, batch?.SeedLotLine);
         var (fields, invalid) = await reader.ReadAsync(cycle, input, null, null, reasonRequired: false, cancellationToken);
         if (invalid is not null)
         {
@@ -97,7 +91,7 @@ public sealed class SeedingRecordService(
 
         string? overPlanReason = null;
         var overPlan = fromNursery
-            ? NurseryRules.CheckSeeding(cycle.NurseryAllocatedQuantity ?? 0m, others, fields!.Quantity)
+            ? NurseryRules.CheckPool(batch!, (await nurseries.SeededByBatchAsync([batch!.Id], null, cancellationToken)).GetValueOrDefault(batch.Id), fields!.Quantity)
             : SeedingPlanRules.Check(new SeedingPlanInput(cycle.ExpectedSeedQuantity, others, request.ConfirmOverPlan, request.OverPlanReason), fields!.Quantity, out overPlanReason);
         if (overPlan is not null)
         {
@@ -143,7 +137,12 @@ public sealed class SeedingRecordService(
         SeedingPhotoRows.Add(records, record, uploaded.Value!);
         records.Add(record);
         unitOfWork.MarkChanged(cycle);
-        if (!fromNursery)
+        if (fromNursery)
+        {
+            // The pool of the batch is shared by every cycle: two sessions that each fit but not together conflict on the batch row (MSG06).
+            unitOfWork.MarkChanged(batch!);
+        }
+        else
         {
             unitOfWork.MarkChanged(fields.Lot.Receipt);
         }

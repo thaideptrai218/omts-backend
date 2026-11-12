@@ -61,7 +61,7 @@ public sealed partial class RecordHistoryService(IAuditEventQuery events, ZoneAc
         var before = AuditValueSerializer.ForDisplay(row.Values.Before);
         var after = AuditValueSerializer.ForDisplay(row.Values.After);
         return new RecordHistoryEntry(
-            e.Id, e.OccurredAt, name ?? "Hệ thống", RecordHistoryLabels.RoleLabel(row.ActorRole), row.ActorRole, action, e.Action, RecordHistoryLabels.ActionLabel(action), e.Reason,
+            e.Id, e.OccurredAt, name ?? "Hệ thống", RecordHistoryLabels.RoleLabel(row.ActorRole), row.ActorRole, action, e.Action, RecordHistoryLabels.ActionLabel(action, recordType), e.Reason,
             NoteOf(after), Changes(recordType, before, after));
     }
 

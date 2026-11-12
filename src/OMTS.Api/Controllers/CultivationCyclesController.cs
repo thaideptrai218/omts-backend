@@ -32,23 +32,34 @@ public sealed class CultivationCyclesController(
         (await reads.ListOfZoneAsync(zoneId, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>
-    /// Starts a cycle; without a start date it starts today. Multipart (owner decision of 12/11/2026): <c>startDate</c>, <c>expectedSeedQuantity</c> and <c>targetYieldKg</c> (optional) and 1 to 3 <c>photos</c>
-    /// parts of the plan (JPEG or PNG, at most 10 MB each; 400 on <c>Photos</c> otherwise). MSG-GEN-09 for a Discontinued raft, MSG-GEN-06 for an Open cycle.
+    /// Starts a cycle by hand from a nursery batch that is ready (v2, 13/11/2026); without a start date it starts today. Multipart: <c>raftId</c>, <c>nurseryBatchId</c> (required: Completed, same zone as the raft, pieces left in its pool),
+    /// <c>targetYieldKg</c> (required, above 0), <c>startDate</c>, <c>note</c> and 1 to 3 <c>photos</c> parts of the plan (JPEG or PNG, at most 10 MB each; 400 on <c>Photos</c> otherwise). MSG-GEN-09 for a Discontinued raft
+    /// or a batch that does not qualify (<c>reasonCode</c>), MSG-GEN-06 for an Open cycle. There is no other way to start a cycle: the old free seed lot path is closed.
     /// </summary>
+    [HttpPost("api/cultivation-cycles")]
+    [RequestSizeLimit(MaxUploadBytes)]
+    [UploadField(PhotosField)]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType<CycleStarted>(StatusCodes.Status201Created)]
+    public async Task<IActionResult> Create([FromForm] CyclePlanForm form, CancellationToken cancellationToken) =>
+        !Request.HasFormContentType
+            ? StatusCode(StatusCodes.Status415UnsupportedMediaType)
+            : (await cycles.CreateAsync(form.ToCreate(Request.Form.Files.HasPartOtherThan(PhotosField)), await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
+                .ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
+
+    /// <summary>The same start with the raft in the route (the quick button of the raft detail): <c>raftId</c> of the form is ignored.</summary>
     [HttpPost("api/rafts/{raftId:guid}/cultivation-cycles")]
     [RequestSizeLimit(MaxUploadBytes)]
     [UploadField(PhotosField)]
     [Consumes("multipart/form-data")]
     [ProducesResponseType<CycleStarted>(StatusCodes.Status201Created)]
-    public async Task<IActionResult> Start(Guid raftId, [FromForm] CyclePlanForm form, CancellationToken cancellationToken) =>
+    public async Task<IActionResult> CreateOnRaft(Guid raftId, [FromForm] CyclePlanForm form, CancellationToken cancellationToken) =>
         !Request.HasFormContentType
             ? StatusCode(StatusCodes.Status415UnsupportedMediaType)
-            : (await cycles.StartAsync(raftId, form.ToStart(Request.Form.Files.HasPartOtherThan(PhotosField)), await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
+            : (await cycles.CreateAsync(form.ToCreate(Request.Form.Files.HasPartOtherThan(PhotosField), raftId), await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
                 .ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
-
     /// <summary>
-    /// Changes the plan photos of a cycle started without a nursery batch: <c>rowVersion</c>, one <c>keepPhotoIds</c> field per photo to keep and the new <c>photos</c>; 1 to 3 remain. 409 <c>PLAN_PHOTOS_FROM_NURSERY</c>
-    /// for a cycle created from a nursery batch (its plan photos are the completion photos of the batch).
+    /// Changes the plan photos of a cycle: <c>rowVersion</c>, one <c>keepPhotoIds</c> field per photo to keep and the new <c>photos</c>; 1 to 3 remain.
     /// </summary>
     [HttpPut("api/cultivation-cycles/{cycleId:guid}/plan-photos")]
     [RequestSizeLimit(MaxUploadBytes)]
@@ -78,7 +89,7 @@ public sealed class CultivationCyclesController(
     public async Task<IActionResult> Get(Guid cycleId, CancellationToken cancellationToken) =>
         (await reads.GetAsync(cycleId, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Edits the start date and the plan estimates of an Open cycle (CYCLE-01.1).</summary>
+    /// <summary>Edits an Open cycle (CYCLE-01.1): the target yield, the start date and the note any time; the nursery batch only before the first seeding record (409 CYCLE_SEED_LOCKED).</summary>
     [HttpPut("api/cultivation-cycles/{cycleId:guid}")]
     [ProducesResponseType<CycleSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Edit(Guid cycleId, EditCycleRequest request, CancellationToken cancellationToken) =>

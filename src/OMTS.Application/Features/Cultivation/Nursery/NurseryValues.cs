@@ -13,6 +13,9 @@ public static class NurseryValues
     public const string Cancelled = "NurseryBatch.Cancelled";
     public const string Completed = "NurseryBatch.Completed";
     public const string SurvivorsCorrected = "NurseryBatch.SurvivorsCorrected";
+    public const string Closed = "NurseryBatch.Closed";
+
+    /// <summary>Legacy event of before v2 (13/11/2026): no new one is written, the old ones are still read in the history.</summary>
     public const string AllocationsChanged = "NurseryBatch.AllocationsChanged";
 
     public const string ZoneField = "Zone";
@@ -39,17 +42,19 @@ public static class NurseryValues
         batch.Note,
         batch.Survivors,
         batch.CompletedOn,
-        Allocations = batch.Allocations.OrderBy(a => a.Raft.Code, StringComparer.Ordinal).Select(a => $"{a.Raft.Code}: {a.Quantity:0.###}").ToList(),
+        batch.ClosedOn,
+        batch.CloseLossPieces,
     };
 
     public static AuditEntry Entry(string action, NurseryBatch batch) => new(action, RecordType) { RecordId = batch.Id, RecordCode = batch.Code, ZoneId = batch.ZoneId };
 
-    /// <summary>The label of a status for the screens: Đang ươm, Đã hoàn tất, Đã hủy.</summary>
+    /// <summary>The label of a status for the screens: Đang ươm, Đã ươm xong, Đã hủy, Đã đóng.</summary>
     public static string StatusLabel(int statusId) => statusId switch
     {
         StatusIds.NurseryBatch.Nursing => "Đang ươm",
-        StatusIds.NurseryBatch.Completed => "Đã hoàn tất",
+        StatusIds.NurseryBatch.Completed => "Đã ươm xong",
         StatusIds.NurseryBatch.Cancelled => "Đã hủy",
+        StatusIds.NurseryBatch.Closed => "Đã đóng",
         _ => string.Empty,
     };
 }

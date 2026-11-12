@@ -5,7 +5,7 @@ namespace OMTS.Application.Features.Cultivation.Seeding;
 
 /// <summary>CYCLE-02.0: one seed lot and the lanes on which its seed was hung.</summary>
 /// <param name="SeedLotId">The <c>id</c> of a lot of the seed lot list: the receipt line.</param>
-/// <param name="Quantity">Left out, or equal to what is left of the share, for a cycle from a nursery (owner decision of 13/11/2026); chosen freely for the others.</param>
+/// <param name="Quantity">The pieces taken today, above 0: chosen freely, and for a cycle that draws from a nursery batch (v2, 13/11/2026) capped by what is left in the pool of the batch (409 NURSERY_POOL_EXCEEDED). The seed lot is then the lot of the batch: <paramref name="SeedLotId"/> is ignored.</param>
 /// <param name="ConfirmOverPlan">The answer to the over-plan question (409 MSG-GEN-04 with <c>confirmFlag: "confirmOverPlan"</c>): the seed of the cycle goes above 110 % of its planned seed; needs <paramref name="OverPlanReason"/>.</param>
 /// <param name="LanePercents">The share of each lane the session hangs (lane number to percent, owner decision of 12/11/2026); a lane left out takes 100. Null when none was sent.</param>
 /// <param name="LanePercentsUnreadable"><c>lanePercents</c> was sent but is not a JSON object of numbers: refused on <c>LanePercent</c>.</param>
@@ -96,7 +96,7 @@ public sealed record SeedingRecordSaved(SeedingRecordView Record, bool OfferMark
 public sealed record SeedingLaneView(
     Guid Id, int LaneNumber, int StatusId, string Status, LaneState State, bool CanSeed, bool IsDamaged = false, bool IsOutOfService = false, string? ReasonCode = null,
     decimal SeededPercent = 0m, decimal? HarvestedPercent = null, string? LastModifiedByName = null, DateTimeOffset? LastModifiedAt = null,
-    IReadOnlyList<LaneProgressChangeView>? ProgressHistory = null);
+    IReadOnlyList<LaneProgressChangeView>? ProgressHistory = null, decimal RemainingPercent = 100m);
 
 /// <summary>The total quantity of the sessions of a cycle from one seed lot (CYCLE-05.2).</summary>
 public sealed record SeedLotTotal(Guid SeedLotId, string Code, string? ItemName, string Unit, decimal Quantity);
@@ -110,7 +110,9 @@ public sealed record SeedLotTotal(Guid SeedLotId, string Code, string? ItemName,
 /// <param name="Lanes">Lanes In Use, and Removed lanes that have records in the cycle, in number order.</param>
 /// <param name="Records">The latest date first.</param>
 /// <param name="CycleRowVersion">Send it to mark the seeding complete.</param>
-/// <param name="NurseryBatchId">The nursery batch the cycle was created from: the session then needs no seed lot and hangs all of what is left of <paramref name="NurseryAllocated"/> (its quantity is not chosen: 400 NURSERY_SEEDING_MUST_USE_FULL_ALLOCATION; 409 NURSERY_SEEDING_ABOVE_ALLOCATION stays as a safety cap); null otherwise, with the other nursery fields.</param>
+/// <param name="NurseryBatchId">The nursery batch the cycle draws from (v2, 13/11/2026): a session then needs no seed lot, and takes any quantity up to <paramref name="NurseryRemaining"/>, what is left in the pool of the batch for every cycle; <paramref name="NurserySeeded"/> is what this cycle took. Null otherwise, with the other nursery fields.</param>
+/// <param name="SeedLot">The seed lot of the batch (read only).</param>
+/// <param name="SeedableLaneNumbers">The lanes the next session can choose: they can be seeded and are below 100 % (a lane at 100 % is hidden from the choice, still drawn on the overview).</param>
 public sealed record SeedingList(
     Guid CycleId,
     Guid RaftId,
@@ -130,9 +132,10 @@ public sealed record SeedingList(
     decimal? Percent = null,
     Guid? NurseryBatchId = null,
     string? NurseryCode = null,
-    decimal? NurseryAllocated = null,
     decimal? NurserySeeded = null,
-    decimal? NurseryRemaining = null);
+    decimal? NurseryRemaining = null,
+    SeedLotRef? SeedLot = null,
+    IReadOnlyList<int>? SeedableLaneNumbers = null);
 
 /// <summary>What to ask before marking the seeding complete (CYCLE-02.1 step 2).</summary>
 /// <param name="Message">MSG-CYCLE-01, listing the lanes that are still Not seeded.</param>

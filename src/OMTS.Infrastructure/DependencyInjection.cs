@@ -129,7 +129,6 @@ public static class DependencyInjection
         services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();
         services.AddScoped<ICustomerDebtAdjustmentRepository, CustomerDebtAdjustmentRepository>();
         services.AddScoped<IPendingSaleRepository, PendingSaleRepository>();
-        services.AddOptions<CycleStartOptions>().Bind(configuration.GetSection(CycleStartOptions.SectionName));
         services.AddOptions<ProvenanceOptions>()
             .Bind(configuration.GetSection(ProvenanceOptions.SectionName))
             .Validate(o => o.HasWebAddress(), ProvenanceOptions.InvalidPublicBaseUrl)

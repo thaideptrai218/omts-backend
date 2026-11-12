@@ -107,8 +107,9 @@ internal static class StatusCatalogSeed
 
         // STD-NURSERY-BATCH (ươm giống, decision of 12/11/2026): a Completed batch is not cancelled.
         NewStatus(S.NurseryBatch.Nursing, G.NurseryBatch, "NURSING", "Nursing", "The pieces left the stock and are in the nursery; it can be edited or cancelled.", initial: true),
-        NewStatus(S.NurseryBatch.Completed, G.NurseryBatch, "COMPLETED", "Completed", "The survivors are recorded and each raft has its cycle; the survivors and shares can still be corrected before the seed is hung.", final: true),
+        NewStatus(S.NurseryBatch.Completed, G.NurseryBatch, "COMPLETED", "Completed", "The survivors are recorded (Đã ươm xong): the batch is a pool that cycles seed from; the survivors can still be corrected, not below what is seeded. It is closed once the rafts are seeded.", final: false),
         NewStatus(S.NurseryBatch.Cancelled, G.NurseryBatch, "CANCELLED", "Cancelled", "Recorded by mistake before it was completed; the pieces are back in the stock.", final: true),
+        NewStatus(S.NurseryBatch.Closed, G.NurseryBatch, "CLOSED", "Closed", "Closed with pieces left in the pool: the remainder is written off as an estimated loss; nothing is seeded from it any more.", final: true),
     ];
 
     public static readonly StatusTransition[] Transitions =
@@ -168,8 +169,9 @@ internal static class StatusCatalogSeed
         NewTransition(30081, S.InputIssue.Completed, S.InputIssue.Cancelled, "INPUT-ISSUE", $"{OwnerOrZoneManager}", Action, "An issue recorded by mistake; its quantities go back in the stock.", true),
 
         // NURSERY-03 and NURSERY-02 (ươm giống); there is no way back from either.
-        NewTransition(30090, S.NurseryBatch.Nursing, S.NurseryBatch.Completed, "NURSERY-03", OwnerOrZoneManager, Action, "The survivors are not above the pieces put in, and the shares of the rafts of the zone, none with an Open cycle, add up to the survivors exactly.", false),
+        NewTransition(30090, S.NurseryBatch.Nursing, S.NurseryBatch.Completed, "NURSERY-03", OwnerOrZoneManager, Action, "The survivors are not above the pieces put in; no share and no cycle is created (v2, 13/11/2026).", false),
         NewTransition(30091, S.NurseryBatch.Nursing, S.NurseryBatch.Cancelled, "NURSERY-02", OwnerOrZoneManager, Action, "The batch is still Nursing; the pieces go back in the stock.", true),
+        NewTransition(30092, S.NurseryBatch.Completed, S.NurseryBatch.Closed, "NURSERY-05", OwnerOrZoneManager, Action, "The batch is Completed and pieces are left in the pool; they are written off as an estimated loss.", false),
 
         // STD-EMPLOYEE-REQUEST (BR-LABOR-08, LABOR-05, LABOR-10.2).
         NewTransition(230, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Approved, "LABOR-05", Owner, Action, "The payroll of the pay period of the day is not Awaiting finalization or Finalized, and the times stay in order.", false),
