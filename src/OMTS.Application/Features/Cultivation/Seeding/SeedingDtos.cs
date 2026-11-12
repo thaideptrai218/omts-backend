@@ -5,6 +5,7 @@ namespace OMTS.Application.Features.Cultivation.Seeding;
 
 /// <summary>CYCLE-02.0: one seed lot and the lanes on which its seed was hung.</summary>
 /// <param name="SeedLotId">The <c>id</c> of a lot of the seed lot list: the receipt line.</param>
+/// <param name="Quantity">Left out, or equal to what is left of the share, for a cycle from a nursery (owner decision of 13/11/2026); chosen freely for the others.</param>
 /// <param name="ConfirmOverPlan">The answer to the over-plan question (409 MSG-GEN-04 with <c>confirmFlag: "confirmOverPlan"</c>): the seed of the cycle goes above 110 % of its planned seed; needs <paramref name="OverPlanReason"/>.</param>
 /// <param name="LanePercents">The share of each lane the session hangs (lane number to percent, owner decision of 12/11/2026); a lane left out takes 100. Null when none was sent.</param>
 /// <param name="LanePercentsUnreadable"><c>lanePercents</c> was sent but is not a JSON object of numbers: refused on <c>LanePercent</c>.</param>
@@ -109,7 +110,7 @@ public sealed record SeedLotTotal(Guid SeedLotId, string Code, string? ItemName,
 /// <param name="Lanes">Lanes In Use, and Removed lanes that have records in the cycle, in number order.</param>
 /// <param name="Records">The latest date first.</param>
 /// <param name="CycleRowVersion">Send it to mark the seeding complete.</param>
-/// <param name="NurseryBatchId">The nursery batch the cycle was created from: the session then needs no seed lot, and is capped by <paramref name="NurseryAllocated"/> (409 NURSERY_SEEDING_ABOVE_ALLOCATION); null otherwise, with the other nursery fields.</param>
+/// <param name="NurseryBatchId">The nursery batch the cycle was created from: the session then needs no seed lot and hangs all of what is left of <paramref name="NurseryAllocated"/> (its quantity is not chosen: 400 NURSERY_SEEDING_MUST_USE_FULL_ALLOCATION; 409 NURSERY_SEEDING_ABOVE_ALLOCATION stays as a safety cap); null otherwise, with the other nursery fields.</param>
 public sealed record SeedingList(
     Guid CycleId,
     Guid RaftId,

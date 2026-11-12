@@ -50,7 +50,22 @@ public sealed class SeedingRecordCorrectionService(
             return refused;
         }
 
-        var input = new SeedingInput(request.SeedingDate, request.SeedLotId, request.LaneNumbers, request.Quantity);
+        // Owner decision of 13/11/2026: a session from a nursery keeps hanging all that is left of the share (the share less the other sessions), so a correction cannot change its quantity by hand:
+        // left out or equal, it takes that figure (which follows a share the Owner raised after seeding); another quantity is 400.
+        var quantity = request.Quantity;
+        if (record.NurseryBatchId is not null)
+        {
+            var others = (await records.ListByCycleAsync(record.CycleId, cancellationToken)).Where(r => r.Id != record.Id).Sum(r => r.Quantity);
+            var full = NurseryRules.FullSeeding(record.Cycle.NurseryAllocatedQuantity ?? 0m, others, request.Quantity);
+            if (full.Error is not null)
+            {
+                return full.Error;
+            }
+
+            quantity = full.Quantity;
+        }
+
+        var input = new SeedingInput(request.SeedingDate, request.SeedLotId, request.LaneNumbers, quantity);
         var (fields, invalid) = await reader.ReadAsync(record.Cycle, input, record, request.Reason, reasonRequired: true, cancellationToken);
         if (invalid is not null)
         {

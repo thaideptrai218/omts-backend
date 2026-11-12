@@ -127,6 +127,38 @@ public class NurseryRulesTests
         Assert.NotNull(NurseryRules.CheckSeeding(100m, 120m, 1m));
     }
 
+    // Owner decision of 13/11/2026: a session from a nursery hangs the whole share left; the quantity is left out or equals it (within three decimals), else 400 with the figures.
+    [Fact]
+    public void A_nursery_session_takes_the_whole_share_left_whether_the_quantity_is_left_out_or_equal()
+    {
+        Assert.Equal((4750m, (AppError?)null), NurseryRules.FullSeeding(4750m, 0m, null));
+        Assert.Equal((750m, (AppError?)null), NurseryRules.FullSeeding(4750m, 4000m, 750m));
+        Assert.Null(NurseryRules.FullSeeding(4750m, 0m, 4750.0004m).Error);
+    }
+
+    [Fact]
+    public void A_nursery_session_with_another_quantity_is_a_bad_request_naming_the_full_share()
+    {
+        var refused = NurseryRules.FullSeeding(4750m, 0m, 4000m).Error;
+
+        Assert.NotNull(refused);
+        Assert.Equal(ErrorKind.Validation, refused.Kind);
+        Assert.Equal(NurseryReasonCodes.SeedingMustUseFullAllocation, refused.Details!["reasonCode"]);
+        Assert.Equal((4750m, 4000m), ((decimal)refused.Details["remaining"]!, (decimal)refused.Details["quantity"]!));
+        Assert.Contains("còn 4750 mảnh", refused.Message.Text);
+        Assert.NotNull(NurseryRules.FullSeeding(4750m, 0m, 4750.01m).Error);
+    }
+
+    [Fact]
+    public void A_nursery_session_with_nothing_left_to_hang_is_a_bad_request_saying_it_is_complete()
+    {
+        var refused = NurseryRules.FullSeeding(4750m, 4750m, null).Error;
+
+        Assert.NotNull(refused);
+        Assert.Equal((ErrorKind.Validation, NurseryReasonCodes.SeedingAlreadyComplete), (refused.Kind, refused.Details!["reasonCode"]));
+        Assert.Equal(0m, (decimal)refused.Details["remaining"]!);
+    }
+
     // A batch shared by two rafts shows each cycle its part of the pieces put in, by the share of the survivors; the percentage is the batch's.
     [Fact]
     public void The_nursery_of_a_cycle_takes_its_part_of_the_pieces_put_in_by_its_share()

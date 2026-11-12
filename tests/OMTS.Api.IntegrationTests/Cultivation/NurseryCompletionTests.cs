@@ -163,9 +163,9 @@ public sealed class NurseryCompletionTests
         Assert.Equal("NURSERY_NOT_NURSING", again.Text("reasonCode"));
     }
 
-    // Owner decision of 12/11/2026: seeding from a nursery is capped by the share of the cycle, needs no seed lot, posts no issue and counts no seed twice.
+    // Owner decisions of 12/11/2026 (no seed lot, no issue, no seed counted twice) and 13/11/2026 (the session hangs the whole share, a second one has nothing left).
     [Fact]
-    public async Task Seeding_from_a_nursery_cycle_needs_no_lot_is_capped_by_its_share_and_posts_no_issue()
+    public async Task Seeding_from_a_nursery_cycle_hangs_the_whole_share_needs_no_lot_and_posts_no_issue()
     {
         using var api = new AuthApiFactory();
         var world = await api.NurseryWorldAsync();
@@ -175,34 +175,63 @@ public sealed class NurseryCompletionTests
         var cycleId = done.AllocationOf(world.Raft1).GetProperty("cycleId").GetGuid();
         var issuesBefore = await api.QueryAsync(db => db.InputIssues.CountAsync());
 
-        var record = await client.SeedingRecordAsync(cycleId, NurseryTestKit.NurserySession([1, 2], 4000m));
+        // Owner decision of 13/11/2026: the quantity is not chosen, the session hangs the whole share (4 750) on the lanes chosen.
+        var record = await client.SeedingRecordAsync(cycleId, NurseryTestKit.NurserySession([1, 2]));
 
-        Assert.Equal((world.Lot.LineId, 4000m), (record.GetProperty("seedLot").Id(), record.Pieces("quantity")));
+        Assert.Equal((world.Lot.LineId, 4750m), (record.GetProperty("seedLot").Id(), record.Pieces("quantity")));
         Assert.Equal(JsonValueKind.Null, record.GetProperty("issueId").ValueKind);
         Assert.Equal(issuesBefore, await api.QueryAsync(db => db.InputIssues.CountAsync()));
         Assert.Equal(batch.Id(), await api.QueryAsync(db => db.SeedingRecords.Where(r => r.Id == record.Id()).Select(r => r.NurseryBatchId).SingleAsync()));
-        // The lot was emptied when the nursery started (10 000): hanging seed from it must not count again, which would show -4 000.
+        // The lot was emptied when the nursery started (10 000): hanging seed from it must not count again, which would show -4 750.
         Assert.Equal(0m, (await client.GetNurseryAsync(batch.Id())).Pieces("seedLotOnHand"));
-
-        var over = await (await client.PostSeedingAsync(cycleId, NurseryTestKit.NurserySession([3], 751m))).ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal(("NURSERY_SEEDING_ABOVE_ALLOCATION", 4750m, 4000m, 750m, 751m), (over.Text("reasonCode"), over.Pieces("allocated"), over.Pieces("seeded"), over.Pieces("remaining"), over.Pieces("quantity")));
-        Assert.Equal(1, await api.QueryAsync(db => db.SeedingRecords.CountAsync(r => r.CycleId == cycleId)));
-
-        // Exactly what is left is fine, with no question about 110 % of a plan.
-        var rest = await client.RecordSeedingAsync(cycleId, NurseryTestKit.NurserySession([3], 750m));
-        Assert.Equal(JsonValueKind.Null, rest.GetProperty("record").GetProperty("issueId").ValueKind);
         var view = await client.CycleViewAsync(cycleId);
         Assert.Equal((4750m, 0m), (view.Pieces("nurserySeeded"), view.Pieces("nurseryRemaining")));
         var left = (await client.GetFromJsonAsync<JsonElement>($"/api/nursery-batches/available?zoneId={world.ZoneId}")).GetProperty("batches")[0];
         Assert.Equal((4750m, world.Raft2), (left.Pieces("remaining"), left.GetProperty("allocations")[0].GetProperty("raftId").GetGuid()));
 
-        // A correction that would pass the share is refused too; one within it is saved and keeps the batch's lot.
-        var correction = record.AsCorrection() with { Quantity = 4001m, SeedLotId = Guid.NewGuid(), RowVersion = await api.IssueRowVersionAsync<SeedingRecord>(record.Id()) };
-        var refused = await (await client.PutSeedingAsync(record.Id(), correction)).ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal("NURSERY_SEEDING_ABOVE_ALLOCATION", refused.Text("reasonCode"));
-        var fine = (await (await client.PutSeedingAsync(record.Id(), correction with { Quantity = 3500m })).ReadAsync(HttpStatusCode.OK)).GetProperty("record");
-        Assert.Equal((3500m, world.Lot.LineId), (fine.Pieces("quantity"), fine.GetProperty("seedLot").Id()));
+        // Nothing is left to hang: another session is refused, whatever quantity it names, and nothing is saved.
+        var done2 = await (await client.PostSeedingAsync(cycleId, NurseryTestKit.NurserySession([3]))).ReadAsync(HttpStatusCode.BadRequest);
+        Assert.Equal(("NURSERY_SEEDING_ALREADY_COMPLETE", "MSG-GEN-09", 0m), (done2.Text("reasonCode"), done2.Text("code"), done2.Pieces("remaining")));
+        Assert.Equal("NURSERY_SEEDING_ALREADY_COMPLETE", (await (await client.PostSeedingAsync(cycleId, NurseryTestKit.NurserySession([3], 1m))).ReadAsync(HttpStatusCode.BadRequest)).Text("reasonCode"));
+        Assert.Equal(1, await api.QueryAsync(db => db.SeedingRecords.CountAsync(r => r.CycleId == cycleId)));
+
+        // A correction keeps the total: another quantity is refused, the same one is saved and keeps the batch's lot.
+        var correction = record.AsCorrection() with { SeedLotId = Guid.NewGuid(), RowVersion = await api.IssueRowVersionAsync<SeedingRecord>(record.Id()) };
+        var refused = await (await client.PutSeedingAsync(record.Id(), correction with { Quantity = 3500m })).ReadAsync(HttpStatusCode.BadRequest);
+        Assert.Equal(("NURSERY_SEEDING_MUST_USE_FULL_ALLOCATION", 4750m), (refused.Text("reasonCode"), refused.Pieces("remaining")));
+        var fine = (await (await client.PutSeedingAsync(record.Id(), correction with { Quantity = null })).ReadAsync(HttpStatusCode.OK)).GetProperty("record");
+        Assert.Equal((4750m, world.Lot.LineId, 2),(fine.Pieces("quantity"), fine.GetProperty("seedLot").Id(), fine.Lanes().Count));
         Assert.Equal(issuesBefore, await api.QueryAsync(db => db.InputIssues.CountAsync()));
+    }
+
+    // Owner decision of 13/11/2026: a quantity that is sent must be the whole share left; it may also be left out. A share raised after seeding leaves the difference to hang, and the first session follows it.
+    [Fact]
+    public async Task A_nursery_session_may_leave_the_quantity_out_or_send_the_whole_share_and_refuses_any_other()
+    {
+        using var api = new AuthApiFactory();
+        var world = await api.NurseryWorldAsync();
+        var client = world.Owner.Client;
+        var batch = await client.StartNurseryAsync(world.ZoneId, world.Lot, "10000");
+        var done = await client.CompleteNurseryAsync(api, batch.Id(), "9500", new Share(world.Raft1, 4750m), new Share(world.Raft2, 4750m));
+        var cycleId = done.AllocationOf(world.Raft1).GetProperty("cycleId").GetGuid();
+
+        var smaller = await (await client.PostSeedingAsync(cycleId, NurseryTestKit.NurserySession([1], 4000m))).ReadAsync(HttpStatusCode.BadRequest);
+        var bigger = await (await client.PostSeedingAsync(cycleId, NurseryTestKit.NurserySession([1], 4751m))).ReadAsync(HttpStatusCode.BadRequest);
+        foreach (var refused in new[] { smaller, bigger })
+        {
+            Assert.Equal(("NURSERY_SEEDING_MUST_USE_FULL_ALLOCATION", "MSG-GEN-09", 4750m), (refused.Text("reasonCode"), refused.Text("code"), refused.Pieces("remaining")));
+            Assert.Contains("còn 4750 mảnh", refused.Text("detail"));
+        }
+
+        Assert.Equal(0, await api.QueryAsync(db => db.SeedingRecords.CountAsync(r => r.CycleId == cycleId)));
+        var sent = await client.SeedingRecordAsync(cycleId, NurseryTestKit.NurserySession([1], 4750m));
+        Assert.Equal(4750m, sent.Pieces("quantity"));
+
+        // The Owner raises the share of this raft to 5 000: 250 are left, and the next session hangs exactly them.
+        await (await client.PostAllocationsAsync(api, batch.Id(), [new Share(world.Raft1, 5000m), new Share(world.Raft2, 4500m)])).ReadAsync(HttpStatusCode.OK);
+        var more = await client.SeedingRecordAsync(cycleId, NurseryTestKit.NurserySession([3]));
+        Assert.Equal(250m, more.Pieces("quantity"));
+        Assert.Equal(0m, (await client.CycleViewAsync(cycleId)).Pieces("nurseryRemaining"));
     }
 
     [Fact]
@@ -214,11 +243,8 @@ public sealed class NurseryCompletionTests
         var batch = await client.StartNurseryAsync(world.ZoneId, world.Lot, "10000");
         var done = await client.CompleteNurseryAsync(api, batch.Id(), "9500", new Share(world.Raft1, 9500m));
         var cycleId = done.AllocationOf(world.Raft1).GetProperty("cycleId").GetGuid();
-        await client.SeedingRecordAsync(cycleId, NurseryTestKit.NurserySession([1], 5000m));
 
-        // Not below what was hung, not above what went in, and a reason is needed.
-        var below = await (await client.PostSurvivorsAsync(api, batch.Id(), 4999m, "Đếm lại")).ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal(("NURSERY_SURVIVORS_BELOW_SEEDED", 5000m), (below.Text("reasonCode"), below.Pieces("seeded")));
+        // Not above what went in, and a reason is needed.
         Assert.Equal(["Survivors"], await (await client.PostSurvivorsAsync(api, batch.Id(), 10001m, "Đếm lại")).InvalidFieldsAsync());
         Assert.Equal(["Reason"], await (await client.PostSurvivorsAsync(api, batch.Id(), 9200m, " ")).InvalidFieldsAsync());
 
@@ -231,6 +257,11 @@ public sealed class NurseryCompletionTests
         Assert.Equal(("Sửa số sống sót", "Đếm lại"), (entry.Text("actionLabel"), entry.Text("reason")));
         var survivors = entry.GetProperty("changes").EnumerateArray().Single(c => c.Text("field") == "Survivors");
         Assert.Equal(("9500", "9200"), (survivors.Text("from"), survivors.Text("to")));
+
+        // The seeding then hangs the corrected share, and the survivors cannot go below what was hung.
+        Assert.Equal(9200m, (await client.SeedingRecordAsync(cycleId, NurseryTestKit.NurserySession([1]))).Pieces("quantity"));
+        var below = await (await client.PostSurvivorsAsync(api, batch.Id(), 9199m, "Đếm lại")).ReadAsync(HttpStatusCode.Conflict);
+        Assert.Equal(("NURSERY_SURVIVORS_BELOW_SEEDED", 9200m), (below.Text("reasonCode"), below.Pieces("seeded")));
     }
 
     [Fact]
@@ -249,21 +280,23 @@ public sealed class NurseryCompletionTests
         Assert.False(await api.QueryAsync(db => db.CultivationCycles.AnyAsync(c => c.Id == cycle2)));
         Assert.Equal((9500m, 700m), await api.QueryAsync(async db => { var c = await db.CultivationCycles.SingleAsync(c => c.NurseryBatchId == batch.Id()); return (c.NurseryAllocatedQuantity!.Value, c.TargetYieldKg!.Value); }));
 
-        // Seed some, then split again: the share of a raft is not below what is hung on it and a raft with seed stays.
-        var cycle1 = one.AllocationOf(world.Raft1).GetProperty("cycleId").GetGuid();
-        await client.SeedingRecordAsync(cycle1, NurseryTestKit.NurserySession([1], 3000m));
+        // Split again before any seed, then seed the share of raft 1 (all of it: the quantity is not chosen); the share of a raft is not below what is hung on it and a raft with seed stays.
+        var first = (await (await client.PostAllocationsAsync(api, batch.Id(), [new Share(world.Raft1, 3000m), new Share(world.Raft2, 6500m)])).ReadAsync(HttpStatusCode.OK)).GetProperty("batch");
+        var cycle1 = first.AllocationOf(world.Raft1).GetProperty("cycleId").GetGuid();
+        Assert.Equal(3000m, (await client.SeedingRecordAsync(cycle1, NurseryTestKit.NurserySession([1]))).Pieces("quantity"));
         var below = await (await client.PostAllocationsAsync(api, batch.Id(), [new Share(world.Raft1, 2000m), new Share(world.Raft2, 7500m)])).ReadAsync(HttpStatusCode.Conflict);
         Assert.Equal("NURSERY_ALLOCATION_BELOW_SEEDED", below.Text("reasonCode"));
         var removed = await (await client.PostAllocationsAsync(api, batch.Id(), [new Share(world.Raft2, 9500m)])).ReadAsync(HttpStatusCode.Conflict);
         Assert.Equal("NURSERY_ALLOCATION_BELOW_SEEDED", removed.Text("reasonCode"));
         Assert.Equal(["Allocations"], await (await client.PostAllocationsAsync(api, batch.Id(), [new Share(world.Raft1, 5000m), new Share(world.Raft2, 4000m)])).InvalidFieldsAsync());
 
-        var split = (await (await client.PostAllocationsAsync(api, batch.Id(), [new Share(world.Raft1, 3000m), new Share(world.Raft2, 6500m)])).ReadAsync(HttpStatusCode.OK)).GetProperty("batch");
-        Assert.Equal((3000m, 0m, 6500m, 2), (split.AllocationOf(world.Raft1).Pieces("quantity"), split.AllocationOf(world.Raft1).Pieces("remaining"), split.AllocationOf(world.Raft2).Pieces("quantity"), split.GetProperty("allocations").GetArrayLength()));
+        // Raising the share of the raft that has seed is fine: 500 pieces are left to hang on it.
+        var split = (await (await client.PostAllocationsAsync(api, batch.Id(), [new Share(world.Raft1, 3500m), new Share(world.Raft2, 6000m)])).ReadAsync(HttpStatusCode.OK)).GetProperty("batch");
+        Assert.Equal((3500m, 500m, 6000m, 2), (split.AllocationOf(world.Raft1).Pieces("quantity"), split.AllocationOf(world.Raft1).Pieces("remaining"), split.AllocationOf(world.Raft2).Pieces("quantity"), split.GetProperty("allocations").GetArrayLength()));
         Assert.Equal(2, (await api.NurseryCyclesAsync(batch.Id())).Count);
 
         var history = (await client.NurseryHistoryAsync(batch.Id())).GetProperty("entries").EnumerateArray().Select(e => e.Text("action")).ToList();
-        Assert.Equal(["Created", "Completed", "AllocationsChanged", "AllocationsChanged"], history);
+        Assert.Equal(["Created", "Completed", "AllocationsChanged", "AllocationsChanged", "AllocationsChanged"], history);
     }
 
     [Fact]

@@ -14,6 +14,8 @@ public static class NurseryReasonCodes
     public const string RaftOtherZone = "NURSERY_RAFT_OTHER_ZONE";
     public const string RaftNotUsable = "NURSERY_RAFT_NOT_USABLE";
     public const string SeedingAboveAllocation = "NURSERY_SEEDING_ABOVE_ALLOCATION";
+    public const string SeedingMustUseFullAllocation = "NURSERY_SEEDING_MUST_USE_FULL_ALLOCATION";
+    public const string SeedingAlreadyComplete = "NURSERY_SEEDING_ALREADY_COMPLETE";
     public const string SurvivorsBelowSeeded = "NURSERY_SURVIVORS_BELOW_SEEDED";
     public const string AllocationBelowSeeded = "NURSERY_ALLOCATION_BELOW_SEEDED";
     public const string AllocationFrozen = "NURSERY_ALLOCATION_FROZEN";
@@ -89,6 +91,36 @@ public static class NurseryRules
             {
                 ["reasonCode"] = NurseryReasonCodes.SeedingAboveAllocation, ["field"] = "Quantity", ["allocated"] = allocated, ["seeded"] = otherSessions, ["remaining"] = remaining, ["quantity"] = quantity,
             });
+    }
+
+    /// <summary>Two quantities of pieces are the same within the precision of the figures (three decimals).</summary>
+    private const decimal SamePiecesWithin = 0.001m;
+
+    /// <summary>
+    /// Owner decision of 13/11/2026: a session on a cycle from a nursery hangs 100 % of what is left of the share, so the quantity is not chosen. It is the remaining share (<paramref name="sent"/> may
+    /// be left out); a quantity that differs is 400 <c>NURSERY_SEEDING_MUST_USE_FULL_ALLOCATION</c>, and nothing left is 400 <c>NURSERY_SEEDING_ALREADY_COMPLETE</c> (the sessions already hung it all).
+    /// A correction passes the other sessions of the cycle, so its quantity keeps the total at the share.
+    /// </summary>
+    public static (decimal Quantity, AppError? Error) FullSeeding(decimal allocated, decimal otherSessions, decimal? sent)
+    {
+        var remaining = Remaining(allocated, otherSessions);
+        var figures = new Dictionary<string, object?> { ["field"] = "Quantity", ["allocated"] = allocated, ["seeded"] = otherSessions, ["remaining"] = remaining };
+        if (remaining <= 0m)
+        {
+            return (0m, new AppError(
+                ErrorKind.Validation, UserMessages.NurseryRefused($"Phần đã chuyển sang bè này ({allocated:0.###} mảnh) đã được thả hết, không còn mảnh nào để thả thêm."),
+                new Dictionary<string, object?>(figures) { ["reasonCode"] = NurseryReasonCodes.SeedingAlreadyComplete }));
+        }
+
+        if (sent is { } quantity && Math.Abs(quantity - remaining) > SamePiecesWithin)
+        {
+            return (remaining, new AppError(
+                ErrorKind.Validation,
+                UserMessages.NurseryRefused($"Thả giống phải dùng đủ phần đã chuyển sang bè: còn {remaining:0.###} mảnh. Nếu số lượng thay đổi, hãy sửa số sống sót hoặc chuyển lại số mảnh giữa các bè trước."),
+                new Dictionary<string, object?>(figures) { ["reasonCode"] = NurseryReasonCodes.SeedingMustUseFullAllocation, ["quantity"] = quantity }));
+        }
+
+        return (remaining, null);
     }
 
     /// <summary>The nursery block of a cycle: the batch's pieces put in in proportion to the cycle's share, and what the share lost (an estimate).</summary>

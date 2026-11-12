@@ -1,5 +1,6 @@
 using OMTS.Application.Common;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Features.Cultivation.Nursery;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Cultivation.Seeding;
 using OMTS.Application.Features.Farming;
@@ -29,12 +30,25 @@ public sealed class TraceSeedingReader(SeedingSessionReader sessions, TimeProvid
         var lastDay = cycle.CloseDate is { } closed && closed < today ? closed : today;
         var lot = await sessions.LotAsync(request.SeedLotId, record, cancellationToken);
 
+        // Owner decision of 13/11/2026: a session from a nursery hangs all that is left of the share of its cycle; its quantity is not chosen here either.
+        var wanted = request.Quantity;
+        if (record.NurseryBatchId is not null)
+        {
+            var full = NurseryRules.FullSeeding(cycle.NurseryAllocatedQuantity ?? 0m, ofCycle.Where(s => s.Id != record.Id).Sum(s => s.Quantity), request.Quantity);
+            if (full.Error is not null)
+            {
+                return (null, full.Error);
+            }
+
+            wanted = full.Quantity;
+        }
+
         var check = new FieldCheck();
         var dateIsValid = request.SeedingDate is { } date && date >= cycle.StartDate && date <= lastDay && (lot is null || date >= lot.Receipt.ReceiptDate);
         check.Check(dateIsValid, SeedingValues.DateField);
         check.Check(lot is not null, SeedingValues.SeedLotField);
         check.Check(
-            request.Quantity is { } quantity && quantity > 0 && quantity <= PurchaseReceiptValidator.MaxQuantity && PurchaseReceiptValidator.HasAllowedDecimals(quantity),
+            wanted is { } quantity && quantity > 0 && quantity <= PurchaseReceiptValidator.MaxQuantity && PurchaseReceiptValidator.HasAllowedDecimals(quantity),
             SeedingValues.QuantityField);
         var (lanes, laneHint) = Lanes(record, raft, request.LaneNumbers, dateIsValid ? request.SeedingDate : null, ofCycle, lots);
         check.Check(lanes is not null && laneHint is null, SeedingValues.LanesField);
@@ -44,7 +58,7 @@ public sealed class TraceSeedingReader(SeedingSessionReader sessions, TimeProvid
             return (null, laneHint is not null && check.Invalid is [SeedingValues.LanesField] ? AppError.Invalid(SeedingValues.LanesField, laneHint) : AppError.InvalidFields(check.Invalid));
         }
 
-        return (new SeedingFields(request.SeedingDate!.Value, lot!, request.Quantity!.Value, lanes!, reason), null);
+        return (new SeedingFields(request.SeedingDate!.Value, lot!, wanted!.Value, lanes!, reason), null);
     }
 
     /// <param name="date">The corrected date when it is valid, else null: the lanes are then checked only as lanes of the raft.</param>

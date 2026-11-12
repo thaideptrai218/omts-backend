@@ -157,6 +157,6 @@ public static class NurseryTestKit
     public static Task<List<Notification>> NurseryNoticesAsync(this AuthApiFactory factory, Guid batchId) =>
         factory.QueryAsync(db => db.Notifications.Where(n => n.Type == "NURSERY_RECORDED" && n.RelatedRecordId == batchId).ToListAsync());
 
-    /// <summary>A session from the nursery cycle: no seed lot is named.</summary>
-    public static SeedingBody NurserySession(IReadOnlyList<int> lanes, decimal quantity) => new(FarmingTestKit.Today, null, lanes, quantity);
+    /// <summary>A session from the nursery cycle: no seed lot is named, and no quantity unless the test sends one (the session hangs the whole share, owner decision of 13/11/2026).</summary>
+    public static SeedingBody NurserySession(IReadOnlyList<int> lanes, decimal? quantity = null) => new(FarmingTestKit.Today, null, lanes, quantity);
 }
