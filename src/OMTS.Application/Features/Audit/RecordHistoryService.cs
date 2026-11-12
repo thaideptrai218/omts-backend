@@ -22,6 +22,7 @@ public sealed partial class RecordHistoryService(IAuditEventQuery events, ZoneAc
     public const string MaterialUsage = "MaterialUsage";
     public const string CultivationLog = "CultivationLog";
     public const string CultivationCycle = "CultivationCycle";
+    public const string NurseryBatch = "NurseryBatch";
 
     /// <summary>Snapshot keys that are not shown as a change.</summary>
     private static readonly HashSet<string> Hidden = new(["RowVersion", "AffectedPublishedLotCodes"], StringComparer.Ordinal);

@@ -32,7 +32,10 @@ public class CultivationCycleStartTests(AuthApiFactory factory) : IClassFixture<
         var cycle = answer.GetProperty("cycle");
         Assert.Equal((Today, StatusIds.CultivationCycle.Open, "Open"), (cycle.Date("startDate"), cycle.GetProperty("statusId").GetInt32(), cycle.Text("status")));
         Assert.Equal((raft.Id(), raft.Text("code")), (cycle.GetProperty("raftId").GetGuid(), cycle.Text("raftCode")));
-        Assert.True(cycle.IsNull("closeDate") && cycle.IsNull("expectedSeedQuantity") && cycle.IsNull("expectedHarvestDate") && cycle.IsNull("targetYieldKg"));
+        Assert.True(cycle.IsNull("closeDate") && cycle.IsNull("expectedSeedQuantity") && cycle.IsNull("targetYieldKg"));
+        // The plan has no expected harvest date any more (owner decision of 12/11/2026) and the nursery fields are null on a cycle started the old way.
+        Assert.False(cycle.TryGetProperty("expectedHarvestDate", out _));
+        Assert.True(cycle.IsNull("nurseryBatchId") && cycle.IsNull("nurseryCode") && cycle.IsNull("nurseryAllocated"));
         Assert.True(cycle.Flag("canEdit") && cycle.Flag("canCancel"));
         Assert.Equal(1, cycle.GetProperty("daysOfFarming").GetInt32());
 
@@ -50,7 +53,10 @@ public class CultivationCycleStartTests(AuthApiFactory factory) : IClassFixture<
         var cycle = await owner.StartCycleAsync(raft.Id(), new CycleBody(start, 250.5m, start.AddDays(1), 8000.25m));
 
         Assert.Equal(start, cycle.Date("startDate"));
-        Assert.Equal((250.5m, start.AddDays(1), 8000.25m), (cycle.GetProperty("expectedSeedQuantity").GetDecimal(), cycle.Date("expectedHarvestDate"), cycle.GetProperty("targetYieldKg").GetDecimal()));
+        // The body still carries an expected harvest date: it is ignored, never stored or answered.
+        Assert.Equal((250.5m, 8000.25m), (cycle.GetProperty("expectedSeedQuantity").GetDecimal(), cycle.GetProperty("targetYieldKg").GetDecimal()));
+        Assert.False(cycle.TryGetProperty("expectedHarvestDate", out _));
+        Assert.Null(await factory.QueryAsync(db => db.CultivationCycles.Where(c => c.Id == cycle.Id()).Select(c => c.ExpectedHarvestDate).SingleAsync()));
         Assert.Equal(10, cycle.GetProperty("daysOfFarming").GetInt32());
     }
 
@@ -96,7 +102,7 @@ public class CultivationCycleStartTests(AuthApiFactory factory) : IClassFixture<
         var (owner, raft) = await OwnerWithRaftAsync();
 
         Assert.Equal(
-            ["Expected seed quantity", "Expected harvest date", "Target yield"],
+            ["Expected seed quantity", "Target yield"],
             await (await owner.PostCycleAsync(raft.Id(), new CycleBody(Today, 0m, Today, -1m))).InvalidFieldsAsync());
         Assert.Equal(
             ["Expected seed quantity", "Target yield"],
@@ -121,7 +127,6 @@ public class CultivationCycleStartTests(AuthApiFactory factory) : IClassFixture<
     // Named "request": the known behaviour of every unreadable JSON value of the API (see WaterBusinessTimeQaTests).
     [Theory]
     [InlineData("{\"startDate\":\"not a date\"}")]
-    [InlineData("{\"expectedHarvestDate\":\"31/12/2026\"}")]
     [InlineData("{\"targetYieldKg\":\"many\"}")]
     public async Task A_value_that_cannot_be_read_answers_msg_gen_01(string json)
     {

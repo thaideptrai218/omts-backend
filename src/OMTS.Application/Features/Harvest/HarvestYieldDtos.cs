@@ -51,6 +51,7 @@ public sealed record HarvestYieldLot(
 /// <param name="CycleStatus">The cycle's status now ("Open" or "Closed"): an Open cycle can still get lots.</param>
 /// <param name="NotFinal">A lot of the group is still for sale (MSG-HARVEST-04).</param>
 /// <param name="Lots">The lots of the group, oldest harvest first.</param>
+/// <param name="NurseryQuantityIn">Pieces put into the nursery for the cycles of the group, in proportion to their share of their batch; all four nursery figures are estimates (survivors are counted by eye) and null when no cycle of the group came from a nursery.</param>
 public sealed record HarvestYieldGroup(
     Guid Key,
     string Label,
@@ -76,7 +77,11 @@ public sealed record HarvestYieldGroup(
     decimal? RemainingKg = null,
     decimal? SeedQuantity = null,
     string? SeedUnit = null,
-    decimal AvailableKg = 0m);
+    decimal AvailableKg = 0m,
+    decimal? NurseryQuantityIn = null,
+    decimal? NurserySurvivors = null,
+    decimal? NurseryLossPieces = null,
+    decimal? NurseryLossPercent = null);
 
 /// <summary>The totals of every lot of the report.</summary>
 /// <param name="HarvestedCages">The cages of every lot of the report.</param>

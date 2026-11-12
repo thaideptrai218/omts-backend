@@ -15,6 +15,7 @@ using OMTS.Application.Features.Cultivation.Closing;
 using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Cultivation.CultivationLogs;
 using OMTS.Application.Features.Cultivation.MaterialUsages;
+using OMTS.Application.Features.Cultivation.Nursery;
 using OMTS.Application.Features.Cultivation.Seeding;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Farming;
@@ -188,6 +189,16 @@ public static class DependencyInjection
         services.AddScoped<SeedingStockSync>();
         services.AddScoped<SeedingRecordCorrectionService>();
         services.AddScoped<SeedingCompletionService>();
+
+        // NURSERY – ươm giống: batches of one seed lot per zone, completed into one cycle per raft
+        services.AddScoped<NurseryBatchViews>();
+        services.AddScoped<NurseryNotifier>();
+        services.AddScoped<NurseryStockSync>();
+        services.AddScoped<NurseryAllocationApplier>();
+        services.AddScoped<NurseryBatchService>();
+        services.AddScoped<NurseryBatchEditService>();
+        services.AddScoped<NurseryCompletionService>();
+        services.AddScoped<NurseryReadService>();
         services.AddScoped<MaterialUsageCycleGuard>();
         services.AddScoped<MaterialUsageViews>();
         services.AddScoped<MaterialUsageService>();

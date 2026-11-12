@@ -63,6 +63,9 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<CultivationLogPhoto> CultivationLogPhotos => Set<CultivationLogPhoto>();
     public DbSet<SeedingRecord> SeedingRecords => Set<SeedingRecord>();
     public DbSet<SeedingRecordLane> SeedingRecordLanes => Set<SeedingRecordLane>();
+    public DbSet<NurseryBatch> NurseryBatches => Set<NurseryBatch>();
+    public DbSet<NurseryBatchAllocation> NurseryBatchAllocations => Set<NurseryBatchAllocation>();
+    public DbSet<NurseryBatchPhoto> NurseryBatchPhotos => Set<NurseryBatchPhoto>();
     public DbSet<WaterMeasurement> WaterMeasurements => Set<WaterMeasurement>();
     public DbSet<HarvestLot> HarvestLots => Set<HarvestLot>();
     public DbSet<HarvestLotLane> HarvestLotLanes => Set<HarvestLotLane>();

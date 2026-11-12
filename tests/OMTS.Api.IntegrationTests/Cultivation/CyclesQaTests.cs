@@ -117,14 +117,15 @@ public class CyclesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         Assert.Equal([field], await (await owner.PostCycleAsync(raft.Id(), new CycleBody(Today, decimal.Parse(seed), null, decimal.Parse(yield)))).InvalidFieldsAsync());
     }
 
+    // Owner decision of 12/11/2026: the plan has no expected harvest date, so one sent (even before the start) is neither checked nor kept.
     [Fact]
-    public async Task The_expected_harvest_date_must_be_after_the_start_also_when_the_start_is_left_out()
+    public async Task An_expected_harvest_date_sent_with_a_start_is_ignored()
     {
         var (owner, _, raft) = await OwnerWithRaftAsync();
 
-        Assert.Equal(["Expected harvest date"], await (await owner.PostCycleAsync(raft.Id(), new CycleBody(null, null, Today))).InvalidFieldsAsync());
-        Assert.Equal(["Expected harvest date"], await (await owner.PostCycleAsync(raft.Id(), new CycleBody(Today.AddDays(-2), null, Today.AddDays(-3)))).InvalidFieldsAsync());
-        Assert.Equal(Today.AddDays(-1), (await owner.StartCycleAsync(raft.Id(), new CycleBody(Today.AddDays(-2), null, Today.AddDays(-1)))).Date("expectedHarvestDate"));
+        var cycle = await owner.StartCycleAsync(raft.Id(), new CycleBody(Today.AddDays(-2), null, Today.AddDays(-3)));
+
+        Assert.False(cycle.TryGetProperty("expectedHarvestDate", out _));
     }
 
     // CYCLE-01.0 step 2: a start needs no value, but it needs a body. Note N1, as it stands: no body at all is a bare 415 with no MSG code, as on every JSON route.

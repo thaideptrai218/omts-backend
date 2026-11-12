@@ -784,7 +784,7 @@ public sealed class InputIssueService(
         : AppError.Conflict(
             UserMessages.WrongStatus(
                 $"{ObjectName} {issue.Code}",
-                $"posted by a {(issue.SourceKind == InputIssueSource.Seeding ? "seeding session" : "material usage")}; change it on that record"),
+                $"posted by a {issue.SourceKind switch { InputIssueSource.Seeding => "seeding session", InputIssueSource.Nursery => "nursery batch", _ => "material usage" }}; change it on that record"),
             new Dictionary<string, object?> { ["sourceKind"] = issue.SourceKind.ToString(), ["sourceRecordId"] = issue.SourceRecordId, ["cycleId"] = issue.CycleId });
 
     private AppError WrongStatus(InputIssue issue) =>

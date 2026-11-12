@@ -34,6 +34,11 @@ public sealed class RecordHistoryController(RecordHistoryService history) : Cont
     public async Task<IActionResult> CultivationLog(Guid logId, CancellationToken cancellationToken) =>
         (await history.ReadAsync(RecordHistoryService.CultivationLog, logId, cancellationToken)).ToActionResult(Ok);
 
+    [HttpGet("api/nursery-batches/{batchId:guid}/history")]
+    [ProducesResponseType<RecordHistory>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> NurseryBatch(Guid batchId, CancellationToken cancellationToken) =>
+        (await history.ReadAsync(RecordHistoryService.NurseryBatch, batchId, cancellationToken)).ToActionResult(Ok);
+
     [HttpGet("api/cultivation-cycles/{cycleId:guid}/history")]
     [ProducesResponseType<RecordHistory>(StatusCodes.Status200OK)]
     public async Task<IActionResult> CultivationCycle(Guid cycleId, CancellationToken cancellationToken) =>

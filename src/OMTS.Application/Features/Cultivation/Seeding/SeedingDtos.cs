@@ -89,6 +89,7 @@ public sealed record SeedLotTotal(Guid SeedLotId, string Code, string? ItemName,
 /// <param name="Lanes">Lanes In Use, and Removed lanes that have records in the cycle, in number order.</param>
 /// <param name="Records">The latest date first.</param>
 /// <param name="CycleRowVersion">Send it to mark the seeding complete.</param>
+/// <param name="NurseryBatchId">The nursery batch the cycle was created from: the session then needs no seed lot, and is capped by <paramref name="NurseryAllocated"/> (409 NURSERY_SEEDING_ABOVE_ALLOCATION); null otherwise, with the other nursery fields.</param>
 public sealed record SeedingList(
     Guid CycleId,
     Guid RaftId,
@@ -105,7 +106,12 @@ public sealed record SeedingList(
     string CycleRowVersion,
     decimal? PlannedSeedQuantity = null,
     decimal SeededQuantity = 0m,
-    decimal? Percent = null);
+    decimal? Percent = null,
+    Guid? NurseryBatchId = null,
+    string? NurseryCode = null,
+    decimal? NurseryAllocated = null,
+    decimal? NurserySeeded = null,
+    decimal? NurseryRemaining = null);
 
 /// <summary>What to ask before marking the seeding complete (CYCLE-02.1 step 2).</summary>
 /// <param name="Message">MSG-CYCLE-01, listing the lanes that are still Not seeded.</param>

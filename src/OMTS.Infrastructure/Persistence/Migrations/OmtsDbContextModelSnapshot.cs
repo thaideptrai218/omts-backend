@@ -438,6 +438,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
 
+                    b.Property<decimal?>("NurseryAllocatedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<Guid?>("NurseryBatchId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("RaftId")
                         .HasColumnType("uniqueidentifier");
 
@@ -467,6 +474,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("NurseryBatchId");
 
                     b.HasIndex("RaftId")
                         .IsUnique()
@@ -636,6 +645,202 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.NurseryBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid?>("CompletedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("CompletedOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("IssueId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal>("QuantityIn")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SeedLotLineId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("StatusId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("Survivors")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ZoneId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("CompletedByAccountId");
+
+                    b.HasIndex("IssueId");
+
+                    b.HasIndex("SeedLotLineId");
+
+                    b.HasIndex("StatusId");
+
+                    b.HasIndex("ZoneId", "StatusId", "StartDate");
+
+                    b.ToTable("NurseryBatches", t =>
+                        {
+                            t.HasCheckConstraint("CK_NurseryBatch_QuantityIn", "[QuantityIn] > 0");
+
+                            t.HasCheckConstraint("CK_NurseryBatch_Survivors", "[Survivors] IS NULL OR ([Survivors] >= 0 AND [Survivors] <= [QuantityIn])");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.NurseryBatchAllocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CycleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("NurseryBatchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<Guid>("RaftId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CycleId")
+                        .IsUnique();
+
+                    b.HasIndex("RaftId");
+
+                    b.HasIndex("NurseryBatchId", "RaftId")
+                        .IsUnique();
+
+                    b.ToTable("NurseryBatchAllocations", t =>
+                        {
+                            t.HasCheckConstraint("CK_NurseryBatchAllocation_Quantity", "[Quantity] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.NurseryBatchPhoto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FileKey")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("NurseryBatchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Phase")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NurseryBatchId", "Phase", "SortOrder")
+                        .IsUnique();
+
+                    b.ToTable("NurseryBatchPhotos", t =>
+                        {
+                            t.HasCheckConstraint("CK_NurseryBatchPhoto_SortOrder", "[SortOrder] BETWEEN 1 AND 3");
+                        });
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -652,6 +857,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid?>("IssueId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("NurseryBatchId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("OverPlanReason")
@@ -686,6 +894,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("IssueId");
+
+                    b.HasIndex("NurseryBatchId");
 
                     b.HasIndex("RecordedByAccountId");
 
@@ -4060,6 +4270,39 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             IsInitial = false,
                             Meaning = "Recorded by mistake; the quantities are back in the stock and it counts nowhere.",
                             SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 4001,
+                            Code = "NURSING",
+                            DisplayName = "Nursing",
+                            Group = "NURSERY_BATCH",
+                            IsFinal = false,
+                            IsInitial = true,
+                            Meaning = "The pieces left the stock and are in the nursery; it can be edited or cancelled.",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 4002,
+                            Code = "COMPLETED",
+                            DisplayName = "Completed",
+                            Group = "NURSERY_BATCH",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "The survivors are recorded and each raft has its cycle; the survivors and shares can still be corrected before the seed is hung.",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 4003,
+                            Code = "CANCELLED",
+                            DisplayName = "Cancelled",
+                            Group = "NURSERY_BATCH",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "Recorded by mistake before it was completed; the pieces are back in the stock.",
+                            SortOrder = 3
                         });
                 });
 
@@ -4490,6 +4733,28 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             ToStatusId = 3903,
                             TriggerEvent = "Action",
                             UseCases = "INPUT-ISSUE"
+                        },
+                        new
+                        {
+                            Id = 30090,
+                            AllowedPerformers = "Cooperative Owner; Zone Manager",
+                            FromStatusId = 4001,
+                            GuardCondition = "The survivors are not above the pieces put in, and the shares of the rafts of the zone, none with an Open cycle, add up to the survivors exactly.",
+                            ReasonRequired = false,
+                            ToStatusId = 4002,
+                            TriggerEvent = "Action",
+                            UseCases = "NURSERY-03"
+                        },
+                        new
+                        {
+                            Id = 30091,
+                            AllowedPerformers = "Cooperative Owner; Zone Manager",
+                            FromStatusId = 4001,
+                            GuardCondition = "The batch is still Nursing; the pieces go back in the stock.",
+                            ReasonRequired = true,
+                            ToStatusId = 4003,
+                            TriggerEvent = "Action",
+                            UseCases = "NURSERY-02"
                         },
                         new
                         {
@@ -4979,6 +5244,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             IsActive = true,
                             IsSystem = true,
                             Name = "Dùng chung cho vùng",
+                            RowVersion = new byte[0]
+                        },
+                        new
+                        {
+                            Id = new Guid("6e1f0b20-0000-4d4a-8b20-000000000004"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 11, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 7, 0, 0, 0)),
+                            IsActive = true,
+                            IsSystem = true,
+                            Name = "Ươm giống",
                             RowVersion = new byte[0]
                         });
                 });
@@ -6988,6 +7262,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationCycle", b =>
                 {
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.NurseryBatch", null)
+                        .WithMany()
+                        .HasForeignKey("NurseryBatchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
                         .WithMany("CultivationCycles")
                         .HasForeignKey("RaftId")
@@ -7065,6 +7344,83 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Raft");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.NurseryBatch", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("CompletedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.InputIssue", "Issue")
+                        .WithMany()
+                        .HasForeignKey("IssueId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Purchasing.PurchaseReceiptLine", "SeedLotLine")
+                        .WithMany()
+                        .HasForeignKey("SeedLotLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
+                        .WithMany()
+                        .HasForeignKey("StatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Farming.FarmingZone", "Zone")
+                        .WithMany()
+                        .HasForeignKey("ZoneId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Issue");
+
+                    b.Navigation("SeedLotLine");
+
+                    b.Navigation("Status");
+
+                    b.Navigation("Zone");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.NurseryBatchAllocation", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.CultivationCycle", "Cycle")
+                        .WithMany()
+                        .HasForeignKey("CycleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.NurseryBatch", "NurseryBatch")
+                        .WithMany("Allocations")
+                        .HasForeignKey("NurseryBatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
+                        .WithMany()
+                        .HasForeignKey("RaftId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Cycle");
+
+                    b.Navigation("NurseryBatch");
+
+                    b.Navigation("Raft");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.NurseryBatchPhoto", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.NurseryBatch", "NurseryBatch")
+                        .WithMany("Photos")
+                        .HasForeignKey("NurseryBatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("NurseryBatch");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingRecord", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Cultivation.CultivationCycle", "Cycle")
@@ -7076,6 +7432,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasOne("OMTS.Domain.Entities.Purchasing.InputIssue", "Issue")
                         .WithMany()
                         .HasForeignKey("IssueId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.NurseryBatch", null)
+                        .WithMany()
+                        .HasForeignKey("NurseryBatchId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
@@ -8780,6 +9141,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationLog", b =>
                 {
+                    b.Navigation("Photos");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.NurseryBatch", b =>
+                {
+                    b.Navigation("Allocations");
+
                     b.Navigation("Photos");
                 });
 

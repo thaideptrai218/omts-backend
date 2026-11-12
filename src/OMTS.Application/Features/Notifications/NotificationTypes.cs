@@ -68,6 +68,9 @@ public static class NotificationTypes
     /// <summary>A lane of a raft put out of service (decision of 12/11/2026), to the Cooperative Owner unless the Owner did it.</summary>
     public const string LaneOutOfService = "LANE_OUT_OF_SERVICE";
 
+    /// <summary>A nursery batch started, edited, cancelled, completed or corrected by a Zone Manager (decision of 12/11/2026), to the Cooperative Owner unless the Owner did it; the generic message code stands in for the SRS.</summary>
+    public const string NurseryRecorded = "NURSERY_RECORDED";
+
     /// <summary>MSG-HARVEST-05, a lot for sale the next daily close check closes, to the Zone Managers of the zone or else the Owner (GFR-05); once per close date. BR-ACCOUNT-11 does not list it as mandatory.</summary>
     public const string HarvestLotAutoCloseWarning = "HARVEST_LOT_AUTO_CLOSE_WARNING";
 
@@ -152,6 +155,8 @@ public static class NotificationTypes
         // Open the raft with its lanes, where the repair or the out-of-service is recorded.
         new(LaneDamaged, "Lane damaged", Default, [CooperativeOwner], NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
         new(LaneOutOfService, "Lane out of service", Default, [CooperativeOwner], NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
+        // Opens the nursery batch (ươm giống), in its zone.
+        new(NurseryRecorded, "Nursery recorded", Default, [CooperativeOwner], NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
         // Opens the lot, where it can be closed by hand (HARVEST-02).
         new(HarvestLotAutoCloseWarning, "Harvest lot closing automatically", Default, [CooperativeOwner, ZoneManager],
             NotificationOpenAccess.InZone(PermissionFunctions.Harvests, PermissionAction.View)),

@@ -29,6 +29,12 @@ public class SeedingRecord : AuditableEntity
     public Guid? IssueId { get; set; }
     public InputIssue? Issue { get; set; }
 
+    /// <summary>
+    /// The nursery batch the seed came from: the session is capped by the cycle's allocation and posts no issue (the stock left when the nursery started), and <see cref="SeedLotLineId"/> is the
+    /// batch's lot, kept for tracing. Null on a session of a cycle started the old way.
+    /// </summary>
+    public Guid? NurseryBatchId { get; set; }
+
     /// <summary>The reason given when the seed of the cycle went above 110 % of its planned seed quantity (confirmed by the caller); null otherwise.</summary>
     public string? OverPlanReason { get; set; }
 

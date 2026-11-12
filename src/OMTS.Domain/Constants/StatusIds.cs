@@ -157,6 +157,14 @@ public static class StatusIds
         public const int PendingTransfer = 3604;
     }
 
+    /// <summary>NURSERY_BATCH (ươm giống, 12/11/2026): a Completed batch is not cancelled; only a Nursing one is edited or cancelled.</summary>
+    public static class NurseryBatch
+    {
+        public const int Nursing = 4001;
+        public const int Completed = 4002;
+        public const int Cancelled = 4003;
+    }
+
     /// <summary>An input issue: a Draft holds no quantity and is removed; Completed writes the movements; Cancelled counts nowhere.</summary>
     public static class InputIssue
     {

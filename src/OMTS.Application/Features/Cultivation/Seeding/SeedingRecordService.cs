@@ -6,6 +6,7 @@ using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Cultivation.Cycles;
+using OMTS.Application.Features.Cultivation.Nursery;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Domain.Entities.Cultivation;
 
@@ -19,6 +20,7 @@ namespace OMTS.Application.Features.Cultivation.Seeding;
 public sealed class SeedingRecordService(
     ICultivationCycleRepository cycles,
     ISeedingRecordRepository records,
+    INurseryBatchRepository nurseries,
     IRaftRepository rafts,
     CycleWriteGuard writes,
     SeedingSessionReader reader,
@@ -49,7 +51,10 @@ public sealed class SeedingRecordService(
             return refused;
         }
 
-        var input = new SeedingInput(request.SeedingDate, request.SeedLotId, request.LaneNumbers, request.Quantity);
+        // A cycle created from a nursery batch seeds the batch's lot, from its share (hard cap), with no stock movement and no plan percentages (owner decision of 12/11/2026).
+        var fromNursery = cycle.NurseryBatchId is not null;
+        var nurseryLot = fromNursery ? await nurseries.SeedLotOfAsync(cycle.NurseryBatchId!.Value, cancellationToken) ?? throw new InvalidOperationException($"Nursery batch {cycle.NurseryBatchId} has no seed lot.") : null;
+        var input = new SeedingInput(request.SeedingDate, request.SeedLotId, request.LaneNumbers, request.Quantity, nurseryLot);
         var (fields, invalid) = await reader.ReadAsync(cycle, input, null, null, reasonRequired: false, cancellationToken);
         if (invalid is not null)
         {
@@ -57,7 +62,11 @@ public sealed class SeedingRecordService(
         }
 
         var others = (await records.ListByCycleAsync(cycle.Id, cancellationToken)).Sum(r => r.Quantity);
-        if (SeedingPlanRules.Check(new SeedingPlanInput(cycle.ExpectedSeedQuantity, others, request.ConfirmOverPlan, request.OverPlanReason), fields!.Quantity, out var overPlanReason) is { } overPlan)
+        string? overPlanReason = null;
+        var overPlan = fromNursery
+            ? NurseryRules.CheckSeeding(cycle.NurseryAllocatedQuantity ?? 0m, others, fields!.Quantity)
+            : SeedingPlanRules.Check(new SeedingPlanInput(cycle.ExpectedSeedQuantity, others, request.ConfirmOverPlan, request.OverPlanReason), fields!.Quantity, out overPlanReason);
+        if (overPlan is not null)
         {
             return overPlan;
         }
@@ -71,18 +80,23 @@ public sealed class SeedingRecordService(
             SeedLotLineId = fields.Lot.Id,
             SeedLotLine = fields.Lot,
             Quantity = fields.Quantity,
+            NurseryBatchId = cycle.NurseryBatchId,
             OverPlanReason = overPlanReason,
             RecordedByAccountId = recorder,
             Lanes = fields.Lanes.Select(l => new SeedingRecordLane { LaneId = l.Id, Lane = l }).ToList(),
         };
-        if (await stockSync.PostAsync(record, fields!, cycle.Raft, cancellationToken) is { } stockRefused)
+        if (!fromNursery && await stockSync.PostAsync(record, fields!, cycle.Raft, cancellationToken) is { } stockRefused)
         {
             return stockRefused;
         }
 
         records.Add(record);
         unitOfWork.MarkChanged(cycle);
-        unitOfWork.MarkChanged(fields.Lot.Receipt);
+        if (!fromNursery)
+        {
+            unitOfWork.MarkChanged(fields.Lot.Receipt);
+        }
+
         audit.Record(SeedingValues.Entry(SeedingValues.Created, record) with { After = SeedingValues.Snapshot(record) });
         await unitOfWork.SaveChangesAsync(cancellationToken);
 

@@ -25,5 +25,6 @@ public static class StatusGroups
     public const string SalesInvoice = "SALES_INVOICE";
     public const string CustomerPayment = "CUSTOMER_PAYMENT";
     public const string InputIssue = "INPUT_ISSUE";
+    public const string NurseryBatch = "NURSERY_BATCH";
 }
 

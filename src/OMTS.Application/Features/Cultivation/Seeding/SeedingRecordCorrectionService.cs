@@ -5,6 +5,7 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Cultivation.Cycles;
+using OMTS.Application.Features.Cultivation.Nursery;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Farming;
 using OMTS.Domain.Entities.Cultivation;
@@ -61,7 +62,11 @@ public sealed class SeedingRecordCorrectionService(
         if (fields!.Quantity > record.Quantity)
         {
             var others = (await records.ListByCycleAsync(record.CycleId, cancellationToken)).Where(r => r.Id != record.Id).Sum(r => r.Quantity);
-            if (SeedingPlanRules.Check(new SeedingPlanInput(record.Cycle.ExpectedSeedQuantity, others, request.ConfirmOverPlan, request.OverPlanReason), fields.Quantity, out overPlanReason) is { } overPlan)
+            // A session from a nursery batch is capped by the share of its cycle (hard cap, no plan percentages); the others keep the plan rules.
+            var overPlan = record.NurseryBatchId is not null
+                ? NurseryRules.CheckSeeding(record.Cycle.NurseryAllocatedQuantity ?? 0m, others, fields.Quantity)
+                : SeedingPlanRules.Check(new SeedingPlanInput(record.Cycle.ExpectedSeedQuantity, others, request.ConfirmOverPlan, request.OverPlanReason), fields.Quantity, out overPlanReason);
+            if (overPlan is not null)
             {
                 return overPlan;
             }
@@ -81,7 +86,11 @@ public sealed class SeedingRecordCorrectionService(
             // Lanes are rows of their own: a change of lanes only must still give the session a new version.
             unitOfWork.MarkChanged(record);
             unitOfWork.MarkChanged(record.Cycle);
-            unitOfWork.MarkChanged(fields!.Lot.Receipt);
+            if (record.NurseryBatchId is null)
+            {
+                unitOfWork.MarkChanged(fields!.Lot.Receipt);
+            }
+
             audit.Record(SeedingValues.Entry(SeedingValues.Corrected, record) with { Before = changedBefore, After = changedAfter, Reason = fields.Reason });
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }

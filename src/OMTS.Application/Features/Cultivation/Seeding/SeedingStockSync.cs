@@ -34,6 +34,12 @@ public sealed class SeedingStockSync(
     /// <summary>A corrected session, called before its row changes: the issue follows the new date, lot and quantity.</summary>
     internal async Task<AppError?> ReplaceAsync(SeedingRecord record, SeedingFields fields, Raft raft, CancellationToken cancellationToken)
     {
+        // A session from a nursery batch touches no stock: the pieces left it when the nursery started and the allocation caps the session.
+        if (record.NurseryBatchId is not null)
+        {
+            return null;
+        }
+
         // What the session holds today counts as consumed, so a correction may keep using it.
         var own = record.SeedLotLineId == fields.Lot.Id ? record.Quantity : 0m;
         if (await CheckOnHandAsync(fields.Lot, fields.Quantity, own, cancellationToken) is { } refused)
@@ -63,9 +69,10 @@ public sealed class SeedingStockSync(
     private static List<FarmingIssueLine> Lines(SeedingFields fields) => [new FarmingIssueLine(fields.Lot.Item!, fields.Lot.Id, fields.Quantity)];
 
     /// <summary>MSG-INPUT-01 when the quantity is above what is on hand in the lot (received, less returns and everything consumed), unless the cooperative allows a negative stock.</summary>
-    private async Task<AppError?> CheckOnHandAsync(PurchaseReceiptLine lot, decimal quantity, decimal own, CancellationToken cancellationToken)
+    /// <param name="enforceAlways">Refuse even when the cooperative allows a negative stock: a nursery takes only what is on hand (owner decision of 12/11/2026).</param>
+    internal async Task<AppError?> CheckOnHandAsync(PurchaseReceiptLine lot, decimal quantity, decimal own, CancellationToken cancellationToken, bool enforceAlways = false)
     {
-        if (await issuer.NegativeAllowedAsync(cancellationToken))
+        if (!enforceAlways && await issuer.NegativeAllowedAsync(cancellationToken))
         {
             return null;
         }

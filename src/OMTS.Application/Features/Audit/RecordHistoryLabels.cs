@@ -69,8 +69,24 @@ internal static partial class RecordHistoryLabels
         ["SeedingCompletedOn"] = ("Ngày hoàn tất thả giống", null),
     };
 
+    private static readonly Dictionary<string, (string Label, string? Unit)> Nursery = new()
+    {
+        ["Status"] = ("Trạng thái", null),
+        ["StartDate"] = ("Ngày bắt đầu ươm", null),
+        ["SeedLot"] = ("Lô giống", null),
+        ["Quantity"] = ("Số mảnh vào ươm", "mảnh"),
+        ["Note"] = ("Ghi chú", null),
+        ["Survivors"] = ("Số mảnh sống sót (ước tính)", "mảnh"),
+        ["CompletedOn"] = ("Ngày hoàn tất ươm", null),
+        ["Allocations"] = ("Phân bổ cho bè", null),
+        ["Photos"] = ("Ảnh", null),
+    };
+
     private static readonly Dictionary<string, string> Actions = new()
     {
+        ["SurvivorsCorrected"] = "Sửa số sống sót",
+        ["AllocationsChanged"] = "Chuyển phần chia giữa các bè",
+        ["Completed"] = "Hoàn tất ươm",
         ["Created"] = "Tạo mới",
         ["Edited"] = "Chỉnh sửa",
         ["TraceCorrected"] = "Hiệu chỉnh truy xuất",
@@ -107,6 +123,7 @@ internal static partial class RecordHistoryLabels
             "MaterialUsage" => Material,
             "CultivationLog" => Log,
             "CultivationCycle" => Cycle,
+            "NurseryBatch" => Nursery,
             _ => null,
         };
         return table is not null && table.TryGetValue(field, out var known) ? known : (Words().Replace(field, " $1").Trim(), null);

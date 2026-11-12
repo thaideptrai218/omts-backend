@@ -6,11 +6,11 @@ using OMTS.Application.Features.Farming.Rafts;
 
 namespace OMTS.Application.Features.Cultivation.Cycles;
 
-/// <summary>CYCLE-01.0. Without <see cref="StartDate"/> the cycle starts today; the plan estimates are optional.</summary>
-public sealed record StartCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, DateOnly? ExpectedHarvestDate, decimal? TargetYieldKg);
+/// <summary>CYCLE-01.0. Without <see cref="StartDate"/> the cycle starts today; the plan estimates are optional. There is no expected harvest date any more (owner decision of 12/11/2026): a field sent for it is ignored.</summary>
+public sealed record StartCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, decimal? TargetYieldKg);
 
 /// <summary>CYCLE-01.1: the start date and the plan estimates as they should be; a plan estimate sent empty is cleared.</summary>
-public sealed record EditCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, DateOnly? ExpectedHarvestDate, decimal? TargetYieldKg, string? RowVersion);
+public sealed record EditCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, decimal? TargetYieldKg, string? RowVersion);
 
 /// <summary>CYCLE-01.2.</summary>
 public sealed record CancelCycleRequest(string? RowVersion);
@@ -18,6 +18,8 @@ public sealed record CancelCycleRequest(string? RowVersion);
 /// <param name="DaysOfFarming">Both the first and the last day count; the last day of an Open cycle is today, of a closed one its last harvest lot, or else the close date.</param>
 /// <param name="CanEdit">The cycle is Open on a raft In Use in a zone In Use (CYCLE-01 PRE-3).</param>
 /// <param name="CanCancel">The cycle can be edited and has no record yet (CYCLE-01 PRE-3).</param>
+/// <param name="NurseryBatchId">The nursery batch the cycle was created from; null on a cycle started the old way (no nursery), whose other nursery fields are null too.</param>
+/// <param name="NurseryAllocated">The pieces of the batch given to this cycle: seeding is capped by it. <paramref name="NurserySeeded"/> is what is hung so far, <paramref name="NurseryRemaining"/> what can still be.</param>
 public sealed record CycleView(
     Guid Id,
     Guid RaftId,
@@ -25,7 +27,6 @@ public sealed record CycleView(
     DateOnly StartDate,
     DateOnly? CloseDate,
     decimal? ExpectedSeedQuantity,
-    DateOnly? ExpectedHarvestDate,
     decimal? TargetYieldKg,
     DateOnly? SeedingCompletedOn,
     string? Assessment,
@@ -35,7 +36,12 @@ public sealed record CycleView(
     string Status,
     bool CanEdit,
     bool CanCancel,
-    string RowVersion);
+    string RowVersion,
+    Guid? NurseryBatchId = null,
+    string? NurseryCode = null,
+    decimal? NurseryAllocated = null,
+    decimal? NurserySeeded = null,
+    decimal? NurseryRemaining = null);
 
 /// <summary>Answer of a cycle edit (CYCLE-01.1).</summary>
 /// <param name="Message">MSG-GEN-05 "Cultivation cycle saved.".</param>
@@ -51,7 +57,8 @@ public sealed record CycleStarted(CycleView Cycle, DateOnly? PreviousCloseDate, 
 
 /// <summary>A cycle in the list of a raft (CYCLE-05.1), the newest first.</summary>
 /// <param name="ClosedEarly">A Closed cycle was closed early (BR-CYCLE-07); false for an Open one.</param>
-public sealed record CycleListItem(Guid Id, DateOnly StartDate, DateOnly? CloseDate, int StatusId, string Status, string RowVersion, bool ClosedEarly);
+/// <param name="NurseryBatchId">The nursery batch the cycle was created from; null on a cycle started the old way.</param>
+public sealed record CycleListItem(Guid Id, DateOnly StartDate, DateOnly? CloseDate, int StatusId, string Status, string RowVersion, bool ClosedEarly, Guid? NurseryBatchId = null);
 
 /// <summary>A raft on the Cultivation cycles screen (SCR-CYCLE-01). The commands are true only when the use case would accept them.</summary>
 /// <param name="LaneCount">The number of lanes In Use.</param>

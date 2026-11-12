@@ -7,6 +7,7 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Cultivation.Cycles;
+using OMTS.Application.Features.Cultivation.Nursery;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Purchasing;
 using OMTS.Domain.Constants;
@@ -20,6 +21,7 @@ public sealed class SeedingReadService(
     ICultivationCycleRepository cycles,
     ISeedingRecordRepository records,
     ISeedLotRepository lots,
+    INurseryBatchRepository nurseries,
     IRaftRepository rafts,
     IHarvestLotRepository harvestLots,
     LaneStateReader laneStates,
@@ -69,6 +71,7 @@ public sealed class SeedingReadService(
         var canRecord = CultivationCycleViews.CanEdit(cycle, cycle.Raft, cycle.Raft.Zone.StatusId == StatusIds.Usage.InUse)
             && await zoneAccess.AllowsAsync(PermissionFunctions.CultivationCycles, PermissionAction.Create, cycle.Raft.ZoneId, cancellationToken);
         var completed = cycle.SeedingCompletedOn is not null;
+        var nursery = cycle.NurseryBatchId is null ? null : (await nurseries.FactsByCycleAsync([cycle.Id], cancellationToken)).GetValueOrDefault(cycle.Id);
         return new SeedingList(
             cycle.Id,
             raft.Id,
@@ -95,7 +98,12 @@ public sealed class SeedingReadService(
             RowVersionGuard.Encode(cycle.RowVersion),
             cycle.ExpectedSeedQuantity,
             ofCycle.Sum(r => r.Quantity),
-            SeedingPlanRules.Percent(cycle.ExpectedSeedQuantity, ofCycle.Sum(r => r.Quantity)));
+            SeedingPlanRules.Percent(cycle.ExpectedSeedQuantity, ofCycle.Sum(r => r.Quantity)),
+            cycle.NurseryBatchId,
+            nursery?.BatchCode,
+            nursery?.Allocated,
+            nursery?.Seeded,
+            nursery is null ? null : NurseryRules.Remaining(nursery.Allocated, nursery.Seeded));
     }
 
     public async Task<Result<SeedingRecordView>> GetAsync(Guid recordId, CancellationToken cancellationToken)

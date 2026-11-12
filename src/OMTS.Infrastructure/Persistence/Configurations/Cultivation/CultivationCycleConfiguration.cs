@@ -13,6 +13,11 @@ internal sealed class CultivationCycleConfiguration : IEntityTypeConfiguration<C
         builder.Property(x => x.ExpectedSeedQuantity).HasPrecision(18, 3);
         builder.Property(x => x.TargetYieldKg).HasPrecision(18, 2);
         builder.Property(x => x.Assessment).HasMaxLength(Lengths.LongText);
+        builder.Property(x => x.NurseryAllocatedQuantity).HasPrecision(18, 3);
+
+        // The nursery batch the cycle was created from (completing it); the allocation row points back to the cycle.
+        builder.HasOne<NurseryBatch>().WithMany().HasForeignKey(x => x.NurseryBatchId);
+        builder.HasIndex(x => x.NurseryBatchId);
 
         // A raft holds at most one Open cycle, even for parallel starts (BR-CYCLE-01).
         builder.HasIndex(x => x.RaftId)

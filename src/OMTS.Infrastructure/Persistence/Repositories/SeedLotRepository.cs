@@ -61,7 +61,8 @@ internal sealed class SeedLotRepository(OmtsDbContext db) : ISeedLotRepository, 
     public async Task<IReadOnlyDictionary<Guid, decimal>> SeededAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken)
     {
         var legacy = await db.SeedingRecords.AsNoTracking()
-            .Where(r => lineIds.Contains(r.SeedLotLineId) && r.IssueId == null)
+            // A session from a nursery batch has no issue either, but its seed left the stock when the nursery started (the batch's issue counts it): never twice.
+            .Where(r => lineIds.Contains(r.SeedLotLineId) && r.IssueId == null && r.NurseryBatchId == null)
             .Select(r => new { r.SeedLotLineId, r.Quantity })
             .ToListAsync(cancellationToken);
         var issued = await db.InputStockMovements.AsNoTracking()

@@ -13,6 +13,9 @@ internal sealed class SeedingRecordConfiguration : IEntityTypeConfiguration<Seed
         builder.HasOne(x => x.Issue).WithMany().HasForeignKey(x => x.IssueId).OnDelete(DeleteBehavior.Restrict);
         // The seed lot is a Seed line of a purchase receipt (GBR-04); a seeded line can never be removed.
         builder.HasOne(x => x.SeedLotLine).WithMany().HasForeignKey(x => x.SeedLotLineId);
+        // The nursery batch the seed came from; null on a session of a cycle started the old way.
+        builder.HasOne<NurseryBatch>().WithMany().HasForeignKey(x => x.NurseryBatchId);
+        builder.HasIndex(x => x.NurseryBatchId);
         builder.ReferencesAccount(nameof(SeedingRecord.RecordedByAccountId));
         builder.Property(x => x.Quantity).HasPrecision(18, 3);
         builder.Property(x => x.OverPlanReason).HasMaxLength(1000);

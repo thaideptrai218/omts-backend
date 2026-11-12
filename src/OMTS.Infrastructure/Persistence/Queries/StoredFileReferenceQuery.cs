@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Files;
+using OMTS.Domain.Entities.Cultivation;
 
 namespace OMTS.Infrastructure.Persistence.Queries;
 
@@ -24,6 +25,8 @@ internal sealed class StoredFileReferenceQuery(OmtsDbContext db) : IStoredFileRe
         FileCategories.HarvestLotPhotos => db.HarvestLotPhotos.Select(p => p.FileKey),
         FileCategories.QualityClaimPhotos => db.QualityClaimPhotos.Select(p => p.FileKey),
         FileCategories.LaneIncidentPhotos => db.LaneIncidentPhotos.Select(p => p.FileKey),
+        FileCategories.NurseryStartPhotos => db.NurseryBatchPhotos.Where(p => p.Phase == NurseryPhotoPhase.Start).Select(p => p.FileKey),
+        FileCategories.NurseryCompletionPhotos => db.NurseryBatchPhotos.Where(p => p.Phase == NurseryPhotoPhase.Completion).Select(p => p.FileKey),
         _ => throw new ArgumentOutOfRangeException(nameof(category), category, "No record column is known for this file category."),
     };
 }

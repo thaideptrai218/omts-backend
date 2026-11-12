@@ -37,4 +37,10 @@ public static class FileCategories
 
     /// <summary>Optional photos of a lane incident (damage or out of service), <c>LaneIncidentPhoto.FileKey</c>. Staff only.</summary>
     public const string LaneIncidentPhotos = "lane-incident-photos";
+
+    /// <summary>Photos of the start of a nursery batch, <c>NurseryBatchPhoto.FileKey</c> with phase Start (1 to 3, mandatory). Staff only.</summary>
+    public const string NurseryStartPhotos = "nursery-start-photos";
+
+    /// <summary>Photos of the completion of a nursery batch, <c>NurseryBatchPhoto.FileKey</c> with phase Completion (1 to 3, mandatory). Staff only.</summary>
+    public const string NurseryCompletionPhotos = "nursery-completion-photos";
 }

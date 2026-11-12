@@ -14,8 +14,8 @@ namespace OMTS.Application.Features.Cultivation.Seeding;
 /// <summary>The checked fields of a session.</summary>
 internal sealed record SeedingFields(DateOnly Date, PurchaseReceiptLine Lot, decimal Quantity, IReadOnlyList<Lane> Lanes, string Reason);
 
-/// <summary>What a session sends, new or corrected.</summary>
-internal sealed record SeedingInput(DateOnly? Date, Guid? SeedLotId, IReadOnlyList<int>? LaneNumbers, decimal? Quantity);
+/// <summary>What a session sends, new or corrected. <paramref name="FixedLot"/> is the seed lot of the nursery batch of a cycle created from a nursery: the session has no choice of lot then.</summary>
+internal sealed record SeedingInput(DateOnly? Date, Guid? SeedLotId, IReadOnlyList<int>? LaneNumbers, decimal? Quantity, PurchaseReceiptLine? FixedLot = null);
 
 /// <summary>
 /// CYCLE-02.0 step 5, shared by a new and a corrected session: the date against the cycle, the seed lot and today, the seed lot itself, the quantity and the lanes
@@ -29,7 +29,7 @@ public sealed class SeedingSessionReader(ISeedLotRepository lots, IRaftRepositor
         CultivationCycle cycle, SeedingInput input, SeedingRecord? current, string? reason, bool reasonRequired, CancellationToken cancellationToken)
     {
         var today = timeProvider.Today();
-        var lot = await LotAsync(input.SeedLotId, current, cancellationToken);
+        var lot = input.FixedLot ?? await LotAsync(input.SeedLotId, current, cancellationToken);
         var raft = await rafts.GetForEditAsync(cycle.RaftId, cancellationToken) ?? throw new InvalidOperationException($"Raft {cycle.RaftId} not found.");
 
         var check = new FieldCheck();
@@ -50,6 +50,12 @@ public sealed class SeedingSessionReader(ISeedLotRepository lots, IRaftRepositor
     /// <summary>GBR-04: a Seed line of a Completed receipt whose whole quantity has not been returned. Lots of a discontinued item or supplier stay: GBR-01 is not cited by CYCLE-02, and the seed is already bought.</summary>
     internal async Task<PurchaseReceiptLine?> LotAsync(Guid? seedLotId, SeedingRecord? current, CancellationToken cancellationToken)
     {
+        // A session from a nursery batch keeps the lot of the batch: it has no choice of lot (and TRACE-03 cannot move it to another).
+        if (current?.NurseryBatchId is not null)
+        {
+            return current.SeedLotLine;
+        }
+
         if (seedLotId is not { } id)
         {
             return null;

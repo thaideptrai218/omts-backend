@@ -122,7 +122,8 @@ public class CycleCloseAcceptanceTests
         Assert.Equal(JsonValueKind.Null, summary.GetProperty("earlyReason").ValueKind);
         // BR-CYCLE-06: the days run to the last harvest lot, both days counted; the plan stands next to the actual figures.
         Assert.Equal((495.5m, 27, new DateOnly(2026, 10, 27), 2), (summary.Number("kgHarvested"), summary.GetProperty("daysOfFarming").GetInt32(), summary.Date("lastHarvestDate"), summary.GetProperty("harvestLotCount").GetInt32()));
-        Assert.Equal((120m, new DateOnly(2026, 10, 30), 5000m), (summary.Number("expectedSeedQuantity"), summary.Date("expectedHarvestDate"), summary.Number("targetYieldKg")));
+        Assert.Equal((120m, 5000m), (summary.Number("expectedSeedQuantity"), summary.Number("targetYieldKg")));
+        Assert.False(summary.TryGetProperty("expectedHarvestDate", out _)); // the plan has no expected harvest date any more (owner decision of 12/11/2026)
         Assert.Contains("\"OwnerApprovalConfirmed\":false", Assert.Single(await api.CloseAuditAftersAsync(cycleId)));
 
         // MSG-CYCLE-06 to the Owner with the figures of the close day.

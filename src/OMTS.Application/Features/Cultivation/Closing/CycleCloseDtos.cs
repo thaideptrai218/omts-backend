@@ -1,4 +1,5 @@
 using OMTS.Application.Features.Cultivation.Cycles;
+using OMTS.Application.Features.Cultivation.Nursery;
 
 namespace OMTS.Application.Features.Cultivation.Closing;
 
@@ -25,10 +26,9 @@ public enum EarlyCloseReason
 /// <param name="SeedHung">The total quantity of the seeding sessions, in <paramref name="SeedUnit"/>.</param>
 /// <param name="SeedUnit">The unit of the seed lots hung; null with no session.</param>
 /// <param name="KgHarvested">The total estimated kg of the harvest lots of the cycle, not the weight confirmed at the port.</param>
-/// <param name="LastHarvestDate">The date of the last harvest lot, or null; compared with <paramref name="ExpectedHarvestDate"/>.</param>
+/// <param name="LastHarvestDate">The date of the last harvest lot, or null. The plan has no expected harvest date any more (owner decision of 12/11/2026).</param>
 /// <param name="DaysOfFarming">From the start date to the last harvest lot, or to the close date (today for an Open cycle) without one; both days count.</param>
 /// <param name="ExpectedSeedQuantity">Plan estimate next to <paramref name="SeedHung"/>; null: Not planned.</param>
-/// <param name="ExpectedHarvestDate">Plan estimate next to <paramref name="LastHarvestDate"/>; null: Not planned.</param>
 /// <param name="TargetYieldKg">Plan estimate next to <paramref name="KgHarvested"/>; null: Not planned.</param>
 /// <param name="ClosedEarly">For a Closed cycle, whether it was closed early; for an Open one, whether closing it today would be early.</param>
 /// <param name="EarlyReason">Why <paramref name="ClosedEarly"/>, or null.</param>
@@ -36,6 +36,7 @@ public enum EarlyCloseReason
 /// <param name="Assessment">The assessment of a Closed cycle, else null.</param>
 /// <param name="LostLanes">The lanes put out of service with seed on them during the cycle, with the reason: they are finished, not "not harvested".</param>
 /// <param name="DamagedLanes">For an Open cycle, the lanes damaged now and not repaired, by number.</param>
+/// <param name="Nursery">The nursery batch the cycle was created from, with the pieces put in, the survivors and the loss (all estimates, <c>estimated: true</c>); null on a cycle started the old way.</param>
 public sealed record CycleSummary(
     Guid CycleId,
     string RaftCode,
@@ -50,7 +51,6 @@ public sealed record CycleSummary(
     DateOnly? LastHarvestDate,
     int DaysOfFarming,
     decimal? ExpectedSeedQuantity,
-    DateOnly? ExpectedHarvestDate,
     decimal? TargetYieldKg,
     bool ClosedEarly,
     EarlyCloseReason? EarlyReason,
@@ -60,7 +60,8 @@ public sealed record CycleSummary(
     decimal? RemainingKg = null,
     decimal? SeedPercent = null,
     IReadOnlyList<LaneLossView>? LostLanes = null,
-    IReadOnlyList<int>? DamagedLanes = null);
+    IReadOnlyList<int>? DamagedLanes = null,
+    NurserySummary? Nursery = null);
 
 /// <summary>A lane put out of service while seed hung on it (decision of 12/11/2026): the loss event of that seed, with no quantity. The lane counts as finished at the close.</summary>
 public sealed record LaneLossView(int LaneNumber, DateOnly Date, string Reason, string? ReasonCode);

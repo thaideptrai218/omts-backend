@@ -1,5 +1,6 @@
 using System.Globalization;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Features.Cultivation.Nursery;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Harvest;
 
@@ -8,8 +9,8 @@ namespace OMTS.Application.Features.Harvest;
 /// <summary>The groups and totals of HARVEST-04 from lots that have been chosen.</summary>
 public sealed record HarvestYieldResult(IReadOnlyList<HarvestYieldGroup> Groups, HarvestYieldTotals Totals);
 
-/// <summary>What a cycle holds beyond the lots of the report: the seed hung and the kg of all its lots, for the plan figures of a group.</summary>
-public sealed record YieldCycleFigures(CycleSeedTotal? Seed, decimal HarvestedKg);
+/// <summary>What a cycle holds beyond the lots of the report: the seed hung and the kg of all its lots, for the plan figures of a group, and its nursery batch when it was created from one.</summary>
+public sealed record YieldCycleFigures(CycleSeedTotal? Seed, decimal HarvestedKg, NurseryCycleFacts? Nursery = null);
 
 /// <summary>
 /// HARVEST-04 figures (BR-HARVEST-07), pure: each lot's figures come from <see cref="HarvestLotFigures"/>, and a raft, zone or cycle is the plain total of its lots, never rounded and never
@@ -70,6 +71,9 @@ public static class HarvestYieldCalculator
         decimal? target = withTarget.Count == 0 ? null : withTarget.Sum(c => c.TargetYieldKg!.Value);
         var seeds = cycles.Select(c => cycleFigures?.GetValueOrDefault(c.Id)?.Seed).OfType<CycleSeedTotal>().ToList();
         var units = seeds.Select(s => s.Unit).Where(u => !string.IsNullOrWhiteSpace(u)).Distinct().ToList();
+        // The nursery of the cycles of the group (estimates, counted by eye): the pieces put in in proportion to the share of each cycle; null when no cycle came from a nursery.
+        var nurseries = cycles.Select(c => cycleFigures?.GetValueOrDefault(c.Id)?.Nursery).OfType<NurseryCycleFacts>().Select(NurseryRules.SummaryOf).ToList();
+        var (nurseryIn, nurserySurvivors) = (nurseries.Sum(n => n.QuantityIn), nurseries.Sum(n => n.Survivors));
         return new HarvestYieldGroup(
             KeyOf(first, groupBy),
             label,
@@ -97,6 +101,10 @@ public static class HarvestYieldCalculator
             seeds.Count == 0 ? null : seeds.Sum(s => s.Quantity),
             units.Count == 1 ? units[0] : null,
             // Only lots still for sale have kg left to sell.
-            lots.Where(l => l.NotFinal).Sum(l => l.RemainingKg));
+            lots.Where(l => l.NotFinal).Sum(l => l.RemainingKg),
+            nurseries.Count == 0 ? null : nurseryIn,
+            nurseries.Count == 0 ? null : nurserySurvivors,
+            nurseries.Count == 0 ? null : NurseryRules.LossPieces(nurseryIn, nurserySurvivors),
+            nurseries.Count == 0 ? null : NurseryRules.LossPercent(nurseryIn, nurserySurvivors));
     }
 }

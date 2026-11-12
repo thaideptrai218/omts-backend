@@ -61,7 +61,7 @@ public sealed class CultivationCycleService(
         var today = timeProvider.Today();
         var previousClose = await cycles.LastCloseDateAsync(raft.Id, cancellationToken);
         var check = CultivationCycleValues.Read(
-            request.StartDate ?? today, request.ExpectedSeedQuantity, request.ExpectedHarvestDate, request.TargetYieldKg,
+            request.StartDate ?? today, request.ExpectedSeedQuantity, request.TargetYieldKg,
             new CycleDateLimits(today, previousClose, null), out var values);
         if (!check.IsValid)
         {
@@ -107,7 +107,7 @@ public sealed class CultivationCycleService(
             timeProvider.Today(),
             await cycles.LastCloseDateAsync(cycle.RaftId, cancellationToken),
             await cycles.FirstRecordDateAsync(cycle.Id, cancellationToken));
-        var check = CultivationCycleValues.Read(request.StartDate, request.ExpectedSeedQuantity, request.ExpectedHarvestDate, request.TargetYieldKg, limits, out var values);
+        var check = CultivationCycleValues.Read(request.StartDate, request.ExpectedSeedQuantity, request.TargetYieldKg, limits, out var values);
         if (!check.IsValid)
         {
             return AppError.InvalidFields(check.Invalid);

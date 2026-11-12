@@ -49,6 +49,12 @@ public static class UserMessages
         Gen09, $"Làn {laneNumber} chưa thể đưa vào hoạt động lại: chu kỳ đang mở vẫn còn giống trên làn này. Hãy đóng hoặc kết thúc chu kỳ trước.", Legacy.Msg61);
 
 
+    /// <summary>
+    /// MSG-GEN-09 in Vietnamese for the nursery (ươm giống, decision of 12/11/2026): the generic code stands in until the SRS gives MSG-NURSERY-xx a number of its own. The caller adds a
+    /// <c>reasonCode</c> to the details so a client can tell the refusals apart.
+    /// </summary>
+    public static UserMessage NurseryRefused(string text) => new(Gen09, text, Legacy.Msg61);
+
     /// <summary>MSG-GEN-09 (GBR-01): a record in this status cannot be used for the change asked for.</summary>
     /// <param name="objectName">e.g. "Farming zone"; the first letter is capitalized.</param>
     /// <param name="status">The display name of the current status, e.g. "Discontinued".</param>

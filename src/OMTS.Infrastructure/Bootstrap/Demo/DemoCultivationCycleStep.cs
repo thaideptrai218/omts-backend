@@ -49,7 +49,7 @@ internal sealed class DemoCultivationCycleStep : IDemoSeedStep
     {
         var start = today.AddDays(-30 - 10 * number);
         return number % 2 == 0
-            ? new StartCycleRequest(start, null, null, null)
-            : new StartCycleRequest(start, 4000m + 1000m * number, start.AddMonths(10), 8000m + 500m * number);
+            ? new StartCycleRequest(start, null, null)
+            : new StartCycleRequest(start, 4000m + 1000m * number, 8000m + 500m * number);
     }
 }

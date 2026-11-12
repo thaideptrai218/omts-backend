@@ -104,6 +104,11 @@ internal static class StatusCatalogSeed
         NewStatus(S.InputIssue.Draft, G.InputIssue, "DRAFT", "Draft", "Being prepared; holds no quantity. Removed, never cancelled.", initial: true),
         NewStatus(S.InputIssue.Completed, G.InputIssue, "COMPLETED", "Completed", "The quantities have left the stock; may still be edited, which writes them again."),
         NewStatus(S.InputIssue.Cancelled, G.InputIssue, "CANCELLED", "Cancelled", "Recorded by mistake; the quantities are back in the stock and it counts nowhere.", final: true),
+
+        // STD-NURSERY-BATCH (ươm giống, decision of 12/11/2026): a Completed batch is not cancelled.
+        NewStatus(S.NurseryBatch.Nursing, G.NurseryBatch, "NURSING", "Nursing", "The pieces left the stock and are in the nursery; it can be edited or cancelled.", initial: true),
+        NewStatus(S.NurseryBatch.Completed, G.NurseryBatch, "COMPLETED", "Completed", "The survivors are recorded and each raft has its cycle; the survivors and shares can still be corrected before the seed is hung.", final: true),
+        NewStatus(S.NurseryBatch.Cancelled, G.NurseryBatch, "CANCELLED", "Cancelled", "Recorded by mistake before it was completed; the pieces are back in the stock.", final: true),
     ];
 
     public static readonly StatusTransition[] Transitions =
@@ -161,6 +166,10 @@ internal static class StatusCatalogSeed
         NewTransition(30079, S.CustomerPayment.PendingTransfer, S.CustomerPayment.Cancelled, "DEBT-02", $"{Accountant}; {Owner}", Action, "The customer did not transfer, or the code was made by mistake.", true),
         NewTransition(30080, S.InputIssue.Draft, S.InputIssue.Completed, "INPUT-ISSUE", $"{OwnerOrZoneManager}", Action, "The issue is complete and no item or seed lot would go below zero when that is not allowed.", false),
         NewTransition(30081, S.InputIssue.Completed, S.InputIssue.Cancelled, "INPUT-ISSUE", $"{OwnerOrZoneManager}", Action, "An issue recorded by mistake; its quantities go back in the stock.", true),
+
+        // NURSERY-03 and NURSERY-02 (ươm giống); there is no way back from either.
+        NewTransition(30090, S.NurseryBatch.Nursing, S.NurseryBatch.Completed, "NURSERY-03", OwnerOrZoneManager, Action, "The survivors are not above the pieces put in, and the shares of the rafts of the zone, none with an Open cycle, add up to the survivors exactly.", false),
+        NewTransition(30091, S.NurseryBatch.Nursing, S.NurseryBatch.Cancelled, "NURSERY-02", OwnerOrZoneManager, Action, "The batch is still Nursing; the pieces go back in the stock.", true),
 
         // STD-EMPLOYEE-REQUEST (BR-LABOR-08, LABOR-05, LABOR-10.2).
         NewTransition(230, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Approved, "LABOR-05", Owner, Action, "The payroll of the pay period of the day is not Awaiting finalization or Finalized, and the times stay in order.", false),

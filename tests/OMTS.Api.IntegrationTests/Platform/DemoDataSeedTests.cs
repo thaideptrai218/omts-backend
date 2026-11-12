@@ -157,7 +157,8 @@ public class DemoDataSeedTests
         Assert.All(cycles, c => Assert.Equal(StatusIds.CultivationCycle.Open, c.StatusId));
         Assert.All(cycles, c => Assert.Equal(StatusIds.Usage.InUse, c.Raft.StatusId));
         Assert.All(cycles, c => Assert.True(c.StartDate < businessToday.AddDays(-30)));
-        Assert.Equal(6, cycles.Count(c => c.ExpectedHarvestDate is not null));
+        // The plan has no expected harvest date any more (owner decision of 12/11/2026): the demo sets none.
+        Assert.Equal(0, cycles.Count(c => c.ExpectedHarvestDate is not null));
         Assert.Equal(9, await db.Employees.CountAsync());
         // Everyone has a type (BR-LABOR-01): those with a login are Staff, the others seasonal workers; one has no phone number.
         Assert.Equal(9, await db.EmployeeTypePeriods.Select(p => p.EmployeeId).Distinct().CountAsync());
