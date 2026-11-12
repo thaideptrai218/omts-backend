@@ -16,10 +16,10 @@ namespace OMTS.Api.IntegrationTests.Cultivation;
 public sealed class SeedingPlanCapTests
 {
     private static Task<HttpResponseMessage> PostAsync(HttpClient owner, Guid cycleId, SeedLotMade lot, decimal quantity, bool? confirm = null, string? reason = null, int lane = 1) =>
-        owner.PostAsJsonAsync($"/api/cultivation-cycles/{cycleId}/seeding-records", new
+        owner.PostAsync($"/api/cultivation-cycles/{cycleId}/seeding-records", StepFormKit.FormOf(new
         {
             seedingDate = FarmingTestKit.Today.AddDays(-1), seedLotId = lot.LineId, laneNumbers = new[] { lane }, quantity, confirmOverPlan = confirm ?? false, overPlanReason = reason,
-        });
+        }, photos: 1));
 
     [Fact]
     public async Task Seed_within_110_percent_is_saved_above_it_asks_and_a_confirmed_session_keeps_its_reason_in_the_record_and_the_audit_log()
@@ -82,14 +82,14 @@ public sealed class SeedingPlanCapTests
         var rowVersion = first.Text("rowVersion");
         var fine = await (await owner.PutSeedingAsync(first.Id(), first.AsCorrection() with { Quantity = 70m, RowVersion = rowVersion })).ReadAsync(HttpStatusCode.OK);
         var over = first.AsCorrection() with { Quantity = 80m, RowVersion = fine.GetProperty("record").Text("rowVersion") };
-        var question = await (await owner.PutAsJsonAsync($"/api/seeding-records/{first.Id()}", new { over.SeedingDate, seedLotId = over.SeedLotId, over.LaneNumbers, over.Quantity, over.Reason, over.RowVersion }))
+        var question = await (await owner.PutAsync($"/api/seeding-records/{first.Id()}", StepFormKit.FormOf(new { over.SeedingDate, seedLotId = over.SeedLotId, over.LaneNumbers, over.Quantity, over.Reason, over.RowVersion })))
             .ReadAsync(HttpStatusCode.Conflict);
         Assert.Equal(("MSG-GEN-04", 120m), (question.Text("code"), question.Money("totalQuantity")));
 
-        var confirmed = await (await owner.PutAsJsonAsync($"/api/seeding-records/{first.Id()}", new
+        var confirmed = await (await owner.PutAsync($"/api/seeding-records/{first.Id()}", StepFormKit.FormOf(new
         {
             over.SeedingDate, seedLotId = over.SeedLotId, over.LaneNumbers, over.Quantity, over.Reason, over.RowVersion, confirmOverPlan = true, overPlanReason = "Re-weighed seed",
-        })).ReadAsync(HttpStatusCode.OK);
+        }))).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("Re-weighed seed", confirmed.GetProperty("record").Text("overPlanReason"));
 
         // Lowering it again is never judged.

@@ -31,7 +31,8 @@ public class LotTraceQaTests
         var raft = await api.SeededRaftAsync();
         var owner = raft.Owner.Client;
         var again = await owner.SeedLotAsync();
-        await owner.SeedingRecordAsync(raft.CycleId, again.Session([2], date: Today));
+        await owner.HalveLaneAsync(raft.Session, 2);
+        await owner.SeedingRecordAsync(raft.CycleId, again.Session([2], date: Today).Percents(50m, 2));
         var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2));
         await api.UpdateAsync<PurchaseReceipt>(again.ReceiptId, r => r.StatusId = StatusIds.PurchaseReceipt.Cancelled);
 

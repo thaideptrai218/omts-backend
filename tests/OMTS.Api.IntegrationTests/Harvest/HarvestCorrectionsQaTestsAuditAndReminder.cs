@@ -104,7 +104,7 @@ public class HarvestCorrectionsQaTestsAuditAndReminder
         Assert.Null(row.After);
         using var before = JsonDocument.Parse(row.Before!);
         Assert.Equal(
-            ["CageCount", "EstimatedKg", "FinishedLanes", "HarvestDate", "HarvestedAt", "KgPerCage", "Lanes", "LotCode", "OverPlanReason", "Photos", "PurchaseRequestId"],
+            ["CageCount", "EstimatedKg", "FinishedLanes", "HarvestDate", "HarvestedAt", "KgPerCage", "LanePercents", "Lanes", "LotCode", "OverPlanReason", "Photos", "PurchaseRequestId"],
             before.RootElement.EnumerateObject().Select(p => p.Name).Order());
         Assert.Equal(lot.PhotoKeysOfLot()[0], before.RootElement.GetProperty("Photos")[0].GetString());
     }

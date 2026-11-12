@@ -23,8 +23,9 @@ public class LaneIncidentTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     private static async Task<string> RaftVersionAsync(HttpClient client, Guid raftId) =>
         (await client.GetFromJsonAsync<JsonElement>($"/api/rafts/{raftId}")).Text("rowVersion");
 
-    private static async Task<HttpResponseMessage> ReportAsync(HttpClient client, Guid raftId, int lane, string reason = "Line snapped in the storm", string? code = "LineBroken") =>
-        await client.PostAsJsonAsync(Url(raftId, lane, "report-damage"), new { reason, reasonCode = code, rowVersion = await RaftVersionAsync(client, raftId) });
+    // A damage report is a multipart form since 12/11/2026: the note and 1 to 3 on-site photos.
+    private static async Task<HttpResponseMessage> ReportAsync(HttpClient client, Guid raftId, int lane, string reason = "Line snapped in the storm", string? code = "LineBroken", int photos = 1) =>
+        await client.PostAsync(Url(raftId, lane, "report-damage"), StepFormKit.FormOf(new { reason, reasonCode = code, rowVersion = await RaftVersionAsync(client, raftId) }, photos));
 
     private static async Task<HttpResponseMessage> RepairAsync(HttpClient client, Guid raftId, int lane, string reason = "New line tied", object[]? materials = null) =>
         await client.PostAsJsonAsync(Url(raftId, lane, "repair"), new { reason, materials = materials ?? [], rowVersion = await RaftVersionAsync(client, raftId) });
@@ -310,7 +311,7 @@ public class LaneIncidentTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var manager = await factory.ManagerAsync(raft.ZoneId);
         var other = await factory.ManagerAsync((await raft.Owner.Client.CreateZoneAsync()).Id());
 
-        var refused = await other.Client.PostAsJsonAsync(Url(raft.RaftId, 1, "report-damage"), new { reason = "x", rowVersion = "" });
+        var refused = await other.Client.PostAsync(Url(raft.RaftId, 1, "report-damage"), StepFormKit.FormOf(new { reason = "x", rowVersion = "" }, photos: 1));
         Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await other.Client.GetAsync($"/api/rafts/{raft.RaftId}/lane-history")).StatusCode);
 
@@ -338,10 +339,10 @@ public class LaneIncidentTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var owner = raft.Owner.Client;
 
         Assert.Equal(HttpStatusCode.NotFound, (await ReportAsync(owner, raft.RaftId, 99)).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await owner.PostAsJsonAsync(Url(Guid.NewGuid(), 1, "report-damage"), new { reason = "x", rowVersion = "" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.PostAsync(Url(Guid.NewGuid(), 1, "report-damage"), StepFormKit.FormOf(new { reason = "x", rowVersion = "" }, photos: 1))).StatusCode);
         var version = await RaftVersionAsync(owner, raft.RaftId);
         await factory.DiscontinueRaftAsync(raft.RaftId);
-        var readOnly = await owner.PostAsJsonAsync(Url(raft.RaftId, 1, "report-damage"), new { reason = "x", rowVersion = version });
+        var readOnly = await owner.PostAsync(Url(raft.RaftId, 1, "report-damage"), StepFormKit.FormOf(new { reason = "x", rowVersion = version }, photos: 1));
         Assert.Equal("MSG-GEN-09", (await readOnly.ReadAsync(HttpStatusCode.Conflict)).Text("code"));
     }
 
@@ -360,15 +361,17 @@ public class LaneIncidentTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     }
 
     [Fact]
-    public async Task An_incident_takes_up_to_three_photos_one_at_a_time_and_a_fourth_is_refused()
+    public async Task An_incident_takes_up_to_three_photos_the_report_brings_one_the_others_come_one_at_a_time_and_a_fourth_is_refused()
     {
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
         var saved = await (await ReportAsync(owner, raft.RaftId, 2)).ReadAsync(HttpStatusCode.OK);
         var incidentId = saved.GetProperty("incident").Id();
         var url = $"/api/rafts/{raft.RaftId}/lanes/2/incidents/{incidentId}/photos";
+        var filesBefore = factory.StoredFiles("lane-incident-photos").Count - 1;
+        Assert.Equal(1, saved.GetProperty("incident").GetProperty("photos").GetArrayLength());
 
-        for (var i = 1; i <= 3; i++)
+        for (var i = 2; i <= 3; i++)
         {
             var view = await (await owner.PostAsync(url, new MultipartFormDataContent { { FileContent(Png, "image/png"), "file", "lane.png" } })).ReadAsync(HttpStatusCode.Created);
             Assert.Equal(i, view.GetProperty("photos").GetArrayLength());
@@ -378,7 +381,7 @@ public class LaneIncidentTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         Assert.Equal("Photos", (await fourth.ReadAsync(HttpStatusCode.BadRequest)).Text("field"));
         var notAPhoto = await owner.PostAsync(url, new MultipartFormDataContent { { FileContent(TextPretendingToBeAFile, "image/png"), "file", "lane.png" } });
         Assert.Equal(HttpStatusCode.BadRequest, notAPhoto.StatusCode);
-        Assert.Equal(3, factory.StoredFiles("lane-incident-photos").Count);
+        Assert.Equal(filesBefore + 3, factory.StoredFiles("lane-incident-photos").Count);
         var history = (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/lanes/2/incidents")).GetProperty("incidents")[0];
         Assert.Equal(3, history.GetProperty("photos").GetArrayLength());
     }

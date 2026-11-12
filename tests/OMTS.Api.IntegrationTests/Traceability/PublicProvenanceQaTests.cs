@@ -223,7 +223,8 @@ public class PublicProvenanceQaTests
 
         var (harvest, raft) = PhotoUrls(await api.CreateClient().ProvenanceAsync(token));
 
-        Assert.Equal((2, 1), (harvest.Count, raft.Count));
+        // The two photos the test adds and the one the lot was recorded with (a new lot needs a photo since 12/11/2026).
+        Assert.Equal((3, 1), (harvest.Count, raft.Count));
         Assert.All(harvest, u => Assert.Contains($"{FileCategories.HarvestLotPhotos}/", u));
         Assert.All(raft, u => Assert.Contains($"{FileCategories.RaftPhotos}/", u));
         Assert.All(harvest.Concat(raft), u => Assert.False(string.IsNullOrEmpty(QueryOf(u)["sig"]), u));

@@ -104,7 +104,7 @@ public class HarvestYieldAcceptanceTests
         Assert.Equal("Cycle", report.Text("groupBy"));
         var group = Assert.Single(report.Groups());
         Assert.Equal(
-            ["availableKg", "cycleCloseDate", "cycleId", "cycleStartDate", "cycleStatus", "differenceKg", "estimatedKg", "harvestedCages", "harvestedKg", "key", "label", "lostKg", "lotCount", "lots", "notFinal", "raftCode",
+            ["availableKg", "cycleCloseDate", "cycleId", "cycleStartDate", "cycleStatus", "differenceKg", "estimatedKg", "harvestedCages", "harvestedKg", "key", "label", "lostKg", "lotCount", "lots", "notFinal", "nurseryLossPercent", "nurseryLossPieces", "nurseryQuantityIn", "nurserySurvivors", "raftCode",
                 "raftId", "remainingKg", "seedQuantity", "seedUnit", "soldKg", "targetYieldKg", "zoneCode", "zoneId", "zoneName"],
             group.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.Equal((setup.Raft.CycleId, "Open"), (group.GetProperty("key").GetGuid(), group.Text("cycleStatus")));

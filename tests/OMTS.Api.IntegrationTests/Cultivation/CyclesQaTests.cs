@@ -138,7 +138,7 @@ public class CyclesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, none.StatusCode);
         Assert.False(await factory.QueryAsync(db => db.CultivationCycles.AnyAsync(c => c.RaftId == raft.Id())));
 
-        var empty = await owner.PostAsync($"/api/rafts/{raft.Id()}/cultivation-cycles", new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
+        var empty = await owner.PostAsync($"/api/rafts/{raft.Id()}/cultivation-cycles", StepFormKit.FormOf(null, photos: 1));
         Assert.Equal(Today, (await empty.ReadAsync(HttpStatusCode.Created)).GetProperty("cycle").Date("startDate"));
     }
 

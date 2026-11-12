@@ -11,7 +11,8 @@ namespace OMTS.Api.IntegrationTests.Cultivation;
 using OMTS.Api.IntegrationTests.Farming;
 
 /// <summary>A session as a client sends it; a correction also has the reason and the version.</summary>
-public sealed record SeedingBody(DateOnly? SeedingDate, Guid? SeedLotId, IReadOnlyList<int>? LaneNumbers, decimal? Quantity, string? Reason = null, string? RowVersion = null);
+public sealed record SeedingBody(
+    DateOnly? SeedingDate, Guid? SeedLotId, IReadOnlyList<int>? LaneNumbers, decimal? Quantity, string? Reason = null, string? RowVersion = null, IReadOnlyDictionary<int, decimal>? LanePercents = null);
 
 /// <summary>A seed lot made through the API: a Seed line of a Completed receipt.</summary>
 public sealed record SeedLotMade(Guid LineId, Guid ReceiptId, string Code, Guid ItemId, Guid SupplierId, JsonElement Receipt);
@@ -38,8 +39,19 @@ public static class SeedingTestKit
     public static SeedingBody Session(this SeedLotMade lot, IReadOnlyList<int>? lanes = null, DateOnly? date = null, decimal quantity = 10m) =>
         new(date ?? FarmingTestKit.Today.AddDays(-1), lot.LineId, lanes ?? [1, 2], quantity);
 
-    public static Task<HttpResponseMessage> PostSeedingAsync(this HttpClient client, Guid cycleId, SeedingBody body) =>
-        client.PostAsJsonAsync($"/api/cultivation-cycles/{cycleId}/seeding-records", body);
+    /// <summary>
+    /// The session takes <paramref name="percent"/> of each of <paramref name="lanes"/> (owner decision of 12/11/2026): a lane hung again in another session shares it, as a lane never holds more than 100 %.
+    /// </summary>
+    public static SeedingBody Percents(this SeedingBody body, decimal percent, params int[] lanes) =>
+        body with { LanePercents = (body.LanePercents ?? new Dictionary<int, decimal>()).Concat(lanes.Select(l => KeyValuePair.Create(l, percent))).ToDictionary(p => p.Key, p => p.Value) };
+
+    /// <summary>Gives a lane of a recorded session half of it, so another session can hang the lane again (a lane never holds more than 100 %).</summary>
+    public static async Task HalveLaneAsync(this HttpClient client, JsonElement session, int lane) =>
+        (await client.PutSeedingAsync(session.Id(), session.AsCorrection() with { LanePercents = new Dictionary<int, decimal> { [lane] = 50m } })).EnsureSuccessStatusCode();
+
+    /// <summary>Posts a session as the multipart form of 12/11/2026, with <paramref name="photos"/> on-site photos (one by default, as a new session needs).</summary>
+    public static Task<HttpResponseMessage> PostSeedingAsync(this HttpClient client, Guid cycleId, SeedingBody body, int photos = 1) =>
+        client.PostAsync($"/api/cultivation-cycles/{cycleId}/seeding-records", StepFormKit.FormOf(body, photos));
 
     /// <summary>Records a session and returns the whole answer.</summary>
     public static async Task<JsonElement> RecordSeedingAsync(this HttpClient client, Guid cycleId, SeedingBody body) =>
@@ -49,8 +61,9 @@ public static class SeedingTestKit
     public static async Task<JsonElement> SeedingRecordAsync(this HttpClient client, Guid cycleId, SeedingBody body) =>
         (await client.RecordSeedingAsync(cycleId, body)).GetProperty("record");
 
-    public static Task<HttpResponseMessage> PutSeedingAsync(this HttpClient client, Guid recordId, SeedingBody body) =>
-        client.PutAsJsonAsync($"/api/seeding-records/{recordId}", body);
+    /// <summary>A correction as a multipart form; the photos stay as they are unless <paramref name="photos"/> new ones are sent.</summary>
+    public static Task<HttpResponseMessage> PutSeedingAsync(this HttpClient client, Guid recordId, SeedingBody body, int photos = 0) =>
+        client.PutAsync($"/api/seeding-records/{recordId}", StepFormKit.FormOf(body, photos));
 
     /// <summary>The saved session as a correction with the reason: the test changes what it corrects.</summary>
     public static SeedingBody AsCorrection(this JsonElement record, string? reason = "Wrong entry") => new(

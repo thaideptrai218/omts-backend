@@ -41,19 +41,19 @@ public class HarvestLotCorrectionPhotoTests
         Assert.Contains(keys[1], await api.QueryAsync(db => db.AuditEvents.Where(e => e.Action == "HarvestLot.Corrected").Select(e => e.Before!).SingleAsync()));
     }
 
-    // Photos are optional on a lot: no kept key and no new photo leaves none, which a log refuses.
+    // A lot that has photos keeps 1 to 3 (owner decision of 12/11/2026): no kept key and no new photo would leave none, which is refused and stores nothing.
     [Fact]
-    public async Task Sending_no_kept_key_removes_every_photo_and_a_lot_may_end_with_none()
+    public async Task Sending_no_kept_key_and_no_new_photo_for_a_lot_that_has_photos_is_refused()
     {
         using var api = new AuthApiFactory();
         var raft = await api.SeededRaftAsync();
         var owner = raft.Owner.Client;
         var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Photos = [Jpeg] });
 
-        var saved = (await api.CorrectLotAsync(owner, lot.Id(), new HarvestFields())).GetProperty("lot");
+        var refused = await (await api.SendCorrectionAsync(owner, lot.Id(), new HarvestFields(), keep: [])).ReadAsync(HttpStatusCode.BadRequest);
 
-        Assert.Empty(saved.PhotoKeysOfLot());
-        Assert.Empty(StoredKeys(api, Category));
+        Assert.Equal("Photos", refused.Text("field"));
+        Assert.Equal(lot.PhotoKeysOfLot().Order(), StoredKeys(api, Category)!);
     }
 
     [Fact]
@@ -71,8 +71,8 @@ public class HarvestLotCorrectionPhotoTests
         Assert.Equal(("Photos", "Keep only photos of this lot."), (unknown.Text("field"), unknown.Text("hint")));
         var spelled = await (await api.SendCorrectionAsync(owner, lot.Id(), new HarvestFields(), keep: [keys[0].ToUpperInvariant()])).ReadAsync(HttpStatusCode.BadRequest);
         Assert.Equal("Photos", spelled.Text("field"));
-        var tooMany = await (await api.SendCorrectionAsync(owner, lot.Id(), new HarvestFields { Photos = Enumerable.Repeat(Jpeg, 10).ToList() }, keep: keys)).ReadAsync(HttpStatusCode.BadRequest);
-        Assert.Equal(("Photos", "A lot holds at most 10 photos."), (tooMany.Text("field"), tooMany.Text("hint")));
+        var tooMany = await (await api.SendCorrectionAsync(owner, lot.Id(), new HarvestFields { Photos = Enumerable.Repeat(Jpeg, 3).ToList() }, keep: keys)).ReadAsync(HttpStatusCode.BadRequest);
+        Assert.Equal(("Photos", "Tối đa 3 ảnh cho mỗi lô thu hoạch."), (tooMany.Text("field"), tooMany.Text("hint")));
         var wrong = await (await api.SendCorrectionAsync(owner, lot.Id(), new HarvestFields { Photos = [Pdf] }, keep: keys)).ReadAsync(HttpStatusCode.BadRequest);
         Assert.Equal("Photos", wrong.Text("field"));
         var part = await (await api.SendCorrectionAsync(owner, lot.Id(), new HarvestFields { PhotoField = "picture", Photos = [Jpeg] }, keep: keys)).ReadAsync(HttpStatusCode.BadRequest);
@@ -83,9 +83,9 @@ public class HarvestLotCorrectionPhotoTests
         await (await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(new HarvestFields { Photos = [Jpeg] }, "x", AcsTestKit.StaleRowVersion, keys))).ReadAsync(HttpStatusCode.Conflict);
         Assert.Equal(stored, StoredKeys(api, Category));
 
-        // Nine kept and one new is the most a lot holds.
-        var saved = (await api.CorrectLotAsync(owner, lot.Id(), new HarvestFields { Photos = Enumerable.Repeat(Jpeg, 9).ToList() }, keep: keys)).GetProperty("lot");
-        Assert.Equal(10, saved.PhotoKeysOfLot().Count);
+        // One kept and two new is the most a lot holds.
+        var saved = (await api.CorrectLotAsync(owner, lot.Id(), new HarvestFields { Photos = Enumerable.Repeat(Jpeg, 2).ToList() }, keep: keys)).GetProperty("lot");
+        Assert.Equal(3, saved.PhotoKeysOfLot().Count);
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public class HarvestLotCorrectionPhotoTests
         await api.RemoveLotAsync(owner, lot.Id());
         await StoreOrphanAsync(api);
         await job.RunOnceAsync(DateTimeOffset.UtcNow.AddDays(2));
-        Assert.Empty(StoredKeys(api, Category));
+        await api.AssertNoOrphanLotPhotosAsync(Category);
     }
 
     private static async Task StoreOrphanAsync(AuthApiFactory api)
@@ -187,7 +187,7 @@ public class HarvestLotCorrectionPhotoTests
         api.Hold.Release();
 
         Assert.Equal("MSG06", await (await pending).ErrorCodeAsync());
-        Assert.Empty(StoredKeys(api, Category));
+        await api.AssertNoOrphanLotPhotosAsync(Category);
         Assert.Equal(7, (await owner.GetHarvestLotAsync(lot.Id())).GetProperty("cageCount").GetDecimal());
     }
 
@@ -203,7 +203,7 @@ public class HarvestLotCorrectionPhotoTests
         api.Hold.Release();
 
         Assert.Equal(HttpStatusCode.NotFound, (await pending).StatusCode);
-        Assert.Empty(StoredKeys(api, Category));
+        await api.AssertNoOrphanLotPhotosAsync(Category);
     }
 
     [Fact]
@@ -219,7 +219,7 @@ public class HarvestLotCorrectionPhotoTests
         api.Hold.Release();
         var refused = await (await pendingLane).ReadAsync(HttpStatusCode.BadRequest);
         Assert.Equal("Lanes", refused.Text("field"));
-        Assert.Empty(StoredKeys(api, Category));
+        await api.AssertNoOrphanLotPhotosAsync(Category);
     }
 
     [Fact]
@@ -239,7 +239,7 @@ public class HarvestLotCorrectionPhotoTests
         api.Hold.Release();
 
         Assert.Equal("MSG-GEN-09", await (await pending).ErrorCodeAsync());
-        Assert.Empty(StoredKeys(api, Category));
+        await api.AssertNoOrphanLotPhotosAsync(Category);
     }
 
     [Fact]

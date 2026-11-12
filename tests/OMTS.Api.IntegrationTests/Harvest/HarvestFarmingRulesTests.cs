@@ -328,7 +328,8 @@ public class HarvestFarmingRulesTests(AuthApiFactory factory) : IClassFixture<Au
 
     private static async Task<MultipartFormDataContent> WithConfirmationAsync(HttpClient client, HarvestFields fields, string confirm, string? reason)
     {
-        var form = fields.For(await HarvestOrderKit.DefaultOrderAsync(client)).ToForm();
+        // A new lot needs 1 to 3 on-site photos (owner decision of 12/11/2026).
+        var form = (fields.Photos.Count == 0 ? fields with { Photos = [FarmingTestKit.Jpeg] } : fields).For(await HarvestOrderKit.DefaultOrderAsync(client)).ToForm();
         form.Add(new StringContent(confirm), "confirmOverPlan");
         if (reason is not null)
         {

@@ -56,7 +56,8 @@ public class TraceClosedCycleCorrectionTests(AuthApiFactory factory) : IClassFix
         var before = await factory.LotRowAsync(t.LotId);
         var fields = HarvestFields.OfLanes(1, 2).FinishedLanes(1, 2) with { Cages = "10" };
 
-        var preview = await (await t.Manager.Client.PreviewLotAsync(t.LotId, new { laneNumbers = new[] { 1, 2 }, finishedLaneNumbers = new[] { 1, 2 }, cageCount = 10, reason = TraceCorrectionTestKit.Reason }))
+        var keepPhotoKeys = (await t.Owner.Client.GetHarvestLotAsync(t.LotId)).PhotoKeysOfLot();
+        var preview = await (await t.Manager.Client.PreviewLotAsync(t.LotId, new { laneNumbers = new[] { 1, 2 }, finishedLaneNumbers = new[] { 1, 2 }, cageCount = 10, keepPhotoKeys, reason = TraceCorrectionTestKit.Reason }))
             .ReadAsync(HttpStatusCode.OK);
         Assert.Equal(["lanes", "finishedLanes", "cageCount", "estimatedKg"], preview.Strings("changedFields"));
         Assert.Equal(preview.GetProperty("before").Text("harvestedAt"), preview.GetProperty("after").Text("harvestedAt"));
@@ -129,8 +130,8 @@ public class TraceClosedCycleCorrectionTests(AuthApiFactory factory) : IClassFix
         Assert.Contains("\"Notes\":\"Two buoys replaced\"", row.After);
         Assert.Contains("\"OwnerApprovalConfirmed\":true", row.After);
 
-        // The CYCLE-04 rules: at least one photo, a visit within the cycle, a reason.
-        Assert.Equal(["Visit date", "Photos", "Reason"],
+        // The CYCLE-04 rules: a visit within the cycle and a reason (the photos of a care log are optional since 12/11/2026).
+        Assert.Equal(["Visit date", "Reason"],
             await (await t.Owner.Client.PutLogTraceAsync(logId, new LogFields { VisitDate = Today.AddDays(1), Photos = [], Reason = null })).InvalidFieldsAsync());
         // CYCLE-04.1 stays locked after the close.
         Assert.Equal(HttpStatusCode.Conflict, (await t.Owner.Client.PutLogAsync(logId, fields)).StatusCode);
@@ -184,7 +185,7 @@ public class TraceClosedCycleCorrectionTests(AuthApiFactory factory) : IClassFix
         Assert.Empty(preview.GetProperty("after").Strings("photos"));
         Assert.Equal(lot.Text("lotCode"), Assert.Single(preview.GetProperty("affectedLots").EnumerateArray()).Text("lotCode"));
 
-        var saved = await (await factory.SendLotTraceAsync(raft.Owner.Client, lot.Id(), HarvestFields.OfLanes(1))).ReadAsync(HttpStatusCode.OK);
+        var saved = await (await factory.SendLotTraceAsync(raft.Owner.Client, lot.Id(), HarvestFields.OfLanes(1), keep: [])).ReadAsync(HttpStatusCode.OK);
         Assert.Empty(saved.GetProperty("lot").PhotoKeysOfLot());
         Assert.Empty((await factory.LotRowAsync(lot.Id())).Photos);
     }

@@ -12,8 +12,9 @@ public sealed record CycleBody(
 /// <summary>CYCLE-01 and CYCLE-05 calls.</summary>
 public static class CycleTestKit
 {
-    public static Task<HttpResponseMessage> PostCycleAsync(this HttpClient client, Guid raftId, CycleBody? body = null) =>
-        client.PostAsJsonAsync($"/api/rafts/{raftId}/cultivation-cycles", body ?? new CycleBody());
+    /// <summary>Starts a cycle with the multipart form of 12/11/2026, with <paramref name="photos"/> photos of the plan (one by default, as a new cycle needs).</summary>
+    public static Task<HttpResponseMessage> PostCycleAsync(this HttpClient client, Guid raftId, CycleBody? body = null, int photos = 1) =>
+        client.PostAsync($"/api/rafts/{raftId}/cultivation-cycles", StepFormKit.FormOf(body ?? new CycleBody(), photos));
 
     /// <summary>Starts a cycle and returns the saved cycle, the <c>cycle</c> of the answer.</summary>
     public static async Task<JsonElement> StartCycleAsync(this HttpClient client, Guid raftId, CycleBody? body = null) =>

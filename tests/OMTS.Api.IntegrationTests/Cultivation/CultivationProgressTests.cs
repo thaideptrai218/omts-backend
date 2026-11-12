@@ -153,7 +153,7 @@ public class CultivationProgressTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal((raft.Id(), raft.Text("code"), Today), (today.GetProperty("raftId").GetGuid(), today.Text("raftCode"), today.Date("date")));
         var lane = today.GetProperty("lanes")[0];
         Assert.Equal((raft.LaneId(1), 1, StatusIds.Lane.InUse, "In Use", "NotSeeded"), (lane.Id(), lane.GetProperty("laneNumber").GetInt32(), lane.GetProperty("statusId").GetInt32(), lane.Text("status"), lane.Text("state")));
-        Assert.Equal(["id", "isDamaged", "isOutOfService", "laneNumber", "lineLengthM", "reasonCode", "state", "status", "statusId"], lane.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(["harvestedPercent", "id", "isDamaged", "isOutOfService", "laneNumber", "lastModifiedAt", "lastModifiedByName", "lineLengthM", "progressHistory", "reasonCode", "seededPercent", "state", "status", "statusId"], lane.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
     }
 
     [Fact]

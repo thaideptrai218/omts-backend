@@ -91,7 +91,7 @@ public class HarvestLotCorrectionFieldTests
         var lot = await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1));
 
         api.Clock.At = InVietnam(10, 28);
-        var correction = new HarvestCorrection(new HarvestFields { Cages = "9" }, "Wrong count", await api.LotVersionAsync(lot.Id()));
+        var correction = new HarvestCorrection(new HarvestFields { Cages = "9" }, "Wrong count", await api.LotVersionAsync(lot.Id()), lot.PhotoKeysOfLot());
         var form = correction.ToForm();
         form.Add(new StringContent("2026-10-01"), "harvestDate");
         form.Add(new StringContent("2026-10-01T00:00:00+07:00"), "harvestedAt");
@@ -198,9 +198,9 @@ public class HarvestLotCorrectionFieldTests
         var lot = await owner.HarvestLotAsync(raft.RaftId);
         var current = await api.LotVersionAsync(lot.Id());
 
-        var stale = await (await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(new HarvestFields { Cages = "9" }, RowVersion: AcsTestKit.StaleRowVersion))).ReadAsync(HttpStatusCode.Conflict);
+        var stale = await (await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(new HarvestFields { Cages = "9" }, RowVersion: AcsTestKit.StaleRowVersion, Keep: lot.PhotoKeysOfLot()))).ReadAsync(HttpStatusCode.Conflict);
         Assert.Equal(("MSG06", current), (stale.Text("code"), stale.GetProperty("currentRowVersion").GetString()));
-        var missing = await (await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(new HarvestFields { Cages = "9" }))).ReadAsync(HttpStatusCode.BadRequest);
+        var missing = await (await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(new HarvestFields { Cages = "9" }, Keep: lot.PhotoKeysOfLot()))).ReadAsync(HttpStatusCode.BadRequest);
         Assert.Equal(("MSG-GEN-01", "RowVersion"), (missing.Text("code"), missing.Text("field")));
         Assert.Equal("MSG06", await (await owner.PostRemoveLotAsync(lot.Id(), "mistake", AcsTestKit.StaleRowVersion)).ErrorCodeAsync());
         Assert.Equal("RowVersion", (await (await owner.PostRemoveLotAsync(lot.Id(), "mistake", null)).ReadAsync(HttpStatusCode.BadRequest)).Text("field"));

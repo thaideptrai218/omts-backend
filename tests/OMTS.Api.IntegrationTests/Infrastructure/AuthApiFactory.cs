@@ -39,6 +39,9 @@ public class AuthApiFactory : WebApplicationFactory<Program>
 
     public const string PublicBaseUrl = "http://localhost:3000";
 
+    /// <summary>Whether <c>POST /api/rafts/{raftId}/cultivation-cycles</c> may still start a cycle by hand: true for the tests of the old cycle screens, false in <see cref="NurseryOnlyApiFactory"/>.</summary>
+    protected virtual bool ManualCycleStartAllowed => true;
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Jwt:SigningKey", _signingKey);
@@ -55,6 +58,8 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jobs:EmploymentEnd:CatchUpOnStart", "false");
         builder.UseSetting("Jobs:HarvestLotAutoClose:CatchUpOnStart", "false");
         builder.UseSetting("Jobs:OrphanFileCleanup:Enabled", "false");
+        // The tests of the old cycle screens start cycles by hand; production does not (owner decision of 12/11/2026, Q21). The tests of that rule turn it off.
+        builder.UseSetting("Cultivation:AllowManualStart", ManualCycleStartAllowed ? "true" : "false");
         builder.ConfigureLogging(logging => logging.AddProvider(Logs));
         builder.ConfigureServices((context, services) =>
         {

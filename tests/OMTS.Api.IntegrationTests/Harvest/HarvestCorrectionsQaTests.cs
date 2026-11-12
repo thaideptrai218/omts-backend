@@ -160,7 +160,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         api.Hold.Release();
 
         await AssertForbiddenAsync(await pending);
-        Assert.Empty(FarmingUploadedFileTests.StoredKeys(api, FileCategories()));
+        await api.AssertNoOrphanLotPhotosAsync(FileCategories());
         Assert.Equal(8, await CagesAsync(raft.Owner.Client, lot.Id()));
     }
 
@@ -384,12 +384,14 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
     {
         var raft = await factory.SeededRaftAsync(1, 2);
         var owner = raft.Owner.Client;
+        // Lane 1 holds half, so a second session can hang the rest once it is out of its lot (a lane never holds more than 100 %).
+        await owner.HalveLaneAsync(raft.Session, 1);
         var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2));
-        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostSeedingAsync(raft.CycleId, raft.Lot.Session([1], Today))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostSeedingAsync(raft.CycleId, raft.Lot.Session([1], Today).Percents(50m, 1))).StatusCode);
 
         await factory.CorrectLotAsync(owner, lot.Id(), HarvestFields.OfLanes(2));
 
-        Assert.Equal(HttpStatusCode.Created, (await owner.PostSeedingAsync(raft.CycleId, raft.Lot.Session([1], Today))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await owner.PostSeedingAsync(raft.CycleId, raft.Lot.Session([1], Today).Percents(50m, 1))).StatusCode);
     }
 
     // SCR-HARVEST-01: Record harvest is offered only while a lane is Growing or Being harvested.
@@ -528,7 +530,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
         var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
-        var form = new HarvestCorrection(new HarvestFields { Cages = "9" }, "Wrong count", await factory.LotVersionAsync(lot.Id())).ToForm();
+        var form = new HarvestCorrection(new HarvestFields { Cages = "9" }, "Wrong count", await factory.LotVersionAsync(lot.Id()), lot.PhotoKeysOfLot()).ToForm();
         form.Add(new StringContent("99"), "kgPerCage");
         form.Add(new StringContent("HACKED"), "lotCode");
         form.Add(new StringContent("2020-01-01"), "harvestDate");
