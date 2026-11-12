@@ -41,6 +41,7 @@ internal static class DemoDataSeeder
         new DemoSeedingStep(),
         new DemoHarvestLotStep(),
         new DemoSalesInvoiceStep(),
+        new DemoOpenHarvestRequestStep(),
         new DemoWaterMeasurementStep(),
         new DemoPayrollStep(),
     ];

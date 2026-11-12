@@ -51,6 +51,14 @@ lists the tokens a real provider would deliver to: those registered (`POST /api/
 logged in. These endpoints answer 404 outside
 Development; they are anonymous, so never expose a Development environment publicly. Local storage writes under `src/OMTS.Api/App_Data/files` (git-ignored); for Azurite set
 `Storage:Provider=AzureBlob` and `Storage:AzureBlob:ConnectionString=UseDevelopmentStorage=true`.
+#### Photos of farming steps: local now, cloud later (OMTS-132, 12/11/2026)
+
+Photos of the steps (nursery, cycle plan, seeding, harvest, lane incident) go through `StepPhotoService` (1 to 3 JPEG or PNG photos per record, at most 10 MB each, a refusal is a 400 on field `Photos`), which stores every file with `IFileStorage`; nothing writes to a disk path directly. For now they stay on the API's disk:
+`Storage:Provider=Local`, files under `Storage:Local:RootPath` (default `App_Data/files`; Docker keeps them in the `files` volume, so `docker compose down -v` removes them) and read through signed, expiring links served by `/api/files/local/...`. A key is `{category}/{yyyy}/{MM}/{guid}.{jpg|png}`, one category per photo table (see `FileCategories`); which cooperative and record a photo belongs to is in its database row, not in the key, so the orphan file clean-up and the read permission checks keep working.
+Moving to the cloud later is configuration only: set `Storage:Provider=AzureBlob`, `Storage:AzureBlob:ConnectionString` (secret) and `Storage:AzureBlob:Container`, then copy the files of the old folder into the container under the same keys (the rows keep the keys, so no row changes). No cloud setup is done now.
+
+The demo seed also adds one more Accepted request of `thuonglai1` for 5 `Hàu béo` cages, harvest still open (`DemoOpenHarvestRequestStep`, found again by a fixed operation id, so a rerun adds nothing and an older database gets it on the next `seed --bootstrap --demo`). Record a new harvest lot for it with `POST /api/rafts/{raftId}/harvest-lots` on a raft with a usable lane; it asks for no pay later and moves no stock.
+
 Fake OCR for water meter photos (WATER-01): the fake answers with
 `Ocr:Fake` (default pH 7.8, salinity 25.5, temperature 28.5), unless the photo bytes contain a marker such as
 `ph9.1_sal20_tmp28.5`, `conf0.6`, `at2026-10-20T08:00`, `ocr-fail` or `ocr-timeout` (used by the tests).
