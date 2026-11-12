@@ -98,6 +98,12 @@ public static class NotificationTypes
     /// <summary>MSG-SALE-18, a correction or a cancellation of a sales invoice leaves the customer debt below zero, to the Accountant and the Owner (BR-SALE-03); not mandatory.</summary>
     public const string CustomerMoneyOwedBack = "CUSTOMER_MONEY_OWED_BACK";
 
+    /// <summary>MSG-PLAN-05, a harvest plan handed to the Zone Managers of its zone, or to the Owners when the zone has none; not mandatory.</summary>
+    public const string HarvestPlanAssigned = "HARVEST_PLAN_ASSIGNED";
+
+    /// <summary>MSG-PLAN-06, lanes of a harvest plan a Zone Manager will not harvest ("Không thu"), with the reason, to the Owners (not to an Owner who did it); not mandatory.</summary>
+    public const string HarvestPlanLanesSkipped = "HARVEST_PLAN_LANES_SKIPPED";
+
     public static readonly IReadOnlyList<NotificationTypeDefinition> All =
     [
         new(WaterAlert, "Water alert", AlwaysPush, [CooperativeOwner, ZoneManager],
@@ -155,6 +161,11 @@ public static class NotificationTypes
             NotificationSmsRule.MoneyToOwner("amount")),
         // Opens nothing: the trader is asked to call the cooperative, and the list row has no related record (a lot is not the trader's record).
         new(ProvenanceWithdrawn, "Origin information withdrawn", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
+        // Opens the plan; a Zone Manager holds the right to view the plans handed to its zones.
+        new(HarvestPlanAssigned, "Harvest plan assigned", Default, [CooperativeOwner, ZoneManager],
+            NotificationOpenAccess.InZone(PermissionFunctions.HarvestPlans, PermissionAction.View)),
+        new(HarvestPlanLanesSkipped, "Harvest plan lanes left out", Default, [CooperativeOwner],
+            NotificationOpenAccess.InZone(PermissionFunctions.HarvestPlans, PermissionAction.View)),
         // Opens the invoice (SALE-09); the money is paid back in DEBT-02.
         new(CustomerMoneyOwedBack, "Money owed back to a customer", Default, [CooperativeOwner, Accountant],
             NotificationOpenAccess.InZone(PermissionFunctions.SalesInvoices, PermissionAction.View)),

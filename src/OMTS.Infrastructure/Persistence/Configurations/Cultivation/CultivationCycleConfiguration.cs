@@ -10,6 +10,7 @@ internal sealed class CultivationCycleConfiguration : IEntityTypeConfiguration<C
     public void Configure(EntityTypeBuilder<CultivationCycle> builder)
     {
         builder.HasOne(x => x.Raft).WithMany(r => r.CultivationCycles).HasForeignKey(x => x.RaftId);
+        builder.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(x => x.ExpectedSeedQuantity).HasPrecision(18, 3);
         builder.Property(x => x.TargetYieldKg).HasPrecision(18, 2);
         builder.Property(x => x.Assessment).HasMaxLength(Lengths.LongText);

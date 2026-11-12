@@ -32,6 +32,8 @@ public sealed record RemoveHarvestLotRequest(string? Reason, string? RowVersion)
 /// <summary>A lot that can be chosen on a sales invoice (SALE-05 step 1, SCR-SALE-04). The remaining kg is for information only and limits no sale (BR-HARVEST-02).</summary>
 /// <param name="OriginState">For the warning of MSG-SALE-09 when it is Withdrawn.</param>
 /// <param name="WithdrawnAt">The withdrawal time, only while the lot is Withdrawn; the reason stays internal (BR-TRACE-06).</param>
+/// <param name="HarvestPlanCode">The harvest plan (KHT) the lot was recorded from, or null.</param>
+/// <param name="Suggested">The lot comes from a plan serving the order asked for (<c>salesOrderId</c>): the lots are listed with these first.</param>
 public sealed record HarvestLotForSale(
     Guid Id,
     string LotCode,
@@ -46,7 +48,9 @@ public sealed record HarvestLotForSale(
     string Status,
     HarvestLotOriginState OriginState,
     DateTimeOffset? WithdrawnAt,
-    IReadOnlyList<HarvestLotProductStock> Products);
+    IReadOnlyList<HarvestLotProductStock> Products,
+    string? HarvestPlanCode = null,
+    bool Suggested = false);
 
 /// <summary>The lots for sale in the zones of the caller.</summary>
 /// <param name="Message">MSG-GEN-10 when there is none, else null.</param>

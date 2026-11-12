@@ -13,10 +13,11 @@ namespace OMTS.Application.Features.Harvest;
 /// cycle or a discontinued raft is still for sale, as BR-CYCLE-04 locks cultivation records, not sales. §I.4.4: the Owner and Zone Managers, not an Accountant.
 /// </summary>
 public sealed class HarvestLotForSaleService(
-    IHarvestLotRepository lots, IHarvestLotSalesQuery sales, IProductStockRepository productStock, ZoneAccessGuard zoneAccess, IStatusCatalog statusCatalog)
+    IHarvestLotRepository lots, IHarvestLotSalesQuery sales, IProductStockRepository productStock, IHarvestPlanRepository harvestPlans, ZoneAccessGuard zoneAccess, IStatusCatalog statusCatalog)
 {
     /// <param name="zoneId">One zone the caller can access, or null for all of them.</param>
-    public async Task<Result<HarvestLotsForSale>> ListAsync(Guid? zoneId, CancellationToken cancellationToken)
+    /// <param name="salesOrderId">The order the lots are chosen for: the lots recorded from a harvest plan that serves it are Suggested and come first.</param>
+    public async Task<Result<HarvestLotsForSale>> ListAsync(Guid? zoneId, Guid? salesOrderId, CancellationToken cancellationToken)
     {
         var zones = await zoneAccess.PermittedZonesAsync(PermissionFunctions.Harvests, PermissionAction.View, cancellationToken);
         if (zones.IsEmpty || (zoneId is { } chosen && !zones.Allows(chosen)))
@@ -29,6 +30,7 @@ public sealed class HarvestLotForSaleService(
         // The kg left of each product on each lot, from the product ledger: a lot recorded before products has no lines and lists none.
         var balances = await productStock.LotBalancesAsync(
             forSale.SelectMany(l => l.ProductLines).Select(p => p.ProductId).Distinct().ToList(), forSale.Where(l => l.ProductLines.Count > 0).Select(l => l.Id).ToList(), cancellationToken);
+        var planOf = (await harvestPlans.PlansOfLotsAsync(forSale.Select(l => l.Id).ToList(), cancellationToken)).ToDictionary(p => p.LotId);
         var views = forSale.Select(l => new HarvestLotForSale(
             l.Id,
             l.LotCode,
@@ -44,7 +46,11 @@ public sealed class HarvestLotForSaleService(
             l.OriginState,
             l.OriginState == HarvestLotOriginState.Withdrawn ? l.WithdrawnAt : null,
             l.ProductLines.OrderBy(p => p.LineNumber)
-                .Select(p => new HarvestLotProductStock(p.ProductId, p.Product.Code, p.Product.Name, p.Kg, balances.GetValueOrDefault((p.ProductId, l.Id)))).ToList())).ToList();
+                .Select(p => new HarvestLotProductStock(p.ProductId, p.Product.Code, p.Product.Name, p.Kg, balances.GetValueOrDefault((p.ProductId, l.Id)))).ToList(),
+            planOf.GetValueOrDefault(l.Id)?.PlanCode,
+            salesOrderId is { } orderId && planOf.GetValueOrDefault(l.Id) is { } plan && plan.OrderIds.Contains(orderId)))
+            // The sort is stable: the suggested lots first, the latest harvest first inside each group as the repository lists them.
+            .OrderByDescending(v => v.Suggested).ToList();
         var empty = views.Count == 0 ? UserMessages.NoDataForFilters(zoneId is null ? "zones" : "zone") : null;
         return new HarvestLotsForSale(views, empty?.Text, empty?.Code);
     }

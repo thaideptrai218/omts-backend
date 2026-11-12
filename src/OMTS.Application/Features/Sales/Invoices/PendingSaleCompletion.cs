@@ -14,6 +14,7 @@ namespace OMTS.Application.Features.Sales.Invoices;
 /// </summary>
 public sealed class PendingSaleCompletion(
     ICustomerRepository customers,
+    ISalesOrderRepository orders,
     IPurchaseRequestRepository requests,
     IProductRepository products,
     IHarvestLotRepository lots,
@@ -29,7 +30,8 @@ public sealed class PendingSaleCompletion(
     public async Task<SalesInvoice> CompleteAsync(PendingSale sale, CancellationToken cancellationToken)
     {
         var snapshot = PendingSaleSnapshot.Read(sale);
-        var (read, invalid) = SalesInvoiceEntryReader.Read(snapshot.Request);
+        // A sale that was awaiting its transfer before invoices came from orders names no order, and is saved with none.
+        var (read, invalid) = SalesInvoiceEntryReader.Read(snapshot.Request, requireOrder: false);
         if (invalid.Count > 0)
         {
             throw new InvalidOperationException($"Pending sale {sale.Code} holds a request that is no longer valid: {string.Join(", ", invalid)}.");
@@ -63,21 +65,45 @@ public sealed class PendingSaleCompletion(
         // A parallel close or sale of one of these lots makes one of the two saves fail, as at the port.
         lineLots.ForEach(unitOfWork.MarkChanged);
 
+        // The order is read as it is now: the sale is saved whatever its status has become, since the money has arrived (an order that was ended meanwhile is noted in the audit log).
+        var orderFacts = await OrderFactsAsync(entries.SalesOrderId, cancellationToken);
+        var resolved = SalesInvoiceLineResolver.Resolve(entries.Lines, lineProducts, orderFacts?.Order, []);
+        if (!resolved.IsSuccess)
+        {
+            throw new PendingSaleNotSavableException($"a line no longer matches its product or its order: {resolved.Error!.Message.Text}");
+        }
+
         var prices = snapshot.Lines.ToDictionary(l => l.LineNumber);
         var lines = entries.Lines.Select(e =>
         {
             var price = prices[e.LineNumber];
-            return new PricedLine(e, lineProducts[e.ProductId], byId[e.LotId], price.UnitPrice, price.PriceSource, price.Amount, price.ListPrice);
+            return new PricedLine(e, lineProducts[e.ProductId], byId[e.LotId], resolved.Value![e.LineNumber], price.UnitPrice, price.PriceSource, price.Amount, price.ListPrice);
         }).ToList();
+        // What the advance of the order covered when the code was shown: the total less the cash and the transfer.
+        var advance = customer is null || orderFacts is null ? 0m : Math.Min(orderFacts.AdvanceLeft, Math.Max(0m, snapshot.Total - snapshot.CashRecorded - sale.ToPayAmount));
         var decision = new SalesInvoiceDecision(
-            lines, snapshot.Subtotal, snapshot.Total, new PortCashSplit(sale.CashAmount, 0m, 0m, sale.ToPayAmount), SalesPaymentTerm.PayNow, 0m, sale.ToPayAmount);
-        var facts = new SalesInvoiceFacts(customer, request, lineProducts, lineLots, sale.ZoneId, snapshot.ByOwner, 0m);
+            lines, snapshot.Subtotal, snapshot.Total, new PortCashSplit(sale.CashAmount, 0m, 0m, sale.ToPayAmount), SalesPaymentTerm.PayNow, 0m, sale.ToPayAmount, advance);
+        var facts = new SalesInvoiceFacts(customer, request, lineProducts, lineLots, sale.ZoneId, snapshot.ByOwner, 0m, resolved.Value!, orderFacts);
 
         var cashCode = sale.CashAmount > 0m ? await paymentCodes.NextAsync(cancellationToken) : null;
         var invoice = writer.Write(entries, facts, decision, sale.Code, cashCode, deduplicationKey: null, sellerOnTransfer: sale.CreatedByAccountId);
         pendingWriter.End(sale, PendingSaleStatus.Completed, invoice.Id, by: null);
         await notifications.SaleAsync(invoice, decision, sale.CreatedByAccountId, cancellationToken);
         return invoice;
+    }
+
+    private async Task<SalesInvoiceOrderFacts?> OrderFactsAsync(Guid? orderId, CancellationToken cancellationToken)
+    {
+        if (orderId is not { } id)
+        {
+            return null;
+        }
+
+        var order = await orders.GetForEditAsync(id, cancellationToken) ?? throw new PendingSaleNotSavableException($"order {id} no longer exists.");
+        var advances = order.CustomerId is null ? [] : await orders.CountedAdvancesForUpdateAsync(order.Id, cancellationToken);
+        var delivered = await orders.DeliveredByLineAsync([order.Id], null, cancellationToken);
+        var shared = (await orders.InvoicesOfAsync(order.Id, cancellationToken)).Where(i => i.StatusId != StatusIds.SalesInvoice.Cancelled).Sum(i => i.DiscountAmount);
+        return new SalesInvoiceOrderFacts(order, advances, delivered, shared);
     }
 
     /// <summary>The profile of the sale, or the one it was merged into while the transfer was awaited (SALE-04.3 moves invoices, not pending sales).</summary>

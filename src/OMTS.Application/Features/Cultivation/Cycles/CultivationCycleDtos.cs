@@ -6,11 +6,16 @@ using OMTS.Application.Features.Farming.Rafts;
 
 namespace OMTS.Application.Features.Cultivation.Cycles;
 
+/// <summary>The product farmed in a cycle (code and name for display).</summary>
+public sealed record CycleProductView(Guid Id, string Code, string Name);
+
 /// <summary>CYCLE-01.0. Without <see cref="StartDate"/> the cycle starts today; the plan estimates are optional.</summary>
-public sealed record StartCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, DateOnly? ExpectedHarvestDate, decimal? TargetYieldKg);
+/// <param name="ProductId">The product farmed on the raft in this cycle, a product In Use. Required: MSG-GEN-01 field <c>Product</c> without it, MSG-GEN-09 when it is not In Use.</param>
+public sealed record StartCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, DateOnly? ExpectedHarvestDate, decimal? TargetYieldKg, Guid? ProductId = null);
 
 /// <summary>CYCLE-01.1: the start date and the plan estimates as they should be; a plan estimate sent empty is cleared.</summary>
-public sealed record EditCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, DateOnly? ExpectedHarvestDate, decimal? TargetYieldKg, string? RowVersion);
+/// <param name="ProductId">The product as it should be; empty leaves the product as it is. A change is refused (MSG-GEN-06) once the cycle has a harvest lot, and the new product must be In Use.</param>
+public sealed record EditCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, DateOnly? ExpectedHarvestDate, decimal? TargetYieldKg, string? RowVersion, Guid? ProductId = null);
 
 /// <summary>CYCLE-01.2.</summary>
 public sealed record CancelCycleRequest(string? RowVersion);
@@ -24,6 +29,7 @@ public sealed record CycleView(
     string RaftCode,
     DateOnly StartDate,
     DateOnly? CloseDate,
+    CycleProductView? Product,
     decimal? ExpectedSeedQuantity,
     DateOnly? ExpectedHarvestDate,
     decimal? TargetYieldKg,
@@ -51,7 +57,8 @@ public sealed record CycleStarted(CycleView Cycle, DateOnly? PreviousCloseDate, 
 
 /// <summary>A cycle in the list of a raft (CYCLE-05.1), the newest first.</summary>
 /// <param name="ClosedEarly">A Closed cycle was closed early (BR-CYCLE-07); false for an Open one.</param>
-public sealed record CycleListItem(Guid Id, DateOnly StartDate, DateOnly? CloseDate, int StatusId, string Status, string RowVersion, bool ClosedEarly);
+/// <param name="Product">The product farmed in the cycle; null for a cycle started before products were recorded.</param>
+public sealed record CycleListItem(Guid Id, DateOnly StartDate, DateOnly? CloseDate, int StatusId, string Status, string RowVersion, bool ClosedEarly, CycleProductView? Product = null);
 
 /// <summary>A raft on the Cultivation cycles screen (SCR-CYCLE-01). The commands are true only when the use case would accept them.</summary>
 /// <param name="LaneCount">The number of lanes In Use.</param>

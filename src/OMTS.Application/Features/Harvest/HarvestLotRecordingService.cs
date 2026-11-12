@@ -11,6 +11,7 @@ using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Application.Features.Files;
+using OMTS.Application.Features.Harvest.Plans;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
@@ -36,6 +37,7 @@ public sealed class HarvestLotRecordingService(
     UploadedFileSaver fileSaver,
     HarvestLotNotifier notifier,
     HarvestLotProductLineService productLines,
+    HarvestPlanProgress planProgress,
     HarvestLotViews views,
     ZoneAccessGuard zoneAccess,
     AuditLogService audit,
@@ -69,8 +71,15 @@ public sealed class HarvestLotRecordingService(
             return refused;
         }
 
+        var planned = await ResolvePlanAsync(request, raftId, cancellationToken);
+        if (!planned.IsSuccess)
+        {
+            return planned.Error!;
+        }
+
+        request = WithPlannedLanes(request, planned.Value);
         var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(photos, request.OtherFilePart);
-        var (_, split, lineError) = await WithProductLinesAsync(request, open!.KgPerCage, cancellationToken);
+        var (_, split, lineError) = await WithProductLinesAsync(request, open!.KgPerCage, open.Cycle.ProductId, cancellationToken);
         if (lineError is not null)
         {
             return lineError;
@@ -145,7 +154,14 @@ public sealed class HarvestLotRecordingService(
             return refused;
         }
 
-        var (resolved, split, lineError) = await WithProductLinesAsync(request, open!.KgPerCage, cancellationToken);
+        var planned = await ResolvePlanAsync(request, raftId, cancellationToken);
+        if (!planned.IsSuccess)
+        {
+            return planned.Error!;
+        }
+
+        request = WithPlannedLanes(request, planned.Value);
+        var (resolved, split, lineError) = await WithProductLinesAsync(request, open!.KgPerCage, open.Cycle.ProductId, cancellationToken);
         if (lineError is not null)
         {
             return lineError;
@@ -180,10 +196,16 @@ public sealed class HarvestLotRecordingService(
             productLines.Add(lot, raft.Code, resolved);
         }
 
+        // The lot carries the link to its line of the plan, and the plan moves on in the same save (Harvesting, then Completed when every line is done).
+        if (planned.Value is { } plannedHarvest)
+        {
+            planProgress.OnLotRecorded(plannedHarvest, lot);
+        }
+
         // The lane states depend on the cycle row: a parallel lot, close, cancel or seeding correction read it before this lot, so one of them fails with MSG06.
         unitOfWork.MarkChanged(cycle);
         audit.Record(HarvestLotAudit.Entry(HarvestLotAudit.Created, lot, raft.ZoneId) with { After = HarvestLotAudit.Snapshot(lot) });
-        await notifier.LotRecordedAsync(lot, raft, recorder, cancellationToken);
+        await notifier.LotRecordedAsync(lot, raft, recorder, cancellationToken, planned.Value?.Plan.Code);
 
         var everyHarvested = LaneStateRules.EverySeededLaneHarvested(raft.Lanes
             .Where(l => l.StatusId == StatusIds.Lane.InUse)
@@ -197,14 +219,38 @@ public sealed class HarvestLotRecordingService(
         return new PreparedLot(lot, cycle, raft, everyHarvested);
     }
 
+    /// <summary>The line of the plan the lot is recorded from (none when the form names none); the plan is read again on every attempt, so a line recorded or a lane left out meanwhile is told.</summary>
+    private async Task<Result<PlannedHarvest?>> ResolvePlanAsync(RecordHarvestRequest request, Guid raftId, CancellationToken cancellationToken)
+    {
+        if (request.HarvestPlanLineIsUnreadable)
+        {
+            return AppError.Invalid(HarvestPlanProgress.FieldName);
+        }
+
+        if (request.HarvestPlanLineId is not { } lineId)
+        {
+            return (PlannedHarvest?)null;
+        }
+
+        var resolved = await planProgress.ResolveLineAsync(lineId, raftId, cancellationToken);
+        return resolved.IsSuccess ? resolved.Value : resolved.Error!;
+    }
+
+    /// <summary>A lot recorded from a plan line holds the lanes of the plan without those left out, whatever lanes the form sent.</summary>
+    private static RecordHarvestRequest WithPlannedLanes(RecordHarvestRequest request, PlannedHarvest? planned) =>
+        planned is null ? request : request with { LaneNumbers = planned.LaneNumbers };
+
     /// <summary>
     /// The product lines of the form, checked against the catalogue. With lines the cages and estimated kg are their sums, whatever the form sent; without them the form is read as before and the lot is
-    /// not split per product.
+    /// not split per product. A line sent without a product takes the product farmed in the Open cycle.
     /// </summary>
     private async Task<(IReadOnlyList<ResolvedProductLine>? Resolved, RecordHarvestRequest Request, AppError? Error)> WithProductLinesAsync(
-        RecordHarvestRequest request, decimal kgPerCage, CancellationToken cancellationToken)
+        RecordHarvestRequest request, decimal kgPerCage, Guid? cycleProductId, CancellationToken cancellationToken)
     {
-        var (resolved, error) = await productLines.ResolveAsync(request.ProductLines, request.ProductLinesAreUnreadable, kgPerCage, new HashSet<Guid>(), cancellationToken);
+        var inputs = cycleProductId is { } productId
+            ? request.ProductLines?.Select(l => l is { ProductId: null } ? l with { ProductId = productId } : l).ToList()
+            : request.ProductLines;
+        var (resolved, error) = await productLines.ResolveAsync(inputs, request.ProductLinesAreUnreadable, kgPerCage, new HashSet<Guid>(), cancellationToken);
         if (error is not null || resolved is null)
         {
             return (null, request, error);

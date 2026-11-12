@@ -6,7 +6,7 @@ using static OMTS.Application.Features.Sales.Invoices.SalesInvoiceAction;
 
 namespace OMTS.Application.UnitTests.Features.Sales;
 
-/// <summary>BR-SALE-10, BR-SALE-11 and BR-CLAIM-03: the endpoints refuse exactly what is not offered; the money of a correction and a cancellation (AC-08).</summary>
+/// <summary>BR-SALE-10, BR-SALE-11 and BR-CLAIM-03: the endpoints refuse exactly what is not offered; the money of an edit, a price cut and a cancellation (AC-08).</summary>
 public class SalesInvoiceChangeRulesTests
 {
     private static readonly int[] Statuses = [StatusIds.SalesInvoice.Completed, StatusIds.SalesInvoice.Cancelled];
@@ -19,32 +19,35 @@ public class SalesInvoiceChangeRulesTests
         {
             foreach (var hasReturn in new[] { true, false })
             {
-                foreach (var isOwner in new[] { true, false })
+                foreach (var mayEdit in new[] { true, false })
                 {
-                    var rights = new SalesInvoiceCallerRights(isOwner, MaySell: true, MayCreateReturn: true, MayPrint: true);
-                    var offered = SalesInvoiceAllowedActions.Of(new SalesInvoiceActionFacts(status, StatusIds.MessageDelivery.Sent, SaleFinished: true, hasReturn), rights);
-                    var refused = SalesInvoiceAllowedActions.ChangeRefusal(status, hasReturn, isOwner) is not null;
+                    foreach (var mayDelete in new[] { true, false })
+                    {
+                        var rights = new SalesInvoiceCallerRights(IsCooperativeOwner: mayEdit, MaySell: true, MayCreateReturn: true, MayPrint: true, mayEdit, mayDelete);
+                        var offered = SalesInvoiceAllowedActions.Of(new SalesInvoiceActionFacts(status, StatusIds.MessageDelivery.Sent, SaleFinished: true, hasReturn), rights);
 
-                    Assert.Equal(!refused, offered.Contains(Correct));
-                    Assert.Equal(!refused, offered.Contains(Cancel));
+                        Assert.Equal(SalesInvoiceAllowedActions.ChangeRefusal(status, hasReturn, mayEdit) is null, offered.Contains(Edit));
+                        Assert.Equal(SalesInvoiceAllowedActions.ChangeRefusal(status, hasReturn, mayEdit) is null, offered.Contains(Correct));
+                        Assert.Equal(SalesInvoiceAllowedActions.ChangeRefusal(status, hasReturn, mayDelete) is null, offered.Contains(Cancel));
+                    }
                 }
             }
         }
     }
 
     [Theory]
-    [InlineData(false, StatusIds.SalesInvoice.Completed, false, SalesInvoiceChangeRefusal.NotCooperativeOwner)]
+    [InlineData(false, StatusIds.SalesInvoice.Completed, false, SalesInvoiceChangeRefusal.NotPermitted)]
     [InlineData(true, StatusIds.SalesInvoice.Cancelled, false, SalesInvoiceChangeRefusal.NotCompleted)]
     [InlineData(true, StatusIds.SalesInvoice.Completed, true, SalesInvoiceChangeRefusal.HasSalesReturn)]
     [InlineData(true, StatusIds.SalesInvoice.Completed, false, null)]
-    public void The_refusal_names_the_rule(bool isOwner, int status, bool hasReturn, SalesInvoiceChangeRefusal? expected) =>
-        Assert.Equal(expected, SalesInvoiceAllowedActions.ChangeRefusal(status, hasReturn, isOwner));
+    public void The_refusal_names_the_rule(bool permitted, int status, bool hasReturn, SalesInvoiceChangeRefusal? expected) =>
+        Assert.Equal(expected, SalesInvoiceAllowedActions.ChangeRefusal(status, hasReturn, permitted));
 
     // MSG-SALE-20 is what a sales return answers once CLAIM-03 feeds the seam.
     [Fact]
     public void A_sales_return_blocks_both_changes_with_its_own_message()
     {
-        Assert.Equal(SalesInvoiceChangeRefusal.HasSalesReturn, SalesInvoiceAllowedActions.ChangeRefusal(StatusIds.SalesInvoice.Completed, hasSalesReturn: true, isCooperativeOwner: true));
+        Assert.Equal(SalesInvoiceChangeRefusal.HasSalesReturn, SalesInvoiceAllowedActions.ChangeRefusal(StatusIds.SalesInvoice.Completed, hasSalesReturn: true, permitted: true));
         Assert.Equal("MSG-SALE-20", OMTS.Application.Common.Messages.UserMessages.InvoiceHasSalesReturn("HD000001").Code);
     }
 

@@ -62,6 +62,10 @@ public class HarvestLot : AuditableEntity, IHasStatus
     /// </summary>
     public DateOnly? AutoCloseWarnedFor { get; set; }
 
+    /// <summary>The line of a harvest plan this lot was recorded from; null for a lot outside a plan. A line has at most one lot. Only a link: the lot code does not change.</summary>
+    public Guid? HarvestPlanLineId { get; set; }
+    public HarvestPlanLine? HarvestPlanLine { get; set; }
+
     public DateTimeOffset? PublishedAt { get; set; }
     public DateTimeOffset? WithdrawnAt { get; set; }
 

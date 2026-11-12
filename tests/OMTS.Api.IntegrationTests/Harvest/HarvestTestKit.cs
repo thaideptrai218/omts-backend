@@ -19,6 +19,11 @@ public sealed record HarvestFields
     public IReadOnlyList<byte[]> Photos { get; init; } = [];
     public string PhotoField { get; init; } = "photos";
 
+    /// <summary>The line of a harvest plan the lot is recorded from; the lanes then come from the plan.</summary>
+    public Guid? PlanLineId { get; init; }
+
+    public HarvestFields FromPlanLine(Guid lineId) => this with { PlanLineId = lineId };
+
     /// <summary>The share of each product on the lot (product, cages, kg left empty to work it out); none keeps the old way of recording a lot.</summary>
     public IReadOnlyList<(Guid ProductId, int Cages, decimal? Kg)> ProductLines { get; init; } = [];
 
@@ -60,6 +65,11 @@ public sealed record HarvestFields
             {
                 form.Add(new StringContent(typed.ToString(System.Globalization.CultureInfo.InvariantCulture)), $"productLines[{i}].kg");
             }
+        }
+
+        if (PlanLineId is { } planLine)
+        {
+            form.Add(new StringContent(planLine.ToString()), "harvestPlanLineId");
         }
 
         foreach (var photo in Photos)

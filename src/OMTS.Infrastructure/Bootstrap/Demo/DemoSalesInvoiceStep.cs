@@ -2,15 +2,17 @@ using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Sales.Invoices;
+using OMTS.Application.Features.Sales.Orders;
 using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Domain.Constants;
+using OMTS.Domain.Enums;
 using OMTS.Infrastructure.Messaging;
 
 namespace OMTS.Infrastructure.Bootstrap.Demo;
 
 /// <summary>
 /// SALE-05: two sales at the port through the service the API uses, by the Zone Manager of each zone. In zone one, a buyer with a profile pays the whole invoice in cash; in zone two,
-/// the active demo trader pays 1,000,000 VND in cash and the rest later, through the accepted request that agrees to it (or, when no request was answered, after the Owner's agreement).
+/// the active demo trader pays 1,000,000 VND in cash and the rest later, after the Owner's agreement. Each sale is made from its own order, saved first by the same Zone Manager.
 /// No lot is closed: the demo lots stay for sale, and the newest lot of each first raft stays removable. Marked done by any <c>SalesInvoice.Created</c> audit row, so a rerun adds nothing.
 /// The cash sale ends with the QR code: its lot is the demo's Published lot (TRACE-01 at the end of the sale).
 /// </summary>
@@ -40,22 +42,21 @@ internal sealed class DemoSalesInvoiceStep : IDemoSeedStep
         var created = 0;
         if (await OldestLotAsync(context, DemoFarmingZoneStep.ZoneOne, cancellationToken) is { } lotOne)
         {
+            var (orderId, lineId) = await OrderAsync(context, DemoFarmingZoneStep.ZoneOne, "quanlyvung1", lotOne.ZoneId, buyer, milky, 120m, cancellationToken);
             var invoiceId = await SellAsync(context, DemoFarmingZoneStep.ZoneOne, "quanlyvung1", new CreateSalesInvoiceRequest(
-                buyer, false, lotOne.ZoneId, [new SalesInvoiceLineEntry(milky, lotOne.Id, 120m)], new SalesInvoicePaymentEntry(120m * 60_000m),
-                NotSoldWholeLotIds: [lotOne.Id]), cancellationToken);
+                buyer, false, lotOne.ZoneId, [new SalesInvoiceLineEntry(milky, lotOne.Id, 120m, SalesOrderLineId: lineId)], new SalesInvoicePaymentEntry(120m * 60_000m),
+                NotSoldWholeLotIds: [lotOne.Id], SalesOrderId: orderId), cancellationToken);
             await FinishWithQrCodeAsync(context, invoiceId, lotOne.ZoneId, cancellationToken);
             created++;
         }
 
         if (await OldestLotAsync(context, DemoFarmingZoneStep.ZoneTwo, cancellationToken) is { } lotTwo)
         {
-            var request = await db.PurchaseRequests.AsNoTracking()
-                .Where(r => r.CustomerId == trader && r.StatusId == StatusIds.PurchaseRequest.Accepted && r.PayLaterAgreed == true && r.AgreedPickupDate >= context.Today)
-                .Select(r => (Guid?)r.Id).FirstOrDefaultAsync(cancellationToken);
+            var (orderId, lineId) = await OrderAsync(context, DemoFarmingZoneStep.ZoneTwo, "quanlyvung2", lotTwo.ZoneId, trader, fat, 80m, cancellationToken);
             await SellAsync(context, DemoFarmingZoneStep.ZoneTwo, "quanlyvung2", new CreateSalesInvoiceRequest(
-                trader, false, lotTwo.ZoneId, [new SalesInvoiceLineEntry(fat, lotTwo.Id, 80m)],
-                new SalesInvoicePaymentEntry(1_000_000m, SalesInvoiceRestPayment.PayLater, PayLaterOwnerAgreed: request is null),
-                PurchaseRequestId: request, TakesRequestInFull: request is null ? null : false, NotSoldWholeLotIds: [lotTwo.Id]), cancellationToken);
+                trader, false, lotTwo.ZoneId, [new SalesInvoiceLineEntry(fat, lotTwo.Id, 80m, SalesOrderLineId: lineId)],
+                new SalesInvoicePaymentEntry(1_000_000m, SalesInvoiceRestPayment.PayLater, PayLaterOwnerAgreed: true),
+                NotSoldWholeLotIds: [lotTwo.Id], SalesOrderId: orderId), cancellationToken);
             created++;
         }
 
@@ -91,6 +92,21 @@ internal sealed class DemoSalesInvoiceStep : IDemoSeedStep
             .Select(l => new { l.Id, l.Raft.ZoneId })
             .FirstOrDefaultAsync(cancellationToken);
         return lot is null ? null : (lot.Id, lot.ZoneId);
+    }
+
+    /// <summary>The order the sale is made from, saved through the service the API uses as the same Zone Manager (a sale at the port): one line of the product in kg at its list price.</summary>
+    private static async Task<(Guid OrderId, Guid LineId)> OrderAsync(
+        DemoSeedContext context, string zoneCode, string manager, Guid zoneId, Guid? customerId, Guid productId, decimal kg, CancellationToken cancellationToken)
+    {
+        var unitId = await context.Db.ProductUnits.AsNoTracking().Where(u => u.ProductId == productId && u.IsBase).Select(u => u.UnitId).FirstAsync(cancellationToken);
+        var actor = await DemoCultivationLogStep.ActorAsync(context, PermissionFunctions.SalesOrders, manager, zoneId, cancellationToken);
+        using var acting = context.Get<AmbientActor>().Use(actor);
+        var saved = DemoSeedContext.Ensure(
+            await context.Get<SalesOrderService>().CreateAsync(
+                new SaveSalesOrderRequest(null, customerId, false, null, SalesOrderSource.AtPort, null, null, null, null, 0m, false, [new SalesOrderLineInput(productId, unitId, kg)]),
+                cancellationToken),
+            $"order of the demo sale of zone {zoneCode}");
+        return (saved.Order.Id, saved.Order.Lines[0].Id);
     }
 
     private static async Task<Guid> SellAsync(DemoSeedContext context, string zoneCode, string manager, CreateSalesInvoiceRequest request, CancellationToken cancellationToken)

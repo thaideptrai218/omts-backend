@@ -438,6 +438,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
 
+                    b.Property<Guid?>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("RaftId")
                         .HasColumnType("uniqueidentifier");
 
@@ -467,6 +470,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
 
                     b.HasIndex("RaftId")
                         .IsUnique()
@@ -1188,6 +1193,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly>("HarvestDate")
                         .HasColumnType("date");
 
+                    b.Property<Guid?>("HarvestPlanLineId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTimeOffset>("HarvestedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -1243,6 +1251,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("ClosedBySalesInvoiceId");
 
                     b.HasIndex("CycleId");
+
+                    b.HasIndex("HarvestPlanLineId")
+                        .IsUnique()
+                        .HasFilter("[HarvestPlanLineId] IS NOT NULL");
 
                     b.HasIndex("LotCode")
                         .IsUnique();
@@ -1363,6 +1375,160 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_HarvestLotProductLine_CageCount", "[CageCount] > 0");
 
                             t.HasCheckConstraint("CK_HarvestLotProductLine_Kg", "[Kg] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("AssignedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("AssignedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CancelledByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CompletedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset>("PlannedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateOnly>("PlannedDate")
+                        .HasColumnType("date");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("StatusId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedByAccountId");
+
+                    b.HasIndex("CancelledByAccountId");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("CompletedByAccountId");
+
+                    b.HasIndex("CreatedByAccountId");
+
+                    b.HasIndex("StatusId", "PlannedDate");
+
+                    b.ToTable("HarvestPlans");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestPlanLane", b =>
+                {
+                    b.Property<Guid>("LineId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("LaneId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SkipReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTimeOffset?>("SkippedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("SkippedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("LineId", "LaneId");
+
+                    b.HasIndex("LaneId");
+
+                    b.HasIndex("SkippedByAccountId");
+
+                    b.ToTable("HarvestPlanLanes", t =>
+                        {
+                            t.HasCheckConstraint("CK_HarvestPlanLane_Skipped", "([SkippedAt] IS NULL AND [SkipReason] IS NULL AND [SkippedByAccountId] IS NULL) OR ([SkippedAt] IS NOT NULL AND [SkipReason] IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestPlanLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("ExpectedCageCount")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("ExpectedProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("LineNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("RaftId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpectedProductId");
+
+                    b.HasIndex("RaftId");
+
+                    b.HasIndex("PlanId", "LineNumber");
+
+                    b.ToTable("HarvestPlanLines", t =>
+                        {
+                            t.HasCheckConstraint("CK_HarvestPlanLine_ExpectedCageCount", "[ExpectedCageCount] IS NULL OR [ExpectedCageCount] > 0");
                         });
                 });
 
@@ -3511,6 +3677,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
+                            Id = 3205,
+                            Code = "ORDERED",
+                            DisplayName = "Ordered",
+                            Group = "PURCHASE_REQUEST",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "The Cooperative Owner made an order (DH) from the request; the order carries on from here.",
+                            SortOrder = 5
+                        },
+                        new
+                        {
                             Id = 3701,
                             Code = "AWAITING_RESPONSE",
                             DisplayName = "Awaiting response",
@@ -3816,6 +3993,105 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             IsInitial = false,
                             Meaning = "Recorded by mistake; the kg are back in the stock and it counts nowhere.",
                             SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 4101,
+                            Code = "DRAFT",
+                            DisplayName = "Draft",
+                            Group = "SALES_ORDER",
+                            IsFinal = false,
+                            IsInitial = true,
+                            Meaning = "The order is agreed with the buyer; no invoice has been made from it yet. Its advance is reserved for it.",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 4102,
+                            Code = "DELIVERING",
+                            DisplayName = "Delivering",
+                            Group = "SALES_ORDER",
+                            IsFinal = false,
+                            IsInitial = false,
+                            Meaning = "At least one invoice was made from the order; goods are still to be delivered. Its advance is reserved for it.",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 4103,
+                            Code = "COMPLETED",
+                            DisplayName = "Completed",
+                            Group = "SALES_ORDER",
+                            IsFinal = false,
+                            IsInitial = false,
+                            Meaning = "Finished by hand or fully delivered; what is left of its advance is general credit of the customer. A cancelled invoice reopens it.",
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 4104,
+                            Code = "CANCELLED",
+                            DisplayName = "Cancelled",
+                            Group = "SALES_ORDER",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "Cancelled with a reason; what is left of its advance is general credit of the customer.",
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 4201,
+                            Code = "DRAFT",
+                            DisplayName = "Draft",
+                            Group = "HARVEST_PLAN",
+                            IsFinal = false,
+                            IsInitial = true,
+                            Meaning = "Being prepared by the Owner; the Zone Managers do not see it yet.",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 4202,
+                            Code = "ASSIGNED",
+                            DisplayName = "Assigned",
+                            Group = "HARVEST_PLAN",
+                            IsFinal = false,
+                            IsInitial = false,
+                            Meaning = "Handed to the Zone Managers of its zone; no lot is recorded and no lane left out yet.",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 4203,
+                            Code = "HARVESTING",
+                            DisplayName = "Harvesting",
+                            Group = "HARVEST_PLAN",
+                            IsFinal = false,
+                            IsInitial = false,
+                            Meaning = "A lot is recorded from a line of the plan, or a lane is left out.",
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 4204,
+                            Code = "COMPLETED",
+                            DisplayName = "Completed",
+                            Group = "HARVEST_PLAN",
+                            IsFinal = false,
+                            IsInitial = false,
+                            Meaning = "Every line has its lot or has every lane left out, or the Owner finished the plan by hand; removing a lot of a plan finished by itself opens it again.",
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 4205,
+                            Code = "CANCELLED",
+                            DisplayName = "Cancelled",
+                            Group = "HARVEST_PLAN",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "Cancelled with a reason before any lot was recorded.",
+                            SortOrder = 5
                         });
                 });
 
@@ -4268,6 +4544,171 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             ToStatusId = 4003,
                             TriggerEvent = "Action",
                             UseCases = "PRODUCT-DISPOSAL"
+                        },
+                        new
+                        {
+                            Id = 30084,
+                            AllowedPerformers = "System",
+                            FromStatusId = 4101,
+                            GuardCondition = "The first invoice of the order is saved with goods still to deliver.",
+                            ReasonRequired = false,
+                            ToStatusId = 4102,
+                            TriggerEvent = "Action",
+                            UseCases = "SALES-ORDER"
+                        },
+                        new
+                        {
+                            Id = 30085,
+                            AllowedPerformers = "System; Cooperative Owner",
+                            FromStatusId = 4101,
+                            GuardCondition = "An invoice covers every line of the order, or the Owner finishes the order.",
+                            ReasonRequired = false,
+                            ToStatusId = 4103,
+                            TriggerEvent = "Action",
+                            UseCases = "SALES-ORDER"
+                        },
+                        new
+                        {
+                            Id = 30086,
+                            AllowedPerformers = "Cooperative Owner; Zone Manager; System",
+                            FromStatusId = 4102,
+                            GuardCondition = "The Owner or a Zone Manager of the zone finishes the order, or every line is delivered.",
+                            ReasonRequired = false,
+                            ToStatusId = 4103,
+                            TriggerEvent = "Action",
+                            UseCases = "SALES-ORDER"
+                        },
+                        new
+                        {
+                            Id = 30087,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 4101,
+                            GuardCondition = "A reason is given.",
+                            ReasonRequired = true,
+                            ToStatusId = 4104,
+                            TriggerEvent = "Action",
+                            UseCases = "SALES-ORDER"
+                        },
+                        new
+                        {
+                            Id = 30088,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 4102,
+                            GuardCondition = "A reason is given and no invoice of the order is left uncancelled; otherwise the order is finished instead.",
+                            ReasonRequired = true,
+                            ToStatusId = 4104,
+                            TriggerEvent = "Action",
+                            UseCases = "SALES-ORDER"
+                        },
+                        new
+                        {
+                            Id = 30089,
+                            AllowedPerformers = "System",
+                            FromStatusId = 4103,
+                            GuardCondition = "An invoice of the finished order is cancelled: the order is open again.",
+                            ReasonRequired = false,
+                            ToStatusId = 4102,
+                            TriggerEvent = "Action",
+                            UseCases = "SALES-ORDER"
+                        },
+                        new
+                        {
+                            Id = 30090,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 3201,
+                            GuardCondition = "The Owner saves an order made from the request.",
+                            ReasonRequired = false,
+                            ToStatusId = 3205,
+                            TriggerEvent = "Action",
+                            UseCases = "SALES-ORDER"
+                        },
+                        new
+                        {
+                            Id = 30091,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 3202,
+                            GuardCondition = "The request is not Fulfilled and has no order yet; the Owner saves an order made from it.",
+                            ReasonRequired = false,
+                            ToStatusId = 3205,
+                            TriggerEvent = "Action",
+                            UseCases = "SALES-ORDER"
+                        },
+                        new
+                        {
+                            Id = 30092,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 4201,
+                            GuardCondition = "The plan has lines, every raft has an Open cycle and no lane is in another open plan; the Zone Managers of the zone are told.",
+                            ReasonRequired = false,
+                            ToStatusId = 4202,
+                            TriggerEvent = "Action",
+                            UseCases = "HARVEST-PLAN"
+                        },
+                        new
+                        {
+                            Id = 30093,
+                            AllowedPerformers = "System",
+                            FromStatusId = 4202,
+                            GuardCondition = "The first lot is recorded from a line of the plan, or the first lane is left out.",
+                            ReasonRequired = false,
+                            ToStatusId = 4203,
+                            TriggerEvent = "Action",
+                            UseCases = "HARVEST-PLAN"
+                        },
+                        new
+                        {
+                            Id = 30094,
+                            AllowedPerformers = "Cooperative Owner; System",
+                            FromStatusId = 4203,
+                            GuardCondition = "Every line has its lot or every lane left out, or the Owner finishes the plan: lanes still to do stay as they are.",
+                            ReasonRequired = false,
+                            ToStatusId = 4204,
+                            TriggerEvent = "Action",
+                            UseCases = "HARVEST-PLAN"
+                        },
+                        new
+                        {
+                            Id = 30095,
+                            AllowedPerformers = "System",
+                            FromStatusId = 4202,
+                            GuardCondition = "Every lane of every line is left out and no lot was recorded.",
+                            ReasonRequired = false,
+                            ToStatusId = 4204,
+                            TriggerEvent = "Action",
+                            UseCases = "HARVEST-PLAN"
+                        },
+                        new
+                        {
+                            Id = 30096,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 4201,
+                            GuardCondition = "A reason is given.",
+                            ReasonRequired = true,
+                            ToStatusId = 4205,
+                            TriggerEvent = "Action",
+                            UseCases = "HARVEST-PLAN"
+                        },
+                        new
+                        {
+                            Id = 30097,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 4202,
+                            GuardCondition = "A reason is given and no lot was recorded from the plan.",
+                            ReasonRequired = true,
+                            ToStatusId = 4205,
+                            TriggerEvent = "Action",
+                            UseCases = "HARVEST-PLAN"
+                        },
+                        new
+                        {
+                            Id = 30098,
+                            AllowedPerformers = "System",
+                            FromStatusId = 4204,
+                            GuardCondition = "A lot of a plan that finished by itself is removed, or a lane left out is put back: a line is open again.",
+                            ReasonRequired = false,
+                            ToStatusId = 4203,
+                            TriggerEvent = "Action",
+                            UseCases = "HARVEST-PLAN"
                         },
                         new
                         {
@@ -5793,6 +6234,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<Guid?>("SalesOrderId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<int>("StatusId")
                         .HasColumnType("int");
 
@@ -5831,6 +6275,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("InvoiceId");
 
                     b.HasIndex("RecordedByAccountId");
+
+                    b.HasIndex("SalesOrderId");
 
                     b.HasIndex("TransferInvoiceCode");
 
@@ -6683,6 +7129,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<decimal>("OtherCharges")
                         .HasPrecision(18)
                         .HasColumnType("decimal(18,0)");
@@ -6714,6 +7164,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
+
+                    b.Property<Guid?>("SalesOrderId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("StatusId")
                         .HasColumnType("int");
@@ -6757,6 +7210,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("[QrToken] IS NOT NULL");
 
+                    b.HasIndex("SalesOrderId");
+
                     b.HasIndex("StatusId");
 
                     b.HasIndex("ZoneId");
@@ -6787,6 +7242,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasPrecision(18)
                         .HasColumnType("decimal(18,0)");
 
+                    b.Property<decimal>("Factor")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
                     b.Property<Guid>("HarvestLotId")
                         .HasColumnType("uniqueidentifier");
 
@@ -6812,8 +7271,28 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("ProductId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<Guid?>("SalesOrderLineId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("SoldWholeLot")
                         .HasColumnType("bit");
+
+                    b.Property<string>("UnitCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("UnitName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<decimal>("UnitPrice")
                         .HasPrecision(18)
@@ -6825,6 +7304,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ProductId");
 
+                    b.HasIndex("SalesOrderLineId");
+
                     b.HasIndex("InvoiceId", "LineNumber")
                         .IsUnique();
 
@@ -6833,6 +7314,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_SalesInvoiceLine_Kg", "[Kg] > 0");
 
                             t.HasCheckConstraint("CK_SalesInvoiceLine_Prices", "[UnitPrice] > 0 AND [ListPrice] > 0 AND [Amount] >= 0");
+
+                            t.HasCheckConstraint("CK_SalesInvoiceLine_Quantity", "[Quantity] > 0");
                         });
                 });
 
@@ -6872,6 +7355,226 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CancelledByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CompletedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("CompletedManually")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeduplicationKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<bool>("DiscountDecidedByOwner")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateOnly>("OrderDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("OrderedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("PickupAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateOnly?>("PickupDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("PurchaseRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ReceivedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("StatusId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ZoneId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CancelledByAccountId");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("CompletedByAccountId");
+
+                    b.HasIndex("CreatedByAccountId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("DeduplicationKey")
+                        .IsUnique()
+                        .HasFilter("[DeduplicationKey] IS NOT NULL");
+
+                    b.HasIndex("PickupDate");
+
+                    b.HasIndex("PurchaseRequestId")
+                        .IsUnique()
+                        .HasFilter("[PurchaseRequestId] IS NOT NULL");
+
+                    b.HasIndex("ReceivedByAccountId");
+
+                    b.HasIndex("ZoneId");
+
+                    b.HasIndex("StatusId", "OrderDate");
+
+                    b.ToTable("SalesOrders", t =>
+                        {
+                            t.HasCheckConstraint("CK_SalesOrder_Amounts", "[DiscountAmount] >= 0 AND [Subtotal] >= 0 AND [Total] >= 0 AND [DiscountAmount] <= [Subtotal] AND [Total] = [Subtotal] - [DiscountAmount]");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesOrderHarvestPlan", b =>
+                {
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("OrderId", "PlanId");
+
+                    b.HasIndex("PlanId");
+
+                    b.ToTable("SalesOrderHarvestPlans");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesOrderLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<decimal>("Factor")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<int>("LineNumber")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("ListPrice")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<string>("UnitCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("UnitName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("OrderId", "LineNumber");
+
+                    b.ToTable("SalesOrderLines", t =>
+                        {
+                            t.HasCheckConstraint("CK_SalesOrderLine_Amounts", "[Quantity] > 0 AND [UnitPrice] >= 0 AND [Amount] >= 0");
+                        });
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.CashBook.CashVoucher", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.CashBook.CashAccount", "CashAccount")
@@ -6897,6 +7600,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationCycle", b =>
                 {
+                    b.HasOne("OMTS.Domain.Entities.Sales.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
                         .WithMany("CultivationCycles")
                         .HasForeignKey("RaftId")
@@ -6908,6 +7616,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Product");
 
                     b.Navigation("Raft");
 
@@ -7142,6 +7852,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OMTS.Domain.Entities.Harvest.HarvestPlanLine", "HarvestPlanLine")
+                        .WithOne("Lot")
+                        .HasForeignKey("OMTS.Domain.Entities.Harvest.HarvestLot", "HarvestPlanLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
                         .WithMany()
                         .HasForeignKey("RaftId")
@@ -7161,6 +7876,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Cycle");
+
+                    b.Navigation("HarvestPlanLine");
 
                     b.Navigation("Raft");
 
@@ -7214,6 +7931,88 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Lot");
 
                     b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestPlan", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AssignedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("CancelledByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("CompletedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
+                        .WithMany()
+                        .HasForeignKey("StatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Status");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestPlanLane", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Farming.Lane", "Lane")
+                        .WithMany()
+                        .HasForeignKey("LaneId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Harvest.HarvestPlanLine", "Line")
+                        .WithMany("Lanes")
+                        .HasForeignKey("LineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("SkippedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Lane");
+
+                    b.Navigation("Line");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestPlanLine", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Sales.Product", "ExpectedProduct")
+                        .WithMany()
+                        .HasForeignKey("ExpectedProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Harvest.HarvestPlan", "Plan")
+                        .WithMany("Lines")
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
+                        .WithMany()
+                        .HasForeignKey("RaftId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ExpectedProduct");
+
+                    b.Navigation("Plan");
+
+                    b.Navigation("Raft");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.AccessGrant", b =>
@@ -8247,6 +9046,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("RecordedByAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesOrder", "SalesOrder")
+                        .WithMany()
+                        .HasForeignKey("SalesOrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
@@ -8258,6 +9062,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Customer");
 
                     b.Navigation("Invoice");
+
+                    b.Navigation("SalesOrder");
 
                     b.Navigation("Status");
                 });
@@ -8551,6 +9357,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("PurchaseRequestId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesOrder", "SalesOrder")
+                        .WithMany()
+                        .HasForeignKey("SalesOrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
@@ -8566,6 +9377,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Customer");
 
                     b.Navigation("PurchaseRequest");
+
+                    b.Navigation("SalesOrder");
 
                     b.Navigation("Status");
 
@@ -8592,11 +9405,18 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesOrderLine", "SalesOrderLine")
+                        .WithMany()
+                        .HasForeignKey("SalesOrderLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("HarvestLot");
 
                     b.Navigation("Invoice");
 
                     b.Navigation("Product");
+
+                    b.Navigation("SalesOrderLine");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesInvoicePriceCut", b =>
@@ -8614,6 +9434,98 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Invoice");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesOrder", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("CancelledByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("CompletedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.PurchaseRequest", "PurchaseRequest")
+                        .WithMany()
+                        .HasForeignKey("PurchaseRequestId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ReceivedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
+                        .WithMany()
+                        .HasForeignKey("StatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Farming.FarmingZone", "Zone")
+                        .WithMany()
+                        .HasForeignKey("ZoneId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("PurchaseRequest");
+
+                    b.Navigation("Status");
+
+                    b.Navigation("Zone");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesOrderHarvestPlan", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesOrder", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Harvest.HarvestPlan", "Plan")
+                        .WithMany("Orders")
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Order");
+
+                    b.Navigation("Plan");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesOrderLine", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesOrder", "Order")
+                        .WithMany("Lines")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Order");
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationLog", b =>
@@ -8653,6 +9565,20 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Photos");
 
                     b.Navigation("ProductLines");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestPlan", b =>
+                {
+                    b.Navigation("Lines");
+
+                    b.Navigation("Orders");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestPlanLine", b =>
+                {
+                    b.Navigation("Lanes");
+
+                    b.Navigation("Lot");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.Account", b =>
@@ -8778,6 +9704,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Payments");
 
                     b.Navigation("PriceCuts");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesOrder", b =>
+                {
+                    b.Navigation("Lines");
                 });
 #pragma warning restore 612, 618
         }

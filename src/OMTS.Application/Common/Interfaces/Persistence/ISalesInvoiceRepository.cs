@@ -20,6 +20,18 @@ public interface ISalesInvoiceRepository
     /// <summary>A price cut entered by a correction (SALE-07.1).</summary>
     void AddPriceCut(SalesInvoicePriceCut priceCut);
 
+    /// <summary>A part of an advance of the order set against the invoice.</summary>
+    void AddAllocation(CustomerPaymentAllocation allocation);
+
+    /// <summary>A part of an advance removed: the money is the advance's again.</summary>
+    void RemoveAllocation(CustomerPaymentAllocation allocation);
+
+    /// <summary>The parts of the advances of the order set against the invoice, with their payments, tracked, newest first (the first to be cut).</summary>
+    Task<IReadOnlyList<CustomerPaymentAllocation>> AdvanceAllocationsOfAsync(Guid invoiceId, Guid salesOrderId, CancellationToken cancellationToken);
+
+    /// <summary>Another invoice that has this code regardless of letter case (cancelled ones included), other than <paramref name="exceptInvoiceId"/>: its id, or null.</summary>
+    Task<Guid?> FindOtherByCodeAsync(string code, Guid? exceptInvoiceId, CancellationToken cancellationToken);
+
     /// <summary>The invoice saved with this key, if any: a repeated save returns it (BR-SALE-08 has no draft, so a second tap must not sell twice).</summary>
     Task<Guid?> FindByDeduplicationKeyAsync(string key, CancellationToken cancellationToken);
 

@@ -54,7 +54,7 @@ public class HarvestLotForSaleTests
 
         // Never on this list: anything of the kg per cage, the photos or the recorder that SALE-05 has no use for.
         Assert.Equal(
-            ["harvestDate", "id", "lotCode", "originState", "raftCode", "raftId", "remainingKg", "status", "statusId", "withdrawnAt", "zoneCode", "zoneId", "zoneName"],
+            ["harvestDate", "harvestPlanCode", "id", "lotCode", "originState", "products", "raftCode", "raftId", "remainingKg", "status", "statusId", "suggested", "withdrawnAt", "zoneCode", "zoneId", "zoneName"],
             first.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
     }
 

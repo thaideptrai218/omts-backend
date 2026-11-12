@@ -23,6 +23,7 @@ public class SalesInvoiceRulesTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var client = sale.Manager.Client;
+        var (orderId, _) = await client.OrderOfAsync(sale.CustomerId, (sale.ProductId, 5m));
         await api.UpdateAsync<HarvestLot>(sale.LotId, l => (l.StatusId, l.CloseDate, l.LeftoverKg) = (StatusIds.HarvestLot.Closed, FarmingTestKit.Today, 0m));
         var code = (await sale.Owner.Client.GetHarvestLotAsync(sale.LotId)).Text("lotCode");
 
@@ -31,7 +32,8 @@ public class SalesInvoiceRulesTests
         Assert.Equal(("MSG-GEN-09", $"Harvest lot {code} is Closed and cannot be used for this action."), (refused.Text("code"), refused.Text("detail")));
 
         (await sale.Owner.Client.PostAsync($"/api/products/{sale.ProductId}/discontinue", null)).EnsureSuccessStatusCode();
-        var discontinued = await (await client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.OtherLotId, 1m)], Cash(30_000m)))).ReadAsync(HttpStatusCode.BadRequest);
+        // The order was made while the product was in use; the invoice of it is refused once the product is discontinued.
+        var discontinued = await (await client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.OtherLotId, 1m)], Cash(30_000m)).With("salesOrderId", orderId))).ReadAsync(HttpStatusCode.BadRequest);
         Assert.Equal(("MSG-GEN-09", "Line 1 product"), (discontinued.Text("code"), discontinued.Text("field")));
         Assert.Equal(0, await api.QueryAsync(db => db.SalesInvoices.CountAsync()));
     }
@@ -45,8 +47,10 @@ public class SalesInvoiceRulesTests
         var otherZone = (await sale.Owner.Client.CreateZoneAsync()).Id();
         var outsider = await api.StaffAsync(await api.ZoneEntityAsync(otherZone));
         var accountant = await api.StaffAsync(null, StaffRole.Accountant);
-        var body = Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m));
+        var (orderId, _) = await sale.Owner.Client.OrderOfAsync(sale.CustomerId, (sale.ProductId, 1m));
+        var body = Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m)).With("salesOrderId", orderId);
 
+        // An order of another zone is not the seller's to invoice, whichever lot the invoice names.
         Assert.Equal("MSG-GEN-08", await (await outsider.Client.PostInvoiceAsync(body)).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-08", await (await accountant.Client.PostInvoiceAsync(body)).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-08", await (await (await api.TraderAsync()).Client.PostInvoiceAsync(body)).ErrorCodeAsync());

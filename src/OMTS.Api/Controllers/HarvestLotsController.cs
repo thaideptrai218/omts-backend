@@ -33,7 +33,8 @@ public sealed class HarvestLotsController(
     /// Records a harvest trip while the raft has an Open cycle. Multipart: one <c>laneNumbers</c> field per lane, one <c>finishedLaneNumbers</c> field per finished lane, <c>cageCount</c>,
     /// optional <c>estimatedKg</c>, and one <c>photos</c> part per photo (none to 10). The share of each product is sent as <c>productLines[i].productId</c>, <c>productLines[i].cageCount</c> and
     /// optional <c>productLines[i].kg</c> (i from 0, no gap): the lot's cages and kg are then the sums of the lines (<c>cageCount</c> and <c>estimatedKg</c> are ignored) and each line adds its kg to the
-    /// stock of its product. A failed upload answers 502 MSG-GEN-03 and saves nothing. Notifies the Cooperative Owner
+    /// stock of its product. <c>harvestPlanLineId</c> records the lot from a line of a harvest plan (KHT): the lanes are then those of the line without the lanes left out (<c>laneNumbers</c> is ignored), the lot
+    /// carries the plan, and the plan moves on (409 MSG-PLAN-03 when the line already has its lot). A failed upload answers 502 MSG-GEN-03 and saves nothing. Notifies the Cooperative Owner
     /// (MSG-HARVEST-01), and when every seeded lane is now Harvested sends the reminder to close the cycle (MSG-CYCLE-08).
     /// </summary>
     [HttpPost("api/rafts/{raftId:guid}/harvest-lots")]
@@ -46,9 +47,11 @@ public sealed class HarvestLotsController(
         TryInt(form.CageCount, out var cageCount);
         var estimatedIsRead = TryDecimal(form.EstimatedKg, out var estimatedKg);
         var (productLines, linesAreUnreadable) = ReadProductLines(form);
+        var planLineGiven = !string.IsNullOrWhiteSpace(form.HarvestPlanLineId);
+        Guid? planLineId = planLineGiven && Guid.TryParse(form.HarvestPlanLineId!.Trim(), out var lineId) ? lineId : null;
         var request = new RecordHarvestRequest(
             Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, !estimatedIsRead, Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)),
-            productLines, linesAreUnreadable);
+            productLines, linesAreUnreadable, planLineId, planLineGiven && planLineId is null);
         return (await recording.RecordAsync(raftId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
             .ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
     }
@@ -122,11 +125,14 @@ public sealed class HarvestLotsController(
     public async Task<IActionResult> Close(Guid lotId, CloseHarvestLotRequest request, CancellationToken cancellationToken) =>
         (await closing.CloseAsync(lotId, request, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>The lots for sale in the zones of the caller, the latest harvest first: what a sales invoice chooses from (SALE-05 step 1).</summary>
+    /// <summary>
+    /// The lots for sale in the zones of the caller, the latest harvest first: what a sales invoice chooses from (SALE-05 step 1). With <c>salesOrderId</c> the lots recorded from a harvest plan that serves
+    /// that order are <c>suggested</c> and come first; every lot carries <c>harvestPlanCode</c> when it was recorded from a plan.
+    /// </summary>
     [HttpGet("api/harvest-lots/for-sale")]
     [ProducesResponseType<HarvestLotsForSale>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ForSale([FromQuery] Guid? zoneId, CancellationToken cancellationToken) =>
-        (await forSale.ListAsync(zoneId, cancellationToken)).ToActionResult(Ok);
+    public async Task<IActionResult> ForSale([FromQuery] Guid? zoneId, [FromQuery] Guid? salesOrderId, CancellationToken cancellationToken) =>
+        (await forSale.ListAsync(zoneId, salesOrderId, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>How many lots are for sale now, of one zone or of every zone: the open harvest lots of the operations dashboard, for the Owner alone (FARM-06, BR-FARM-10).</summary>
     [HttpGet("api/harvest-lots/for-sale/count")]

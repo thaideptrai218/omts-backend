@@ -77,24 +77,6 @@ public class SalesInvoiceCancellationTests
         Assert.Equal((StatusIds.HarvestLot.Closed, (Guid?)closer.Id()), (stillClosed.StatusId, stillClosed.ClosedBySalesInvoiceId));
     }
 
-    // BR-SALE-01: the request a cancelled invoice took in full is Accepted again.
-    [Fact]
-    public async Task A_request_taken_in_full_is_accepted_again_after_the_cancellation()
-    {
-        using var api = new AuthApiFactory();
-        var sale = await api.SaleSetupAsync();
-        var trader = await api.TraderAsync();
-        var request = await trader.Client.PlaceAsync(sale.ProductId, 10m);
-        (await sale.Owner.Client.AcceptAsync(request, payLater: true)).EnsureSuccessStatusCode();
-        var sold = (await sale.Manager.Client.SellAsync(Invoice(trader.Profile.Id, [Line(sale.ProductId, sale.LotId, 10m)], Cash(0m, "PayLater"), sale.LotId).With("purchaseRequestId", request.Id()))).GetProperty("invoice");
-        Assert.True((await trader.Client.MineAsync(request.Id())).GetProperty("fulfilled").GetBoolean());
-
-        await sale.Owner.Client.CancelledAsync(sold.Id(), Cancellation(sold));
-
-        var mine = await trader.Client.MineAsync(request.Id());
-        Assert.Equal(("Accepted", false), (mine.Text("status"), mine.GetProperty("fulfilled").GetBoolean()));
-    }
-
     // SALE-08.3: each cash payment Awaiting confirmation is asked about; Yes cancels it with the reason.
     [Fact]
     public async Task Cash_awaiting_confirmation_is_asked_about_and_cancelled_when_given_back()
@@ -215,7 +197,9 @@ public class SalesInvoiceCancellationTests
 
         var entries = statement.GetProperty("entries").EnumerateArray().ToList();
         var ofCorrected = entries.Single(e => e.Id() == corrected.Id());
-        Assert.Equal((290_000m, "PriceCutAfterClaim"), (ofCorrected.Money("debtChange"), ofCorrected.GetProperty("corrections")[0].Text("kind")));
+        // The invoice keeps what it was saved at; the price cut is its own entry below it.
+        Assert.Equal((300_000m, "PriceCutAfterClaim"), (ofCorrected.Money("debtChange"), ofCorrected.GetProperty("corrections")[0].Text("kind")));
+        Assert.Equal(-10_000m, entries.Single(e => e.Text("kind") == "PriceCut" && e.Text("invoiceCode") == ofCorrected.Text("code")).Money("debtChange"));
         var ofCancelled = entries.Single(e => e.Id() == cancelled.Id());
         Assert.Equal((0m, true, "The trader never took the goods"), (ofCancelled.Money("debtChange"), ofCancelled.GetProperty("cancelled").GetBoolean(), ofCancelled.Text("cancelReason")));
         Assert.NotNull(ofCancelled.Text("cancelledAt"));

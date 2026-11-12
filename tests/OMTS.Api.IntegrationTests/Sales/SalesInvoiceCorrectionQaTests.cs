@@ -46,8 +46,11 @@ public class SalesInvoiceCorrectionQaTests
         Assert.Equal(9_500_000m, list.Rows().Single(r => r.Id() == sold.Id()).Money("total"));
         var statement = await owner.StatementAsync(sale.CustomerId);
         Assert.Equal(9_500_000m, statement.GetProperty("unpaidInvoices").EnumerateArray().Single().Money("unpaid"));
-        var lineEntry = statement.GetProperty("entries").EnumerateArray().Single(e => e.Id() == sold.Id());
-        Assert.Equal(9_500_000m, lineEntry.Money("debtChange"));
+        // The invoice entry keeps what it was saved at and the price cut is its own entry: together they move the debt by the latest total.
+        var entries = statement.GetProperty("entries").EnumerateArray().ToList();
+        var lineEntry = entries.Single(e => e.Id() == sold.Id());
+        var cut = entries.Single(e => e.Text("kind") == "PriceCut" && e.Text("invoiceCode") == lineEntry.Text("code"));
+        Assert.Equal((10_000_000m, -500_000m), (lineEntry.Money("debtChange"), cut.Money("debtChange")));
     }
 
     // BR-DEBT-05 (3): the part of the cash that the invoice no longer needs after a price cut covers the oldest invoice; the unpaid amounts add up to the debt.
@@ -180,105 +183,21 @@ public class SalesInvoiceCorrectionQaTests
         Assert.Equal(370_360m, cut.Money("total"));
     }
 
-    // BR-SALE-07 (4): cash above the total lowered the debt; moving that invoice moves the whole payment, and the two debts stay right.
+    // SALE-07.5: another profile is not part of a data entry change any more (the edit keeps the customer): the old kind is refused with the way to do it; a price cut never changes the profile.
     [Fact]
-    public async Task Moving_an_invoice_paid_with_cash_above_its_total_moves_the_whole_payment()
-    {
-        using var api = new AuthApiFactory();
-        var sale = await api.SaleSetupAsync();
-        var owner = sale.Owner.Client;
-        var manager = sale.Manager.Client;
-        var oldProfile = await NewCustomerAsync(sale);
-        var newProfile = await NewCustomerAsync(sale);
-        await sale.PayLaterAsync(oldProfile, 10m);
-        var sold = (await manager.SellAsync(Invoice(oldProfile, [Line(sale.ProductId, sale.OtherLotId, 10m)], Cash(400_000m, subtractExtraFromDebt: true), sale.OtherLotId))).GetProperty("invoice");
-        Assert.Equal(200_000m, await owner.CustomerDebtAsync(oldProfile));
-
-        var body = DataEntry(await owner.InvoiceAsync(sold.Id()), [Line(sale.ProductId, sale.OtherLotId, 10m, ListPrice)], sale.OtherLotId).With("customerId", newProfile);
-        var question = await (await owner.CorrectAsync(sold.Id(), body)).QuestionAsync();
-        Assert.Equal(("MSG-SALE-17", 100_000m), (question.Code, question.Body.Money("owedBackAmount")));
-
-        await owner.CorrectedAsync(sold.Id(), body.With("confirmOwedBack", true));
-
-        Assert.Equal(300_000m, await owner.CustomerDebtAsync(oldProfile));
-        Assert.Equal(-100_000m, await owner.CustomerDebtAsync(newProfile));
-        Assert.Equal((Guid?)newProfile, Assert.Single(await api.PaymentsOfAsync(sold.Id())).CustomerId);
-        var oldStatement = await owner.StatementAsync(oldProfile);
-        Assert.DoesNotContain(oldStatement.GetProperty("entries").EnumerateArray(), e => e.Id() == sold.Id());
-        Assert.Contains((await owner.StatementAsync(newProfile)).GetProperty("entries").EnumerateArray(), e => e.Id() == sold.Id());
-    }
-
-    // BR-SALE-10 (2): "The total of an invoice that has no customer profile cannot be raised; the extra goods go on a new invoice" (SALE-07.0.E4, MSG-SALE-21).
-    [Fact]
-    public async Task A_walk_in_invoice_given_a_profile_in_the_same_correction_cannot_have_its_total_raised()
-    {
-        using var api = new AuthApiFactory();
-        var sale = await api.SaleSetupAsync();
-        var owner = sale.Owner.Client;
-        var profile = await NewCustomerAsync(sale);
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId, walkIn: true);
-
-        var raised = await owner.CorrectAsync(sold.Id(), DataEntry(sold, [Line(sale.ProductId, sale.LotId, 20m)], sale.LotId).With("customerId", profile));
-
-        // Refused with MSG-SALE-21 with or without the profile: the walk-in sale of 300,000 must not become a debt of 300,000 that nobody agreed.
-        Assert.Equal(HttpStatusCode.Conflict, raised.StatusCode);
-        Assert.Equal("MSG-SALE-21", (await raised.ReadAsync(HttpStatusCode.Conflict)).Text("code"));
-        Assert.Equal(0m, await owner.CustomerDebtAsync(profile));
-    }
-
-    // The comment of the planner and SALE-07.2 give a profile only to a walk-in invoice with money to give back; a walk-in invoice with nothing paid gets a debt instead.
-    [Fact]
-    public async Task A_price_cut_refuses_a_profile_for_a_walk_in_invoice_that_has_no_money_to_give_back()
-    {
-        using var api = new AuthApiFactory();
-        var sale = await api.SaleSetupAsync();
-        var owner = sale.Owner.Client;
-        var profile = await NewCustomerAsync(sale);
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId, walkIn: true);
-        var payment = Assert.Single(await api.PaymentsOfAsync(sold.Id()));
-        await api.UpdateAsync<CustomerPayment>(payment.Id, p => (p.StatusId, p.CancelReason) = (StatusIds.CustomerPayment.Cancelled, "Recorded by mistake"));
-        var current = await owner.InvoiceAsync(sold.Id());
-
-        var answer = await owner.CorrectAsync(sold.Id(), PriceCut(current, 10_000m).With("customerId", profile));
-
-        Assert.Equal(HttpStatusCode.BadRequest, answer.StatusCode);
-        Assert.Equal(0m, await owner.CustomerDebtAsync(profile));
-    }
-
-    // SALE-07.2: a walk-in invoice that stays paid in full keeps no profile and moves nothing; its total may go down to what was paid.
-    [Fact]
-    public async Task A_walk_in_correction_that_owes_nothing_back_needs_no_profile()
-    {
-        using var api = new AuthApiFactory();
-        var sale = await api.SaleSetupAsync();
-        var owner = sale.Owner.Client;
-        var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId, walkIn: true);
-
-        var same = (await owner.CorrectedAsync(sold.Id(), DataEntry(sold, [Line(sale.ProductId, sale.LotId, 10m, ListPrice)], sale.LotId))).GetProperty("invoice");
-
-        Assert.Equal(300_000m, same.Money("total"));
-        Assert.Equal(JsonValueKind.Null, same.GetProperty("customer").ValueKind);
-        Assert.Equal((Guid?)null, Assert.Single(await api.PaymentsOfAsync(sold.Id())).CustomerId);
-    }
-
-    // SALE-07.5: the unknown or merged profile is refused; naming the current profile is no change; a price cut never changes it.
-    [Fact]
-    public async Task The_profile_of_a_correction_must_exist_be_live_and_a_price_cut_never_changes_it()
+    public async Task The_profile_cannot_change_with_a_data_entry_change_and_a_price_cut_never_changes_it()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
         var sold = await sale.SoldOnDebtAsync(sale.LotId, 10m, ListPrice);
         var keep = await NewCustomerAsync(sale);
-        var gone = await NewCustomerAsync(sale);
-        await api.UpdateAsync<Customer>(gone, c => c.MergedIntoCustomerId = keep);
 
-        Assert.Equal(["Customer"], await (await owner.CorrectAsync(sold.Id(), DataEntry(sold, [Line(sale.ProductId, sale.LotId, 10m)], sale.LotId).With("customerId", Guid.NewGuid()))).InvalidFieldsAsync());
-        var merged = await (await owner.CorrectAsync(sold.Id(), DataEntry(sold, [Line(sale.ProductId, sale.LotId, 10m)], sale.LotId).With("customerId", gone))).ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal("MSG-GEN-09", merged.Text("code"));
+        var old = await owner.CorrectAsync(sold.Id(), DataEntry(sold, [Line(sale.ProductId, sale.LotId, 10m)], sale.LotId).With("customerId", keep));
+        Assert.Equal(["Kind"], await old.InvalidFieldsAsync());
         Assert.Equal(["Customer"], await (await owner.CorrectAsync(sold.Id(), PriceCut(sold, 1_000m).With("customerId", keep))).InvalidFieldsAsync());
 
-        var named = (await owner.CorrectedAsync(sold.Id(), DataEntry(sold, [Line(sale.ProductId, sale.LotId, 10m, ListPrice)], sale.LotId).With("customerId", sale.CustomerId))).GetProperty("invoice");
+        var named = (await owner.CorrectedAsync(sold.Id(), DataEntry(sold, [Line(sale.ProductId, sale.LotId, 10m, ListPrice)], sale.LotId))).GetProperty("invoice");
         Assert.Equal(sale.CustomerId, named.GetProperty("customer").Id());
         Assert.Equal(300_000m, await owner.CustomerDebtAsync(sale.CustomerId));
     }
@@ -423,9 +342,9 @@ public class SalesInvoiceCorrectionQaTests
         var owner = sale.Owner.Client;
         var sold = await sale.SoldOnDebtAsync(sale.LotId, 10m, ListPrice);
 
-        var invalid = await (await owner.CorrectAsync(sold.Id(), DataEntry(sold, [Line(sale.ProductId, sale.LotId, 0m), Line(sale.ProductId, sale.LotId, -1m, 0m)]).With("reason", null).With("discount", -1m).With("otherCharges", 1.5m))).InvalidFieldsAsync();
+        var invalid = await (await owner.CorrectAsync(sold.Id(), DataEntry(sold, [Line(sale.ProductId, sale.LotId, 0m), Line(sale.ProductId, sale.LotId, -1m, 0m)]).With("discount", -1m).With("otherCharges", 1.5m))).InvalidFieldsAsync();
 
-        Assert.Equal(["Reason", "Line 1 kg", "Line 2 kg", "Line 2 unit price", "Discount", "Other charges"], invalid);
+        Assert.Equal(["Line 1 kg", "Line 2 kg", "Line 2 unit price", "Discount", "Other charges"], invalid);
         var strangers = await (await owner.CorrectAsync(sold.Id(), DataEntry(sold, [Line(Guid.NewGuid(), sale.LotId, 1m)]))).InvalidFieldsAsync();
         Assert.Equal(["Line 1 product"], strangers);
         Assert.Equal(["Line 1 harvest lot"], await (await owner.CorrectAsync(sold.Id(), DataEntry(sold, [Line(sale.ProductId, Guid.NewGuid(), 1m)]))).InvalidFieldsAsync());

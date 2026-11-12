@@ -198,4 +198,35 @@ public class CultivationCycleStartTests(AuthApiFactory factory) : IClassFixture<
 
         Assert.Equal(HttpStatusCode.NotFound, (await owner.PostCycleAsync(Guid.NewGuid())).StatusCode);
     }
+
+    // The product farmed on the raft is chosen when the cycle starts and is required then.
+    [Fact]
+    public async Task A_start_without_a_product_or_with_an_unknown_one_answers_msg_gen_01_for_the_product_and_starts_nothing()
+    {
+        var (owner, raft) = await OwnerWithRaftAsync();
+
+        var none = await owner.PostAsJsonAsync($"/api/rafts/{raft.Id()}/cultivation-cycles", new { startDate = Today });
+        var unknown = await owner.PostAsJsonAsync($"/api/rafts/{raft.Id()}/cultivation-cycles", new { productId = Guid.NewGuid() });
+
+        Assert.Equal(["Product"], await none.InvalidFieldsAsync());
+        Assert.Equal(["Product"], await unknown.InvalidFieldsAsync());
+        Assert.False(await factory.QueryAsync(db => db.CultivationCycles.AnyAsync(c => c.RaftId == raft.Id())));
+    }
+
+    [Fact]
+    public async Task A_start_keeps_the_product_and_shows_it_on_the_cycle_and_the_progress_and_an_edit_changes_it_while_there_is_no_harvest_lot()
+    {
+        var (owner, raft) = await OwnerWithRaftAsync();
+        var first = await owner.CycleProductAsync();
+        var second = (await (await owner.PostAsJsonAsync("/api/products", new { name = "Second cycle oyster", unitPrice = 70000 })).Content.ReadFromJsonAsync<JsonElement>());
+        var secondId = (second.TryGetProperty("product", out var saved) ? saved : second).Id();
+
+        var cycle = await owner.StartCycleAsync(raft.Id());
+
+        Assert.Equal(first, cycle.GetProperty("product").Id());
+        Assert.Equal(first, (await owner.ProgressAsync(raft.Id())).GetProperty("cycle").GetProperty("product").Id());
+        var edited = await owner.EditCycleAsync(cycle.Id(), new CycleBody(Today, RowVersion: cycle.Text("rowVersion"), ProductId: secondId));
+        Assert.Equal(secondId, edited.GetProperty("product").Id());
+        Assert.Equal(secondId, await factory.QueryAsync(db => db.CultivationCycles.Where(c => c.Id == cycle.Id()).Select(c => c.ProductId).SingleAsync()));
+    }
 }

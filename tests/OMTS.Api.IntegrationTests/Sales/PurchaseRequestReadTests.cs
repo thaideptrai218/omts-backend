@@ -60,7 +60,7 @@ public class PurchaseRequestReadTests(AuthApiFactory factory) : IClassFixture<Au
         var view = await trader.Client.MineAsync(request.Id());
 
         Assert.Equal(
-            new[] { "cancelReason", "cancelledAt", "canCancel", "fulfilled", "id", "note", "pickupDate", "productId", "productName", "requestedKg", "response", "rowVersion", "sentAt", "status", "statusId" }.Order(),
+            new[] { "cancelReason", "cancelledAt", "canCancel", "fulfilled", "id", "note", "pickupDate", "productId", "productName", "requestedKg", "response", "rowVersion", "salesOrderCode", "sentAt", "status", "statusId" }.Order(),
             view.EnumerateObject().Select(p => p.Name).Order());
         Assert.Equal(
             new[] { "acceptedKg", "note", "payLaterAgreed", "pickupDate", "respondedAt" }.Order(),

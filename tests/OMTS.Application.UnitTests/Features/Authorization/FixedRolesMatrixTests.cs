@@ -90,6 +90,13 @@ public class FixedRolesMatrixTests
         { "INPUT-DISPOSALS", No, Full, InputDisposals, [View, Export] },
         // Product disposals (Xuất hủy hàu) are not a use case of the SRS matrix either: the Zone Manager records those of its zones, the Owner any; the Accountant reads and exports them.
         { "PRODUCT-DISPOSALS", Full, R, ProductDisposals, [View, Create, Edit, Delete, Export] },
+        // Orders of goods (DH) are not a use case of the SRS matrix either: the Zone Manager saves, changes and finishes those of its zones (no cancelling); the Accountant reads and exports them; cancelling is the Owner's.
+        { "SALES-ORDERS", Full, R, SalesOrders, [View, Create, Edit] },
+        { "SALES-ORDERS-EXPORT", No, Full, SalesOrders, [Export] },
+        { "SALES-ORDERS-CANCEL", No, No, SalesOrders, [Delete] },
+        // Harvest plans (KHT) are not a use case of the SRS matrix either: the Owner makes, changes, hands over and cancels them; the Zone Manager only views the plans handed to its zones (it harvests from them with HARVESTS); the Accountant has none.
+        { "HARVEST-PLANS", Full, No, HarvestPlans, [View] },
+        { "HARVEST-PLANS-WRITE", No, No, HarvestPlans, [Create, Edit, Delete, Export] },
     };
 
     /// <summary>

@@ -39,5 +39,5 @@ internal sealed record CultivationCycleValues(DateOnly StartDate, decimal? Expec
         cycle.TargetYieldKg = TargetYieldKg;
     }
 
-    public static object Snapshot(CultivationCycle c) => new { c.StartDate, c.ExpectedSeedQuantity, c.ExpectedHarvestDate, c.TargetYieldKg };
+    public static object Snapshot(CultivationCycle c) => new { c.StartDate, c.ProductId, c.ExpectedSeedQuantity, c.ExpectedHarvestDate, c.TargetYieldKg };
 }

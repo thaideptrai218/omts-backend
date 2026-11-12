@@ -1,5 +1,4 @@
 using OMTS.Application.Features.Sales.Payments;
-using OMTS.Application.Common.Constants;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
@@ -33,7 +32,7 @@ public sealed class SalesInvoiceService(
     SalesInvoiceViews views,
     PendingSaleViews pendingViews,
     SalesInvoiceReadService reads,
-    IDocumentNumberAllocator numbers,
+    SalesInvoiceCodeService codes,
     CustomerPaymentCodeService paymentCodes,
     ICurrentUser currentUser,
     IUnitOfWork unitOfWork)
@@ -87,7 +86,8 @@ public sealed class SalesInvoiceService(
 
         // The profile the sale names now: a merge while the transfer was awaited moved the sale (and its purchase request) to the kept profile (SALE-04.3).
         var request = PendingSaleSnapshot.Read(sale).Request with { CustomerId = sale.CustomerId, Payment = body.Payment, DeduplicationKey = null };
-        var (entries, invalid) = SalesInvoiceEntryReader.Read(request);
+        // A sale that was awaiting its transfer before invoices came from orders names no order, and is saved as it was.
+        var (entries, invalid) = SalesInvoiceEntryReader.Read(request, requireOrder: false);
         return invalid.Count > 0 ? AppError.InvalidFields(invalid) : await SaveAsync(request, entries!, key: null, sale.Code, cancellationToken);
     }
 
@@ -95,6 +95,8 @@ public sealed class SalesInvoiceService(
         CreateSalesInvoiceRequest request, SalesInvoiceEntries entries, string? key, string? pendingCode, CancellationToken cancellationToken)
     {
         var code = pendingCode;
+        // The number of a generated code is spent when it is taken; a code the user typed spends none, so only a generated one is named in the audit log when the attempts end without the invoice.
+        var generated = pendingCode is not null;
         string? paymentCode = null;
         Guid? zoneId = null;
         for (var attempt = 1; ; attempt++)
@@ -109,7 +111,7 @@ public sealed class SalesInvoiceService(
             var facts = await factsReader.ReadAsync(entries, cancellationToken);
             if (!facts.IsSuccess)
             {
-                await RecordUnusedCodesAsync(code, pendingCode, paymentCode, zoneId, Refused(facts.Error!), cancellationToken);
+                await RecordUnusedCodesAsync(generated ? code : null, pendingCode, paymentCode, zoneId, Refused(facts.Error!), cancellationToken);
                 return facts.Error!;
             }
 
@@ -117,7 +119,7 @@ public sealed class SalesInvoiceService(
             var decided = SalesInvoiceDecisions.Decide(entries, facts.Value!);
             if (!decided.IsSuccess)
             {
-                await RecordUnusedCodesAsync(code, pendingCode, paymentCode, zoneId, Refused(decided.Error!), cancellationToken);
+                await RecordUnusedCodesAsync(generated ? code : null, pendingCode, paymentCode, zoneId, Refused(decided.Error!), cancellationToken);
                 return decided.Error!;
             }
 
@@ -125,12 +127,26 @@ public sealed class SalesInvoiceService(
             if (decision.AwaitsTransfer && (await cooperatives.GetCurrentAsync(cancellationToken))?.BankAccount is null)
             {
                 // SALE-05.0.E3: VietQR is offered only once the receiving bank account is set up (BR-DEBT-01).
-                await RecordUnusedCodesAsync(code, pendingCode, paymentCode, zoneId, $"{MessageCodes.Sale13}: no receiving bank account.", cancellationToken);
+                await RecordUnusedCodesAsync(generated ? code : null, pendingCode, paymentCode, zoneId, $"{MessageCodes.Sale13}: no receiving bank account.", cancellationToken);
                 return AppError.Conflict(UserMessages.VietQrNeedsReceivingAccount);
             }
 
             // Taken once the invoice is valid and confirmed, so a refused request spends no number.
-            code ??= SalesDocumentCodes.InvoiceCode(await numbers.NextAsync(DocumentSequenceKeys.SalesInvoice, cancellationToken));
+            if (code is null && entries.Code is { } typed)
+            {
+                if (await codes.DuplicateAsync(typed, null, cancellationToken) is { } taken)
+                {
+                    return taken;
+                }
+
+                code = typed;
+            }
+            else if (code is null)
+            {
+                code = await codes.NextAsync(cancellationToken);
+                generated = true;
+            }
+
             if (decision.Cash.Recorded > 0m && !decision.AwaitsTransfer)
             {
                 paymentCode ??= await paymentCodes.NextAsync(cancellationToken);
@@ -152,7 +168,8 @@ public sealed class SalesInvoiceService(
                 }
 
                 await notifications.SaleAsync(invoice, decision, currentUser.AccountId!.Value, cancellationToken);
-                answer = async () => new SalesInvoiceCreated(await views.SavedAsync(await ReadBackAsync(invoice.Id, cancellationToken), decision.Cash.Change, false, cancellationToken), null);
+                answer = async () => new SalesInvoiceCreated(
+                    await views.SavedAsync(await ReadBackAsync(invoice.Id, cancellationToken), decision.Cash.Change, false, cancellationToken, decision.AdvanceUse), null);
             }
 
             try
@@ -166,7 +183,7 @@ public sealed class SalesInvoiceService(
                 unitOfWork.DiscardChanges();
                 if (key is not null && await FirstOfKeyAsync(key, cancellationToken) is { } saved)
                 {
-                    await RecordUnusedCodesAsync(code, pendingCode, paymentCode, zoneId, "A parallel save with the same deduplication key saved its invoice first.", cancellationToken);
+                    await RecordUnusedCodesAsync(generated ? code : null, pendingCode, paymentCode, zoneId, "A parallel save with the same deduplication key saved its invoice first.", cancellationToken);
                     return saved;
                 }
 
@@ -174,7 +191,7 @@ public sealed class SalesInvoiceService(
                 {
                     // The answer the API gives the exception rethrown below.
                     var refused = exception is DuplicateRecordException ? UserMessages.AlreadyExists("Record") : UserMessages.ConcurrentUpdateByAnotherUser;
-                    await RecordUnusedCodesAsync(code, pendingCode, paymentCode, zoneId, $"Parallel saves changed the records of this sale on each of its {MaxAttempts} attempts ({refused.Code}).", cancellationToken);
+                    await RecordUnusedCodesAsync(generated ? code : null, pendingCode, paymentCode, zoneId, $"Parallel saves changed the records of this sale on each of its {MaxAttempts} attempts ({refused.Code}).", cancellationToken);
                     // A row removed on every attempt is a lost race as well: MSG06, as for the other conflicts.
                     if (exception is ForeignKeyViolationException)
                     {

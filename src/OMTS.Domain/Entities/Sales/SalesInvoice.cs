@@ -32,6 +32,13 @@ public class SalesInvoice : AuditableEntity, IHasStatus
     public Guid? PurchaseRequestId { get; set; }
     public PurchaseRequest? PurchaseRequest { get; set; }
 
+    /// <summary>The order (DH) the invoice was made from, which gives its customer and zone. Null for an invoice saved before invoices came from orders.</summary>
+    public Guid? SalesOrderId { get; set; }
+    public SalesOrder? SalesOrder { get; set; }
+
+    /// <summary>A free note of the seller, at most 1000 characters.</summary>
+    public string? Note { get; set; }
+
     /// <summary>The request is Fulfilled while a Completed invoice linked to it keeps this mark (BR-SALE-01).</summary>
     public bool TakesRequestInFull { get; set; }
 
@@ -102,10 +109,23 @@ public class SalesInvoiceLine : Entity
     public Guid HarvestLotId { get; set; }
     public HarvestLot HarvestLot { get; set; } = null!;
 
-    /// <summary>Above 0, at most 3 decimals.</summary>
+    /// <summary>The order line this line delivers; null for a line added outside the order (it counts in no delivery) and for an invoice with no order.</summary>
+    public Guid? SalesOrderLineId { get; set; }
+    public SalesOrderLine? SalesOrderLine { get; set; }
+
+    /// <summary>The unit the line is counted and priced in, with its code, name and kg factor as they were (no foreign key, so the unit can leave the product later). The kg unit for a line of kg.</summary>
+    public Guid UnitId { get; set; }
+    public string UnitCode { get; set; } = string.Empty;
+    public string UnitName { get; set; } = string.Empty;
+    public decimal Factor { get; set; } = 1m;
+
+    /// <summary>The quantity in the unit of the line, above 0, at most 3 decimals; equal to <see cref="Kg"/> for a line of kg.</summary>
+    public decimal Quantity { get; set; }
+
+    /// <summary>The kg weighed at the port, always entered: the stock ledger counts kg. Above 0, at most 3 decimals.</summary>
     public decimal Kg { get; set; }
 
-    /// <summary>Whole VND per kg, above 0: the list price, or the price the Cooperative Owner decided.</summary>
+    /// <summary>Whole VND per unit of the line, above 0 (per kg for a line of kg): the order price, the list price, or the price the Cooperative Owner decided.</summary>
     public decimal UnitPrice { get; set; }
 
     /// <summary>The list price of the product when the line was saved: a later price change does not touch the invoice (BR-SALE-05), and MSG-SALE-08 shows it.</summary>
@@ -113,7 +133,7 @@ public class SalesInvoiceLine : Entity
 
     public SalesPriceSource PriceSource { get; set; }
 
-    /// <summary>Kg × unit price, rounded half up to the dong (PM default of the plan; BR-SALE-06 says "not rounded", which means no rounding to thousands).</summary>
+    /// <summary>Quantity × unit price, rounded half up to the dong (BR-SALE-06 says "not rounded", which means no rounding to thousands).</summary>
     public decimal Amount { get; set; }
 
     /// <summary>The "sold the whole lot" tick: one value for every line of the same lot. A ticked lot is closed when the invoice is saved (BR-HARVEST-04).</summary>

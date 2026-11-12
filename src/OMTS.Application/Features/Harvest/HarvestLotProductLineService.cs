@@ -87,7 +87,7 @@ public sealed class HarvestLotProductLineService(
     }
 
     /// <summary>"Lồng" in any letter case and with or without the accents.</summary>
-    private static bool IsCageUnit(string? name) =>
+    internal static bool IsCageUnit(string? name) =>
         name is not null && string.Equals(RemoveAccents(name.Trim()), "long", StringComparison.OrdinalIgnoreCase);
 
     private static string RemoveAccents(string text)

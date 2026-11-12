@@ -129,7 +129,7 @@ public class CyclesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
 
     // CYCLE-01.0 step 2: a start needs no value, but it needs a body. Note N1, as it stands: no body at all is a bare 415 with no MSG code, as on every JSON route.
     [Fact]
-    public async Task A_start_with_an_empty_json_object_starts_today_and_one_with_no_body_answers_415_and_starts_nothing()
+    public async Task A_start_with_only_the_product_starts_today_and_one_with_no_body_answers_415_and_starts_nothing()
     {
         var (owner, _, raft) = await OwnerWithRaftAsync();
 
@@ -137,7 +137,7 @@ public class CyclesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, none.StatusCode);
         Assert.False(await factory.QueryAsync(db => db.CultivationCycles.AnyAsync(c => c.RaftId == raft.Id())));
 
-        var empty = await owner.PostAsync($"/api/rafts/{raft.Id()}/cultivation-cycles", new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
+        var empty = await owner.PostAsync($"/api/rafts/{raft.Id()}/cultivation-cycles", new StringContent($"{{\"productId\":\"{await owner.CycleProductAsync()}\"}}", System.Text.Encoding.UTF8, "application/json"));
         Assert.Equal(Today, (await empty.ReadAsync(HttpStatusCode.Created)).GetProperty("cycle").Date("startDate"));
     }
 

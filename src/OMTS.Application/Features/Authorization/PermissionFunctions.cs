@@ -49,6 +49,12 @@ public static class PermissionFunctions
     /// <summary>The disposals of products (Xuất hủy hàu), which have a zone: the Owner and the Zone Managers of the zone record them; the Accountant views and exports.</summary>
     public const string ProductDisposals = "PRODUCT_DISPOSALS";
 
+    /// <summary>The orders of goods (DH) in a zone: Create saves an order, Edit changes and finishes it and adds an advance, Delete cancels it. Every sales invoice is made from one.</summary>
+    public const string SalesOrders = "SALES_ORDERS";
+
+    /// <summary>The harvest plans (KHT) of a zone: the Owner makes, changes, hands over and cancels them; a Zone Manager only reads the ones handed to its zones and harvests from them with HARVESTS Create.</summary>
+    public const string HarvestPlans = "HARVEST_PLANS";
+
     public const string DashboardDailyRevenue = "DASHBOARD_DAILY_REVENUE";
     public const string DashboardReceivables = "DASHBOARD_RECEIVABLES";
     public const string DashboardOpenHarvestLots = "DASHBOARD_OPEN_HARVEST_LOTS";
@@ -73,7 +79,7 @@ public static class PermissionFunctions
         new(SupplierPayments, "Supplier payments and supplier debts (PURCHASE-04, PURCHASE-05)", true, [View, Create, Export]),
         new(Customers, "Customers (SALE-04); Delete removes a customer nothing refers to", true, [View, Create, Edit, Delete, Export]),
         new(PurchaseRequests, "Purchase requests (SALE-03; responding is Owner-only)", true, [View, Edit]),
-        new(SalesInvoices, "Sales invoices (SALE-05, SALE-06, SALE-09; correcting and cancelling, SALE-07 and SALE-08, are Owner-only)", false, [View, Create, Edit, Delete, Export]),
+        new(SalesInvoices, "Sales invoices (SALE-05, SALE-06, SALE-09; editing and price cuts, SALE-07, need Edit and cancelling, SALE-08, needs Delete: only the Owner has them by default)", false, [View, Create, Edit, Delete, Export]),
         new(QualityClaims, "Quality claims (CLAIM-02; responding is Owner-only)", false, [View, Edit]),
         new(SalesReturns, "Sales returns (CLAIM-03; cancelling one is Owner-only)", false, [View, Create, Delete]),
         new(CustomerPayments, "Customer payments and money paid back (DEBT-02)", true, [View, Create, Edit, Export]),
@@ -89,6 +95,9 @@ public static class PermissionFunctions
         new(InputIssues, "Input item use issues in a zone: Create saves a draft or an issue, Edit changes and completes one, Delete cancels or removes one", false, [View, Create, Edit, Delete, Export]),
         new(InputDisposals, "Input item disposals (view and export only; recording and cancelling one is Owner-only)", true, [View, Export]),
         new(ProductDisposals, "Product (oyster) disposals in a zone: Create saves a draft or a disposal, Edit changes and completes one, Delete cancels or removes one", false, [View, Create, Edit, Delete, Export]),
+
+        new(SalesOrders, "Sales orders (DH; an order has no zone): Create saves an order, Edit changes and finishes it and takes an advance on it, Delete cancels it", true, [View, Create, Edit, Delete, Export]),
+        new(HarvestPlans, "Harvest plans (KHT) in a zone: Create saves one, Edit changes, hands over and finishes it, Delete cancels it; a Zone Manager only views the plans handed to its zones", false, [View, Create, Edit, Delete, Export]),
 
         new(DashboardDailyRevenue, "Dashboard tile: daily revenue (FARM-06, Owner only)", false, [View], IsDashboardTile: true),
         new(DashboardReceivables, "Dashboard tile: receivables (FARM-06, Owner only)", false, [View], IsDashboardTile: true),

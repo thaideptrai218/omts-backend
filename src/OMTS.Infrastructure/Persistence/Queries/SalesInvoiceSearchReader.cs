@@ -25,6 +25,11 @@ internal sealed class SalesInvoiceSearchReader(OmtsDbContext db) : ISalesInvoice
             query = query.Where(i => i.CustomerId == customerId);
         }
 
+        if (filter.SalesOrderId is { } orderId)
+        {
+            query = query.Where(i => i.SalesOrderId == orderId);
+        }
+
         if (filter.HarvestLotId is { } lotId)
         {
             query = query.Where(i => i.Lines.Any(l => l.HarvestLotId == lotId));
@@ -84,7 +89,7 @@ internal sealed class SalesInvoiceSearchReader(OmtsDbContext db) : ISalesInvoice
             .Select(i => new SalesInvoiceSearchRow(
                 i.Id, i.Code, i.InvoicedAt, i.InvoiceDate, i.ZoneId, i.Zone.Code, i.Zone.Name,
                 i.CustomerId, i.Customer == null ? null : i.Customer.Name, i.Customer == null ? null : i.Customer.PhoneNumber, i.Total, i.StatusId, i.PaymentTerm,
-                i.Customer == null ? null : i.Customer.Code))
+                i.Customer == null ? null : i.Customer.Code, i.SalesOrderId, i.SalesOrder == null ? null : i.SalesOrder.Code))
             .ToListAsync(cancellationToken);
     }
 

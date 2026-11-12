@@ -13,6 +13,9 @@ internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<Sales
         builder.HasOne(x => x.Zone).WithMany().HasForeignKey(x => x.ZoneId);
         builder.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId);
         builder.HasOne(x => x.PurchaseRequest).WithMany().HasForeignKey(x => x.PurchaseRequestId);
+        builder.HasOne(x => x.SalesOrder).WithMany().HasForeignKey(x => x.SalesOrderId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(x => x.SalesOrderId);
+        builder.Property(x => x.Note).HasMaxLength(Lengths.Reason);
         builder.HasOne(x => x.Status).WithMany().HasForeignKey(x => x.StatusId);
         builder.ReferencesAccount(nameof(SalesInvoice.CreatedByAccountId));
         builder.ReferencesAccount(nameof(SalesInvoice.CancelledByAccountId));
@@ -52,6 +55,12 @@ internal sealed class SalesInvoiceLineConfiguration : IEntityTypeConfiguration<S
         builder.HasOne(x => x.Invoice).WithMany(i => i.Lines).HasForeignKey(x => x.InvoiceId);
         builder.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId);
         builder.HasOne(x => x.HarvestLot).WithMany().HasForeignKey(x => x.HarvestLotId);
+        builder.HasOne(x => x.SalesOrderLine).WithMany().HasForeignKey(x => x.SalesOrderLineId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(x => x.SalesOrderLineId);
+        builder.Property(x => x.UnitCode).HasMaxLength(Lengths.Code);
+        builder.Property(x => x.UnitName).HasMaxLength(Lengths.Name);
+        builder.Property(x => x.Factor).HasPrecision(18, 3);
+        builder.Property(x => x.Quantity).HasPrecision(18, 3);
         builder.HasIndex(x => new { x.InvoiceId, x.LineNumber }).IsUnique();
         // The sales figures of a lot (BR-HARVEST-07) and whether it is on an invoice (BR-HARVEST-05).
         builder.HasIndex(x => x.HarvestLotId);
@@ -62,6 +71,7 @@ internal sealed class SalesInvoiceLineConfiguration : IEntityTypeConfiguration<S
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("CK_SalesInvoiceLine_Kg", "[Kg] > 0");
+            t.HasCheckConstraint("CK_SalesInvoiceLine_Quantity", "[Quantity] > 0");
             t.HasCheckConstraint("CK_SalesInvoiceLine_Prices", "[UnitPrice] > 0 AND [ListPrice] > 0 AND [Amount] >= 0");
         });
     }
@@ -88,6 +98,8 @@ internal sealed class CustomerPaymentConfiguration : IEntityTypeConfiguration<Cu
         builder.HasIndex(x => x.Code).IsUnique();
         builder.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId);
         builder.HasOne(x => x.Invoice).WithMany(i => i.Payments).HasForeignKey(x => x.InvoiceId);
+        // An advance on an order names it; the order keeps its advances (restrict), and the debt reads them through this column.
+        builder.HasOne(x => x.SalesOrder).WithMany().HasForeignKey(x => x.SalesOrderId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Status).WithMany().HasForeignKey(x => x.StatusId);
         builder.ReferencesAccount(nameof(CustomerPayment.CollectedByAccountId));
         builder.ReferencesAccount(nameof(CustomerPayment.RecordedByAccountId));
@@ -114,6 +126,7 @@ internal sealed class CustomerPaymentConfiguration : IEntityTypeConfiguration<Cu
         // The customer debt (BR-DEBT-02), the payments of an invoice and the payments Awaiting confirmation, oldest first (DEBT-02.2).
         builder.HasIndex(x => new { x.CustomerId, x.StatusId });
         builder.HasIndex(x => x.InvoiceId);
+        builder.HasIndex(x => x.SalesOrderId);
         builder.HasIndex(x => new { x.StatusId, x.PaymentDate });
         // Zero only when the payment is all discount.
         builder.ToTable(t => t.HasCheckConstraint("CK_CustomerPayment_Amount", "[Amount] >= 0 AND [DiscountAmount] >= 0 AND ([Amount] > 0 OR [DiscountAmount] > 0)"));

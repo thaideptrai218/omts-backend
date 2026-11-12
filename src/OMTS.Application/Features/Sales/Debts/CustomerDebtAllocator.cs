@@ -12,9 +12,10 @@ public sealed record CustomerLedgerPriceCut(Guid Id, DateOnly CutDate, decimal A
 /// <param name="CancelledAt">When SALE-08 cancelled it, shown in the statement (BR-DEBT-04).</param>
 /// <param name="CancelReason">Why it was cancelled.</param>
 /// <param name="PriceCuts">The price cuts that made <paramref name="Total"/> lower than what the invoice was saved with; the statement shows each as its own entry.</param>
+/// <param name="SalesOrderId">The order the invoice was made from: the only invoices an advance reserved for that order may cover (see <see cref="CustomerDebtAllocator"/>). Null for an invoice with no order.</param>
 public sealed record CustomerLedgerInvoice(
     Guid CustomerId, Guid Id, string Code, DateTimeOffset InvoicedAt, DateOnly InvoiceDate, decimal Total, bool Cancelled, DateTimeOffset? CancelledAt = null, string? CancelReason = null,
-    IReadOnlyList<CustomerLedgerPriceCut>? PriceCuts = null)
+    IReadOnlyList<CustomerLedgerPriceCut>? PriceCuts = null, Guid? SalesOrderId = null)
 {
     /// <summary>What the invoice was worth before its price cuts.</summary>
     public decimal OriginalTotal => Total + (PriceCuts?.Sum(c => c.Amount) ?? 0m);
@@ -36,10 +37,13 @@ public sealed record CustomerLedgerAdjustment(
 /// <param name="PaidAt">When the money moved; the statement orders the entries of a day by it.</param>
 /// <param name="DiscountAmount">Debt written off with the payment: it lowers the debt like money received does.</param>
 /// <param name="Allocations">The invoices the payment names; what it does not name covers the oldest invoices.</param>
+/// <param name="SalesOrderId">The order the payment is an advance on, with its code for the screens.</param>
+/// <param name="OrderHoldsAdvance">True while that order is Draft or Delivering: the payment is then reserved for the order (see <see cref="CustomerDebtAllocator"/>).</param>
 public sealed record CustomerLedgerPayment(
     Guid CustomerId, Guid Id, string Code, CustomerPaymentKind Kind, DateOnly PaymentDate, decimal Amount, CustomerPaymentMethod Method,
     Guid? InvoiceId, string? InvoiceCode, int StatusId, DateTimeOffset? CancelledAt = null, CustomerPaymentInternals? Internals = null,
-    DateTimeOffset? PaidAt = null, decimal DiscountAmount = 0m, IReadOnlyList<CustomerLedgerAllocation>? Allocations = null)
+    DateTimeOffset? PaidAt = null, decimal DiscountAmount = 0m, IReadOnlyList<CustomerLedgerAllocation>? Allocations = null,
+    Guid? SalesOrderId = null, string? SalesOrderCode = null, bool OrderHoldsAdvance = false)
 {
     public bool Cancelled => StatusId == StatusIds.CustomerPayment.Cancelled;
 
@@ -50,6 +54,9 @@ public sealed record CustomerLedgerPayment(
 
     /// <summary>It lowers (or, paid back, raises) the debt: not cancelled and not still waiting for its transfer.</summary>
     public bool Counts => !Cancelled && !Pending;
+
+    /// <summary>An advance that counts and is still held by an open order: it lowers the debt but covers no invoice except the order's own.</summary>
+    public bool Reserved => Counts && Kind == CustomerPaymentKind.Payment && OrderHoldsAdvance && SalesOrderId is not null;
 }
 
 /// <summary>
@@ -64,12 +71,28 @@ public sealed record CustomerPaymentInternals(AccountRef? RecordedBy, AccountRef
 /// <param name="AgeDays">Days since its invoice date.</param>
 public sealed record UnpaidInvoice(Guid Id, string Code, DateOnly InvoiceDate, decimal Total, decimal Covered, decimal Unpaid, int AgeDays);
 
+/// <summary>What is left of the advances paid on one open order: money the customer paid that is reserved for that order's own invoices.</summary>
+public sealed record ReservedOrderAdvance(Guid SalesOrderId, string SalesOrderCode, decimal Amount);
+
 /// <summary>The debt of one profile now and the invoices still unpaid, oldest first.</summary>
-/// <param name="Debt">BR-DEBT-02 over the same rows; below 0 it is money owed back.</param>
-/// <param name="OldestUnpaidDate">The date the age of the debt counts from; null when the debt is not above 0.</param>
-public sealed record CustomerDebtAllocation(decimal Debt, IReadOnlyList<UnpaidInvoice> UnpaidInvoices, DateOnly? OldestUnpaidDate, int? DebtAgeDays)
+/// <param name="Debt">BR-DEBT-02 over the same rows; below 0 it is money owed back. It counts the reserved advances as paid, so the unpaid invoices add up to <see cref="DebtApartFromReserved"/>, not to it.</param>
+/// <param name="OldestUnpaidDate">The date the age of the debt counts from; null when there is no debt apart from the reserved advances.</param>
+/// <param name="Reserved">Per open order, what is left of its advances: shown apart ("Tiền ứng của DH…"), covering no invoice until that order's own invoices do.</param>
+public sealed record CustomerDebtAllocation(
+    decimal Debt, IReadOnlyList<UnpaidInvoice> UnpaidInvoices, DateOnly? OldestUnpaidDate, int? DebtAgeDays, IReadOnlyList<ReservedOrderAdvance>? Reserved = null)
 {
     public static readonly CustomerDebtAllocation None = new(0m, [], null, null);
+
+    /// <summary>The advances reserved for open orders, one entry per order.</summary>
+    public IReadOnlyList<ReservedOrderAdvance> ReservedAdvances => Reserved ?? [];
+
+    public decimal ReservedTotal => ReservedAdvances.Sum(r => r.Amount);
+
+    /// <summary>
+    /// The debt as it would be without the reserved advances: what the customer owes on invoices (above 0), or the credit that is really free (below 0). The unpaid invoices add up to it when it is above 0, and the
+    /// limits of a payment (above the debt, money paid back) are read from it, so reserved money is never paid back or counted as free credit.
+    /// </summary>
+    public decimal DebtApartFromReserved => Debt + ReservedTotal;
 
     /// <summary>What is still unpaid of the invoice: 0 when it is covered, cancelled or of another profile.</summary>
     public decimal UnpaidOf(Guid invoiceId) => UnpaidInvoices.FirstOrDefault(i => i.Id == invoiceId)?.Unpaid ?? 0m;
@@ -84,8 +107,14 @@ public sealed record CustomerDebtAllocation(decimal Debt, IReadOnlyList<UnpaidIn
 /// (3) the rest of every payment, and its discount, goes to the pool; (4) money paid back and an adjustment that raises the debt are taken from the pool;
 /// (5) the pool covers the oldest invoices first (invoice time, then code); a pool below 0 (a payment cancelled after money was paid back) makes the newest covered
 /// invoices unpaid again for the difference. Cancelled invoices, payments and adjustments count nowhere, and neither does a payment still waiting for its transfer.
-/// A merged profile's rows are re-pointed to the kept one (SALE-04.3), so they are allocated together. The unpaid amounts add up to the debt when it is above 0; when it is 0
-/// or below no invoice is unpaid. A payment recorded before the parts existed names none, so it reads as before: the oldest invoices first.
+/// A merged profile's rows are re-pointed to the kept one (SALE-04.3), so they are allocated together. The unpaid amounts add up to the debt apart from the reserved advances
+/// (<see cref="CustomerDebtAllocation.DebtApartFromReserved"/>) when it is above 0; when it is 0 or below no invoice is unpaid. A payment recorded before the parts existed names none, so it reads as before:
+/// the oldest invoices first.
+/// An advance on an order that is still Draft or Delivering is reserved for that order (<see cref="CustomerLedgerPayment.Reserved"/>): it still lowers the debt (the customer has paid), but it never goes to the pool,
+/// so no oldest-first or other automatic allocation reaches it, and only its parts set against invoices of that same order cover anything. What is left of it is listed apart (<see cref="CustomerDebtAllocation.Reserved"/>).
+/// When the order is Completed or Cancelled it is a plain payment again: its parts stand and the rest goes to the pool as general credit.
+/// Seam for the invoices made from an order: the invoice row carries its order (<see cref="CustomerLedgerInvoice.SalesOrderId"/>) and saving the invoice writes parts of the order's advances against it; they are
+/// honoured here, and nowhere else can a reserved advance reach an invoice.
 /// </summary>
 public static class CustomerDebtAllocator
 {
@@ -99,6 +128,8 @@ public static class CustomerDebtAllocator
         var needs = open.ToDictionary(i => i.Id, i => i.Total);
 
         var pool = 0m;
+        var reserved = new Dictionary<Guid, (string Code, decimal Amount)>();
+        var orderOf = open.Where(i => i.SalesOrderId is not null).ToDictionary(i => i.Id, i => i.SalesOrderId!.Value);
         foreach (var payment in counted)
         {
             if (payment.Kind == CustomerPaymentKind.PaidBack)
@@ -108,6 +139,29 @@ public static class CustomerDebtAllocator
             }
 
             var credit = payment.Amount + payment.DiscountAmount;
+            if (payment.Reserved)
+            {
+                // Held for its order: only parts set against that order's own invoices cover anything; the rest stays reserved and never reaches the pool.
+                var orderId = payment.SalesOrderId!.Value;
+                var used = 0m;
+                foreach (var part in payment.Allocations ?? [])
+                {
+                    if (needs.TryGetValue(part.InvoiceId, out var need) && orderOf.TryGetValue(part.InvoiceId, out var invoiceOrder) && invoiceOrder == orderId)
+                    {
+                        var own = Math.Min(part.Amount, need - covered[part.InvoiceId]);
+                        covered[part.InvoiceId] += own;
+                        used += own;
+                    }
+                }
+
+                if (credit - used > 0)
+                {
+                    reserved[orderId] = (payment.SalesOrderCode ?? string.Empty, reserved.GetValueOrDefault(orderId).Amount + credit - used);
+                }
+
+                continue;
+            }
+
             var taken = 0m;
             if (payment.Allocations is { Count: > 0 } parts)
             {
@@ -165,12 +219,14 @@ public static class CustomerDebtAllocator
             .Select(i => new UnpaidInvoice(i.Id, i.Code, i.InvoiceDate, i.Total, covered[i.Id], i.Total - covered[i.Id], today.DayNumber - i.InvoiceDate.DayNumber))
             .ToList();
         // A debt with no unpaid invoice comes only from money paid back above the payments, or an adjustment (no invoice left to explain it): it is as old as that entry.
-        var oldest = debt <= 0
+        // The age is read apart from the reserved advances: they are set aside for their orders and pay none of the unpaid invoices.
+        var reservedAdvances = reserved.Select(r => new ReservedOrderAdvance(r.Key, r.Value.Code, r.Value.Amount)).OrderBy(r => r.SalesOrderCode, StringComparer.Ordinal).ToList();
+        var oldest = debt + reservedAdvances.Sum(r => r.Amount) <= 0
             ? null
             : unpaid.Count > 0
                 ? unpaid[0].InvoiceDate
                 : counted.Where(p => p.Kind == CustomerPaymentKind.PaidBack).Select(p => (DateOnly?)p.PaymentDate)
                     .Concat(standing.Where(a => a.Amount > 0).Select(a => (DateOnly?)a.AdjustmentDate)).Min();
-        return new CustomerDebtAllocation(debt, unpaid, oldest, oldest is { } date ? today.DayNumber - date.DayNumber : null);
+        return new CustomerDebtAllocation(debt, unpaid, oldest, oldest is { } date ? today.DayNumber - date.DayNumber : null, reservedAdvances);
     }
 }

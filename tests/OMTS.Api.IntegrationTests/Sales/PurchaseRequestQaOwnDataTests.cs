@@ -136,7 +136,7 @@ public class PurchaseRequestQaOwnDataTests(AuthApiFactory factory) : IClassFixtu
 
         var names = (await single.ReadAsync(HttpStatusCode.OK)).EnumerateObject().Select(p => p.Name).Order().ToList();
         Assert.Equal(
-            new[] { "cancelReason", "cancelledAt", "canCancel", "fulfilled", "id", "note", "pickupDate", "productId", "productName", "requestedKg", "response", "rowVersion", "sentAt", "status", "statusId" }.Order().ToList(),
+            new[] { "cancelReason", "cancelledAt", "canCancel", "fulfilled", "id", "note", "pickupDate", "productId", "productName", "requestedKg", "response", "rowVersion", "salesOrderCode", "sentAt", "status", "statusId" }.Order().ToList(),
             names);
     }
 

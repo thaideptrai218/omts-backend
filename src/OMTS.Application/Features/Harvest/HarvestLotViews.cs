@@ -16,6 +16,7 @@ namespace OMTS.Application.Features.Harvest;
 /// <summary>The lot answers, with signed photo links, the figures of the sales port and the commands the caller has. Every caller has already passed the zone check on the record.</summary>
 public sealed class HarvestLotViews(
     IHarvestLotSalesQuery sales,
+    IHarvestPlanRepository harvestPlans,
     IProductRepository products,
     ProvenanceReadiness readiness,
     IAccountRepository accounts,
@@ -87,8 +88,13 @@ public sealed class HarvestLotViews(
             canRemove,
             MayClose(access, lot, raft.ZoneId),
             RowVersionGuard.Encode(lot.RowVersion),
-            ProductLines(lot, await ProductsOfAsync([lot], cancellationToken)));
+            ProductLines(lot, await ProductsOfAsync([lot], cancellationToken)),
+            (await PlansOfAsync([lot.Id], cancellationToken)).GetValueOrDefault(lot.Id));
     }
+
+    /// <summary>The harvest plan (KHT) each lot was recorded from; a lot outside a plan is absent.</summary>
+    private async Task<IReadOnlyDictionary<Guid, HarvestLotPlanRef>> PlansOfAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) =>
+        (await harvestPlans.PlansOfLotsAsync(lotIds, cancellationToken)).ToDictionary(p => p.LotId, p => new HarvestLotPlanRef(p.PlanId, p.PlanCode));
 
     /// <summary>The products named by the lines of the lots, read from the catalogue: a line saved in this request names its product by id only.</summary>
     private async Task<IReadOnlyDictionary<Guid, Domain.Entities.Sales.Product>> ProductsOfAsync(IEnumerable<HarvestLot> lots, CancellationToken cancellationToken)
@@ -116,6 +122,7 @@ public sealed class HarvestLotViews(
         var editable = CanEdit(cycle, raft);
         var access = await AccessAsync(cancellationToken);
         var catalogue = await ProductsOfAsync(lots, cancellationToken);
+        var planOf = await PlansOfAsync(ids, cancellationToken);
         return lots
             .OrderByDescending(l => l.IsForSale).ThenByDescending(l => l.HarvestedAt)
             .Select(lot =>
@@ -126,7 +133,7 @@ public sealed class HarvestLotViews(
                     lot.Id, lot.LotCode, lot.HarvestedAt, lot.HarvestDate, LaneNumbers(lot), FinishedLaneNumbers(lot), lot.CageCount, lot.KgPerCage, lot.EstimatedKg,
                     worked.InvoicedKg, worked.RemainingKg, lot.StatusId, statusCatalog.DisplayNameOf(lot.StatusId), lot.OriginState,
                     missing[lot.Id], LotPublishRules.Block(access, lot, raft.ZoneId, onCurrentInvoice.Contains(lot.Id)) is null,
-                    canCorrect, canCorrect && !onInvoice.Contains(lot.Id), MayClose(access, lot, raft.ZoneId), RowVersionGuard.Encode(lot.RowVersion), ProductLines(lot, catalogue));
+                    canCorrect, canCorrect && !onInvoice.Contains(lot.Id), MayClose(access, lot, raft.ZoneId), RowVersionGuard.Encode(lot.RowVersion), ProductLines(lot, catalogue), planOf.GetValueOrDefault(lot.Id));
             })
             .ToList();
     }

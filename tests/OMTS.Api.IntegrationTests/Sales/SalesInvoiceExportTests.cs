@@ -95,8 +95,9 @@ public class SalesInvoiceExportTests
 
         using var withCash = await WorkbookAsync(await client.ExportInvoicesAsync("?cashCollectedByMe=true"));
         var cashSheet = withCash.Worksheet(SalesInvoiceExportSheets.ListSheet);
-        Assert.Equal("Cash awaiting confirmation", cashSheet.Cell(1, 11).GetString());
-        Assert.Equal(60_000m, cashSheet.Cell(2, 11).GetValue<decimal>());
+        Assert.Equal("Order", cashSheet.Cell(1, 11).GetString());
+        Assert.Equal("Cash awaiting confirmation", cashSheet.Cell(1, 12).GetString());
+        Assert.Equal(60_000m, cashSheet.Cell(2, 12).GetValue<decimal>());
 
         var day = PurchaseRequestTestKit.Today.AddDays(-20);
         using var empty = await WorkbookAsync(await client.ExportInvoicesAsync($"?from={day:yyyy-MM-dd}&to={day:yyyy-MM-dd}"));
@@ -121,7 +122,7 @@ public class SalesInvoiceExportTests
         var heading = workbook.Worksheet(SalesInvoiceExportSheets.InvoiceSheet);
         Assert.Equal(("Invoice", sold.Text("code")), (heading.Cell(2, 1).GetString(), heading.Cell(2, 2).GetString()));
         var lines = workbook.Worksheet(SalesInvoiceExportSheets.LinesSheet);
-        Assert.Equal((1, 10m, ListPrice, "PriceList", 300_000m), (lines.Cell(2, 1).GetValue<int>(), lines.Cell(2, 4).GetValue<decimal>(), lines.Cell(2, 5).GetValue<decimal>(), lines.Cell(2, 6).GetString(), lines.Cell(2, 7).GetValue<decimal>()));
+        Assert.Equal((1, 10m, ListPrice, "OrderPrice", 300_000m), (lines.Cell(2, 1).GetValue<int>(), lines.Cell(2, 4).GetValue<decimal>(), lines.Cell(2, 5).GetValue<decimal>(), lines.Cell(2, 6).GetString(), lines.Cell(2, 7).GetValue<decimal>()));
         Assert.Equal(("Total", 300_000m), (lines.Cell(7, 1).GetString(), lines.Cell(7, 7).GetValue<decimal>()));
         var payments = workbook.Worksheet(SalesInvoiceExportSheets.PaymentsSheet);
         Assert.Equal(("Cash", 100_000m), (payments.Cell(2, 3).GetString(), payments.Cell(2, 4).GetValue<decimal>()));

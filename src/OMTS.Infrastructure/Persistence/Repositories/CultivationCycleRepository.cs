@@ -7,16 +7,16 @@ namespace OMTS.Infrastructure.Persistence.Repositories;
 internal sealed class CultivationCycleRepository(OmtsDbContext db) : ICultivationCycleRepository
 {
     public Task<CultivationCycle?> GetForEditAsync(Guid cycleId, CancellationToken cancellationToken) =>
-        db.CultivationCycles.Include(c => c.Raft).ThenInclude(r => r.Zone).FirstOrDefaultAsync(c => c.Id == cycleId, cancellationToken);
+        db.CultivationCycles.Include(c => c.Product).Include(c => c.Raft).ThenInclude(r => r.Zone).FirstOrDefaultAsync(c => c.Id == cycleId, cancellationToken);
 
     public Task<CultivationCycle?> GetAsync(Guid cycleId, CancellationToken cancellationToken) =>
-        db.CultivationCycles.AsNoTracking().Include(c => c.Raft).ThenInclude(r => r.Zone).FirstOrDefaultAsync(c => c.Id == cycleId, cancellationToken);
+        db.CultivationCycles.AsNoTracking().Include(c => c.Product).Include(c => c.Raft).ThenInclude(r => r.Zone).FirstOrDefaultAsync(c => c.Id == cycleId, cancellationToken);
 
     public async Task<IReadOnlyList<CultivationCycle>> ListByRaftAsync(Guid raftId, CancellationToken cancellationToken) =>
-        await db.CultivationCycles.AsNoTracking().Where(c => c.RaftId == raftId).OrderByDescending(c => c.StartDate).ToListAsync(cancellationToken);
+        await db.CultivationCycles.AsNoTracking().Include(c => c.Product).Where(c => c.RaftId == raftId).OrderByDescending(c => c.StartDate).ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<CultivationCycle>> ListByZoneAsync(Guid zoneId, CancellationToken cancellationToken) =>
-        await db.CultivationCycles.AsNoTracking().Where(c => c.Raft.ZoneId == zoneId).ToListAsync(cancellationToken);
+        await db.CultivationCycles.AsNoTracking().Include(c => c.Product).Where(c => c.Raft.ZoneId == zoneId).ToListAsync(cancellationToken);
 
     public Task<DateOnly?> LastCloseDateAsync(Guid raftId, CancellationToken cancellationToken) =>
         db.CultivationCycles.AsNoTracking().Where(c => c.RaftId == raftId).MaxAsync(c => c.CloseDate, cancellationToken);
@@ -40,6 +40,9 @@ internal sealed class CultivationCycleRepository(OmtsDbContext db) : ICultivatio
         var harvested = await db.HarvestLots.AsNoTracking().Where(l => cycleIds.Contains(l.CycleId)).Select(l => l.CycleId).Distinct().ToListAsync(cancellationToken);
         return seeded.Concat(logged).Concat(harvested).ToHashSet();
     }
+
+    public Task<bool> HasHarvestLotAsync(Guid cycleId, CancellationToken cancellationToken) =>
+        db.HarvestLots.AnyAsync(l => l.CycleId == cycleId, cancellationToken);
 
     public async Task<int> CountRecordsAsync(Guid cycleId, CancellationToken cancellationToken) =>
         await db.SeedingRecords.CountAsync(r => r.CycleId == cycleId, cancellationToken)

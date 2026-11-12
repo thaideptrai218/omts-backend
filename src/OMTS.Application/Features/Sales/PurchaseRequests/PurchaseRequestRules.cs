@@ -57,6 +57,12 @@ internal static class PurchaseRequestRules
     /// <summary>SALE-02 step 1, before the Fulfilled check.</summary>
     public static bool AllowsCancel(int statusId) => statusId is StatusIds.PurchaseRequest.AwaitingResponse or StatusIds.PurchaseRequest.Accepted;
 
+    /// <summary>
+    /// The Owner may make an order from a request that waits for the answer or was accepted (a request accepted before orders existed has no order yet); the caller also refuses a Fulfilled one.
+    /// An Ordered request has its order already, and a Declined or Cancelled one is finished.
+    /// </summary>
+    public static bool AllowsOrder(int statusId) => statusId is StatusIds.PurchaseRequest.AwaitingResponse or StatusIds.PurchaseRequest.Accepted;
+
     /// <summary>SALE-03 step 1: a response cannot be changed once it is sent (BR-SALE-02).</summary>
     public static bool AllowsResponse(int statusId) => statusId == StatusIds.PurchaseRequest.AwaitingResponse;
 }

@@ -16,7 +16,7 @@ public static class SalesInvoiceExportSheets
     /// <summary>The list, with the total of the Completed invoices of the search as its last row.</summary>
     public static IReadOnlyList<SpreadsheetSheet> List(IReadOnlyList<SalesInvoiceRow> rows, decimal completedTotal, bool withCashAwaiting)
     {
-        List<string> headers = ["Code", "Time", "Zone", "Customer", "Total", "Status", "Payment term", "Paid", "Unpaid", "Delivery status"];
+        List<string> headers = ["Code", "Time", "Zone", "Customer", "Total", "Status", "Payment term", "Paid", "Unpaid", "Delivery status", "Order"];
         if (withCashAwaiting)
         {
             headers.Add("Cash awaiting confirmation");
@@ -27,7 +27,7 @@ public static class SalesInvoiceExportSheets
             List<object?> cells =
             [
                 r.Code, Local(r.InvoicedAt), r.Zone.Name, r.Customer?.Name ?? SalesInvoiceNotifications.WalkInCustomerName, r.Total, r.Status,
-                r.PaymentTerm.ToString(), Paid(r.IsPaid), r.UnpaidAmount, r.DeliveryStatus,
+                r.PaymentTerm.ToString(), Paid(r.IsPaid), r.UnpaidAmount, r.DeliveryStatus, r.SalesOrder?.Code,
             ];
             if (withCashAwaiting)
             {
@@ -56,11 +56,13 @@ public static class SalesInvoiceExportSheets
             ["Paid", Paid(invoice.DebtEffect.IsPaid)],
             ["Unpaid", invoice.DebtEffect.Unpaid],
             ["Delivery status", invoice.DeliveryStatus],
+            ["Order", invoice.SalesOrder?.Code],
+            ["Note", invoice.Note],
             .. Cancellation(invoice),
         ]),
-        new SpreadsheetSheet(LinesSheet, ["Line", "Product", "Harvest lot", "Kg", "Unit price", "Price source", "Amount"],
+        new SpreadsheetSheet(LinesSheet, ["Line", "Product", "Harvest lot", "Kg", "Unit price", "Price source", "Amount", "Unit", "Quantity"],
         [
-            .. invoice.Lines.Select(l => (IReadOnlyList<object?>)[l.LineNumber, l.ProductName, l.LotCode, l.Kg, l.UnitPrice, l.PriceSource.ToString(), l.Amount]),
+            .. invoice.Lines.Select(l => (IReadOnlyList<object?>)[l.LineNumber, l.ProductName, l.LotCode, l.Kg, l.UnitPrice, l.PriceSource.ToString(), l.Amount, l.Unit.Name, l.Quantity]),
             ["Subtotal", null, null, invoice.TotalKg, null, null, invoice.Subtotal],
             ["Discount", null, null, null, null, null, invoice.Discount],
             ["Other charges", null, null, null, null, null, invoice.OtherCharges],

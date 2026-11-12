@@ -53,12 +53,14 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
         }
 
         var found = await queries.CustomersAsync(nonZero, search, cancellationToken);
-        var allocations = await debts.AllocationsAsync(found.Where(c => debtOf[c.Id] > 0).Select(c => c.Id).ToList(), cancellationToken);
+        var allocations = await debts.AllocationsAsync(found.Select(c => c.Id).ToList(), cancellationToken);
         var rows = found
             .Select(c =>
             {
                 var allocation = allocations.GetValueOrDefault(c.Id) ?? CustomerDebtAllocation.None;
-                return new CustomerDebtRow(View(c), debtOf[c.Id], allocation.DebtAgeDays, allocation.OldestUnpaidDate);
+                // A debt of 0 or below has no age, even while advances reserved for orders leave invoices unpaid.
+                var owes = debtOf[c.Id] > 0;
+                return new CustomerDebtRow(View(c), debtOf[c.Id], owes ? allocation.DebtAgeDays : null, owes ? allocation.OldestUnpaidDate : null, allocation.ReservedTotal);
             })
             // Money owed back has no age: last, largest first.
             .OrderByDescending(r => r.DebtAgeDays ?? -1)
@@ -92,7 +94,7 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
             ledger.Invoices, ledger.Payments, start, end, ledger.Adjustments, await corrections.OfAsync(ledger.Invoices.Select(i => i.Id).ToList(), cancellationToken));
         var now = CustomerDebtAllocator.Allocate(ledger.Invoices, ledger.Payments, today, ledger.Adjustments);
         return new CustomerDebtStatement(
-            View(customer), start, end, lines.OpeningDebt, lines.Entries, lines.ClosingDebt, now.Debt, now.DebtAgeDays, now.UnpaidInvoices);
+            View(customer), start, end, lines.OpeningDebt, lines.Entries, lines.ClosingDebt, now.Debt, now.DebtAgeDays, now.UnpaidInvoices, now.ReservedAdvances);
     }
 
     /// <summary>
@@ -113,7 +115,8 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
 
         var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
         var ledger = await queries.StatementLedgerAsync(customerId, cancellationToken);
-        var lines = CustomerStatementLedger.Build(ledger.Invoices, ledger.Payments, DateOnly.MinValue, DateOnly.MaxValue, ledger.Adjustments);
+        var lines = CustomerStatementLedger.Build(
+            ledger.Invoices, ledger.Payments, DateOnly.MinValue, DateOnly.MaxValue, ledger.Adjustments, await corrections.OfAsync(ledger.Invoices.Select(i => i.Id).ToList(), cancellationToken));
         var now = CustomerDebtAllocator.Allocate(ledger.Invoices, ledger.Payments, timeProvider.Today(), ledger.Adjustments);
         var entries = lines.Entries.AsEnumerable().Reverse();
         if (query.From is { } from)
@@ -136,7 +139,7 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
         return new CustomerDebtTab(
             View(customer), now.Debt, now.DebtAgeDays, now.UnpaidInvoices,
             new Paged<CustomerStatementEntry>(matching.Skip((page - 1) * pageSize).Take(pageSize).ToList(), page, pageSize, matching.Count), opening,
-            ledger.Payments.Count(p => p.AwaitingConfirmation), ledger.Payments.Count(p => p.Pending));
+            ledger.Payments.Count(p => p.AwaitingConfirmation), ledger.Payments.Count(p => p.Pending), now.ReservedAdvances);
     }
 
     private static CustomerDebtCustomer View(DebtCustomerRow c) => new(c.Id, c.Name, c.PhoneNumber, c.Code);

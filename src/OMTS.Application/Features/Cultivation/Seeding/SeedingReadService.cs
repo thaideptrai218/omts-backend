@@ -143,7 +143,7 @@ public sealed class SeedingReadService(
             .ToList();
         return new LaneProgressView(
             raft.Id, raft.Code, lane.Id, lane.LaneNumber, lane.StatusId, statusCatalog.DisplayNameOf(lane.StatusId), state,
-            cycle is null ? null : new CycleListItem(cycle.Id, cycle.StartDate, cycle.CloseDate, cycle.StatusId, statusCatalog.DisplayNameOf(cycle.StatusId), RowVersionGuard.Encode(cycle.RowVersion), cycle.ClosedEarly),
+            cycle is null ? null : new CycleListItem(cycle.Id, cycle.StartDate, cycle.CloseDate, cycle.StatusId, statusCatalog.DisplayNameOf(cycle.StatusId), RowVersionGuard.Encode(cycle.RowVersion), cycle.ClosedEarly, CultivationCycleViews.ProductOf(cycle)),
             sessions,
             lots);
     }

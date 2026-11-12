@@ -137,6 +137,8 @@ public static class DependencyInjection
         services.AddScoped<IProductCategoryRepository, ProductCategoryRepository>();
         services.AddScoped<IProductListQuery, ProductListReader>();
         services.AddScoped<IProductDisposalRepository, ProductDisposalRepository>();
+        services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
+        services.AddScoped<IHarvestPlanRepository, HarvestPlanRepository>();
         services.AddScoped<IInputStockRepository, InputStockRepository>();
         services.AddScoped<IInputUnitRepository, InputUnitRepository>();
         services.AddScoped<IInputItemCategoryRepository, InputItemCategoryRepository>();

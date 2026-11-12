@@ -29,11 +29,13 @@ public enum CustomerStatementEntryKind
 /// <param name="At">When it happened: the invoice time, the time the money moved, the time of the adjustment; null for a price cut (a date only).</param>
 /// <param name="Pending">A payment waiting for its bank transfer: it changes nothing yet.</param>
 /// <param name="Corrections">An invoice only: its corrections, also those made after the period (BR-DEBT-04).</param>
+/// <param name="SalesOrderCode">A payment that is an advance on an order: the code of that order ("Tiền ứng của DH…").</param>
+/// <param name="ReservedForOrder">The advance is still held by its open order: it lowers the debt but covers no invoice except that order's own.</param>
 public sealed record CustomerStatementEntry(
     DateOnly Date, CustomerStatementEntryKind Kind, Guid Id, string Code, decimal Amount, decimal DebtChange, string? InvoiceCode,
     CustomerPaymentMethod? Method, bool AwaitingConfirmation, bool Cancelled, decimal DebtAfter, DateTimeOffset? CancelledAt = null,
     AccountRef? RecordedBy = null, AccountRef? ConfirmedBy = null, AccountRef? CollectedBy = null, string? Note = null, string? CancelReason = null,
-    DateTimeOffset? At = null, bool Pending = false, IReadOnlyList<SalesInvoiceCorrectionView>? Corrections = null);
+    DateTimeOffset? At = null, bool Pending = false, IReadOnlyList<SalesInvoiceCorrectionView>? Corrections = null, string? SalesOrderCode = null, bool ReservedForOrder = false);
 
 /// <summary>The debt at the start of a period, its entries in date order and the debt at its end (BR-DEBT-04).</summary>
 public sealed record CustomerStatementLines(decimal OpeningDebt, IReadOnlyList<CustomerStatementEntry> Entries, decimal ClosingDebt);
@@ -72,7 +74,8 @@ public static class CustomerStatementLedger
                 all.Add(new CustomerStatementEntry(
                     p.PaymentDate, kind, p.Id, p.Code, p.Amount, !p.Counts ? 0m : paidBack ? p.Amount : -p.Amount,
                     p.InvoiceCode, p.Method, p.AwaitingConfirmation, p.Cancelled, 0m, p.CancelledAt,
-                    p.Internals?.RecordedBy, p.Internals?.ConfirmedBy, p.Internals?.CollectedBy, p.Internals?.Note, p.Internals?.CancelReason, p.PaidAt, p.Pending));
+                    p.Internals?.RecordedBy, p.Internals?.ConfirmedBy, p.Internals?.CollectedBy, p.Internals?.Note, p.Internals?.CancelReason, p.PaidAt, p.Pending,
+                    SalesOrderCode: p.SalesOrderCode, ReservedForOrder: p.Reserved));
             }
 
             if (p.DiscountAmount > 0)

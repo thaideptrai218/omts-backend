@@ -6,7 +6,8 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 
 /// <summary>
 /// CYCLE-01: an Open cycle on the first five rafts of each In Use demo zone, started weeks ago, so seeding, logs and the GFR-04
-/// water reminder have data; the other rafts In Use can start one. The even rafts have no plan estimates, which are optional.
+/// water reminder have data; the other rafts In Use can start one. The even rafts have no plan estimates, which are optional. The odd rafts
+/// farm Hàu sữa and the even ones Hàu béo (the product step runs first).
 /// Matched by the start in the audit log, as a cycle has no code: a rerun does not bring back a cycle the user cancelled.
 /// A raft that exists is left as it is: an older database can have one Discontinued, or one with a cycle and no audit row, and the seed goes on past it.
 /// </summary>
@@ -19,6 +20,8 @@ internal sealed class DemoCultivationCycleStep : IDemoSeedStep
     public async Task<int> RunAsync(DemoSeedContext context, CancellationToken cancellationToken)
     {
         var service = context.Get<CultivationCycleService>();
+        var products = await context.Db.Products.AsNoTracking()
+            .Where(p => p.Name == "Hàu sữa" || p.Name == "Hàu béo").ToDictionaryAsync(p => p.Name, p => p.Id, cancellationToken);
         var created = 0;
         foreach (var zoneCode in new[] { DemoFarmingZoneStep.ZoneOne, DemoFarmingZoneStep.ZoneTwo })
         {
@@ -37,7 +40,7 @@ internal sealed class DemoCultivationCycleStep : IDemoSeedStep
                     continue;
                 }
 
-                DemoSeedContext.Ensure(await service.StartAsync(raft.Id, Request(context.Today, number), cancellationToken), $"cycle of raft {code}");
+                DemoSeedContext.Ensure(await service.StartAsync(raft.Id, Request(context.Today, number, products[number % 2 == 0 ? "Hàu béo" : "Hàu sữa"]), cancellationToken), $"cycle of raft {code}");
                 created++;
             }
         }
@@ -45,11 +48,11 @@ internal sealed class DemoCultivationCycleStep : IDemoSeedStep
         return created;
     }
 
-    private static StartCycleRequest Request(DateOnly today, int number)
+    private static StartCycleRequest Request(DateOnly today, int number, Guid productId)
     {
         var start = today.AddDays(-30 - 10 * number);
         return number % 2 == 0
-            ? new StartCycleRequest(start, null, null, null)
-            : new StartCycleRequest(start, 200m + 50m * number, start.AddMonths(10), 8000m + 500m * number);
+            ? new StartCycleRequest(start, null, null, null, productId)
+            : new StartCycleRequest(start, 200m + 50m * number, start.AddMonths(10), 8000m + 500m * number, productId);
     }
 }

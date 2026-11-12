@@ -4,6 +4,7 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Harvest;
+using OMTS.Application.Features.Sales.Orders;
 using OMTS.Application.Features.Sales.Products;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
@@ -19,6 +20,7 @@ public sealed class SalesInvoiceWriter(
     ISalesInvoiceRepository invoices,
     HarvestLotStatusService lotStatuses,
     ProductStockLedger productLedger,
+    SalesOrderProgress orderProgress,
     IStatusCatalog statusCatalog,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
@@ -50,6 +52,8 @@ public sealed class SalesInvoiceWriter(
             CustomerId = facts.Customer?.Id,
             Customer = facts.Customer,
             PurchaseRequestId = facts.Request?.Id,
+            SalesOrderId = facts.Order?.Order.Id,
+            Note = entries.Note,
             TakesRequestInFull = entries.TakesRequestInFull,
             DiscountAmount = entries.Discount,
             DiscountDecidedByOwner = entries.Discount > 0m,
@@ -69,6 +73,12 @@ public sealed class SalesInvoiceWriter(
                 Product = line.Product,
                 HarvestLotId = line.Lot.Id,
                 HarvestLot = line.Lot,
+                SalesOrderLineId = line.Resolved.OrderLine?.Id,
+                UnitId = line.Resolved.Unit.UnitId,
+                UnitCode = line.Resolved.Unit.Code,
+                UnitName = line.Resolved.Unit.Name,
+                Factor = line.Resolved.Unit.Factor,
+                Quantity = line.Resolved.Quantity,
                 Kg = line.Entry.Kg,
                 UnitPrice = line.UnitPrice,
                 ListPrice = line.ListPrice,
@@ -83,12 +93,13 @@ public sealed class SalesInvoiceWriter(
         // ProductStockLedger.ReverseAsync(invoice.Id).
         productLedger.PostSale(invoice, facts.Customer);
         MarkReferencesChanged(facts);
+        var orderMoves = facts.Order is { } orderFacts ? WriteOrderLink(invoice, orderFacts, decision.AdvanceUse, sellerOnTransfer is not null) : null;
         audit.Record(new AuditEntry(CreatedAction, RecordType)
         {
             RecordId = invoice.Id,
             RecordCode = invoice.Code,
             ZoneId = invoice.ZoneId,
-            After = Snapshot(invoice, entries, facts),
+            After = Snapshot(invoice, entries, facts, decision.AdvanceUse, orderMoves),
             ActorAccountId = sellerOnTransfer,
         });
 
@@ -154,6 +165,35 @@ public sealed class SalesInvoiceWriter(
         });
     }
 
+    /// <summary>
+    /// The invoice of an order, in the same save: the reserved advance of the order is set against it (oldest advance first, each part a <see cref="CustomerPaymentAllocation"/>), and the order moves along:
+    /// Draft to Delivering, or Completed when every line is delivered in full. The order is marked changed, so a parallel invoice, finish or cancel of the same order makes one of the two saves fail.
+    /// An order that was ended while the transfer of the invoice was awaited keeps its status: the money has arrived, so the invoice is saved and the audit log says so.
+    /// </summary>
+    private string? WriteOrderLink(SalesInvoice invoice, SalesInvoiceOrderFacts facts, decimal advanceUse, bool savedOnTransfer)
+    {
+        var order = facts.Order;
+        if (advanceUse > 0m)
+        {
+            var plan = SalesInvoiceOrderShare.AdvancePlan(facts.Advances.Select(a => new AdvanceLeft(a.Id, SalesOrderViews.Left(a))), advanceUse);
+            foreach (var use in plan)
+            {
+                invoices.AddAllocation(new CustomerPaymentAllocation { PaymentId = use.PaymentId, InvoiceId = invoice.Id, Amount = use.Amount });
+                // Read for what is left of it, so a parallel invoice of the order that takes the same money and this save cannot both win.
+                unitOfWork.MarkChanged(facts.Advances.First(a => a.Id == use.PaymentId));
+            }
+        }
+
+        unitOfWork.MarkChanged(order);
+        var delivered = SalesInvoiceOrderShare.DeliveredWith(
+            facts.DeliveredByOthers, invoice.Lines.Where(l => l.SalesOrderLineId is not null).Select(l => (l.SalesOrderLineId!.Value, l.Quantity)));
+        var completes = SalesInvoiceOrderShare.AllDelivered(order.Lines.Select(l => (l.Id, l.Quantity)), delivered);
+        var wasOpen = SalesOrderRules.IsOpen(order.StatusId);
+        var from = statusCatalog.CodeOf(order.StatusId);
+        orderProgress.OnInvoiceSaved(order, completes, byUser: false);
+        return savedOnTransfer && !wasOpen ? $"The order was {from} when the transfer arrived." : null;
+    }
+
     private void MarkReferencesChanged(SalesInvoiceFacts facts)
     {
         // CustomerReferences: a merge at this moment conflicts, so no invoice stays on a merged profile; a trader's cancel of the request conflicts too.
@@ -168,16 +208,21 @@ public sealed class SalesInvoiceWriter(
         }
     }
 
-    private object Snapshot(SalesInvoice invoice, SalesInvoiceEntries entries, SalesInvoiceFacts facts) => new
+    private object Snapshot(SalesInvoice invoice, SalesInvoiceEntries entries, SalesInvoiceFacts facts, decimal advanceUse, string? orderNote) => new
     {
         invoice.Code,
+        invoice.SalesOrderId,
+        OrderCode = facts.Order?.Order.Code,
+        AdvanceUse = advanceUse,
+        OrderNote = orderNote,
+        invoice.Note,
         invoice.InvoiceDate,
         invoice.ZoneId,
         invoice.CustomerId,
         WalkInCustomer = invoice.CustomerId is null,
         invoice.PurchaseRequestId,
         invoice.TakesRequestInFull,
-        Lines = invoice.Lines.Select(l => new { l.LineNumber, l.ProductId, ProductName = l.Product.Name, l.HarvestLotId, LotCode = l.HarvestLot.LotCode, l.Kg, l.UnitPrice, l.ListPrice, l.PriceSource, l.Amount, l.SoldWholeLot }),
+        Lines = invoice.Lines.Select(l => new { l.LineNumber, l.ProductId, ProductName = l.Product.Name, l.HarvestLotId, LotCode = l.HarvestLot.LotCode, l.SalesOrderLineId, l.UnitId, l.UnitCode, l.Quantity, l.Kg, l.UnitPrice, l.ListPrice, l.PriceSource, l.Amount, l.SoldWholeLot }),
         invoice.Subtotal,
         Discount = invoice.DiscountAmount,
         invoice.DiscountDecidedByOwner,

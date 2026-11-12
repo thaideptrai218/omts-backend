@@ -22,16 +22,18 @@ public sealed record PurchaseRequestCustomerView(Guid Id, string Name, string? P
 public sealed record PurchaseRequestSendingView(string Channel, string? PhoneNumber, int? DeliveryStatusId, string? DeliveryStatus, DateTimeOffset? DeliveryStatusAt);
 
 /// <summary>A request as staff see it (SCR-SALE-02).</summary>
-/// <param name="Status">"Fulfilled" while <paramref name="Fulfilled"/> is true, with <paramref name="StatusId"/> still Accepted.</param>
+/// <param name="Status">"Fulfilled" while <paramref name="Fulfilled"/> is true, with <paramref name="StatusId"/> still Accepted; "Ordered" once the Owner made an order from it.</param>
+/// <param name="SalesOrderId">The order made from the request (Ordered requests only); <paramref name="SalesOrderCode"/> is its code (DH000123).</param>
 public sealed record PurchaseRequestView(
     Guid Id, PurchaseRequestCustomerView Customer, Guid ProductId, string ProductName, decimal RequestedKg, DateOnly PickupDate, string? Note, DateTimeOffset SentAt,
     int StatusId, string Status, bool Fulfilled, PurchaseRequestResponseView? Response, string? CancelReason, DateTimeOffset? CancelledAt,
-    IReadOnlyList<PurchaseRequestSendingView> Sendings, string RowVersion);
+    IReadOnlyList<PurchaseRequestSendingView> Sendings, string RowVersion, Guid? SalesOrderId = null, string? SalesOrderCode = null);
 
 /// <summary>A request as its trader sees it (SCR-SALE-01): no other customer's data, no price, no internal field.</summary>
 public sealed record TraderPurchaseRequestView(
     Guid Id, Guid ProductId, string ProductName, decimal RequestedKg, DateOnly PickupDate, string? Note, DateTimeOffset SentAt,
-    int StatusId, string Status, bool Fulfilled, bool CanCancel, PurchaseRequestResponseView? Response, string? CancelReason, DateTimeOffset? CancelledAt, string RowVersion);
+    int StatusId, string Status, bool Fulfilled, bool CanCancel, PurchaseRequestResponseView? Response, string? CancelReason, DateTimeOffset? CancelledAt, string RowVersion,
+    string? SalesOrderCode = null);
 
 /// <summary>A sent request with MSG-GEN-05 (SALE-01 step 5).</summary>
 public sealed record PurchaseRequestSaved(TraderPurchaseRequestView Request, string Message, string MessageCode);

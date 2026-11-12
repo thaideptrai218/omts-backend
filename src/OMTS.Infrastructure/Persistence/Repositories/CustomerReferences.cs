@@ -21,6 +21,7 @@ internal sealed class CustomerReferences(OmtsDbContext db) : ICustomerReferences
         new Reference<Customer>("Merged customer profiles", c => c.MergedIntoCustomerId),
         new Reference<PurchaseRequest>("Purchase requests", r => r.CustomerId),
         new Reference<QualityClaim>("Quality claims", c => c.CustomerId),
+        new Reference<SalesOrder>("Sales orders", o => o.CustomerId),
         new Reference<SalesInvoice>("Sales invoices", i => i.CustomerId),
         new Reference<CustomerPayment>("Customer payments", p => p.CustomerId),
         new Reference<CustomerDebtAdjustment>("Customer debt adjustments", a => a.CustomerId),

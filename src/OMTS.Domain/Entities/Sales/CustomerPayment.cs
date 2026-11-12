@@ -45,6 +45,13 @@ public class CustomerPayment : AuditableEntity, IHasStatus
     public Guid? InvoiceId { get; set; }
     public SalesInvoice? Invoice { get; set; }
 
+    /// <summary>
+    /// The order this payment is an advance on. While the order is Draft or Delivering the money is reserved for that order: it lowers the customer debt but covers no invoice except the order's own. Once the order is
+    /// Completed or Cancelled, what is left of it is general credit again.
+    /// </summary>
+    public Guid? SalesOrderId { get; set; }
+    public SalesOrder? SalesOrder { get; set; }
+
     /// <summary>The person who collected the money ("Người thu") or paid it back; for cash at the port the Zone Manager who hands it to the Accountant (BR-SALE-07 (3)).</summary>
     public Guid? CollectedByAccountId { get; set; }
 

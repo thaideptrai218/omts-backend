@@ -7,7 +7,9 @@ using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Notifications;
+using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Sales.Debts;
+using OMTS.Application.Features.Sales.Orders;
 using OMTS.Application.Features.Sales.Payments;
 using OMTS.Application.Features.Sales.Products;
 using OMTS.Domain.Constants;
@@ -18,14 +20,17 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Sales.Invoices;
 
 /// <summary>
-/// SALE-08 – the Cooperative Owner cancels an invoice for a sale that did not happen (BR-SALE-11). A payment is cancelled only when the Owner answers that its cash was given back (MSG-SALE-23);
+/// SALE-08 – the Owner (SALES_INVOICES Delete) cancels an invoice for a sale that did not happen (BR-SALE-11). A payment is cancelled only when the Owner answers that its cash was given back (MSG-SALE-23);
 /// each lot this invoice closed is reopened, a walk-in invoice with kept payments first gets a profile (MSG-SALE-19), and the trader is told after the commit, whatever the service answers (GFR-06).
-/// A linked request is no longer Fulfilled, and revenue, debt and yield no longer count the invoice, because those are worked out from its status.
+/// A linked request is no longer Fulfilled, and revenue, debt and yield no longer count the invoice, because those are worked out from its status. The parts of the advance of its order set against it are
+/// taken off (the advance is the order's again, and is never cancelled with the invoice), and a Completed order is Delivering again.
 /// </summary>
 public sealed class SalesInvoiceCancellationService(
     ISalesInvoiceRepository invoices,
     SalesInvoiceChangeGuard guard,
     SalesInvoiceFactsReader factsReader,
+    ISalesOrderRepository orders,
+    SalesOrderProgress orderProgress,
     IHarvestLotRepository lots,
     HarvestLotStatusService lotStatuses,
     ProductStockLedger productLedger,
@@ -45,7 +50,7 @@ public sealed class SalesInvoiceCancellationService(
     public async Task<Result<SalesInvoiceSent>> CancelAsync(Guid invoiceId, CancelSalesInvoiceRequest request, CancellationToken cancellationToken)
     {
         var invoice = await invoices.GetForSendingAsync(invoiceId, cancellationToken);
-        if (await guard.RefusalAsync(invoice, request.RowVersion, cancellationToken) is { } refused)
+        if (await guard.RefusalAsync(invoice, request.RowVersion, PermissionAction.Delete, cancellationToken) is { } refused)
         {
             return refused;
         }
@@ -69,7 +74,9 @@ public sealed class SalesInvoiceCancellationService(
         }
 
         var customer = chosen.Value ?? invoice.Customer;
-        var debtsAfter = await DebtAfterAsync(invoice, customer, givenBack.Value!, keptPayments, cancellationToken);
+        var order = invoice.SalesOrderId is { } orderId ? await orders.GetForEditAsync(orderId, cancellationToken) : null;
+        var advances = order is null || order.CustomerId is null ? [] : await orders.CountedAdvancesForUpdateAsync(order.Id, cancellationToken);
+        var debtsAfter = await DebtAfterAsync(invoice, customer, givenBack.Value!, keptPayments, order, advances, cancellationToken);
         if (!request.ConfirmOwedBack && debtsAfter.FirstOrDefault(d => d.DebtAfter < 0m) is { } owed)
         {
             var amount = CustomerDebtMath.OwedBack(owed.DebtAfter);
@@ -78,7 +85,7 @@ public sealed class SalesInvoiceCancellationService(
                 new Dictionary<string, object?> { ["confirmationField"] = "confirmOwedBack", ["customerName"] = owed.Customer.Name, ["owedBackAmount"] = amount });
         }
 
-        await ApplyAsync(invoice, reason, givenBack.Value!, chosen.Value, debtsAfter, cancellationToken);
+        await ApplyAsync(invoice, reason, givenBack.Value!, chosen.Value, debtsAfter, order, advances, cancellationToken);
         await owedBack.NotifyAsync(invoice, debtsAfter, "cancelled", cancellationToken);
         var notice = await messages.QueueCancellationAsync(invoice, keptPayments, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -131,23 +138,40 @@ public sealed class SalesInvoiceCancellationService(
         return customerId is null ? Result<Customer?>.Success(null) : AppError.Invalid("Customer");
     }
 
+    // What the customer owes apart from the advances held for open orders, once the invoice is cancelled. The parts of the advance of its order that covered the invoice are the advance's again, and the order
+    // is open after the cancellation (Delivering): all that is left of the advance is held for it, so it is no longer free credit.
     private async Task<List<CustomerDebtAfterChange>> DebtAfterAsync(
-        SalesInvoice invoice, Customer? customer, IReadOnlyList<CustomerPayment> givenBack, decimal keptPayments, CancellationToken cancellationToken)
+        SalesInvoice invoice, Customer? customer, IReadOnlyList<CustomerPayment> givenBack, decimal keptPayments, SalesOrder? order, IReadOnlyList<CustomerPayment> advances,
+        CancellationToken cancellationToken)
     {
         if (customer is null)
         {
             return [];
         }
 
-        var before = await debts.DebtAsync(customer.Id, cancellationToken);
+        var before = (await debts.AllocationAsync(customer.Id, cancellationToken)).DebtApartFromReserved;
         var after = invoice.CustomerId is null
             ? SalesInvoiceChangeMoney.AfterWalkInCancelled(before, keptPayments)
-            : SalesInvoiceChangeMoney.AfterCancellation(before, invoice.Total, givenBack.Sum(p => p.Amount));
+            : SalesInvoiceChangeMoney.AfterCancellation(before, invoice.Total, givenBack.Sum(p => p.Amount)) + ReservedGain(invoice, order, advances);
         return [new CustomerDebtAfterChange(customer, after)];
     }
 
+    private static decimal ReservedGain(SalesInvoice invoice, SalesOrder? order, IReadOnlyList<CustomerPayment> advances)
+    {
+        if (order is null)
+        {
+            return 0m;
+        }
+
+        var left = advances.Sum(SalesOrderViews.Left);
+        var covering = advances.SelectMany(a => a.Allocations).Where(a => a.InvoiceId == invoice.Id).Sum(a => a.Amount);
+        var reservedBefore = SalesOrderRules.IsOpen(order.StatusId) ? left : 0m;
+        return left + covering - reservedBefore;
+    }
+
     private async Task ApplyAsync(
-        SalesInvoice invoice, string reason, IReadOnlyList<CustomerPayment> givenBack, Customer? chosen, IReadOnlyList<CustomerDebtAfterChange> debtsAfter, CancellationToken cancellationToken)
+        SalesInvoice invoice, string reason, IReadOnlyList<CustomerPayment> givenBack, Customer? chosen, IReadOnlyList<CustomerDebtAfterChange> debtsAfter, SalesOrder? order,
+        IReadOnlyList<CustomerPayment> advances, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
         var today = BusinessClock.ToBusinessDate(now);
@@ -188,6 +212,7 @@ public sealed class SalesInvoiceCancellationService(
             }
         }
 
+        var orderMoved = order is not null && ReleaseOrder(invoice, order, advances);
         audit.Record(new AuditEntry(CancelledAction, SalesInvoiceWriter.RecordType)
         {
             RecordId = invoice.Id,
@@ -195,7 +220,24 @@ public sealed class SalesInvoiceCancellationService(
             ZoneId = invoice.ZoneId,
             Reason = reason,
             Before = before,
-            After = new { Status = statusCatalog.CodeOf(invoice.StatusId), invoice.CustomerId, CashGivenBack = givenBack.Select(p => p.Code).ToList(), ReopenedLots = reopened },
+            After = new
+            {
+                Status = statusCatalog.CodeOf(invoice.StatusId), invoice.CustomerId, CashGivenBack = givenBack.Select(p => p.Code).ToList(), ReopenedLots = reopened, OrderReopened = orderMoved,
+            },
         });
+    }
+
+    // The parts of the advance of the order set against this invoice are taken off (the advance is never cancelled with the invoice), and the order is marked changed, so a parallel invoice or finish of the
+    // same order and this save cannot both win. A Completed order is Delivering again; the others keep their status. Returns whether the order was reopened.
+    private bool ReleaseOrder(SalesInvoice invoice, SalesOrder order, IReadOnlyList<CustomerPayment> advances)
+    {
+        foreach (var allocation in advances.SelectMany(a => a.Allocations).Where(a => a.InvoiceId == invoice.Id).ToList())
+        {
+            unitOfWork.MarkChanged(allocation.Payment);
+            invoices.RemoveAllocation(allocation);
+        }
+
+        unitOfWork.MarkChanged(order);
+        return orderProgress.OnInvoiceCancelled(order);
     }
 }

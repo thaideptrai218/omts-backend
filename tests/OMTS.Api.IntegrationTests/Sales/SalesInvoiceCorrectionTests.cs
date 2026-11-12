@@ -102,7 +102,7 @@ public class SalesInvoiceCorrectionTests
         var audit = Assert.Single(await api.InvoiceAuditAsync(sold.Id(), SalesInvoiceCorrectionWriter.CorrectedAction));
         Assert.Contains("300000", audit.Before);
         Assert.Contains("195000", audit.After);
-        Assert.Equal(Reason, audit.Reason);
+        Assert.Null(audit.Reason);
     }
 
     // Lines added and removed; a mark removed reopens the lot this invoice closed; a mark added closes a lot still for sale.
@@ -194,27 +194,33 @@ public class SalesInvoiceCorrectionTests
         Assert.Equal((Guid?)sale.CustomerId, payment.CustomerId);
     }
 
-    // SALE-07.5: another profile takes the invoice and the payments that name it; both debts stay right and the message goes to the new phone.
+    // The edit keeps the profile: the debt moves by the difference of the totals and the corrected message goes to the same phone.
     [Fact]
-    public async Task Changing_the_profile_moves_the_payments_and_both_debts_and_the_message()
+    public async Task An_edit_keeps_the_profile_moves_the_debt_by_the_difference_and_sends_the_corrected_message()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
-        var other = await owner.CreateCustomerAsync();
         var sold = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(100_000m, "PayLater", payLaterOwnerAgreed: true), sale.LotId))).GetProperty("invoice");
         await sale.Manager.Client.FinishedAsync(sold.Id(), wantsQrCode: false);
         var current = await owner.InvoiceAsync(sold.Id());
+        Assert.Equal(200_000m, await owner.CustomerDebtAsync(sale.CustomerId));
 
-        await owner.CorrectedAsync(sold.Id(), DataEntry(current, [Line(sale.ProductId, sale.LotId, 10m, ListPrice)], sale.LotId).With("customerId", other.Id()));
+        var edited = (await owner.EditedAsync(sold.Id(), Edit(current, [Line(sale.ProductId, sale.LotId, 8m)], sale.LotId))).GetProperty("invoice");
 
-        Assert.Equal(0m, await owner.CustomerDebtAsync(sale.CustomerId));
-        Assert.Equal(200_000m, await owner.CustomerDebtAsync(other.Id()));
-        Assert.Equal((Guid?)other.Id(), Assert.Single(await api.PaymentsOfAsync(sold.Id())).CustomerId);
-        var sms = api.SmsTo(other.Text("phoneNumber")!);
-        Assert.Contains("(corrected)", sms[0].Text);
+        Assert.Equal((sale.CustomerId, 240_000m), (edited.GetProperty("customer").Id(), edited.Money("total")));
+        Assert.Equal(140_000m, await owner.CustomerDebtAsync(sale.CustomerId));
+        Assert.Equal((Guid?)sale.CustomerId, Assert.Single(await api.PaymentsOfAsync(sold.Id())).CustomerId);
+        var sms = api.SmsTo(await api.PhoneOfAsync(sale.CustomerId));
+        Assert.Contains(sms, m => m.Text.Contains("(corrected)", StringComparison.Ordinal));
         var audit = Assert.Single(await api.InvoiceAuditAsync(sold.Id(), SalesInvoiceCorrectionWriter.CorrectedAction));
-        Assert.Contains(sale.CustomerId.ToString(), audit.Before, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("300000", audit.Before);
+        Assert.Contains("240000", audit.After);
+
+        // A data entry correction of the old kind is refused with the way to do it.
+        var old = await owner.CorrectAsync(sold.Id(), DataEntry(edited, [Line(sale.ProductId, sale.LotId, 8m)], sale.LotId).With("customerId", sale.CustomerId));
+        var refused = await old.ReadAsync(HttpStatusCode.BadRequest);
+        Assert.Equal(("Kind", true), (refused.Text("field"), refused.Text("hint")!.Contains("PUT api/sales-invoices", StringComparison.Ordinal)));
     }
 
     // MSG-SALE-17 asks; MSG-SALE-18 tells the Owners and, with a request to pay back, the Accountants.

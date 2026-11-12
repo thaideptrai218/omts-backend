@@ -5,6 +5,7 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.CashBook;
 using OMTS.Application.Features.Sales.Debts;
 using OMTS.Application.Features.WaterQuality.Dtos;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
 
@@ -41,6 +42,11 @@ public sealed class CustomerPaymentViews(IAccountRepository accounts, IStatusCat
             p.PaidAt, p.DiscountAmount, p.CashAccount is { } account ? new CashAccountRef(account.Id, account.ProviderName, account.AccountNumber) : null,
             p.Allocations
                 .OrderBy(a => a.Invoice.InvoicedAt).ThenBy(a => a.Invoice.Code, StringComparer.Ordinal)
-                .Select(a => new CustomerPaymentAllocationView(a.InvoiceId, a.Invoice.Code, a.Invoice.InvoicedAt, a.Invoice.Total, a.Amount)).ToList())).ToList();
+                .Select(a => new CustomerPaymentAllocationView(a.InvoiceId, a.Invoice.Code, a.Invoice.InvoicedAt, a.Invoice.Total, a.Amount)).ToList(),
+            p.SalesOrder is { } order
+                ? new CustomerPaymentOrderRef(
+                    order.Id, order.Code, order.StatusId, statusCatalog.DisplayNameOf(order.StatusId),
+                    p.Kind == CustomerPaymentKind.Payment && p.StatusId is not (StatusIds.CustomerPayment.Cancelled or StatusIds.CustomerPayment.PendingTransfer) && Orders.SalesOrderRules.HoldsAdvance(order.StatusId))
+                : null)).ToList();
     }
 }

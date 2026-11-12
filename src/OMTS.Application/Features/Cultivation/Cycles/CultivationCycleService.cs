@@ -1,6 +1,7 @@
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Exceptions;
+using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
@@ -10,18 +11,22 @@ using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Domain.Entities.Cultivation;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
+using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Application.Features.Cultivation.Cycles;
 
 /// <summary>
 /// CYCLE-01 start, edit and cancel, for a Zone Manager of the raft's zone and the Cooperative Owner. These writes notify nobody.
 /// A raft holds at most one Open cycle and its cycles never overlap (BR-CYCLE-01); the filtered unique index holds that against
-/// parallel starts.
+/// parallel starts. The product farmed on the raft is chosen when the cycle starts (a product In Use) and can change until the cycle has a harvest lot.
 /// </summary>
 public sealed class CultivationCycleService(
     ICultivationCycleRepository cycles,
     ICultivationCycleQuery cycleQuery,
+    IProductRepository products,
+    IStatusCatalog statusCatalog,
     IRaftRepository rafts,
     RaftViews raftViews,
     CultivationCycleViews views,
@@ -34,6 +39,7 @@ public sealed class CultivationCycleService(
 {
     private const string RecordType = nameof(CultivationCycle);
     private const string Saved = "Cultivation cycle";
+    private const string ProductField = "Product";
 
     public async Task<Result<CycleStarted>> StartAsync(Guid raftId, StartCycleRequest request, CancellationToken cancellationToken)
     {
@@ -63,12 +69,19 @@ public sealed class CultivationCycleService(
         var check = CultivationCycleValues.Read(
             request.StartDate ?? today, request.ExpectedSeedQuantity, request.ExpectedHarvestDate, request.TargetYieldKg,
             new CycleDateLimits(today, previousClose, null), out var values);
+        var product = await FindProductAsync(request.ProductId, cancellationToken);
+        check.Check(product is not null, ProductField);
         if (!check.IsValid)
         {
             return AppError.InvalidFields(check.Invalid);
         }
 
-        var cycle = new CultivationCycle { RaftId = raft.Id, Raft = raft };
+        if (ProductRefusal(product!) is { } notInUse)
+        {
+            return notInUse;
+        }
+
+        var cycle = new CultivationCycle { RaftId = raft.Id, Raft = raft, ProductId = product!.Id, Product = product };
         values.ApplyTo(cycle);
         cycles.Add(cycle);
 
@@ -108,6 +121,9 @@ public sealed class CultivationCycleService(
             await cycles.LastCloseDateAsync(cycle.RaftId, cancellationToken),
             await cycles.FirstRecordDateAsync(cycle.Id, cancellationToken));
         var check = CultivationCycleValues.Read(request.StartDate, request.ExpectedSeedQuantity, request.ExpectedHarvestDate, request.TargetYieldKg, limits, out var values);
+        var changesProduct = request.ProductId is { } chosen && chosen != cycle.ProductId;
+        var product = changesProduct ? await FindProductAsync(request.ProductId, cancellationToken) : null;
+        check.Check(!changesProduct || product is not null, ProductField);
         if (!check.IsValid)
         {
             return AppError.InvalidFields(check.Invalid);
@@ -118,8 +134,27 @@ public sealed class CultivationCycleService(
             return conflict;
         }
 
+        if (product is not null)
+        {
+            if (ProductRefusal(product) is { } notInUse)
+            {
+                return notInUse;
+            }
+
+            if (await cycles.HasHarvestLotAsync(cycle.Id, cancellationToken))
+            {
+                return ProductLocked(cycle);
+            }
+        }
+
         var before = CultivationCycleValues.Snapshot(cycle);
         values.ApplyTo(cycle);
+        if (product is not null)
+        {
+            cycle.ProductId = product.Id;
+            cycle.Product = product;
+        }
+
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, CultivationCycleValues.Snapshot(cycle));
         if (changedAfter is not null)
         {
@@ -193,6 +228,20 @@ public sealed class CultivationCycleService(
             throw;
         }
     }
+
+    /// <summary>The product chosen, null when it was not sent, does not exist or is deleted (hidden): MSG-GEN-01 names the field.</summary>
+    private async Task<Product?> FindProductAsync(Guid? productId, CancellationToken cancellationToken) =>
+        productId is { } id ? (await products.GetByIdsAsync([id], cancellationToken)).FirstOrDefault(p => !p.IsHidden) : null;
+
+    /// <summary>MSG-GEN-09 (GBR-01) when the product chosen is Discontinued, which is not offered for a new choice.</summary>
+    private AppError? ProductRefusal(Product product) => product.StatusId == StatusIds.Usage.InUse
+        ? null
+        : AppError.NotUsableChoice($"Product {product.Code}", statusCatalog.DisplayNameOf(product.StatusId), ProductField);
+
+    /// <summary>MSG-GEN-09: the product is fixed once the cycle has a harvest lot, recorded and sold under it. Not MSG-GEN-06, which makes the screen ask for a reload.</summary>
+    private static AppError ProductLocked(CultivationCycle cycle) => AppError.Conflict(
+        UserMessages.WrongStatus($"The cultivation cycle of raft {cycle.Raft.Code}", "with harvest lots"),
+        new Dictionary<string, object?> { ["cycleId"] = cycle.Id, ["field"] = ProductField });
 
     /// <summary>MSG-GEN-06, as a cycle with records blocks the cancel the way an Open cycle blocks a start or a lane change.</summary>
     private static AppError HasRecords(CultivationCycle cycle, int records) => AppError.Conflict(

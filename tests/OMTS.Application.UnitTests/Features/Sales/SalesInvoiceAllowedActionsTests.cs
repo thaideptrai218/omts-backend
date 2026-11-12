@@ -4,10 +4,10 @@ using static OMTS.Application.Features.Sales.Invoices.SalesInvoiceAction;
 
 namespace OMTS.Application.UnitTests.Features.Sales;
 
-/// <summary>SALE-09.1 step 3 for each role and state: BR-SALE-09 (Resend), BR-CLAIM-03 (the sales return), BR-SALE-10 and BR-SALE-11 (Correct and Cancel, Owner only).</summary>
+/// <summary>SALE-09.1 step 3 for each role and state: BR-SALE-09 (Resend), BR-CLAIM-03 (the sales return), BR-SALE-10 and BR-SALE-11 (Edit, Correct and Cancel: the Owner only, by the SALES_INVOICES Edit and Delete rights).</summary>
 public class SalesInvoiceAllowedActionsTests
 {
-    private static readonly SalesInvoiceCallerRights Owner = new(IsCooperativeOwner: true, MaySell: true, MayCreateReturn: true, MayPrint: true);
+    private static readonly SalesInvoiceCallerRights Owner = new(IsCooperativeOwner: true, MaySell: true, MayCreateReturn: true, MayPrint: true, MayEdit: true, MayDelete: true);
     private static readonly SalesInvoiceCallerRights Manager = new(IsCooperativeOwner: false, MaySell: true, MayCreateReturn: true, MayPrint: true);
     private static readonly SalesInvoiceCallerRights Accountant = new(IsCooperativeOwner: false, MaySell: false, MayCreateReturn: false, MayPrint: false);
 
@@ -20,11 +20,19 @@ public class SalesInvoiceAllowedActionsTests
 
     [Fact]
     public void On_a_finished_completed_invoice_the_owner_has_every_command_but_cancel_return() =>
-        Check(Owner, Facts(), Resend, CreateReturn, Correct, Cancel, Print);
+        Check(Owner, Facts(), Resend, CreateReturn, Edit, Correct, Cancel, Print);
 
     [Fact]
     public void The_zone_manager_resends_returns_and_prints_and_never_corrects_or_cancels() =>
         Check(Manager, Facts(), Resend, CreateReturn, Print);
+
+    // Who edits or cancels is a right of the zone (SALES_INVOICES Edit, Delete), not the role: a role given one of them gets that command alone.
+    [Fact]
+    public void Edit_and_cancel_follow_their_own_rights()
+    {
+        Check(Manager with { MayEdit = true }, Facts(), Resend, CreateReturn, Edit, Correct, Print);
+        Check(Manager with { MayDelete = true }, Facts(), Resend, CreateReturn, Cancel, Print);
+    }
 
     [Fact]
     public void The_accountant_is_offered_no_command() =>
@@ -46,7 +54,7 @@ public class SalesInvoiceAllowedActionsTests
     public void An_unfinished_sale_has_nothing_to_resend()
     {
         Check(Manager, Facts(delivery: StatusIds.MessageDelivery.NotSent, finished: false), CreateReturn, Print);
-        Check(Owner, Facts(delivery: StatusIds.MessageDelivery.NotSent, finished: false), CreateReturn, Correct, Cancel, Print);
+        Check(Owner, Facts(delivery: StatusIds.MessageDelivery.NotSent, finished: false), CreateReturn, Edit, Correct, Cancel, Print);
     }
 
     [Fact]

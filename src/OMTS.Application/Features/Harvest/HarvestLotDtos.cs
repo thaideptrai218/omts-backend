@@ -13,9 +13,14 @@ namespace OMTS.Application.Features.Harvest;
 /// <param name="OtherFilePart">A file came in a part not named <c>photos</c>: refused after the access check, so no photo is dropped without a word.</param>
 /// <param name="ProductLines">The share of each product on the lot (null: the form sent none, the lot is not split per product). With lines, the cages and estimated kg of the lot are their sums and any <c>CageCount</c> or <c>EstimatedKg</c> sent is ignored.</param>
 /// <param name="ProductLinesAreUnreadable">A line value was sent that is not a number.</param>
+/// <param name="HarvestPlanLineId">The line of a harvest plan (KHT) the lot is recorded from: the raft and lanes then come from the plan (the lanes sent are ignored) and the plan moves on with the lot.</param>
+/// <param name="HarvestPlanLineIsUnreadable">A value was sent for the plan line that is not an id.</param>
 public sealed record RecordHarvestRequest(
     IReadOnlyList<int>? LaneNumbers, IReadOnlyList<int>? FinishedLaneNumbers, int? CageCount, decimal? EstimatedKg, bool EstimatedKgIsUnreadable = false, bool OtherFilePart = false,
-    IReadOnlyList<HarvestProductLineInput>? ProductLines = null, bool ProductLinesAreUnreadable = false);
+    IReadOnlyList<HarvestProductLineInput>? ProductLines = null, bool ProductLinesAreUnreadable = false, Guid? HarvestPlanLineId = null, bool HarvestPlanLineIsUnreadable = false);
+
+/// <summary>The harvest plan (KHT) a lot was recorded from; the lot code does not change.</summary>
+public sealed record HarvestLotPlanRef(Guid Id, string Code);
 
 /// <summary>A product line of a lot, with the code of the product.</summary>
 public sealed record HarvestLotProductLineView(Guid ProductId, string ProductCode, string ProductName, int CageCount, decimal Kg);
@@ -55,7 +60,8 @@ public sealed record HarvestLotListItem(
     bool CanRemove,
     bool CanClose,
     string RowVersion,
-    IReadOnlyList<HarvestLotProductLineView> ProductLines);
+    IReadOnlyList<HarvestLotProductLineView> ProductLines,
+    HarvestLotPlanRef? HarvestPlan);
 
 /// <summary>A harvest lot with its figures (BR-HARVEST-07): the record a notification opens.</summary>
 /// <param name="Photos">In slot order.</param>
@@ -101,7 +107,8 @@ public sealed record HarvestLotView(
     bool CanRemove,
     bool CanClose,
     string RowVersion,
-    IReadOnlyList<HarvestLotProductLineView> ProductLines);
+    IReadOnlyList<HarvestLotProductLineView> ProductLines,
+    HarvestLotPlanRef? HarvestPlan);
 
 /// <summary>Answer of a recorded harvest.</summary>
 /// <param name="EverySeededLaneHarvested">Every seeded lane of the cycle shows Harvested now: the cycle can be closed normally (BR-CYCLE-07).</param>

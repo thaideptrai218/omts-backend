@@ -21,9 +21,9 @@ internal sealed class CustomerPaymentRepository(OmtsDbContext db) : ICustomerPay
     public async Task<IReadOnlyList<CustomerPayment>> GetPendingTransfersAsync(CancellationToken cancellationToken) =>
         await With(db.CustomerPayments).Where(p => p.StatusId == StatusIds.CustomerPayment.PendingTransfer).OrderBy(p => p.PaymentDate).ThenBy(p => p.Code).ToListAsync(cancellationToken);
 
-    /// <summary>The customer, the invoice, the bank account and the parts of the payment, with the invoices they name.</summary>
+    /// <summary>The customer, the invoice, the order of an advance, the bank account and the parts of the payment, with the invoices they name.</summary>
     private static IQueryable<CustomerPayment> With(IQueryable<CustomerPayment> payments) =>
-        payments.Include(p => p.Customer).Include(p => p.Invoice).Include(p => p.CashAccount).Include(p => p.Allocations).ThenInclude(a => a.Invoice);
+        payments.Include(p => p.Customer).Include(p => p.Invoice).Include(p => p.CashAccount).Include(p => p.SalesOrder).Include(p => p.Allocations).ThenInclude(a => a.Invoice);
 
     public Task<CustomerPayment?> GetForEditAsync(Guid paymentId, CancellationToken cancellationToken) =>
         With(db.CustomerPayments).FirstOrDefaultAsync(p => p.Id == paymentId, cancellationToken);

@@ -41,7 +41,7 @@ public class SalesInvoiceAllowedActionsQaTests
             sending ? StatusIds.MessageDelivery.Sending : StatusIds.MessageDelivery.Sent,
             finished,
             hasReturn);
-        var rights = new SalesInvoiceCallerRights(owner, managerOrOwner, managerOrOwner, managerOrOwner);
+        var rights = new SalesInvoiceCallerRights(owner, managerOrOwner, managerOrOwner, managerOrOwner, owner, owner);
 
         var expected = new List<SalesInvoiceAction>();
         if (managerOrOwner && !cancelled && !sending && finished)
@@ -61,6 +61,7 @@ public class SalesInvoiceAllowedActionsQaTests
 
         if (owner && !cancelled && !hasReturn)
         {
+            expected.Add(Edit);
             expected.Add(Correct);
             expected.Add(Cancel);
         }

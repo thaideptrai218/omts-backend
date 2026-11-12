@@ -19,6 +19,22 @@ internal sealed class SalesInvoiceRepository(OmtsDbContext db) : ISalesInvoiceRe
 
     public void AddPriceCut(SalesInvoicePriceCut priceCut) => db.Add(priceCut);
 
+    public void AddAllocation(CustomerPaymentAllocation allocation) => db.CustomerPaymentAllocations.Add(allocation);
+
+    public void RemoveAllocation(CustomerPaymentAllocation allocation) => db.CustomerPaymentAllocations.Remove(allocation);
+
+    public async Task<IReadOnlyList<CustomerPaymentAllocation>> AdvanceAllocationsOfAsync(Guid invoiceId, Guid salesOrderId, CancellationToken cancellationToken) =>
+        await db.CustomerPaymentAllocations.Include(a => a.Payment)
+            .Where(a => a.InvoiceId == invoiceId && a.Payment.SalesOrderId == salesOrderId)
+            .OrderByDescending(a => a.Payment.PaidAt).ThenByDescending(a => a.Payment.Code)
+            .ToListAsync(cancellationToken);
+
+    public async Task<Guid?> FindOtherByCodeAsync(string code, Guid? exceptInvoiceId, CancellationToken cancellationToken)
+    {
+        var upper = code.ToUpperInvariant();
+        return await db.SalesInvoices.AsNoTracking().Where(i => i.Code.ToUpper() == upper && i.Id != exceptInvoiceId).Select(i => (Guid?)i.Id).FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<Guid?> FindByDeduplicationKeyAsync(string key, CancellationToken cancellationToken) =>
         await db.SalesInvoices.AsNoTracking().Where(i => i.DeduplicationKey == key).Select(i => (Guid?)i.Id).FirstOrDefaultAsync(cancellationToken);
 
@@ -29,6 +45,7 @@ internal sealed class SalesInvoiceRepository(OmtsDbContext db) : ISalesInvoiceRe
         db.SalesInvoices.AsNoTracking().AsSplitQuery()
             .Include(i => i.Zone)
             .Include(i => i.Customer)
+            .Include(i => i.SalesOrder)
             .Include(i => i.Lines).ThenInclude(l => l.Product)
             .Include(i => i.Lines).ThenInclude(l => l.HarvestLot)
             .Include(i => i.PriceCuts)

@@ -6,6 +6,8 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Notifications;
+using OMTS.Application.Features.Sales.Orders;
+using OMTS.Application.Features.Sales.QualityClaims;
 using OMTS.Application.Features.Sales.Debts;
 using OMTS.Application.Features.WaterQuality.Dtos;
 using OMTS.Domain.Constants;
@@ -21,6 +23,8 @@ namespace OMTS.Application.Features.Sales.Invoices;
 public sealed class SalesInvoiceViews(
     IAccountRepository accounts,
     ISalesInvoiceRepository invoices,
+    ISalesOrderRepository orders,
+    IInvoiceSalesReturnCheck salesReturns,
     CustomerDebtReader debts,
     SalesInvoiceCorrectionLog corrections,
     ZoneAccessGuard zoneAccess,
@@ -33,7 +37,8 @@ public sealed class SalesInvoiceViews(
     /// port names an invoice (BR-SALE-07 (3)); of the transfers, only the one that completed the sale counts, not a later one for the same invoice.
     /// </summary>
     /// <param name="savedOnTransfer">The bank notification saved the invoice (GFR-08): its first VietQR payment, the lowest code, is the transfer of the sale.</param>
-    public async Task<SalesInvoiceSaved> SavedAsync(SalesInvoice invoice, decimal change, bool savedOnTransfer, CancellationToken cancellationToken)
+    /// <param name="advanceUse">The part of the total the advance of the order paid: what the cash and Pay later do not name.</param>
+    public async Task<SalesInvoiceSaved> SavedAsync(SalesInvoice invoice, decimal change, bool savedOnTransfer, CancellationToken cancellationToken, decimal advanceUse = 0m)
     {
         var payments = invoice.Payments.Where(p => p.Kind == CustomerPaymentKind.Payment).ToList();
         var cash = payments.Where(p => p.Method == CustomerPaymentMethod.Cash).Sum(p => p.Amount);
@@ -41,9 +46,22 @@ public sealed class SalesInvoiceViews(
             ? payments.Where(p => p.Method == CustomerPaymentMethod.VietQrInvoice).OrderBy(p => p.Code, StringComparer.Ordinal).Select(p => p.Amount).FirstOrDefault()
             : 0m;
         var subtracted = Math.Max(0m, cash - invoice.Total);
-        var later = invoice.PaymentTerm == SalesPaymentTerm.PayLater ? invoice.Total - (cash - subtracted) : 0m;
+        var later = invoice.PaymentTerm == SalesPaymentTerm.PayLater ? invoice.Total - advanceUse - (cash - subtracted) : 0m;
         var message = UserMessages.SaleCompleted(invoice.Code, cash, later, invoice.Customer?.Name ?? SalesInvoiceNotifications.WalkInCustomerName, vietQr);
-        return new SalesInvoiceSaved(await ViewAsync(invoice, cancellationToken), change, subtracted, message.Text, message.Code);
+        return new SalesInvoiceSaved(await ViewAsync(invoice, cancellationToken), change, subtracted, message.Text, message.Code, await OrderStateAsync(invoice, cancellationToken));
+    }
+
+    /// <summary>The order of the invoice as the save left it: its status, and whether it is open with lines not fully delivered (the web then asks to finish it).</summary>
+    private async Task<SalesInvoiceOrderState?> OrderStateAsync(SalesInvoice invoice, CancellationToken cancellationToken)
+    {
+        if (invoice.SalesOrderId is not { } orderId || await orders.GetForEditAsync(orderId, cancellationToken) is not { } order)
+        {
+            return null;
+        }
+
+        var delivered = await orders.DeliveredByLineAsync([order.Id], null, cancellationToken);
+        var canFinish = SalesOrderRules.IsOpen(order.StatusId) && !SalesInvoiceOrderShare.AllDelivered(order.Lines.Select(l => (l.Id, l.Quantity)), delivered);
+        return new SalesInvoiceOrderState(order.Id, order.Code, order.StatusId, statusCatalog.DisplayNameOf(order.StatusId), canFinish);
     }
 
     public async Task<SalesInvoiceView> ViewAsync(SalesInvoice invoice, CancellationToken cancellationToken)
@@ -51,7 +69,8 @@ public sealed class SalesInvoiceViews(
         var people = invoice.Payments.Select(p => p.CollectedByAccountId).OfType<Guid>().Append(invoice.CreatedByAccountId).Distinct().ToList();
         var names = await accounts.GetDisplayNamesAsync(people, cancellationToken);
         var lines = invoice.Lines.OrderBy(l => l.LineNumber).Select(l => new SalesInvoiceLineView(
-            l.Id, l.LineNumber, l.ProductId, l.Product.Name, l.HarvestLotId, l.HarvestLot.LotCode, l.Kg, l.UnitPrice, l.ListPrice, l.PriceSource, l.Amount, l.SoldWholeLot)).ToList();
+            l.Id, l.LineNumber, l.ProductId, l.Product.Name, l.HarvestLotId, l.HarvestLot.LotCode, l.Kg, l.UnitPrice, l.ListPrice, l.PriceSource, l.Amount, l.SoldWholeLot,
+            new SalesInvoiceUnitView(l.UnitId, l.UnitCode, l.UnitName, l.Factor), l.Quantity, l.SalesOrderLineId)).ToList();
         var payments = invoice.Payments.OrderBy(p => p.CreatedAt).ThenBy(p => p.Code).Select(p => new CustomerPaymentView(
             p.Id, p.Code, p.Kind, p.Method, p.Amount, p.PaymentDate, p.CreatedAt, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId),
             p.CollectedByAccountId is { } collector ? Person(collector, names) : null)).ToList();
@@ -59,7 +78,7 @@ public sealed class SalesInvoiceViews(
         var latest = LatestStatus(sendings);
         var debtEffect = await DebtEffectAsync(invoice, cancellationToken);
         var allowedActions = SalesInvoiceAllowedActions.Of(
-            new SalesInvoiceActionFacts(invoice.StatusId, latest, SaleFinished: invoice.QrDecidedAt is not null, HasSalesReturn: SalesInvoiceAllowedActions.HasSalesReturn(invoice)),
+            new SalesInvoiceActionFacts(invoice.StatusId, latest, SaleFinished: invoice.QrDecidedAt is not null, HasSalesReturn: await salesReturns.HasSalesReturnAsync(invoice.Id, cancellationToken)),
             await RightsAsync(invoice.ZoneId, cancellationToken));
         return new SalesInvoiceView(
             invoice.Id,
@@ -99,7 +118,9 @@ public sealed class SalesInvoiceViews(
             invoice.LastCorrectionReason,
             await corrections.OfAsync(invoice.Id, cancellationToken),
             invoice.CancelledAt,
-            invoice.CancelReason);
+            invoice.CancelReason,
+            invoice.SalesOrder is { } order ? new SalesInvoiceOrderRef(order.Id, order.Code) : null,
+            invoice.Note);
     }
 
     /// <summary>The paid state of the invoice (BR-DEBT-05) and the debt of its profile now (BR-DEBT-02).</summary>
@@ -116,7 +137,9 @@ public sealed class SalesInvoiceViews(
         new(await zoneAccess.IsCooperativeOwnerAsync(cancellationToken),
             await zoneAccess.AllowsAsync(PermissionFunctions.SalesInvoices, PermissionAction.Create, zoneId, cancellationToken),
             await zoneAccess.AllowsAsync(PermissionFunctions.SalesReturns, PermissionAction.Create, zoneId, cancellationToken),
-            await zoneAccess.AllowsAsync(PermissionFunctions.SalesInvoices, PermissionAction.Export, zoneId, cancellationToken));
+            await zoneAccess.AllowsAsync(PermissionFunctions.SalesInvoices, PermissionAction.Export, zoneId, cancellationToken),
+            await zoneAccess.AllowsAsync(PermissionFunctions.SalesInvoices, PermissionAction.Edit, zoneId, cancellationToken),
+            await zoneAccess.AllowsAsync(PermissionFunctions.SalesInvoices, PermissionAction.Delete, zoneId, cancellationToken));
 
     /// <summary>The link of the QR code of the invoice, or null when it has none.</summary>
     public string? QrUrlOf(SalesInvoice invoice) => invoice.QrToken is { } token ? provenance.Value.LinkOf(token) : null;

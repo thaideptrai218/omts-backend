@@ -47,7 +47,8 @@ public sealed class ProductAccess(ICurrentUser currentUser, PermissionService pe
             return ProductReader.Trader;
         }
 
-        if (!access.PermittedZonesFor(PermissionFunctions.SalesInvoices, PermissionAction.Create).IsEmpty)
+        if (!access.PermittedZonesFor(PermissionFunctions.SalesInvoices, PermissionAction.Create).IsEmpty
+            || !access.PermittedZonesFor(PermissionFunctions.SalesOrders, PermissionAction.Create).IsEmpty)
         {
             return ProductReader.Seller;
         }

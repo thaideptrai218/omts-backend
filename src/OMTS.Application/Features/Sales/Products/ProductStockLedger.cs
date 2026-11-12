@@ -1,5 +1,6 @@
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Domain.Entities.Harvest;
 using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
@@ -27,7 +28,7 @@ public sealed class ProductStockLedger(IProductStockRepository stock, ICurrentUs
         Post(
             ProductStockMovementKind.Sale, invoice.Id, invoice.Code, invoice.InvoicedAt, customer?.Name, customer?.Code,
             invoice.Lines.Where(l => l.HarvestLot.ProductLines.Any(p => p.ProductId == l.ProductId))
-                .Select(l => new ProductPosting(l.ProductId, l.HarvestLotId, l.HarvestLot.LotCode, -l.Kg, l.UnitPrice)).ToList());
+                .Select(l => new ProductPosting(l.ProductId, l.HarvestLotId, l.HarvestLot.LotCode, -l.Kg, InvoiceMoney.PricePerKg(l.Kg, l.Quantity, l.UnitPrice, l.Amount))).ToList());
 
     /// <summary>The Disposal rows of a disposal: its lines leave the stock of their products on their lots.</summary>
     public void PostDisposal(ProductDisposal disposal, IEnumerable<ProductDisposalLine> lines) =>

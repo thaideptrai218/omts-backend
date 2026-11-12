@@ -8,6 +8,7 @@ using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Sales.Customers;
 using OMTS.Application.Features.Sales.Debts;
+using OMTS.Application.Features.Sales.Orders;
 using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Harvest;
@@ -15,12 +16,25 @@ using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Application.Features.Sales.Invoices;
 
+/// <summary>The order an invoice is made from, read tracked: its advances (what is left of each), what its other invoices delivered and the discount they took.</summary>
+/// <param name="Advances">The advances of the order that count, oldest first, with their allocations.</param>
+/// <param name="DeliveredByOthers">The quantity of each order line delivered by the invoices that are not cancelled, other than this one.</param>
+/// <param name="DiscountShared">The discount of the invoices of the order that are not cancelled, other than this one.</param>
+internal sealed record SalesInvoiceOrderFacts(SalesOrder Order, IReadOnlyList<CustomerPayment> Advances, IReadOnlyDictionary<Guid, decimal> DeliveredByOthers, decimal DiscountShared)
+{
+    /// <summary>What is left of the advances of the order for another invoice of it.</summary>
+    public decimal AdvanceLeft => Advances.Sum(Orders.SalesOrderViews.Left);
+}
+
 /// <summary>What the entries name, read tracked as the save will write it, and the debt of the customer before the invoice (BR-SALE-07 (4)).</summary>
+/// <param name="DebtBefore">What the customer owes apart from the advances reserved for open orders (they pay no other invoice): above 0 it is a debt, below 0 free credit.</param>
+/// <param name="Resolved">The unit, the quantity and the order line of each line, by line number.</param>
+/// <param name="Order">Null for a sale that was awaiting its transfer before invoices came from orders.</param>
 /// <param name="Standing">Where the customer stands against the debt limit; null for a walk-in customer, or while the debt warning is off.</param>
 /// <param name="AllowMoreDebtOverLimit">False: an invoice that leaves a debt for a customer over the limit is refused.</param>
 internal sealed record SalesInvoiceFacts(
     Customer? Customer, PurchaseRequest? Request, IReadOnlyDictionary<Guid, Product> Products, IReadOnlyList<HarvestLot> Lots, Guid ZoneId, bool ByOwner, decimal DebtBefore,
-    CustomerDebtStanding? Standing = null, bool AllowMoreDebtOverLimit = true);
+    IReadOnlyDictionary<int, ResolvedLine> Resolved, SalesInvoiceOrderFacts? Order = null, CustomerDebtStanding? Standing = null, bool AllowMoreDebtOverLimit = true);
 
 /// <summary>
 /// SALE-05 steps 2 to 6 against the database: the profile, the request (SALE-05.3), the products In Use (GBR-01), the lots for sale in zones the user can access (BR-SALE-06, BR-FARM-08)
@@ -30,6 +44,7 @@ public sealed class SalesInvoiceFactsReader(
     ICustomerRepository customers,
     IPurchaseRequestRepository requests,
     IPurchaseRequestFulfilment fulfilment,
+    ISalesOrderRepository orders,
     IProductRepository products,
     IHarvestLotRepository lots,
     IFarmingZoneRepository zones,
@@ -51,7 +66,15 @@ public sealed class SalesInvoiceFactsReader(
             return AppError.Forbidden;
         }
 
-        var chosenCustomer = await ReadCustomerAsync(entries.CustomerId, cancellationToken);
+        var order = await ReadOrderAsync(entries, cancellationToken);
+        if (!order.IsSuccess)
+        {
+            return order.Error!;
+        }
+
+        var orderFacts = order.Value;
+        // The customer and the zone are the order's; an invoice of the old flow (a sale that was awaiting its transfer) names its own.
+        var chosenCustomer = orderFacts is null ? await ReadCustomerAsync(entries.CustomerId, cancellationToken) : OrderCustomer(orderFacts.Order);
         if (!chosenCustomer.IsSuccess)
         {
             return chosenCustomer.Error!;
@@ -70,14 +93,21 @@ public sealed class SalesInvoiceFactsReader(
             return lineProducts.Error!;
         }
 
+        var resolved = SalesInvoiceLineResolver.Resolve(entries.Lines, lineProducts.Value!, orderFacts?.Order, []);
+        if (!resolved.IsSuccess)
+        {
+            return resolved.Error!;
+        }
+
         var lineLots = await ReadLotsAsync(entries, permitted, cancellationToken);
         if (!lineLots.IsSuccess)
         {
             return lineLots.Error!;
         }
 
-        var zoneId = entries.ZoneId ?? lineLots.Value![0].Raft.ZoneId;
-        if (entries.ZoneId is { } chosen && (await zones.GetByIdsAsync([chosen], cancellationToken)).Count == 0)
+        // An invoice made from an order takes the zone of its first lot (an order has no zone); one of the old flow takes the zone it names.
+        var zoneId = orderFacts is null ? entries.ZoneId ?? lineLots.Value![0].Raft.ZoneId : lineLots.Value![0].Raft.ZoneId;
+        if (orderFacts is null && entries.ZoneId is { } chosen && (await zones.GetByIdsAsync([chosen], cancellationToken)).Count == 0)
         {
             return AppError.Invalid("Zone");
         }
@@ -94,11 +124,55 @@ public sealed class SalesInvoiceFactsReader(
         }
 
         var byOwner = await zoneAccess.IsCooperativeOwnerAsync(cancellationToken);
-        var debt = customer is null ? 0m : await debts.DebtAsync(customer.Id, cancellationToken);
+        var debt = customer is null ? 0m : (await debts.AllocationAsync(customer.Id, cancellationToken)).DebtApartFromReserved;
         var policy = await standings.PolicyAsync(cancellationToken);
         var standing = customer is not null && policy.Enabled ? (await standings.ForAsync([customer.Id], policy, cancellationToken))[customer.Id] : null;
-        return new SalesInvoiceFacts(customer, request.Value, lineProducts.Value!, lineLots.Value!, zoneId, byOwner, debt, standing, policy.AllowMoreOverLimit);
+        return new SalesInvoiceFacts(customer, request.Value, lineProducts.Value!, lineLots.Value!, zoneId, byOwner, debt, resolved.Value!, orderFacts, standing, policy.AllowMoreOverLimit);
     }
+
+    /// <summary>
+    /// The order of the invoice, tracked with its advances (MSG-GEN-01 when it does not exist, 409 MSG-ORDER-05 when it is not Draft or Delivering, 400 MSG-ORDER-06 when the request names another customer);
+    /// null with no order. The order is marked changed in the save, so a parallel invoice, finish or cancel of the same order makes one of the two saves fail and read again.
+    /// </summary>
+    private async Task<Result<SalesInvoiceOrderFacts?>> ReadOrderAsync(SalesInvoiceEntries entries, CancellationToken cancellationToken)
+    {
+        if (entries.SalesOrderId is not { } orderId)
+        {
+            return Result<SalesInvoiceOrderFacts?>.Success(null);
+        }
+
+        var order = await orders.GetForEditAsync(orderId, cancellationToken);
+        if (order is null)
+        {
+            return AppError.Invalid("Sales order");
+        }
+
+        if (!SalesOrderRules.IsOpen(order.StatusId))
+        {
+            return AppError.Conflict(UserMessages.OrderNotOpenForInvoice(order.Code, statusCatalog.DisplayNameOf(order.StatusId)));
+        }
+
+        if ((entries.CustomerId is not null && entries.CustomerId != order.CustomerId) || (entries.WalkInRequested && order.CustomerId is not null))
+        {
+            return OrderMismatch(order, "Customer");
+        }
+
+        var advances = order.CustomerId is null ? [] : await orders.CountedAdvancesForUpdateAsync(order.Id, cancellationToken);
+        var delivered = await orders.DeliveredByLineAsync([order.Id], null, cancellationToken);
+        var shared = (await orders.InvoicesOfAsync(order.Id, cancellationToken)).Where(i => i.StatusId != StatusIds.SalesInvoice.Cancelled).Sum(i => i.DiscountAmount);
+        return new SalesInvoiceOrderFacts(order, advances, delivered, shared);
+    }
+
+    private static AppError OrderMismatch(SalesOrder order, string field) =>
+        new(ErrorKind.Validation, UserMessages.InvoiceDiffersFromOrder(order.Code, field), new Dictionary<string, object?> { ["field"] = field });
+
+    /// <summary>The customer of the order, tracked; MSG-GEN-09 when it was merged into another (an order is moved with its customer, so this only catches a merge in progress).</summary>
+    private Result<Customer?> OrderCustomer(SalesOrder order) =>
+        order.Customer is null
+            ? Result<Customer?>.Success(null)
+            : order.Customer.MergedIntoCustomerId is null
+                ? order.Customer
+                : AppError.Conflict(UserMessages.WrongStatus($"{CustomerService.ObjectName} {order.Customer.Name}", CustomerService.MergedStatus));
 
     /// <summary>The profile chosen for an invoice, tracked: null without a choice; MSG-GEN-01 when it does not exist, MSG-GEN-09 when it was merged into another.</summary>
     internal async Task<Result<Customer?>> ReadCustomerAsync(Guid? customerId, CancellationToken cancellationToken)

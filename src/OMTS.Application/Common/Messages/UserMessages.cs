@@ -380,18 +380,30 @@ public static class UserMessages
     };
 
     /// <summary>MSG-HARVEST-01 (BF-03 step 7): notification to the Cooperative Owner when a harvest lot is recorded.</summary>
-    public static UserMessage HarvestLotRecorded(string raftCode, DateOnly harvestDate, string lotCode, int cageCount, decimal estimatedKg) => new(
-        Harvest01, $"Raft {raftCode}: the harvest of {Date(harvestDate)} is recorded as lot {lotCode} ({cageCount.ToString(CultureInfo.InvariantCulture)} cages, about {Quantity(estimatedKg)} kg).")
+    /// <param name="planCode">The harvest plan (KHT) the lot was recorded from, named in the text and sent as <c>plan_code</c>; null for a lot outside a plan.</param>
+    public static UserMessage HarvestLotRecorded(string raftCode, DateOnly harvestDate, string lotCode, int cageCount, decimal estimatedKg, string? planCode = null)
     {
-        Parameters = new Dictionary<string, object?>
+        var parameters = new Dictionary<string, object?>
         {
             ["raft_code"] = raftCode,
             ["harvest_date"] = harvestDate,
             ["lot_code"] = lotCode,
             ["cage_count"] = cageCount,
             ["estimated_kg"] = decimal.Parse(Quantity(estimatedKg), CultureInfo.InvariantCulture),
-        },
-    };
+        };
+        if (planCode is not null)
+        {
+            parameters["plan_code"] = planCode;
+        }
+
+        return new UserMessage(
+            Harvest01,
+            $"Raft {raftCode}: the harvest of {Date(harvestDate)} is recorded as lot {lotCode} ({cageCount.ToString(CultureInfo.InvariantCulture)} cages, about {Quantity(estimatedKg)} kg)"
+            + (planCode is null ? string.Empty : $" from harvest plan {planCode}") + ".")
+        {
+            Parameters = parameters,
+        };
+    }
 
     /// <summary>MSG-HARVEST-03 (HARVEST-03 step 4): the days before automatic close are lowered.</summary>
     public static UserMessage AutoCloseDaysLowered(int days, int count) => new(
@@ -963,6 +975,20 @@ public static class UserMessages
         Parameters = new Dictionary<string, object?> { ["discount_amount"] = discountAmount },
     };
 
+    /// <summary>MSG-SALE-10 for a line of an order, whose price is of the unit of the line.</summary>
+    public static UserMessage OrderPriceNeedsOwnerDecision(string productName, string unitName, decimal listPrice, decimal unitPrice) => new(
+        Sale10, $"{productName}: the list price is {Vnd(listPrice)} VND/{unitName}, and you entered {Vnd(unitPrice)} VND/{unitName}. Has the Cooperative Owner decided this price?")
+    {
+        Parameters = new Dictionary<string, object?> { ["product_name"] = productName, ["unit_name"] = unitName, ["list_price"] = listPrice, ["unit_price"] = unitPrice },
+    };
+
+    /// <summary>MSG-SALE-10 for the discount of an order.</summary>
+    public static UserMessage OrderDiscountNeedsOwnerDecision(decimal discountAmount) => new(
+        Sale10, $"Has the Cooperative Owner decided a discount of {Vnd(discountAmount)} VND on this order?")
+    {
+        Parameters = new Dictionary<string, object?> { ["discount_amount"] = discountAmount },
+    };
+
     /// <summary>MSG-SALE-11 (SALE-05.6 step 3): cash above the total, for a customer who has a debt. {subtract_amount} is the extra but at most the debt; {change_amount} the rest.</summary>
     public static UserMessage CashAboveTotal(decimal excessAmount, string customerName, decimal debtAmount, decimal subtractAmount, decimal changeAmount) => new(
         Sale11,
@@ -1217,6 +1243,101 @@ public static class UserMessages
             ["over_amount"] = overAmount,
             ["over_days"] = overDays,
         },
+    };
+
+    // ---- MSG-ORDER ----
+
+    /// <summary>MSG-ORDER-01: an order with an invoice that is not cancelled cannot be cancelled; the Owner finishes it instead.</summary>
+    public static UserMessage OrderHasInvoices(string orderCode) => new(
+        Order01, $"Đơn đặt hàng {orderCode} đã có hóa đơn chưa hủy nên không thể hủy. Hãy hủy các hóa đơn đó trước, hoặc dùng Kết thúc để đóng đơn.")
+    {
+        Parameters = new Dictionary<string, object?> { ["order_code"] = orderCode },
+    };
+
+    /// <summary>MSG-ORDER-02: the purchase request already has an order.</summary>
+    public static UserMessage PurchaseRequestAlreadyOrdered(string orderCode) => new(
+        Order02, $"Yêu cầu mua này đã được đặt hàng ({orderCode}).")
+    {
+        Parameters = new Dictionary<string, object?> { ["order_code"] = orderCode },
+    };
+
+    /// <summary>MSG-ORDER-03: a line cannot be lowered under what was delivered on it.</summary>
+    public static UserMessage OrderQuantityBelowDelivered(string productName, string unitName, decimal deliveredQuantity) => new(
+        Order03, $"{productName}: đã giao {Quantity(deliveredQuantity)} {unitName}, số lượng đặt không được nhỏ hơn số đã giao.")
+    {
+        Parameters = new Dictionary<string, object?> { ["product_name"] = productName, ["unit_name"] = unitName, ["delivered_quantity"] = deliveredQuantity },
+    };
+
+    /// <summary>MSG-ORDER-04: the notice to the trader that the purchase request became an order; {pickup_at} is when the goods are to be collected, empty when not set.</summary>
+    public static UserMessage OrderPlacedNotice(string cooperativeShortName, string orderCode, DateTimeOffset? pickupAt) => new(
+        Order04,
+        $"{cooperativeShortName}: Đã đặt hàng {orderCode}" + (pickupAt is { } at ? $", hẹn lấy {BusinessClock.Format(at)}" : string.Empty) + ".")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["cooperative_short_name"] = cooperativeShortName, ["order_code"] = orderCode, ["pickup_at"] = pickupAt?.ToOffset(BusinessClock.UtcOffset),
+        },
+    };
+
+    /// <summary>MSG-ORDER-05: an invoice can be made only from an order that is Draft or Delivering.</summary>
+    public static UserMessage OrderNotOpenForInvoice(string orderCode, string status) => new(
+        Order05, $"Đơn đặt hàng {orderCode} đang ở trạng thái {status} nên không lập thêm hóa đơn được.")
+    {
+        Parameters = new Dictionary<string, object?> { ["order_code"] = orderCode, ["status"] = status },
+    };
+
+    /// <summary>MSG-ORDER-06: the customer of an invoice is that of its order.</summary>
+    public static UserMessage InvoiceDiffersFromOrder(string orderCode, string field) => new(
+        Order06, $"Khách hàng của hóa đơn phải là của đơn đặt hàng {orderCode}; không đổi {field} trên hóa đơn.")
+    {
+        Parameters = new Dictionary<string, object?> { ["order_code"] = orderCode, ["field"] = field },
+    };
+
+    // ---- MSG-PLAN ----
+
+    /// <summary>MSG-PLAN-01: lanes of a lot recorded from a harvest plan must be lanes of that plan's line.</summary>
+    public static UserMessage PlanLanesOutsidePlan(string planCode, string raftCode, IReadOnlyList<int> laneNumbers) => new(
+        Plan01, $"Luống {string.Join(", ", laneNumbers)} của bè {raftCode} không nằm trong kế hoạch thu hoạch {planCode}.")
+    {
+        Parameters = new Dictionary<string, object?> { ["plan_code"] = planCode, ["raft_code"] = raftCode, ["lane_numbers"] = laneNumbers.ToList() },
+    };
+
+    /// <summary>MSG-PLAN-02: a lane is already waiting to be harvested in another open plan.</summary>
+    public static UserMessage PlanLanesInAnotherPlan(string raftCode, IReadOnlyList<int> laneNumbers, string otherPlanCode) => new(
+        Plan02, $"Luống {string.Join(", ", laneNumbers)} của bè {raftCode} đã có trong kế hoạch thu hoạch {otherPlanCode} đang mở.")
+    {
+        Parameters = new Dictionary<string, object?> { ["raft_code"] = raftCode, ["lane_numbers"] = laneNumbers.ToList(), ["other_plan_code"] = otherPlanCode },
+    };
+
+    /// <summary>MSG-PLAN-03: a line that has its lot, or a lane left out, can no longer be changed or recorded again.</summary>
+    public static UserMessage PlanLineAlreadyHarvested(string planCode, string raftCode) => new(
+        Plan03, $"Dòng bè {raftCode} của kế hoạch thu hoạch {planCode} đã có lô thu hoạch hoặc đã có luống không thu nên không thể sửa hay ghi lô lần nữa.")
+    {
+        Parameters = new Dictionary<string, object?> { ["plan_code"] = planCode, ["raft_code"] = raftCode },
+    };
+
+    /// <summary>MSG-PLAN-04: a plan that has started cannot be cancelled; the Owner finishes it instead.</summary>
+    public static UserMessage PlanCannotBeCancelled(string planCode) => new(
+        Plan04, $"Kế hoạch thu hoạch {planCode} đã bắt đầu thu nên không thể hủy. Hãy dùng Kết thúc để đóng kế hoạch.")
+    {
+        Parameters = new Dictionary<string, object?> { ["plan_code"] = planCode },
+    };
+
+    /// <summary>MSG-PLAN-05: the plan was handed to the Zone Managers of its zone (to the Owners when the zone has none).</summary>
+    public static UserMessage PlanAssignedNotice(string planCode, string zoneCode, DateTimeOffset plannedAt, int lineCount) => new(
+        Plan05, $"Kế hoạch thu hoạch {planCode} của vùng {zoneCode} đã được giao, dự kiến {BusinessClock.Format(plannedAt)}, {lineCount.ToString(CultureInfo.InvariantCulture)} bè.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["plan_code"] = planCode, ["zone_code"] = zoneCode, ["planned_at"] = plannedAt.ToOffset(BusinessClock.UtcOffset), ["line_count"] = lineCount,
+        },
+    };
+
+    /// <summary>MSG-PLAN-06: lanes of a plan will not be harvested ("Không thu"), with the reason; to the Owners.</summary>
+    public static UserMessage PlanLanesSkippedNotice(string planCode, string raftCode, IReadOnlyList<int> laneNumbers, string reason) => new(
+        Plan06, $"Kế hoạch thu hoạch {planCode}, bè {raftCode}: luống {string.Join(", ", laneNumbers)} không thu. Lý do: {reason}.")
+    {
+        Parameters = new Dictionary<string, object?> { ["plan_code"] = planCode, ["raft_code"] = raftCode, ["lane_numbers"] = laneNumbers.ToList(), ["reason"] = reason },
     };
 
     // ---- Old codes still sent as the code (Legacy.KeptAsCode) ----

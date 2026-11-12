@@ -56,7 +56,7 @@ public sealed class HarvestLotReadService(
         return new HarvestLotsScreen(
             raft.Id,
             raft.Code,
-            open is null ? null : new CycleListItem(open.Id, open.StartDate, open.CloseDate, open.StatusId, statusCatalog.DisplayNameOf(open.StatusId), RowVersionGuard.Encode(open.RowVersion), open.ClosedEarly),
+            open is null ? null : new CycleListItem(open.Id, open.StartDate, open.CloseDate, open.StatusId, statusCatalog.DisplayNameOf(open.StatusId), RowVersionGuard.Encode(open.RowVersion), open.ClosedEarly, CultivationCycleViews.ProductOf(open)),
             cooperative.AverageKgPerCage,
             lanes.Any(l => l.CanHarvest),
             lanes,

@@ -80,5 +80,11 @@ public static class DocumentSequenceKeys
 
     /// <summary>Disposals of products (oysters), XHS000123.</summary>
     public const string ProductDisposal = "XHS";
+
+    /// <summary>Orders of goods, DH000123.</summary>
+    public const string SalesOrder = "DH";
+
+    /// <summary>Harvest plans, KHT000123 (not the "KH" of the customers).</summary>
+    public const string HarvestPlan = "KHT";
 }
 

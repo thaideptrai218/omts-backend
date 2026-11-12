@@ -32,7 +32,7 @@ public class SalesInvoiceDetailTests
         var invoice = await client.InvoiceAsync(sold.Id());
 
         var line = invoice.GetProperty("lines")[0];
-        Assert.Equal((sale.LotId, 10m, ListPrice, "PriceList"), (line.GetProperty("harvestLotId").GetGuid(), line.Money("kg"), line.Money("unitPrice"), line.Text("priceSource")));
+        Assert.Equal((sale.LotId, 10m, ListPrice, "OrderPrice"), (line.GetProperty("harvestLotId").GetGuid(), line.Money("kg"), line.Money("unitPrice"), line.Text("priceSource")));
         var payment = invoice.GetProperty("payments")[0];
         Assert.Equal(("Cash", 100_000m), (payment.Text("method"), payment.Money("amount")));
         Assert.Single(invoice.GetProperty("sendings").EnumerateArray());
@@ -73,7 +73,7 @@ public class SalesInvoiceDetailTests
         var accountant = await api.StaffAsync(zone, StaffRole.Accountant);
         var managerAll = await api.StaffAsync(null, StaffRole.ZoneManager);
 
-        Assert.Equal(["Resend", "CreateReturn", "Correct", "Cancel", "Print"], (await sale.Owner.Client.InvoiceAsync(invoice.Id())).Actions());
+        Assert.Equal(["Resend", "CreateReturn", "Edit", "Correct", "Cancel", "Print"], (await sale.Owner.Client.InvoiceAsync(invoice.Id())).Actions());
         Assert.Equal(["Resend", "CreateReturn", "Print"], (await sale.Manager.Client.InvoiceAsync(invoice.Id())).Actions());
         Assert.Equal(["Resend", "CreateReturn", "Print"], (await managerAll.Client.InvoiceAsync(invoice.Id())).Actions());
         Assert.Empty((await accountant.Client.InvoiceAsync(invoice.Id())).Actions());

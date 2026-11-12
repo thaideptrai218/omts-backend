@@ -20,6 +20,7 @@ public sealed class HarvestLotCorrectionService(
     IHarvestLotRepository lots,
     HarvestLotEditReader edits,
     HarvestLotProductLineService productLines,
+    IHarvestPlanRepository harvestPlans,
     RecordPhotoStore photoStore,
     UploadedFileSaver fileSaver,
     RowVersionGuard rowVersions,
@@ -119,6 +120,16 @@ public sealed class HarvestLotCorrectionService(
         if (HarvestLotFieldReader.Read(fields, raft, facts.Choosable(), lot.KgPerCage, photoHint, out var read, correction) is { } invalid)
         {
             return invalid;
+        }
+
+        // A lot recorded from a plan line keeps to the lanes of that line (the raft never changes).
+        if (lot.HarvestPlanLineId is { } planLineId && await harvestPlans.PlannedLanesOfLineAsync(planLineId, cancellationToken) is { } planned)
+        {
+            var outside = read!.Lanes.Where(l => !planned.LaneIds.Contains(l.Id)).Select(l => l.LaneNumber).Order().ToList();
+            if (outside.Count > 0)
+            {
+                return AppError.Conflict(UserMessages.PlanLanesOutsidePlan(planned.PlanCode, raft.Code, outside), new Dictionary<string, object?> { ["field"] = HarvestLotFieldReader.LanesField });
+            }
         }
 
         if (lineError is null && lines is not null)

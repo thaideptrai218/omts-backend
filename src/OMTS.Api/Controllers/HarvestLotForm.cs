@@ -18,6 +18,9 @@ public class HarvestLotForm
 
     public string? CageCount { get; set; }
 
+    /// <summary>When recording: the line of a harvest plan (KHT) the lot is recorded from. The raft and lanes then come from the plan and <c>laneNumbers</c> is ignored. Not used by a correction.</summary>
+    public string? HarvestPlanLineId { get; set; }
+
     /// <summary>
     /// The share of each product on the lot, one entry per product: <c>productLines[0].productId</c>, <c>productLines[0].cageCount</c> and <c>productLines[0].kg</c> (indexes 0, 1, 2… with no gap). With lines,
     /// <c>cageCount</c> and <c>estimatedKg</c> of the form are ignored: the lot's cages and kg are the sums of its lines.

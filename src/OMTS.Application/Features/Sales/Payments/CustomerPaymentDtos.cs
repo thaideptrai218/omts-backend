@@ -67,12 +67,17 @@ public sealed record CustomerPaymentAllocationView(Guid InvoiceId, string Invoic
 /// <param name="DiscountAmount">Debt written off with the payment.</param>
 /// <param name="CashAccount">The bank account of a transfer.</param>
 /// <param name="Allocations">The invoices it pays, in the order of their invoices; empty when it names none (the oldest invoices are covered).</param>
+/// <param name="SalesOrder">The order this payment is an advance on; its money is reserved for that order while the order is open.</param>
 public sealed record CustomerPaymentDetails(
     Guid Id, string Code, CustomerDebtCustomer? Customer, CustomerPaymentKind Kind, decimal Amount, DateOnly PaymentDate, CustomerPaymentMethod Method,
     string? BankReference, CustomerPaymentInvoiceRef? Invoice, AccountRef? CollectedBy, AccountRef? RecordedBy, string? Note,
     int StatusId, string Status, AccountRef? ConfirmedBy, DateTimeOffset? ConfirmedAt, AccountRef? CancelledBy, DateTimeOffset? CancelledAt, string? CancelReason,
     string RowVersion, string? TransferInvoiceCode = null, DateTimeOffset? TransferredAt = null,
-    DateTimeOffset PaidAt = default, decimal DiscountAmount = 0m, CashAccountRef? CashAccount = null, IReadOnlyList<CustomerPaymentAllocationView>? Allocations = null);
+    DateTimeOffset PaidAt = default, decimal DiscountAmount = 0m, CashAccountRef? CashAccount = null, IReadOnlyList<CustomerPaymentAllocationView>? Allocations = null,
+    CustomerPaymentOrderRef? SalesOrder = null);
+
+/// <summary>The order of an advance: <paramref name="Reserved"/> is true while the order is Draft or Delivering, the time its money covers no invoice but the order's own.</summary>
+public sealed record CustomerPaymentOrderRef(Guid Id, string Code, int StatusId, string Status, bool Reserved);
 
 /// <summary>The VietQR code of a payment waiting for its transfer: the client draws the image from <paramref name="Payload"/>.</summary>
 /// <param name="Payload">The EMVCo text to draw as a QR code.</param>
@@ -89,12 +94,13 @@ public sealed record CustomerPaymentSaved(CustomerPaymentDetails Payment, decima
 public sealed record CustomerPaymentBankAccount(Guid Id, string BankBin, string ProviderName, string AccountNumber, string HolderName, bool IsDefault);
 
 /// <summary>DEBT-02 step 1 and DEBT-02.3 step 2 (SCR-DEBT-03): the debt today, the money owed back, the unpaid invoices oldest first and who can collect.</summary>
-/// <param name="OwedBack">The money owed back (positive) when the debt is below 0; the most that can be paid back (BR-DEBT-03).</param>
+/// <param name="OwedBack">The money owed back (positive) when the debt is below 0, apart from the advances reserved for open orders (they are never paid back); the most that can be paid back (BR-DEBT-03).</param>
+/// <param name="ReservedAdvances">Per open order, what is left of its advances ("Tiền ứng của DH…"): counted in <paramref name="Debt"/> as paid, but kept for that order. The debt apart from them is <c>debt + Σ amount</c>: the unpaid invoices add up to it, and a payment above it asks MSG-DEBT-04.</param>
 /// <param name="CashCollectors">The active Owner and staff accounts: who may be named as having collected the money or paid it back.</param>
 /// <param name="BankAccounts">The Bank accounts of the cash book a VietQR code may pay into.</param>
 public sealed record CustomerPaymentForm(
     CustomerDebtCustomer Customer, decimal Debt, decimal OwedBack, int? DebtAgeDays, IReadOnlyList<UnpaidInvoice> UnpaidInvoices, IReadOnlyList<AccountRef> CashCollectors,
-    IReadOnlyList<CustomerPaymentBankAccount> BankAccounts);
+    IReadOnlyList<CustomerPaymentBankAccount> BankAccounts, IReadOnlyList<ReservedOrderAdvance>? ReservedAdvances = null);
 
 /// <summary>DEBT-02.2 step 2: oldest first.</summary>
 /// <param name="TotalAmount">Σ of every payment Awaiting confirmation, not only of the page.</param>

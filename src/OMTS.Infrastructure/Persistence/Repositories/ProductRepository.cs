@@ -70,9 +70,11 @@ internal sealed class ProductRepository(OmtsDbContext db) : IProductRepository
         var ids = productIds.ToList();
         var used = new HashSet<Guid>();
         used.UnionWith(await db.SalesInvoiceLines.Where(l => ids.Contains(l.ProductId)).Select(l => l.ProductId).Distinct().ToListAsync(cancellationToken));
+        used.UnionWith(await db.SalesOrderLines.Where(l => ids.Contains(l.ProductId)).Select(l => l.ProductId).Distinct().ToListAsync(cancellationToken));
         used.UnionWith(await db.PurchaseRequests.Where(r => ids.Contains(r.ProductId)).Select(r => r.ProductId).Distinct().ToListAsync(cancellationToken));
         used.UnionWith(await db.HarvestLotProductLines.Where(l => ids.Contains(l.ProductId)).Select(l => l.ProductId).Distinct().ToListAsync(cancellationToken));
         used.UnionWith(await db.ProductDisposalLines.Where(l => ids.Contains(l.ProductId)).Select(l => l.ProductId).Distinct().ToListAsync(cancellationToken));
+        used.UnionWith(await db.CultivationCycles.Where(c => c.ProductId != null && ids.Contains(c.ProductId.Value)).Select(c => c.ProductId!.Value).Distinct().ToListAsync(cancellationToken));
         used.UnionWith(await db.ProductStockMovements.Where(m => ids.Contains(m.ProductId)).Select(m => m.ProductId).Distinct().ToListAsync(cancellationToken));
 
         // A sale awaiting its VietQR transfer names its products in its JSON (ids in their "D" form): the transfer will invoice it, so the product must still exist.

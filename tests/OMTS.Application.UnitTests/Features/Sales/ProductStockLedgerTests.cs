@@ -65,7 +65,7 @@ public sealed class ProductStockLedgerTests
         var number = 0;
         foreach (var (productId, kg, price) in lines)
         {
-            invoice.Lines.Add(new SalesInvoiceLine { LineNumber = ++number, ProductId = productId, HarvestLot = lot, HarvestLotId = lot.Id, Kg = kg, UnitPrice = price });
+            invoice.Lines.Add(new SalesInvoiceLine { LineNumber = ++number, ProductId = productId, HarvestLot = lot, HarvestLotId = lot.Id, Kg = kg, Quantity = kg, UnitPrice = price, Amount = kg * price });
         }
 
         return invoice;

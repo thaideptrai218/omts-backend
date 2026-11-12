@@ -20,8 +20,8 @@ public class FixedRolesScopeQaTests
 
     /// <summary>
     /// Function, true when its records have no zone (BR-FARM-08: suppliers, purchase receipts and returns, customers,
-    /// payroll, pay rates, customer and supplier payments and debts, and purchase requests: PM 03/11, Zone Managers see all
-    /// of them). Deliberately zone-scoped for now: quality claims (accepted default), employees (the cooperative-wide
+    /// payroll, pay rates, customer and supplier payments and debts, purchase requests: PM 03/11, Zone Managers see all
+    /// of them; and sales orders, which have no zone: the harvest plan decides the zones). Deliberately zone-scoped for now: quality claims (accepted default), employees (the cooperative-wide
     /// employee list comes with the LABOR ticket; the endpoints are Owner-only today).
     /// </summary>
     public static readonly TheoryData<string, bool> RecordsWithNoZone = new()
@@ -54,6 +54,8 @@ public class FixedRolesScopeQaTests
         { InputIssues, false },
         { InputDisposals, true },
         { ProductDisposals, false },
+        { SalesOrders, true },
+        { HarvestPlans, false },
         { DashboardDailyRevenue, false },
         { DashboardReceivables, false },
         { DashboardOpenHarvestLots, false },
@@ -159,6 +161,25 @@ public class FixedRolesScopeQaTests
 
         Assert.All(PermissionFunctions.All.Where(f => f.IsDashboardTile), f => Assert.False(access.Allows(f.Code, View, PermissionScope.AnyZone, null), f.Code));
         Assert.True(access.Allows(WaterMeasurements, Create, PermissionScope.ZoneScoped, ZoneB));
+    }
+
+    // An order has no zone: a Zone Manager of zone A takes, changes and reads every order, never cancels one; harvest plans stay zone-scoped (it sees the plans with a line in zone A).
+    [Fact]
+    public void A_zone_manager_reaches_every_order_whatever_the_zone_but_the_plans_of_its_own_zone_only()
+    {
+        var access = Staff(Pair(ZoneA, FixedRoles.ZoneManager));
+
+        foreach (var action in new[] { View, Create, Edit })
+        {
+            Assert.True(access.Allows(SalesOrders, action, PermissionScope.NoZone, null), $"{action}");
+            Assert.True(access.Allows(SalesOrders, action, PermissionScope.ZoneScoped, ZoneB), $"{action} on a record of zone B");
+            Assert.True(access.PermittedZonesFor(SalesOrders, action).AllZones, $"{action}");
+        }
+
+        Assert.False(access.Allows(SalesOrders, Delete, PermissionScope.NoZone, null));
+        Assert.True(access.PermittedZonesFor(SalesOrders, Delete).IsEmpty);
+        Assert.Equal([ZoneA], access.PermittedZonesFor(HarvestPlans, View).ZoneIds);
+        Assert.False(access.Allows(HarvestPlans, View, PermissionScope.ZoneScoped, ZoneB));
     }
 
     // A pair whose role row is not a fixed role (an old custom role kept with a placeholder code) carries no permission.

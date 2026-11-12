@@ -66,6 +66,7 @@ internal static class StatusCatalogSeed
         NewStatus(S.PurchaseRequest.Accepted, G.PurchaseRequest, "ACCEPTED", "Accepted", "Accepted by the Cooperative Owner, possibly for fewer kg; invoices may be linked to it."),
         NewStatus(S.PurchaseRequest.Declined, G.PurchaseRequest, "DECLINED", "Declined", "Declined by the Cooperative Owner with a note.", final: true),
         NewStatus(S.PurchaseRequest.Cancelled, G.PurchaseRequest, "CANCELLED", "Cancelled", "Cancelled by the trader; no invoice can be linked to it.", final: true),
+        NewStatus(S.PurchaseRequest.Ordered, G.PurchaseRequest, "ORDERED", "Ordered", "The Cooperative Owner made an order (DH) from the request; the order carries on from here.", final: true),
 
         // STD-QUALITY-CLAIM: a response cannot be changed (BR-CLAIM-02).
         NewStatus(S.QualityClaim.AwaitingResponse, G.QualityClaim, "AWAITING_RESPONSE", "Awaiting response", "Sent by the trader; not answered yet.", initial: true),
@@ -106,6 +107,15 @@ internal static class StatusCatalogSeed
         NewStatus(S.ProductDisposal.Draft, G.ProductDisposal, "DRAFT", "Draft", "Being prepared; holds no kg. Removed, never cancelled.", initial: true),
         NewStatus(S.ProductDisposal.Completed, G.ProductDisposal, "COMPLETED", "Completed", "The kg have left the stock of their products; may still be edited, which writes them again."),
         NewStatus(S.ProductDisposal.Cancelled, G.ProductDisposal, "CANCELLED", "Cancelled", "Recorded by mistake; the kg are back in the stock and it counts nowhere.", final: true),
+        NewStatus(S.SalesOrder.Draft, G.SalesOrder, "DRAFT", "Draft", "The order is agreed with the buyer; no invoice has been made from it yet. Its advance is reserved for it.", initial: true),
+        NewStatus(S.SalesOrder.Delivering, G.SalesOrder, "DELIVERING", "Delivering", "At least one invoice was made from the order; goods are still to be delivered. Its advance is reserved for it."),
+        NewStatus(S.SalesOrder.Completed, G.SalesOrder, "COMPLETED", "Completed", "Finished by hand or fully delivered; what is left of its advance is general credit of the customer. A cancelled invoice reopens it."),
+        NewStatus(S.SalesOrder.Cancelled, G.SalesOrder, "CANCELLED", "Cancelled", "Cancelled with a reason; what is left of its advance is general credit of the customer.", final: true),
+        NewStatus(S.HarvestPlan.Draft, G.HarvestPlan, "DRAFT", "Draft", "Being prepared by the Owner; the Zone Managers do not see it yet.", initial: true),
+        NewStatus(S.HarvestPlan.Assigned, G.HarvestPlan, "ASSIGNED", "Assigned", "Handed to the Zone Managers of its zone; no lot is recorded and no lane left out yet."),
+        NewStatus(S.HarvestPlan.Harvesting, G.HarvestPlan, "HARVESTING", "Harvesting", "A lot is recorded from a line of the plan, or a lane is left out."),
+        NewStatus(S.HarvestPlan.Completed, G.HarvestPlan, "COMPLETED", "Completed", "Every line has its lot or has every lane left out, or the Owner finished the plan by hand; removing a lot of a plan finished by itself opens it again."),
+        NewStatus(S.HarvestPlan.Cancelled, G.HarvestPlan, "CANCELLED", "Cancelled", "Cancelled with a reason before any lot was recorded.", final: true),
     ];
 
     public static readonly StatusTransition[] Transitions =
@@ -165,6 +175,21 @@ internal static class StatusCatalogSeed
         NewTransition(30081, S.InputIssue.Completed, S.InputIssue.Cancelled, "INPUT-ISSUE", $"{OwnerOrZoneManager}", Action, "An issue recorded by mistake; its quantities go back in the stock.", true),
         NewTransition(30082, S.ProductDisposal.Draft, S.ProductDisposal.Completed, "PRODUCT-DISPOSAL", $"{OwnerOrZoneManager}", Action, "The disposal has a reason and its lines are complete.", false),
         NewTransition(30083, S.ProductDisposal.Completed, S.ProductDisposal.Cancelled, "PRODUCT-DISPOSAL", $"{OwnerOrZoneManager}", Action, "A disposal recorded by mistake; its kg go back in the stock.", true),
+        NewTransition(30084, S.SalesOrder.Draft, S.SalesOrder.Delivering, "SALES-ORDER", SystemActor, Action, "The first invoice of the order is saved with goods still to deliver.", false),
+        NewTransition(30085, S.SalesOrder.Draft, S.SalesOrder.Completed, "SALES-ORDER", $"{SystemActor}; {Owner}", Action, "An invoice covers every line of the order, or the Owner finishes the order.", false),
+        NewTransition(30086, S.SalesOrder.Delivering, S.SalesOrder.Completed, "SALES-ORDER", $"{OwnerOrZoneManager}; {SystemActor}", Action, "The Owner or a Zone Manager of the zone finishes the order, or every line is delivered.", false),
+        NewTransition(30087, S.SalesOrder.Draft, S.SalesOrder.Cancelled, "SALES-ORDER", Owner, Action, "A reason is given.", true),
+        NewTransition(30088, S.SalesOrder.Delivering, S.SalesOrder.Cancelled, "SALES-ORDER", Owner, Action, "A reason is given and no invoice of the order is left uncancelled; otherwise the order is finished instead.", true),
+        NewTransition(30089, S.SalesOrder.Completed, S.SalesOrder.Delivering, "SALES-ORDER", SystemActor, Action, "An invoice of the finished order is cancelled: the order is open again.", false),
+        NewTransition(30090, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Ordered, "SALES-ORDER", Owner, Action, "The Owner saves an order made from the request.", false),
+        NewTransition(30091, S.PurchaseRequest.Accepted, S.PurchaseRequest.Ordered, "SALES-ORDER", Owner, Action, "The request is not Fulfilled and has no order yet; the Owner saves an order made from it.", false),
+        NewTransition(30092, S.HarvestPlan.Draft, S.HarvestPlan.Assigned, "HARVEST-PLAN", Owner, Action, "The plan has lines, every raft has an Open cycle and no lane is in another open plan; the Zone Managers of the zone are told.", false),
+        NewTransition(30093, S.HarvestPlan.Assigned, S.HarvestPlan.Harvesting, "HARVEST-PLAN", SystemActor, Action, "The first lot is recorded from a line of the plan, or the first lane is left out.", false),
+        NewTransition(30094, S.HarvestPlan.Harvesting, S.HarvestPlan.Completed, "HARVEST-PLAN", $"{Owner}; {SystemActor}", Action, "Every line has its lot or every lane left out, or the Owner finishes the plan: lanes still to do stay as they are.", false),
+        NewTransition(30095, S.HarvestPlan.Assigned, S.HarvestPlan.Completed, "HARVEST-PLAN", SystemActor, Action, "Every lane of every line is left out and no lot was recorded.", false),
+        NewTransition(30096, S.HarvestPlan.Draft, S.HarvestPlan.Cancelled, "HARVEST-PLAN", Owner, Action, "A reason is given.", true),
+        NewTransition(30097, S.HarvestPlan.Assigned, S.HarvestPlan.Cancelled, "HARVEST-PLAN", Owner, Action, "A reason is given and no lot was recorded from the plan.", true),
+        NewTransition(30098, S.HarvestPlan.Completed, S.HarvestPlan.Harvesting, "HARVEST-PLAN", SystemActor, Action, "A lot of a plan that finished by itself is removed, or a lane left out is put back: a line is open again.", false),
 
         // STD-EMPLOYEE-REQUEST (BR-LABOR-08, LABOR-05, LABOR-10.2).
         NewTransition(230, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Approved, "LABOR-05", Owner, Action, "The payroll of the pay period of the day is not Awaiting finalization or Finalized, and the times stay in order.", false),

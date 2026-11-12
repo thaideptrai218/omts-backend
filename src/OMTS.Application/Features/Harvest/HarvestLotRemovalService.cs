@@ -5,6 +5,7 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Files;
+using OMTS.Application.Features.Harvest.Plans;
 using OMTS.Application.Features.Sales.Invoices;
 
 namespace OMTS.Application.Features.Harvest;
@@ -18,6 +19,7 @@ public sealed class HarvestLotRemovalService(
     IHarvestLotSalesQuery sales,
     IProductDisposalRepository disposals,
     HarvestLotProductLineService productLines,
+    HarvestPlanProgress planProgress,
     PendingSaleLotQuery pendingSales,
     HarvestLotEditReader edits,
     RowVersionGuard rowVersions,
@@ -85,6 +87,8 @@ public sealed class HarvestLotRemovalService(
         unitOfWork.MarkChanged(lot.Cycle);
         // The kg the lot gave to its products go back: its Harvest rows are undone by reversal rows, which keep the lot's code and id.
         await productLines.ReverseAsync(lot, cancellationToken);
+        // The line of a harvest plan the lot was recorded from is open again, and a plan that had finished by itself is Harvesting again.
+        await planProgress.OnLotRemovedAsync(lot, cancellationToken);
         lots.Remove(lot);
         await fileSaver.SaveAsync([], keys, cancellationToken);
         return true;
