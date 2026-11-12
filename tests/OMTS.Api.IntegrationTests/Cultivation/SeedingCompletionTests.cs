@@ -102,7 +102,7 @@ public class SeedingCompletionTests(AuthApiFactory factory) : IClassFixture<Auth
         Assert.True(after.Flag("canRecord"));
 
         var refused = await (await manager.Client.PostSeedingAsync(setup.CycleId, lot.Session([2, 4]))).ReadAsync(HttpStatusCode.BadRequest);
-        Assert.Equal(("MSG-GEN-01", "Lanes", "Lanes 2 cannot be seeded now."), (refused.Text("code"), refused.Text("field"), refused.Text("hint")));
+        Assert.Equal(("MSG-GEN-01", "Lanes", "Không thể thả giống vào làn 2 lúc này."), (refused.Text("code"), refused.Text("field"), refused.Text("hint")));
 
         await manager.Client.RecordSeedingAsync(setup.CycleId, lot.Session([4, 5]));
         Assert.Equal(told, (await factory.SeedingNoticesAsync(setup.CycleId)).Count);

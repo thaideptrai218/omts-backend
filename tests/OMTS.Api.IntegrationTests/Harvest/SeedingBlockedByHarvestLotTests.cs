@@ -92,7 +92,7 @@ public class SeedingBlockedByHarvestLotTests(AuthApiFactory factory) : IClassFix
         Assert.Equal(("BeingHarvested", "Harvested", "Growing"), (list.StateOf(1), list.StateOf(2), list.StateOf(3)));
 
         var refused = await (await owner.PostSeedingAsync(raft.CycleId, raft.Lot.Session([1, 2, 3]))).ReadAsync(HttpStatusCode.BadRequest);
-        Assert.Equal(("Lanes", "Lanes 1, 2 cannot be seeded now."), (refused.Text("field"), refused.Text("hint")));
+        Assert.Equal(("Lanes", "Không thể thả giống vào làn 1, 2 lúc này."), (refused.Text("field"), refused.Text("hint")));
 
         var added = await (await owner.PutSeedingAsync(free.Id(), free.AsCorrection() with { LaneNumbers = [4, 1] })).ReadAsync(HttpStatusCode.BadRequest);
         Assert.Equal("Lanes", added.Text("field"));

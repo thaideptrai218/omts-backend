@@ -243,7 +243,7 @@ public class SeedingQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
 
         // Re-hanging is over: a new session or an added lane that already has seed is refused and named.
         var refused = await (await owner.PostSeedingAsync(setup.CycleId, lot.Session([3, 4]))).ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
-        Assert.Equal(("Lanes", "Lanes 3 cannot be seeded now."), (refused.Text("field"), refused.Text("hint")));
+        Assert.Equal(("Lanes", "Không thể thả giống vào làn 3 lúc này."), (refused.Text("field"), refused.Text("hint")));
         Assert.Equal("Lanes", (await (await owner.PutSeedingAsync(record.Id(), edit with { LaneNumbers = [1, 2, 3] })).ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01")).Text("field"));
 
         // A lane of the session stays allowed, a lane Not seeded may be added, and a lane given back shows Not seeded.

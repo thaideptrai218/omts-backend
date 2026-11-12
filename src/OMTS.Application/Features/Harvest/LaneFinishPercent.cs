@@ -27,10 +27,18 @@ internal static class LaneFinishPercent
             return;
         }
 
+        RecordWhole(row.LaneId, current, progress, cycleId, actor, now, today);
+    }
+
+    /// <summary>
+    /// Finishing a lane that has NO harvest lot, only a share harvested entered by hand (QA of 13/11/2026: such a lane is Being harvested, and the finish answered 409 for want of a lot): the lane is
+    /// completed by one more manual change, harvested 100 and seeded as it is, recorded with the reason <see cref="FinishReason"/>. No lot is created or edited.
+    /// </summary>
+    public static void RecordWhole(Guid laneId, LanePercents current, ILaneProgressRepository progress, Guid cycleId, Guid actor, DateTimeOffset now, DateOnly today) =>
         progress.Add(new LaneProgressChange
         {
             CycleId = cycleId,
-            LaneId = row.LaneId,
+            LaneId = laneId,
             OccurredAt = now,
             OccurredOn = today,
             ChangedByAccountId = actor,
@@ -40,5 +48,4 @@ internal static class LaneFinishPercent
             SeededPercent = current.Seeded,
             HarvestedPercent = LanePercentRules.Whole,
         });
-    }
 }

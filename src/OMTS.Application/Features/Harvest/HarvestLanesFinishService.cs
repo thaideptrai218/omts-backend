@@ -82,7 +82,7 @@ public sealed class HarvestLanesFinishService(
         var cycle = span is null ? null : await cycles.GetForEditAsync(span.Id, cancellationToken);
         if (cycle is not { StatusId: StatusIds.CultivationCycle.Open })
         {
-            return AppError.Conflict(UserMessages.WrongStatus($"Raft {raft.Code}", "without an Open cycle"));
+            return AppError.Conflict(UserMessages.HarvestRefused($"Bè {raft.Code} chưa có chu kỳ đang mở nên chưa thể hoàn tất thu hoạch."));
         }
 
         if (request.RowVersion is not null && await rowVersions.CheckAsync(cycle, request.RowVersion, cancellationToken) is { } stale)
@@ -94,7 +94,8 @@ public sealed class HarvestLanesFinishService(
         var states = day.States;
         var problems = new List<LaneFinishProblem>();
         var already = new List<int>();
-        var toFinish = new List<(Lane Lane, int Number, HarvestLotLane Latest, IReadOnlyList<HarvestLotLane> InLots)>();
+        // Latest is null for a lane Being harvested only by a share entered by hand: it is finished by a manual change, with no lot (QA of 13/11/2026).
+        var toFinish = new List<(Lane Lane, int Number, HarvestLotLane? Latest, IReadOnlyList<HarvestLotLane> InLots)>();
         foreach (var number in numbers.Order())
         {
             var lane = raft.Lanes.FirstOrDefault(l => l.LaneNumber == number && l.StatusId == StatusIds.Lane.InUse);
@@ -106,9 +107,9 @@ public sealed class HarvestLanesFinishService(
 
             var inLots = await lots.ListOfLaneAsync(cycle.Id, lane.Id, cancellationToken);
             var latest = inLots.OrderByDescending(l => l.Lot.HarvestedAt).FirstOrDefault();
-            if (latest is null || states[lane.Id] is not (LaneState.BeingHarvested or LaneState.Harvested))
+            if (states[lane.Id] is not (LaneState.BeingHarvested or LaneState.Harvested))
             {
-                problems.Add(new LaneFinishProblem(number, NotBeingHarvested, $"Làn {number} chưa có đợt thu hoạch nào để hoàn tất."));
+                problems.Add(new LaneFinishProblem(number, NotBeingHarvested, $"Làn {number} chưa ở trạng thái đang thu hoạch (chưa có đợt thu hoạch hay phần trăm đã thu) để hoàn tất."));
             }
             else if (states[lane.Id] == LaneState.Harvested)
             {
@@ -123,7 +124,7 @@ public sealed class HarvestLanesFinishService(
         if (problems.Count > 0)
         {
             return AppError.Conflict(
-                UserMessages.WrongStatus($"Raft {raft.Code}", "not ready: some lanes cannot be finished"),
+                UserMessages.HarvestRefused($"Bè {raft.Code} chưa sẵn sàng: có làn chưa thể hoàn tất thu hoạch. Không có làn nào được lưu."),
                 new Dictionary<string, object?> { ["lanes"] = problems });
         }
 
@@ -131,13 +132,25 @@ public sealed class HarvestLanesFinishService(
         var actorId = toFinish.Count == 0 ? Guid.Empty : currentUser.AccountId ?? throw new InvalidOperationException("A lane finish needs an authenticated caller.");
         foreach (var (lane, number, latest, inLots) in toFinish)
         {
+            var current = day.Percents?.GetValueOrDefault(lane.Id) ?? new LanePercents(0m, 0m);
+            if (latest is null)
+            {
+                LaneFinishPercent.RecordWhole(lane.Id, current, progress, cycle.Id, actorId, timeProvider.GetUtcNow(), timeProvider.Today());
+                audit.Record(new AuditEntry(HarvestLaneFinishService.LaneFinished, nameof(Raft))
+                {
+                    RecordId = raft.Id, RecordCode = raft.Code, ZoneId = raft.ZoneId,
+                    Before = new { Lane = number, HarvestedPercent = current.Harvested },
+                    After = new { Lane = number, HarvestedPercent = LanePercentRules.Whole },
+                });
+                after[lane.Id] = LaneState.Harvested;
+                continue;
+            }
+
             // Tracked copy of the lot, to change its lane row (the same instance when two lanes share a lot).
             var lot = await lots.GetForEditAsync(latest.LotId, cancellationToken) ?? throw new InvalidOperationException("The lot of a lane row must exist.");
             var row = lot.Lanes.Single(l => l.LaneId == lane.Id);
             row.IsFinished = true;
-            LaneFinishPercent.Apply(
-                row, inLots, day.Percents?.GetValueOrDefault(lane.Id) ?? new LanePercents(0m, 0m), day.Steps?.Any(s => s.LaneId == lane.Id) == true, progress, cycle.Id, actorId,
-                timeProvider.GetUtcNow(), timeProvider.Today());
+            LaneFinishPercent.Apply(row, inLots, current, day.Steps?.Any(s => s.LaneId == lane.Id) == true, progress, cycle.Id, actorId, timeProvider.GetUtcNow(), timeProvider.Today());
             unitOfWork.MarkChanged(lot);
             audit.Record(HarvestLotAudit.Entry(HarvestLaneFinishService.LaneFinished, lot, raft.ZoneId) with
             {

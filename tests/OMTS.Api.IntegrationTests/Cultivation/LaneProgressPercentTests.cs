@@ -221,4 +221,36 @@ public class LaneProgressPercentTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal(("Harvested", "100"), (lane.Text("state"), Percent(lane, "harvestedPercent")));
         Assert.Equal(2, lane.GetProperty("progressHistory").GetArrayLength());
     }
+
+    // QA of 13/11/2026: a lane harvested 30 % by hand with no lot is Being harvested, and "finish harvest" answered 409 for want of a lot.
+    [Fact]
+    public async Task Finishing_a_lane_that_is_being_harvested_only_by_a_manual_percent_completes_it_with_no_lot_one_lane_or_many()
+    {
+        var raft = await factory.SeededRaftAsync();
+        var owner = raft.Owner.Client;
+        foreach (var number in new[] { 2, 3 })
+        {
+            var version = (await owner.HarvestScreenAsync(raft.RaftId)).GetProperty("cycle").Text("rowVersion");
+            await (await owner.PutAsJsonAsync($"/api/rafts/{raft.RaftId}/lanes/{number}/progress", new { harvestedPercent = 30m, reason = "Recount", rowVersion = version })).ReadAsync(HttpStatusCode.OK);
+        }
+
+        var before = LaneOf(await owner.HarvestScreenAsync(raft.RaftId), 2);
+        Assert.Equal(("BeingHarvested", "30"), (before.Text("state"), Percent(before, "harvestedPercent")));
+
+        var one = await (await owner.PostAsync($"/api/rafts/{raft.RaftId}/lanes/2/finish-harvest", null)).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal(("Harvested", true, string.Empty), (one.Text("state"), one.Flag("changed"), one.Text("lotCode")));
+        var lane = LaneOf(await owner.HarvestScreenAsync(raft.RaftId), 2);
+        Assert.Equal(("Harvested", "100"), (lane.Text("state"), Percent(lane, "harvestedPercent")));
+        Assert.Equal(2, lane.GetProperty("progressHistory").GetArrayLength());
+        Assert.Equal(0, await factory.LotCountAsync(raft.RaftId));
+
+        var again = await (await owner.PostAsync($"/api/rafts/{raft.RaftId}/lanes/2/finish-harvest", null)).ReadAsync(HttpStatusCode.OK);
+        Assert.False(again.Flag("changed"));
+
+        var many = await (await owner.PostAsJsonAsync($"/api/rafts/{raft.RaftId}/finish-harvest", new { laneNumbers = new[] { 2, 3 } })).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal([3], many.Numbers("finished"));
+        Assert.Equal([2], many.Numbers("alreadyFinished"));
+        Assert.Equal("Harvested", LaneOf(await owner.HarvestScreenAsync(raft.RaftId), 3).Text("state"));
+        Assert.Equal(0, await factory.LotCountAsync(raft.RaftId));
+    }
 }

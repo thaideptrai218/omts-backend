@@ -106,6 +106,8 @@ public sealed class LaneIncidentService(
             var before = LaneIncidentAudit.Snapshot(lane, state.ToString());
             lane.IsDamaged = true;
             incident = NewIncident(lane, LaneIncidentKind.Damaged, day, state, reason, reasonCode, actor, today, timeProvider.GetUtcNow());
+            // Whether the lane holds seed in the Open cycle (QA of 13/11/2026: a lane 100 % seeded answered false): from its seeded share, which follows the seeding records and manual changes.
+            incident.HadSeed = day.Percents?.GetValueOrDefault(lane.Id) is { Seeded: > 0m };
             incidents.Add(incident);
             var slot = 0;
             foreach (var key in uploaded.Value!)

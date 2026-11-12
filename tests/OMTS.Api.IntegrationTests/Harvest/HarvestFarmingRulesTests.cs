@@ -183,6 +183,8 @@ public class HarvestFarmingRulesTests(AuthApiFactory factory) : IClassFixture<Au
 
         var growing = await (await owner.PostAsync($"/api/rafts/{raft.RaftId}/lanes/2/finish-harvest", null)).ReadAsync(HttpStatusCode.Conflict);
         Assert.Equal("MSG-GEN-09", growing.Text("code"));
+        // The detail is in Vietnamese (QA of 13/11/2026), naming the lane and the raft.
+        Assert.StartsWith("Làn 2 của bè ", growing.Text("detail"));
         Assert.Equal(HttpStatusCode.NotFound, (await owner.PostAsync($"/api/rafts/{raft.RaftId}/lanes/99/finish-harvest", null)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await owner.PostAsync($"/api/rafts/{Guid.NewGuid()}/lanes/1/finish-harvest", null)).StatusCode);
 
@@ -191,7 +193,9 @@ public class HarvestFarmingRulesTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal(HttpStatusCode.Forbidden, (await stranger.Client.PostAsync($"/api/rafts/{raft.RaftId}/lanes/1/finish-harvest", null)).StatusCode);
 
         await factory.CloseCycleAsync(raft.CycleId);
-        Assert.Equal("MSG-GEN-09", await (await owner.PostAsync($"/api/rafts/{raft.RaftId}/lanes/1/finish-harvest", null)).ErrorCodeAsync());
+        var closed = await (await owner.PostAsync($"/api/rafts/{raft.RaftId}/lanes/1/finish-harvest", null)).ReadAsync(HttpStatusCode.Conflict);
+        Assert.Equal("MSG-GEN-09", closed.Text("code"));
+        Assert.Contains("chưa có chu kỳ đang mở", closed.Text("detail"));
     }
 
     [Fact]

@@ -24,6 +24,7 @@
 | FARM-02, FARM-03 | Không có hao hụt, khối lượng mỗi con, tỷ lệ sống; không có thực thể kế hoạch thu hoạch (`HarvestPlan`) | Chờ quyết định (D3, D4, D5) |
 | FARM-04 | Thu hoạch KHÔNG bị chặn bởi mục tiêu sản lượng chu kỳ (quyết định Owner 12/11/2026: kế hoạch chỉ là kế hoạch). Màn thu hoạch trả `targetPercent` và `overTarget`; `confirmOverPlan`/`overPlanReason` của thu hoạch được nhận nhưng bỏ qua. Trần 110%/150% chỉ còn ở kế hoạch giống và vật tư | Đã làm |
 | FARM-05 | "Thu xong làn": `POST /api/rafts/{raftId}/lanes/{laneNumber}/finish-harvest`; hoàn tất nhiều làn một lần (`POST /api/rafts/{raftId}/finish-harvest`) | Đã commit (`d534d829`, `ade8a6d1`) |
+| FARM-05 (bổ sung 13/11/2026) | "Hoàn tất thu hoạch" cho làn Đang thu hoạch chỉ nhờ % đã thu nhập tay (không có lô thu hoạch): thêm một thay đổi tay (`LaneProgressChange`, lý do "Hoàn tất thu hoạch") đưa % đã thu lên 100, làn thành Đã thu hoạch, không tạo hay sửa lô; `lotCode` trả về chuỗi rỗng. Chi tiết lỗi 409 của hai endpoint này và gợi ý `hint` "Không thể thả giống vào làn …" trả bằng tiếng Việt. Báo hỏng làn trả `hadSeed` = làn có % đã thả > 0 | Đã làm (QA tích hợp) |
 | FARM-06 | Quy tắc tọa độ (từ chối 0,0 và hoán đổi; cảnh báo ngoài khung Việt Nam hoặc cách vùng quá 5 km) | Chờ quyết định (D9) |
 | STK-01 | Sổ kho: danh mục vật tư và giống, Xuất dùng (`InputIssue`), Xuất hủy, đơn vị và giá trên phiếu nhập; tồn âm bị từ chối (MSG-INPUT-01) | Đã làm (commit `ad3b9db`) |
 | STK-02 | Thả giống không đối chiếu với lô giống (GBR-04) | Chờ quyết định (Q8) |

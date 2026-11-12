@@ -55,6 +55,12 @@ public static class UserMessages
     /// </summary>
     public static UserMessage NurseryRefused(string text) => new(Gen09, text, Legacy.Msg61);
 
+    /// <summary>
+    /// MSG-GEN-09 in Vietnamese for finishing a harvest (QA of 13/11/2026: the English detail of the refusals shown to the Owner on the live demo): the same code and legacy code as
+    /// <see cref="WrongStatus"/>, with a text the screen can show as it is.
+    /// </summary>
+    public static UserMessage HarvestRefused(string text) => new(Gen09, text, Legacy.Msg61);
+
     /// <summary>MSG-GEN-09 (GBR-01): a record in this status cannot be used for the change asked for.</summary>
     /// <param name="objectName">e.g. "Farming zone"; the first letter is capitalized.</param>
     /// <param name="status">The display name of the current status, e.g. "Discontinued".</param>

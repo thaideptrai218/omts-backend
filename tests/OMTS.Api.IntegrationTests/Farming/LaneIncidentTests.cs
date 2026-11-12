@@ -50,6 +50,8 @@ public class LaneIncidentTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         Assert.Equal((true, "Growing", true, "LaneDamaged"), (saved.Flag("changed"), saved.GetProperty("lane").Text("state"), saved.GetProperty("lane").Flag("isDamaged"), saved.GetProperty("lane").Text("reasonCode")));
         Assert.Equal(("Damaged", "LineBroken", "Line snapped in the storm", "Growing"), (saved.GetProperty("incident").Text("kind"), saved.GetProperty("incident").Text("reasonCode"),
             saved.GetProperty("incident").Text("reason"), saved.GetProperty("incident").Text("stateBefore")));
+        // Lane 2 is seeded 100 %: the damage entry says the lane had seed (QA of 13/11/2026 saw false).
+        Assert.True(saved.GetProperty("incident").Flag("hadSeed"));
         var screen = await owner.HarvestScreenAsync(raft.RaftId);
         var lane = LaneOf(screen, 2);
         Assert.Equal((false, "LaneDamaged", true, "Growing"), (lane.Flag("canHarvest"), lane.Text("reasonCode"), lane.Flag("isDamaged"), lane.Text("state")));
@@ -96,7 +98,8 @@ public class LaneIncidentTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     {
         var raft = await factory.SeededRaftAsync(1, 2);
         var owner = raft.Owner.Client;
-        await (await ReportAsync(owner, raft.RaftId, 4)).ReadAsync(HttpStatusCode.OK);
+        var damage = await (await ReportAsync(owner, raft.RaftId, 4)).ReadAsync(HttpStatusCode.OK);
+        Assert.False(damage.GetProperty("incident").Flag("hadSeed"));
 
         var screen = await owner.GetFromJsonAsync<JsonElement>($"/api/cultivation-cycles/{raft.CycleId}/seeding-records");
         var lane4 = screen.GetProperty("lanes").EnumerateArray().Single(l => l.GetProperty("laneNumber").GetInt32() == 4);

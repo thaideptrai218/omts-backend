@@ -92,6 +92,6 @@ public sealed class SeedingSessionReader(ISeedLotRepository lots, IRaftRepositor
         var refused = lanes
             .Where(l => !isOwn.Contains(l.Id) && (!l.IsUsable || !SeedingLaneRules.CanBeSeeded(states[l.Id], completed)))
             .Select(l => l.LaneNumber).Order().ToList();
-        return (lanes, refused.Count == 0 ? null : $"Lanes {string.Join(", ", refused)} cannot be seeded now.");
+        return (lanes, refused.Count == 0 ? null : $"Không thể thả giống vào làn {string.Join(", ", refused)} lúc này.");
     }
 }
