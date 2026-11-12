@@ -29,23 +29,21 @@ jobs:
         include:
           - name: unit
             sql: false
-          # Integration shards s1-s5 are paused while develop is being fixed; the unit job still builds the whole
-          # solution, so build-test stays meaningful. Uncomment them to bring the database tests back.
-#         - name: s1
-#           sql: true
-#           filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Sales.|FullyQualifiedName~OMTS.Api.IntegrationTests.Notifications.'
-#         - name: s2
-#           sql: true
-#           filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Cultivation.|FullyQualifiedName~OMTS.Api.IntegrationTests.Employees.'
-#         - name: s3
-#           sql: true
-#           filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Purchasing.|FullyQualifiedName~OMTS.Api.IntegrationTests.Farming.'
-#         - name: s4
-#           sql: true
-#           filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Labor.|FullyQualifiedName~OMTS.Api.IntegrationTests.WaterQuality.'
-#         - name: s5
-#           sql: true
-#           filter: 'FullyQualifiedName!~OMTS.Api.IntegrationTests.Sales.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Notifications.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Cultivation.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Employees.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Purchasing.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Farming.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Labor.&FullyQualifiedName!~OMTS.Api.IntegrationTests.WaterQuality.'
+          - name: s1
+            sql: true
+            filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Sales.|FullyQualifiedName~OMTS.Api.IntegrationTests.Notifications.'
+          - name: s2
+            sql: true
+            filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Cultivation.|FullyQualifiedName~OMTS.Api.IntegrationTests.Employees.'
+          - name: s3
+            sql: true
+            filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Purchasing.|FullyQualifiedName~OMTS.Api.IntegrationTests.Farming.'
+          - name: s4
+            sql: true
+            filter: 'FullyQualifiedName~OMTS.Api.IntegrationTests.Labor.|FullyQualifiedName~OMTS.Api.IntegrationTests.WaterQuality.'
+          - name: s5
+            sql: true
+            filter: 'FullyQualifiedName!~OMTS.Api.IntegrationTests.Sales.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Notifications.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Cultivation.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Employees.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Purchasing.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Farming.&FullyQualifiedName!~OMTS.Api.IntegrationTests.Labor.&FullyQualifiedName!~OMTS.Api.IntegrationTests.WaterQuality.'
     steps:
       - uses: actions/checkout@v7
 
