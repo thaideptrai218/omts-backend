@@ -8,20 +8,22 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 /// <summary>
 /// NURSERY-01 (owner decision of 12/11/2026, Q21: a new cycle is created by completing a nursery batch): one batch Nursing in the first In Use demo zone, started today by its Zone Manager from a demo seed lot that
 /// still has stock, so the Owner can complete it, divide it between rafts and start the new flow. It goes through the real service: the pieces leave the stock in the same save (never below zero: a lot with too little
-/// left is passed over), and the start photo is a demo picture. Runs after the sessions and the harvests, which take their seed first. Matched by any batch of the zone: a rerun adds nothing and does not bring back a
+/// left is passed over), and the start photo is a demo picture. Runs after the sessions and the harvests, which take their seed first. Matched by its own note: a rerun adds nothing and does not bring back a
 /// batch the user cancelled or completed. The demo cycles keep working: they were started by the bootstrap, which the rule that a cycle is created by a nursery batch does not touch.
 /// </summary>
 internal sealed class DemoNurseryStep : IDemoSeedStep
 {
     private const decimal MinOnHand = 400m;
     private const decimal Pieces = 1000m;
+    private const string DemoNote = "Lô ươm mẫu để thử luồng hoàn tất ươm";
 
     public string Name => "nursery batch";
 
     public async Task<int> RunAsync(DemoSeedContext context, CancellationToken cancellationToken)
     {
         var zoneId = await context.Db.FarmingZones.Where(z => z.Code == DemoFarmingZoneStep.ZoneOne).Select(z => z.Id).SingleAsync(cancellationToken);
-        if (await context.Db.NurseryBatches.AnyAsync(b => b.ZoneId == zoneId, cancellationToken))
+        // Matched by its own note, whatever its status: batches a user made in the zone do not stop it, and a demo batch the user cancelled or completed is not brought back.
+        if (await context.Db.NurseryBatches.AnyAsync(b => b.ZoneId == zoneId && b.Note == DemoNote, cancellationToken))
         {
             return 0;
         }
@@ -37,7 +39,7 @@ internal sealed class DemoNurseryStep : IDemoSeedStep
         }
 
         var quantity = Math.Min(Pieces, Math.Floor(lot.OnHand / 2m));
-        var request = new StartNurseryRequest(lot.Id, quantity, null, "Lô ươm mẫu để thử luồng hoàn tất ươm", false);
+        var request = new StartNurseryRequest(lot.Id, quantity, null, DemoNote, false);
         DemoSeedContext.Ensure(await context.Get<NurseryBatchService>().StartAsync(zoneId, request, [DemoFiles.CyclePlanPhoto(90)], cancellationToken), "demo nursery batch");
         return 1;
     }
