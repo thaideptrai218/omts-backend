@@ -8,6 +8,7 @@ using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Cultivation.Nursery;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Farming;
+using OMTS.Application.Features.Files;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
 
@@ -27,11 +28,15 @@ public sealed class SeedingRecordCorrectionService(
     LaneStateReader laneStates,
     RowVersionGuard rowVersions,
     SeedingStockSync stockSync,
+    LanePercentGuard percents,
+    RecordPhotoStore photoStore,
+    UploadedFileSaver fileSaver,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
 {
-    public async Task<Result<SeedingRecordSaved>> CorrectAsync(Guid recordId, CorrectSeedingRequest request, CancellationToken cancellationToken)
+    /// <param name="newPhotos">New photos (owner decision of 12/11/2026). A session that has photos keeps 1 to 3 after the correction; one saved before the photos stays valid with none.</param>
+    public async Task<Result<SeedingRecordSaved>> CorrectAsync(Guid recordId, CorrectSeedingRequest request, IReadOnlyList<IncomingFile> newPhotos, CancellationToken cancellationToken)
     {
         var record = await records.GetForEditAsync(recordId, cancellationToken);
         if (record is null)
@@ -57,6 +62,25 @@ public sealed class SeedingRecordCorrectionService(
             return conflict;
         }
 
+        // The photos after the correction: all of them unless the form names the ones to keep; a session that has photos keeps at least one, one saved before the photos may stay without.
+        var keep = (request.KeepPhotoIds ?? []).ToHashSet();
+        var kept = request.ChangesPhotos ? record.Photos.Where(p => keep.Contains(p.Id)).ToList() : record.Photos.ToList();
+        var files = request.ChangesPhotos || newPhotos.Count > 0
+            ? StepPhotoService.Read(newPhotos, kept.Count, request.OtherFilePart, kept.Count == keep.Count || !request.ChangesPhotos, record.Photos.Count > 0 ? StepPhotoService.MinPhotos : 0)
+            : Result<IReadOnlyList<ValidatedFile>>.Success([]);
+        if (!files.IsSuccess)
+        {
+            return files.Error!;
+        }
+
+        var shares = percents.ForSeeding(
+            await percents.ReadAsync(record.CycleId, cancellationToken), fields!.Lanes, request.LanePercents, request.LanePercentsUnreadable,
+            record.Lanes.ToDictionary(l => l.LaneId, l => l.SeededPercent), record.Id);
+        if (!shares.IsSuccess)
+        {
+            return shares.Error!;
+        }
+
         // Judged only when the correction raises the seed (the other sessions and this one's new quantity against the plan), as for a harvest lot.
         string? overPlanReason = null;
         if (fields!.Quantity > record.Quantity)
@@ -72,18 +96,36 @@ public sealed class SeedingRecordCorrectionService(
             }
         }
 
-        var before = SeedingValues.Snapshot(record);
-        if (await stockSync.ReplaceAsync(record, fields!, raft, cancellationToken) is { } stockRefused)
+        var uploaded = await photoStore.UploadAllAsync(FileCategories.SeedingPhotos, files.Value!, cancellationToken);
+        if (!uploaded.IsSuccess)
         {
-            return stockRefused;
+            return uploaded.Error!;
         }
 
-        SeedingRecordRows.Apply(records, record, fields);
-        record.OverPlanReason = overPlanReason ?? record.OverPlanReason;
-        var (changedBefore, changedAfter) = AuditDiff.Changed(before, SeedingValues.Snapshot(record));
-        if (changedAfter is not null)
+        var before = SeedingValues.Snapshot(record);
+        // A refusal or a failure before the save removes the uploads: no row will point to them.
+        var replaced = await photoStore.PrepareSaveAsync(uploaded.Value!, async () =>
         {
-            // Lanes are rows of their own: a change of lanes only must still give the session a new version.
+            if (await stockSync.ReplaceAsync(record, fields!, raft, cancellationToken) is { } stockRefused)
+            {
+                return Result<bool>.Failure(stockRefused);
+            }
+
+            return Result<bool>.Success(true);
+        });
+        if (!replaced.IsSuccess)
+        {
+            return replaced.Error!;
+        }
+
+        SeedingRecordRows.Apply(records, record, fields!, shares.Value);
+        record.OverPlanReason = overPlanReason ?? record.OverPlanReason;
+        var photosChanged = request.ChangesPhotos || uploaded.Value!.Count > 0;
+        var removedKeys = photosChanged ? SeedingPhotoRows.Replace(records, record, kept, uploaded.Value!) : [];
+        var (changedBefore, changedAfter) = AuditDiff.Changed(before, SeedingValues.Snapshot(record));
+        if (changedAfter is not null || removedKeys.Count > 0 || uploaded.Value!.Count > 0)
+        {
+            // Lanes and photos are rows of their own: a change of them only must still give the session a new version.
             unitOfWork.MarkChanged(record);
             unitOfWork.MarkChanged(record.Cycle);
             if (record.NurseryBatchId is null)
@@ -91,8 +133,8 @@ public sealed class SeedingRecordCorrectionService(
                 unitOfWork.MarkChanged(fields!.Lot.Receipt);
             }
 
-            audit.Record(SeedingValues.Entry(SeedingValues.Corrected, record) with { Before = changedBefore, After = changedAfter, Reason = fields.Reason });
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+            audit.Record(SeedingValues.Entry(SeedingValues.Corrected, record) with { Before = changedBefore ?? before, After = changedAfter ?? SeedingValues.Snapshot(record), Reason = fields!.Reason });
+            await fileSaver.SaveAsync(uploaded.Value!, removedKeys, cancellationToken);
         }
 
         return await views.SavedAsync(record, raft, laneStates, timeProvider.Today(), cancellationToken);

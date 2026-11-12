@@ -23,6 +23,7 @@ public sealed class HarvestLotReadService(
     IPurchaseRequestFulfilment fulfilment,
     ICooperativeRepository cooperatives,
     LaneStateReader laneStates,
+    LaneProgressViews laneProgress,
     HarvestLotViews views,
     ZoneAccessGuard zoneAccess,
     IStatusCatalog statusCatalog,
@@ -50,6 +51,7 @@ public sealed class HarvestLotReadService(
         var mayRecord = open is not null && raftIsEditable && mayCreate;
         var ofCycle = open is null ? [] : await lots.ListByCycleAsync(open.Id, cancellationToken);
         var seedLotCodes = open is null ? new Dictionary<Guid, IReadOnlyList<string>>() : SeedLotCodesByLane(await seedingRecords.ListByCycleAsync(open.Id, cancellationToken));
+        var progress = await laneProgress.InfoAsync(day, cancellationToken);
         var lanes = raft.Lanes
             .Where(l => l.StatusId == StatusIds.Lane.InUse || day.LanesWithRecords.Contains(l.Id))
             .OrderBy(l => l.LaneNumber)
@@ -68,7 +70,8 @@ public sealed class HarvestLotReadService(
                     ofLane.Sum(lot => lot.CageCount / lot.Lanes.Count),
                     l.IsDamaged,
                     l.IsOutOfService,
-                    Farming.Rafts.RaftGeometry.EffectiveLineLength(l, raft));
+                    Farming.Rafts.RaftGeometry.EffectiveLineLength(l, raft),
+                    progress[l.Id].SeededPercent, progress[l.Id].HarvestedPercent, progress[l.Id].LastModifiedByName, progress[l.Id].LastModifiedAt, progress[l.Id].ProgressHistory);
             })
             .ToList();
         var cooperative = await cooperatives.GetCurrentAsync(cancellationToken) ?? throw new InvalidOperationException("A harvest lot needs the cooperative created at deployment.");

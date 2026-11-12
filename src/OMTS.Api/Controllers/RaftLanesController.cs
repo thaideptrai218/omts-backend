@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using OMTS.Api.Common;
 using OMTS.Api.Filters;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Farming.Rafts;
 
 namespace OMTS.Api.Controllers;
@@ -13,16 +14,38 @@ namespace OMTS.Api.Controllers;
 /// </summary>
 [ApiController]
 [Authorize]
-public sealed class RaftLanesController(LaneIncidentService commands, LaneIncidentReadService reads, LaneIncidentPhotoService photos) : ControllerBase
+public sealed class RaftLanesController(LaneIncidentService commands, LaneIncidentReadService reads, LaneIncidentPhotoService photos, LaneProgressService progress) : ControllerBase
 {
+    private const string PhotosField = "Photos";
+
+    // Three photos of 10 MB plus the multipart envelope.
+    private const long MaxUploadBytes = 35 * 1024 * 1024;
+
     /// <summary>
-    /// Reports the lane damaged: seeding and harvest on it are blocked and it keeps its state. Body <c>reason</c> (required), <c>reasonCode</c> (optional) and the raft <c>rowVersion</c>. 200 with
-    /// <c>changed: false</c> when it is already damaged; 409 MSG-GEN-09 when the lane is out of service or removed.
+    /// Reports the lane damaged: seeding and harvest on it are blocked and it keeps its state. Multipart (owner decision of 12/11/2026): <c>reason</c> (required: when, which lane, how it was damaged), <c>reasonCode</c>
+    /// (optional), the raft <c>rowVersion</c> and 1 to 3 <c>photos</c> parts (JPEG or PNG, at most 10 MB each; 400 on <c>Photos</c> otherwise). 200 with <c>changed: false</c> when it is already damaged;
+    /// 409 MSG-GEN-09 when the lane is out of service or removed.
     /// </summary>
     [HttpPost("api/rafts/{raftId:guid}/lanes/{laneNumber:int}/report-damage")]
+    [RequestSizeLimit(MaxUploadBytes)]
+    [UploadField(PhotosField)]
+    [Consumes("multipart/form-data")]
     [ProducesResponseType<LaneIncidentSaved>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ReportDamage(Guid raftId, int laneNumber, ReportLaneDamageRequest request, CancellationToken cancellationToken) =>
-        (await commands.ReportDamageAsync(raftId, laneNumber, request, cancellationToken)).ToActionResult(Ok);
+    public async Task<IActionResult> ReportDamage(Guid raftId, int laneNumber, [FromForm] ReportLaneDamageForm form, CancellationToken cancellationToken) =>
+        !Request.HasFormContentType
+            ? StatusCode(StatusCodes.Status415UnsupportedMediaType)
+            : (await commands.ReportDamageAsync(
+                raftId, laneNumber, new ReportLaneDamageRequest(form.Reason, form.ReasonCode, form.RowVersion, Request.Form.Files.HasPartOtherThan(PhotosField)),
+                await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// Changes the seeded and/or harvested percentage of a lane by hand (owner decision of 12/11/2026). Body <c>seededPercent</c> and/or <c>harvestedPercent</c> (0 to 100), <c>reason</c> (required) and the
+    /// <c>rowVersion</c> of the Open cycle. 200 with the lane as it is now and its history (<c>changed: false</c> when nothing differs); 409 MSG-GEN-09 <c>LANE_NOT_SEEDED</c> / <c>LANE_OUT_OF_SERVICE</c>.
+    /// </summary>
+    [HttpPut("api/rafts/{raftId:guid}/lanes/{laneNumber:int}/progress")]
+    [ProducesResponseType<LaneProgressSaved>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ChangeProgress(Guid raftId, int laneNumber, LaneProgressRequest request, CancellationToken cancellationToken) =>
+        (await progress.ChangeAsync(raftId, laneNumber, request, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>
     /// Records the repair of a damaged lane: <c>reason</c> (what was done) and optional <c>materials</c> (<c>itemId</c>, <c>quantity</c>, <c>unit</c>), each checked against the stock on hand

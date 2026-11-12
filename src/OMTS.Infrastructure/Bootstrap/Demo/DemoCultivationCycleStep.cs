@@ -37,7 +37,8 @@ internal sealed class DemoCultivationCycleStep : IDemoSeedStep
                     continue;
                 }
 
-                DemoSeedContext.Ensure(await service.StartAsync(raft.Id, Request(context.Today, number), cancellationToken), $"cycle of raft {code}");
+                DemoSeedContext.Ensure(
+                    await service.StartAsync(raft.Id, Request(context.Today, number), [DemoFiles.CyclePlanPhoto(number)], cancellationToken, bootstrap: true), $"cycle of raft {code}");
                 created++;
             }
         }

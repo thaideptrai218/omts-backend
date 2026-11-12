@@ -18,12 +18,17 @@ namespace OMTS.Application.Features.Harvest;
 /// <param name="CrewUnreadable">An id was sent that is not a GUID.</param>
 public sealed record RecordHarvestRequest(
     IReadOnlyList<int>? LaneNumbers, IReadOnlyList<int>? FinishedLaneNumbers, decimal? CageCount, decimal? EstimatedKg, bool EstimatedKgIsUnreadable = false, bool OtherFilePart = false,
-    bool ConfirmOverPlan = false, string? OverPlanReason = null, Guid? PurchaseRequestId = null, IReadOnlyList<Guid>? Crew = null, bool CrewUnreadable = false);
+    bool ConfirmOverPlan = false, string? OverPlanReason = null, Guid? PurchaseRequestId = null, IReadOnlyList<Guid>? Crew = null, bool CrewUnreadable = false,
+    IReadOnlyDictionary<int, decimal>? LanePercents = null, bool LanePercentsUnreadable = false);
 
 /// <summary>A photo of a lot, for staff.</summary>
-/// <param name="Key">The storage key.</param>
+/// <param name="Id">The id of the photo row, as on the other steps (<c>photos[{id,url}]</c>).</param>
+/// <param name="Key">The storage key: what <c>keepPhotoKeys</c> names when a correction keeps the photo.</param>
 /// <param name="Url">A signed link that expires; read the lot again for a new one.</param>
-public sealed record HarvestLotPhotoView(string Key, int SortOrder, string Url);
+public sealed record HarvestLotPhotoView(string Key, int SortOrder, string Url, Guid Id = default);
+
+/// <summary>The share of a lane a lot harvested (owner decision of 12/11/2026); null when nobody entered it.</summary>
+public sealed record HarvestLanePercentView(int LaneNumber, decimal? Percent);
 
 /// <summary>A lot on the Harvest lots screen (SCR-HARVEST-01).</summary>
 /// <param name="LaneNumbers">In number order.</param>
@@ -105,7 +110,8 @@ public sealed record HarvestLotView(
     string? OverPlanReason = null,
     Guid? PurchaseRequestId = null,
     string? PurchaseRequestCode = null,
-    IReadOnlyList<HarvestCrewMemberView>? Crew = null);
+    IReadOnlyList<HarvestCrewMemberView>? Crew = null,
+    IReadOnlyList<HarvestLanePercentView>? LanePercents = null);
 
 /// <summary>Answer of a recorded harvest.</summary>
 /// <param name="EverySeededLaneHarvested">Every seeded lane of the cycle shows Harvested now: the cycle can be closed normally (BR-CYCLE-07).</param>
@@ -144,7 +150,12 @@ public sealed record HarvestLaneView(
     decimal HarvestedCages = 0m,
     bool IsDamaged = false,
     bool IsOutOfService = false,
-    decimal? LineLengthM = null);
+    decimal? LineLengthM = null,
+    decimal SeededPercent = 0m,
+    decimal? HarvestedPercent = null,
+    string? LastModifiedByName = null,
+    DateTimeOffset? LastModifiedAt = null,
+    IReadOnlyList<LaneProgressChangeView>? ProgressHistory = null);
 
 /// <summary>The Harvest lots screen of a raft (SCR-HARVEST-01).</summary>
 /// <param name="Cycle">The Open cycle, or null: no lot can be recorded.</param>

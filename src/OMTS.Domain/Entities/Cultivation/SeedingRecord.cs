@@ -38,5 +38,10 @@ public class SeedingRecord : AuditableEntity
     /// <summary>The reason given when the seed of the cycle went above 110 % of its planned seed quantity (confirmed by the caller); null otherwise.</summary>
     public string? OverPlanReason { get; set; }
 
+    public const int MaxPhotos = 3;
+
     public ICollection<SeedingRecordLane> Lanes { get; set; } = [];
+
+    /// <summary>On-site photos, 1 to <see cref="MaxPhotos"/> on a session recorded since 12/11/2026, none on an older one.</summary>
+    public ICollection<SeedingRecordPhoto> Photos { get; set; } = [];
 }

@@ -11,7 +11,7 @@ namespace OMTS.Application.Features.Harvest;
 
 /// <summary>The checked fields of a lot; <paramref name="EstimatedKg"/> holds the worked-out value when none was sent.</summary>
 internal sealed record HarvestLotFields(
-    IReadOnlyList<Lane> Lanes, IReadOnlySet<Guid> FinishedLaneIds, decimal CageCount, decimal EstimatedKg);
+    IReadOnlyList<Lane> Lanes, IReadOnlySet<Guid> FinishedLaneIds, decimal CageCount, decimal EstimatedKg, IReadOnlyDictionary<Guid, decimal?>? Shares = null);
 
 /// <summary>What a correction adds to the fields of a harvest: the reason, kept in the audit log, and why the finished lanes cannot be so.</summary>
 /// <param name="OwnLaneIds">
@@ -87,10 +87,11 @@ internal static class HarvestLotFieldReader
         return null;
     }
 
-    /// <summary>The photos are optional and checked once, as their content does not change: the answer holds why they were refused.</summary>
+    /// <summary>The photos are checked once, as their content does not change: the answer holds why they were refused. A new lot needs 1 to 3 on-site photos (owner decision of 12/11/2026).</summary>
     /// <param name="kept">How many current photos stay on the lot.</param>
     /// <param name="keysAreKnown">Every key the client asked to keep is a photo of this lot.</param>
-    public static (IReadOnlyList<ValidatedFile> Files, string? Hint) ReadPhotos(IReadOnlyList<IncomingFile> photos, bool otherFilePart, int kept = 0, bool keysAreKnown = true)
+    /// <param name="minimum">The least photos the lot must end with: 1 for a new lot or one that has photos; 0 for one recorded before the photos, which stays valid without.</param>
+    public static (IReadOnlyList<ValidatedFile> Files, string? Hint) ReadPhotos(IReadOnlyList<IncomingFile> photos, bool otherFilePart, int kept = 0, bool keysAreKnown = true, int minimum = 0)
     {
         if (otherFilePart)
         {
@@ -102,12 +103,17 @@ internal static class HarvestLotFieldReader
             return ([], "Keep only photos of this lot.");
         }
 
-        if (kept + photos.Count > HarvestLot.MaxPhotos)
+        if (kept + photos.Count < minimum)
         {
-            return ([], $"A lot holds at most {HarvestLot.MaxPhotos} photos.");
+            return ([], $"Cần ít nhất {minimum} ảnh chụp tại hiện trường (tối đa {StepPhotoService.MaxPhotos} ảnh).");
         }
 
-        var validated = FileValidator.Validate(photos, FileRules.Photos);
+        if (kept + photos.Count > StepPhotoService.MaxPhotos)
+        {
+            return ([], $"Tối đa {StepPhotoService.MaxPhotos} ảnh cho mỗi lô thu hoạch.");
+        }
+
+        var validated = FileValidator.Validate(photos, FileRules.Photos with { MaxFiles = StepPhotoService.MaxPhotos });
         return validated.IsValid ? (validated.Files, null) : ([], validated.Problem);
     }
 

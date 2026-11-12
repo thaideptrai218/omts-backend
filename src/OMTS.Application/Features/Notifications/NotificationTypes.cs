@@ -68,6 +68,9 @@ public static class NotificationTypes
     /// <summary>A lane of a raft put out of service (decision of 12/11/2026), to the Cooperative Owner unless the Owner did it.</summary>
     public const string LaneOutOfService = "LANE_OUT_OF_SERVICE";
 
+    /// <summary>The seeded or harvested percentage of a lane changed by hand by a Zone Manager (decision of 12/11/2026), to the Cooperative Owner unless the Owner did it; the generic message code stands in for the SRS.</summary>
+    public const string LaneProgressChanged = "LANE_PROGRESS_CHANGED";
+
     /// <summary>A nursery batch started, edited, cancelled, completed or corrected by a Zone Manager (decision of 12/11/2026), to the Cooperative Owner unless the Owner did it; the generic message code stands in for the SRS.</summary>
     public const string NurseryRecorded = "NURSERY_RECORDED";
 
@@ -155,6 +158,7 @@ public static class NotificationTypes
         // Open the raft with its lanes, where the repair or the out-of-service is recorded.
         new(LaneDamaged, "Lane damaged", Default, [CooperativeOwner], NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
         new(LaneOutOfService, "Lane out of service", Default, [CooperativeOwner], NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
+        new(LaneProgressChanged, "Lane progress changed", Default, [CooperativeOwner], NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
         // Opens the nursery batch (ươm giống), in its zone.
         new(NurseryRecorded, "Nursery recorded", Default, [CooperativeOwner], NotificationOpenAccess.InZone(PermissionFunctions.CultivationCycles, PermissionAction.View)),
         // Opens the lot, where it can be closed by hand (HARVEST-02).

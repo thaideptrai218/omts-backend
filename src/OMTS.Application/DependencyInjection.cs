@@ -174,6 +174,9 @@ public static class DependencyInjection
 
         // CYCLE – cultivation cycles and the lane states derived from their records
         services.AddScoped<LaneStateReader>();
+        services.AddScoped<LaneProgressViews>();
+        services.AddScoped<LanePercentGuard>();
+        services.AddScoped<LaneProgressService>();
         services.AddScoped<CultivationCycleViews>();
         services.AddScoped<CycleWriteGuard>();
         services.AddScoped<CultivationLogViews>();

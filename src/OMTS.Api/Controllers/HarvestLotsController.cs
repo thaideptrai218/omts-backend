@@ -20,8 +20,8 @@ public sealed class HarvestLotsController(
 {
     private const string PhotosField = "Photos";
 
-    // Ten photos of 10 MB plus the multipart envelope; a larger body answers MSG-GEN-01 on the photos.
-    private const long MaxUploadBytes = 105 * 1024 * 1024;
+    // Three photos of 10 MB plus the multipart envelope (owner decision of 12/11/2026); a larger body answers MSG-GEN-01 on the photos.
+    private const long MaxUploadBytes = 35 * 1024 * 1024;
 
     /// <summary>The Harvest lots screen: the lanes with their state today and the lots of the Open cycle, lots for sale first.</summary>
     [HttpGet("api/rafts/{raftId:guid}/harvest-lots")]
@@ -48,7 +48,8 @@ public sealed class HarvestLotsController(
             Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, !estimatedIsRead, Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)),
             form.ConfirmOverPlan, form.OverPlanReason,
             Guid.TryParse(form.PurchaseRequestId, out var requestId) && requestId != Guid.Empty ? requestId : null,
-            ReadCrew(form.Crew, form.ReplaceCrew, out var crewUnreadable), crewUnreadable);
+            ReadCrew(form.Crew, form.ReplaceCrew, out var crewUnreadable), crewUnreadable,
+            LanePercents(form.LanePercents, out var percentsUnreadable), percentsUnreadable);
         return (await recording.RecordAsync(raftId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
             .ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
     }
@@ -128,7 +129,8 @@ public sealed class HarvestLotsController(
         var estimatedIsRead = TryDecimal(form.EstimatedKg, out var estimatedKg);
         var request = new CorrectHarvestLotRequest(
             Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, form.KeepPhotoKeys, form.Reason, form.RowVersion, !estimatedIsRead,
-            Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)), form.ConfirmOverPlan, form.OverPlanReason, ReadCrew(form.Crew, form.ReplaceCrew, out var crewUnreadable), crewUnreadable);
+            Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)), form.ConfirmOverPlan, form.OverPlanReason, ReadCrew(form.Crew, form.ReplaceCrew, out var crewUnreadable), crewUnreadable,
+            LanePercents(form.LanePercents, out var percentsUnreadable), percentsUnreadable);
         return (await corrections.CorrectAsync(lotId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken)).ToActionResult(Ok);
     }
 

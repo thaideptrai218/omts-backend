@@ -15,6 +15,7 @@ internal static partial class RecordHistoryLabels
         ["PurchaseRequestId"] = ("Đơn đặt mua", null),
         ["Lanes"] = ("Làn thu hoạch", null),
         ["FinishedLanes"] = ("Làn đã thu xong", null),
+        ["LanePercents"] = ("Phần trăm đã thu từng làn", null),
         ["CageCount"] = ("Số lồng", Cage),
         ["KgPerCage"] = ("Cân nặng ước tính mỗi lồng", "kg/lồng"),
         ["EstimatedKg"] = ("Sản lượng ước tính", "kg"),
@@ -35,8 +36,16 @@ internal static partial class RecordHistoryLabels
         ["SeedingDate"] = ("Ngày thả giống", null),
         ["SeedLot"] = ("Lô giống", null),
         ["Lanes"] = ("Làn thả giống", null),
+        ["LanePercents"] = ("Phần trăm đã thả từng làn", null),
         ["Quantity"] = ("Số lượng giống", null),
+        ["Photos"] = ("Ảnh", null),
         ["OverPlanReason"] = ("Lý do vượt kế hoạch", null),
+    };
+
+    private static readonly Dictionary<string, (string Label, string? Unit)> LaneProgress = new()
+    {
+        ["SeededPercent"] = ("Phần trăm đã thả", "%"),
+        ["HarvestedPercent"] = ("Phần trăm đã thu", "%"),
     };
 
     private static readonly Dictionary<string, (string Label, string? Unit)> Material = new()
@@ -67,6 +76,7 @@ internal static partial class RecordHistoryLabels
         ["EarlyReason"] = ("Lý do chốt sớm", null),
         ["Status"] = ("Trạng thái", null),
         ["SeedingCompletedOn"] = ("Ngày hoàn tất thả giống", null),
+        ["Photos"] = ("Ảnh kế hoạch", null),
     };
 
     private static readonly Dictionary<string, (string Label, string? Unit)> Nursery = new()
@@ -91,6 +101,7 @@ internal static partial class RecordHistoryLabels
         ["Edited"] = "Chỉnh sửa",
         ["TraceCorrected"] = "Hiệu chỉnh truy xuất",
         ["Removed"] = "Xóa",
+        ["ProgressChanged"] = "Chỉnh phần trăm tiến độ làn",
         ["LaneFinished"] = "Kết thúc thu hoạch làn",
         ["HarvestLanesFinished"] = "Hoàn tất thu hoạch nhiều làn",
         ["Started"] = "Bắt đầu vụ",
@@ -124,6 +135,7 @@ internal static partial class RecordHistoryLabels
             "CultivationLog" => Log,
             "CultivationCycle" => Cycle,
             "NurseryBatch" => Nursery,
+            "Lane" => LaneProgress,
             _ => null,
         };
         return table is not null && table.TryGetValue(field, out var known) ? known : (Words().Replace(field, " $1").Trim(), null);

@@ -51,11 +51,17 @@ public sealed class RaftViews(IRaftMaterialCostQuery materialCosts, IFileStorage
         .ToList();
 
     /// <summary>Every lane of the raft in number order with its state on a date (BR-FARM-03).</summary>
-    public IReadOnlyList<LaneDayView> LanesOn(Raft raft, IReadOnlyDictionary<Guid, LaneState> states) => raft.Lanes
+    /// <param name="progress">The percentages of each lane in the cycle of the day (<see cref="LaneProgressViews"/>); left out, the lanes show none.</param>
+    public IReadOnlyList<LaneDayView> LanesOn(Raft raft, IReadOnlyDictionary<Guid, LaneState> states, IReadOnlyDictionary<Guid, LaneProgressInfo>? progress = null) => raft.Lanes
         .OrderBy(l => l.LaneNumber)
-        .Select(l => new LaneDayView(
-            l.Id, l.LaneNumber, l.StatusId, statusCatalog.DisplayNameOf(l.StatusId), states[l.Id],
-            l.IsDamaged, l.IsOutOfService, RaftGeometry.EffectiveLineLength(l, raft), LaneReasonCodes.Of(l)))
+        .Select(l =>
+        {
+            var info = progress?.GetValueOrDefault(l.Id);
+            return new LaneDayView(
+                l.Id, l.LaneNumber, l.StatusId, statusCatalog.DisplayNameOf(l.StatusId), states[l.Id],
+                l.IsDamaged, l.IsOutOfService, RaftGeometry.EffectiveLineLength(l, raft), LaneReasonCodes.Of(l),
+                info?.SeededPercent ?? 0m, info?.HarvestedPercent, info?.LastModifiedByName, info?.LastModifiedAt, info?.ProgressHistory);
+        })
         .ToList();
 
     /// <summary>The raft with MSG-GEN-05 "{what} saved." (FARM-04.0 step 6).</summary>

@@ -33,6 +33,7 @@ public static class HarvestLotAudit
                 lot.PurchaseRequestId,
                 Lanes = lot.Lanes.Select(l => l.Lane.LaneNumber).Order().ToList(),
                 FinishedLanes = lot.Lanes.Where(l => l.IsFinished).Select(l => l.Lane.LaneNumber).Order().ToList(),
+                LanePercents = LanePercents(lot),
                 lot.CageCount,
                 lot.KgPerCage,
                 lot.EstimatedKg,
@@ -48,12 +49,19 @@ public static class HarvestLotAudit
                 lot.PurchaseRequestId,
                 Lanes = lot.Lanes.Select(l => l.Lane.LaneNumber).Order().ToList(),
                 FinishedLanes = lot.Lanes.Where(l => l.IsFinished).Select(l => l.Lane.LaneNumber).Order().ToList(),
+                LanePercents = LanePercents(lot),
                 lot.CageCount,
                 lot.KgPerCage,
                 lot.EstimatedKg,
                 lot.OverPlanReason,
                 Photos = lot.Photos.OrderBy(p => p.SortOrder).Select(p => p.FileKey).ToList(),
             };
+
+    /// <summary>The share each lane took, as "lane: percent%" in lane order; "-" when nobody entered it.</summary>
+    private static List<string> LanePercents(HarvestLot lot) => lot.Lanes
+        .OrderBy(l => l.Lane.LaneNumber)
+        .Select(l => $"{l.Lane.LaneNumber}: {(l.HarvestedPercent is { } p ? p.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "%" : "-")}")
+        .ToList();
 
     /// <summary>The changed values of a correction; a Published lot is named, as its page shows the correction at once (BR-TRACE-05).</summary>
     internal static JsonObject WithAffectedPublishedLot(JsonObject changedAfter, HarvestLot lot)

@@ -17,6 +17,7 @@ public sealed class RaftReadService(
     RaftViews views,
     FarmingLookupAccess lookupAccess,
     LaneStateReader laneStates,
+    LaneProgressViews laneProgress,
     IStatusCatalog statusCatalog,
     TimeProvider timeProvider)
 {
@@ -76,6 +77,6 @@ public sealed class RaftReadService(
 
         var today = timeProvider.Today();
         var day = await laneStates.ReadAsync(raft, today, cancellationToken);
-        return new RaftLanesToday(raft.Id, raft.Code, today, views.LanesOn(raft, day.States));
+        return new RaftLanesToday(raft.Id, raft.Code, today, views.LanesOn(raft, day.States, await laneProgress.InfoAsync(day, cancellationToken)));
     }
 }

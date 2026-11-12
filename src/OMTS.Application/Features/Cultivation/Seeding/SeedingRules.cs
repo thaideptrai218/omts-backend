@@ -42,7 +42,9 @@ public static class SeedingValues
         record.SeedingDate,
         SeedLot = LotCode(record.SeedLotLine),
         Lanes = record.Lanes.Select(l => l.Lane.LaneNumber).Order().ToList(),
+        LanePercents = record.Lanes.OrderBy(l => l.Lane.LaneNumber).Select(l => $"{l.Lane.LaneNumber}: {l.SeededPercent:0.##}%").ToList(),
         record.Quantity,
+        Photos = record.Photos.Count,
         record.OverPlanReason,
     };
 

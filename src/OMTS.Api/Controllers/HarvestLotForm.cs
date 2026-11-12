@@ -39,7 +39,13 @@ public class HarvestLotForm
     /// <summary>Send true to make the crew of a correction exactly the <c>crew</c> fields, none meaning an empty crew: a form cannot send an empty list, so this is how a crew is cleared.</summary>
     public bool ReplaceCrew { get; set; }
 
-    /// <summary>One part per photo, none is fine: JPEG or PNG, at most 10 MB each.</summary>
+    /// <summary>
+    /// The share of each lane the lot harvested (owner decision of 12/11/2026): one JSON object, lane number to percent, e.g. <c>{"1":60,"2":100}</c>. A lane left out takes what is left when the lot finishes it,
+    /// else no share is entered; a correction keeps the share of a lane it does not name.
+    /// </summary>
+    public string? LanePercents { get; set; }
+
+    /// <summary>One part per photo, 1 to 3 when recording and for a lot that has photos: JPEG or PNG, at most 10 MB each.</summary>
     public List<IFormFile>? Photos { get; set; }
 }
 

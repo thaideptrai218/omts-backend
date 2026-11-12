@@ -10,6 +10,7 @@ internal sealed record CultivationLogValues(DateOnly VisitDate, string? Notes, I
 {
     private const string PhotosField = "Photos";
     private const int MaxNotesLength = 2000;
+    private const int MaxPhotosPerLog = StepPhotoService.MaxPhotos;
     private const int MaxReasonLength = 1000;
     private const string UnknownKeysHint = "Keep only photos of this log.";
 
@@ -69,17 +70,13 @@ internal sealed record CultivationLogValues(DateOnly VisitDate, string? Notes, I
             return ([], UnknownKeysHint);
         }
 
-        if (kept + files.Count == 0)
+        // The photos of a care log are optional, at most three (owner decision of 12/11/2026).
+        if (kept + files.Count > MaxPhotosPerLog)
         {
-            return ([], "Attach at least one photo.");
+            return ([], $"A log holds at most {MaxPhotosPerLog} photos.");
         }
 
-        if (kept + files.Count > CultivationLog.MaxPhotos)
-        {
-            return ([], $"A log holds at most {CultivationLog.MaxPhotos} photos.");
-        }
-
-        var validated = FileValidator.Validate(files, FileRules.Photos);
+        var validated = FileValidator.Validate(files, FileRules.Photos with { MaxFiles = MaxPhotosPerLog });
         return validated.IsValid ? (validated.Files, null) : ([], validated.Problem);
     }
 }

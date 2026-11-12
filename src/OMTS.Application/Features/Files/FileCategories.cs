@@ -41,6 +41,12 @@ public static class FileCategories
     /// <summary>Photos of the start of a nursery batch, <c>NurseryBatchPhoto.FileKey</c> with phase Start (1 to 3, mandatory). Staff only.</summary>
     public const string NurseryStartPhotos = "nursery-start-photos";
 
+    /// <summary>On-site photos of a seeding session, <c>SeedingRecordPhoto.FileKey</c> (1 to 3, mandatory on a new session). Staff only.</summary>
+    public const string SeedingPhotos = "seeding-photos";
+
+    /// <summary>Photos of the plan of a cycle started without a nursery batch, <c>CyclePlanPhoto.FileKey</c> (1 to 3, mandatory on a new cycle). Staff only.</summary>
+    public const string CyclePlanPhotos = "cycle-plan-photos";
+
     /// <summary>Photos of the completion of a nursery batch, <c>NurseryBatchPhoto.FileKey</c> with phase Completion (1 to 3, mandatory). Staff only.</summary>
     public const string NurseryCompletionPhotos = "nursery-completion-photos";
 }

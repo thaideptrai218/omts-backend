@@ -6,8 +6,11 @@ using OMTS.Application.Features.Farming.Rafts;
 
 namespace OMTS.Application.Features.Cultivation.Cycles;
 
-/// <summary>CYCLE-01.0. Without <see cref="StartDate"/> the cycle starts today; the plan estimates are optional. There is no expected harvest date any more (owner decision of 12/11/2026): a field sent for it is ignored.</summary>
-public sealed record StartCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, decimal? TargetYieldKg);
+/// <summary>
+/// CYCLE-01.0. Without <see cref="StartDate"/> the cycle starts today; the plan estimates are optional. There is no expected harvest date any more (owner decision of 12/11/2026): a field sent for it is ignored.
+/// The plan carries 1 to 3 photos, sent beside it; <paramref name="OtherFilePart"/>: a file came in a part not named <c>photos</c>.
+/// </summary>
+public sealed record StartCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, decimal? TargetYieldKg, bool OtherFilePart = false);
 
 /// <summary>CYCLE-01.1: the start date and the plan estimates as they should be; a plan estimate sent empty is cleared.</summary>
 public sealed record EditCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, decimal? TargetYieldKg, string? RowVersion);
@@ -41,7 +44,18 @@ public sealed record CycleView(
     string? NurseryCode = null,
     decimal? NurseryAllocated = null,
     decimal? NurserySeeded = null,
-    decimal? NurseryRemaining = null);
+    decimal? NurseryRemaining = null,
+    IReadOnlyList<CyclePlanPhotoView>? PlanPhotos = null,
+    bool PlanPhotosFromNursery = false);
+
+/// <summary>A photo of the plan of a cycle: <paramref name="Url"/> is a signed link that expires.</summary>
+public sealed record CyclePlanPhotoView(Guid Id, int SortOrder, string Url);
+
+/// <summary>
+/// Change the photos of the plan of a cycle started without a nursery batch (decision of 12/11/2026): the plan then keeps exactly the photos of <paramref name="KeepPhotoIds"/> and the new ones, 1 to 3.
+/// <paramref name="RowVersion"/> is the version of the cycle; <paramref name="OtherFilePart"/>: a file came in a part not named <c>photos</c>.
+/// </summary>
+public sealed record ChangePlanPhotosRequest(string? RowVersion, IReadOnlyList<Guid>? KeepPhotoIds, bool OtherFilePart = false);
 
 /// <summary>Answer of a cycle edit (CYCLE-01.1).</summary>
 /// <param name="Message">MSG-GEN-05 "Cultivation cycle saved.".</param>
@@ -86,9 +100,14 @@ public sealed record ZoneCycleItem(
 /// <param name="IsOutOfService">Put out of service (decision of 12/11/2026). The state shows <c>OutOfService</c> when seed hung on the lane in the cycle (the lane counts as finished at the close).</param>
 /// <param name="LineLengthM">The line length in effect (the lane's own, else the raft's); null when unknown.</param>
 /// <param name="ReasonCode">Why the lane cannot take seed or a harvest from its own flags: <c>LaneDamaged</c> or <c>LaneOutOfService</c>; null otherwise.</param>
+/// <param name="SeededPercent">The share of the lane hung in the cycle, 0 to 100 (owner decision of 12/11/2026); the state follows from it and <paramref name="HarvestedPercent"/>.</param>
+/// <param name="HarvestedPercent">The share harvested, 0 to 100; null when nobody entered it (a lane harvested in lots before the percentages).</param>
+/// <param name="LastModifiedByName">Who last changed the percentages by hand, with <paramref name="LastModifiedAt"/>; null when nobody did. <paramref name="ProgressHistory"/> lists those changes, the newest first.</param>
 public sealed record LaneDayView(
     Guid Id, int LaneNumber, int StatusId, string Status, LaneState State,
-    bool IsDamaged = false, bool IsOutOfService = false, decimal? LineLengthM = null, string? ReasonCode = null);
+    bool IsDamaged = false, bool IsOutOfService = false, decimal? LineLengthM = null, string? ReasonCode = null,
+    decimal SeededPercent = 0m, decimal? HarvestedPercent = null, string? LastModifiedByName = null, DateTimeOffset? LastModifiedAt = null,
+    IReadOnlyList<LaneProgressChangeView>? ProgressHistory = null);
 
 /// <summary>CYCLE-05: the lanes of a raft on a date with the cycle that was open then.</summary>
 /// <param name="Cycle">The cycle open on <paramref name="Date"/>, or null: the raft had none, so every lane is Not seeded.</param>

@@ -40,6 +40,7 @@ public sealed class HarvestLanesFinishService(
     IHarvestLotRepository lots,
     RaftViews raftViews,
     LaneStateReader laneStates,
+    ILaneProgressRepository progress,
     HarvestLotNotifier notifier,
     ZoneAccessGuard zoneAccess,
     RowVersionGuard rowVersions,
@@ -89,10 +90,11 @@ public sealed class HarvestLanesFinishService(
             return stale;
         }
 
-        var states = (await laneStates.ReadAsync(raft, timeProvider.Today(), cancellationToken)).States;
+        var day = await laneStates.ReadAsync(raft, timeProvider.Today(), cancellationToken);
+        var states = day.States;
         var problems = new List<LaneFinishProblem>();
         var already = new List<int>();
-        var toFinish = new List<(Lane Lane, int Number, HarvestLotLane Latest)>();
+        var toFinish = new List<(Lane Lane, int Number, HarvestLotLane Latest, IReadOnlyList<HarvestLotLane> InLots)>();
         foreach (var number in numbers.Order())
         {
             var lane = raft.Lanes.FirstOrDefault(l => l.LaneNumber == number && l.StatusId == StatusIds.Lane.InUse);
@@ -114,7 +116,7 @@ public sealed class HarvestLanesFinishService(
             }
             else
             {
-                toFinish.Add((lane, number, latest));
+                toFinish.Add((lane, number, latest, inLots));
             }
         }
 
@@ -126,11 +128,16 @@ public sealed class HarvestLanesFinishService(
         }
 
         var after = new Dictionary<Guid, LaneState>(states);
-        foreach (var (lane, number, latest) in toFinish)
+        var actorId = toFinish.Count == 0 ? Guid.Empty : currentUser.AccountId ?? throw new InvalidOperationException("A lane finish needs an authenticated caller.");
+        foreach (var (lane, number, latest, inLots) in toFinish)
         {
             // Tracked copy of the lot, to change its lane row (the same instance when two lanes share a lot).
             var lot = await lots.GetForEditAsync(latest.LotId, cancellationToken) ?? throw new InvalidOperationException("The lot of a lane row must exist.");
-            lot.Lanes.Single(l => l.LaneId == lane.Id).IsFinished = true;
+            var row = lot.Lanes.Single(l => l.LaneId == lane.Id);
+            row.IsFinished = true;
+            LaneFinishPercent.Apply(
+                row, inLots, day.Percents?.GetValueOrDefault(lane.Id) ?? new LanePercents(0m, 0m), day.Steps?.Any(s => s.LaneId == lane.Id) == true, progress, cycle.Id, actorId,
+                timeProvider.GetUtcNow(), timeProvider.Today());
             unitOfWork.MarkChanged(lot);
             audit.Record(HarvestLotAudit.Entry(HarvestLaneFinishService.LaneFinished, lot, raft.ZoneId) with
             {

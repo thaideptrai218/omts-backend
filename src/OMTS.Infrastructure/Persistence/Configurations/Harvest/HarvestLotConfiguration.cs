@@ -47,6 +47,9 @@ internal sealed class HarvestLotLaneConfiguration : IEntityTypeConfiguration<Har
         builder.HasKey(x => new { x.LotId, x.LaneId });
         builder.HasOne(x => x.Lot).WithMany(l => l.Lanes).HasForeignKey(x => x.LotId);
         builder.HasOne(x => x.Lane).WithMany().HasForeignKey(x => x.LaneId);
+        // The share of the lane this lot harvested; null when nobody entered it (before the percentages, or no share and the lane not finished).
+        builder.Property(x => x.HarvestedPercent).HasPrecision(5, 2);
+        builder.ToTable(t => t.HasCheckConstraint("CK_HarvestLotLane_HarvestedPercent", "[HarvestedPercent] IS NULL OR ([HarvestedPercent] > 0 AND [HarvestedPercent] <= 100)"));
     }
 }
 

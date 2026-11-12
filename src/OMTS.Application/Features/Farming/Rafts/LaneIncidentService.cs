@@ -10,6 +10,7 @@ using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Cultivation.MaterialUsages;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Cultivation.Seeding;
+using OMTS.Application.Features.Files;
 using OMTS.Application.Features.Harvest;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
@@ -37,6 +38,9 @@ public sealed class LaneIncidentService(
     MaterialUsageCycleGuard cycleGuard,
     MaterialUsageStockSync stockSync,
     LaneStateReader laneStates,
+    LaneProgressViews laneProgress,
+    RecordPhotoStore photoStore,
+    UploadedFileSaver fileSaver,
     RaftViews raftViews,
     LaneIncidentViews views,
     LaneIncidentNotifier notifier,
@@ -58,7 +62,12 @@ public sealed class LaneIncidentService(
 
     private sealed record Target(Raft Raft, Lane Lane, DateOnly Today, LaneDay Day, LaneState State, Guid Actor);
 
-    public async Task<Result<LaneIncidentSaved>> ReportDamageAsync(Guid raftId, int laneNumber, ReportLaneDamageRequest request, CancellationToken cancellationToken)
+    /// <summary>
+    /// Reports the lane damaged with 1 to 3 on-site photos and the note of what happened (owner decision of 12/11/2026). A repeated report (the lane is already damaged) answers as before without looking at the
+    /// photos; a new one stores them first, and a refused or failed save leaves none behind.
+    /// </summary>
+    public async Task<Result<LaneIncidentSaved>> ReportDamageAsync(
+        Guid raftId, int laneNumber, ReportLaneDamageRequest request, IReadOnlyList<IncomingFile> photos, CancellationToken cancellationToken)
     {
         var check = new FieldCheck();
         var reason = ReadReason(check, request.Reason, request.ReasonCode, out var reasonCode);
@@ -79,14 +88,44 @@ public sealed class LaneIncidentService(
             return await RepeatedAsync(raft, lane, day, LaneIncidentKind.Damaged, cancellationToken);
         }
 
-        var before = LaneIncidentAudit.Snapshot(lane, state.ToString());
-        lane.IsDamaged = true;
-        var incident = NewIncident(lane, LaneIncidentKind.Damaged, day, state, reason, reasonCode, actor, today, timeProvider.GetUtcNow());
-        incidents.Add(incident);
-        unitOfWork.MarkChanged(raft);
-        audit.Record(LaneIncidentAudit.Entry(LaneIncidentAudit.Damaged, raft, lane, reason) with { Before = before, After = LaneIncidentAudit.Snapshot(lane, state.ToString()) });
-        await notifier.DamagedAsync(raft, lane, reason, actor, cancellationToken);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        var files = StepPhotoService.Read(photos, otherFilePart: request.OtherFilePart);
+        if (!files.IsSuccess)
+        {
+            return files.Error!;
+        }
+
+        var uploaded = await photoStore.UploadAllAsync(FileCategories.LaneIncidentPhotos, files.Value!, cancellationToken);
+        if (!uploaded.IsSuccess)
+        {
+            return uploaded.Error!;
+        }
+
+        LaneIncident incident;
+        try
+        {
+            var before = LaneIncidentAudit.Snapshot(lane, state.ToString());
+            lane.IsDamaged = true;
+            incident = NewIncident(lane, LaneIncidentKind.Damaged, day, state, reason, reasonCode, actor, today, timeProvider.GetUtcNow());
+            incidents.Add(incident);
+            var slot = 0;
+            foreach (var key in uploaded.Value!)
+            {
+                var photo = new LaneIncidentPhoto { IncidentId = incident.Id, SortOrder = ++slot, FileKey = key };
+                incident.Photos.Add(photo);
+                incidents.AddPhoto(photo);
+            }
+
+            unitOfWork.MarkChanged(raft);
+            audit.Record(LaneIncidentAudit.Entry(LaneIncidentAudit.Damaged, raft, lane, reason) with { Before = before, After = LaneIncidentAudit.Snapshot(lane, state.ToString()) });
+            await notifier.DamagedAsync(raft, lane, reason, actor, cancellationToken);
+        }
+        catch
+        {
+            await fileSaver.DiscardAsync(uploaded.Value!);
+            throw;
+        }
+
+        await fileSaver.SaveAsync(uploaded.Value!, [], cancellationToken);
         return await SavedAsync(raft, lane, incident, day, true, cycle: null, cancellationToken);
     }
 
@@ -392,7 +431,7 @@ public sealed class LaneIncidentService(
         var saved = UserMessages.Saved("Lane incident");
         return new LaneIncidentSaved(
             await views.ViewAsync(incident, cancellationToken),
-            raftViews.LanesOn(raft, states).Single(l => l.Id == lane.Id),
+            raftViews.LanesOn(raft, states, await laneProgress.InfoAsync(day, cancellationToken)).Single(l => l.Id == lane.Id),
             changed,
             RowVersionGuard.Encode(raft.RowVersion),
             cycle is null ? null : RowVersionGuard.Encode(cycle.RowVersion),

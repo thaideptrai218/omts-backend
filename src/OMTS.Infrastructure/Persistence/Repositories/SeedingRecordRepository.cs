@@ -22,7 +22,7 @@ internal sealed class SeedingRecordRepository(OmtsDbContext db) : ISeedingRecord
     public async Task<IReadOnlyList<LaneSeeding>> LaneSeedingsAsync(Guid cycleId, CancellationToken cancellationToken) =>
         await db.SeedingRecordLanes.AsNoTracking()
             .Where(l => l.SeedingRecord.CycleId == cycleId)
-            .Select(l => new LaneSeeding(cycleId, l.LaneId, l.SeedingRecord.SeedingDate))
+            .Select(l => new LaneSeeding(cycleId, l.LaneId, l.SeedingRecord.SeedingDate, l.SeededPercent, l.SeedingRecord.CreatedAt, l.SeedingRecordId))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyDictionary<Guid, CycleSeedTotal>> SeedTotalsByCycleAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken)
@@ -37,18 +37,23 @@ internal sealed class SeedingRecordRepository(OmtsDbContext db) : ISeedingRecord
 
     public void Add(SeedingRecord record) => db.SeedingRecords.Add(record);
 
+    public void AddPhoto(SeedingRecordPhoto photo) => db.SeedingRecordPhotos.Add(photo);
+
+    public void RemovePhoto(SeedingRecordPhoto photo) => db.SeedingRecordPhotos.Remove(photo);
+
     public void AddLane(SeedingRecordLane lane) => db.SeedingRecordLanes.Add(lane);
 
     public void RemoveLane(SeedingRecordLane lane) => db.SeedingRecordLanes.Remove(lane);
 
     public void Remove(SeedingRecord record)
     {
+        db.SeedingRecordPhotos.RemoveRange(record.Photos);
         db.SeedingRecordLanes.RemoveRange(record.Lanes);
         db.SeedingRecords.Remove(record);
     }
 
     private static IQueryable<SeedingRecord> WithLot(IQueryable<SeedingRecord> records) =>
-        records.Include(r => r.Issue).Include(r => r.Lanes).ThenInclude(l => l.Lane)
+        records.Include(r => r.Issue).Include(r => r.Lanes).ThenInclude(l => l.Lane).Include(r => r.Photos)
             .Include(r => r.SeedLotLine).ThenInclude(l => l.Item)
             .Include(r => r.SeedLotLine).ThenInclude(l => l.Receipt).ThenInclude(r => r.Supplier);
 

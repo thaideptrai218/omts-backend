@@ -49,7 +49,7 @@ public sealed class HarvestLotViews(
         var photos = new List<HarvestLotPhotoView>(lot.Photos.Count);
         foreach (var photo in lot.Photos.OrderBy(p => p.SortOrder))
         {
-            photos.Add(new HarvestLotPhotoView(photo.FileKey, photo.SortOrder, await storage.GetReadUrlAsync(photo.FileKey, cancellationToken: cancellationToken)));
+            photos.Add(new HarvestLotPhotoView(photo.FileKey, photo.SortOrder, await storage.GetReadUrlAsync(photo.FileKey, cancellationToken: cancellationToken), photo.Id));
         }
 
         return new HarvestLotView(
@@ -89,7 +89,8 @@ public sealed class HarvestLotViews(
             lot.OverPlanReason,
             lot.PurchaseRequestId,
             lot.PurchaseRequest?.Code,
-            HarvestCrewService.ViewOf(lot));
+            HarvestCrewService.ViewOf(lot),
+            lot.Lanes.OrderBy(l => l.Lane.LaneNumber).Select(l => new HarvestLanePercentView(l.Lane.LaneNumber, l.HarvestedPercent)).ToList());
     }
 
     /// <summary>The lots of one cycle with their lanes: lots for sale first, then the latest harvest first (SCR-HARVEST-01). The raft comes with its zone.</summary>

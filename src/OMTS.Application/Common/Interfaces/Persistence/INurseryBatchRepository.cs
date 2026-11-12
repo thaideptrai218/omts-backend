@@ -44,6 +44,9 @@ public interface INurseryBatchRepository
     /// <summary>The seed hung in each of the cycles (the total of its seeding sessions); a cycle with none is left out.</summary>
     Task<IReadOnlyDictionary<Guid, decimal>> SeededByCycleAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken);
 
+    /// <summary>The completion photos of the batch in slot order, read only: the plan photos of the cycles created from it (decision of 12/11/2026).</summary>
+    Task<IReadOnlyList<NurseryBatchPhoto>> CompletionPhotosAsync(Guid batchId, CancellationToken cancellationToken);
+
     void Add(NurseryBatch batch);
 
     /// <summary>New rows under a tracked batch are added explicitly: their keys are already set.</summary>

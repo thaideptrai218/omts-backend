@@ -37,6 +37,7 @@ public sealed class HarvestLaneFinishService(
     IHarvestLotRepository lots,
     RaftViews raftViews,
     LaneStateReader laneStates,
+    ILaneProgressRepository progress,
     HarvestLotNotifier notifier,
     ZoneAccessGuard zoneAccess,
     AuditLogService audit,
@@ -78,7 +79,8 @@ public sealed class HarvestLaneFinishService(
         }
 
         // The cycle row is read before the lane states: the save fails if anything changed the cycle since.
-        var states = (await laneStates.ReadAsync(raft, timeProvider.Today(), cancellationToken)).States;
+        var day = await laneStates.ReadAsync(raft, timeProvider.Today(), cancellationToken);
+        var states = day.States;
         var inLots = await lots.ListOfLaneAsync(cycle.Id, lane.Id, cancellationToken);
         var latest = inLots.OrderByDescending(l => l.Lot.HarvestedAt).FirstOrDefault();
         if (latest is null || states[lane.Id] is not (LaneState.BeingHarvested or LaneState.Harvested))
@@ -97,6 +99,10 @@ public sealed class HarvestLaneFinishService(
         var lot = await lots.GetForEditAsync(latest.LotId, cancellationToken) ?? throw new InvalidOperationException("The lot of a lane row must exist.");
         var row = lot.Lanes.Single(l => l.LaneId == lane.Id);
         row.IsFinished = true;
+        var finisher = currentUser.AccountId ?? throw new InvalidOperationException("A lane finish needs an authenticated caller.");
+        LaneFinishPercent.Apply(
+            row, inLots, day.Percents?.GetValueOrDefault(lane.Id) ?? new LanePercents(0m, 0m), day.Steps?.Any(s => s.LaneId == lane.Id) == true, progress, cycle.Id, finisher,
+            timeProvider.GetUtcNow(), timeProvider.Today());
         unitOfWork.MarkChanged(lot);
         unitOfWork.MarkChanged(cycle);
         audit.Record(HarvestLotAudit.Entry(LaneFinished, lot, raft.ZoneId) with

@@ -64,8 +64,8 @@ public sealed class TraceSeedingReader(SeedingSessionReader sessions, TimeProvid
         }
 
         var cycle = record.Cycle;
-        var others = ofCycle.Where(s => s.Id != record.Id).SelectMany(s => s.Lanes.Select(l => new LaneSeeding(cycle.Id, l.LaneId, s.SeedingDate))).ToList();
-        var harvests = lots.SelectMany(lot => lot.Lanes.Select(l => new LaneHarvest(cycle.Id, l.LaneId, lot.HarvestDate, l.IsFinished))).ToList();
+        var others = ofCycle.Where(s => s.Id != record.Id).SelectMany(s => s.Lanes.Select(l => new LaneSeeding(cycle.Id, l.LaneId, s.SeedingDate, l.SeededPercent, s.CreatedAt, s.Id))).ToList();
+        var harvests = lots.SelectMany(lot => lot.Lanes.Select(l => new LaneHarvest(cycle.Id, l.LaneId, lot.HarvestDate, l.IsFinished, l.HarvestedPercent, lot.HarvestedAt, lot.Id))).ToList();
         var states = LaneStateRules.StatesOn(on, new CycleSpan(cycle.Id, cycle.RaftId, cycle.StartDate, cycle.CloseDate), raft.Lanes.Select(l => l.Id), others, harvests);
 
         // The seeding was marked complete before that day: only lanes still Not seeded then (BR-CYCLE-02).

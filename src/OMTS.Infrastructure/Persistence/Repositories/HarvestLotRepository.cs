@@ -26,7 +26,7 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
     public async Task<IReadOnlyList<LaneHarvest>> LaneHarvestsAsync(Guid cycleId, CancellationToken cancellationToken) =>
         await db.HarvestLotLanes.AsNoTracking()
             .Where(l => l.Lot.CycleId == cycleId)
-            .Select(l => new LaneHarvest(cycleId, l.LaneId, l.Lot.HarvestDate, l.IsFinished))
+            .Select(l => new LaneHarvest(cycleId, l.LaneId, l.Lot.HarvestDate, l.IsFinished, l.HarvestedPercent, l.Lot.HarvestedAt, l.LotId))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<HarvestLotLane>> ListOfLaneAsync(Guid cycleId, Guid laneId, CancellationToken cancellationToken) =>
@@ -38,7 +38,7 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
     public async Task<IReadOnlyList<LotLaneFact>> LaneFactsAsync(Guid cycleId, CancellationToken cancellationToken) =>
         await db.HarvestLotLanes.AsNoTracking()
             .Where(l => l.Lot.CycleId == cycleId)
-            .Select(l => new LotLaneFact(l.LotId, l.LaneId, l.Lot.HarvestDate, l.Lot.HarvestedAt, l.IsFinished))
+            .Select(l => new LotLaneFact(l.LotId, l.LaneId, l.Lot.HarvestDate, l.Lot.HarvestedAt, l.IsFinished, l.HarvestedPercent))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<string>> CodesFromAsync(string baseCode, CancellationToken cancellationToken)

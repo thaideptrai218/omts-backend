@@ -8,6 +8,7 @@ using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Cultivation.Nursery;
 using OMTS.Application.Features.Cultivation.Progress;
+using OMTS.Application.Features.Files;
 using OMTS.Domain.Entities.Cultivation;
 
 namespace OMTS.Application.Features.Cultivation.Seeding;
@@ -27,13 +28,19 @@ public sealed class SeedingRecordService(
     SeedingStockSync stockSync,
     SeedingViews views,
     LaneStateReader laneStates,
+    LanePercentGuard percents,
+    RecordPhotoStore photoStore,
+    UploadedFileSaver fileSaver,
     ZoneAccessGuard zoneAccess,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
     TimeProvider timeProvider)
 {
-    public async Task<Result<SeedingRecordSaved>> RecordAsync(Guid cycleId, RecordSeedingRequest request, CancellationToken cancellationToken)
+    /// <param name="photos">The on-site photos (owner decision of 12/11/2026): 1 to 3, else 400 on <c>Photos</c> and nothing is saved.</param>
+    /// <param name="photosRequired">False only for the demo bootstrap, which records sessions without a camera; no request can send it.</param>
+    public async Task<Result<SeedingRecordSaved>> RecordAsync(
+        Guid cycleId, RecordSeedingRequest request, IReadOnlyList<IncomingFile> photos, CancellationToken cancellationToken, bool photosRequired = true)
     {
         var cycle = await cycles.GetForEditAsync(cycleId, cancellationToken);
         if (cycle is null)
@@ -61,6 +68,19 @@ public sealed class SeedingRecordService(
             return invalid;
         }
 
+        var files = StepPhotoService.Read(photos, otherFilePart: request.OtherFilePart, minimum: photosRequired ? StepPhotoService.MinPhotos : 0);
+        if (!files.IsSuccess)
+        {
+            return files.Error!;
+        }
+
+        var shares = percents.ForSeeding(
+            await percents.ReadAsync(cycle.Id, cancellationToken), fields!.Lanes, request.LanePercents, request.LanePercentsUnreadable, new Dictionary<Guid, decimal>(), null);
+        if (!shares.IsSuccess)
+        {
+            return shares.Error!;
+        }
+
         var others = (await records.ListByCycleAsync(cycle.Id, cancellationToken)).Sum(r => r.Quantity);
         string? overPlanReason = null;
         var overPlan = fromNursery
@@ -83,13 +103,31 @@ public sealed class SeedingRecordService(
             NurseryBatchId = cycle.NurseryBatchId,
             OverPlanReason = overPlanReason,
             RecordedByAccountId = recorder,
-            Lanes = fields.Lanes.Select(l => new SeedingRecordLane { LaneId = l.Id, Lane = l }).ToList(),
+            Lanes = fields.Lanes.Select(l => new SeedingRecordLane { LaneId = l.Id, Lane = l, SeededPercent = shares.Value![l.Id] }).ToList(),
         };
-        if (!fromNursery && await stockSync.PostAsync(record, fields!, cycle.Raft, cancellationToken) is { } stockRefused)
+
+        var uploaded = await photoStore.UploadAllAsync(FileCategories.SeedingPhotos, files.Value!, cancellationToken);
+        if (!uploaded.IsSuccess)
         {
-            return stockRefused;
+            return uploaded.Error!;
         }
 
+        // A refusal or a failure from here to the save removes the uploads: no row will point to them.
+        var posted = await photoStore.PrepareSaveAsync(uploaded.Value!, async () =>
+        {
+            if (!fromNursery && await stockSync.PostAsync(record, fields!, cycle.Raft, cancellationToken) is { } stockRefused)
+            {
+                return Result<bool>.Failure(stockRefused);
+            }
+
+            return Result<bool>.Success(true);
+        });
+        if (!posted.IsSuccess)
+        {
+            return posted.Error!;
+        }
+
+        SeedingPhotoRows.Add(records, record, uploaded.Value!);
         records.Add(record);
         unitOfWork.MarkChanged(cycle);
         if (!fromNursery)
@@ -98,7 +136,7 @@ public sealed class SeedingRecordService(
         }
 
         audit.Record(SeedingValues.Entry(SeedingValues.Created, record) with { After = SeedingValues.Snapshot(record) });
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await fileSaver.SaveAsync(uploaded.Value!, [], cancellationToken);
 
         var raft = await rafts.GetForEditAsync(cycle.RaftId, cancellationToken) ?? cycle.Raft;
         return await views.SavedAsync(record, raft, laneStates, timeProvider.Today(), cancellationToken);

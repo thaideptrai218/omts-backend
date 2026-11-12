@@ -13,6 +13,7 @@ using OMTS.Application.Common.Interfaces.Payments;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Interfaces.Reports;
 using OMTS.Application.Common.Interfaces.Storage;
+using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Application.Features.Sales.QualityClaims;
@@ -107,6 +108,7 @@ public static class DependencyInjection
         services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddScoped<IRaftRepository, RaftRepository>();
         services.AddScoped<ILaneIncidentRepository, LaneIncidentRepository>();
+        services.AddScoped<ILaneProgressRepository, LaneProgressRepository>();
         services.AddScoped<INurseryBatchRepository, NurseryBatchRepository>();
         services.AddScoped<ICultivationCycleRepository, CultivationCycleRepository>();
         services.AddScoped<ICultivationLogRepository, CultivationLogRepository>();
@@ -127,6 +129,7 @@ public static class DependencyInjection
         services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();
         services.AddScoped<ICustomerDebtAdjustmentRepository, CustomerDebtAdjustmentRepository>();
         services.AddScoped<IPendingSaleRepository, PendingSaleRepository>();
+        services.AddOptions<CycleStartOptions>().Bind(configuration.GetSection(CycleStartOptions.SectionName));
         services.AddOptions<ProvenanceOptions>()
             .Bind(configuration.GetSection(ProvenanceOptions.SectionName))
             .Validate(o => o.HasWebAddress(), ProvenanceOptions.InvalidPublicBaseUrl)

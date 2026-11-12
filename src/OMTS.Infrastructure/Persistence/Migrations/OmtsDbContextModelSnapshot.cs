@@ -581,6 +581,123 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CyclePlanPhoto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CycleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FileKey")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CycleId", "SortOrder")
+                        .IsUnique();
+
+                    b.ToTable("CyclePlanPhotos", t =>
+                        {
+                            t.HasCheckConstraint("CK_CyclePlanPhoto_SortOrder", "[SortOrder] BETWEEN 1 AND 3");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.LaneProgressChange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ChangedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CycleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("HarvestedPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<Guid>("LaneId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateOnly>("OccurredOn")
+                        .HasColumnType("date");
+
+                    b.Property<decimal?>("OldHarvestedPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal>("OldSeededPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<decimal>("SeededPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChangedByAccountId");
+
+                    b.HasIndex("LaneId");
+
+                    b.HasIndex("CycleId", "LaneId", "OccurredAt");
+
+                    b.ToTable("LaneProgressChanges");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.MaterialUsage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -917,11 +1034,66 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("LaneId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal>("SeededPercent")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)")
+                        .HasDefaultValue(100m);
+
                     b.HasKey("SeedingRecordId", "LaneId");
 
                     b.HasIndex("LaneId");
 
-                    b.ToTable("SeedingRecordLanes");
+                    b.ToTable("SeedingRecordLanes", t =>
+                        {
+                            t.HasCheckConstraint("CK_SeedingRecordLane_SeededPercent", "[SeededPercent] > 0 AND [SeededPercent] <= 100");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingRecordPhoto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FileKey")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SeedingRecordId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SeedingRecordId", "SortOrder")
+                        .IsUnique();
+
+                    b.ToTable("SeedingRecordPhotos", t =>
+                        {
+                            t.HasCheckConstraint("CK_SeedingRecordPhoto_SortOrder", "[SortOrder] BETWEEN 1 AND 3");
+                        });
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.WaterMeasurement", b =>
@@ -1706,6 +1878,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("LaneId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal?>("HarvestedPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
                     b.Property<bool>("IsFinished")
                         .HasColumnType("bit");
 
@@ -1713,7 +1889,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("LaneId");
 
-                    b.ToTable("HarvestLotLanes");
+                    b.ToTable("HarvestLotLanes", t =>
+                        {
+                            t.HasCheckConstraint("CK_HarvestLotLane_HarvestedPercent", "[HarvestedPercent] IS NULL OR ([HarvestedPercent] > 0 AND [HarvestedPercent] <= 100)");
+                        });
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestLotPhoto", b =>
@@ -7312,6 +7491,38 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Log");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CyclePlanPhoto", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.CultivationCycle", "Cycle")
+                        .WithMany("PlanPhotos")
+                        .HasForeignKey("CycleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Cycle");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.LaneProgressChange", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ChangedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.CultivationCycle", null)
+                        .WithMany()
+                        .HasForeignKey("CycleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Farming.Lane", null)
+                        .WithMany()
+                        .HasForeignKey("LaneId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.MaterialUsage", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Purchasing.InputIssue", "Issue")
@@ -7473,6 +7684,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Lane");
+
+                    b.Navigation("SeedingRecord");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingRecordPhoto", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.SeedingRecord", "SeedingRecord")
+                        .WithMany("Photos")
+                        .HasForeignKey("SeedingRecordId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("SeedingRecord");
                 });
@@ -9139,6 +9361,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Invoice");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationCycle", b =>
+                {
+                    b.Navigation("PlanPhotos");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationLog", b =>
                 {
                     b.Navigation("Photos");
@@ -9154,6 +9381,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingRecord", b =>
                 {
                     b.Navigation("Lanes");
+
+                    b.Navigation("Photos");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Farming.FarmingZone", b =>

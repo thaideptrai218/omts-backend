@@ -23,6 +23,13 @@ public sealed class LaneIncidentNotifier(IZoneRecipientQuery recipients, OwnerAc
         $"Raft {raft.Code}, lane {lane.LaneNumber} is out of service: {reason}.{(hadSeed ? " The seed on it is recorded as lost." : string.Empty)}",
         raft, actor, cancellationToken);
 
+    /// <summary>A Zone Manager changed the seeded or harvested percentage of a lane by hand (decision of 12/11/2026).</summary>
+    public Task ProgressChangedAsync(Raft raft, Lane lane, string change, string reason, Guid actor, CancellationToken cancellationToken) => NotifyAsync(
+        NotificationTypes.LaneProgressChanged,
+        "Lane progress changed",
+        $"Raft {raft.Code}, lane {lane.LaneNumber}: {change} ({reason}).",
+        raft, actor, cancellationToken);
+
     private async Task NotifyAsync(string type, string title, string body, Raft raft, Guid actor, CancellationToken cancellationToken)
     {
         var told = await ownerActorFilter.WithoutOwnerActorAsync(await recipients.GetCooperativeOwnersAsync(cancellationToken), actor, cancellationToken);

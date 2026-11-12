@@ -48,6 +48,12 @@ internal sealed class NurseryBatchRepository(OmtsDbContext db) : INurseryBatchRe
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<NurseryBatchPhoto>> CompletionPhotosAsync(Guid batchId, CancellationToken cancellationToken) =>
+        await db.NurseryBatchPhotos.AsNoTracking()
+            .Where(p => p.NurseryBatchId == batchId && p.Phase == NurseryPhotoPhase.Completion)
+            .OrderBy(p => p.SortOrder)
+            .ToListAsync(cancellationToken);
+
     public Task<PurchaseReceiptLine?> SeedLotOfAsync(Guid batchId, CancellationToken cancellationToken) =>
         db.PurchaseReceiptLines
             .Include(l => l.Item)

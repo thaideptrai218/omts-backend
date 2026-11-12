@@ -48,6 +48,11 @@ public class CultivationCycle : AuditableEntity, IHasStatus
     /// <summary>When MSG-CYCLE-08 was sent, so it is sent once.</summary>
     public DateTimeOffset? CloseRemindedAt { get; set; }
 
+    public const int MaxPlanPhotos = 3;
+
+    /// <summary>Photos of the plan, 1 to <see cref="MaxPlanPhotos"/> on a cycle started without a nursery batch since 12/11/2026; none on an older one, none on one from a nursery batch (it shows the batch's completion photos).</summary>
+    public ICollection<CyclePlanPhoto> PlanPhotos { get; set; } = [];
+
     public int StatusId { get; set; } = StatusIds.CultivationCycle.Open;
     public Status Status { get; set; } = null!;
 }

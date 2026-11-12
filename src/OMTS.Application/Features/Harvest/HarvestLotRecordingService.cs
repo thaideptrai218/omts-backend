@@ -38,6 +38,7 @@ public sealed class HarvestLotRecordingService(
     ICooperativeRepository cooperatives,
     RaftViews raftViews,
     LaneStateReader laneStates,
+    LanePercentGuard percents,
     RecordPhotoStore photoStore,
     UploadedFileSaver fileSaver,
     HarvestLotNotifier notifier,
@@ -75,10 +76,16 @@ public sealed class HarvestLotRecordingService(
             return refused;
         }
 
-        var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(photos, request.OtherFilePart);
-        if (HarvestLotFieldReader.Read(request, raft, open!.States, open.KgPerCage, photoHint, out _) is { } invalid)
+        // A new lot needs 1 to 3 on-site photos (owner decision of 12/11/2026); a lot recorded before the photos stays valid without.
+        var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(photos, request.OtherFilePart, minimum: StepPhotoService.MinPhotos);
+        if (HarvestLotFieldReader.Read(request, raft, open!.States, open.KgPerCage, photoHint, out var firstFields) is { } invalid)
         {
             return invalid;
+        }
+
+        if ((await SharesAsync(request, firstFields!, open.Cycle.Id, cancellationToken)).Error is { } wrongPercent)
+        {
+            return wrongPercent;
         }
 
         var order = await requests.GetForEditAsync(request.PurchaseRequestId!.Value, cancellationToken);
@@ -183,6 +190,12 @@ public sealed class HarvestLotRecordingService(
             return invalid;
         }
 
+        var shares = await SharesAsync(request, fields!, open.Cycle.Id, cancellationToken);
+        if (!shares.IsSuccess)
+        {
+            return shares.Error!;
+        }
+
         var order = await requests.GetForEditAsync(request.PurchaseRequestId!.Value, cancellationToken);
         if (await PurchaseRequestRules.RefusesHarvestLotAsync(order, statuses, fulfilment, cancellationToken) is { } wrongRequest)
         {
@@ -212,7 +225,10 @@ public sealed class HarvestLotRecordingService(
             RecordedByAccountId = recorder,
             PurchaseRequestId = order!.Id,
             PurchaseRequest = order,
-            Lanes = fields.Lanes.Select(l => new HarvestLotLane { LaneId = l.Id, Lane = l, IsFinished = fields.FinishedLaneIds.Contains(l.Id) }).ToList(),
+            Lanes = fields.Lanes.Select(l => new HarvestLotLane
+            {
+                LaneId = l.Id, Lane = l, IsFinished = fields.FinishedLaneIds.Contains(l.Id), HarvestedPercent = shares.Value![l.Id],
+            }).ToList(),
             Photos = keys.Select((key, index) => new HarvestLotPhoto { SortOrder = index + 1, FileKey = key }).ToList(),
         };
         lots.Add(lot);
@@ -239,6 +255,12 @@ public sealed class HarvestLotRecordingService(
 
         return new PreparedLot(lot, cycle, raft, everyHarvested);
     }
+
+    /// <summary>The share each lane of the new lot takes (<see cref="LanePercentGuard.ForHarvest"/>), checked against what the other lots and the manual changes of the cycle already hold.</summary>
+    private async Task<Result<IReadOnlyDictionary<Guid, decimal?>>> SharesAsync(RecordHarvestRequest request, HarvestLotFields fields, Guid cycleId, CancellationToken cancellationToken) =>
+        percents.ForHarvest(
+            await percents.ReadAsync(cycleId, cancellationToken), fields.Lanes, fields.FinishedLaneIds, request.LanePercents, request.LanePercentsUnreadable,
+            new Dictionary<Guid, decimal?>(), null);
 
     private static AppError NoOpenCycle(Raft raft) => AppError.Conflict(UserMessages.WrongStatus($"Raft {raft.Code}", "without an Open cycle"));
 

@@ -5,9 +5,10 @@ namespace OMTS.Application.Features.Farming.Rafts;
 
 /// <summary>
 /// Report a lane damaged (decision of 12/11/2026). <paramref name="Reason"/> is required (at most 500 characters); <paramref name="ReasonCode"/> is optional: LineBroken, BuoyDamaged, Storm,
-/// MassMortality or Other. <paramref name="RowVersion"/> is the raft version the screen was read at (NFR-09). A photo is added after, with the incident photo route (optional, at most 3).
+/// MassMortality or Other. <paramref name="RowVersion"/> is the raft version the screen was read at (NFR-09). The report carries 1 to 3 on-site photos (owner decision of 12/11/2026), sent beside it;
+/// <paramref name="OtherFilePart"/>: a file came in a part not named <c>photos</c>.
 /// </summary>
-public sealed record ReportLaneDamageRequest(string? Reason, string? ReasonCode, string? RowVersion);
+public sealed record ReportLaneDamageRequest(string? Reason, string? ReasonCode, string? RowVersion, bool OtherFilePart = false);
 
 /// <summary>A material a repair takes from the stock, in the unit of the item (<paramref name="Unit"/> is checked when sent, never converted).</summary>
 public sealed record RepairMaterialInput(Guid? ItemId, decimal? Quantity, string? Unit);

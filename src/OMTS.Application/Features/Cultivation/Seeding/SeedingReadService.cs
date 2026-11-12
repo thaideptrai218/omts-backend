@@ -25,6 +25,7 @@ public sealed class SeedingReadService(
     IRaftRepository rafts,
     IHarvestLotRepository harvestLots,
     LaneStateReader laneStates,
+    LaneProgressViews laneProgress,
     SeedingViews views,
     ZoneAccessGuard zoneAccess,
     IStatusCatalog statusCatalog,
@@ -72,6 +73,7 @@ public sealed class SeedingReadService(
             && await zoneAccess.AllowsAsync(PermissionFunctions.CultivationCycles, PermissionAction.Create, cycle.Raft.ZoneId, cancellationToken);
         var completed = cycle.SeedingCompletedOn is not null;
         var nursery = cycle.NurseryBatchId is null ? null : (await nurseries.FactsByCycleAsync([cycle.Id], cancellationToken)).GetValueOrDefault(cycle.Id);
+        var progress = await laneProgress.InfoAsync(day, cancellationToken);
         return new SeedingList(
             cycle.Id,
             raft.Id,
@@ -88,7 +90,8 @@ public sealed class SeedingReadService(
                 .Select(l => new SeedingLaneView(
                     l.Id, l.LaneNumber, l.StatusId, statusCatalog.DisplayNameOf(l.StatusId), day.States[l.Id],
                     canRecord && l.IsUsable && SeedingLaneRules.CanBeSeeded(day.States[l.Id], completed),
-                    l.IsDamaged, l.IsOutOfService, Farming.Rafts.LaneReasonCodes.Of(l)))
+                    l.IsDamaged, l.IsOutOfService, Farming.Rafts.LaneReasonCodes.Of(l),
+                    progress[l.Id].SeededPercent, progress[l.Id].HarvestedPercent, progress[l.Id].LastModifiedByName, progress[l.Id].LastModifiedAt, progress[l.Id].ProgressHistory))
                 .ToList(),
             await views.ListAsync(ofCycle, cycle, day.States, cancellationToken),
             ofCycle.GroupBy(r => r.SeedLotLineId)
@@ -145,7 +148,9 @@ public sealed class SeedingReadService(
             return AppError.NotFound;
         }
 
-        var state = cycle is null ? LaneState.NotSeeded : (await laneStates.ReadAsync(raft, cycle.CloseDate ?? timeProvider.Today(), cancellationToken)).States[lane.Id];
+        var shownDay = cycle is null ? null : await laneStates.ReadAsync(raft, cycle.CloseDate ?? timeProvider.Today(), cancellationToken);
+        var state = shownDay?.States[lane.Id] ?? LaneState.NotSeeded;
+        var info = shownDay is null ? null : (await laneProgress.InfoAsync(shownDay, cancellationToken))[lane.Id];
         var sessions = cycle is null ? [] : (await records.ListByCycleAsync(cycle.Id, cancellationToken))
             .Where(r => r.Lanes.Any(l => l.LaneId == lane.Id))
             .Select(r => new LaneSeedingSession(r.Id, r.SeedingDate, SeedingViews.LotRef(r.SeedLotLine), r.Quantity))
@@ -157,7 +162,8 @@ public sealed class SeedingReadService(
             raft.Id, raft.Code, lane.Id, lane.LaneNumber, lane.StatusId, statusCatalog.DisplayNameOf(lane.StatusId), state,
             cycle is null ? null : new CycleListItem(cycle.Id, cycle.StartDate, cycle.CloseDate, cycle.StatusId, statusCatalog.DisplayNameOf(cycle.StatusId), RowVersionGuard.Encode(cycle.RowVersion), cycle.ClosedEarly),
             sessions,
-            lots);
+            lots,
+            info?.SeededPercent ?? 0m, info?.HarvestedPercent, info?.LastModifiedByName, info?.LastModifiedAt, info?.ProgressHistory);
     }
 
     /// <summary>CYCLE-05.0 step 1: for each seeded lane on the date, its seed lots and seeding dates.</summary>

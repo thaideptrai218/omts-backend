@@ -23,6 +23,10 @@ public interface ISeedingRecordRepository
     /// <summary>Adds the session with the lanes it holds.</summary>
     void Add(SeedingRecord record);
 
+    void AddPhoto(SeedingRecordPhoto photo);
+
+    void RemovePhoto(SeedingRecordPhoto photo);
+
     void AddLane(SeedingRecordLane lane);
 
     void RemoveLane(SeedingRecordLane lane);

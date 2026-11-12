@@ -46,6 +46,16 @@ internal sealed class CultivationCycleRepository(OmtsDbContext db) : ICultivatio
         + await db.CultivationLogs.CountAsync(l => l.CycleId == cycleId, cancellationToken)
         + await db.HarvestLots.CountAsync(l => l.CycleId == cycleId, cancellationToken);
 
+    public async Task<IReadOnlyList<CyclePlanPhoto>> PlanPhotosAsync(Guid cycleId, CancellationToken cancellationToken) =>
+        await db.CyclePlanPhotos.AsNoTracking().Where(p => p.CycleId == cycleId).OrderBy(p => p.SortOrder).ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<CyclePlanPhoto>> PlanPhotosForEditAsync(Guid cycleId, CancellationToken cancellationToken) =>
+        await db.CyclePlanPhotos.Where(p => p.CycleId == cycleId).OrderBy(p => p.SortOrder).ToListAsync(cancellationToken);
+
+    public void AddPlanPhoto(CyclePlanPhoto photo) => db.CyclePlanPhotos.Add(photo);
+
+    public void RemovePlanPhoto(CyclePlanPhoto photo) => db.CyclePlanPhotos.Remove(photo);
+
     public void Add(CultivationCycle cycle) => db.CultivationCycles.Add(cycle);
 
     public void Remove(CultivationCycle cycle) => db.CultivationCycles.Remove(cycle);

@@ -24,7 +24,9 @@ public sealed record CorrectHarvestLotRequest(
     bool ConfirmOverPlan = false,
     string? OverPlanReason = null,
     IReadOnlyList<Guid>? Crew = null,
-    bool CrewUnreadable = false);
+    bool CrewUnreadable = false,
+    IReadOnlyDictionary<int, decimal>? LanePercents = null,
+    bool LanePercentsUnreadable = false);
 
 /// <summary>HARVEST-01.1 step 3; the client has asked with MSG-GEN-04.</summary>
 public sealed record RemoveHarvestLotRequest(string? Reason, string? RowVersion);

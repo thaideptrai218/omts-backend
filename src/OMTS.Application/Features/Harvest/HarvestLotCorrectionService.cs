@@ -5,6 +5,7 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
+using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Files;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Harvest;
@@ -25,13 +26,15 @@ public sealed class HarvestLotCorrectionService(
     HarvestLotNotifier notifier,
     HarvestLotViews views,
     HarvestCrewService crews,
+    LanePercentGuard percents,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
     TimeProvider timeProvider)
 {
     private sealed record Checked(
-        HarvestLot Lot, Raft Raft, HarvestLotFields Fields, HarvestLotLaneFacts Facts, List<HarvestLotPhoto> Kept, IReadOnlyList<ValidatedFile> Files, IReadOnlyList<Domain.Entities.Identity.Employee>? Crew);
+        HarvestLot Lot, Raft Raft, HarvestLotFields Fields, HarvestLotLaneFacts Facts, List<HarvestLotPhoto> Kept, IReadOnlyList<ValidatedFile> Files, IReadOnlyList<Domain.Entities.Identity.Employee>? Crew,
+        IReadOnlyDictionary<Guid, decimal?> Shares);
 
     private sealed record Applied(HarvestLot Lot, Raft Raft, List<string> RemovedKeys, bool Changed, bool EveryHarvested);
 
@@ -97,7 +100,8 @@ public sealed class HarvestLotCorrectionService(
 
         var (raft, facts) = await edits.FactsAsync(lot, cancellationToken);
         var kept = lot.Photos.Where(p => keep.Contains(p.FileKey)).ToList();
-        var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(newPhotos, request.OtherFilePart, kept.Count, kept.Count == keep.Count);
+        // A lot that has photos keeps 1 to 3 after the correction (owner decision of 12/11/2026); one recorded before the photos stays valid without.
+        var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(newPhotos, request.OtherFilePart, kept.Count, kept.Count == keep.Count, lot.Photos.Count > 0 ? StepPhotoService.MinPhotos : 0);
 
         // BR-HARVEST-02: left out, the estimate stays, unless the cages changed: then it is worked out again with the kg per cage of the lot, never the current setting.
         var estimatedKg = request.EstimatedKg ?? (request.CageCount == lot.CageCount ? lot.EstimatedKg : null);
@@ -114,12 +118,23 @@ public sealed class HarvestLotCorrectionService(
             return crewError;
         }
 
+        // The lot's own share is not counted against itself; a lane the correction leaves as it is keeps its share and is not judged again. A lane the lot no longer finishes loses the share the finish gave it
+        // (what was left, so the lane's total became 100): it is back to what a lot with no share and no finish has.
+        var shares = percents.ForHarvest(
+            await percents.ReadAsync(lot.CycleId, cancellationToken), read!.Lanes, read.FinishedLaneIds, request.LanePercents, request.LanePercentsUnreadable,
+            lot.Lanes.ToDictionary(l => l.LaneId, l => l.IsFinished && !read.FinishedLaneIds.Contains(l.LaneId) ? null : l.HarvestedPercent), lot.Id);
+        if (!shares.IsSuccess)
+        {
+            return shares.Error!;
+        }
+
         if (version is not null)
         {
             return version;
         }
 
-        return new Checked(lot, raft, read!, facts, kept, files, crew);
+        // The lane states the correction would give are worked out with the new shares too, not the ones the rows still hold.
+        return new Checked(lot, raft, read with { Shares = shares.Value }, facts, kept, files, crew, shares.Value!);
     }
 
     /// <summary>Changes the row as it is after the uploads. The cap on photos still holds, as the kept photos can only be the same ones.</summary>
@@ -131,13 +146,13 @@ public sealed class HarvestLotCorrectionService(
             return current.Error!;
         }
 
-        var (lot, raft, fields, facts, kept, _, crew) = current.Value!;
+        var (lot, raft, fields, facts, kept, _, crew, shares) = current.Value!;
         var everyBefore = facts.EveryHarvestedNow();
         var everyAfter = facts.EveryHarvestedWith(fields);
         var takesALaneBack = facts.CorrectionTakesALaneOutOfHarvested(fields);
         var before = HarvestLotAudit.Snapshot(lot, alwaysNameCrew: true);
         (lot.CageCount, lot.EstimatedKg) = (fields.CageCount, fields.EstimatedKg);
-        HarvestLotCorrectionRows.ApplyLanes(lots, lot, fields);
+        HarvestLotCorrectionRows.ApplyLanes(lots, lot, fields, shares);
         if (crew is not null)
         {
             crews.Apply(lot, crew);
