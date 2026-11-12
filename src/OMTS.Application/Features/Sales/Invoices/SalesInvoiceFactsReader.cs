@@ -51,24 +51,20 @@ public sealed class SalesInvoiceFactsReader(
             return AppError.Forbidden;
         }
 
-        var customer = entries.CustomerId is { } customerId ? await customers.GetForEditAsync(customerId, cancellationToken) : null;
-        if (entries.CustomerId is not null && customer is null)
+        var chosenCustomer = await ReadCustomerAsync(entries.CustomerId, cancellationToken);
+        if (!chosenCustomer.IsSuccess)
         {
-            return AppError.Invalid("Customer");
+            return chosenCustomer.Error!;
         }
 
-        if (customer?.MergedIntoCustomerId is not null)
-        {
-            return AppError.Conflict(UserMessages.WrongStatus($"{CustomerService.ObjectName} {customer.Name}", CustomerService.MergedStatus));
-        }
-
+        var customer = chosenCustomer.Value;
         var request = await ReadRequestAsync(entries, customer, cancellationToken);
         if (!request.IsSuccess)
         {
             return request.Error!;
         }
 
-        var lineProducts = await ReadProductsAsync(entries, cancellationToken);
+        var lineProducts = await ReadProductsAsync(entries.Lines, new HashSet<Guid>(), cancellationToken);
         if (!lineProducts.IsSuccess)
         {
             return lineProducts.Error!;
@@ -104,6 +100,25 @@ public sealed class SalesInvoiceFactsReader(
         return new SalesInvoiceFacts(customer, request.Value, lineProducts.Value!, lineLots.Value!, zoneId, byOwner, debt, standing, policy.AllowMoreOverLimit);
     }
 
+    /// <summary>The profile chosen for an invoice, tracked: null without a choice; MSG-GEN-01 when it does not exist, MSG-GEN-09 when it was merged into another.</summary>
+    internal async Task<Result<Customer?>> ReadCustomerAsync(Guid? customerId, CancellationToken cancellationToken)
+    {
+        if (customerId is null)
+        {
+            return Result<Customer?>.Success(null);
+        }
+
+        var customer = await customers.GetForEditAsync(customerId.Value, cancellationToken);
+        if (customer is null)
+        {
+            return AppError.Invalid("Customer");
+        }
+
+        return customer.MergedIntoCustomerId is null
+            ? customer
+            : AppError.Conflict(UserMessages.WrongStatus($"{CustomerService.ObjectName} {customer.Name}", CustomerService.MergedStatus));
+    }
+
     private async Task<Result<PurchaseRequest?>> ReadRequestAsync(SalesInvoiceEntries entries, Customer? customer, CancellationToken cancellationToken)
     {
         if (entries.RequestId is not { } requestId)
@@ -135,10 +150,12 @@ public sealed class SalesInvoiceFactsReader(
         return request;
     }
 
-    private async Task<Result<IReadOnlyDictionary<Guid, Product>>> ReadProductsAsync(SalesInvoiceEntries entries, CancellationToken cancellationToken)
+    /// <summary>The products of the lines, tracked and In Use (GBR-01); a product in <paramref name="alreadyOnInvoice"/> is kept even if it was discontinued since (SALE-07).</summary>
+    internal async Task<Result<IReadOnlyDictionary<Guid, Product>>> ReadProductsAsync(
+        IReadOnlyList<SalesInvoiceLineEntries> lines, IReadOnlySet<Guid> alreadyOnInvoice, CancellationToken cancellationToken)
     {
         var found = new Dictionary<Guid, Product>();
-        foreach (var line in entries.Lines)
+        foreach (var line in lines)
         {
             if (!found.TryGetValue(line.ProductId, out var product))
             {
@@ -151,7 +168,7 @@ public sealed class SalesInvoiceFactsReader(
                 found[product.Id] = product;
             }
 
-            if (product.StatusId != StatusIds.Usage.InUse)
+            if (product.StatusId != StatusIds.Usage.InUse && !alreadyOnInvoice.Contains(product.Id))
             {
                 return AppError.NotUsableChoice($"Product {product.Name}", statusCatalog.DisplayNameOf(product.StatusId), $"Line {line.LineNumber} product");
             }

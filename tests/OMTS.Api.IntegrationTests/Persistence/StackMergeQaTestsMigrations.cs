@@ -34,8 +34,9 @@ public class StackMergeQaTestsMigrations
         "20261105093720_AuditSearch", "20261105093736_EmployeesV2", "20261105122524_PurchaseRequests", "20261105140242_SupplierPaymentsV2", "20261105161142_RaftsV2",
         "20261105165022_CultivationCyclesV2", "20261105170348_PurchaseReturnsV2", "20261106081809_LaborSettings", "20261106083401_CultivationLogs", "20261106084757_MaterialUsages",
         "20261107050042_SeedingRecords", "20261107052218_HarvestLots", "20261107055301_HarvestLotCorrections", "20261107112721_SalesInvoices",
-        "20261107145951_SalesInvoiceSending", "20261107164749_HarvestLotAutoClose", "20261108020405_CustomerPayments", "20261108182824_VietQrPendingSales", "20261109084608_LoginSessionRefreshGrace",
-        "20261109104138_QualityClaims", "20261109104320_SupplierProfileFields", "20261109105053_LoginSessionRevokedAtIndex", "20261109110307_LoginSessionDeviceAndSignInMethod", "20261109152702_PurchaseDiscountsZonesAndDraftReturns",
+        "20261107145951_SalesInvoiceSending", "20261107164749_HarvestLotAutoClose", "20261108020405_CustomerPayments", "20261108182824_VietQrPendingSales", "20261109053538_SalesInvoiceCorrectionAndCancellation",
+        "20261109084608_LoginSessionRefreshGrace", "20261109104138_QualityClaims", "20261109104320_SupplierProfileFields", "20261109105053_LoginSessionRevokedAtIndex", "20261109110307_LoginSessionDeviceAndSignInMethod",
+        "20261109152702_PurchaseDiscountsZonesAndDraftReturns",
         "20261109181525_PurchaseReceiptTimeReceiverAndLineDiscount", "20261109192443_PurchaseReturnTimeAndSupplierPaymentAllocations", "20261110060643_CashBookVouchersAccountsAndTypes",
     ];
 

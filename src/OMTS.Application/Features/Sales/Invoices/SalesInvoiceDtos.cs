@@ -72,13 +72,18 @@ public sealed record SalesInvoiceSendingView(string Channel, string? PhoneNumber
 /// <param name="PriceCuts">The price cuts of SALE-07, oldest first.</param>
 /// <param name="DebtEffect">Whether it is paid and what it does to the customer debt (BR-DEBT-05).</param>
 /// <param name="AllowedActions">The commands the caller is offered on this invoice now (SALE-09.1 step 3).</param>
+/// <param name="LastCorrectionKind">The kind of the latest correction (SALE-07 POST-1); null until one is made.</param>
+/// <param name="Corrections">Every correction from the audit log, oldest first (SALE-09.1 step 2).</param>
+/// <param name="CancelledAt">Set by SALE-08.</param>
+/// <param name="CancelReason">Set by SALE-08.</param>
 public sealed record SalesInvoiceView(
     Guid Id, string Code, DateTimeOffset InvoicedAt, DateOnly InvoiceDate, SalesInvoiceZoneView Zone, SalesInvoiceCustomerView? Customer, bool WalkInCustomer,
     Guid? PurchaseRequestId, bool TakesRequestInFull, IReadOnlyList<SalesInvoiceLineView> Lines, decimal TotalKg, decimal Subtotal, decimal Discount, bool DiscountDecidedByOwner,
     decimal OtherCharges, decimal PriceCutTotal, decimal Total, SalesPaymentTerm PaymentTerm, int StatusId, string Status, IReadOnlyList<CustomerPaymentView> Payments,
     AccountRef CreatedBy, string? QrToken, string? QrUrl, DateTimeOffset? QrDecidedAt, int DeliveryStatusId, string DeliveryStatus,
     IReadOnlyList<SalesInvoiceSendingView> Sendings, string RowVersion, IReadOnlyList<SalesInvoicePriceCutView> PriceCuts, SalesInvoiceDebtEffect DebtEffect,
-    IReadOnlyList<SalesInvoiceAction> AllowedActions);
+    IReadOnlyList<SalesInvoiceAction> AllowedActions, SalesInvoiceCorrectionKind? LastCorrectionKind, DateTimeOffset? LastCorrectedAt, string? LastCorrectionReason,
+    IReadOnlyList<SalesInvoiceCorrectionView> Corrections, DateTimeOffset? CancelledAt, string? CancelReason);
 
 /// <summary>The end of the sale (SALE-05 steps 9-11).</summary>
 /// <param name="WantsQrCode">The answer to MSG-SALE-07; null asks it (409 with <c>confirmationField</c>).</param>

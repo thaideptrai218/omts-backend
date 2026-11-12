@@ -11,6 +11,15 @@ public interface ISalesInvoiceRepository
 
     void AddPayment(CustomerPayment payment);
 
+    /// <summary>A line added by a correction (SALE-07).</summary>
+    void AddLine(SalesInvoiceLine line);
+
+    /// <summary>A line removed by a correction (SALE-07).</summary>
+    void RemoveLine(SalesInvoiceLine line);
+
+    /// <summary>A price cut entered by a correction (SALE-07.1).</summary>
+    void AddPriceCut(SalesInvoicePriceCut priceCut);
+
     /// <summary>The invoice saved with this key, if any: a repeated save returns it (BR-SALE-08 has no draft, so a second tap must not sell twice).</summary>
     Task<Guid?> FindByDeduplicationKeyAsync(string key, CancellationToken cancellationToken);
 
@@ -20,15 +29,21 @@ public interface ISalesInvoiceRepository
     /// <summary>The invoice with its zone, customer, lines (product and lot), price cuts and payments, read only.</summary>
     Task<SalesInvoice?> GetAsync(Guid invoiceId, CancellationToken cancellationToken);
 
-    /// <summary>The invoice with its customer, lines and payments, tracked: what sending it (SALE-06) and the end of the sale change and read.</summary>
+    /// <summary>The invoice with its customer, lines and payments, tracked: what sending it (SALE-06), the end of the sale, a correction (SALE-07) and a cancellation (SALE-08) change and read.</summary>
     Task<SalesInvoice?> GetForSendingAsync(Guid invoiceId, CancellationToken cancellationToken);
 
     /// <summary>The sendings of the invoice message (BR-SALE-09), oldest first.</summary>
     Task<IReadOnlyList<SalesInvoiceSending>> ListSendingsAsync(Guid invoiceId, CancellationToken cancellationToken);
+
+    /// <summary>The correction events of the invoices in the audit log (BR-SALE-10, BR-DEBT-04), oldest first, one query whatever the number of invoices.</summary>
+    Task<IReadOnlyList<SalesInvoiceCorrectionEvent>> ListCorrectionEventsAsync(IReadOnlyCollection<Guid> invoiceIds, CancellationToken cancellationToken);
 }
 
 /// <summary>A saved invoice as a transfer names it: its customer profile (none for a walk-in customer).</summary>
 public sealed record SalesInvoiceRef(Guid Id, string Code, Guid? CustomerId);
+
+/// <summary>One correction of an invoice as its audit event keeps it: <see cref="After"/> is the JSON written by the correction.</summary>
+public sealed record SalesInvoiceCorrectionEvent(Guid InvoiceId, DateTimeOffset OccurredAt, string? Reason, string? After);
 
 /// <summary>One sending of an invoice to the trader's phone, as its Notification row keeps it.</summary>
 public sealed record SalesInvoiceSending(NotificationChannel Channel, string? PhoneNumber, int? DeliveryStatusId, DateTimeOffset? DeliveryStatusAt, DateTimeOffset CreatedAt);

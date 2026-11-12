@@ -9,9 +9,12 @@ public sealed record CustomerLedgerPriceCut(Guid Id, DateOnly CutDate, decimal A
 
 /// <summary>A sales invoice of a customer profile, cancelled ones included (the statement lists them; the debt and the allocation skip them).</summary>
 /// <param name="Total">The total at its latest values (BR-SALE-10), the price cuts already taken off.</param>
+/// <param name="CancelledAt">When SALE-08 cancelled it, shown in the statement (BR-DEBT-04).</param>
+/// <param name="CancelReason">Why it was cancelled.</param>
 /// <param name="PriceCuts">The price cuts that made <paramref name="Total"/> lower than what the invoice was saved with; the statement shows each as its own entry.</param>
 public sealed record CustomerLedgerInvoice(
-    Guid CustomerId, Guid Id, string Code, DateTimeOffset InvoicedAt, DateOnly InvoiceDate, decimal Total, bool Cancelled, IReadOnlyList<CustomerLedgerPriceCut>? PriceCuts = null)
+    Guid CustomerId, Guid Id, string Code, DateTimeOffset InvoicedAt, DateOnly InvoiceDate, decimal Total, bool Cancelled, DateTimeOffset? CancelledAt = null, string? CancelReason = null,
+    IReadOnlyList<CustomerLedgerPriceCut>? PriceCuts = null)
 {
     /// <summary>What the invoice was worth before its price cuts.</summary>
     public decimal OriginalTotal => Total + (PriceCuts?.Sum(c => c.Amount) ?? 0m);
