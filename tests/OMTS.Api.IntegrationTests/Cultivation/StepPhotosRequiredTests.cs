@@ -9,7 +9,7 @@ using OMTS.Api.IntegrationTests.Infrastructure;
 namespace OMTS.Api.IntegrationTests.Cultivation;
 
 /// <summary>
-/// Owner decision of 12/11/2026: a new seeding session, harvest lot, cycle plan (not from a nursery batch) and lane damage report carry 1 to 3 on-site photos; an older record without photos stays valid and
+/// Owner decision of 12/11/2026: a new seeding session, harvest lot, cycle plan and lane damage report carry 1 to 3 on-site photos; an older record without photos stays valid and
 /// readable; an edit leaves 1 to 3 when the record has photos; a care log's photos are optional, at most 3. Reads give <c>photos[{id,url}]</c>.
 /// </summary>
 public class StepPhotosRequiredTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
@@ -124,23 +124,25 @@ public class StepPhotosRequiredTests(AuthApiFactory factory) : IClassFixture<Aut
         Assert.Equal("Photos", (await (await owner.Client.PutAsync($"/api/cultivation-cycles/{cycle.Id()}/plan-photos", emptied)).ReadAsync(HttpStatusCode.BadRequest)).Text("field"));
     }
 
+    // v2 (13/11/2026): a cycle started from a nursery batch has plan photos of its own (1 to 3, required), changed within 1 to 3 like any other; none of them comes from the batch.
     [Fact]
-    public async Task A_cycle_from_a_nursery_batch_shows_the_completion_photos_of_its_batch_and_its_own_plan_photos_cannot_be_changed()
+    public async Task A_cycle_started_from_a_nursery_batch_has_its_own_plan_photos_that_can_be_changed_within_1_to_3()
     {
         var world = await factory.NurseryWorldAsync();
         var client = world.Owner.Client;
-        var batch = await client.StartNurseryAsync(world.ZoneId, world.Lot);
-        var done = await client.CompleteNurseryAsync(factory, batch.Id(), "900", new Share(world.Raft1, 900m));
-        var cycleId = done.GetProperty("allocations")[0].GetProperty("cycleId").GetGuid();
+        var batch = await client.ReadyNurseryAsync(factory, world.ZoneId, world.Lot, "1000", "900");
 
-        var cycle = await client.GetFromJsonAsync<JsonElement>($"/api/cultivation-cycles/{cycleId}");
+        var none = await (await client.PostNurseryCycleAsync(world.Raft1, batch.Id(), photos: 0)).ReadAsync(HttpStatusCode.BadRequest);
+        Assert.Equal("Photos", none.Text("field"));
+        var cycle = (await (await client.PostNurseryCycleAsync(world.Raft1, batch.Id(), photos: 2)).ReadAsync(HttpStatusCode.Created)).GetProperty("cycle");
 
-        Assert.Equal((1, true), (PhotoIds(cycle, "planPhotos").Count, cycle.Flag("planPhotosFromNursery")));
-        var refused = await (await client.PutAsync($"/api/cultivation-cycles/{cycleId}/plan-photos",
-            StepFormKit.FormOf(new { rowVersion = await factory.IssueRowVersionAsync<OMTS.Domain.Entities.Cultivation.CultivationCycle>(cycleId) }, photos: 1))).ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal("PLAN_PHOTOS_FROM_NURSERY", refused.Text("reasonCode"));
+        Assert.Equal((2, false), (PhotoIds(cycle, "planPhotos").Count, cycle.Flag("planPhotosFromNursery")));
+        var ids = PhotoIds(cycle, "planPhotos");
+        var changed = StepFormKit.FormOf(new { rowVersion = await factory.IssueRowVersionAsync<OMTS.Domain.Entities.Cultivation.CultivationCycle>(cycle.Id()), keepPhotoIds = new[] { ids[0] } }, photos: 1);
+        var after = (await (await client.PutAsync($"/api/cultivation-cycles/{cycle.Id()}/plan-photos", changed)).ReadAsync(HttpStatusCode.OK)).GetProperty("cycle");
+        Assert.Equal(2, PhotoIds(after, "planPhotos").Count);
+        Assert.Contains(ids[0], PhotoIds(after, "planPhotos"));
     }
-
     [Fact]
     public async Task A_lane_damage_report_needs_its_note_and_1_to_3_photos_and_keeps_them_with_the_incident()
     {

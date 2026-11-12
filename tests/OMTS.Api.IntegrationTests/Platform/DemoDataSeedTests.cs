@@ -146,8 +146,15 @@ public class DemoDataSeedTests
         Assert.Equal(4, await db.ZoneComplianceDocuments.CountAsync());
         Assert.Equal(1, await db.ZoneComplianceDocuments.CountAsync(d => d.ReplacesDocumentId != null));
         Assert.Equal(2, await db.ZoneComplianceDocuments.Select(d => d.ZoneId).Distinct().CountAsync());
-        // Twenty rafts of FARM-04 and the four empty ones of the nursery demo (B1-11 to B1-14, with a pin and no cycle).
-        Assert.Equal(24, await db.Rafts.CountAsync());
+        // Twenty rafts of FARM-04 and the five empty ones of the nursery demo (B1-11 to B1-15, with a pin and no cycle).
+        Assert.Equal(25, await db.Rafts.CountAsync());
+        // NURSERY (v2, 13/11/2026): two batches "đã ươm xong" with 9 500 and 6 000 survivors from different seed lots and nothing seeded yet, and one still Nursing; no cycle starts from them.
+        var nurseries = await db.NurseryBatches.AsNoTracking().OrderBy(b => b.Code).ToListAsync();
+        Assert.Equal([StatusIds.NurseryBatch.Completed, StatusIds.NurseryBatch.Completed, StatusIds.NurseryBatch.Nursing], nurseries.Select(b => b.StatusId).ToList());
+        Assert.Equal([9500m, 6000m], nurseries.Where(b => b.StatusId == StatusIds.NurseryBatch.Completed).Select(b => b.Survivors!.Value).ToList());
+        Assert.Equal(2, nurseries.Where(b => b.StatusId == StatusIds.NurseryBatch.Completed).Select(b => b.SeedLotLineId).Distinct().Count());
+        Assert.Equal(0, await db.SeedingRecords.CountAsync(r => r.NurseryBatchId != null));
+        Assert.Equal(0, await db.CultivationCycles.CountAsync(c => c.NurseryBatchId != null));
         // First raft of each In Use zone: two photos and a Removed lane; second: one photo; third: no map pin (FARM-04).
         Assert.Equal(6, await db.RaftPhotos.CountAsync());
         Assert.Equal(2, await db.Lanes.CountAsync(l => l.StatusId == StatusIds.Lane.Removed));

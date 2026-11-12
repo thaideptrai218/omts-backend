@@ -134,11 +134,11 @@ public class CyclesQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFactor
     {
         var (owner, _, raft) = await OwnerWithRaftAsync();
 
-        var none = await owner.PostAsync($"/api/rafts/{raft.Id()}/cultivation-cycles", null);
+        var none = await owner.PostAsync($"/test-only/rafts/{raft.Id()}/cultivation-cycles", null);
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, none.StatusCode);
         Assert.False(await factory.QueryAsync(db => db.CultivationCycles.AnyAsync(c => c.RaftId == raft.Id())));
 
-        var empty = await owner.PostAsync($"/api/rafts/{raft.Id()}/cultivation-cycles", StepFormKit.FormOf(null, photos: 1));
+        var empty = await owner.PostAsync($"/test-only/rafts/{raft.Id()}/cultivation-cycles", StepFormKit.FormOf(null, photos: 1));
         Assert.Equal(Today, (await empty.ReadAsync(HttpStatusCode.Created)).GetProperty("cycle").Date("startDate"));
     }
 

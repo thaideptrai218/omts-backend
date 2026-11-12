@@ -1,13 +1,16 @@
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Cultivation.Nursery;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Cultivation;
 
 namespace OMTS.Application.UnitTests.Features.Cultivation;
 
-/// <summary>The figures and checks of the nursery (ươm giống, decision of 12/11/2026) as pure functions: the loss, the shares of the survivors and the hard cap of seeding.</summary>
+/// <summary>The figures and checks of the nursery (v2, 13/11/2026) as pure functions: the loss, the pool of a batch and its hard cap, the loss of a cycle that shares a batch.</summary>
 public class NurseryRulesTests
 {
-    private static NurseryAllocationInput Share(Guid raft, decimal quantity) => new(raft, quantity);
+    private static NurseryBatch Batch(int status, decimal survivors, decimal? closeLoss = null) =>
+        new() { Code = "NU000009", StatusId = status, QuantityIn = 10000m, Survivors = survivors, CloseLossPieces = closeLoss };
 
     // 10 000 pieces in, 9 500 survive: 500 lost, 5.0 % (an estimate: the survivors are counted by eye).
     [Theory]
@@ -25,6 +28,16 @@ public class NurseryRulesTests
     public void Nothing_put_in_has_no_loss_percentage()
     {
         Assert.Equal(0m, NurseryRules.LossPercent(0m, 0m));
+        Assert.Equal(0m, NurseryRules.TotalLossPercent(0m, 0m, 0m));
+    }
+
+    // A closed batch adds what its close wrote off: 10 000 in, 9 500 survived, 1 500 were left in the pool: 2 000 lost, 20.0 %.
+    [Fact]
+    public void The_total_loss_of_a_closed_batch_adds_the_close_loss_to_the_nursery_loss()
+    {
+        Assert.Equal(2000m, NurseryRules.TotalLoss(10000m, 9500m, 1500m));
+        Assert.Equal(20.0m, NurseryRules.TotalLossPercent(10000m, 9500m, 1500m));
+        Assert.Equal(500m, NurseryRules.TotalLoss(10000m, 9500m, null));
     }
 
     [Theory]
@@ -58,134 +71,83 @@ public class NurseryRulesTests
     }
 
     [Fact]
-    public void Shares_that_add_up_to_the_survivors_exactly_are_fine_for_one_raft_or_many()
+    public void Missing_survivors_are_not_valid_survivors()
     {
-        var (a, b) = (Guid.NewGuid(), Guid.NewGuid());
+        Assert.False(NurseryRules.IsSurvivors(null, 10000m));
+    }
 
-        Assert.Null(NurseryRules.AllocationHint(9500m, [Share(a, 9500m)]));
-        Assert.Null(NurseryRules.AllocationHint(9500m, [Share(a, 4750m), Share(b, 4750m)]));
-        Assert.Null(NurseryRules.AllocationHint(0m, []));
+    // The pool: survivors less what every cycle seeded; a Closed batch has none left, a Nursing or Cancelled one has no pool.
+    [Fact]
+    public void The_pool_of_a_completed_batch_is_the_survivors_less_what_is_seeded_and_never_below_zero()
+    {
+        Assert.Equal(6500m, NurseryRules.PoolRemaining(Batch(StatusIds.NurseryBatch.Completed, 9500m), 3000m));
+        Assert.Equal(0m, NurseryRules.PoolRemaining(Batch(StatusIds.NurseryBatch.Completed, 9500m), 9600m));
+        Assert.Equal(0m, NurseryRules.PoolRemaining(Batch(StatusIds.NurseryBatch.Closed, 9500m, 6500m), 3000m));
+        Assert.Null(NurseryRules.PoolRemaining(Batch(StatusIds.NurseryBatch.Nursing, 0m), 0m));
+        Assert.Null(NurseryRules.PoolRemaining(Batch(StatusIds.NurseryBatch.Cancelled, 0m), 0m));
     }
 
     [Fact]
-    public void Shares_that_do_not_add_up_exactly_are_refused_with_a_hint_on_the_totals()
+    public void Seeding_up_to_what_is_left_in_the_pool_is_allowed_and_one_piece_more_is_not()
     {
-        var (a, b) = (Guid.NewGuid(), Guid.NewGuid());
+        var batch = Batch(StatusIds.NurseryBatch.Completed, 9500m);
 
-        var hint = NurseryRules.AllocationHint(9500m, [Share(a, 4750m), Share(b, 4749m)]);
-
-        Assert.NotNull(hint);
-        Assert.Contains("9499", hint);
-        Assert.Contains("9500", hint);
-    }
-
-    [Fact]
-    public void Survivors_with_no_raft_to_farm_them_are_refused()
-    {
-        Assert.NotNull(NurseryRules.AllocationHint(9500m, []));
-    }
-
-    [Fact]
-    public void A_raft_given_twice_or_with_no_piece_or_with_no_id_is_refused()
-    {
-        var a = Guid.NewGuid();
-
-        Assert.NotNull(NurseryRules.AllocationHint(10m, [Share(a, 5m), Share(a, 5m)]));
-        Assert.NotNull(NurseryRules.AllocationHint(10m, [Share(a, 10m), Share(Guid.NewGuid(), 0m)]));
-        Assert.NotNull(NurseryRules.AllocationHint(10m, [new NurseryAllocationInput(null, 10m)]));
-        Assert.NotNull(NurseryRules.AllocationHint(10m, [new NurseryAllocationInput(a, null)]));
-        Assert.NotNull(NurseryRules.AllocationHint(10m, [new NurseryAllocationInput(a, 10.005m)]));
-    }
-
-    [Fact]
-    public void What_can_still_be_hung_is_the_share_less_the_seed_hung_and_never_below_zero()
-    {
-        Assert.Equal(3000m, NurseryRules.Remaining(5000m, 2000m));
-        Assert.Equal(0m, NurseryRules.Remaining(5000m, 5000m));
-        Assert.Equal(0m, NurseryRules.Remaining(5000m, 5100m));
-    }
-
-    // Owner decision of 12/11/2026: seeding from a nursery is capped by the share of the cycle, exactly (no 110 % and 150 % of a plan).
-    [Fact]
-    public void Seeding_up_to_the_share_is_allowed_and_one_piece_above_is_a_conflict_with_the_figures()
-    {
-        Assert.Null(NurseryRules.CheckSeeding(4750m, 4000m, 750m));
-
-        var over = NurseryRules.CheckSeeding(4750m, 4000m, 751m);
-
-        Assert.NotNull(over);
-        Assert.Equal(ErrorKind.Conflict, over.Kind);
-        Assert.Equal(NurseryReasonCodes.SeedingAboveAllocation, over.Details!["reasonCode"]);
-        Assert.Equal((4750m, 4000m, 750m, 751m), ((decimal)over.Details["allocated"]!, (decimal)over.Details["seeded"]!, (decimal)over.Details["remaining"]!, (decimal)over.Details["quantity"]!));
-        Assert.Equal("Quantity", over.Details["field"]);
-    }
-
-    [Fact]
-    public void Nothing_more_can_be_hung_from_a_share_already_fully_hung()
-    {
-        Assert.NotNull(NurseryRules.CheckSeeding(100m, 100m, 1m));
-        Assert.NotNull(NurseryRules.CheckSeeding(100m, 120m, 1m));
-    }
-
-    // Owner decision of 13/11/2026: a session from a nursery hangs the whole share left; the quantity is left out or equals it (within three decimals), else 400 with the figures.
-    [Fact]
-    public void A_nursery_session_takes_the_whole_share_left_whether_the_quantity_is_left_out_or_equal()
-    {
-        Assert.Equal((4750m, (AppError?)null), NurseryRules.FullSeeding(4750m, 0m, null));
-        Assert.Equal((750m, (AppError?)null), NurseryRules.FullSeeding(4750m, 4000m, 750m));
-        Assert.Null(NurseryRules.FullSeeding(4750m, 0m, 4750.0004m).Error);
-    }
-
-    [Fact]
-    public void A_nursery_session_with_another_quantity_is_a_bad_request_naming_the_full_share()
-    {
-        var refused = NurseryRules.FullSeeding(4750m, 0m, 4000m).Error;
-
-        Assert.NotNull(refused);
-        Assert.Equal(ErrorKind.Validation, refused.Kind);
-        Assert.Equal(NurseryReasonCodes.SeedingMustUseFullAllocation, refused.Details!["reasonCode"]);
-        Assert.Equal((4750m, 4000m), ((decimal)refused.Details["remaining"]!, (decimal)refused.Details["quantity"]!));
-        Assert.Contains("còn 4750 mảnh", refused.Message.Text);
-        Assert.NotNull(NurseryRules.FullSeeding(4750m, 0m, 4750.01m).Error);
-    }
-
-    [Fact]
-    public void A_nursery_session_with_nothing_left_to_hang_is_a_bad_request_saying_it_is_complete()
-    {
-        var refused = NurseryRules.FullSeeding(4750m, 4750m, null).Error;
-
-        Assert.NotNull(refused);
-        Assert.Equal((ErrorKind.Validation, NurseryReasonCodes.SeedingAlreadyComplete), (refused.Kind, refused.Details!["reasonCode"]));
-        Assert.Equal(0m, (decimal)refused.Details["remaining"]!);
-    }
-
-    // A batch shared by two rafts shows each cycle its part of the pieces put in, by the share of the survivors; the percentage is the batch's.
-    [Fact]
-    public void The_nursery_of_a_cycle_takes_its_part_of_the_pieces_put_in_by_its_share()
-    {
-        var facts = new NurseryCycleFacts(Guid.NewGuid(), "NU000001", 10000m, 9500m, 4750m, 1000m);
-
-        var summary = NurseryRules.SummaryOf(facts);
-
-        Assert.Equal((5000m, 4750m, 250m, 5.0m, true), (summary.QuantityIn, summary.Survivors, summary.LossPieces, summary.LossPercent, summary.Estimated));
-        Assert.Equal("NU000001", summary.BatchCode);
-    }
-
-    [Fact]
-    public void A_batch_with_one_raft_shows_its_whole_figures()
-    {
-        var summary = NurseryRules.SummaryOf(new NurseryCycleFacts(Guid.NewGuid(), "NU000002", 10000m, 9500m, 9500m, 0m));
-
-        Assert.Equal((10000m, 9500m, 500m, 5.0m), (summary.QuantityIn, summary.Survivors, summary.LossPieces, summary.LossPercent));
-    }
-
-    [Fact]
-    public void A_refusal_carries_its_reason_code_and_the_details_it_is_given()
-    {
-        var refused = NurseryRules.NotNursing("NU000003", "Đã hoàn tất");
+        Assert.Null(NurseryRules.CheckPool(batch, 3000m, 6500m));
+        var refused = NurseryRules.CheckPool(batch, 3000m, 6500.01m)!;
 
         Assert.Equal(ErrorKind.Conflict, refused.Kind);
-        Assert.Equal(NurseryReasonCodes.NotNursing, refused.Details!["reasonCode"]);
-        Assert.Contains("NU000003", refused.Message.Text);
+        Assert.Equal(NurseryReasonCodes.PoolExceeded, refused.Details!["reasonCode"]);
+        Assert.Equal(6500m, refused.Details["remaining"]);
+        Assert.Equal(6500.01m, refused.Details["quantity"]);
+        Assert.Equal(9500m, refused.Details["survivors"]);
+        Assert.Equal(3000m, refused.Details["seeded"]);
+    }
+
+    // A record of a closed batch (seeded 3 000 of 9 500, 6 500 written off) can be kept or lowered, never raised.
+    [Fact]
+    public void A_closed_batch_gives_only_what_was_seeded_before_the_close()
+    {
+        var closed = Batch(StatusIds.NurseryBatch.Closed, 9500m, 6500m);
+
+        Assert.Equal(3000m, NurseryRules.PoolSize(closed));
+        Assert.Null(NurseryRules.CheckPool(closed, 0m, 3000m));
+        Assert.NotNull(NurseryRules.CheckPool(closed, 0m, 3001m));
+        Assert.NotNull(NurseryRules.CheckPool(closed, 3000m, 1m));
+    }
+
+    // Two cycles drew 3 000 and 1 000 from a batch of 10 000 in, 9 500 survivors, 1 500 closed off: the loss of 2 000 is shared 3:1, the percentage is the batch's.
+    [Fact]
+    public void The_nursery_figures_of_a_cycle_share_the_batch_by_what_each_cycle_seeded()
+    {
+        var batchId = Guid.NewGuid();
+
+        var first = NurseryRules.SummaryOf(new NurseryCycleFacts(batchId, "NU000001", 10000m, 9500m, 1500m, 3000m, 4000m));
+        var second = NurseryRules.SummaryOf(new NurseryCycleFacts(batchId, "NU000001", 10000m, 9500m, 1500m, 1000m, 4000m));
+
+        Assert.Equal((7500m, 7125m, 1500m, 20.0m, true), (first.QuantityIn, first.Survivors, first.LossPieces, first.LossPercent, first.Estimated));
+        Assert.Equal((2500m, 2375m, 500m, 20.0m), (second.QuantityIn, second.Survivors, second.LossPieces, second.LossPercent));
+        Assert.Equal(2000m, first.LossPieces + second.LossPieces);
+    }
+
+    [Fact]
+    public void A_cycle_that_seeded_nothing_has_no_share_of_the_batch()
+    {
+        var summary = NurseryRules.SummaryOf(new NurseryCycleFacts(Guid.NewGuid(), "NU000002", 10000m, 9500m, 0m, 0m, 0m));
+
+        Assert.Equal((0m, 0m, 0m, 5.0m), (summary.QuantityIn, summary.Survivors, summary.LossPieces, summary.LossPercent));
+    }
+
+    [Fact]
+    public void The_refusals_carry_a_reason_code_and_a_vietnamese_text()
+    {
+        var notNursing = NurseryRules.NotNursing("NU000003", "Đã ươm xong");
+        var notCompleted = NurseryRules.NotCompleted("NU000003", "Đang ươm");
+        var seedingCompleted = NurseryRules.SeedingCompletedRefusal("B01");
+
+        Assert.Equal(NurseryReasonCodes.NotNursing, notNursing.Details!["reasonCode"]);
+        Assert.Equal(NurseryReasonCodes.NotCompleted, notCompleted.Details!["reasonCode"]);
+        Assert.Equal(NurseryReasonCodes.SeedingCompleted, seedingCompleted.Details!["reasonCode"]);
+        Assert.Contains("NU000003", notNursing.Message.Text);
+        Assert.Contains("B01", seedingCompleted.Message.Text);
     }
 }

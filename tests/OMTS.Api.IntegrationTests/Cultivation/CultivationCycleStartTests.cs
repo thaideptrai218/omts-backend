@@ -35,7 +35,7 @@ public class CultivationCycleStartTests(AuthApiFactory factory) : IClassFixture<
         Assert.True(cycle.IsNull("closeDate") && cycle.IsNull("expectedSeedQuantity") && cycle.IsNull("targetYieldKg"));
         // The plan has no expected harvest date any more (owner decision of 12/11/2026) and the nursery fields are null on a cycle started the old way.
         Assert.False(cycle.TryGetProperty("expectedHarvestDate", out _));
-        Assert.True(cycle.IsNull("nurseryBatchId") && cycle.IsNull("nurseryCode") && cycle.IsNull("nurseryAllocated"));
+        Assert.True(cycle.IsNull("nurseryBatchId") && cycle.IsNull("nurseryCode") && cycle.IsNull("seedLot"));
         Assert.True(cycle.Flag("canEdit") && cycle.Flag("canCancel"));
         Assert.Equal(1, cycle.GetProperty("daysOfFarming").GetInt32());
 
@@ -134,7 +134,7 @@ public class CultivationCycleStartTests(AuthApiFactory factory) : IClassFixture<
 
         var form = StepFormKit.FormOf(null, photos: 1);
         form.Add(new StringContent(value), field);
-        var answer = await owner.PostAsync($"/api/rafts/{raft.Id()}/cultivation-cycles", form);
+        var answer = await owner.PostAsync($"/test-only/rafts/{raft.Id()}/cultivation-cycles", form);
 
         Assert.Equal([named], await answer.InvalidFieldsAsync());
         Assert.False(await factory.QueryAsync(db => db.CultivationCycles.AnyAsync(c => c.RaftId == raft.Id())));

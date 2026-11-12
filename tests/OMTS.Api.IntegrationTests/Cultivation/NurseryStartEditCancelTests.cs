@@ -145,7 +145,7 @@ public sealed class NurseryStartEditCancelTests
         var first = await client.StartNurseryAsync(world.ZoneId, world.Lot, "3000");
         var second = await client.StartNurseryAsync(world.ZoneId, world.Lot, "2000");
         await (await client.CancelNurseryAsync(api, second.Id(), "Nhập nhầm")).ReadAsync(HttpStatusCode.OK);
-        await client.CompleteNurseryAsync(api, first.Id(), "2700", new Share(world.Raft1, 2700m));
+        await client.CompleteNurseryAsync(api, first.Id(), "2700");
 
         var all = await client.GetFromJsonAsync<JsonElement>($"/api/nursery-batches?zoneId={world.ZoneId}");
         var completed = await client.GetFromJsonAsync<JsonElement>($"/api/nursery-batches?zoneId={world.ZoneId}&status=completed");
@@ -157,7 +157,7 @@ public sealed class NurseryStartEditCancelTests
         Assert.Equal((3000m, 0m, 3000m, 2700m, 300m, 10.0m, 0, 1), (summary.Pieces("quantityIn"), summary.Pieces("nursingQuantityIn"), summary.Pieces("completedQuantityIn"), summary.Pieces("survivors"),
             summary.Pieces("lossPieces"), summary.Pieces("lossPercent"), summary.GetProperty("nursingCount").GetInt32(), summary.GetProperty("completedCount").GetInt32()));
         var item = Assert.Single(completed.GetProperty("items").EnumerateArray());
-        Assert.Equal((first.Id(), 2700m, 300m, 10.0m, true, 1), (item.Id(), item.Pieces("survivors"), item.Pieces("lossPieces"), item.Pieces("lossPercent"), item.Flag("estimated"), item.GetProperty("allocationCount").GetInt32()));
+        Assert.Equal((first.Id(), 2700m, 300m, 10.0m, true, 0m, 2700m), (item.Id(), item.Pieces("survivors"), item.Pieces("lossPieces"), item.Pieces("lossPercent"), item.Flag("estimated"), item.Pieces("seeded"), item.Pieces("remaining")));
         Assert.Equal(second.Id(), Assert.Single(byCode.GetProperty("items").EnumerateArray()).Id());
 
         var lots = await client.GetFromJsonAsync<JsonElement>($"/api/nursery-batches/seed-lots?zoneId={world.ZoneId}");
@@ -222,7 +222,7 @@ public sealed class NurseryStartEditCancelTests
         Assert.Equal(HttpStatusCode.Conflict, (await client.PutNurseryAsync(batch.Id(), new NurseryFields { RowVersion = await api.IssueRowVersionAsync<NurseryBatch>(batch.Id()), Quantity = "1" })).StatusCode);
     }
 
-    // Owner decision of 12/11/2026: a Completed nursery cannot be cancelled, nor edited.
+    // Owner decision of 12/11/2026: a Completed ("đã ươm xong") nursery cannot be cancelled, nor edited.
     [Fact]
     public async Task A_completed_batch_is_neither_cancelled_nor_edited_and_the_pieces_stay_out_of_the_stock()
     {
@@ -230,7 +230,7 @@ public sealed class NurseryStartEditCancelTests
         var world = await api.NurseryWorldAsync();
         var client = world.Owner.Client;
         var batch = await client.StartNurseryAsync(world.ZoneId, world.Lot, "4000");
-        await client.CompleteNurseryAsync(api, batch.Id(), "3800", new Share(world.Raft1, 3800m));
+        await client.CompleteNurseryAsync(api, batch.Id(), "3800");
 
         var cancel = await (await client.CancelNurseryAsync(api, batch.Id(), "Muốn hủy")).ReadAsync(HttpStatusCode.Conflict);
         var edit = await (await client.PutNurseryAsync(batch.Id(), new NurseryFields { RowVersion = await api.VersionOfAsync(batch.Id()), Quantity = "100" })).ReadAsync(HttpStatusCode.Conflict);
