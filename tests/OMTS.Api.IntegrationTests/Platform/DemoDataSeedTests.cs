@@ -50,6 +50,12 @@ public class DemoDataSeedTests
         ("EmployeeJobTypes", db => db.EmployeeJobTypes.CountAsync()),
         ("AttendanceSettingsVersions", db => db.AttendanceSettingsVersions.CountAsync()),
         ("Payrolls", db => db.Payrolls.CountAsync()),
+        ("PayrollLines", db => db.PayrollLines.CountAsync()),
+        ("WagePayments", db => db.WagePayments.CountAsync()),
+        ("PayrollAdvanceDeductions", db => db.PayrollAdvanceDeductions.CountAsync()),
+        ("Attendances", db => db.Attendances.CountAsync()),
+        ("WorkAssignments", db => db.WorkAssignments.CountAsync()),
+        ("CashVouchers", db => db.CashVouchers.CountAsync()),
         ("Notifications", db => db.Notifications.CountAsync()),
         ("AuditEvents", db => db.AuditEvents.CountAsync()),
     ];
@@ -184,8 +190,9 @@ public class DemoDataSeedTests
         Assert.True(await db.SupplierPayments.AnyAsync(p => p.StatusId == StatusIds.SupplierPayment.Recorded && p.Kind == SupplierPaymentKind.PaidBack));
         Assert.Equal(1, await db.SupplierPayments.CountAsync(p => p.StatusId == StatusIds.SupplierPayment.Cancelled));
         Assert.True(await db.SupplierPayments.AllAsync(p => p.Code.StartsWith("TT")));
-        // Each transaction told the Owner (MSG-PURCHASE-04), the cancellation apart from its payment.
-        var payments = await db.SupplierPayments.CountAsync();
+        // Each transaction told the Owner (MSG-PURCHASE-04), the cancellation apart from its payment. The money paid back
+        // with a return is saved by the return and sends no MSG-PURCHASE-04 of its own.
+        var payments = await db.SupplierPayments.CountAsync(p => p.PurchaseReturnId == null);
         Assert.Equal(payments + 1, await db.Notifications.CountAsync(n => n.Type == NotificationTypes.SupplierTransaction));
         // PN codes; Material lines name their raft, seed lines may; one amount keeps its dongs (BR-PURCHASE-02).
         Assert.True(await db.PurchaseReceipts.AllAsync(r => r.Code.StartsWith("PN")));
@@ -222,12 +229,25 @@ public class DemoDataSeedTests
         Assert.Equal((1, false), (cooperative.PayPeriodStartDay, cooperative.AutomaticPayroll));
 
         var payrolls = await db.Payrolls.OrderBy(p => p.PeriodStart).ToListAsync();
-        Assert.Equal([StatusIds.Payroll.Finalized, StatusIds.Payroll.AwaitingFinalization], payrolls.Select(p => p.StatusId));
+        Assert.Equal([StatusIds.Payroll.Finalized, StatusIds.Payroll.Provisional], payrolls.Select(p => p.StatusId));
+        Assert.Equal(["BL000001", "BL000002"], payrolls.Select(p => p.Code));
+        Assert.Equal(("Monthly", "Monthly"), (payrolls[0].PeriodType.ToString(), payrolls[1].PeriodType.ToString()));
+        Assert.Equal($"{payrolls[0].PeriodEnd:yyyy-MM}", payrolls[0].ExpenseMonth);
         Assert.Equal(payrolls[0].PeriodEnd.AddDays(1), payrolls[1].PeriodStart);
         // The test may run just after midnight of the first of a month, later than the seed: last month is then the one before.
         Assert.InRange(payrolls[1].PeriodEnd, today.AddMonths(-1).AddDays(-1), today);
         Assert.True(payrolls.All(p => p.PeriodStart.Day == 1));
         Assert.True(await db.PayRates.Where(r => r.HourlyRate == 36_000).AllAsync(r => r.EffectiveFrom > payrolls[1].PeriodEnd));
+
+        // The payroll demo: attendance of the seasonal workers, last month's before sheet Finalized with one payslip partly paid in cash and one paid in
+        // full by transfer, an advance to the second, and last month's sheet Provisional with that advance previewed as a deduction.
+        Assert.True(await db.Attendances.AnyAsync());
+        Assert.True(await db.PayrollLines.CountAsync(l => l.PayrollId == payrolls[0].Id) >= 2);
+        var wages = await db.WagePayments.Where(w => w.Kind == OMTS.Domain.Enums.WagePaymentKind.Wage).OrderBy(w => w.CreatedAt).ToListAsync();
+        Assert.Equal([OMTS.Domain.Enums.PaymentMethod.Cash, OMTS.Domain.Enums.PaymentMethod.BankTransfer], wages.Select(w => w.Method));
+        Assert.Equal(1, await db.WagePayments.CountAsync(w => w.Kind == OMTS.Domain.Enums.WagePaymentKind.Advance && w.Amount == 500_000));
+        Assert.Equal(3, await db.CashVouchers.CountAsync(v => v.TypeId == CashVoucherTypeIds.PaymentPayroll));
+        Assert.True(await db.PayrollLines.AnyAsync(l => l.PayrollId == payrolls[1].Id && l.Deduction > 0));
     }
 
     // WATER (OMTS-219): thresholds and 30 days of readings per In Use zone, at its rafts, each with a temperature and a photo:

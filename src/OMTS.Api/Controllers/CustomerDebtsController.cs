@@ -5,6 +5,7 @@ using OMTS.Api.Filters;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Sales.Debts;
+using OMTS.Application.Features.Sales.Payments;
 
 namespace OMTS.Api.Controllers;
 
@@ -15,8 +16,32 @@ namespace OMTS.Api.Controllers;
 [ApiController]
 [Route("api/customer-debts")]
 [Authorize]
-public sealed class CustomerDebtsController(CustomerDebtService debts, CustomerDebtExportService exports) : ControllerBase
+public sealed class CustomerDebtsController(CustomerDebtService debts, CustomerDebtExportService exports, CustomerDebtAdjustmentService adjustments) : ControllerBase
 {
+    /// <summary>
+    /// The debt tab of the customer screen: the debt now, the unpaid invoices oldest first and the entries (invoice, price cut, payment, discount, money paid back, adjustment), newest
+    /// first, each with the debt after it. <c>kinds</c> (repeat the parameter), <c>from</c> and <c>to</c> narrow the entries, never the debt after each.
+    /// </summary>
+    [HttpGet("{customerId:guid}")]
+    [RequirePermission(PermissionFunctions.CustomerDebts, PermissionAction.View, PermissionScope.NoZone)]
+    [ProducesResponseType<CustomerDebtTab>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Tab(Guid customerId, [FromQuery] CustomerDebtTabQuery query, CancellationToken cancellationToken) =>
+        (await debts.TabAsync(customerId, query, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>A correction of the debt by hand ("Điều chỉnh"): a signed amount, above 0 the customer owes more. The Owner and the Accountant (CUSTOMER_PAYMENTS Edit).</summary>
+    [HttpPost("adjustments")]
+    [RequirePermission(PermissionFunctions.CustomerPayments, PermissionAction.Edit, PermissionScope.NoZone)]
+    [ProducesResponseType<CustomerDebtAdjustmentSaved>(StatusCodes.Status201Created)]
+    public async Task<IActionResult> Adjust(RecordCustomerDebtAdjustmentRequest request, CancellationToken cancellationToken) =>
+        (await adjustments.RecordAsync(request, cancellationToken)).ToActionResult(a => StatusCode(StatusCodes.Status201Created, a));
+
+    /// <summary>An adjustment made by mistake, with a reason; it no longer counts. 409 MSG-GEN-09 when it is already cancelled.</summary>
+    [HttpPost("adjustments/{id:guid}/cancel")]
+    [RequirePermission(PermissionFunctions.CustomerPayments, PermissionAction.Edit, PermissionScope.NoZone)]
+    [ProducesResponseType<CustomerDebtAdjustmentSaved>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> CancelAdjustment(Guid id, CancelCustomerPaymentRequest request, CancellationToken cancellationToken) =>
+        (await adjustments.CancelAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
     /// <summary>Step 1: the profiles whose debt today is not 0, with the age of a debt above 0, the totals and the payments Awaiting confirmation.</summary>
     [HttpGet]
     [RequirePermission(PermissionFunctions.CustomerDebts, PermissionAction.View, PermissionScope.NoZone)]

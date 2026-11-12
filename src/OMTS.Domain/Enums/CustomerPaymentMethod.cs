@@ -6,4 +6,7 @@ public enum CustomerPaymentMethod
     VietQrInvoice,
     OtherTransfer,
     Cash,
+
+    /// <summary>Into an e-wallet account of the cash book; only a cash book voucher that counts in the debt makes one.</summary>
+    EWallet,
 }

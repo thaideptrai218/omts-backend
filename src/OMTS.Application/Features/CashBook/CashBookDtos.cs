@@ -1,14 +1,30 @@
+using OMTS.Application.Features.Sales.Payments;
 using OMTS.Application.Features.WaterQuality.Dtos;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.CashBook;
 
-/// <summary>Where a line of the cash book comes from: a self-made voucher, or a supplier payment or money a supplier paid back.</summary>
+/// <summary>
+/// Where a line of the cash book comes from: a self-made voucher, a supplier payment or money a supplier paid back, or a customer payment (money received from a customer, Completed
+/// only) or money paid back to one. The lines of the last four are read only: they open in their own screens ("Mở phiếu").
+/// </summary>
 public enum CashSource
 {
     CashVoucher,
     SupplierPayment,
     SupplierPaidBack,
+    CustomerPayment,
+    CustomerPaidBack,
+}
+
+/// <summary>What a receipt voucher for a customer does with the money it counts in the debt ("Tính vào công nợ").</summary>
+public enum CashDebtMode
+{
+    /// <summary>"Phân bổ vào hóa đơn": it pays the invoices named (<c>debtAllocations</c>), or the unpaid ones oldest first when none are named.</summary>
+    AllocateToInvoices,
+
+    /// <summary>"Chỉ trừ vào công nợ": it only takes the amount off the debt; no invoice is set.</summary>
+    DebtOnly,
 }
 
 /// <summary>A voucher counts while Recorded; a cancelled one stays listed but never counts in a balance.</summary>
@@ -85,6 +101,13 @@ public sealed record CreateCashPartyRequest(string? Name, string? PhoneNumber = 
 /// <param name="PartyName">Not read: the name is the one of the record named.</param>
 /// <param name="CountsInResult">Left out: the value of the type.</param>
 /// <param name="RowVersion">An edit only.</param>
+/// <param name="CountInDebt">
+/// A create only, with <paramref name="PartyKind"/> Customer: "Tính vào công nợ". A receipt needs a customer who owes (and is at most what is owed), a payment a customer the cooperative
+/// owes (at most what is owed back); the fund is Cash or Bank. It is saved as a customer payment (a Completed payment, or money paid back), not a plain voucher: the type is the system
+/// one, the answer has <c>source</c> CustomerPayment and the id and code of that payment.
+/// </param>
+/// <param name="DebtMode">With <paramref name="CountInDebt"/> on a receipt: AllocateToInvoices (the default) or DebtOnly.</param>
+/// <param name="DebtAllocations">With AllocateToInvoices: the unpaid invoices it pays; left out: the unpaid invoices oldest first up to the amount.</param>
 public sealed record SaveCashVoucherRequest(
     string? Code,
     CashDirection? Direction,
@@ -99,7 +122,10 @@ public sealed record SaveCashVoucherRequest(
     string? PartyName = null,
     string? Note = null,
     bool? CountsInResult = null,
-    string? RowVersion = null);
+    string? RowVersion = null,
+    bool CountInDebt = false,
+    CashDebtMode? DebtMode = null,
+    IReadOnlyList<CustomerPaymentAllocationInput>? DebtAllocations = null);
 
 public sealed record CancelCashVoucherRequest(string? Reason, string? RowVersion = null);
 
@@ -122,7 +148,9 @@ public sealed record CashVoucherView(
     DateTimeOffset CreatedAt,
     AccountRef? CreatedBy,
     DateTimeOffset? UpdatedAt,
-    string RowVersion);
+    string RowVersion,
+    CashSource Source = CashSource.CashVoucher,
+    CashSourceDocument? SourceDocument = null);
 
 // ---- The book ----
 

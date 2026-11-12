@@ -54,6 +54,12 @@ public class CustomerPaymentQaTestsSqlServer
     {
         public void Add(CustomerPayment payment) => inner.Add(payment);
 
+        public void RemoveAllocation(CustomerPaymentAllocation allocation) => inner.RemoveAllocation(allocation);
+
+        public Task<Guid?> FindIdByCodeAsync(string code, Guid? exceptPaymentId, CancellationToken cancellationToken) => inner.FindIdByCodeAsync(code, exceptPaymentId, cancellationToken);
+
+        public Task<IReadOnlyList<CustomerPayment>> GetPendingTransfersAsync(CancellationToken cancellationToken) => inner.GetPendingTransfersAsync(cancellationToken);
+
         public Task<CustomerPayment?> GetForEditAsync(Guid paymentId, CancellationToken cancellationToken) => inner.GetForEditAsync(paymentId, cancellationToken);
 
         public Task<IReadOnlyList<CustomerPayment>> GetForEditAsync(IReadOnlyCollection<Guid> paymentIds, CancellationToken cancellationToken) =>
@@ -123,7 +129,7 @@ public class CustomerPaymentQaTestsSqlServer
 
     // The columns that exist before the migration.
     private static Task<List<string>> PaymentsAsync(DbContext db) => db.Database.SqlQueryRaw<string>(
-        "SELECT CONCAT(Code, ' ', Kind, ' ', Method, ' ', Amount, ' ', StatusId, ' ', CONVERT(varchar(10), PaymentDate, 23), ' ', CONVERT(varchar(20), RowVersion, 1)) AS [Value] "
+        "SELECT CONCAT(Code, ' ', Kind, ' ', Method, ' ', Amount, ' ', StatusId, ' ', CONVERT(varchar(10), PaymentDate, 23)) AS [Value] "
         + "FROM CustomerPayments ORDER BY Code").ToListAsync();
 
     private static Task<int> NewColumnsSetAsync(DbContext db) => db.Database.SqlQueryRaw<int>(

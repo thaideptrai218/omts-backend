@@ -18,6 +18,9 @@ public class HarvestLotForm
 
     public string? CageCount { get; set; }
 
+    /// <summary>When recording: the id of the purchase request the trip harvests for (decision of 11/11/2026). A correction does not read it.</summary>
+    public string? PurchaseRequestId { get; set; }
+
     /// <summary>Left out when recording: cages times the average kg per cage. Left out when correcting: it stays, or when the cages changed, cages times the kg per cage of the lot.</summary>
     public string? EstimatedKg { get; set; }
 

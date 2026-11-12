@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Api.IntegrationTests.Purchasing;
+using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Identity;
 using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 
 namespace OMTS.Api.IntegrationTests.Sales;
@@ -30,16 +32,20 @@ public class CustomerMergeRefusalTests(AuthApiFactory factory) : IClassFixture<A
     }
 
     [Fact]
-    public async Task Two_profiles_with_trader_accounts_are_not_merged()
+    public async Task Two_profiles_with_trader_accounts_are_merged_the_kept_one_keeps_its_account_and_the_merged_one_is_locked_and_audited()
     {
         var owner = await factory.PurchasingOwnerAsync();
-        var (_, first) = await factory.LinkedProfileAsync(name: "First");
-        var (_, second) = await factory.LinkedProfileAsync(name: "Second");
+        var (keptAccount, first) = await factory.LinkedProfileAsync(name: "First");
+        var (mergedAccount, second) = await factory.LinkedProfileAsync(name: "Second");
 
-        var body = await (await owner.MergeAsync(first.Id, second.Id)).ProblemAsync(HttpStatusCode.Conflict, "MSG-SALE-05");
+        var preview = await (await owner.GetAsync($"/api/customers/{first.Id}/merge-preview?mergedCustomerId={second.Id}")).ReadAsync(HttpStatusCode.OK);
+        Assert.True(preview.GetProperty("locksMergedAccount").GetBoolean());
+        await (await owner.MergeAsync(first.Id, second.Id)).ReadAsync(HttpStatusCode.OK);
 
-        Assert.Equal("Second cannot be merged into First: both have a trader account.", body.Text("detail"));
-        Assert.False(body.GetProperty("canKeepMergedInstead").GetBoolean());
+        Assert.Equal(first.Id, await MergedIntoAsync(second.Id));
+        var statuses = await factory.QueryAsync(db => db.Accounts.Where(a => a.Id == keptAccount.Id || a.Id == mergedAccount.Id).ToDictionaryAsync(a => a.Id, a => a.StatusId));
+        Assert.Equal((StatusIds.Account.Active, StatusIds.Account.Locked), (statuses[keptAccount.Id], statuses[mergedAccount.Id]));
+        Assert.Equal(1, await factory.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == mergedAccount.Id && e.RecordType == nameof(Account))));
     }
 
     [Fact]

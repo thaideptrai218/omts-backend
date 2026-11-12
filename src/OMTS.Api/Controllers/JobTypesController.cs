@@ -18,11 +18,16 @@ namespace OMTS.Api.Controllers;
 [Authorize]
 public sealed class JobTypesController(JobTypeService jobTypes, PayRateService rates, JobTypeQueryService queries) : ControllerBase
 {
+    /// <summary>
+    /// <c>sortBy</c> is name (default), rate, effectiveFrom or status with <c>sortDir</c> asc (default) or desc, over the whole result
+    /// before paging, then by id. The rate and its date are those in force today. A value that does not exist is 400 MSG-GEN-01.
+    /// </summary>
     [HttpGet]
     [RequirePermission(PermissionFunctions.PayRules, PermissionAction.View, PermissionScope.AnyZone)]
     [ProducesResponseType<Paged<JobTypeView>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Search(string? search, int? statusId, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default) =>
-        Ok(await queries.SearchAsync(search, statusId, page, pageSize, cancellationToken));
+    public async Task<IActionResult> Search(
+        string? search, int? statusId, string? sortBy, string? sortDir, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default) =>
+        (await queries.SearchAsync(search, statusId, sortBy, sortDir, page, pageSize, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>LABOR-01: the job types In Use, by name, without rates.</summary>
     [HttpGet("options")]

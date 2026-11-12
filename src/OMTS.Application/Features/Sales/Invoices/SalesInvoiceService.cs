@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Sales.Payments;
 using OMTS.Application.Common.Constants;
 using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
@@ -26,6 +27,7 @@ public sealed class SalesInvoiceService(
     IPendingSaleRepository pendingSales,
     ICooperativeRepository cooperatives,
     SalesInvoiceFactsReader factsReader,
+    SalesInvoiceWeighingReader weighingReader,
     SalesInvoiceWriter writer,
     PendingSaleWriter pendingWriter,
     SalesInvoiceNotifications notifications,
@@ -33,6 +35,7 @@ public sealed class SalesInvoiceService(
     PendingSaleViews pendingViews,
     SalesInvoiceReadService reads,
     IDocumentNumberAllocator numbers,
+    CustomerPaymentCodeService paymentCodes,
     ICurrentUser currentUser,
     IUnitOfWork unitOfWork)
 {
@@ -53,8 +56,15 @@ public sealed class SalesInvoiceService(
             return first;
         }
 
-        var (entries, invalid) = SalesInvoiceEntryReader.Read(request);
-        return invalid.Count > 0 ? AppError.InvalidFields(invalid) : await SaveAsync(request, entries!, key, pendingCode: null, cancellationToken);
+        // Một hóa đơn lập từ lần cân đã chốt lấy số kg của lần cân đó.
+        var weighed = await weighingReader.FillKgAsync(request, cancellationToken);
+        if (!weighed.IsSuccess)
+        {
+            return weighed.Error!;
+        }
+
+        var (entries, invalid) = SalesInvoiceEntryReader.Read(weighed.Value!);
+        return invalid.Count > 0 ? AppError.InvalidFields(invalid) : await SaveAsync(weighed.Value!, entries!, key, pendingCode: null, cancellationToken);
     }
 
     /// <summary>
@@ -131,7 +141,7 @@ public sealed class SalesInvoiceService(
             code ??= SalesDocumentCodes.InvoiceCode(await numbers.NextAsync(DocumentSequenceKeys.SalesInvoice, cancellationToken));
             if (decision.Cash.Recorded > 0m && !decision.AwaitsTransfer)
             {
-                paymentCode ??= SalesDocumentCodes.PaymentCode(await numbers.NextAsync(DocumentSequenceKeys.CustomerPayment, cancellationToken));
+                paymentCode ??= await paymentCodes.NextAsync(cancellationToken);
             }
 
             Func<Task<SalesInvoiceCreated>> answer;

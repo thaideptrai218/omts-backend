@@ -185,7 +185,7 @@ public class SalesInvoiceSearchTests
         var byOther = await other.SoldAsync(sale, sale.LotId);
         var payLater = (await manager.SellAsync(sale.PayLater(sale.LotId, 1m))).GetProperty("invoice");
         var payment = (await api.PaymentsOfAsync(confirmed.Id())).Single();
-        await api.UpdateAsync<CustomerPayment>(payment.Id, p => p.StatusId = StatusIds.CustomerPayment.Confirmed);
+        await api.UpdateAsync<CustomerPayment>(payment.Id, p => p.StatusId = StatusIds.CustomerPayment.Completed);
 
         var list = await manager.InvoiceListAsync("?cashCollectedByMe=true");
 

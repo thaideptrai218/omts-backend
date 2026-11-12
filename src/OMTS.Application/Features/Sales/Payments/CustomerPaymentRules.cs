@@ -1,11 +1,27 @@
+using System.Globalization;
+using OMTS.Application.Common;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Features.Purchasing;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Sales.Debts;
 using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Sales.Payments;
+
+/// <summary>How a payment comes about: the Accountant records money that arrived, makes a VietQR code first, or counts the voucher of the cash book in the debt.</summary>
+public enum CustomerPaymentMode
+{
+    /// <summary>Money that has arrived (or left); a transfer needs its bank reference.</summary>
+    Direct,
+
+    /// <summary>A VietQR code is made first: the payment waits for the transfer and counts nowhere until it arrives.</summary>
+    WaitsForTransfer,
+
+    /// <summary>A voucher of the cash book that counts in the debt ("Tính vào công nợ"): it has no bank reference and is for a customer whose debt allows it.</summary>
+    FromCashVoucher,
+}
 
 /// <summary>
 /// BR-DEBT-03 as pure rules: the fields of a payment or money paid back (as BR-PURCHASE-08, same limits as the supplier payments), and its questions and refusals:
@@ -15,29 +31,78 @@ public static class CustomerPaymentRules
 {
     public const int MaxBatchSize = 200;
 
-    /// <summary>Every missing or invalid field (MSG-GEN-01), the customer and the cash collector apart.</summary>
-    public static List<string> InvalidFields(RecordCustomerPaymentRequest request, DateOnly today)
+    /// <summary>How far ahead of the server clock a time paid may be: a client clock a little fast is not "in the future".</summary>
+    public static readonly TimeSpan ClockTolerance = SupplierPaymentRules.ClockTolerance;
+
+    /// <summary>
+    /// Every missing or invalid field (MSG-GEN-01), the customer, the person who collected and the invoices of the allocations apart. A payment with no money (all discount) needs
+    /// no method. <see cref="CustomerPaymentMode.WaitsForTransfer"/>: a VietQR code is made first, so it needs money, the bank account for the code, and no bank reference yet.
+    /// </summary>
+    public static List<string> InvalidFields(
+        RecordCustomerPaymentRequest request, DateTimeOffset now, CustomerPaymentKind kind = CustomerPaymentKind.Payment, CustomerPaymentMode mode = CustomerPaymentMode.Direct)
     {
+        var waitsForTransfer = mode == CustomerPaymentMode.WaitsForTransfer;
+        var today = BusinessClock.ToBusinessDate(now);
         var invalid = new List<string>();
-        if (request.PaymentDate is not { } paymentDate || paymentDate > today)
+        if (!DocumentCodes.TypedAllowed(request.Code))
+        {
+            invalid.Add("Code");
+        }
+
+        if (waitsForTransfer)
+        {
+            // A code waiting for its transfer takes the time the transfer arrives: no date to check yet.
+        }
+        else if (request.PaidAt is { } paidAt)
+        {
+            if (paidAt > now + ClockTolerance)
+            {
+                invalid.Add("Paid at");
+            }
+            else if (request.PaymentDate is { } date && date != BusinessClock.ToBusinessDate(paidAt))
+            {
+                invalid.Add("Payment date");
+            }
+        }
+        else if (request.PaymentDate is not { } paymentDate || paymentDate > today)
         {
             invalid.Add("Payment date");
         }
 
-        // Whole VND: the column has no decimals, and a silent rounding would record another amount than the bank's.
-        if (request.Amount is not > 0 || request.Amount > SupplierPaymentRules.MaxAmount || request.Amount != decimal.Truncate(request.Amount.Value))
+        var discount = request.DiscountAmount;
+        if (discount < 0 || discount > SupplierPaymentRules.MaxAmount || discount != decimal.Truncate(discount) || (discount > 0 && kind != CustomerPaymentKind.Payment))
+        {
+            invalid.Add("Discount amount");
+        }
+
+        // Whole VND: the column has no decimals, and a silent rounding would record another amount than the bank's. Zero only when the payment is all discount.
+        if (request.Amount is not { } money || money < 0 || (money == 0 && (discount <= 0 || waitsForTransfer)) || money > SupplierPaymentRules.MaxAmount || money != decimal.Truncate(money))
         {
             invalid.Add("Amount");
         }
 
-        if (request.Method is not (CustomerPaymentMethod.Cash or CustomerPaymentMethod.OtherTransfer))
+        // A missing amount is invalid already; a payment with an amount of 0 (all discount) moves no money and so needs no method.
+        var movesMoney = request.Amount != 0m;
+        if (waitsForTransfer)
         {
-            invalid.Add("Method");
+            if (request.CashAccountId is null)
+            {
+                invalid.Add("Cash account");
+            }
         }
-
-        if (request.Method == CustomerPaymentMethod.OtherTransfer && Trimmed(request.BankReference)?.Length is null or > SupplierPaymentRules.MaxBankReferenceLength)
+        else if (movesMoney)
         {
-            invalid.Add("Bank reference");
+            if (request.Method is not (CustomerPaymentMethod.Cash or CustomerPaymentMethod.OtherTransfer)
+                && !(request.Method == CustomerPaymentMethod.EWallet && mode == CustomerPaymentMode.FromCashVoucher))
+            {
+                invalid.Add("Method");
+            }
+
+            if (mode == CustomerPaymentMode.Direct && request.Method == CustomerPaymentMethod.OtherTransfer
+                && Trimmed(request.BankReference)?.Length is null or > SupplierPaymentRules.MaxBankReferenceLength)
+            {
+                invalid.Add("Bank reference");
+            }
         }
 
         if (Trimmed(request.Note)?.Length > SupplierPaymentRules.MaxNoteLength)
@@ -50,6 +115,56 @@ public static class CustomerPaymentRules
             invalid.Add("Deduplication key");
         }
 
+        invalid.AddRange(InvalidAllocations(request, kind));
+        return invalid;
+    }
+
+    /// <summary>
+    /// The time paid: <c>paidAt</c> when sent; otherwise the payment date at the time now when it is today, or at the start of an earlier day, at UTC+7.
+    /// </summary>
+    public static DateTimeOffset PaidAt(RecordCustomerPaymentRequest request, DateTimeOffset now)
+    {
+        if (request.PaidAt is { } paidAt)
+        {
+            return paidAt.ToOffset(BusinessClock.UtcOffset);
+        }
+
+        var date = request.PaymentDate!.Value;
+        return date == BusinessClock.ToBusinessDate(now) ? now.ToOffset(BusinessClock.UtcOffset) : BusinessClock.FromLocal(date.ToDateTime(TimeOnly.MinValue));
+    }
+
+    /// <summary>
+    /// The shape of the allocations: kind Payment only, one per invoice, whole VND above zero, together at most the money plus the discount. Whether each invoice has that much
+    /// left is read from the debt by the service.
+    /// </summary>
+    private static List<string> InvalidAllocations(RecordCustomerPaymentRequest request, CustomerPaymentKind kind)
+    {
+        var invalid = new List<string>();
+        if (request.Allocations is not { } allocations)
+        {
+            return invalid;
+        }
+
+        if (allocations.Count > 0 && kind != CustomerPaymentKind.Payment)
+        {
+            invalid.Add("Allocations");
+            return invalid;
+        }
+
+        for (var i = 0; i < allocations.Count; i++)
+        {
+            if (allocations[i] is not { InvoiceId: not null, Amount: { } amount } || amount <= 0 || amount > SupplierPaymentRules.MaxAmount || amount != decimal.Truncate(amount))
+            {
+                invalid.Add($"Allocation {i + 1}");
+            }
+        }
+
+        if (allocations.Select(a => a?.InvoiceId).Distinct().Count() != allocations.Count
+            || allocations.Sum(a => a?.Amount ?? 0) > (request.Amount ?? 0) + request.DiscountAmount)
+        {
+            invalid.Add("Allocations");
+        }
+
         return invalid;
     }
 
@@ -57,6 +172,7 @@ public static class CustomerPaymentRules
     public static string? Reason(string? reason) => Trimmed(reason) is { Length: <= SupplierPaymentRules.MaxNoteLength } kept ? kept : null;
 
     /// <summary>MSG-DEBT-04 (DEBT-02.1): a payment above the debt, or with a debt of 0 or below; the difference becomes money owed back.</summary>
+    /// <param name="amount">What the payment takes off the debt: the money and its discount.</param>
     public static AppError? AboveDebtQuestion(string customerName, decimal debt, decimal amount, bool confirmed)
     {
         if (confirmed || (debt > 0 && amount <= debt))
@@ -104,12 +220,46 @@ public static class CustomerPaymentRules
         });
 
     /// <summary>The debt after a payment (lower) or money paid back (higher), and after its cancellation (the other way).</summary>
-    public static decimal DebtAfter(decimal debt, CustomerPaymentKind kind, decimal amount, bool cancelled) =>
-        (kind == CustomerPaymentKind.Payment) != cancelled ? debt - amount : debt + amount;
+    public static decimal DebtAfter(decimal debt, CustomerPaymentKind kind, decimal amount, bool cancelled, decimal discount = 0m) =>
+        (kind == CustomerPaymentKind.Payment) != cancelled ? debt - amount - discount : debt + amount + discount;
 
     /// <summary>The atomic {transaction_kind} of MSG-DEBT-03.</summary>
     public static string TransactionKind(CustomerPaymentKind kind, bool cancelled) =>
         $"{(kind == CustomerPaymentKind.PaidBack ? "PaidBack" : "Payment")}{(cancelled ? "Cancelled" : string.Empty)}";
+
+    /// <summary>
+    /// The note a transfer that arrived for a payment waiting for it gets when it is not what was asked: "Khách chuyển 800.000, phiếu 1.000.000" (what the customer
+    /// transferred, what the voucher asked).
+    /// </summary>
+    public static string TransferDifferenceNote(decimal received, decimal asked) =>
+        $"Khách chuyển {Vnd(received)}, phiếu {Vnd(asked)}";
+
+    /// <summary>
+    /// A transfer short of the payment: its parts are cut from the newest invoice back until they are covered by the money received and the discount; one that is over
+    /// leaves them as they are (the rest is an advance).
+    /// </summary>
+    /// <param name="parts">The parts with the time of their invoice; returns the parts that remain (above zero), in the same order.</param>
+    public static IReadOnlyList<(Guid InvoiceId, decimal Amount)> TrimParts(
+        IReadOnlyList<(Guid InvoiceId, DateTimeOffset InvoicedAt, string InvoiceCode, decimal Amount)> parts, decimal covered)
+    {
+        var excess = parts.Sum(p => p.Amount) - covered;
+        var kept = parts.ToDictionary(p => p.InvoiceId, p => p.Amount);
+        foreach (var part in parts.OrderByDescending(p => p.InvoicedAt).ThenByDescending(p => p.InvoiceCode, StringComparer.Ordinal))
+        {
+            if (excess <= 0)
+            {
+                break;
+            }
+
+            var cut = Math.Min(excess, part.Amount);
+            kept[part.InvoiceId] -= cut;
+            excess -= cut;
+        }
+
+        return parts.Where(p => kept[p.InvoiceId] > 0).Select(p => (p.InvoiceId, kept[p.InvoiceId])).ToList();
+    }
+
+    private static string Vnd(decimal amount) => amount.ToString("#,##0", CultureInfo.InvariantCulture).Replace(',', '.');
 
     public static string? Trimmed(string? value) => SupplierPaymentRules.Trimmed(value);
 }

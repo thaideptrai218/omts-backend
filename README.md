@@ -73,6 +73,8 @@ server uses a secret of its own (see [Demo on a shared server](#demo-on-a-shared
 | `nhanvien.doimk` | Zone Manager | DEMO-01 | Logged in with `mustChangePassword = true` (change it first) |
 | `nhanvien.chuaxacthuc` | Zone Manager | DEMO-02 | Logged in with `phoneVerificationRequired = true` (verify the phone first) |
 | `nhanvien.hethan` | Zone Manager | DEMO-01, pair revoked | Refused: no Effective zone–role pair (MSG-ACCOUNT-07) |
+| `nhanvien1` | Employee, no zone–role pair | – | Normal login to the employee's own area (purchase shifts, own work); the demo marks a made-up Zalo link, which such an employee needs to log in |
+| `nhanvien2` | Employee, no zone–role pair | – | As `nhanvien1` |
 
 A password you change stays changed: the seed never resets it. The Owner gets `Demo@1234` only while still on the
 bootstrap temporary password. To get every demo login back, reset the environment with `docker compose down -v`.
@@ -80,7 +82,7 @@ bootstrap temporary password. To get every demo login back, reset the environmen
 The demo data also holds the cooperative profile (with a logo, a cover photo and two certifications: one Valid, one
 expiring within 30 days), a fictional receiving bank account (`DEMO00000001`; skipped with a message when `Payments:Provider` does not accept it, as `None` does not), the zones `DEMO-01`/`DEMO-02` (In Use) and `DEMO-03` (Discontinued), zone licenses (`DEMO-01`:
 an expired license replaced by one expiring within 30 days; `DEMO-02`: a valid license and an older expired one), about 10 rafts with lanes per zone (the first five of each In Use zone with an Open cultivation cycle, the first three with cultivation logs by the zone manager), 4 job types with hourly rates (one with a rate still
-to come, one Discontinued), two versions of the attendance settings, 9 employees (one Left, one without a phone number; the 3 seasonal workers have job types),
+to come, one Discontinued), two versions of the attendance settings, 9 employees (codes NV000001–NV000009; one Left, one without a phone number; the 3 seasonal workers have job types),
 payroll headers of the last two months without lines (Finalized, Awaiting finalization: a date up to the end of last month answers `MSG-LABOR-04`),
 5 suppliers, 15 farming input items (codes VT001–VT015, every seed item counted in `con`) and 20 purchase receipts of the last 3 months
 (16 Completed, 2 Cancelled, 2 Draft): Material lines and two seed receipts name the raft they were bought for, one line has a
@@ -309,6 +311,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | `ZONE_LICENSE_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
 | `COOPERATIVE_CERTIFICATION_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
 | `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (LABOR-01.3) | never: list only | Owner |
+| `EMPLOYEE_REQUEST_NEW` | MSG-LABOR-23 (LABOR-10), when an employee sends a request (leave, missed check-in or check-out) | unless turned off | Owner |
 | `CULTIVATION_LOG_RECORDED` | MSG-CYCLE-04, when a cultivation log is saved, not on a correction, not to the Owner who recorded it | unless turned off | Owner |
 | `CYCLE_SEEDING_COMPLETED` | MSG-CYCLE-02, when the seeding of a raft is marked complete (once per cycle), not to the Owner who marked it | unless turned off | Owner |
 | `HARVEST_LOT_RECORDED` | MSG-HARVEST-01, when a harvest lot is recorded, not on a correction, not to the Owner who recorded it | unless turned off | Owner |
@@ -414,6 +417,10 @@ SALE-09 (`SALES_INVOICES`, zones of the caller's pairs, BR-SALE-08): the Owner, 
 
 - `GET /api/sales-invoices`: newest first, paged (`page`, `pageSize` up to 100). Filters: `from`/`to` (Vietnam dates, both included; today when neither is given, only `to` is that one day, only `from` runs to today, at most 5 years, else MSG-GEN-01), `zoneId`, `customerId`, `harvestLotId`, `raftId` (a line of a lot of the raft), `statusId`, `code` (part of the code, `%`, `_`, `[` are plain text), `paid` (true/false; a Cancelled invoice matches neither) and `cashCollectedByMe=true` (cash this caller collected that is Awaiting confirmation; each row then has `cashAwaitingConfirmation`). No match: 200 with an empty page and MSG-GEN-10 in `message`. A row has `code`, `invoicedAt`, `zone`, `customer` (null for a walk-in), `total`, `status`, `paymentTerm`, `isPaid` (null for a Cancelled invoice), `unpaidAmount` and `deliveryStatus`. `completedTotal` is the total of every Completed match, not of the page; `isPaid` comes from the debt allocation (BR-DEBT-05), a walk-in invoice from its own payments.
 - `GET /api/sales-invoices/{id}`: the invoice with `lines`, `payments`, `sendings`, `priceCuts`, `debtEffect` (`isPaid`, `covered`, `unpaid`, `countsInCustomerDebt`, `customerDebt`) and `allowedActions` (SALE-09.1 step 3). The same fields are in the answers of `POST` create, `finish` and `resend`.
+- Weighing at the port (decision of 09/11/2026): after the harvest each cage is weighed, the trader confirms the figures, and the invoice is made from that weighing. `POST /api/port-weighings` (`purchaseRequestId`, `lots: [{ harvestLotId, cageKgs }]`; SALES_INVOICES Create in the zones of the lots) for an Accepted request that is not Fulfilled, one weighing waiting for the trader at a time; `PUT /api/port-weighings/{id}` (`lots`, `rowVersion`) corrects it until it is confirmed; `GET /api/port-weighings?purchaseRequestId=` and `GET /api/port-weighings/{id}` read it. The trader: `GET /api/me/port-weighings`, `GET /api/me/port-weighings/{id}` and `POST /api/me/port-weighings/{id}/confirm` (`rowVersion`: figures corrected since they were read answer 409). A weighing has `customerId`, `lots` with `cageKgs`, `cageCount`, `totalKg`, `confirmedAt`, `invoiceId` and `invoiceCode`.
+- Public provenance page (BR-ORIGIN-01, BR-ORIGIN-05): `GET /api/origin/{qrToken}`, anonymous, the token at the end of the QR link of an invoice. It lists the Published lots of the invoice with their origin (products, zone and raft, seed lots and suppliers, seeding dates, cultivation logs, the average water of the zone while the lot grew, harvest, the kg sold and the cages weighed) and a Withdrawn lot only with its withdrawal time; never the customer, the staff or a price (decided 10/11/2026). An unknown token, a cancelled invoice or one with no published lot answers 404.
+- `POST /api/sales-invoices` with a `purchaseRequestId` needs the `portWeighingId` of a confirmed weighing of that request not yet on a Completed invoice (MSG-GEN-01 `Port weighing`, MSG-GEN-09). Each line names one lot of the weighing and takes its kg (a `kg` sent must be that one), and every lot is on one line. A sale without a request gives `kg` itself. `lines[].cageKgs` and `portWeighingId` come back on the invoice, and `GET /api/sales-invoices/open-purchase-requests` gives `deliveredCages`, the cages of the weighings already on Completed invoices, next to `acceptedCages`.
+- `GET /api/me/invoices` (`page`, `pageSize` up to 100, newest first; MSG-GEN-11 in `message` when empty) and `GET /api/me/invoices/{id}`: the logged-in trader's own invoices with `cageKgs`, the money, the payments and `qrUrl`, without the staff data. Staff get 403 MSG-GEN-08; an invoice of another profile is 404.
 - `GET /api/sales-invoices/export` (the filters above, every page) and `GET /api/sales-invoices/{id}/print`: an `.xlsx` file for download and print, Export right in the zone of the invoice (the Accountant only views, §I.4.4 R: 403). Text is never a formula. An empty list is a header and a zero total.
 
 `allowedActions`, on the rules of the SRS:
@@ -447,6 +454,29 @@ A trader reports a quality problem on one of their invoices with photos; the Coo
 - `GET /api/me/quality-claims` (own claims, newest first, MSG-GEN-11 when none) and `GET /api/me/quality-claims/{id}` (404 for another trader's): the description, photo links, status, offer and response note. The photos are private (BR-CLAIM-01): signed links for 1 hour, never on the provenance page.
 - `GET /api/quality-claims` (`statusId`, `page`, `pageSize`; Awaiting response first) and `GET /api/quality-claims/{id}` (customer with phone number, invoice with lines, lots, kg, amounts, status and price cuts, the SMS sendings, `rowVersion`): QUALITY_CLAIMS View, so the Owner and the Zone Managers, who see the claims of invoices in their zones only (PM default; another zone answers 403). An Accountant has no access.
 - `POST /api/quality-claims/{id}/accept` (`{ offer: "ReturnAllGoods" | "PriceCutWholeInvoice", note?, rowVersion }`) and `POST /api/quality-claims/{id}/reject` (`{ note, rowVersion }`): Owner only, while Awaiting response; a response cannot be changed (409 MSG-GEN-09, or MSG06 when the form is stale). Accepting answers 409 MSG-CLAIM-03 when the invoice was cancelled or has a sales return (it can still be rejected). The offer only records what was proposed: the return is CLAIM-03 and the price cut SALE-07 (`PUT /api/sales-invoices/{id}/correction`, PriceCutAfterClaim), which the Owner runs after the trader chooses. Neither changes here. The trader gets a push and an SMS with MSG-CLAIM-02; a message that cannot be sent undoes nothing (GFR-06), it stays in the trader's list and the sending is listed Not sent on the claim; a profile without a phone number gets a Not sent row (`NO_PHONE_NUMBER`).
+
+### Work assignment, attendance and employee requests (LABOR-02, LABOR-04, LABOR-05, LABOR-10)
+
+`WorkAssignment` holds one job period of an employee and day (the first one has no start time, each change of job adds one),
+`Attendance` the check-in and check-out of one employee and day with their recording method, `EmployeeRequest` a leave or a missed
+check-in or check-out. Hours are worked out when shown (`WorkHoursCalculator`, BR-LABOR-05) from the attendance settings in force
+on the day; nothing is recorded in a pay period whose payroll is Awaiting finalization or Finalized (`MSG-LABOR-04`, BR-LABOR-13).
+Zone Manager (in the zone of the raft) and Owner, except where marked Owner:
+
+- `GET /api/workforce/assignments?day=`, `GET /api/workforce/lookups?day=`; `POST /api/workforce/assignments` (409 `MSG-LABOR-06`
+  asks to move an employee, resend with `moveExisting`), `PUT`/`DELETE /api/workforce/assignments/{id}` until the employee is
+  checked in (`MSG-LABOR-07`), `POST /api/workforce/crew-job` (Change job for crew, 204).
+- `POST /api/workforce/assignments/{id}/check-in` and `/check-out` with `qrCode` (the code of `GET /api/me/attendance-qr`, valid
+  60 seconds, else `MSG-LABOR-13`) or null to mark by hand; `POST /api/workforce/crew-start`; Staff employees:
+  `GET /api/workforce/staff-attendance`, `POST /api/workforce/staff/{employeeId}/check-in|check-out`.
+- Owner: `GET`/`PUT /api/workforce/attendance/{employeeId}/{day}` corrects times and job periods with a reason;
+  `POST /api/workforce/leave-requests/{id}/review` approves or rejects (a rejection needs a note); `GET /api/workforce/leave-requests`
+  is also read by the Zone Manager.
+- The employee linked to the caller's account (`Employee.AccountId`): `GET /api/me/workforce?from=&to=` (at most 62 days),
+  `GET /api/me/attendance-qr`, `POST /api/me/leave-requests` (leave, or `type` MissedCheckIn / MissedCheckOut with `day` and
+  `requestedTime`), `DELETE /api/me/leave-requests/{id}` (cancel while Awaiting review).
+
+Not here yet: the employee app login with login codes (LABOR-03, LABOR-06) and the pushes to the employee (MSG-LABOR-05, MSG-LABOR-15).
 
 ### Audit log
 
@@ -704,7 +734,7 @@ To set up the server:
    and the API refuse to start), the secrets of "Deployment" step 1 for an **empty** database, one storage folder or
    container of its own, `Demo__AllowOutsideDevelopment=true` and `Demo__Password`. Use fake data in `Bootstrap:*`.
 2. Run `dotnet OMTS.Api.dll seed --bootstrap --demo`, start the API and check `GET /health/ready`.
-3. Give the password to the testers privately. The nine logins of "Run with Docker" all use it, the Owner included, and
+3. Give the password to the testers privately. The eleven logins of "Run with Docker" all use it, the Owner included, and
    land in the same branches. Put the server behind HTTPS: the image itself listens on plain HTTP.
 
 **Which database.** The demo only runs on a database with no accounts, or on one it seeded itself: the first run writes a
@@ -749,6 +779,9 @@ a real bank account on this server, in an employee record or anywhere else. Whoe
 the refusal to `DemoSeedGate`.
 
 ## Design documents
+
+The current cage request, staffing, harvest completion and port weighing contract is documented in
+[docs/cage-order-harvest.md](docs/cage-order-harvest.md), including the remaining slices and deployment limits.
 
 `docs/sds/` holds the detailed design (SDS) of the modules, written from this code. A PR that changes a
 documented module updates its SDS part in the same PR.

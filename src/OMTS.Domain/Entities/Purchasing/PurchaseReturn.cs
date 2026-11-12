@@ -62,20 +62,36 @@ public class PurchaseReturnLine : Entity
     public Guid ItemId { get; set; }
     public FarmingInputItem Item { get; set; } = null!;
 
-    /// <summary>Copied from the item or the receipt line when saved.</summary>
+    /// <summary>The unit the line was entered in: that of the receipt line, or one of the item's units on a return with no receipt; null on a line saved before units existed.</summary>
+    public Guid? ItemUnitId { get; set; }
+    public InputItemUnit? ItemUnit { get; set; }
+
+    /// <summary>Base units in one unit of the line, as it was when saved.</summary>
+    public decimal UnitFactor { get; set; } = 1m;
+
+    /// <summary>The name of the unit of the line, kept for history.</summary>
     public string Unit { get; set; } = string.Empty;
+
+    /// <summary>Quantity in BASE units: <see cref="EnteredQuantity"/> × <see cref="UnitFactor"/>.</summary>
     public decimal Quantity { get; set; }
+
+    /// <summary>The quantity as typed, in the unit of the line.</summary>
+    public decimal EnteredQuantity { get; set; }
+
+    /// <summary>The price as typed, whole VND per unit of the line; <see cref="UnitPrice"/> is the same per base unit.</summary>
+    public decimal EnteredUnitPrice { get; set; }
 
     /// <summary>
     /// Whole VND, the price each unit is returned at. From a receipt it may be entered; by default it is what one unit of the
     /// receipt line was paid: its unit price less its line discount, less its share of the receipt discount (prorated by line
-    /// amount), half up to the dong. Entered on a return made without a receipt.
+    /// amount), half up to the dong. Entered on a return made without a receipt. Per BASE unit.
     /// </summary>
     public decimal UnitPrice { get; set; }
 
     /// <summary>
-    /// The amount when it was recorded: quantity × unit price of the line that day, half up to the dong. It is stored and a
+    /// The amount when it was recorded: entered quantity × entered price of the line that day, half up to the dong. It is stored and a
     /// later correction of the receipt does not change it (PM 03/11); an edit of the return's quantity does.
     /// </summary>
     public decimal ReturnValue { get; set; }
 }
+

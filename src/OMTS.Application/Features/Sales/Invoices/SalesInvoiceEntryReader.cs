@@ -17,7 +17,8 @@ internal sealed record SalesInvoiceEntries(
     decimal Cash,
     SalesInvoiceRestPayment Rest,
     bool? SubtractExtraFromDebt,
-    bool PayLaterOwnerAgreed)
+    bool PayLaterOwnerAgreed,
+    Guid? PortWeighingId = null)
 {
     public bool IsWalkIn => CustomerId is null;
 
@@ -56,6 +57,12 @@ internal static class SalesInvoiceEntryReader
         if ((request.PurchaseRequestId is not null && walkIn) || (request.PurchaseRequestId is null && request.TakesRequestInFull is not null))
         {
             invalid.Add("Purchase request");
+        }
+
+        // A request is in whole cages, so its invoice comes from a weighing both sides confirmed (decision of 09/11/2026); a sale without a request gives the kg itself.
+        if ((request.PurchaseRequestId is null) != (request.PortWeighingId is null))
+        {
+            invalid.Add("Port weighing");
         }
 
         var discount = request.Discount ?? 0m;
@@ -99,7 +106,8 @@ internal static class SalesInvoiceEntryReader
             payment!.CashAmount!.Value,
             payment.Rest,
             payment.SubtractExtraFromDebt,
-            payment.PayLaterOwnerAgreed), invalid);
+            payment.PayLaterOwnerAgreed,
+            request.PortWeighingId), invalid);
     }
 
     internal static List<SalesInvoiceLineEntries> ReadLines(IReadOnlyList<SalesInvoiceLineEntry?>? entries, List<string> invalid)

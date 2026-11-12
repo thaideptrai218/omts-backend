@@ -67,7 +67,10 @@ internal sealed class ClosedXmlSpreadsheetReader : ISpreadsheetReader
         }
 
         var value = cell.Value;
-        var text = value.IsNumber ? value.GetNumber().ToString("0.##########", CultureInfo.InvariantCulture) : value.IsBlank ? null : cell.GetString();
+        // A date cell is read as the date it holds, whatever display format the sheet gives it ("m/d/yyyy" or "dd/mm/yyyy" cannot be told apart as text).
+        var text = value.IsNumber ? value.GetNumber().ToString("0.##########", CultureInfo.InvariantCulture)
+            : value.IsDateTime ? value.GetDateTime().ToString(value.GetDateTime().TimeOfDay == TimeSpan.Zero ? "yyyy-MM-dd" : "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
+            : value.IsBlank ? null : cell.GetString();
         return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
     }
 }

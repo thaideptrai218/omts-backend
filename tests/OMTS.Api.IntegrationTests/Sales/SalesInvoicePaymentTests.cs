@@ -104,26 +104,33 @@ public class SalesInvoicePaymentTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var trader = await api.TraderAsync();
-        var request = await trader.Client.PlaceAsync(sale.ProductId, 300m);
+        var request = await trader.Client.PlaceAsync(sale.ProductId, 300);
         (await sale.Owner.Client.AcceptAsync(request, payLater: true)).EnsureSuccessStatusCode();
-        var other = await trader.Client.PlaceAsync(sale.ProductId, 50m);
+        var other = await trader.Client.PlaceAsync(sale.ProductId, 50);
         (await sale.Owner.Client.AcceptAsync(other, payLater: false)).EnsureSuccessStatusCode();
         var client = sale.Manager.Client;
+        // Each request is weighed from its own lots, once its harvest is done (decision of 11/11/2026).
+        var otherLot = (await sale.HarvestedForAsync(other, 1)).LotId;
+        sale = await sale.HarvestedForAsync(request);
 
         var open = await client.GetFromJsonAsync<JsonElement>($"/api/sales-invoices/open-purchase-requests?customerId={trader.Profile.Id}");
         Assert.Equal(new[] { request.Id(), other.Id() }.Order(), open.EnumerateArray().Select(r => r.Id()).Order());
         var offered = open.EnumerateArray().Single(r => r.Id() == request.Id());
-        Assert.Equal((300m, true), (offered.Money("acceptedKg"), offered.GetProperty("payLaterAgreed").GetBoolean()));
+        Assert.Equal((300m, true), (offered.Money("acceptedCages"), offered.GetProperty("payLaterAgreed").GetBoolean()));
 
         // Taken in part: the request stays Accepted and offered.
-        var part = (await client.SellAsync(Invoice(trader.Profile.Id, [Line(sale.ProductId, sale.LotId, 100m)], Cash(0m, "PayLater"), sale.LotId)
-            .With("purchaseRequestId", request.Id()).With("takesRequestInFull", false))).GetProperty("invoice");
+        var firstWeighing = await client.ConfirmedWeighingAsync(trader.Client, request.Id(), PortWeighingTestKit.WeighedLot(sale.LotId, 60m, 40m));
+        var secondWeighing = await client.ConfirmedWeighingAsync(trader.Client, request.Id(), PortWeighingTestKit.WeighedLot(sale.LotId, 120m, 80m));
+        var spareWeighing = await client.ConfirmedWeighingAsync(trader.Client, request.Id(), PortWeighingTestKit.WeighedLot(sale.OtherLotId, 1m));
+        var otherWeighing = await client.ConfirmedWeighingAsync(trader.Client, other.Id(), PortWeighingTestKit.WeighedLot(otherLot, 1m));
+        var part = (await client.SellAsync(Invoice(trader.Profile.Id, [PortWeighingTestKit.WeighedLine(sale.ProductId, sale.LotId)], Cash(0m, "PayLater"), sale.LotId)
+            .FromWeighing(firstWeighing).With("takesRequestInFull", false))).GetProperty("invoice");
         Assert.Equal((request.Id(), false, "PayLater"), (part.GetProperty("purchaseRequestId").GetGuid(), part.GetProperty("takesRequestInFull").GetBoolean(), part.Text("paymentTerm")));
         Assert.False((await trader.Client.MineAsync(request.Id())).GetProperty("fulfilled").GetBoolean());
 
         // Taken in full, the default: Fulfilled, so no longer offered, and the trader can no longer cancel it.
-        var full = (await client.SellAsync(Invoice(trader.Profile.Id, [Line(sale.ProductId, sale.LotId, 200m)], Cash(0m, "PayLater"))
-            .With("purchaseRequestId", request.Id()))).GetProperty("invoice");
+        var full = (await client.SellAsync(Invoice(trader.Profile.Id, [PortWeighingTestKit.WeighedLine(sale.ProductId, sale.LotId)], Cash(0m, "PayLater"))
+            .FromWeighing(secondWeighing))).GetProperty("invoice");
         Assert.True(full.GetProperty("takesRequestInFull").GetBoolean());
         var mine = await trader.Client.MineAsync(request.Id());
         Assert.True(mine.GetProperty("fulfilled").GetBoolean());
@@ -132,15 +139,15 @@ public class SalesInvoicePaymentTests
         Assert.Equal("MSG-GEN-09", await (await trader.Client.CancelAsync(mine)).ErrorCodeAsync());
 
         // A Fulfilled request cannot be linked again, and a request without the agreement still asks MSG-SALE-12.
-        Assert.Equal("MSG-GEN-09", await (await client.PostInvoiceAsync(Invoice(trader.Profile.Id, [Line(sale.ProductId, sale.OtherLotId, 1m)], Cash(30_000m))
-            .With("purchaseRequestId", request.Id()))).ErrorCodeAsync());
-        var (code, _, _) = await (await client.PostInvoiceAsync(Invoice(trader.Profile.Id, [Line(sale.ProductId, sale.OtherLotId, 1m)], Cash(0m, "PayLater"))
-            .With("purchaseRequestId", other.Id()))).QuestionAsync();
+        Assert.Equal("MSG-GEN-09", await (await client.PostInvoiceAsync(Invoice(trader.Profile.Id, [PortWeighingTestKit.WeighedLine(sale.ProductId, sale.OtherLotId)], Cash(30_000m))
+            .FromWeighing(spareWeighing))).ErrorCodeAsync());
+        var (code, _, _) = await (await client.PostInvoiceAsync(Invoice(trader.Profile.Id, [PortWeighingTestKit.WeighedLine(sale.ProductId, otherLot)], Cash(0m, "PayLater"))
+            .FromWeighing(otherWeighing))).QuestionAsync();
         Assert.Equal("MSG-SALE-12", code);
 
         // A request of another profile is not this invoice's to link.
-        Assert.Equal(["Purchase request"], await (await client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.OtherLotId, 1m)], Cash(30_000m))
-            .With("purchaseRequestId", other.Id()))).InvalidFieldsAsync());
+        Assert.Equal(["Purchase request"], await (await client.PostInvoiceAsync(Invoice(sale.CustomerId, [PortWeighingTestKit.WeighedLine(sale.ProductId, otherLot)], Cash(30_000m))
+            .FromWeighing(otherWeighing))).InvalidFieldsAsync());
 
         Assert.Equal(9_000_000m, await client.CustomerDebtAsync(trader.Profile.Id));
     }

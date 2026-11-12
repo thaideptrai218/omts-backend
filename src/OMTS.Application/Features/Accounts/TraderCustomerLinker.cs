@@ -1,4 +1,5 @@
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Features.Sales.Customers;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Sales;
 
@@ -9,7 +10,7 @@ namespace OMTS.Application.Features.Accounts;
 /// verified number and no account, otherwise a new profile. The link never changes afterwards; a Zone Manager merges
 /// profiles of the same trader in Manage customers (SALE-04).
 /// </summary>
-public sealed class TraderCustomerLinker(ICustomerRepository customers)
+public sealed class TraderCustomerLinker(ICustomerRepository customers, CustomerCodeService codes)
 {
     /// <summary>
     /// Registration (ACCOUNT-01 steps 6 and ACCOUNT-01.1): links the uniquely matching profile, otherwise creates a new
@@ -28,6 +29,7 @@ public sealed class TraderCustomerLinker(ICustomerRepository customers)
 
         var customer = new Customer
         {
+            Code = await codes.NextAsync(cancellationToken),
             CooperativeId = cooperativeId,
             AccountId = trader.Id,
             Name = trader.DisplayName,

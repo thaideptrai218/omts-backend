@@ -148,10 +148,10 @@ public class CustomerRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var second = await owner.CreateCustomerAsync(name: $"B {tag}", phone: phone);
         var (_, linked) = await factory.LinkedProfileAsync(name: $"C {tag}");
 
-        var page = await (await owner.GetAsync($"/api/customers?search={tag}&pageSize=2")).ReadAsync(HttpStatusCode.OK);
+        var page = await (await owner.GetAsync($"/api/customers?search={tag}&sortBy=name&sortDir=asc&pageSize=2")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(3, page.GetProperty("total").GetInt32());
         Assert.Equal([byName.Id(), second.Id()], page.GetProperty("items").EnumerateArray().Select(i => i.Id()));
-        var last = await (await owner.GetAsync($"/api/customers?search={tag}&pageSize=2&page=2")).ReadAsync(HttpStatusCode.OK);
+        var last = await (await owner.GetAsync($"/api/customers?search={tag}&sortBy=name&sortDir=asc&pageSize=2&page=2")).ReadAsync(HttpStatusCode.OK);
         var row = Assert.Single(last.GetProperty("items").EnumerateArray());
         Assert.Equal(linked.Id, row.Id());
         Assert.True(row.GetProperty("hasTraderAccount").GetBoolean());

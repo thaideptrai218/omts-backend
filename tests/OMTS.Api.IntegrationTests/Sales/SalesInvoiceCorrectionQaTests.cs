@@ -46,8 +46,11 @@ public class SalesInvoiceCorrectionQaTests
         Assert.Equal(9_500_000m, list.Rows().Single(r => r.Id() == sold.Id()).Money("total"));
         var statement = await owner.StatementAsync(sale.CustomerId);
         Assert.Equal(9_500_000m, statement.GetProperty("unpaidInvoices").EnumerateArray().Single().Money("unpaid"));
-        var lineEntry = statement.GetProperty("entries").EnumerateArray().Single(e => e.Id() == sold.Id());
-        Assert.Equal(9_500_000m, lineEntry.Money("debtChange"));
+        // The statement shows what the invoice was worth and the price cut as an entry of its own (BR-DEBT-04), so the two together are the latest total.
+        var entries = statement.GetProperty("entries").EnumerateArray().ToList();
+        Assert.Equal(10_000_000m, entries.Single(e => e.Id() == sold.Id()).Money("debtChange"));
+        Assert.Equal(-500_000m, entries.Single(e => e.Id() != sold.Id()).Money("debtChange"));
+        Assert.Equal(9_500_000m, entries.Sum(e => e.Money("debtChange")));
     }
 
     // BR-DEBT-05 (3): the part of the cash that the invoice no longer needs after a price cut covers the oldest invoice; the unpaid amounts add up to the debt.

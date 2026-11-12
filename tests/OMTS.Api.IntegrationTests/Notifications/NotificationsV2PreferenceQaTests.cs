@@ -114,7 +114,7 @@ public class NotificationsV2PreferenceQaTests(AuthApiFactory factory) : IClassFi
         await factory.GrantAsync(staff, StaffRole.Accountant, null);
         var client = await factory.LoginAsync(staff.Username, TestPassword);
         Assert.Equal(HttpStatusCode.OK, (await client.SavePushAsync(("WATER_MEASUREMENT_OVERDUE", false))).StatusCode);
-        Assert.Equal(["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "HARVEST_LOT_AUTO_CLOSE_WARNING", "CYCLE_CLOSE_REMINDER", "PURCHASE_RECEIPT_CANCELLED_ADVANCE", "CUSTOMER_MONEY_OWED_BACK"], (await client.OfferedTypesAsync()).Keys);
+        Assert.Equal(["WORK_PLAN_REQUESTED", "WORK_PLAN_STAFF_RESPONDED", "WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "HARVEST_LOT_AUTO_CLOSE_WARNING", "CYCLE_CLOSE_REMINDER", "PURCHASE_RECEIPT_CANCELLED_ADVANCE", "CUSTOMER_MONEY_OWED_BACK"], (await client.OfferedTypesAsync()).Keys);
 
         var revoked = await ownerClient.PostAsJsonAsync($"/api/accounts/{staff.Id}/grants/{pair.Id}/revoke", new { reason = "Moved to the office" });
 

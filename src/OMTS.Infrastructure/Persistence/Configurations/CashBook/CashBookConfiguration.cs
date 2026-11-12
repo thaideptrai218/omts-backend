@@ -37,7 +37,8 @@ internal sealed class CashVoucherTypeConfiguration : IEntityTypeConfiguration<Ca
             Seed(CashVoucherTypeIds.ReceiptTransferWithdrawal, CashDirection.Receipt, CashCategory.TransferWithdrawal, "Chuyển/Rút", manual: true),
             Seed(CashVoucherTypeIds.PaymentToSupplier, CashDirection.Payment, CashCategory.Goods, "Chi tiền trả NCC", manual: false),
             Seed(CashVoucherTypeIds.PaymentPayroll, CashDirection.Payment, CashCategory.Payroll, "Chi trả lương NV", manual: false),
-            Seed(CashVoucherTypeIds.PaymentOther, CashDirection.Payment, CashCategory.OtherExpense, "Chi phí khác", manual: true));
+            Seed(CashVoucherTypeIds.PaymentOther, CashDirection.Payment, CashCategory.OtherExpense, "Chi phí khác", manual: true),
+            Seed(CashVoucherTypeIds.PaymentToCustomer, CashDirection.Payment, CashCategory.Goods, "Chi trả lại khách", manual: false));
     }
 
     // Anonymous objects: the key has no public setter. Other income, other expense and wages count in the business result; goods and

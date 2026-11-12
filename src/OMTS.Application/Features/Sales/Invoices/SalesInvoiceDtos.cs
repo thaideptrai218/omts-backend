@@ -19,6 +19,7 @@ public enum SalesInvoiceRestPayment
 }
 
 /// <summary>One line as the Zone Manager enters it: the unit price is the list price when left out.</summary>
+/// <param name="Kg">May be left out on an invoice made from a weighing, whose kg it takes; sent, it must be the weighed one.</param>
 /// <param name="PriceDecidedByOwner">The answer Yes to MSG-SALE-10 for a price other than the list price; not asked of the Owner.</param>
 public sealed record SalesInvoiceLineEntry(Guid? ProductId, Guid? HarvestLotId, decimal? Kg, decimal? UnitPrice = null, bool PriceDecidedByOwner = false);
 
@@ -35,6 +36,7 @@ public sealed record SalesInvoicePaymentEntry(decimal? CashAmount, SalesInvoiceR
 /// <param name="NotSoldWholeLotIds">The lots whose "sold the whole lot" mark the Zone Manager cleared: every other lot of the invoice is closed (BR-HARVEST-04).</param>
 /// <param name="DiscountDecidedByOwner">The answer Yes to MSG-SALE-10 for the discount; not asked of the Owner.</param>
 /// <param name="DeduplicationKey">The same key again returns the first invoice and creates nothing.</param>
+/// <param name="PortWeighingId">The confirmed weighing of the linked request the kg come from; required with <paramref name="PurchaseRequestId"/> and only with it.</param>
 public sealed record CreateSalesInvoiceRequest(
     Guid? CustomerId,
     bool WalkInCustomer,
@@ -47,15 +49,17 @@ public sealed record CreateSalesInvoiceRequest(
     decimal? Discount = null,
     bool DiscountDecidedByOwner = false,
     decimal? OtherCharges = null,
-    string? DeduplicationKey = null);
+    string? DeduplicationKey = null,
+    Guid? PortWeighingId = null);
 
 public sealed record SalesInvoiceZoneView(Guid Id, string Code, string Name);
 
-public sealed record SalesInvoiceCustomerView(Guid Id, string Name, string? PhoneNumber);
+public sealed record SalesInvoiceCustomerView(Guid Id, string Name, string? PhoneNumber, string? Code = null);
 
+/// <param name="CageKgs">The kg of each cage in the order weighed; empty for a line sold by the kg.</param>
 public sealed record SalesInvoiceLineView(
     Guid Id, int LineNumber, Guid ProductId, string ProductName, Guid HarvestLotId, string LotCode, decimal Kg, decimal UnitPrice, decimal ListPrice, SalesPriceSource PriceSource,
-    decimal Amount, bool SoldWholeLot);
+    decimal Amount, bool SoldWholeLot, IReadOnlyList<decimal> CageKgs);
 
 public sealed record CustomerPaymentView(
     Guid Id, string Code, CustomerPaymentKind Kind, CustomerPaymentMethod Method, decimal Amount, DateOnly PaymentDate, DateTimeOffset CreatedAt, int StatusId, string Status, AccountRef? CollectedBy);
@@ -82,7 +86,7 @@ public sealed record SalesInvoiceView(
     decimal OtherCharges, decimal PriceCutTotal, decimal Total, SalesPaymentTerm PaymentTerm, int StatusId, string Status, IReadOnlyList<CustomerPaymentView> Payments,
     AccountRef CreatedBy, string? QrToken, string? QrUrl, DateTimeOffset? QrDecidedAt, int DeliveryStatusId, string DeliveryStatus,
     IReadOnlyList<SalesInvoiceSendingView> Sendings, string RowVersion, IReadOnlyList<SalesInvoicePriceCutView> PriceCuts, SalesInvoiceDebtEffect DebtEffect,
-    IReadOnlyList<SalesInvoiceAction> AllowedActions, SalesInvoiceCorrectionKind? LastCorrectionKind, DateTimeOffset? LastCorrectedAt, string? LastCorrectionReason,
+    IReadOnlyList<SalesInvoiceAction> AllowedActions, Guid? PortWeighingId, SalesInvoiceCorrectionKind? LastCorrectionKind, DateTimeOffset? LastCorrectedAt, string? LastCorrectionReason,
     IReadOnlyList<SalesInvoiceCorrectionView> Corrections, DateTimeOffset? CancelledAt, string? CancelReason);
 
 /// <summary>The end of the sale (SALE-05 steps 9-11).</summary>
@@ -125,4 +129,5 @@ public sealed record SalesInvoiceSaved(SalesInvoiceView Invoice, decimal Change,
 public sealed record SalesInvoiceCreated(SalesInvoiceSaved? Saved, PendingSaleView? Pending);
 
 /// <summary>A purchase request the invoice can be linked to (SALE-05.3): Accepted, not Fulfilled, pickup not more than 3 days ago.</summary>
-public sealed record OpenPurchaseRequestView(Guid Id, Guid ProductId, string ProductName, decimal RequestedKg, decimal AcceptedKg, DateOnly PickupDate, bool PayLaterAgreed, string? ResponseNote);
+/// <param name="DeliveredCages">The cages of the weighings already on Completed invoices of the request, to compare with <paramref name="AcceptedCages"/>.</param>
+public sealed record OpenPurchaseRequestView(Guid Id, Guid ProductId, string ProductName, int RequestedCages, int AcceptedCages, DateOnly PickupDate, bool PayLaterAgreed, string? ResponseNote, int DeliveredCages);

@@ -11,8 +11,10 @@ namespace OMTS.Application.Features.Harvest;
 /// <param name="EstimatedKg">Without it the system works it out: cages times the average kg per cage.</param>
 /// <param name="EstimatedKgIsUnreadable">A value was sent that is not a number, so it does not mean "work it out".</param>
 /// <param name="OtherFilePart">A file came in a part not named <c>photos</c>: refused after the access check, so no photo is dropped without a word.</param>
+/// <param name="PurchaseRequestId">The request the trip harvests for (decision of 11/11/2026): required when recording, never read by a correction; null when no id could be read.</param>
 public sealed record RecordHarvestRequest(
-    IReadOnlyList<int>? LaneNumbers, IReadOnlyList<int>? FinishedLaneNumbers, int? CageCount, decimal? EstimatedKg, bool EstimatedKgIsUnreadable = false, bool OtherFilePart = false);
+    IReadOnlyList<int>? LaneNumbers, IReadOnlyList<int>? FinishedLaneNumbers, int? CageCount, decimal? EstimatedKg, bool EstimatedKgIsUnreadable = false, bool OtherFilePart = false,
+    Guid? PurchaseRequestId = null);
 
 /// <summary>A photo of a lot, for staff.</summary>
 /// <param name="Key">The storage key.</param>
@@ -25,6 +27,7 @@ public sealed record HarvestLotPhotoView(string Key, int SortOrder, string Url);
 /// <param name="OriginMissing">As on <see cref="HarvestLotView"/>.</param>
 /// <param name="CanPublish">As on <see cref="HarvestLotView"/>.</param>
 /// <param name="CanClose">Show Close lot, as on <see cref="HarvestLotView"/>.</param>
+/// <param name="PurchaseRequestCode">The code of the request the trip harvested for; null on a lot recorded before lots had one.</param>
 public sealed record HarvestLotListItem(
     Guid Id,
     string LotCode,
@@ -45,7 +48,9 @@ public sealed record HarvestLotListItem(
     bool CanCorrect,
     bool CanRemove,
     bool CanClose,
-    string RowVersion);
+    string RowVersion,
+    Guid? PurchaseRequestId = null,
+    string? PurchaseRequestCode = null);
 
 /// <summary>A harvest lot with its figures (BR-HARVEST-07): the record a notification opens.</summary>
 /// <param name="Photos">In slot order.</param>
@@ -57,6 +62,7 @@ public sealed record HarvestLotListItem(
 /// Show Publish (TRACE-01.2): a Not published lot on a sales invoice that is not cancelled, or a Withdrawn lot for the Cooperative Owner, in a zone where the caller publishes. The
 /// publish still answers MSG-TRACE-01 while <paramref name="OriginMissing"/> is not empty.
 /// </param>
+/// <param name="PurchaseRequestCode">As on <see cref="HarvestLotListItem"/>.</param>
 public sealed record HarvestLotView(
     Guid Id,
     string LotCode,
@@ -90,7 +96,9 @@ public sealed record HarvestLotView(
     bool CanCorrect,
     bool CanRemove,
     bool CanClose,
-    string RowVersion);
+    string RowVersion,
+    Guid? PurchaseRequestId = null,
+    string? PurchaseRequestCode = null);
 
 /// <summary>Answer of a recorded harvest.</summary>
 /// <param name="EverySeededLaneHarvested">Every seeded lane of the cycle shows Harvested now: the cycle can be closed normally (BR-CYCLE-07).</param>
@@ -109,8 +117,19 @@ public sealed record HarvestLaneView(Guid Id, int LaneNumber, int StatusId, stri
 /// <param name="CanRecordHarvest">Show Record harvest: at least one lane is Growing or Being harvested, and the caller may record.</param>
 /// <param name="Lanes">Lanes In Use, and Removed lanes that have records in the cycle shown, in number order.</param>
 /// <param name="Lots">The lots of the Open cycle: lots for sale first, then the latest harvest first.</param>
+/// <param name="Orders">What a new lot can be recorded for, when the caller may record: see <see cref="HarvestOrderOption"/>.</param>
 public sealed record HarvestLotsScreen(
-    Guid RaftId, string RaftCode, CycleListItem? Cycle, decimal AverageKgPerCage, bool CanRecordHarvest, IReadOnlyList<HarvestLaneView> Lanes, IReadOnlyList<HarvestLotListItem> Lots);
+    Guid RaftId, string RaftCode, CycleListItem? Cycle, decimal AverageKgPerCage, bool CanRecordHarvest, IReadOnlyList<HarvestLaneView> Lanes, IReadOnlyList<HarvestLotListItem> Lots,
+    IReadOnlyList<HarvestOrderOption> Orders);
+
+/// <summary>
+/// A purchase request a new lot can be recorded for (decision of 11/11/2026): Accepted and its harvest not marked done. The requests whose work plan sends the harvest to this
+/// raft come first, then the earliest agreed pickup.
+/// </summary>
+/// <param name="HarvestedCages">The cages of the lots already recorded for it, on every raft.</param>
+/// <param name="PlannedOnRaft">Its work plan names this raft: the form picks it first.</param>
+public sealed record HarvestOrderOption(
+    Guid Id, string Code, string CustomerName, string ProductName, int AcceptedCages, int HarvestedCages, DateOnly PickupDate, DateOnly? WorkDate, bool PlannedOnRaft);
 
 /// <summary>The harvest settings (HARVEST-03).</summary>
 public sealed record HarvestSettingsView(decimal AverageKgPerCage, int DaysBeforeAutoClose, string RowVersion);

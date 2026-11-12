@@ -28,8 +28,11 @@ internal sealed class CooperativeConfiguration : IEntityTypeConfiguration<Cooper
         builder.Property(x => x.IntroductionVi).HasMaxLength(Introduction);
         builder.Property(x => x.IntroductionEn).HasMaxLength(Introduction);
         builder.Property(x => x.AverageKgPerCage).HasPrecision(9, 2);
+        builder.Property(x => x.CustomerMaxDebtAmount).HasPrecision(18, 0);
         builder.ToTable(t =>
         {
+            t.HasCheckConstraint("CK_Cooperative_CustomerMaxDebtAmount", "[CustomerMaxDebtAmount] IS NULL OR [CustomerMaxDebtAmount] > 0");
+            t.HasCheckConstraint("CK_Cooperative_CustomerMaxDebtDays", "[CustomerMaxDebtDays] IS NULL OR [CustomerMaxDebtDays] >= 1");
             t.HasCheckConstraint("CK_Cooperatives_PayPeriodStartDay", "[PayPeriodStartDay] BETWEEN 1 AND 28");
             t.HasCheckConstraint("CK_Cooperative_AverageKgPerCage", "[AverageKgPerCage] > 0");
             t.HasCheckConstraint("CK_Cooperative_DaysBeforeAutoClose", "[DaysBeforeAutoClose] >= 1");

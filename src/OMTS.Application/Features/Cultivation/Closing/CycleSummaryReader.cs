@@ -41,7 +41,7 @@ public sealed class CycleSummaryReader(
             asOf,
             sessions.Count,
             sessions.Sum(s => s.Quantity),
-            sessions.Select(s => s.SeedLotLine.Unit).FirstOrDefault(u => !string.IsNullOrWhiteSpace(u)),
+            sessions.Select(s => s.SeedLotLine.Item?.Unit ?? s.SeedLotLine.Unit).FirstOrDefault(u => !string.IsNullOrWhiteSpace(u)),
             lots.Count,
             lots.Sum(l => l.EstimatedKg),
             lastLot,
@@ -68,3 +68,4 @@ public sealed class CycleSummaryReader(
         .Order()
         .ToList();
 }
+

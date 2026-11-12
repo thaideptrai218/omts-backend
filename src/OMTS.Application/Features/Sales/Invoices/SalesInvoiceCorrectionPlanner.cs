@@ -43,6 +43,12 @@ public sealed class SalesInvoiceCorrectionPlanner(SalesInvoiceFactsReader factsR
         var customer = chosen.Value ?? invoice.Customer;
         var customerChanged = customer?.Id != invoice.CustomerId;
 
+        // The profile is locked by the order the invoice fulfils, and the advance is bound to it (PM 12/11): no other profile while the invoice is linked to a purchase request.
+        if (customerChanged && invoice.PurchaseRequestId is not null)
+        {
+            return AppError.Invalid("Customer");
+        }
+
         var lines = entries.IsPriceCut ? LinePlan.None : await PlanLinesAsync(invoice, entries, cancellationToken);
         if (!lines.IsSuccess)
         {

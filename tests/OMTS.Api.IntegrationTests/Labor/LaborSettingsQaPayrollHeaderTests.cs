@@ -112,22 +112,20 @@ public class LaborSettingsQaPayrollHeaderTests
     }
 
     [Fact]
-    public async Task No_route_reads_or_writes_a_payroll_and_the_routes_of_this_pr_are_the_ones_of_the_client_list()
+    public async Task The_payroll_settings_routes_are_unchanged_and_no_pay_period_route_exists()
     {
         await using var factory = new AuthApiFactory();
         var endpoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>().Select(e => e.RoutePattern.RawText ?? string.Empty).ToList();
 
-        Assert.DoesNotContain(endpoints, p => p.Contains("payrolls", StringComparison.OrdinalIgnoreCase) || p.Contains("pay-periods", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(endpoints, p => p.Contains("pay-periods", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(
             ["api/payroll-settings", "api/payroll-settings", "api/payroll-settings/preview"],
-            endpoints.Where(p => p.Contains("payroll", StringComparison.OrdinalIgnoreCase)).Order(StringComparer.Ordinal));
+            endpoints.Where(p => p.StartsWith("api/payroll-settings", StringComparison.OrdinalIgnoreCase)).Order(StringComparer.Ordinal));
         Assert.Equal(
             [
                 "api/job-types", "api/job-types", "api/job-types/options", "api/job-types/{id:guid}", "api/job-types/{id:guid}/discontinue",
                 "api/job-types/{id:guid}/name", "api/job-types/{id:guid}/rates", "api/job-types/{id:guid}/resume",
             ],
             endpoints.Where(p => p.Contains("job-types", StringComparison.OrdinalIgnoreCase)).Order(StringComparer.Ordinal));
-        var client = await OwnerAsync(factory);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/payrolls")).StatusCode);
     }
 }

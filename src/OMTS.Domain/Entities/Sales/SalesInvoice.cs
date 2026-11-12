@@ -32,6 +32,10 @@ public class SalesInvoice : AuditableEntity, IHasStatus
     public Guid? PurchaseRequestId { get; set; }
     public PurchaseRequest? PurchaseRequest { get; set; }
 
+    /// <summary>The confirmed weighing the kg come from; required with a <see cref="PurchaseRequestId"/>, none for a sale without a request.</summary>
+    public Guid? PortWeighingId { get; set; }
+    public PortWeighing? PortWeighing { get; set; }
+
     /// <summary>The request is Fulfilled while a Completed invoice linked to it keeps this mark (BR-SALE-01).</summary>
     public bool TakesRequestInFull { get; set; }
 

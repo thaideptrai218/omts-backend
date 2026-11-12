@@ -141,7 +141,7 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         var cooperative = await factory.EnsureCooperativeAsync();
         var phone = NewPhone();
         await factory.UseDbAsync(db => db.Customers.AddRange(Enumerable.Range(0, offlineProfiles)
-            .Select(i => new Customer { CooperativeId = cooperative.Id, Name = $"Offline {i}", PhoneNumber = phone })));
+            .Select(i => new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = cooperative.Id, Name = $"Offline {i}", PhoneNumber = phone })));
         var client = factory.CreateClient();
         var id = await VerificationIdAsync(await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }));
         var token = await VerifyAsync(client, id, factory.LastSmsCode(phone));
@@ -157,9 +157,10 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         Assert.False(registered.TryGetProperty("oldDocumentsHidden", out _));
     }
 
-    // ACCOUNT-01.0.E1: MSG-ACCOUNT-03 naming the phone number or the email (MSG14 before).
+    // ACCOUNT-01.0.E1: MSG-ACCOUNT-03 naming the phone number (MSG14 before). An email no longer registers: even a
+    // registered one gets MSG-GEN-01 on the channel and reveals nothing.
     [Fact]
-    public async Task Registration_with_a_registered_phone_or_email_is_msg_account_03_naming_it()
+    public async Task Registration_with_a_registered_phone_is_msg_account_03_and_an_email_cannot_register()
     {
         var email = $"trader-{NewCode()}@example.com";
         var existing = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader, a => { a.Email = email; a.EmailVerifiedAt = DateTimeOffset.UtcNow; });
@@ -168,29 +169,25 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         var phone = await (await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = existing.PhoneNumber }))
             .SrsProblemAsync(HttpStatusCode.Conflict, "MSG-ACCOUNT-03", "MSG14");
         var mail = await (await client.PostAsJsonAsync("/api/verifications", new { channel = "Email", target = email }))
-            .SrsProblemAsync(HttpStatusCode.Conflict, "MSG-ACCOUNT-03", "MSG14");
+            .SrsProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01", "MSG01");
 
         Assert.Equal("This phone number is already registered. Please log in, or select Forgot password if you have forgotten your password.", phone.Detail());
         Assert.Equal("Phone number", phone.Str("field"));
-        Assert.Equal("This email is already registered. Please log in, or select Forgot password if you have forgotten your password.", mail.Detail());
-        Assert.Equal("Email", mail.Str("field"));
+        Assert.Equal("Channel", mail.Str("field"));
     }
 
-    // GFR-06: MSG-ACCOUNT-13 naming the channel (MSG04 "The SMS service is not responding" before); nothing is kept.
+    // GFR-06: MSG-ACCOUNT-13 naming SMS (MSG04 "The SMS service is not responding" before); nothing is kept.
     [Fact]
-    public async Task Code_that_cannot_be_sent_is_msg_account_13_naming_sms_or_email()
+    public async Task Code_that_cannot_be_sent_is_msg_account_13_naming_sms()
     {
-        var (phone, email) = (NewPhone(), $"down-{NewCode()}@example.com");
-        await using var failing = factory.WithWebHostBuilder(b => b.UseSetting("Sms:Fake:FailFor:0", phone).UseSetting("Email:Fake:FailFor:0", email));
+        var phone = NewPhone();
+        await using var failing = factory.WithWebHostBuilder(b => b.UseSetting("Sms:Fake:FailFor:0", phone));
         var client = failing.CreateClient();
 
         var sms = await (await client.PostAsJsonAsync("/api/verifications", new { channel = "Sms", target = phone }))
             .SrsProblemAsync(HttpStatusCode.ServiceUnavailable, "MSG-ACCOUNT-13", "MSG04");
-        var mail = await (await client.PostAsJsonAsync("/api/verifications", new { channel = "Email", target = email }))
-            .SrsProblemAsync(HttpStatusCode.ServiceUnavailable, "MSG-ACCOUNT-13", "MSG04");
 
         Assert.Equal("The verification code could not be sent by SMS. Nothing has been changed. Please try again later.", sms.Detail());
-        Assert.Equal("The verification code could not be sent by email. Nothing has been changed. Please try again later.", mail.Detail());
     }
 
     // ACCOUNT-06.1.E1 / BR-ACCOUNT-09: MSG-ACCOUNT-18 with the retry time (TOO_MANY_REQUESTS before).
@@ -277,7 +274,8 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Equal(0, resend.GetProperty("sendsLeft").GetInt32());
     }
 
-    // ACCOUNT-02.1.E2 (MSG-ACCOUNT-09, MSG01 before) and ACCOUNT-04 texts with their legacy codes.
+    // ACCOUNT-02.1.E2 (MSG-ACCOUNT-09, MSG01 before) and ACCOUNT-04 texts with their legacy codes. The email code for a
+    // password change (MSG-ACCOUNT-15) is gone: the current password is the only proof.
     [Fact]
     public async Task Phone_step_and_password_change_refusals_carry_their_srs_texts_and_legacy_codes()
     {
@@ -292,15 +290,10 @@ public class AccountMessageCodeQaTests(AuthApiFactory factory) : IClassFixture<A
             .SrsProblemAsync(HttpStatusCode.BadRequest, "MSG-ACCOUNT-09", "MSG01");
         var wrongCurrent = await (await owner.PostAsJsonAsync("/api/me/password", new { currentPassword = WrongPassword, newPassword = ChangedPassword, passwordConfirmation = ChangedPassword }))
             .SrsProblemAsync(HttpStatusCode.BadRequest, "MSG-ACCOUNT-14", "MSG17");
-        var noEmail = await (await owner.PostAsync("/api/me/password/code", null))
-            .SrsProblemAsync(HttpStatusCode.BadRequest, "MSG-ACCOUNT-15", "NO_VERIFIED_EMAIL");
 
         Assert.Equal("This phone number is already used by another account. Please enter another one.", taken.Detail());
         Assert.Equal("Phone number", taken.Str("field"));
         Assert.Equal("The current password is incorrect. Your password has not been changed.", wrongCurrent.Detail());
-        Assert.Equal(
-            "Your account has no verified email, so no code can be sent. Use Forgot password with your phone number, or add an email in your personal profile.",
-            noEmail.Detail());
     }
 
     // The current-password check counts like a login (deviation 4): the 5th failure is MSG-ACCOUNT-06 (MSG69 before), 423, with the whole pause left.

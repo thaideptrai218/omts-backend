@@ -46,7 +46,7 @@ public sealed class SalesInvoiceMessages(
         var cooperative = await cooperatives.GetCurrentAsync(cancellationToken)
             ?? throw new InvalidOperationException("The cooperative has not been created yet (run the bootstrap command).");
         var message = UserMessages.InvoiceCancellationNotice(
-            cooperative.ShortName ?? cooperative.FullName, invoice.Code, invoice.InvoiceDate, invoice.Total, paidAmount, cooperative.PhoneNumber ?? "the cooperative");
+            cooperative.ShortName ?? cooperative.FullName, invoice.Code, invoice.InvoiceDate, invoice.Total, paidAmount, cooperative.PhoneNumber ?? "HTX");
         var content = new NotificationContent(CancellationType, Title, message, new RelatedRecord(RelatedRecordTypes.SalesInvoice, invoice.Id, invoice.Code));
         return traderMessages.Queue(customer.AccountId, customer.PhoneNumber, content);
     }

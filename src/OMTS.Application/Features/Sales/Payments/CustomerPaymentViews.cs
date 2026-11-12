@@ -2,6 +2,7 @@ using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
+using OMTS.Application.Features.CashBook;
 using OMTS.Application.Features.Sales.Debts;
 using OMTS.Application.Features.WaterQuality.Dtos;
 using OMTS.Domain.Entities.Sales;
@@ -16,11 +17,11 @@ public sealed class CustomerPaymentViews(IAccountRepository accounts, IStatusCat
         (await ViewAsync([payment], cancellationToken))[0];
 
     /// <summary>The answer of a save, with MSG-GEN-05 ("Payment PT000123 saved.", "Cancellation of money paid back PT000124 saved.").</summary>
-    public async Task<CustomerPaymentSaved> SavedAsync(CustomerPayment payment, decimal? debtAfter, bool cancelled, CancellationToken cancellationToken)
+    public async Task<CustomerPaymentSaved> SavedAsync(CustomerPayment payment, decimal? debtAfter, bool cancelled, CancellationToken cancellationToken, CustomerPaymentQr? qr = null)
     {
         var what = payment.Kind == CustomerPaymentKind.PaidBack ? "money paid back" : "payment";
         var message = UserMessages.Saved(cancelled ? $"Cancellation of {what} {payment.Code}" : $"{char.ToUpperInvariant(what[0])}{what[1..]} {payment.Code}");
-        return new CustomerPaymentSaved(await ViewAsync(payment, cancellationToken), debtAfter, message.Text, message.Code);
+        return new CustomerPaymentSaved(await ViewAsync(payment, cancellationToken), debtAfter, message.Text, message.Code, qr);
     }
 
     public async Task<IReadOnlyList<CustomerPaymentDetails>> ViewAsync(IReadOnlyList<CustomerPayment> payments, CancellationToken cancellationToken)
@@ -33,9 +34,13 @@ public sealed class CustomerPaymentViews(IAccountRepository accounts, IStatusCat
         IReadOnlyDictionary<Guid, string> names = ids.Count == 0 ? new Dictionary<Guid, string>() : await accounts.GetDisplayNamesAsync(ids, cancellationToken);
         AccountRef? Ref(Guid? id) => id is { } value ? new AccountRef(value, names.GetValueOrDefault(value) ?? string.Empty) : null;
         return payments.Select(p => new CustomerPaymentDetails(
-            p.Id, p.Code, p.Customer is { } c ? new CustomerDebtCustomer(c.Id, c.Name, c.PhoneNumber) : null, p.Kind, p.Amount, p.PaymentDate, p.Method,
+            p.Id, p.Code, p.Customer is { } c ? new CustomerDebtCustomer(c.Id, c.Name, c.PhoneNumber, c.Code) : null, p.Kind, p.Amount, p.PaymentDate, p.Method,
             p.BankReference, p.Invoice is { } i ? new CustomerPaymentInvoiceRef(i.Id, i.Code) : null, Ref(p.CollectedByAccountId), Ref(p.RecordedByAccountId), p.Note,
             p.StatusId, statusCatalog.DisplayNameOf(p.StatusId), Ref(p.ConfirmedByAccountId), p.ConfirmedAt, Ref(p.CancelledByAccountId), p.CancelledAt, p.CancelReason,
-            RowVersionGuard.Encode(p.RowVersion), p.TransferInvoiceCode, p.TransferredAt)).ToList();
+            RowVersionGuard.Encode(p.RowVersion), p.TransferInvoiceCode, p.TransferredAt,
+            p.PaidAt, p.DiscountAmount, p.CashAccount is { } account ? new CashAccountRef(account.Id, account.ProviderName, account.AccountNumber) : null,
+            p.Allocations
+                .OrderBy(a => a.Invoice.InvoicedAt).ThenBy(a => a.Invoice.Code, StringComparer.Ordinal)
+                .Select(a => new CustomerPaymentAllocationView(a.InvoiceId, a.Invoice.Code, a.Invoice.InvoicedAt, a.Invoice.Total, a.Amount)).ToList())).ToList();
     }
 }

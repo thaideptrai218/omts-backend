@@ -52,7 +52,7 @@ public class SalesInvoicesMigrationAndDemoTests
         Assert.Contains("CK_SalesInvoiceLine_Kg", checks);
         Assert.Equal(1, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.indexes WHERE name = 'IX_SalesInvoices_DeduplicationKey' AND is_unique = 1 AND has_filter = 1"));
         Assert.Equal(["COMPLETED", "CANCELLED"], await db.Statuses.Where(s => s.Group == StatusGroups.SalesInvoice).OrderBy(s => s.Id).Select(s => s.Code).ToListAsync());
-        Assert.Equal(["AWAITING_CONFIRMATION", "CONFIRMED", "CANCELLED"], await db.Statuses.Where(s => s.Group == StatusGroups.CustomerPayment).OrderBy(s => s.Id).Select(s => s.Code).ToListAsync());
+        Assert.Equal(["AWAITING_CONFIRMATION", "COMPLETED", "CANCELLED", "PENDING_TRANSFER"], await db.Statuses.Where(s => s.Group == StatusGroups.CustomerPayment).OrderBy(s => s.Id).Select(s => s.Code).ToListAsync());
         Assert.Equal([200, 210, 211, 212], await db.StatusTransitions.Where(t => t.Id >= 200 && t.Id <= 212).Select(t => t.Id).OrderBy(i => i).ToListAsync());
 
         // A sale that closed its lot, with its line and its cash payment, on both sides of the Down.

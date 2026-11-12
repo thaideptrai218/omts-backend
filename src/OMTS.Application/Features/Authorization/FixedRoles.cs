@@ -42,7 +42,10 @@ public static class FixedRoles
             new(SalesInvoices, [View, Create, Export]),
             new(QualityClaims, [View]),
             new(SalesReturns, [View, Create]),
-            Full(LaborWorkers), Full(WorkAssignments), Full(Attendance),
+            // Exporting and importing employee files is the Cooperative Owner's: the Zone Manager holds the other three actions.
+            new(LaborWorkers, [View, Create, Edit]),
+            Full(WorkAssignments), Full(Attendance),
+            Full(InputIssues),
         ]);
 
     /// <summary>Office work, usually granted at All zones; views sales invoices and lot traces, views and exports purchase receipts.</summary>
@@ -53,11 +56,16 @@ public static class FixedRoles
         "Customer payments, money paid back and debts, supplier payments and debts, the cash book, pay rates, payroll and sales reports; usually granted at All zones.",
         [
             Full(CustomerPayments), Full(CustomerDebts), Full(SupplierPayments), Full(PayRules), Full(Payroll), Full(SalesReports), Full(CashBookOperations), Full(CashBookSettings),
+            // The Accountant views and exports every input issue (the use issues of any zone, and the disposals); recording one is the Zone Manager's (use) or the Owner's.
+            new(InputIssues, [View, Export]),
+            Full(InputDisposals),
             new(SalesInvoices, [View]),
             // PURCHASE-03 is R for the Accountant but "includes exporting to a file": view and export (lead decision, QA P2 Q1).
             new(PurchaseReceipts, [View, Export]),
             // TRACE-02 is R for the Accountant: the trace result is viewed, not exported (TRACE-02.2 is the Zone Manager's).
             new(LotTracing, [View]),
+            // Customers are looked up, added and kept up to date by the Accountant too (the customer screen holds their debts and payments); no delete.
+            new(Customers, [View, Create, Edit, Export]),
             // Suppliers are read to pick the payee of a supplier payment (PURCHASE-05) and the Accountant may export the list it
             // already sees. §I.4.4 shows PURCHASE-07 as No; this deviation was confirmed by the user.
             new(Suppliers, [View, Export]),

@@ -5,6 +5,7 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Purchasing;
 using OMTS.Domain.Enums;
@@ -24,6 +25,7 @@ public sealed class PurchaseReceiptCorrectionService(
     ISeedLotUsageQuery seedUsage,
     PurchaseReceiptCancellationService cancellations,
     PurchaseReceiptViews views,
+    InputStockLedger ledger,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
     AuditLogService audit,
@@ -79,7 +81,7 @@ public sealed class PurchaseReceiptCorrectionService(
         }
 
         var corrected = receipt.Lines.Sum(line => inputs.FirstOrDefault(i => i.LineId == line.Id) is { } input
-            ? PurchaseMoney.LineAmount(input.Quantity ?? line.Quantity, input.UnitPrice ?? line.UnitPrice, line.Discount)
+            ? PurchaseMoney.LineAmount(input.Quantity ?? line.EnteredQuantity, input.UnitPrice ?? line.EnteredUnitPrice, line.EnteredDiscount)
             : line.LineAmount);
         if (receipt.Discount > corrected)
         {
@@ -97,16 +99,18 @@ public sealed class PurchaseReceiptCorrectionService(
         {
             var line = lines[input.LineId!.Value];
             before.Add(LineValues(line));
-            line.Quantity = input.Quantity ?? line.Quantity;
-            line.UnitPrice = input.UnitPrice ?? line.UnitPrice;
+            ReceiptLineUnits.Fill(line, input.Quantity ?? line.EnteredQuantity, input.UnitPrice ?? line.EnteredUnitPrice, line.EnteredDiscount);
             if (input.SupplierLotCode is { } lotCode)
             {
                 line.SupplierLotCode = string.IsNullOrWhiteSpace(lotCode) ? null : lotCode.Trim();
             }
 
-            line.LineAmount = PurchaseMoney.LineAmount(line.Quantity, line.UnitPrice, line.Discount);
             after.Add(LineValues(line));
         }
+
+        // The ledger follows the corrected quantities: the old rows are undone, the new ones written.
+        await ledger.ReverseAsync(receipt.Id, afterReceiptRemoved: false, cancellationToken);
+        await ledger.PostReceiptAsync(receipt, cancellationToken);
 
         // Only lines change: the receipt still gets a new row version, so a parallel return or correction is MSG06.
         unitOfWork.MarkChanged(receipt);
@@ -122,10 +126,10 @@ public sealed class PurchaseReceiptCorrectionService(
     private static AppError? CheckLine(PurchaseReceiptLine line, CorrectionLineInput input, decimal seededQuantity, decimal returned)
     {
         var field = $"Line {line.LineNumber}";
-        var (quantity, price) = (input.Quantity ?? line.Quantity ?? 0, input.UnitPrice ?? line.UnitPrice ?? 0);
+        var (quantity, price) = (input.Quantity ?? line.EnteredQuantity ?? 0, input.UnitPrice ?? line.EnteredUnitPrice ?? 0);
         // A quantity saved before the 2-decimal rule and left unchanged does not stop the Owner correcting the price of the line.
-        if (quantity <= 0 || quantity > PurchaseReceiptValidator.MaxQuantity || (quantity != line.Quantity && !PurchaseReceiptValidator.HasAllowedDecimals(quantity))
-            || price < line.Discount || price > PurchaseReceiptValidator.MaxAmount || decimal.Truncate(price) != price
+        if (quantity <= 0 || quantity > PurchaseReceiptValidator.MaxQuantity || (quantity != line.EnteredQuantity && !PurchaseReceiptValidator.HasAllowedDecimals(quantity))
+            || price < line.EnteredDiscount || price > PurchaseReceiptValidator.MaxAmount || decimal.Truncate(price) != price
             || quantity * price > PurchaseReceiptValidator.MaxAmount)
         {
             return PurchaseReceiptValidator.InvalidLine(line.LineNumber);
@@ -137,18 +141,20 @@ public sealed class PurchaseReceiptCorrectionService(
         }
 
         // Seeding does not compare with what is left (GBR-04), so seeded + returned can pass the quantity: that must not stop a price correction.
-        if (quantity == line.Quantity)
+        if (quantity == line.EnteredQuantity)
         {
             return null;
         }
 
-        return quantity >= seededQuantity + returned ? null : PurchaseReceiptValidator.QuantityBelowUsed(line, field, seededQuantity, returned);
+        // Seeded and returned are in base units, like the quantity of the line.
+        return quantity * line.UnitFactor >= seededQuantity + returned ? null : PurchaseReceiptValidator.QuantityBelowUsed(line, field, seededQuantity, returned);
     }
 
     private static object LineValues(PurchaseReceiptLine line) =>
-        new { line.LineNumber, line.Quantity, line.UnitPrice, line.Discount, line.LineAmount, line.SupplierLotCode };
+        new { line.LineNumber, Quantity = line.EnteredQuantity, UnitPrice = line.EnteredUnitPrice, Discount = line.EnteredDiscount, line.LineAmount, line.SupplierLotCode };
 
     private AppError WrongStatus(PurchaseReceipt receipt, string? hint) => AppError.Conflict(
         UserMessages.WrongStatus($"Purchase receipt {receipt.Code}", statusCatalog.DisplayNameOf(receipt.StatusId)),
         hint is null ? null : new Dictionary<string, object?> { ["hint"] = hint });
 }
+

@@ -116,13 +116,21 @@ public class SalesCatalogueAccessTests(AuthApiFactory factory) : IClassFixture<A
     }
 
     [Fact]
-    public async Task An_accountant_or_a_trader_has_no_customer_function()
+    public async Task An_accountant_keeps_customers_but_deletes_none_and_a_trader_has_no_customer_function()
     {
         var owner = await factory.PurchasingOwnerAsync();
         var customer = await owner.CreateCustomerAsync();
         var other = await owner.CreateCustomerAsync();
 
-        foreach (var client in new[] { await factory.AccountantAsync(), await TraderAsync() })
+        var accountant = await factory.AccountantAsync();
+        await (await accountant.GetAsync("/api/customers")).ReadAsync(HttpStatusCode.OK);
+        await (await accountant.GetAsync($"/api/customers/{customer.Id()}")).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, (await accountant.GetAsync("/api/customers/export")).StatusCode);
+        var created = (await (await accountant.PostAsJsonAsync("/api/customers", new { name = "Made by the accountant", phoneNumber = NewPhone() })).ReadAsync(HttpStatusCode.Created)).GetProperty("customer");
+        await (await accountant.PutAsJsonAsync($"/api/customers/{customer.Id()}", new { name = "Edited by the accountant", phoneNumber = customer.Text("phoneNumber"), rowVersion = customer.RowVersion() })).ReadAsync(HttpStatusCode.OK);
+        await (await accountant.DeleteAsync($"/api/customers/{created.Id()}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+
+        foreach (var client in new[] { await TraderAsync() })
         {
             await (await client.GetAsync("/api/customers")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
             await (await client.GetAsync($"/api/customers/{customer.Id()}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");

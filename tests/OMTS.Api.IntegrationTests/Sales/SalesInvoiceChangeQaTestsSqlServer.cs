@@ -139,7 +139,7 @@ public class SalesInvoiceChangeQaTestsSqlServer
             else
             {
                 Assert.Equal(HttpStatusCode.OK, answers[1].StatusCode);
-                Assert.Equal(StatusIds.CustomerPayment.Confirmed, status);
+                Assert.Equal(StatusIds.CustomerPayment.Completed, status);
             }
         }
     }

@@ -42,6 +42,7 @@ internal static class DemoDataSeeder
         new DemoHarvestLotStep(),
         new DemoSalesInvoiceStep(),
         new DemoWaterMeasurementStep(),
+        new DemoPayrollStep(),
     ];
 
     public static async Task<IReadOnlyList<string>> SeedAsync(

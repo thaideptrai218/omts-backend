@@ -120,7 +120,7 @@ public class LaborSettingsQaDemoTests
         Assert.Equal(
             [
                 (thisMonth.AddMonths(-2), thisMonth.AddMonths(-1).AddDays(-1), StatusIds.Payroll.Finalized),
-                (thisMonth.AddMonths(-1), thisMonth.AddDays(-1), StatusIds.Payroll.AwaitingFinalization),
+                (thisMonth.AddMonths(-1), thisMonth.AddDays(-1), StatusIds.Payroll.Provisional),
             ],
             payrolls.Select(p => (p.PeriodStart, p.PeriodEnd, p.StatusId)));
 
@@ -147,10 +147,12 @@ public class LaborSettingsQaDemoTests
         var jobTypes = await accountant.GetFromJsonAsync<JsonElement>(JobTypes);
         var harvesting = jobTypes.GetProperty("items").EnumerateArray().Single(j => j.Str("name") == "Thu hoạch");
 
-        var refused = await accountant.PostRateAsync(harvesting, 45_000, thisMonth.AddDays(-1).ToString("yyyy-MM-dd"));
+        // The month before last is Finalized and locked; last month is Provisional, which locks nothing (BR-LABOR-13).
+        var lockedEnd = thisMonth.AddMonths(-1).AddDays(-1).ToString("yyyy-MM-dd");
+        var refused = await accountant.PostRateAsync(harvesting, 45_000, lockedEnd);
         var saved = await accountant.PostRateAsync(harvesting, 45_000, thisMonth.ToString("yyyy-MM-dd"));
 
-        Assert.Equal(thisMonth.AddDays(-1).ToString("yyyy-MM-dd"), (await refused.SrsProblemAsync(HttpStatusCode.Conflict, "MSG-LABOR-04", null)).Str("lockedUntil"));
+        Assert.Equal(lockedEnd, (await refused.SrsProblemAsync(HttpStatusCode.Conflict, "MSG-LABOR-04", null)).Str("lockedUntil"));
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
     }
 

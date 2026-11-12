@@ -51,9 +51,9 @@ public class SalesInvoiceChangeMoneyQaTests
         CustomerPayment[] payments =
         [
             new() { Kind = CustomerPaymentKind.Payment, Amount = 1m, StatusId = StatusIds.CustomerPayment.AwaitingConfirmation, Method = CustomerPaymentMethod.Cash },
-            new() { Kind = CustomerPaymentKind.Payment, Amount = 2m, StatusId = StatusIds.CustomerPayment.Confirmed, Method = CustomerPaymentMethod.VietQrInvoice },
+            new() { Kind = CustomerPaymentKind.Payment, Amount = 2m, StatusId = StatusIds.CustomerPayment.Completed, Method = CustomerPaymentMethod.VietQrInvoice },
             new() { Kind = CustomerPaymentKind.Payment, Amount = 4m, StatusId = StatusIds.CustomerPayment.Cancelled, Method = CustomerPaymentMethod.Cash },
-            new() { Kind = CustomerPaymentKind.PaidBack, Amount = 8m, StatusId = StatusIds.CustomerPayment.Confirmed, Method = CustomerPaymentMethod.Cash },
+            new() { Kind = CustomerPaymentKind.PaidBack, Amount = 8m, StatusId = StatusIds.CustomerPayment.Completed, Method = CustomerPaymentMethod.Cash },
         ];
 
         Assert.Equal(3m, SalesInvoiceChangeMoney.PaidOf(payments));

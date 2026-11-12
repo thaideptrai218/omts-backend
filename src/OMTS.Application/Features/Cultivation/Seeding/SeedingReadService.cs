@@ -88,7 +88,7 @@ public sealed class SeedingReadService(
                 .ToList(),
             await views.ListAsync(ofCycle, cycle, day.States, cancellationToken),
             ofCycle.GroupBy(r => r.SeedLotLineId)
-                .Select(g => new SeedLotTotal(g.Key, SeedingValues.LotCode(g.First().SeedLotLine), g.First().SeedLotLine.Item?.Name, g.First().SeedLotLine.Unit, g.Sum(r => r.Quantity)))
+                .Select(g => new SeedLotTotal(g.Key, SeedingValues.LotCode(g.First().SeedLotLine), g.First().SeedLotLine.Item?.Name, g.First().SeedLotLine.Item?.Unit ?? g.First().SeedLotLine.Unit, g.Sum(r => r.Quantity)))
                 .OrderBy(t => t.Code, StringComparer.Ordinal)
                 .ToList(),
             RowVersionGuard.Encode(cycle.RowVersion));
@@ -178,3 +178,4 @@ public sealed class SeedingReadService(
     private Task<bool> CanViewAsync(Guid zoneId, CancellationToken cancellationToken) =>
         zoneAccess.AllowsAsync(PermissionFunctions.CultivationCycles, PermissionAction.View, zoneId, cancellationToken);
 }
+

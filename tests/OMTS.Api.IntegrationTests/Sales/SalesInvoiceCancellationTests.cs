@@ -84,9 +84,13 @@ public class SalesInvoiceCancellationTests
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
         var trader = await api.TraderAsync();
-        var request = await trader.Client.PlaceAsync(sale.ProductId, 10m);
+        var request = await trader.Client.PlaceAsync(sale.ProductId, 5);
         (await sale.Owner.Client.AcceptAsync(request, payLater: true)).EnsureSuccessStatusCode();
-        var sold = (await sale.Manager.Client.SellAsync(Invoice(trader.Profile.Id, [Line(sale.ProductId, sale.LotId, 10m)], Cash(0m, "PayLater"), sale.LotId).With("purchaseRequestId", request.Id()))).GetProperty("invoice");
+        // A request is sold from its weighing at the port, after its harvest is done (decision of 11/11/2026).
+        sale = await sale.HarvestedForAsync(request);
+        var weighing = await sale.Manager.Client.ConfirmedWeighingAsync(trader.Client, request.Id(), PortWeighingTestKit.WeighedLot(sale.LotId, 10m, 10m, 10m, 10m, 10m));
+        var sold = (await sale.Manager.Client.SellAsync(
+            Invoice(trader.Profile.Id, [PortWeighingTestKit.WeighedLine(sale.ProductId, sale.LotId)], Cash(0m, "PayLater"), sale.LotId).FromWeighing(weighing))).GetProperty("invoice");
         Assert.True((await trader.Client.MineAsync(request.Id())).GetProperty("fulfilled").GetBoolean());
 
         await sale.Owner.Client.CancelledAsync(sold.Id(), Cancellation(sold));
@@ -149,11 +153,11 @@ public class SalesInvoiceCancellationTests
         var owner = sale.Owner.Client;
         var sold = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
         var payment = Assert.Single(await api.PaymentsOfAsync(sold.Id()));
-        await api.UpdateAsync<CustomerPayment>(payment.Id, p => p.StatusId = StatusIds.CustomerPayment.Confirmed);
+        await api.UpdateAsync<CustomerPayment>(payment.Id, p => p.StatusId = StatusIds.CustomerPayment.Completed);
 
         await owner.CancelledAsync(sold.Id(), Cancellation(sold).With("confirmOwedBack", true));
 
-        Assert.Equal(StatusIds.CustomerPayment.Confirmed, Assert.Single(await api.PaymentsOfAsync(sold.Id())).StatusId);
+        Assert.Equal(StatusIds.CustomerPayment.Completed, Assert.Single(await api.PaymentsOfAsync(sold.Id())).StatusId);
         Assert.Equal(-300_000m, await owner.CustomerDebtAsync(sale.CustomerId));
     }
 
@@ -214,8 +218,11 @@ public class SalesInvoiceCancellationTests
         var statement = await (await owner.GetAsync($"/api/customer-debts/{sale.CustomerId}/statement")).ReadAsync(HttpStatusCode.OK);
 
         var entries = statement.GetProperty("entries").EnumerateArray().ToList();
+        // The invoice entry is what it was worth when saved, and its price cut is an entry of its own beside it (the corrections list holds data-entry corrections only).
         var ofCorrected = entries.Single(e => e.Id() == corrected.Id());
-        Assert.Equal((290_000m, "PriceCutAfterClaim"), (ofCorrected.Money("debtChange"), ofCorrected.GetProperty("corrections")[0].Text("kind")));
+        var cut = entries.Single(e => e.Id() != corrected.Id() && e.Id() != cancelled.Id() && e.Text("invoiceCode") == corrected.Text("code"));
+        Assert.Equal((300_000m, -10_000m), (ofCorrected.Money("debtChange"), cut.Money("debtChange")));
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, ofCorrected.GetProperty("corrections").ValueKind);
         var ofCancelled = entries.Single(e => e.Id() == cancelled.Id());
         Assert.Equal((0m, true, "The trader never took the goods"), (ofCancelled.Money("debtChange"), ofCancelled.GetProperty("cancelled").GetBoolean(), ofCancelled.Text("cancelReason")));
         Assert.NotNull(ofCancelled.Text("cancelledAt"));

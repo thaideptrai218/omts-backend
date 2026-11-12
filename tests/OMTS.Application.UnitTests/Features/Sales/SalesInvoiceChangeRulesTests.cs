@@ -76,9 +76,9 @@ public class SalesInvoiceChangeRulesTests
         CustomerPayment[] payments =
         [
             new() { Kind = CustomerPaymentKind.Payment, Amount = 100m, StatusId = StatusIds.CustomerPayment.AwaitingConfirmation },
-            new() { Kind = CustomerPaymentKind.Payment, Amount = 50m, StatusId = StatusIds.CustomerPayment.Confirmed },
+            new() { Kind = CustomerPaymentKind.Payment, Amount = 50m, StatusId = StatusIds.CustomerPayment.Completed },
             new() { Kind = CustomerPaymentKind.Payment, Amount = 25m, StatusId = StatusIds.CustomerPayment.Cancelled },
-            new() { Kind = CustomerPaymentKind.PaidBack, Amount = 7m, StatusId = StatusIds.CustomerPayment.Confirmed },
+            new() { Kind = CustomerPaymentKind.PaidBack, Amount = 7m, StatusId = StatusIds.CustomerPayment.Completed },
         ];
 
         Assert.Equal(150m, SalesInvoiceChangeMoney.PaidOf(payments));

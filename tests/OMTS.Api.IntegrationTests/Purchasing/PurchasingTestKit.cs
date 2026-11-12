@@ -14,7 +14,7 @@ using static OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit;
 namespace OMTS.Api.IntegrationTests.Purchasing;
 
 public sealed record LineBody(
-    Guid? ItemId, decimal? Quantity, decimal? UnitPrice, string? SupplierLotCode = null, Guid? RaftId = null, decimal? Discount = null, Guid? LineId = null);
+    Guid? ItemId, decimal? Quantity, decimal? UnitPrice, string? SupplierLotCode = null, Guid? RaftId = null, decimal? Discount = null, Guid? LineId = null, Guid? ItemUnitId = null);
 
 /// <summary>PURCHASE-01 request body; every field can be left out (null) to check the validation.</summary>
 public sealed record ReceiptBody
@@ -144,8 +144,7 @@ public static class PurchasingTestKit
     }
 
     /// <summary>
-    /// An item named "{group} item {code}" (names are unique, BR-PURCHASE-10). Every Seed item of one database shares a
-    /// unit, so the tests use "kg" for seed.
+    /// An item named "{group} item {code}" (names are unique, BR-PURCHASE-10).
     /// </summary>
     public static async Task<Guid> CreateItemAsync(this HttpClient owner, string group, string unit = "kg", string? code = null)
     {
@@ -270,3 +269,5 @@ public static class PurchasingTestKit
     public static Task<List<string>> AuditActionsAsync(this AuthApiFactory factory, Guid recordId) =>
         factory.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == recordId).OrderBy(e => e.OccurredAt).Select(e => e.Action).ToListAsync());
 }
+
+

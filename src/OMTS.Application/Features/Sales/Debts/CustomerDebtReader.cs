@@ -37,10 +37,11 @@ public sealed class CustomerDebtReader(ICustomerDebtQuery query, TimeProvider ti
             return new Dictionary<Guid, CustomerDebtAllocation>();
         }
 
-        var (invoices, payments) = await query.LedgerAsync(ids, cancellationToken);
-        var invoicesOf = invoices.ToLookup(i => i.CustomerId);
-        var paymentsOf = payments.ToLookup(p => p.CustomerId);
+        var ledger = await query.LedgerAsync(ids, cancellationToken);
+        var invoicesOf = ledger.Invoices.ToLookup(i => i.CustomerId);
+        var paymentsOf = ledger.Payments.ToLookup(p => p.CustomerId);
+        var adjustmentsOf = ledger.Adjustments.ToLookup(a => a.CustomerId);
         var today = timeProvider.Today();
-        return ids.ToDictionary(id => id, id => CustomerDebtAllocator.Allocate(invoicesOf[id], paymentsOf[id], today));
+        return ids.ToDictionary(id => id, id => CustomerDebtAllocator.Allocate(invoicesOf[id], paymentsOf[id], today, adjustmentsOf[id]));
     }
 }
