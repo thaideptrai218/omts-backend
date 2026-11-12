@@ -30,10 +30,6 @@ public static class UserMessages
     /// <param name="action">What is done, in the words of the SRS, e.g. "correct traceability data".</param>
     public static UserMessage ConfirmAction(string action) => new(Gen04, $"Are you sure you want to {action}? This action is recorded in the audit log.", Legacy.Msg09);
 
-    /// <summary>MSG-GEN-04 for a harvest that takes the cycle above 110 % of its target yield: the client asks again with <c>confirmOverPlan</c> and a reason.</summary>
-    public static UserMessage HarvestOverPlanQuestion(decimal totalKg, decimal targetKg) => ConfirmAction(
-        $"record this harvest, which takes the cycle to {Quantity(totalKg)} kg, above its target yield of {Quantity(targetKg)} kg");
-
     /// <summary>MSG-GEN-04 for a seeding session that takes the cycle above 110 % of its planned seed: the client asks again with <c>confirmOverPlan</c> and a reason.</summary>
     public static UserMessage SeedingOverPlanQuestion(decimal totalQuantity, decimal plannedQuantity) => ConfirmAction(
         $"record this seeding, which takes the cycle to {Quantity(totalQuantity)} seed, above its planned seed of {Quantity(plannedQuantity)}");

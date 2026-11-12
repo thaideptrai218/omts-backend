@@ -11,7 +11,7 @@ namespace OMTS.Application.Features.Harvest;
 
 /// <summary>The checked fields of a lot; <paramref name="EstimatedKg"/> holds the worked-out value when none was sent.</summary>
 internal sealed record HarvestLotFields(
-    IReadOnlyList<Lane> Lanes, IReadOnlySet<Guid> FinishedLaneIds, decimal CageCount, decimal EstimatedKg, string? OverPlanReason = null, bool PlanEvaluated = false);
+    IReadOnlyList<Lane> Lanes, IReadOnlySet<Guid> FinishedLaneIds, decimal CageCount, decimal EstimatedKg);
 
 /// <summary>What a correction adds to the fields of a harvest: the reason, kept in the audit log, and why the finished lanes cannot be so.</summary>
 /// <param name="OwnLaneIds">
@@ -41,10 +41,9 @@ internal static class HarvestLotFieldReader
     /// <param name="kgPerCage">What the estimated kg is worked out with when none was sent.</param>
     /// <param name="photoHint">Why the photos were refused, or null.</param>
     /// <param name="correction">The fields only a correction has.</param>
-    /// <param name="plan">The cycle's target and the other lots: the harvest is capped against it. Null for a lot of a Closed cycle (TRACE-03.2), which only fixes data.</param>
     public static AppError? Read(
         RecordHarvestRequest request, Raft raft, IReadOnlyDictionary<Guid, LaneState> states, decimal kgPerCage, string? photoHint, out HarvestLotFields? fields,
-        HarvestLotCorrectionInput? correction = null, HarvestPlanInput? plan = null)
+        HarvestLotCorrectionInput? correction = null)
     {
         fields = null;
         var check = new FieldCheck();
@@ -83,15 +82,8 @@ internal static class HarvestLotFieldReader
             };
         }
 
-        // The cap on the cycle plan judges what the save adds: a correction that does not raise the kg adds nothing, so it is not asked again.
-        var raisesKg = correction is null || estimated > correction.ExistingEstimatedKg;
-        string? overPlanReason = null;
-        if (plan is not null && raisesKg && HarvestQuantityRules.CheckPlan(plan, estimated!.Value, out overPlanReason) is { } overPlan)
-        {
-            return overPlan;
-        }
-
-        fields = new HarvestLotFields(lanes!, finished!, request.CageCount!.Value, estimated!.Value, overPlanReason, plan is not null && raisesKg);
+        // The cycle target yield is a plan, not a cap (owner decision 12/11/2026): the harvest is never judged against it.
+        fields = new HarvestLotFields(lanes!, finished!, request.CageCount!.Value, estimated!.Value);
         return null;
     }
 

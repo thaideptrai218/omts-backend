@@ -1,17 +1,9 @@
-using OMTS.Application.Common.Messages;
-using OMTS.Application.Common.Results;
-
 namespace OMTS.Application.Features.Harvest;
 
 /// <summary>
-/// What the cycle plan says about the harvest of a lot being saved (PM decision 11/11/2026, replacing "no cap" of BR-HARVEST-02): the target yield of the cycle, the estimated kg of its other
-/// lots, and the Zone Manager's answer to the warning (<see cref="Confirm"/> and <see cref="Reason"/>).
+/// The numbers of a harvest, as pure functions so every limit is tested in one place (BR-HARVEST-02, PM decision 11/11/2026). The target yield of the cycle is a plan, not a cap (owner
+/// decision 12/11/2026): no rule here compares a harvest with it, so a harvest above the target saves like any other.
 /// </summary>
-/// <param name="TargetYieldKg">The cycle's own estimate (BR-CYCLE-01); null: no cap.</param>
-/// <param name="OtherLotsKg">The estimated kg of every other lot of the cycle (the lot being corrected leaves its own out).</param>
-internal sealed record HarvestPlanInput(decimal? TargetYieldKg, decimal OtherLotsKg, bool Confirm, string? Reason);
-
-/// <summary>The numbers of a harvest, as pure functions so every limit is tested in one place (BR-HARVEST-02, PM decision 11/11/2026).</summary>
 internal static class HarvestQuantityRules
 {
     /// <summary>The most cages a lot holds: far above any raft, so only a slip of the finger is refused.</summary>
@@ -21,14 +13,6 @@ internal static class HarvestQuantityRules
     public const decimal MinKgShare = 0.2m;
 
     public const decimal MaxKgShare = 2m;
-
-    /// <summary>Above this share of the target the harvest needs a confirmation and a reason; above <see cref="HardOverPlan"/> it is refused.</summary>
-    public const decimal SoftOverPlan = 0.10m;
-
-    public const decimal HardOverPlan = 0.50m;
-
-    public const string ConfirmFlag = "confirmOverPlan";
-    public const string ReasonField = "Over plan reason";
 
     /// <summary>More than 0 and at most <see cref="MaxCages"/>, in steps of 0.01 (the column is decimal(9,2)).</summary>
     public static bool CagesAreValid(decimal? cages) => cages is > 0 and <= MaxCages && decimal.Round(cages.Value, 2) == cages.Value;
@@ -63,53 +47,7 @@ internal static class HarvestQuantityRules
                 $"The estimated kg is far from {cages:0.##} cages at {kgPerCage:0.##} kg per cage ({KgOf(cages, kgPerCage):0.##} kg).",
                 new Dictionary<string, object?> { ["workedKg"] = KgOf(cages, kgPerCage), ["minKg"] = KgOf(cages, kgPerCage) * MinKgShare, ["maxKg"] = KgOf(cages, kgPerCage) * MaxKgShare })];
 
-    /// <summary>
-    /// The cycle's harvested kg with this lot against its target: null while it is at most 110 % or there is no target; 409 asking for <c>confirmOverPlan</c> and a reason between 110 % and
-    /// 150 %; 400 above 150 %. A confirmed lot returns its reason in <paramref name="reason"/> to keep on the lot.
-    /// </summary>
-    public static AppError? CheckPlan(HarvestPlanInput plan, decimal estimatedKg, out string? reason)
-    {
-        reason = null;
-        if (plan.TargetYieldKg is not > 0)
-        {
-            return null;
-        }
-
-        var target = plan.TargetYieldKg.Value;
-        var total = plan.OtherLotsKg + estimatedKg;
-        if (total > target * (1 + HardOverPlan))
-        {
-            return AppError.Invalid(HarvestLotFieldReader.EstimatedKgField, $"The cycle would have {total:0.##} kg, more than {(1 + HardOverPlan) * 100:0}% of its target of {target:0.##} kg.");
-        }
-
-        if (total <= target * (1 + SoftOverPlan))
-        {
-            return null;
-        }
-
-        if (!plan.Confirm)
-        {
-            return AppError.Conflict(
-                UserMessages.HarvestOverPlanQuestion(total, target),
-                new Dictionary<string, object?>
-                {
-                    ["confirmFlag"] = ConfirmFlag,
-                    ["reasonField"] = "overPlanReason",
-                    ["targetYieldKg"] = target,
-                    ["harvestedKg"] = plan.OtherLotsKg,
-                    ["newKg"] = estimatedKg,
-                    ["totalKg"] = total,
-                    ["overPlanPercent"] = decimal.Round((total - target) / target * 100, 1),
-                });
-        }
-
-        var trimmed = plan.Reason?.Trim();
-        if (string.IsNullOrEmpty(trimmed) || trimmed.Length > HarvestLotFieldReader.MaxReasonLength)
-        {
-            return AppError.Invalid(ReasonField);
-        }
-
-        reason = trimmed;
-        return null;
-    }
+    /// <summary>The share of the target the harvested kg reaches, to 1 decimal; null without a target above 0. Above 100 the cycle is over its target, which is only information.</summary>
+    public static decimal? TargetPercent(decimal? targetYieldKg, decimal harvestedKg) =>
+        targetYieldKg is > 0 ? decimal.Round(harvestedKg / targetYieldKg.Value * 100, 1) : null;
 }

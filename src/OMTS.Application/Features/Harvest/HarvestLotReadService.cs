@@ -86,7 +86,9 @@ public sealed class HarvestLotReadService(
             ofCycle.Sum(lot => lot.CageCount),
             harvestedKg,
             open?.TargetYieldKg,
-            open?.TargetYieldKg is { } target ? target - harvestedKg : null);
+            open?.TargetYieldKg is { } target ? target - harvestedKg : null,
+            HarvestQuantityRules.TargetPercent(open?.TargetYieldKg, harvestedKg),
+            open?.TargetYieldKg is > 0 and var over && harvestedKg > over);
     }
 
     /// <summary>

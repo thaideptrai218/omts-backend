@@ -11,6 +11,8 @@ namespace OMTS.Application.Features.Harvest;
 /// <param name="EstimatedKg">Without it the system works it out: cages times the average kg per cage.</param>
 /// <param name="EstimatedKgIsUnreadable">A value was sent that is not a number, so it does not mean "work it out".</param>
 /// <param name="OtherFilePart">A file came in a part not named <c>photos</c>: refused after the access check, so no photo is dropped without a word.</param>
+/// <param name="ConfirmOverPlan">Kept so older clients still bind: the cycle target is a plan, not a cap (owner decision 12/11/2026), so nothing asks for it and it is ignored.</param>
+/// <param name="OverPlanReason">As <paramref name="ConfirmOverPlan"/>: accepted and ignored.</param>
 /// <param name="PurchaseRequestId">The request the trip harvests for (decision of 11/11/2026): required when recording, never read by a correction; null when no id could be read.</param>
 /// <param name="Crew">The employees who worked on the trip (decision of 12/11/2026), optional: null when none was sent (a correction then leaves the crew as it is); an empty list clears it.</param>
 /// <param name="CrewUnreadable">An id was sent that is not a GUID.</param>
@@ -163,7 +165,9 @@ public sealed record HarvestLotsScreen(
     decimal HarvestedCages = 0m,
     decimal HarvestedKg = 0m,
     decimal? TargetYieldKg = null,
-    decimal? RemainingKg = null);
+    decimal? RemainingKg = null,
+    decimal? TargetPercent = null,
+    bool OverTarget = false);
 
 /// <summary>
 /// A purchase request a new lot can be recorded for (decision of 11/11/2026): Accepted and its harvest not marked done. The requests whose work plan sends the harvest to this

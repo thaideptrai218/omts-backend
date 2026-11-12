@@ -10,7 +10,7 @@ using static OMTS.Api.IntegrationTests.Farming.FarmingTestKit;
 namespace OMTS.Api.IntegrationTests.Harvest;
 
 /// <summary>
-/// PM decision 11/11/2026 on the farming flow: fractional cages, kg worked out from them, the cap of the cycle's harvested kg against its target yield, "finish harvest" on a lane, the lane
+/// PM decision 11/11/2026 on the farming flow: fractional cages, kg worked out from them, the target yield as a plan only (no cap), "finish harvest" on a lane, the lane
 /// facts of the screen, finishing an empty seeding, the checks on map pins and the plan figures of the yield report.
 /// </summary>
 public class HarvestFarmingRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
@@ -85,43 +85,37 @@ public class HarvestFarmingRulesTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Contains("at most 1000", error.Text("hint"));
     }
 
+    // Owner decision 12/11/2026: the target yield is a plan. 500 kg planned and 700 kg harvested is saved with no question, no reason and no refusal; only the screen says it is over.
     [Fact]
-    public async Task Above_110_percent_of_the_target_asks_for_a_confirmation_and_a_reason_which_the_lot_and_the_audit_keep()
+    public async Task A_harvest_far_above_the_target_saves_without_a_question_and_the_screen_says_it_is_over()
     {
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        await factory.UpdateAsync<CultivationCycle>(raft.CycleId, c => c.TargetYieldKg = 1000m);
-        await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Cages = "16" }); // 800 kg of 1000
+        await factory.UpdateAsync<CultivationCycle>(raft.CycleId, c => c.TargetYieldKg = 500m);
+        await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Cages = "10" }); // 500 kg of 500
 
-        var warning = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields { Cages = "8" })).ReadAsync(HttpStatusCode.Conflict); // 1200 kg: +20 %
+        var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Cages = "4" }); // 700 kg of 500: +40 %
+        var huge = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Cages = "31" }); // 2250 kg: far above 150 %
 
-        Assert.Equal("MSG-GEN-04", warning.Text("code"));
-        Assert.Equal("confirmOverPlan", warning.Text("confirmFlag"));
-        Assert.Equal((1000m, 800m, 400m, 1200m, 20m), (warning.GetProperty("targetYieldKg").GetDecimal(), warning.GetProperty("harvestedKg").GetDecimal(),
-            warning.GetProperty("newKg").GetDecimal(), warning.GetProperty("totalKg").GetDecimal(), warning.GetProperty("overPlanPercent").GetDecimal()));
-        Assert.Equal(1, await factory.LotCountAsync(raft.RaftId));
-
-        var noReason = await owner.PostAsync($"/api/rafts/{raft.RaftId}/harvest-lots", await WithConfirmationAsync(owner, new HarvestFields { Cages = "8" }, "true", null));
-        Assert.Equal("Over plan reason", (await noReason.ReadAsync(HttpStatusCode.BadRequest)).Text("field"));
-
-        var saved = await owner.PostAsync($"/api/rafts/{raft.RaftId}/harvest-lots", await WithConfirmationAsync(owner, new HarvestFields { Cages = "8" }, "true", " Late harvest, good price "));
-        var lot = (await saved.ReadAsync(HttpStatusCode.Created)).GetProperty("lot");
-        Assert.Equal("Late harvest, good price", lot.Text("overPlanReason"));
-        Assert.Equal(2, await factory.LotCountAsync(raft.RaftId));
-        var audit = await factory.QueryAsync(db => Task.FromResult(db.AuditEvents.Single(a => a.Action == "HarvestLot.Created" && a.RecordId == lot.Id()).After!));
-        Assert.Contains("Late harvest, good price", audit);
+        Assert.Equal(200m, lot.Kg("estimatedKg"));
+        Assert.Equal(1550m, huge.Kg("estimatedKg"));
+        Assert.Equal(JsonValueKind.Null, lot.GetProperty("overPlanReason").ValueKind);
+        Assert.Equal(3, await factory.LotCountAsync(raft.RaftId));
+        var screen = await owner.HarvestScreenAsync(raft.RaftId);
+        Assert.Equal((2250m, 500m, -1750m, 450m, true), (screen.Kg("harvestedKg"), screen.Kg("targetYieldKg"), screen.Kg("remainingKg"), screen.Kg("targetPercent"), screen.GetProperty("overTarget").GetBoolean()));
     }
 
     [Fact]
-    public async Task Above_150_percent_of_the_target_is_refused_even_when_confirmed()
+    public async Task An_over_plan_confirmation_sent_by_an_older_client_is_ignored()
     {
         var raft = await factory.SeededRaftAsync();
-        await factory.UpdateAsync<CultivationCycle>(raft.CycleId, c => c.TargetYieldKg = 1000m);
+        var owner = raft.Owner.Client;
+        await factory.UpdateAsync<CultivationCycle>(raft.CycleId, c => c.TargetYieldKg = 100m);
 
-        var answer = await raft.Owner.Client.PostAsync($"/api/rafts/{raft.RaftId}/harvest-lots", await WithConfirmationAsync(raft.Owner.Client, new HarvestFields { Cages = "31" }, "true", "big"));
+        var saved = await owner.PostAsync($"/api/rafts/{raft.RaftId}/harvest-lots", await WithConfirmationAsync(owner, new HarvestFields { Cages = "8" }, "true", "late"));
 
-        var error = await answer.ReadAsync(HttpStatusCode.BadRequest); // 31 cages = 1550 kg: above +50 %
-        Assert.Equal("MSG-GEN-01", error.Text("code"));
+        var lot = (await saved.ReadAsync(HttpStatusCode.Created)).GetProperty("lot");
+        Assert.Equal(JsonValueKind.Null, lot.GetProperty("overPlanReason").ValueKind);
     }
 
     [Fact]
@@ -136,19 +130,16 @@ public class HarvestFarmingRulesTests(AuthApiFactory factory) : IClassFixture<Au
     }
 
     [Fact]
-    public async Task A_correction_that_raises_the_kg_is_capped_and_one_that_does_not_is_not_asked_again()
+    public async Task A_correction_that_raises_the_kg_above_the_target_is_not_asked_again()
     {
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
         var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Cages = "10" }); // 500 kg
-        await factory.UpdateAsync<CultivationCycle>(raft.CycleId, c => c.TargetYieldKg = 450m); // the lot is now 11 % over its target
-
-        // Only the reason changes: the kg stay, so nothing is judged.
-        var same = await factory.SendCorrectionAsync(owner, lot.Id(), new HarvestFields { Cages = "10" }, "typo");
-        Assert.Equal(HttpStatusCode.OK, same.StatusCode);
+        await factory.UpdateAsync<CultivationCycle>(raft.CycleId, c => c.TargetYieldKg = 450m);
 
         var raised = await factory.SendCorrectionAsync(owner, lot.Id(), new HarvestFields { Cages = "12" }, "recount");
-        Assert.Equal("confirmOverPlan", (await raised.ReadAsync(HttpStatusCode.Conflict)).Text("confirmFlag"));
+
+        Assert.Equal(HttpStatusCode.OK, raised.StatusCode);
     }
 
     [Fact]

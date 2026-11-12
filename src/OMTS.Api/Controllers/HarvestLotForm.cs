@@ -19,9 +19,10 @@ public class HarvestLotForm
     /// <summary>Cages, a number with a dot and at most 2 decimals (0.5 is half a cage).</summary>
     public string? CageCount { get; set; }
 
-    /// <summary>The Zone Manager answers the over-plan warning (409, confirmFlag confirmOverPlan): send true with <see cref="OverPlanReason"/>.</summary>
+    /// <summary>Accepted and ignored: the cycle target is a plan, not a cap (owner decision 12/11/2026), so a harvest above it is never asked about.</summary>
     public bool ConfirmOverPlan { get; set; }
 
+    /// <summary>Accepted and ignored, like <see cref="ConfirmOverPlan"/>.</summary>
     public string? OverPlanReason { get; set; }
 
     /// <summary>When recording: the id of the purchase request the trip harvests for (decision of 11/11/2026). A correction does not read it.</summary>

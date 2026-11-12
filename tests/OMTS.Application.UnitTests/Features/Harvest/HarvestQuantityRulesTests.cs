@@ -3,7 +3,7 @@ using OMTS.Application.Features.Harvest;
 
 namespace OMTS.Application.UnitTests.Features.Harvest;
 
-/// <summary>PM decision 11/11/2026: fractional cages, kg from cages, the 0.2x to 2x range, and the cap of the cycle's harvested kg against its target yield.</summary>
+/// <summary>PM decision 11/11/2026: fractional cages, kg from cages, the 0.2x to 2x range, and the share of the target yield reached (a plan, not a cap: owner decision 12/11/2026).</summary>
 public class HarvestQuantityRulesTests
 {
     [Theory]
@@ -50,50 +50,16 @@ public class HarvestQuantityRulesTests
         Assert.Equal(HarvestQuantityRules.KgFarFromCagesCode, Assert.Single(HarvestQuantityRules.KgWarnings(2m, 50m, 19m)).Code);
     }
 
-    [Fact]
-    public void Without_a_target_there_is_no_cap()
-    {
-        Assert.Null(HarvestQuantityRules.CheckPlan(new HarvestPlanInput(null, 5_000_000m, false, null), 9_000_000m, out var reason));
-        Assert.Null(reason);
-    }
+    [Theory]
+    [InlineData(1000, 700, 70)]
+    [InlineData(500, 700, 140)] // above the target is only a figure
+    [InlineData(3, 1, 33.3)]
+    public void The_target_percent_is_the_harvested_kg_over_the_target_and_may_exceed_100(decimal target, decimal harvested, decimal percent) =>
+        Assert.Equal(percent, HarvestQuantityRules.TargetPercent(target, harvested));
 
     [Theory]
-    [InlineData(0, 1000)] // exactly the target
-    [InlineData(500, 600)] // 1100 = target + 10 %
-    public void Up_to_110_percent_of_the_target_needs_nothing(decimal harvested, decimal added) =>
-        Assert.Null(HarvestQuantityRules.CheckPlan(new HarvestPlanInput(1000m, harvested, false, null), added, out _));
-
-    [Fact]
-    public void Between_110_and_150_percent_asks_for_a_confirmation_with_the_figures()
-    {
-        var error = HarvestQuantityRules.CheckPlan(new HarvestPlanInput(1000m, 800m, false, null), 400m, out _)!;
-
-        Assert.Equal(ErrorKind.Conflict, error.Kind);
-        Assert.Equal("MSG-GEN-04", error.Message.Code);
-        Assert.Equal("confirmOverPlan", error.Details!["confirmFlag"]);
-        Assert.Equal(1200m, error.Details["totalKg"]);
-        Assert.Equal(20m, error.Details["overPlanPercent"]);
-    }
-
-    [Fact]
-    public void A_confirmation_needs_a_reason_and_keeps_it_trimmed()
-    {
-        var withoutReason = HarvestQuantityRules.CheckPlan(new HarvestPlanInput(1000m, 800m, true, "  "), 400m, out _)!;
-        Assert.Equal((ErrorKind.Validation, "Over plan reason"), (withoutReason.Kind, withoutReason.Details!["field"]));
-
-        Assert.Null(HarvestQuantityRules.CheckPlan(new HarvestPlanInput(1000m, 800m, true, "  late season  "), 400m, out var reason));
-        Assert.Equal("late season", reason);
-    }
-
-    [Fact]
-    public void Above_150_percent_is_refused_even_when_confirmed()
-    {
-        var error = HarvestQuantityRules.CheckPlan(new HarvestPlanInput(1000m, 1000m, true, "because"), 501m, out _)!;
-
-        Assert.Equal((ErrorKind.Validation, "Estimated kg"), (error.Kind, error.Details!["field"]));
-    }
-
-    [Fact]
-    public void Exactly_150_percent_is_still_a_warning_not_a_refusal() =>
-        Assert.Equal(ErrorKind.Conflict, HarvestQuantityRules.CheckPlan(new HarvestPlanInput(1000m, 1000m, false, null), 500m, out _)!.Kind);
+    [InlineData(null)]
+    [InlineData(0.0)]
+    public void Without_a_target_above_0_there_is_no_percent(double? target) =>
+        Assert.Null(HarvestQuantityRules.TargetPercent((decimal?)target, 500m));
 }

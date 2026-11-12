@@ -103,10 +103,7 @@ public sealed class HarvestLotCorrectionService(
         var estimatedKg = request.EstimatedKg ?? (request.CageCount == lot.CageCount ? lot.EstimatedKg : null);
         var fields = new RecordHarvestRequest(request.LaneNumbers, request.FinishedLaneNumbers, request.CageCount, estimatedKg, request.EstimatedKgIsUnreadable, request.OtherFilePart);
         var correction = new HarvestLotCorrectionInput(request.Reason, facts.FinishedHint(request.FinishedLaneNumbers), null, lot.CageCount, lot.EstimatedKg, lot.Lanes.Select(l => l.LaneId).ToHashSet());
-        // PM decision 11/11/2026: the cycle total, without this lot, is capped against the target yield when the correction raises the kg.
-        var otherKg = (await lots.ListByCycleAsync(lot.CycleId, cancellationToken)).Where(l => l.Id != lot.Id).Sum(l => l.EstimatedKg);
-        var plan = new HarvestPlanInput(lot.Cycle.TargetYieldKg, otherKg, request.ConfirmOverPlan, request.OverPlanReason);
-        if (HarvestLotFieldReader.Read(fields, raft, facts.Choosable(), lot.KgPerCage, photoHint, out var read, correction, plan) is { } invalid)
+        if (HarvestLotFieldReader.Read(fields, raft, facts.Choosable(), lot.KgPerCage, photoHint, out var read, correction) is { } invalid)
         {
             return invalid;
         }
@@ -140,11 +137,6 @@ public sealed class HarvestLotCorrectionService(
         var takesALaneBack = facts.CorrectionTakesALaneOutOfHarvested(fields);
         var before = HarvestLotAudit.Snapshot(lot, alwaysNameCrew: true);
         (lot.CageCount, lot.EstimatedKg) = (fields.CageCount, fields.EstimatedKg);
-        if (fields.PlanEvaluated)
-        {
-            lot.OverPlanReason = fields.OverPlanReason;
-        }
-
         HarvestLotCorrectionRows.ApplyLanes(lots, lot, fields);
         if (crew is not null)
         {
