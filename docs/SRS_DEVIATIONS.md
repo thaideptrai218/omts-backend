@@ -22,7 +22,7 @@
 | PAY-08 | Thiết lập kỳ lương và cờ tự động tạo bảng lương lưu được nhưng chưa có tác dụng (GFR-07 chưa làm) | Chờ backend |
 | FARM-01 | `CageCount` chuyển từ `int` sang `decimal` (migration `20261111140000_HarvestLotFractionalCagesAndOverPlanReason`) | Đang làm (chưa commit) |
 | FARM-02, FARM-03 | Không có hao hụt, khối lượng mỗi con, tỷ lệ sống; không có thực thể kế hoạch thu hoạch (`HarvestPlan`) | Chờ quyết định (D3, D4, D5) |
-| FARM-04 | Cảnh báo mềm khi vượt 110% mục tiêu chu kỳ (`confirmOverPlan`, `OverPlanReason`, MSG-GEN-04); từ chối khi vượt 150% (`HarvestQuantityRules`) | Đang làm (chưa commit); ngưỡng chờ Q7 |
+| FARM-04 | Thu hoạch KHÔNG bị chặn bởi mục tiêu sản lượng chu kỳ (quyết định Owner 12/11/2026: kế hoạch chỉ là kế hoạch). Màn thu hoạch trả `targetPercent` và `overTarget`; `confirmOverPlan`/`overPlanReason` của thu hoạch được nhận nhưng bỏ qua. Trần 110%/150% chỉ còn ở kế hoạch giống và vật tư | Đã làm |
 | FARM-05 | "Thu xong làn": `POST /api/rafts/{raftId}/lanes/{laneNumber}/finish-harvest` | Đang làm (chưa commit) |
 | FARM-06 | Quy tắc tọa độ (từ chối 0,0 và hoán đổi; cảnh báo ngoài khung Việt Nam hoặc cách vùng quá 5 km) | Chờ quyết định (D9) |
 | STK-01 | Sổ kho: danh mục vật tư và giống, Xuất dùng (`InputIssue`), Xuất hủy, đơn vị và giá trên phiếu nhập; tồn âm bị từ chối (MSG-INPUT-01) | Đã làm (commit `ad3b9db`) |
