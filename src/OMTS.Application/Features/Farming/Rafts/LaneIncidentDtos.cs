@@ -72,3 +72,6 @@ public sealed record LaneIncidentSaved(
     bool EverySeededLaneHarvested,
     string Message,
     string MessageCode);
+
+/// <summary>Bring a lane out of service back. <paramref name="Reason"/> is optional; <paramref name="Materials"/> as for a repair (stock check and linked use issue).</summary>
+public sealed record RestoreLaneServiceRequest(string? Reason, IReadOnlyList<RepairMaterialInput>? Materials, string? RowVersion);

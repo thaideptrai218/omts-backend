@@ -37,6 +37,8 @@
 | SAL-07 | Sửa hóa đơn (SALE-07), hủy (SALE-08), trả hàng theo khiếu nại (CLAIM-03) chưa có endpoint | Chờ backend |
 | WEB-06 | Thông báo lỗi nhập và xuất nhân viên, lỗi file, vượt 5000 dòng chưa có mã MSG (`messageCode` = null) | Chờ quyết định (Q15) |
 
+Ghi chú 12/11/2026: hai thông báo `LANE_DAMAGED`, `LANE_OUT_OF_SERVICE` dùng mã chung `MINI_APP_NOTIFICATION`; chờ SRS có mã message riêng. Chi tiết làn/bè/thu hoạch: `SRS_CHANGE_LOG_HR_2026-11-11.md` mục G.7 trong repo Web.
+
 ## Tích hợp chưa có nhà cung cấp
 
 Các phần sau chạy bằng bản giả trong Development và chưa có nhà cung cấp thật: OCR đọc ảnh đồng hồ đo nước (WATER-01), Payment Notification Service (API-12), SMS, email và push. Chi tiết: [operations-reference.md](operations-reference.md#external-services-development).

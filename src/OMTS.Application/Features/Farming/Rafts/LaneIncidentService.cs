@@ -93,7 +93,7 @@ public sealed class LaneIncidentService(
     public async Task<Result<LaneIncidentSaved>> RepairAsync(Guid raftId, int laneNumber, RepairLaneRequest request, CancellationToken cancellationToken)
     {
         var check = new FieldCheck();
-        var reason = ReadReason(check, request.Reason, null, out _);
+        var reason = ReadOptionalReason(check, request.Reason, "Repaired");
         var lines = request.Materials ?? [];
         var found = (await items.GetByIdsAsync(lines.Select(l => l?.ItemId).OfType<Guid>().Distinct().ToList(), cancellationToken)).ToDictionary(i => i.Id);
         CheckMaterials(check, lines, found);
@@ -130,29 +130,9 @@ public sealed class LaneIncidentService(
         var incident = NewIncident(lane, LaneIncidentKind.Repaired, day, state, reason, null, actor, today, timeProvider.GetUtcNow());
         incident.ResolvesIncidentId = open?.Id;
         incidents.Add(incident);
-        var usageReason = $"Lane {lane.LaneNumber}: {reason}";
-        if (usageReason.Length > MaterialUsage.MaxRepairReasonLength)
+        if (await PostMaterialsAsync(raft, lane, incident, lines, found, reason, today, actor, cancellationToken) is { } stockRefused)
         {
-            usageReason = usageReason[..MaterialUsage.MaxRepairReasonLength];
-        }
-
-        foreach (var line in lines)
-        {
-            var item = found[line.ItemId!.Value];
-            var usage = new MaterialUsage
-            {
-                RaftId = raft.Id, UsageDate = today, RepairReason = usageReason, ItemId = item.Id, Quantity = line.Quantity!.Value, RecordedByAccountId = actor,
-            };
-            if (await stockSync.PostAsync(usage, item, raft, cancellationToken) is { } stockRefused)
-            {
-                return stockRefused;
-            }
-
-            usages.Add(usage);
-            audit.Record(MaterialUsageValues.Entry(MaterialUsageValues.Created, usage, raft) with { After = MaterialUsageValues.Snapshot(usage, raft, item) });
-            var material = new LaneIncidentMaterial { IncidentId = incident.Id, MaterialUsageId = usage.Id, ItemId = item.Id, Quantity = usage.Quantity, IssueId = usage.IssueId };
-            incident.Materials.Add(material);
-            incidents.AddMaterial(material);
+            return stockRefused;
         }
 
         var before = LaneIncidentAudit.Snapshot(lane, state.ToString());
@@ -270,6 +250,102 @@ public sealed class LaneIncidentService(
         var day = await laneStates.ReadAsync(raft, today, cancellationToken);
         var actor = currentUser.AccountId ?? throw new InvalidOperationException("A lane command needs an authenticated caller.");
         return new Target(raft, lane, today, day, day.States[lane.Id], actor);
+    }
+
+    /// <summary>An optional note (at most 500 characters); blank becomes <paramref name="fallback"/>, as a history entry always has a text.</summary>
+    private static string ReadOptionalReason(FieldCheck check, string? reason, string fallback) =>
+        check.Optional(reason, ReasonField, LaneIncident.MaxReasonLength) ?? fallback;
+
+    /// <summary>One usage record and one Completed use issue per material, checked against the stock (MSG-INPUT-01); the incident names them. Null when all were posted.</summary>
+    private async Task<AppError?> PostMaterialsAsync(
+        Raft raft, Lane lane, LaneIncident incident, IReadOnlyList<RepairMaterialInput> lines, Dictionary<Guid, FarmingInputItem> found, string reason, DateOnly today, Guid actor,
+        CancellationToken cancellationToken)
+    {
+        var usageReason = $"Lane {lane.LaneNumber}: {reason}";
+        if (usageReason.Length > MaterialUsage.MaxRepairReasonLength)
+        {
+            usageReason = usageReason[..MaterialUsage.MaxRepairReasonLength];
+        }
+
+        foreach (var line in lines)
+        {
+            var item = found[line.ItemId!.Value];
+            var usage = new MaterialUsage
+            {
+                RaftId = raft.Id, UsageDate = today, RepairReason = usageReason, ItemId = item.Id, Quantity = line.Quantity!.Value, RecordedByAccountId = actor,
+            };
+            if (await stockSync.PostAsync(usage, item, raft, cancellationToken) is { } stockRefused)
+            {
+                return stockRefused;
+            }
+
+            usages.Add(usage);
+            audit.Record(MaterialUsageValues.Entry(MaterialUsageValues.Created, usage, raft) with { After = MaterialUsageValues.Snapshot(usage, raft, item) });
+            var material = new LaneIncidentMaterial { IncidentId = incident.Id, MaterialUsageId = usage.Id, ItemId = item.Id, Quantity = usage.Quantity, IssueId = usage.IssueId };
+            incident.Materials.Add(material);
+            incidents.AddMaterial(material);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Brings a lane put out of service back (owner decision of 12/11/2026, after the cycle is done): allowed only when no Open cycle still holds seed on it. It clears the out-of-service day and the damage
+    /// flag, so the lane is Not seeded for the next cycle, records <c>Restored</c>, and takes the optional materials out of the stock like a repair.
+    /// </summary>
+    public async Task<Result<LaneIncidentSaved>> RestoreServiceAsync(Guid raftId, int laneNumber, RestoreLaneServiceRequest request, CancellationToken cancellationToken)
+    {
+        var check = new FieldCheck();
+        var reason = ReadOptionalReason(check, request.Reason, "Back in service");
+        var lines = request.Materials ?? [];
+        var found = (await items.GetByIdsAsync(lines.Select(l => l?.ItemId).OfType<Guid>().Distinct().ToList(), cancellationToken)).ToDictionary(i => i.Id);
+        CheckMaterials(check, lines, found);
+        var opened = await OpenAsync(raftId, laneNumber, request.RowVersion, check, cancellationToken);
+        if (!opened.IsSuccess)
+        {
+            return opened.Error!;
+        }
+
+        var (raft, lane, today, day, state, actor) = opened.Value!;
+        if (!lane.IsOutOfService)
+        {
+            return AppError.Conflict(
+                UserMessages.WrongStatus($"Lane {lane.LaneNumber} of raft {raft.Code}", "in service"),
+                new Dictionary<string, object?> { ["reasonCode"] = "LANE_NOT_OUT_OF_SERVICE", ["laneNumber"] = lane.LaneNumber });
+        }
+
+        // An Open cycle still holds seed on the lane: any state but Not seeded (the lane lost its seed, or was harvested, in this very cycle).
+        if (day.Cycle is { CloseDate: null } && state != LaneState.NotSeeded)
+        {
+            return AppError.Conflict(
+                UserMessages.LaneStillHoldsSeed(lane.LaneNumber),
+                new Dictionary<string, object?> { ["reasonCode"] = "LANE_HOLDS_SEED", ["laneNumber"] = lane.LaneNumber, ["state"] = state.ToString() });
+        }
+
+        if (DiscontinuedLine(lines, found) is { } discontinued)
+        {
+            return discontinued;
+        }
+
+        if (await cycleGuard.HoldAsync(raft, today, cancellationToken) is { } closed)
+        {
+            return closed;
+        }
+
+        var before = LaneIncidentAudit.Snapshot(lane, state.ToString());
+        var incident = NewIncident(lane, LaneIncidentKind.Restored, day, state, reason, null, actor, today, timeProvider.GetUtcNow());
+        incidents.Add(incident);
+        if (await PostMaterialsAsync(raft, lane, incident, lines, found, reason, today, actor, cancellationToken) is { } stockRefused)
+        {
+            return stockRefused;
+        }
+
+        lane.OutOfServiceOn = null;
+        lane.IsDamaged = false;
+        unitOfWork.MarkChanged(raft);
+        audit.Record(LaneIncidentAudit.Entry(LaneIncidentAudit.Restored, raft, lane, reason) with { Before = before, After = LaneIncidentAudit.Snapshot(lane, state.ToString()) });
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return await SavedAsync(raft, lane, incident, day, true, cycle: null, cancellationToken);
     }
 
     private static string ReadReason(FieldCheck check, string? reason, string? reasonCode, out string? code)

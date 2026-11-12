@@ -412,4 +412,75 @@ public class LaneIncidentTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var refused = await factory.SendCorrectionAsync(owner, lot.Id(), new HarvestFields { Lanes = ["1", "2", "3", "4"], Cages = "9" });
         Assert.Equal("Lanes", (await refused.ReadAsync(HttpStatusCode.BadRequest)).Text("field"));
     }
+
+    private static async Task<HttpResponseMessage> RestoreAsync(HttpClient client, Guid raftId, int lane, string? reason = null, object[]? materials = null) =>
+        await client.PostAsJsonAsync(Url(raftId, lane, "restore-service"), new { reason, materials = materials ?? [], rowVersion = await RaftVersionAsync(client, raftId) });
+
+    [Fact]
+    public async Task A_repair_needs_no_reason_and_a_blank_one_reads_as_repaired()
+    {
+        var raft = await factory.SeededRaftAsync();
+        var owner = raft.Owner.Client;
+        await (await ReportAsync(owner, raft.RaftId, 2)).ReadAsync(HttpStatusCode.OK);
+
+        var repaired = await (await RepairAsync(owner, raft.RaftId, 2, reason: " ")).ReadAsync(HttpStatusCode.OK);
+
+        Assert.Equal(("Repaired", "Repaired"), (repaired.GetProperty("incident").Text("kind"), repaired.GetProperty("incident").Text("reason")));
+    }
+
+    [Fact]
+    public async Task A_lane_out_of_service_cannot_come_back_while_the_open_cycle_holds_its_seed_and_the_answer_is_clear_vietnamese()
+    {
+        var raft = await factory.SeededRaftAsync();
+        var owner = raft.Owner.Client;
+        await (await OutOfServiceAsync(owner, raft.RaftId, 3, confirm: true)).ReadAsync(HttpStatusCode.OK);
+
+        var refused = await (await RestoreAsync(owner, raft.RaftId, 3)).ReadAsync(HttpStatusCode.Conflict);
+
+        Assert.Equal(("MSG-GEN-09", "LANE_HOLDS_SEED"), (refused.Text("code"), refused.Text("reasonCode")));
+        Assert.StartsWith("Làn 3 chưa thể", refused.Text("detail"));
+        Assert.True(LaneOf(await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/lanes/today"), 3).Flag("isOutOfService"));
+    }
+
+    [Fact]
+    public async Task After_the_cycle_is_closed_the_lane_is_restored_not_seeded_with_its_materials_taken_from_the_stock()
+    {
+        var raft = await factory.SeededRaftAsync();
+        var owner = raft.Owner.Client;
+        var item = await MaterialWithStockAsync(owner, 10m);
+        await (await OutOfServiceAsync(owner, raft.RaftId, 3, confirm: true)).ReadAsync(HttpStatusCode.OK);
+        await owner.RecordHarvestAsync(raft.RaftId, HarvestFields.OfLanes(1, 2, 4, 5).FinishedLanes(1, 2, 4, 5));
+        await owner.CloseCycleAsync(raft.CycleId);
+        await factory.UpdateAsync<OMTS.Domain.Entities.Cultivation.CultivationCycle>(raft.CycleId, c => c.CloseDate = Today.AddDays(-1)); // a record is refused on the close day itself (BR-CYCLE-04)
+
+        var restored = await (await RestoreAsync(owner, raft.RaftId, 3, "New lane built", [new { itemId = item, quantity = 5m, unit = "m" }])).ReadAsync(HttpStatusCode.OK);
+
+        Assert.Equal(("Restored", "NotSeeded", false, false), (restored.GetProperty("incident").Text("kind"), restored.GetProperty("lane").Text("state"),
+            restored.GetProperty("lane").Flag("isOutOfService"), restored.GetProperty("lane").Flag("isDamaged")));
+        var material = Assert.Single(restored.GetProperty("incident").GetProperty("materials").EnumerateArray());
+        Assert.StartsWith("XD", material.Text("issueCode"));
+        var kinds = (await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/lanes/3/incidents")).GetProperty("incidents").EnumerateArray().Select(i => i.Text("kind")).ToList();
+        Assert.Equal(["Restored", "OutOfService"], kinds);
+        Assert.Equal(1, await factory.QueryAsync(db => db.AuditEvents.CountAsync(a => a.Action == "Lane.Restored" && a.RecordId == restored.GetProperty("lane").Id())));
+        var again = await (await RestoreAsync(owner, raft.RaftId, 3)).ReadAsync(HttpStatusCode.Conflict);
+        Assert.Equal("LANE_NOT_OUT_OF_SERVICE", again.Text("reasonCode"));
+    }
+
+    [Fact]
+    public async Task A_restore_with_more_material_than_is_on_hand_is_refused_and_the_lane_stays_out_of_service()
+    {
+        var raft = await factory.SeededRaftAsync(1, 2);
+        var owner = raft.Owner.Client;
+        var settings = await owner.GetFromJsonAsync<JsonElement>("/api/input-inventory-settings");
+        await (await owner.PutAsJsonAsync("/api/input-inventory-settings", new { costMethod = "Fixed", allowNegativeQuantity = false, rowVersion = settings.Text("rowVersion") })).ReadAsync(HttpStatusCode.OK);
+        var item = await MaterialWithStockAsync(owner, 1m);
+        await (await OutOfServiceAsync(owner, raft.RaftId, 5)).ReadAsync(HttpStatusCode.OK); // no seed: may come back during the open cycle
+
+        var refused = await (await RestoreAsync(owner, raft.RaftId, 5, materials: [new { itemId = item, quantity = 4m }])).ReadAsync(HttpStatusCode.Conflict);
+        Assert.Equal("MSG-INPUT-01", refused.Text("code"));
+        Assert.True(LaneOf(await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{raft.RaftId}/lanes/today"), 5).Flag("isOutOfService"));
+
+        var ok = await (await RestoreAsync(owner, raft.RaftId, 5)).ReadAsync(HttpStatusCode.OK);
+        Assert.False(ok.GetProperty("lane").Flag("isOutOfService"));
+    }
 }

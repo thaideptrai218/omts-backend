@@ -44,6 +44,15 @@ public sealed class RaftLanesController(LaneIncidentService commands, LaneIncide
     public async Task<IActionResult> OutOfService(Guid raftId, int laneNumber, LaneOutOfServiceRequest request, CancellationToken cancellationToken) =>
         (await commands.PutOutOfServiceAsync(raftId, laneNumber, request, cancellationToken)).ToActionResult(Ok);
 
+    /// <summary>
+    /// Brings a lane out of service back (<c>reason</c> optional, <c>materials</c> optional as for a repair): only when no Open cycle still holds seed on it, else 409 <c>MSG-GEN-09</c> with a Vietnamese text and
+    /// <c>reasonCode</c> <c>LANE_HOLDS_SEED</c>. The lane is Not seeded for the next cycle; the history gets <c>Restored</c>.
+    /// </summary>
+    [HttpPost("api/rafts/{raftId:guid}/lanes/{laneNumber:int}/restore-service")]
+    [ProducesResponseType<LaneIncidentSaved>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> RestoreService(Guid raftId, int laneNumber, RestoreLaneServiceRequest request, CancellationToken cancellationToken) =>
+        (await commands.RestoreServiceAsync(raftId, laneNumber, request, cancellationToken)).ToActionResult(Ok);
+
     /// <summary>Adds an optional photo to an incident, at most three. Multipart field <c>file</c>, once: JPEG or PNG, at most 10 MB.</summary>
     [HttpPost("api/rafts/{raftId:guid}/lanes/{laneNumber:int}/incidents/{incidentId:guid}/photos")]
     [RequestSizeLimit(11 * 1024 * 1024)]

@@ -48,6 +48,10 @@ public static class UserMessages
     /// <summary>MSG-GEN-08 (GFR-02): the role or zone access does not allow the function; nothing is changed.</summary>
     public static readonly UserMessage NoPermission = new(
         Gen08, "You do not have permission to perform this action. Nothing has been changed.", Legacy.Msg02);
+    /// <summary>MSG-GEN-09 in Vietnamese for a lane put out of service that cannot be restored while an Open cycle still holds seed on it (owner decision of 12/11/2026).</summary>
+    public static UserMessage LaneStillHoldsSeed(int laneNumber) => new(
+        Gen09, $"Làn {laneNumber} chưa thể đưa vào hoạt động lại: chu kỳ đang mở vẫn còn giống trên làn này. Hãy đóng hoặc kết thúc chu kỳ trước.", Legacy.Msg61);
+
 
     /// <summary>MSG-GEN-09 (GBR-01): a record in this status cannot be used for the change asked for.</summary>
     /// <param name="objectName">e.g. "Farming zone"; the first letter is capitalized.</param>

@@ -10,6 +10,7 @@ public static class LaneIncidentAudit
     public const string Damaged = "Lane.Damaged";
     public const string Repaired = "Lane.Repaired";
     public const string OutOfService = "Lane.OutOfService";
+    public const string Restored = "Lane.Restored";
 
     internal static AuditEntry Entry(string action, Raft raft, Lane lane, string reason) => new(action, RecordType)
     {
