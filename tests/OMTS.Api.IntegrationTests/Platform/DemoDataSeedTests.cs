@@ -146,7 +146,8 @@ public class DemoDataSeedTests
         Assert.Equal(4, await db.ZoneComplianceDocuments.CountAsync());
         Assert.Equal(1, await db.ZoneComplianceDocuments.CountAsync(d => d.ReplacesDocumentId != null));
         Assert.Equal(2, await db.ZoneComplianceDocuments.Select(d => d.ZoneId).Distinct().CountAsync());
-        Assert.Equal(20, await db.Rafts.CountAsync());
+        // Twenty rafts of FARM-04 and the four empty ones of the nursery demo (B1-11 to B1-14, with a pin and no cycle).
+        Assert.Equal(24, await db.Rafts.CountAsync());
         // First raft of each In Use zone: two photos and a Removed lane; second: one photo; third: no map pin (FARM-04).
         Assert.Equal(6, await db.RaftPhotos.CountAsync());
         Assert.Equal(2, await db.Lanes.CountAsync(l => l.StatusId == StatusIds.Lane.Removed));

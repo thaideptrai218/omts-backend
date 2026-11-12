@@ -45,6 +45,8 @@ internal static class DemoDataSeeder
         new DemoOpenHarvestRequestStep(),
         new DemoWaterMeasurementStep(),
         new DemoPayrollStep(),
+        // Last, so that no step above takes these empty rafts into its data.
+        new DemoReadyRaftStep(),
     ];
 
     public static async Task<IReadOnlyList<string>> SeedAsync(
