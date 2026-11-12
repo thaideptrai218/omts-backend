@@ -1,0 +1,81 @@
+# EC2 staging: the API image from GHCR plus Redis. SQL Server is hosted separately (Azure SQL, free serverless).
+# This file is the source of truth: the "CD staging" workflow copies it to /opt/omts/compose.yml on every deploy, so an
+# edit made on the server is overwritten. Edit it here, through a pull request.
+# Never put real credentials in this file; they live in the untracked /opt/omts/.env on the EC2 host. OMTS_IMAGE in that
+# .env is written by deploy.sh (deploy/staging/deploy.sh) and names the image that runs.
+name: omts-staging
+
+x-api-environment: &api-environment
+  ASPNETCORE_ENVIRONMENT: Staging
+  DOTNET_ENVIRONMENT: Staging
+  Swagger__Enabled: ${SWAGGER_ENABLED:-false}
+  Cors__AllowedOrigins__0: ${CORS_ALLOWED_ORIGIN_0:-}
+  Cors__AllowedOrigins__1: ${CORS_ALLOWED_ORIGIN_1:-}
+  ConnectionStrings__OmtsDb: ${OMTS_DB_CONNECTION:?Set OMTS_DB_CONNECTION in .env}
+  ConnectionStrings__Redis: redis:6379,password=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+  Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
+  Provenance__PublicBaseUrl: ${PROVENANCE_PUBLIC_BASE_URL:?Set PROVENANCE_PUBLIC_BASE_URL in .env}
+  Storage__Provider: Local
+  Storage__Local__RootPath: /app/App_Data/files
+  Storage__Local__SigningKey: ${STORAGE_SIGNING_KEY:?Set STORAGE_SIGNING_KEY in .env}
+  Sms__Provider: None
+  Zalo__Provider: ${ZALO_PROVIDER:-}
+  Zalo__AppSecret: ${ZALO_APP_SECRET:-}
+  # Save Azure SQL serverless vCore: no 10 s Redis sweeper (sessions checked in SQL per request),
+  # and every daily job in one 06:00-06:05 window so the database wakes once a day.
+  Revocation__Mode: Sql
+  Jobs__EmploymentEnd__RunAt: "06:00"
+  Jobs__HarvestLotAutoClose__RunAt: "06:01"
+  Jobs__OrphanFileCleanup__RunAt: "06:02"
+  Jobs__LoginSessionCleanup__RunAt: "06:03"
+  Jobs__WaterMeasurementOverdue__RunAt: "06:04"
+  Jobs__ZoneLicenseReminder__RunAt: "06:05"
+
+services:
+  redis:
+    image: redis:7.4.2-alpine
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --save \"\" --appendonly no --maxmemory 128mb --maxmemory-policy noeviction"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  api:
+    image: ${OMTS_IMAGE:?Set OMTS_IMAGE in .env}
+    environment: *api-environment
+    # Loopback only: nginx (port 80, reached by CloudFront) and the DB warm-up cron call it on the host itself.
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - omts-files:/app/App_Data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # First setup only, on an empty dedicated staging database, before the API starts (README "Demo on a shared server"):
+  #   docker compose --profile bootstrap run --rm seed
+  # The demo flag and password come from .env (DEMO_ALLOW_OUTSIDE_DEVELOPMENT=true, DEMO_PASSWORD); unset, the demo is
+  # refused. Deploys never use this service: deploy.sh runs a plain "seed --bootstrap" (migrations only).
+  seed:
+    image: ${OMTS_IMAGE:?Set OMTS_IMAGE in .env}
+    profiles: ["bootstrap"]
+    command: ["seed", "--bootstrap", "--demo"]
+    environment:
+      <<: *api-environment
+      Bootstrap__Cooperative__FullName: ${BOOTSTRAP_COOPERATIVE_NAME:-}
+      Bootstrap__Owner__DisplayName: ${BOOTSTRAP_OWNER_NAME:-}
+      Bootstrap__Owner__Username: ${BOOTSTRAP_OWNER_USERNAME:-owner}
+      Bootstrap__Owner__PhoneNumber: ${BOOTSTRAP_OWNER_PHONE:-}
+      Bootstrap__Owner__TemporaryPassword: ${BOOTSTRAP_OWNER_PASSWORD:-}
+      Demo__AllowOutsideDevelopment: ${DEMO_ALLOW_OUTSIDE_DEVELOPMENT:-false}
+      Demo__Password: ${DEMO_PASSWORD:-}
+    restart: "no"
+
+volumes:
+  omts-files:

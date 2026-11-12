@@ -1,0 +1,166 @@
+name: CD staging
+
+# Staging deploy on the EC2 host behind https://d2zray6os5wptx.cloudfront.net.
+# - Automatic: every push to develop whose CI run passed, while that commit is still the tip of develop (a re-run of
+#   an old CI run never deploys an older commit). The image is built once here, pushed to GHCR as
+#   ghcr.io/<owner>/<repo>:sha-<7 chars> (and the moving tag "staging"), then deploy/staging/deploy.sh runs on the host.
+# - Manual (Run workflow on develop): with "tag" empty it builds and deploys develop as it is now; with "tag" set to
+#   sha-<7 chars> of a commit of develop it skips the build and redeploys that image, which is how to roll back.
+# The SSH secrets live in the "staging" environment, which only develop may use.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [develop]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to redeploy, sha-<7 chars> of a develop commit (empty: build and deploy develop now)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  build-push:
+    # Only a passing CI run of a push (never of a pull request, even one from a fork branch named develop), or a
+    # manual run on develop without a tag.
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') ||
+      (github.event_name == 'workflow_dispatch' && inputs.tag == '' && github.ref == 'refs/heads/develop')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      # A CI run that finishes after a newer push, or a re-run of an old one, must not put an older commit on staging
+      # (its schema may already be behind the database). Empty tag = nothing to deploy.
+      - id: tag
+        env:
+          RUN_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          tip="$(git ls-remote origin refs/heads/develop | cut -f1)"
+          if [ "$RUN_SHA" != "$tip" ]; then
+            echo "Skipped: $RUN_SHA is no longer the tip of develop ($tip)." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "tag=sha-$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - if: steps.tag.outputs.tag != ''
+        uses: docker/setup-buildx-action@v4
+
+      - if: steps.tag.outputs.tag != ''
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - if: steps.tag.outputs.tag != ''
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          pull: true
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+            ${{ env.IMAGE }}:staging
+          # Links the package to this repository on GHCR.
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha || github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-push
+    # After a build that produced a tag, or alone for a manual redeploy of an existing tag on develop.
+    if: >-
+      !cancelled() &&
+      ((needs.build-push.result == 'success' && needs.build-push.outputs.tag != '') ||
+       (needs.build-push.result == 'skipped' && github.event_name == 'workflow_dispatch' && inputs.tag != '' && github.ref == 'refs/heads/develop'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Deploys queue instead of cancelling each other: a cancelled deploy could stop between migration and restart.
+    # Set on this job only, so runs that deploy nothing never take a place in the queue.
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    environment:
+      name: staging
+      url: https://d2zray6os5wptx.cloudfront.net/health
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          sparse-checkout: deploy/staging
+
+      # A manual tag must name an image this workflow built from develop: sha-<7 hex> of a commit develop contains.
+      - name: Image to deploy
+        id: image
+        env:
+          BUILT_TAG: ${{ needs.build-push.outputs.tag }}
+          INPUT_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${BUILT_TAG:-$INPUT_TAG}"
+          if [[ ! "$tag" =~ ^sha-[0-9a-f]{7}$ ]]; then
+            echo "Not a deployable tag: '$tag' (expected sha-<7 lowercase hex chars>)"; exit 1
+          fi
+          if [ -z "$BUILT_TAG" ]; then
+            status="$(gh api "repos/$GITHUB_REPOSITORY/compare/${tag#sha-}...develop" --jq .status 2> /dev/null || true)"
+            if [ "$status" != "ahead" ] && [ "$status" != "identical" ]; then
+              echo "${tag#sha-} is not a commit of develop (compare: '${status:-not found}')"; exit 1
+            fi
+          fi
+          echo "ref=$IMAGE:$tag" >> "$GITHUB_OUTPUT"
+          echo "Deploying \`$IMAGE:$tag\`" >> "$GITHUB_STEP_SUMMARY"
+
+      # Secrets pasted on Windows may carry CR characters, which break the key and the known_hosts line.
+      - name: SSH identity
+        env:
+          SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+
+      - name: Deploy on the host
+        env:
+          HOST: ${{ secrets.STAGING_SSH_HOST }}
+          SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+          REF: ${{ steps.image.outputs.ref }}
+        run: |
+          ssh_opts=(-i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o BatchMode=yes
+                    -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=4)
+          scp "${ssh_opts[@]}" deploy/staging/compose.yml "$SSH_USER@$HOST:/opt/omts/compose.next.yml"
+          scp "${ssh_opts[@]}" deploy/staging/deploy.sh "$SSH_USER@$HOST:/opt/omts/deploy.sh"
+          # REF expands here on purpose; the step above allowed only sha-<hex> tags in it.
+          # shellcheck disable=SC2029
+          ssh "${ssh_opts[@]}" "$SSH_USER@$HOST" bash /opt/omts/deploy.sh "$REF"
+
+      # The same check a client makes: through CloudFront and nginx to the API and the database.
+      - name: Smoke test through CloudFront
+        run: |
+          for _ in $(seq 1 6); do
+            if curl -fsS -o /dev/null -m 20 https://d2zray6os5wptx.cloudfront.net/health/db; then exit 0; fi
+            sleep 10
+          done
+          echo "CloudFront /health/db did not answer 200"; exit 1
+
+      - name: Remove the SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519

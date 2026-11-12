@@ -767,6 +767,35 @@ numbers of its employees are placeholders in `DemoEmployeePlans`, and it stores 
 a real bank account on this server, in an employee record or anywhere else. Whoever adds a payment provider also adds
 the refusal to `DemoSeedGate`.
 
+## Staging deploy (CD)
+
+The shared staging server (EC2, `/opt/omts`, public URL `https://d2zray6os5wptx.cloudfront.net`) is deployed by
+`.github/workflows/cd-staging.yml`:
+
+1. A push to `develop` runs CI. When CI passes, CD builds the image once and pushes it to GHCR as
+   `ghcr.io/thaideptrai218/omts-backend:sha-<7 chars>` (and the moving tag `staging`).
+2. Over SSH it copies `deploy/staging/compose.yml` and `deploy/staging/deploy.sh` to the host and runs
+   `deploy.sh <image>`: it sets `OMTS_IMAGE` in `/opt/omts/.env`, pulls, applies migrations with a plain
+   `seed --bootstrap` (retried while the Azure SQL serverless database resumes), restarts the API and waits for
+   `/health/db`. A failure, or the run being cancelled or cut off, brings back the last compose file that passed and
+   the image that ran before, checks the API again, and the run turns red. Seed and API output go to
+   `/opt/omts/deploy.log` on the host, not to the public Actions log.
+3. A last check calls `/health/db` through CloudFront.
+
+A CI run that is no longer the tip of `develop` (a newer push, or a re-run of an old run) deploys nothing.
+
+- **Roll back or redeploy:** Actions → "CD staging" → Run workflow on `develop` with `tag` = an earlier
+  `sha-xxxxxxx` (a commit of `develop`). An empty `tag` builds and deploys `develop` as it is. A rollback restores the
+  image only: **migrations are forward-only**, so a migration the newer image applied stays.
+- **Configuration:** edit `deploy/staging/compose.yml` here, through a pull request. Each deploy overwrites the copy on
+  the server. Secrets stay in the server's `.env` (never in the repository); the API listens on `127.0.0.1:8080` only,
+  behind nginx.
+- **Secrets of the `staging` environment** (repository admin; only `develop` may use them): `STAGING_SSH_HOST`,
+  `STAGING_SSH_USER`, `STAGING_SSH_KEY` (a key used for deploys only) and `STAGING_SSH_KNOWN_HOSTS` (the host key line).
+- The GHCR package must be public: the host pulls without logging in. GHCR makes a new package private, so the very
+  first run fails at the pull (and keeps the old API): make `omts-backend` public in the package settings, then re-run
+  the failed job.
+
 ## Design documents
 
 The current cage request, staffing, harvest completion and port weighing contract is documented in
