@@ -57,8 +57,8 @@ public class SalesCatalogueQaReadFieldsTests(AuthApiFactory factory) : IClassFix
 
         Assert.Equal(
             [
-                "address", "birthDate", "code", "companyName", "createdAt", "createdBy", "currentDebt", "customerType", "email", "facebook", "gender", "hasTraderAccount", "id",
-                "lastTransactionAt", "name", "netSales", "note", "phoneNumber", "phoneNumber2", "photoUrl", "province", "rowVersion", "status", "statusId", "taxCode", "totalSales", "ward",
+                "address", "birthDate", "code", "companyName", "createdAt", "createdBy", "currentDebt", "customerType", "debtDays", "email", "facebook", "gender", "hasTraderAccount", "id",
+                "lastTransactionAt", "name", "netSales", "note", "overDebtAmount", "overDebtDays", "overDebtLimit", "phoneNumber", "phoneNumber2", "photoUrl", "province", "rowVersion", "status", "statusId", "taxCode", "totalSales", "ward",
             ],
             Keys(Assert.Single(list.GetProperty("items").EnumerateArray())));
         var view = await owner.CustomerAsync(linked.Id);

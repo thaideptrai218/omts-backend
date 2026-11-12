@@ -120,6 +120,7 @@ public class PurchaseRequestQaCatalogAndMigrationSqlServerTests
         await db.Database.MigrateAsync();
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
         Assert.False(db.Database.HasPendingModelChanges());
-        Assert.Equal(4, await db.Statuses.CountAsync(s => s.Group == StatusGroups.PurchaseRequest));
+        // Awaiting response, Accepted, Declined, Cancelled and Awaiting staff (cage orders, OMTS-223).
+        Assert.Equal(5, await db.Statuses.CountAsync(s => s.Group == StatusGroups.PurchaseRequest));
     }
 }
