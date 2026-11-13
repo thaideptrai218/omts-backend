@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Common.Interfaces.Persistence;
+using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Purchasing;
@@ -92,6 +93,46 @@ internal sealed class NurseryBatchRepository(OmtsDbContext db) : INurseryBatchRe
         return rows.ToDictionary(
             r => r.CycleId,
             r => new NurseryCycleFacts(r.Id, r.Code, r.QuantityIn, r.Survivors ?? 0m, r.CloseLossPieces ?? 0m, cycleSeeded.GetValueOrDefault(r.CycleId), batchSeeded.GetValueOrDefault(r.Id)));
+    }
+
+    public async Task<IReadOnlyList<CycleSeedSource>> SeedSourcesAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken)
+    {
+        if (cycleIds.Count == 0)
+        {
+            return [];
+        }
+
+        // Cycles of a nursery batch: the batch's lot. Then the lots of every cycle's seeding records with what each took. The lots are read once for both.
+        var batches = await db.CultivationCycles.AsNoTracking()
+            .Where(c => cycleIds.Contains(c.Id) && c.NurseryBatchId != null)
+            .Join(db.NurseryBatches, c => c.NurseryBatchId, b => b.Id, (c, b) => new { CycleId = c.Id, b.Code, LotLineId = b.SeedLotLineId })
+            .ToListAsync(cancellationToken);
+        var seeded = await db.SeedingRecords.AsNoTracking()
+            .Where(r => cycleIds.Contains(r.CycleId))
+            .GroupBy(r => new { r.CycleId, r.SeedLotLineId })
+            .Select(g => new { g.Key.CycleId, LotLineId = g.Key.SeedLotLineId, Quantity = g.Sum(r => r.Quantity) })
+            .ToListAsync(cancellationToken);
+        var lineIds = batches.Select(b => b.LotLineId).Concat(seeded.Select(s => s.LotLineId)).Distinct().ToList();
+        var lines = (await db.PurchaseReceiptLines.AsNoTracking()
+                .Where(l => lineIds.Contains(l.Id))
+                .Select(l => new { l.Id, ReceiptCode = l.Receipt.Code, l.LineNumber, ItemName = l.Item == null ? null : l.Item.Name })
+                .ToListAsync(cancellationToken))
+            .ToDictionary(l => l.Id);
+
+        var result = new List<CycleSeedSource>();
+        foreach (var b in batches.Where(b => lines.ContainsKey(b.LotLineId)))
+        {
+            var line = lines[b.LotLineId];
+            result.Add(new CycleSeedSource(b.CycleId, line.Id, line.ReceiptCode, line.LineNumber, line.ItemName, b.Code, 0m, true));
+        }
+
+        foreach (var s in seeded.Where(s => lines.ContainsKey(s.LotLineId)))
+        {
+            var line = lines[s.LotLineId];
+            result.Add(new CycleSeedSource(s.CycleId, line.Id, line.ReceiptCode, line.LineNumber, line.ItemName, null, s.Quantity, false));
+        }
+
+        return result;
     }
 
     public async Task<IReadOnlyDictionary<Guid, decimal>> SeededByCycleAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken) =>

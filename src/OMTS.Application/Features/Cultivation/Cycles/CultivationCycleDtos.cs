@@ -36,7 +36,8 @@ public sealed record CancelCycleRequest(string? RowVersion);
 /// <param name="CanChangeNursery">The cycle is Open and has no seeding record yet: the batch can still be changed (CYCLE-01.1, v2).</param>
 /// <param name="ProductId">The product the cycle will yield and sell, which a harvest lot's purchase request must match (13/11/2026); null on a cycle started before, which is not checked.</param>
 /// <param name="CanChangeProduct">The same condition as <paramref name="CanChangeNursery"/>: the product can still change, by changing the batch (it is derived from the seed item of the batch).</param>
-/// <param name="SeedItemName">The seed item of the batch's seed lot, whose product the cycle farms; null without a batch.</param>
+/// <param name="SeedItemName">The seed item the cycle farms: that of the batch's seed lot (whose product the cycle yields), or on a cycle started the old way that of its main seeding lot; null when it has no seed yet.</param>
+/// <param name="SeedItemNames">A cycle started the old way and seeded from more than one seed item: the distinct names, the one with most seed first; null otherwise.</param>
 public sealed record CycleView(
     Guid Id,
     Guid RaftId,
@@ -66,7 +67,8 @@ public sealed record CycleView(
     Guid? ProductId = null,
     string? ProductName = null,
     bool CanChangeProduct = false,
-    string? SeedItemName = null);
+    string? SeedItemName = null,
+    IReadOnlyList<string>? SeedItemNames = null);
 
 /// <summary>A photo of the plan of a cycle: <paramref name="Url"/> is a signed link that expires.</summary>
 public sealed record CyclePlanPhotoView(Guid Id, int SortOrder, string Url);
@@ -92,7 +94,18 @@ public sealed record CycleStarted(CycleView Cycle, DateOnly? PreviousCloseDate, 
 /// <summary>A cycle in the list of a raft (CYCLE-05.1), the newest first.</summary>
 /// <param name="ClosedEarly">A Closed cycle was closed early (BR-CYCLE-07); false for an Open one.</param>
 /// <param name="NurseryBatchId">The nursery batch the cycle was created from; null on a cycle started the old way.</param>
-public sealed record CycleListItem(Guid Id, DateOnly StartDate, DateOnly? CloseDate, int StatusId, string Status, string RowVersion, bool ClosedEarly, Guid? NurseryBatchId = null);
+/// <param name="NurseryCode">The code of that batch (NU000007).</param>
+/// <param name="SeedItemName">The seed the cycle farms (what a raft shows as "Đang nuôi"): the item of the batch's seed lot, or on a cycle started the old way the item of its main seeding lot; null when it has no seed yet.</param>
+/// <param name="SeedLot">The batch's seed lot, or on a cycle started the old way the seeding lot with the most seed (code and item).</param>
+/// <param name="SeedItemNames">The distinct seed item names of a cycle started the old way that was seeded from more than one item, the one with most seed first; null otherwise.</param>
+public sealed record CycleListItem(
+    Guid Id, DateOnly StartDate, DateOnly? CloseDate, int StatusId, string Status, string RowVersion, bool ClosedEarly, Guid? NurseryBatchId = null,
+    string? NurseryCode = null, string? SeedItemName = null, CycleSeedLot? SeedLot = null, IReadOnlyList<string>? SeedItemNames = null)
+{
+    /// <summary>The same item with the seed it farms (a null label leaves it as it is).</summary>
+    public CycleListItem WithSeed(CycleSeedLabel? label) =>
+        label is null ? this : this with { NurseryCode = label.NurseryCode, SeedItemName = label.SeedItemName, SeedLot = label.SeedLot, SeedItemNames = label.SeedItemNames };
+}
 
 /// <summary>A raft on the Cultivation cycles screen (SCR-CYCLE-01). The commands are true only when the use case would accept them.</summary>
 /// <param name="LaneCount">The number of lanes In Use.</param>

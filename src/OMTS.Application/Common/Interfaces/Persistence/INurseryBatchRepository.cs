@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Purchasing;
 
@@ -53,6 +54,9 @@ public interface INurseryBatchRepository
 
     /// <summary>The batch facts of each of the cycles that draws from a nursery batch; a cycle started the old way is left out.</summary>
     Task<IReadOnlyDictionary<Guid, NurseryCycleFacts>> FactsByCycleAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken);
+
+    /// <summary>The seed lots of each of the cycles, for naming what a raft farms: the lot of the nursery batch of a cycle that has one, and for every cycle the lots of its seeding records with the seed hung from each. One query set for any number of cycles.</summary>
+    Task<IReadOnlyList<CycleSeedSource>> SeedSourcesAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken);
 
     /// <summary>The seed hung in each of the cycles (the total of its seeding sessions); a cycle with none is left out.</summary>
     Task<IReadOnlyDictionary<Guid, decimal>> SeededByCycleAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken);

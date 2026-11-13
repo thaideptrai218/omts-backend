@@ -22,6 +22,7 @@ public sealed class SeedingReadService(
     ISeedingRecordRepository records,
     ISeedLotRepository lots,
     INurseryBatchRepository nurseries,
+    CycleSeedLabels seedLabels,
     IRaftRepository rafts,
     IHarvestLotRepository harvestLots,
     LaneStateReader laneStates,
@@ -71,6 +72,9 @@ public sealed class SeedingReadService(
         var figures = SeedingViews.Figures(raft, day.States);
         var batch = cycle.NurseryBatchId is { } batchId ? await nurseries.GetForPoolAsync(batchId, cancellationToken) : null;
         var poolSeeded = batch is null ? 0m : (await nurseries.SeededByBatchAsync([batch.Id], null, cancellationToken)).GetValueOrDefault(batch.Id);
+        // A cycle started the old way farms what its sessions hung: the lot with the most seed is named, the other item names listed (owner feedback 13/11/2026).
+        var legacyLabel = batch is null ? CycleSeedLabels.Build(CycleSeedLabels.FromRecords(ofCycle)) : null;
+        var legacySeed = legacyLabel?.PrimaryLotLineId is { } lineId ? (Lot: SeedingViews.LotRef(ofCycle.First(r => r.SeedLotLineId == lineId).SeedLotLine), Label: legacyLabel) : ((SeedLotRef Lot, CycleSeedLabel Label)?)null;
         var completed = cycle.SeedingCompletedOn is not null;
         // A cycle that draws from a nursery takes no new session once its seeding is marked complete (v2).
         var canRecord = CultivationCycleViews.CanEdit(cycle, cycle.Raft, cycle.Raft.Zone.StatusId == StatusIds.Usage.InUse)
@@ -110,10 +114,12 @@ public sealed class SeedingReadService(
             batch?.Code,
             batch is null ? null : ofCycle.Sum(r => r.Quantity),
             batch is null ? null : NurseryRules.PoolRemaining(batch, poolSeeded) ?? 0m,
-            batch is null ? null : SeedingViews.LotRef(batch.SeedLotLine),
+            batch is null ? legacySeed?.Lot : SeedingViews.LotRef(batch.SeedLotLine),
             raft.Lanes
                 .Where(l => l.StatusId == StatusIds.Lane.InUse && l.IsUsable && SeedingLaneRules.CanBeSeeded(day.States[l.Id], completed) && progress[l.Id].SeededPercent < 100m)
-                .OrderBy(l => l.LaneNumber).Select(l => l.LaneNumber).ToList());
+                .OrderBy(l => l.LaneNumber).Select(l => l.LaneNumber).ToList(),
+            batch is null ? legacySeed?.Label.SeedItemName : batch.SeedLotLine.Item?.Name,
+            legacySeed?.Label.SeedItemNames);
     }
 
     public async Task<Result<SeedingRecordView>> GetAsync(Guid recordId, CancellationToken cancellationToken)
@@ -167,7 +173,8 @@ public sealed class SeedingReadService(
             .ToList();
         return new LaneProgressView(
             raft.Id, raft.Code, lane.Id, lane.LaneNumber, lane.StatusId, statusCatalog.DisplayNameOf(lane.StatusId), state,
-            cycle is null ? null : new CycleListItem(cycle.Id, cycle.StartDate, cycle.CloseDate, cycle.StatusId, statusCatalog.DisplayNameOf(cycle.StatusId), RowVersionGuard.Encode(cycle.RowVersion), cycle.ClosedEarly),
+            cycle is null ? null : new CycleListItem(cycle.Id, cycle.StartDate, cycle.CloseDate, cycle.StatusId, statusCatalog.DisplayNameOf(cycle.StatusId), RowVersionGuard.Encode(cycle.RowVersion), cycle.ClosedEarly, cycle.NurseryBatchId)
+                .WithSeed((await seedLabels.ReadAsync([cycle.Id], cancellationToken)).GetValueOrDefault(cycle.Id)),
             sessions,
             lots,
             info?.SeededPercent ?? 0m, info?.HarvestedPercent, info?.LastModifiedByName, info?.LastModifiedAt, info?.ProgressHistory);

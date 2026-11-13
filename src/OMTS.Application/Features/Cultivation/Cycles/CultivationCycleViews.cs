@@ -13,7 +13,7 @@ namespace OMTS.Application.Features.Cultivation.Cycles;
 
 /// <summary>The cycle answers, with the figures and commands worked out when shown.</summary>
 public sealed class CultivationCycleViews(
-    ICultivationCycleRepository cycles, IHarvestLotRepository harvestLots, INurseryBatchRepository nurseries, IProductRepository products, IFileStorage storage, IStatusCatalog statusCatalog, TimeProvider timeProvider)
+    ICultivationCycleRepository cycles, IHarvestLotRepository harvestLots, INurseryBatchRepository nurseries, ISeedingRecordRepository seedingRecords, IProductRepository products, IFileStorage storage, IStatusCatalog statusCatalog, TimeProvider timeProvider)
 {
     /// <summary>The cycle with its raft and zone loaded, for one cycle shown at a time: the list items hold no days of farming. An Open cycle counts to today, so only a closed one reads its last lot.</summary>
     public async Task<CycleView> ViewAsync(CultivationCycle cycle, CancellationToken cancellationToken)
@@ -35,6 +35,9 @@ public sealed class CultivationCycleViews(
         {
             photos.Add(new CyclePlanPhotoView(id, sortOrder, await storage.GetReadUrlAsync(key, cancellationToken: cancellationToken)));
         }
+
+        // A cycle started the old way has no batch: it farms what its seeding records hung (owner feedback 13/11/2026), the lot with the most seed leading.
+        var legacySeed = batch is null && hasRecords ? await LegacySeedAsync(cycle.Id, cancellationToken) : null;
 
         // Most loads include the product; one that did not is read by id.
         var productName = cycle.ProductId is not { } productId ? null : cycle.Product?.Name ?? (await products.GetForEditAsync(productId, cancellationToken))?.Name;
@@ -63,15 +66,25 @@ public sealed class CultivationCycleViews(
             photos,
             fromNursery,
             cycle.Note,
-            batch is null ? null : SeedingViews.LotRef(batch.SeedLotLine),
+            batch is null ? legacySeed?.Lot : SeedingViews.LotRef(batch.SeedLotLine),
             canEdit && seededByCycle <= 0m,
             cycle.ProductId,
             productName,
             canEdit && seededByCycle <= 0m,
-            batch?.SeedLotLine.Item?.Name);
+            batch is null ? legacySeed?.Label.SeedItemName : batch.SeedLotLine.Item?.Name,
+            legacySeed?.Label.SeedItemNames);
     }
-    public CycleListItem ListItem(CultivationCycle cycle) => new(
-        cycle.Id, cycle.StartDate, cycle.CloseDate, cycle.StatusId, statusCatalog.DisplayNameOf(cycle.StatusId), RowVersionGuard.Encode(cycle.RowVersion), cycle.ClosedEarly, cycle.NurseryBatchId);
+
+    private async Task<(SeedLotRef Lot, CycleSeedLabel Label)?> LegacySeedAsync(Guid cycleId, CancellationToken cancellationToken)
+    {
+        var records = await seedingRecords.ListByCycleAsync(cycleId, cancellationToken);
+        var label = CycleSeedLabels.Build(CycleSeedLabels.FromRecords(records));
+        return label?.PrimaryLotLineId is { } lineId ? (SeedingViews.LotRef(records.First(r => r.SeedLotLineId == lineId).SeedLotLine), label) : null;
+    }
+
+    /// <summary>The item of a cycle list; <paramref name="seed"/> names the seed it farms (see <see cref="CycleSeedLabels"/>), left out when the caller has none.</summary>
+    public CycleListItem ListItem(CultivationCycle cycle, CycleSeedLabel? seed = null) => new CycleListItem(
+        cycle.Id, cycle.StartDate, cycle.CloseDate, cycle.StatusId, statusCatalog.DisplayNameOf(cycle.StatusId), RowVersionGuard.Encode(cycle.RowVersion), cycle.ClosedEarly, cycle.NurseryBatchId).WithSeed(seed);
 
     /// <summary>CYCLE-01 PRE-3, as the writes answer it: an Open cycle, with neither its raft nor its zone Discontinued.</summary>
     public static bool CanEdit(CultivationCycle? cycle, Raft raft, bool zoneInUse) =>

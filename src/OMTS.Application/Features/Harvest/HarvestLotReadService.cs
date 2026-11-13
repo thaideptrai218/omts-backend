@@ -17,6 +17,7 @@ public sealed class HarvestLotReadService(
     IRaftRepository rafts,
     ICultivationCycleRepository cycles,
     ICultivationCycleQuery cycleQuery,
+    CycleSeedLabels seedLabels,
     IHarvestLotRepository lots,
     ISeedingRecordRepository seedingRecords,
     IPurchaseRequestRepository requests,
@@ -80,7 +81,8 @@ public sealed class HarvestLotReadService(
         return new HarvestLotsScreen(
             raft.Id,
             raft.Code,
-            open is null ? null : new CycleListItem(open.Id, open.StartDate, open.CloseDate, open.StatusId, statusCatalog.DisplayNameOf(open.StatusId), RowVersionGuard.Encode(open.RowVersion), open.ClosedEarly),
+            open is null ? null : new CycleListItem(open.Id, open.StartDate, open.CloseDate, open.StatusId, statusCatalog.DisplayNameOf(open.StatusId), RowVersionGuard.Encode(open.RowVersion), open.ClosedEarly, open.NurseryBatchId)
+                .WithSeed((await seedLabels.ReadAsync([open.Id], cancellationToken)).GetValueOrDefault(open.Id)),
             cooperative.AverageKgPerCage,
             lanes.Any(l => l.CanHarvest),
             lanes,

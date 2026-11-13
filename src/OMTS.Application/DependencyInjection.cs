@@ -178,6 +178,7 @@ public static class DependencyInjection
         services.AddScoped<LanePercentGuard>();
         services.AddScoped<LaneProgressService>();
         services.AddScoped<CultivationCycleViews>();
+        services.AddScoped<CycleSeedLabels>();
         services.AddScoped<CycleWriteGuard>();
         services.AddScoped<CultivationLogViews>();
         services.AddScoped<RecordPhotoStore>();

@@ -111,7 +111,9 @@ public sealed record SeedLotTotal(Guid SeedLotId, string Code, string? ItemName,
 /// <param name="Records">The latest date first.</param>
 /// <param name="CycleRowVersion">Send it to mark the seeding complete.</param>
 /// <param name="NurseryBatchId">The nursery batch the cycle draws from (v2, 13/11/2026): a session then needs no seed lot, and takes any quantity up to <paramref name="NurseryRemaining"/>, what is left in the pool of the batch for every cycle; <paramref name="NurserySeeded"/> is what this cycle took. Null otherwise, with the other nursery fields.</param>
-/// <param name="SeedLot">The seed lot of the batch (read only).</param>
+/// <param name="SeedLot">The seed lot of the batch (read only); on a cycle started the old way, its main seeding lot (the one with the most seed).</param>
+/// <param name="SeedItemName">The seed the cycle farms: the item of the batch's lot, or on a cycle started the old way the item of its main seeding lot; null while it has no seed.</param>
+/// <param name="SeedItemNames">A cycle started the old way and seeded from several seed items: the distinct names, the one with most seed first; null otherwise.</param>
 /// <param name="SeedableLaneNumbers">The lanes the next session can choose: they can be seeded and are below 100 % (a lane at 100 % is hidden from the choice, still drawn on the overview).</param>
 public sealed record SeedingList(
     Guid CycleId,
@@ -135,7 +137,9 @@ public sealed record SeedingList(
     decimal? NurserySeeded = null,
     decimal? NurseryRemaining = null,
     SeedLotRef? SeedLot = null,
-    IReadOnlyList<int>? SeedableLaneNumbers = null);
+    IReadOnlyList<int>? SeedableLaneNumbers = null,
+    string? SeedItemName = null,
+    IReadOnlyList<string>? SeedItemNames = null);
 
 /// <summary>What to ask before marking the seeding complete (CYCLE-02.1 step 2).</summary>
 /// <param name="Message">MSG-CYCLE-01, listing the lanes that are still Not seeded.</param>
