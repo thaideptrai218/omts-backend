@@ -22,11 +22,23 @@ public sealed record HarvestFields
     public IReadOnlyList<byte[]> Photos { get; init; } = [];
     public string PhotoField { get; init; } = "photos";
 
+    /// <summary>The employees on the trip, one <c>crew</c> field each (decision of 12/11/2026); null sends none (a correction then keeps the crew); a single empty value clears it.</summary>
+    public IReadOnlyList<string>? Crew { get; init; }
+
+    /// <summary>Sends <c>replaceCrew=true</c>: the crew of a correction becomes exactly the <c>crew</c> fields, none clearing it.</summary>
+    public bool ReplaceCrew { get; init; }
+
     /// <summary>The purchase request the trip harvests for (decision of 11/11/2026).</summary>
     public Guid? Order { get; init; }
 
     /// <summary>Sends no purchase request, to see it refused.</summary>
     public bool WithoutOrder { get; init; }
+
+    /// <summary>Sends no photo when recording, to see it refused (the kit adds one otherwise).</summary>
+    public bool NoPhoto { get; init; }
+
+    /// <summary>The <c>lanePercents</c> field (lane number to percent, owner decision of 12/11/2026); null sends none.</summary>
+    public IReadOnlyDictionary<int, decimal>? LanePercents { get; init; }
 
     public HarvestFields For(Guid order) => this with { Order = order };
 
@@ -62,6 +74,21 @@ public sealed record HarvestFields
             form.Add(new StringContent(order.ToString()), "purchaseRequestId");
         }
 
+        if (LanePercents is not null)
+        {
+            form.Add(new StringContent(JsonSerializer.Serialize(LanePercents)), "lanePercents");
+        }
+
+        if (ReplaceCrew)
+        {
+            form.Add(new StringContent("true"), "replaceCrew");
+        }
+
+        foreach (var employee in Crew ?? [])
+        {
+            form.Add(new StringContent(employee), "crew");
+        }
+
         foreach (var photo in Photos)
         {
             form.Add(FarmingTestKit.FileContent(photo, "image/jpeg"), PhotoField, "harvest.jpg");
@@ -83,6 +110,12 @@ public static class HarvestTestKit
         if (fields.Order is null && !fields.WithoutOrder)
         {
             fields = fields.For(await HarvestOrderKit.DefaultOrderAsync(client));
+        }
+
+        // A new lot needs 1 to 3 on-site photos (owner decision of 12/11/2026): a test that sends none gets one, unless it asks to see the refusal (<see cref="HarvestFields.NoPhoto"/>).
+        if (fields.Photos.Count == 0 && !fields.NoPhoto)
+        {
+            fields = fields with { Photos = [FarmingTestKit.Jpeg] };
         }
 
         return await client.PostAsync($"/api/rafts/{raftId}/harvest-lots", fields.ToForm());
@@ -136,6 +169,16 @@ public static class HarvestTestKit
 
     public static Task<List<Notification>> NoticesAsync(this AuthApiFactory factory, string type, Guid recordId) =>
         factory.QueryAsync(db => db.Notifications.Where(n => n.Type == type && n.RelatedRecordId == recordId).ToListAsync());
+
+    /// <summary>
+    /// Every stored file of the category belongs to a photo row and every row has its file: a refused or failed save leaves no file behind. The lots a test recorded keep their own photo (the kit sends one
+    /// when a test names none, as a new lot needs 1 to 3), so "nothing stored" reads "nothing but the photos of the lots".
+    /// </summary>
+    public static async Task AssertNoOrphanLotPhotosAsync(this AuthApiFactory factory, string category)
+    {
+        var rows = (await factory.QueryAsync(db => db.HarvestLotPhotos.Select(p => p.FileKey).ToListAsync())).Order().ToList();
+        Assert.Equal(rows, FarmingUploadedFileTests.StoredKeys(factory, category).Select(k => k!).Order().ToList());
+    }
 
     public static Task<int> LotCountAsync(this AuthApiFactory factory, Guid raftId) =>
         factory.QueryAsync(db => db.HarvestLots.CountAsync(l => l.RaftId == raftId));

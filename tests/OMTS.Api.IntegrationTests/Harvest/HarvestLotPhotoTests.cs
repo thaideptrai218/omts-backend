@@ -34,13 +34,14 @@ public class HarvestLotPhotoTests
     }
 
     [Fact]
-    public async Task Photos_are_optional_stored_in_their_category_with_signed_links_and_in_slot_order()
+    public async Task Photos_are_required_stored_in_their_category_with_signed_links_and_in_slot_order()
     {
         using var factory = new AuthApiFactory();
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
 
-        Assert.Empty((await owner.HarvestLotAsync(raft.RaftId)).GetProperty("photos").EnumerateArray());
+        // The kit sends one photo when a test names none: a new lot needs 1 to 3 (owner decision of 12/11/2026).
+        Assert.Single((await owner.HarvestLotAsync(raft.RaftId)).GetProperty("photos").EnumerateArray());
 
         var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Photos = [Jpeg, Png] });
 
@@ -51,28 +52,30 @@ public class HarvestLotPhotoTests
             Assert.StartsWith($"{Category}/", p.Text("key"));
             Assert.NotEmpty(p.Text("url"));
         });
-        Assert.Equal(KeysOf(lot).Order(), StoredKeys(factory, Category)!);
+        Assert.Equal(KeysOf(lot).Count + 1, StoredKeys(factory, Category)!.Count);
         var signed = await factory.CreateClient().GetAsync(photos[0].Text("url"));
         Assert.Equal(HttpStatusCode.OK, signed.StatusCode);
     }
 
     [Fact]
-    public async Task Ten_photos_are_saved_and_the_eleventh_a_wrong_format_or_another_part_is_refused_and_stores_nothing()
+    public async Task Three_photos_are_saved_and_the_fourth_none_a_wrong_format_or_another_part_is_refused_and_stores_nothing()
     {
         using var factory = new AuthApiFactory();
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
 
-        var tooMany = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields { Photos = Enumerable.Repeat(Jpeg, 11).ToList() })).ReadAsync(HttpStatusCode.BadRequest);
-        Assert.Equal(("Photos", "A lot holds at most 10 photos."), (tooMany.Text("field"), tooMany.Text("hint")));
+        var tooMany = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields { Photos = Enumerable.Repeat(Jpeg, 4).ToList() })).ReadAsync(HttpStatusCode.BadRequest);
+        Assert.Equal(("Photos", "Tối đa 3 ảnh cho mỗi lô thu hoạch."), (tooMany.Text("field"), tooMany.Text("hint")));
+        var none = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields { NoPhoto = true })).ReadAsync(HttpStatusCode.BadRequest);
+        Assert.Equal("Photos", none.Text("field"));
         var wrong = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields { Photos = [Pdf] })).ReadAsync(HttpStatusCode.BadRequest);
         Assert.Equal("Photos", wrong.Text("field"));
         var part = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields { PhotoField = "picture", Photos = [Jpeg] })).ReadAsync(HttpStatusCode.BadRequest);
         Assert.Equal(("Photos", "Send each photo in a part named photos."), (part.Text("field"), part.Text("hint")));
         Assert.Empty(StoredKeys(factory, Category));
 
-        var ten = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Photos = Enumerable.Repeat(Jpeg, 10).ToList() });
-        Assert.Equal(10, KeysOf(ten).Count);
+        var three = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Photos = Enumerable.Repeat(Jpeg, 3).ToList() });
+        Assert.Equal(3, KeysOf(three).Count);
     }
 
     [Fact]

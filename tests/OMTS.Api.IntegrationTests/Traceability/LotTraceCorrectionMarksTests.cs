@@ -44,7 +44,7 @@ public class LotTraceCorrectionMarksTests(AuthApiFactory factory) : IClassFixtur
         Assert.Equal(lotRow.OccurredAt, DateTimeOffset.Parse(lotMark.At));
 
         // BR-TRACE-05: the trace shows the data as corrected, and the cycle is Closed.
-        Assert.Equal((earlier, 10, "Closed"), (session.Date("seedingDate"), trace.GetProperty("cageCount").GetInt32(), trace.Text("cycleStatus")));
+        Assert.Equal((earlier, 10, "Closed"), (session.Date("seedingDate"), trace.GetProperty("cageCount").GetDecimal(), trace.Text("cycleStatus")));
 
         // TRACE-02.2: the marks are in the file too.
         var sheets = await (await t.Manager.Client.GetTraceExportAsync(t.LotId)).SheetsAsync();

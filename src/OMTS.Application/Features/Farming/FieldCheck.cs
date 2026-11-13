@@ -1,3 +1,5 @@
+using OMTS.Application.Common.Results;
+
 namespace OMTS.Application.Features.Farming;
 
 /// <summary>
@@ -9,6 +11,16 @@ internal sealed class FieldCheck
     public List<string> Invalid { get; } = [];
 
     public bool IsValid => Invalid.Count == 0;
+
+    /// <summary>Why a pin was refused beyond its range ((0, 0), or latitude and longitude swapped); shown as the hint of the answer.</summary>
+    public string? CoordinateHint { get; private set; }
+
+    /// <summary>MSG-GEN-01 listing every invalid field, with the hint about the pin when there is one.</summary>
+    public AppError ToError()
+    {
+        var error = AppError.InvalidFields(Invalid);
+        return CoordinateHint is null ? error : error with { Details = new Dictionary<string, object?>(error.Details!) { ["hint"] = CoordinateHint } };
+    }
 
     /// <summary>Trimmed text of 1…<paramref name="max"/> characters.</summary>
     public string Required(string? value, string field, int max)
@@ -54,6 +66,15 @@ internal sealed class FieldCheck
                 Invalid.Add("Longitude");
             }
 
+            return (null, null);
+        }
+
+        // PM decision 11/11/2026: (0, 0) and a swapped pair are refused, both fields named, with the reason as a hint.
+        if (latitude is { } lat && longitude is { } lon && CoordinateRules.RefusalHint(lat, lon) is { } hint)
+        {
+            CoordinateHint = hint;
+            Invalid.Add("Latitude");
+            Invalid.Add("Longitude");
             return (null, null);
         }
 

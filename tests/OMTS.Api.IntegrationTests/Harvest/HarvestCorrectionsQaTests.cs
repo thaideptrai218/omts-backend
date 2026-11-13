@@ -40,7 +40,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
     private Task RevokeAsync(AuthApiFactory api, Guid grantId) =>
         api.UpdateAsync<AccessGrant>(grantId, g => { g.StatusId = StatusIds.AccessGrant.Revoked; g.RevokedAt = DateTimeOffset.UtcNow; });
 
-    private static Task<int> CagesAsync(HttpClient client, Guid lotId) => client.GetHarvestLotAsync(lotId).ContinueWith(t => t.Result.GetProperty("cageCount").GetInt32());
+    private static Task<decimal> CagesAsync(HttpClient client, Guid lotId) => client.GetHarvestLotAsync(lotId).ContinueWith(t => t.Result.GetProperty("cageCount").GetDecimal());
 
     private Task<int> AuditRowsAsync(string action, Guid lotId) => factory.QueryAsync(db => db.AuditEvents.CountAsync(e => e.Action == action && e.RecordId == lotId));
 
@@ -160,7 +160,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         api.Hold.Release();
 
         await AssertForbiddenAsync(await pending);
-        Assert.Empty(FarmingUploadedFileTests.StoredKeys(api, FileCategories()));
+        await api.AssertNoOrphanLotPhotosAsync(FileCategories());
         Assert.Equal(8, await CagesAsync(raft.Owner.Client, lot.Id()));
     }
 
@@ -384,12 +384,14 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
     {
         var raft = await factory.SeededRaftAsync(1, 2);
         var owner = raft.Owner.Client;
+        // Lane 1 holds half, so a second session can hang the rest once it is out of its lot (a lane never holds more than 100 %).
+        await owner.HalveLaneAsync(raft.Session, 1);
         var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2));
-        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostSeedingAsync(raft.CycleId, raft.Lot.Session([1], Today))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostSeedingAsync(raft.CycleId, raft.Lot.Session([1], Today).Percents(50m, 1))).StatusCode);
 
         await factory.CorrectLotAsync(owner, lot.Id(), HarvestFields.OfLanes(2));
 
-        Assert.Equal(HttpStatusCode.Created, (await owner.PostSeedingAsync(raft.CycleId, raft.Lot.Session([1], Today))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await owner.PostSeedingAsync(raft.CycleId, raft.Lot.Session([1], Today).Percents(50m, 1))).StatusCode);
     }
 
     // SCR-HARVEST-01: Record harvest is offered only while a lane is Growing or Being harvested.
@@ -502,10 +504,10 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
     [InlineData("Estimated kg", "8", "-1")]
     [InlineData("Estimated kg", "8", "1.234")]
     [InlineData("Estimated kg", "8", "abc")]
-    [InlineData("Estimated kg", "2147483647", null)]
+    [InlineData("Number of cages", "2147483647", null)] // cages are at most 100000 now: the estimate is never asked about
     [InlineData("Number of cages", "0", null)]
     [InlineData("Number of cages", "-1", null)]
-    [InlineData("Number of cages", "8.5", null)]
+    [InlineData("Number of cages", "8.555", null)]
     [InlineData("Number of cages", "8,5", null)]
     [InlineData("Number of cages", "abc", null)]
     [InlineData("Number of cages", null, null)]
@@ -518,7 +520,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         await AssertFieldRefusedAsync(await factory.SendCorrectionAsync(owner, lot.Id(), new HarvestFields { Cages = cages, EstimatedKg = estimate }), field);
 
         var read = await owner.GetHarvestLotAsync(lot.Id());
-        Assert.Equal((8, 400m), (read.GetProperty("cageCount").GetInt32(), read.Kg("estimatedKg")));
+        Assert.Equal((8, 400m), (read.GetProperty("cageCount").GetDecimal(), read.Kg("estimatedKg")));
     }
 
     // The client list: "kgPerCage, lotCode, harvestedAt and harvestDate never change: sent values are ignored."
@@ -528,7 +530,7 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
         var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
-        var form = new HarvestCorrection(new HarvestFields { Cages = "9" }, "Wrong count", await factory.LotVersionAsync(lot.Id())).ToForm();
+        var form = new HarvestCorrection(new HarvestFields { Cages = "9" }, "Wrong count", await factory.LotVersionAsync(lot.Id()), lot.PhotoKeysOfLot()).ToForm();
         form.Add(new StringContent("99"), "kgPerCage");
         form.Add(new StringContent("HACKED"), "lotCode");
         form.Add(new StringContent("2020-01-01"), "harvestDate");

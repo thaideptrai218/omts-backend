@@ -8,4 +8,4 @@ namespace OMTS.Application.Common.Models.Traceability;
 /// <param name="CultivationLogCount">The cultivation logs of the cycle up to the harvest date.</param>
 public sealed record PublicOriginLotFacts(
     Guid Id, string LotCode, HarvestLotOriginState OriginState, DateTimeOffset? WithdrawnAt, string ZoneName, string RaftCode, DateOnly CycleStartDate, DateOnly HarvestDate,
-    int CageCount, decimal EstimatedKg, int LaneCount, IReadOnlyList<PublicOriginSeedingRow> Seedings, int CultivationLogCount, PublicOriginWaterFacts Water);
+    decimal CageCount, decimal EstimatedKg, int LaneCount, IReadOnlyList<PublicOriginSeedingRow> Seedings, int CultivationLogCount, PublicOriginWaterFacts Water);

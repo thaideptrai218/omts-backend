@@ -17,7 +17,8 @@ internal sealed class InputIssueTypeConfiguration : IEntityTypeConfiguration<Inp
         builder.HasData(
             Seed(InputIssueTypeIds.SeedRelease, "Thả giống"),
             Seed(InputIssueTypeIds.RaftRepair, "Sửa chữa bè"),
-            Seed(InputIssueTypeIds.ZoneShared, "Dùng chung cho vùng"));
+            Seed(InputIssueTypeIds.ZoneShared, "Dùng chung cho vùng"),
+            Seed(InputIssueTypeIds.Nursery, "Ươm giống"));
     }
 
     // Anonymous objects: the key has no public setter.
@@ -48,6 +49,7 @@ internal sealed class InputIssueConfiguration : IEntityTypeConfiguration<InputIs
         builder.Property(x => x.CancelReason).HasMaxLength(Lengths.Reason);
         builder.HasIndex(x => new { x.Kind, x.IssuedAt });
         builder.HasIndex(x => x.ZoneId);
+        builder.HasIndex(x => new { x.SourceKind, x.SourceRecordId });
     }
 }
 

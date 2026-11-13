@@ -17,6 +17,7 @@ public sealed class CultivationCycleReadService(
     IRaftRepository rafts,
     IFarmingZoneRepository zones,
     CultivationCycleViews views,
+    CycleSeedLabels seedLabels,
     CycleSummaryReader summaries,
     ZoneAccessGuard zoneAccess,
     IStatusCatalog statusCatalog,
@@ -59,7 +60,9 @@ public sealed class CultivationCycleReadService(
             return AppError.Forbidden;
         }
 
-        return (await cycles.ListByRaftAsync(raftId, cancellationToken)).Select(views.ListItem).ToList();
+        var ofRaft = await cycles.ListByRaftAsync(raftId, cancellationToken);
+        var seeds = await seedLabels.ReadAsync(ofRaft.Select(c => c.Id).ToList(), cancellationToken);
+        return ofRaft.Select(c => views.ListItem(c, seeds.GetValueOrDefault(c.Id))).ToList();
     }
 
     /// <summary>SCR-CYCLE-01: every raft of the zone by code, with its Open or last closed cycle and the commands allowed. The route has checked the zone.</summary>
@@ -74,7 +77,9 @@ public sealed class CultivationCycleReadService(
         var ofZone = (await cycles.ListByZoneAsync(zoneId, cancellationToken)).ToLookup(c => c.RaftId);
         var raftsOfZone = await rafts.ListByZoneAsync(zoneId, null, cancellationToken);
         var shown = raftsOfZone.ToDictionary(r => r.Id, r => CurrentOf(ofZone[r.Id]));
-        var withRecords = await cycles.WithRecordsAsync(shown.Values.OfType<CultivationCycle>().Select(c => c.Id).ToList(), cancellationToken);
+        var shownIds = shown.Values.OfType<CultivationCycle>().Select(c => c.Id).ToList();
+        var withRecords = await cycles.WithRecordsAsync(shownIds, cancellationToken);
+        var seeds = await seedLabels.ReadAsync(shownIds, cancellationToken);
         var zoneInUse = found[0].StatusId == StatusIds.Usage.InUse;
         var today = timeProvider.Today();
 
@@ -89,7 +94,7 @@ public sealed class CultivationCycleReadService(
                 raft.StatusId,
                 statusCatalog.DisplayNameOf(raft.StatusId),
                 RaftLaneChange.InUseCount(raft.Lanes),
-                cycle is null ? null : views.ListItem(cycle),
+                cycle is null ? null : views.ListItem(cycle, seeds.GetValueOrDefault(cycle.Id)),
                 lastClose,
                 noOpenCycle && zoneInUse && raft.StatusId == StatusIds.Usage.InUse && (lastClose is null || lastClose < today),
                 CultivationCycleViews.CanEdit(cycle, raft, zoneInUse),

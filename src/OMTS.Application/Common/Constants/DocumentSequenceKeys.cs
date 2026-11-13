@@ -74,5 +74,8 @@ public static class DocumentSequenceKeys
 
     /// <summary>Disposals of input items, XH000123.</summary>
     public const string InputIssueDisposal = "XH";
+
+    /// <summary>Nursery batches (ươm giống), NU000123.</summary>
+    public const string NurseryBatch = "NU";
 }
 

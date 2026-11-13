@@ -101,8 +101,9 @@ public class TraceSeedingCorrectionTests(AuthApiFactory factory) : IClassFixture
     {
         var raft = await factory.SeededRaftAsync(1, 2);
         var owner = raft.Owner.Client;
-        // Lane 1 is hung again from another session (re-hanging), lane 3 for the first time; then lane 1 and 2 are harvested.
-        await owner.SeedingRecordAsync(raft.CycleId, raft.Lot.Session([1, 3], Today));
+        // Lane 1 is hung again from another session (re-hanging, half of it each), lane 3 for the first time; then lane 1 and 2 are harvested.
+        await (await owner.PutSeedingAsync(raft.Session.Id(), raft.Session.AsCorrection() with { LanePercents = new Dictionary<int, decimal> { [1] = 50m } })).ReadAsync(HttpStatusCode.OK);
+        await owner.SeedingRecordAsync(raft.CycleId, raft.Lot.Session([1, 3], Today).Percents(50m, 1));
         var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2));
 
         var refused = await (await owner.PutSeedingTraceAsync(raft.Session.Id(), raft.Session.SeedingCorrection(lanes: [1]))).ReadAsync(HttpStatusCode.BadRequest);

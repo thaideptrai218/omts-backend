@@ -39,6 +39,12 @@ public static partial class RelatedRecordTypes
     /// <summary>A harvest lot (HARVEST-01); the code shown is its lot code.</summary>
     public const string HarvestLot = "HarvestLot";
 
+    /// <summary>A nursery batch (ươm giống); its zone is its own, and the code shown is NU000001.</summary>
+    public const string NurseryBatch = "NurseryBatch";
+
+    /// <summary>A raft (FARM-04); its zone is its own, and the code shown is the raft code.</summary>
+    public const string Raft = "Raft";
+
     /// <summary>A purchase receipt (PURCHASE-01, PURCHASE-06); the notification follows the role, whatever the zone of the receipt.</summary>
     public const string PurchaseReceipt = "PurchaseReceipt";
 

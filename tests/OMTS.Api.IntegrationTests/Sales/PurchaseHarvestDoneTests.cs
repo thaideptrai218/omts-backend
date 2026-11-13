@@ -79,7 +79,7 @@ public class PurchaseHarvestDoneTests
             Assert.Equal("MSG-GEN-09", await (await sale.Manager.Client.PostWeighingAsync(request.Id(), WeighedLot(harvested.LotId, 10m))).ErrorCodeAsync());
 
             // The forgotten trip, the mark again, and the weighing: the mark then stays.
-            await owner.HarvestLotAsync(sale.RaftId, HarvestFields.OfLanes(5).For(request.Id()));
+            await owner.HarvestLotAsync(sale.RaftId, (HarvestFields.OfLanes(5) with { Cages = "4" }).For(request.Id()));
             Assert.Equal(3, (await owner.MarkHarvestDoneAsync(request.Id())).GetProperty("harvest").GetProperty("lots").GetArrayLength());
             await sale.Manager.Client.WeighAsync(request.Id(), WeighedLot(harvested.LotId, 10m));
 

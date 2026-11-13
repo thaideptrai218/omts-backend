@@ -195,7 +195,7 @@ public class SeedingRecordTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var lot = await setup.Owner.Client.SeedLotAsync();
         var answer = await setup.Owner.Client.PostAsync(
             $"/api/cultivation-cycles/{setup.CycleId}/seeding-records",
-            new StringContent(JsonSerializer.Serialize(new { seedingDate = "yesterday", seedLotId = lot.LineId, laneNumbers = new[] { 1 }, quantity = 1 }), System.Text.Encoding.UTF8, "application/json"));
+            StepFormKit.FormOf(new { seedingDate = "yesterday", seedLotId = lot.LineId, laneNumbers = new[] { 1 }, quantity = 1 }, photos: 1));
 
         Assert.Equal((HttpStatusCode.BadRequest, "MSG-GEN-01"), (answer.StatusCode, await answer.ErrorCodeAsync()));
     }

@@ -87,7 +87,7 @@ internal sealed class DemoHarvestLotStep : IDemoSeedStep
         var service = context.Get<HarvestLotRecordingService>();
         for (var trip = 0; trip < trips.Length; trip++)
         {
-            DemoSeedContext.Ensure(await service.RecordAsync(cycle.RaftId, trips[trip], trip == 0 ? [DemoFiles.HarvestLotPhoto(number)] : [], cancellationToken), $"harvest of raft {raftCode}");
+            DemoSeedContext.Ensure(await service.RecordAsync(cycle.RaftId, trips[trip], [DemoFiles.HarvestLotPhoto(number * 10 + trip)], cancellationToken), $"harvest of raft {raftCode}");
         }
 
         return trips.Length;

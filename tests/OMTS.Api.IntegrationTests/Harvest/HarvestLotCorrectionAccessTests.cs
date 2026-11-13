@@ -81,7 +81,7 @@ public class HarvestLotCorrectionAccessTests(AuthApiFactory factory) : IClassFix
         await AssertRefusedAsync((await factory.StaffAsync(null, StaffRole.Accountant)).Client, lot.Id());
         await AssertRefusedAsync(await factory.TraderAsync(), lot.Id());
         Assert.Equal(2, await factory.LotCountAsync(raft.RaftId));
-        Assert.Equal(8, (await manager.Client.GetHarvestLotAsync(lot.Id())).GetProperty("cageCount").GetInt32());
+        Assert.Equal(8, (await manager.Client.GetHarvestLotAsync(lot.Id())).GetProperty("cageCount").GetDecimal());
     }
 
     // GFR-02: access first, so a refused caller learns nothing of the state or the form.

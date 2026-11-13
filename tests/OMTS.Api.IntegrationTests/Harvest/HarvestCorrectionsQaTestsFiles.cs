@@ -65,12 +65,13 @@ public class HarvestCorrectionsQaTestsFiles
         var owner = raft.Owner.Client;
         var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(1));
         var versionOfBothForms = await api.LotVersionAsync(lot.Id());
+        var keys = lot.PhotoKeysOfLot();
 
-        await (await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(HarvestFields.OfLanes(2), "Wrong lane", versionOfBothForms))).ReadAsync(HttpStatusCode.OK);
+        await (await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(HarvestFields.OfLanes(2), "Wrong lane", versionOfBothForms, keys))).ReadAsync(HttpStatusCode.OK);
         var current = await VersionMovedByTheSaveAsync(api, lot.Id(), versionOfBothForms);
         await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1).FinishedLanes(1));
 
-        var second = await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(HarvestFields.OfLanes(1, 2).FinishedLanes(1) with { Cages = "9" }, "Counted again", versionOfBothForms));
+        var second = await owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(HarvestFields.OfLanes(1, 2).FinishedLanes(1) with { Cages = "9" }, "Counted again", versionOfBothForms, keys));
 
         var answer = await second.ReadAsync(HttpStatusCode.Conflict);
         Assert.Equal(("MSG06", current), (answer.Text("code"), answer.Text("currentRowVersion")));
@@ -111,14 +112,15 @@ public class HarvestCorrectionsQaTestsFiles
         var version = await api.LotVersionAsync(lot.Id());
         api.Hold.Arm();
 
-        var pending = owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(new HarvestFields { Lanes = ["1"], Photos = [Jpeg] }, "One more", version));
+        var pending = owner.PutHarvestLotAsync(lot.Id(), new HarvestCorrection(new HarvestFields { Lanes = ["1"], Photos = [Jpeg] }, "One more", version, lot.PhotoKeysOfLot()));
         await api.Hold.Reached;
         await api.CorrectLotAsync(owner, other.Id(), HarvestFields.OfLanes(2, 3));
         await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(4));
         api.Hold.Release();
 
         var saved = (await (await pending).ReadAsync(HttpStatusCode.OK)).GetProperty("lot");
-        Assert.Equal(StoredKeys(api, Category)!, saved.PhotoKeysOfLot());
+        Assert.Equal(2, saved.PhotoKeysOfLot().Count);
+        Assert.All(saved.PhotoKeysOfLot(), key => Assert.Contains(key, StoredKeys(api, Category)));
     }
 
     // After a correction: a kept link goes on serving its bytes, a removed one stops, and a new one works.
@@ -208,8 +210,10 @@ public class HarvestCorrectionsQaTestsFiles
         var answer = await api.SendCorrectionAsync(owner, lot.Id(), new HarvestFields { Photos = [Png] });
 
         Assert.Equal("MSG06", await answer.ErrorCodeAsync());
+        // The lot keeps the photo it had (the kit keeps what a lot has) and the new one the committed save added: both files are stored.
         var keys = await api.QueryAsync(db => db.HarvestLotPhotos.Select(p => p.FileKey).ToListAsync());
-        Assert.Contains(Assert.Single(keys), StoredKeys(api, Category));
+        Assert.Equal(2, keys.Count);
+        Assert.All(keys, key => Assert.Contains(key, StoredKeys(api, Category)));
     }
 
     // A failed save keeps every file the lot points to and takes back its own.
@@ -247,19 +251,19 @@ public class HarvestCorrectionsQaTestsFiles
         Assert.Equal(saved.PhotoKeysOfLot().Order(), StoredKeys(api, Category)!);
     }
 
-    // The most photos: ten on the lot, one replaced; a removal of all at once. NFR-14 reads 10 per save; the lot holds 10 at most (the check constraint): see the report.
+    // The most photos: three on the lot (owner decision of 12/11/2026), one replaced; a fourth is refused whatever is sent.
     [Fact]
-    public async Task Ten_photos_can_be_replaced_one_at_a_time_and_an_eleventh_is_refused_whatever_is_sent()
+    public async Task Three_photos_can_be_replaced_one_at_a_time_and_a_fourth_is_refused_whatever_is_sent()
     {
         using var api = new AuthApiFactory();
         var raft = await api.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Photos = Enumerable.Repeat(Jpeg, 10).ToList() });
+        var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Photos = Enumerable.Repeat(Jpeg, 3).ToList() });
         var keys = lot.PhotoKeysOfLot();
 
         var saved = (await api.CorrectLotAsync(owner, lot.Id(), new HarvestFields { Photos = [Png] }, keep: keys.Skip(1).ToList())).GetProperty("lot");
 
-        Assert.Equal(10, saved.PhotoKeysOfLot().Count);
+        Assert.Equal(3, saved.PhotoKeysOfLot().Count);
         Assert.Equal(1, saved.GetProperty("photos")[0].GetProperty("sortOrder").GetInt32());
         Assert.DoesNotContain(keys[0], saved.PhotoKeysOfLot());
         var refused = await api.SendCorrectionAsync(owner, lot.Id(), new HarvestFields { Photos = [Png] }, keep: saved.PhotoKeysOfLot());
@@ -301,17 +305,17 @@ public class HarvestCorrectionsQaTestsKestrel(KestrelApiFactory api) : IClassFix
     }
 
     [Fact]
-    public async Task Ten_new_photos_of_ten_megabytes_with_every_other_field_fit_the_limit_of_a_correction()
+    public async Task Three_new_photos_of_ten_megabytes_with_every_other_field_fit_the_limit_of_a_correction()
     {
         var raft = await api.SeededRaftAsync();
         var lot = await raft.Owner.Client.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
         using var client = await OnKestrelAsync(raft.Owner.Account.Username);
         var photo = FarmingTestKit.Sized(FarmingTestKit.Jpeg, (int)(10 * Megabyte));
-        var fields = HarvestFields.OfLanes(1, 2, 3, 4, 5).FinishedLanes(1, 2, 3, 4, 5) with { Photos = Enumerable.Repeat(photo, 10).ToList() };
+        var fields = HarvestFields.OfLanes(1, 2, 3, 4, 5).FinishedLanes(1, 2, 3, 4, 5) with { Photos = Enumerable.Repeat(photo, 3).ToList() };
 
         using var response = await client.PutAsync($"api/harvest-lots/{lot.Id()}", new HarvestCorrection(fields, new string('x', 1000), await api.LotVersionAsync(lot.Id())).ToForm());
 
-        Assert.Equal(10, (await response.ReadAsync(HttpStatusCode.OK)).GetProperty("lot").GetProperty("photos").GetArrayLength());
+        Assert.Equal(3, (await response.ReadAsync(HttpStatusCode.OK)).GetProperty("lot").GetProperty("photos").GetArrayLength());
     }
 
     private sealed class ZeroContent(long length) : HttpContent

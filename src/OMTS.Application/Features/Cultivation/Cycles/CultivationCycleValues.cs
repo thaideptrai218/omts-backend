@@ -8,21 +8,22 @@ namespace OMTS.Application.Features.Cultivation.Cycles;
 /// <param name="FirstRecordDate">On an edit, the start date must not be after it.</param>
 internal sealed record CycleDateLimits(DateOnly Today, DateOnly? PreviousCloseDate, DateOnly? FirstRecordDate);
 
-/// <summary>The checked fields of a cycle start or edit (MSG-GEN-01 names the others), and the values the audit log keeps.</summary>
-internal sealed record CultivationCycleValues(DateOnly StartDate, decimal? ExpectedSeedQuantity, DateOnly? ExpectedHarvestDate, decimal? TargetYieldKg)
+/// <summary>
+/// The checked fields of a cycle start or edit (MSG-GEN-01 names the others), and the values the audit log keeps. The plan has no expected harvest date any more (owner decision of 12/11/2026):
+/// the column stays but is neither read nor written here.
+/// </summary>
+internal sealed record CultivationCycleValues(DateOnly StartDate, decimal? ExpectedSeedQuantity, decimal? TargetYieldKg)
 {
     private const int SeedQuantityScale = 3;
     private const int TargetYieldScale = 2;
 
-    public static FieldCheck Read(
-        DateOnly? startDate, decimal? expectedSeedQuantity, DateOnly? expectedHarvestDate, decimal? targetYieldKg, CycleDateLimits limits, out CultivationCycleValues values)
+    public static FieldCheck Read(DateOnly? startDate, decimal? expectedSeedQuantity, decimal? targetYieldKg, CycleDateLimits limits, out CultivationCycleValues values)
     {
         var check = new FieldCheck();
         check.Check(startDate is { } start && IsAllowedStart(start, limits), "Start date");
         var seed = check.PositiveOptional(expectedSeedQuantity, "Expected seed quantity", SeedQuantityScale);
-        check.Check(startDate is null || expectedHarvestDate is null || expectedHarvestDate > startDate, "Expected harvest date");
         var yield = check.PositiveOptional(targetYieldKg, "Target yield", TargetYieldScale);
-        values = new CultivationCycleValues(startDate ?? default, seed, expectedHarvestDate, yield);
+        values = new CultivationCycleValues(startDate ?? default, seed, yield);
         return check;
     }
 
@@ -35,9 +36,12 @@ internal sealed record CultivationCycleValues(DateOnly StartDate, decimal? Expec
     {
         cycle.StartDate = StartDate;
         cycle.ExpectedSeedQuantity = ExpectedSeedQuantity;
-        cycle.ExpectedHarvestDate = ExpectedHarvestDate;
         cycle.TargetYieldKg = TargetYieldKg;
     }
 
-    public static object Snapshot(CultivationCycle c) => new { c.StartDate, c.ExpectedSeedQuantity, c.ExpectedHarvestDate, c.TargetYieldKg };
+    public static object Snapshot(CultivationCycle c) => new { c.StartDate, c.ExpectedSeedQuantity, c.TargetYieldKg, Product = c.Product?.Name };
+
+    /// <summary>The audit values of a cycle that draws from a nursery batch (v2): the batch by its code, not its id.</summary>
+    public static object NurserySnapshot(CultivationCycle c, string? nurseryCode, string? productName = null) =>
+        new { c.StartDate, c.TargetYieldKg, c.Note, NurseryBatch = nurseryCode, Product = productName };
 }

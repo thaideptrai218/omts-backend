@@ -172,7 +172,7 @@ public class PortWeighingTests
         var trader = await api.TraderAsync();
         var request = await trader.Client.PlaceAsync(sale.ProductId, 5);
         await (await sale.Owner.Client.AcceptAsync(request)).ReadAsync(HttpStatusCode.OK);
-        var own = await sale.Owner.Client.HarvestLotAsync(sale.RaftId, HarvestFields.OfLanes(3).For(request.Id()));
+        var own = await sale.Owner.Client.HarvestLotAsync(sale.RaftId, (HarvestFields.OfLanes(3) with { Cages = "5" }).For(request.Id()));
 
         Assert.Equal("MSG-GEN-09", await (await sale.Manager.Client.PostWeighingAsync(request.Id(), WeighedLot(own.Id(), 10m))).ErrorCodeAsync());
 

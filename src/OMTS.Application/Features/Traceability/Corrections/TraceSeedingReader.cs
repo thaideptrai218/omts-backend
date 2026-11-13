@@ -1,5 +1,7 @@
 using OMTS.Application.Common;
+using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
+using OMTS.Application.Features.Cultivation.Nursery;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Cultivation.Seeding;
 using OMTS.Application.Features.Farming;
@@ -17,7 +19,7 @@ namespace OMTS.Application.Features.Traceability.Corrections;
 /// A lane the correction adds, or every lane when the date moves, must be free to seed on that date without the session itself: Not seeded, or Growing (re-hanging) while the
 /// seeding was not yet marked complete; never Being harvested or Harvested. Lanes the session keeps stay allowed, also one Removed since the close (BR-FARM-04).
 /// </summary>
-public sealed class TraceSeedingReader(SeedingSessionReader sessions, TimeProvider timeProvider)
+public sealed class TraceSeedingReader(SeedingSessionReader sessions, INurseryBatchRepository nurseries, TimeProvider timeProvider)
 {
     /// <param name="ofCycle">Every session of the cycle, the corrected one among them.</param>
     /// <param name="lots">Every lot of the cycle with its lanes.</param>
@@ -44,6 +46,13 @@ public sealed class TraceSeedingReader(SeedingSessionReader sessions, TimeProvid
             return (null, laneHint is not null && check.Invalid is [SeedingValues.LanesField] ? AppError.Invalid(SeedingValues.LanesField, laneHint) : AppError.InvalidFields(check.Invalid));
         }
 
+        // A session from a nursery (v2, 13/11/2026) stays within the pool of its batch once this session is set aside.
+        if (record.NurseryBatchId is { } batchId && await nurseries.GetForPoolAsync(batchId, cancellationToken) is { } batch
+            && NurseryRules.CheckPool(batch, (await nurseries.SeededByBatchAsync([batch.Id], record.Id, cancellationToken)).GetValueOrDefault(batch.Id), request.Quantity!.Value) is { } overPool)
+        {
+            return (null, overPool);
+        }
+
         return (new SeedingFields(request.SeedingDate!.Value, lot!, request.Quantity!.Value, lanes!, reason), null);
     }
 
@@ -64,8 +73,8 @@ public sealed class TraceSeedingReader(SeedingSessionReader sessions, TimeProvid
         }
 
         var cycle = record.Cycle;
-        var others = ofCycle.Where(s => s.Id != record.Id).SelectMany(s => s.Lanes.Select(l => new LaneSeeding(cycle.Id, l.LaneId, s.SeedingDate))).ToList();
-        var harvests = lots.SelectMany(lot => lot.Lanes.Select(l => new LaneHarvest(cycle.Id, l.LaneId, lot.HarvestDate, l.IsFinished))).ToList();
+        var others = ofCycle.Where(s => s.Id != record.Id).SelectMany(s => s.Lanes.Select(l => new LaneSeeding(cycle.Id, l.LaneId, s.SeedingDate, l.SeededPercent, s.CreatedAt, s.Id))).ToList();
+        var harvests = lots.SelectMany(lot => lot.Lanes.Select(l => new LaneHarvest(cycle.Id, l.LaneId, lot.HarvestDate, l.IsFinished, l.HarvestedPercent, lot.HarvestedAt, lot.Id))).ToList();
         var states = LaneStateRules.StatesOn(on, new CycleSpan(cycle.Id, cycle.RaftId, cycle.StartDate, cycle.CloseDate), raft.Lanes.Select(l => l.Id), others, harvests);
 
         // The seeding was marked complete before that day: only lanes still Not seeded then (BR-CYCLE-02).

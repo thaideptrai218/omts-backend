@@ -27,7 +27,8 @@ public sealed class OrphanFileCleanupService(
     public static readonly IReadOnlyList<string> Categories =
     [
         FileCategories.RaftPhotos, FileCategories.ZoneLicenses, FileCategories.CooperativeCoverPhotos, FileCategories.CooperativeCertifications, FileCategories.WaterMeterPhotos, FileCategories.CultivationLogPhotos,
-        FileCategories.HarvestLotPhotos, FileCategories.QualityClaimPhotos,
+        FileCategories.HarvestLotPhotos, FileCategories.QualityClaimPhotos, FileCategories.LaneIncidentPhotos, FileCategories.NurseryStartPhotos, FileCategories.NurseryCompletionPhotos,
+        FileCategories.SeedingPhotos, FileCategories.CyclePlanPhotos,
     ];
 
     /// <summary>
@@ -37,7 +38,8 @@ public sealed class OrphanFileCleanupService(
     /// </summary>
     private static readonly IReadOnlySet<string> MayAllBeUnreferenced = new HashSet<string>(StringComparer.Ordinal)
     {
-        FileCategories.CooperativeCoverPhotos, FileCategories.CooperativeCertifications, FileCategories.CultivationLogPhotos, FileCategories.HarvestLotPhotos, FileCategories.QualityClaimPhotos,
+        FileCategories.CooperativeCoverPhotos, FileCategories.CooperativeCertifications, FileCategories.CultivationLogPhotos, FileCategories.HarvestLotPhotos, FileCategories.QualityClaimPhotos, FileCategories.LaneIncidentPhotos,
+        FileCategories.NurseryStartPhotos, FileCategories.NurseryCompletionPhotos, FileCategories.SeedingPhotos, FileCategories.CyclePlanPhotos,
     };
 
     /// <summary>The audit record type of the records that can all be removed, with their name in the warning: the audit rows outlive them.</summary>
@@ -45,7 +47,12 @@ public sealed class OrphanFileCleanupService(
     {
         [FileCategories.CultivationLogPhotos] = (CultivationLogAudit.RecordType, "cultivation log"),
         [FileCategories.HarvestLotPhotos] = (HarvestLotAudit.RecordType, "harvest lot"),
+        [FileCategories.LaneIncidentPhotos] = (Farming.Rafts.LaneIncidentAudit.RecordType, "lane incident"),
         [FileCategories.QualityClaimPhotos] = (Sales.QualityClaims.QualityClaimRules.RecordType, "quality claim"),
+        [FileCategories.NurseryStartPhotos] = (Cultivation.Nursery.NurseryValues.RecordType, "nursery batch"),
+        [FileCategories.NurseryCompletionPhotos] = (Cultivation.Nursery.NurseryValues.RecordType, "nursery batch"),
+        [FileCategories.SeedingPhotos] = (Cultivation.Seeding.SeedingValues.RecordType, "seeding session"),
+        [FileCategories.CyclePlanPhotos] = ("CultivationCycle", "cultivation cycle"),
     };
 
     /// <summary>

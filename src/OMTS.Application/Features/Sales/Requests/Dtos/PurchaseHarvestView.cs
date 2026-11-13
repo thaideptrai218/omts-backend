@@ -6,7 +6,7 @@ namespace OMTS.Application.Features.Sales.Requests.Dtos;
 /// <param name="CanMarkDone">Show "Đã thu xong": the caller is the Owner, the request is Accepted, not marked yet and has a lot.</param>
 /// <param name="CanUnmarkDone">The Owner may clear the mark: it is set and the request has no weighing yet.</param>
 public sealed record PurchaseHarvestView(
-    int HarvestedCages,
+    decimal HarvestedCages,
     IReadOnlyList<PurchaseHarvestLotView> Lots,
     DateTimeOffset? CompletedAt,
     string? CompletedByName,

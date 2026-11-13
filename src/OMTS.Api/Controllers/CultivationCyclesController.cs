@@ -19,6 +19,11 @@ namespace OMTS.Api.Controllers;
 public sealed class CultivationCyclesController(
     CultivationCycleReadService reads, CultivationCycleService cycles, CultivationProgressService progress, CycleCloseService closes) : ControllerBase
 {
+    private const string PhotosField = "Photos";
+
+    // Three photos of 10 MB plus the multipart envelope.
+    private const long MaxUploadBytes = 35 * 1024 * 1024;
+
     /// <summary>Every raft of the zone with its Open or last closed cycle and the commands allowed (SCR-CYCLE-01).</summary>
     [HttpGet("api/zones/{zoneId:guid}/cultivation-cycles")]
     [RequirePermission(PermissionFunctions.CultivationCycles, PermissionAction.View)]
@@ -26,11 +31,46 @@ public sealed class CultivationCyclesController(
     public async Task<IActionResult> ListOfZone(Guid zoneId, CancellationToken cancellationToken) =>
         (await reads.ListOfZoneAsync(zoneId, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Starts a cycle; without a start date it starts today. MSG-GEN-09 for a Discontinued raft, MSG-GEN-06 for an Open cycle.</summary>
-    [HttpPost("api/rafts/{raftId:guid}/cultivation-cycles")]
+    /// <summary>
+    /// Starts a cycle by hand from a nursery batch that is ready (v2, 13/11/2026); without a start date it starts today. Multipart: <c>raftId</c>, <c>nurseryBatchId</c> (required: Completed, same zone as the raft, pieces left in its pool),
+    /// <c>targetYieldKg</c> (required, above 0), <c>startDate</c>, <c>note</c> and 1 to 3 <c>photos</c> parts of the plan (JPEG or PNG, at most 10 MB each; 400 on <c>Photos</c> otherwise). MSG-GEN-09 for a Discontinued raft
+    /// or a batch that does not qualify (<c>reasonCode</c>), MSG-GEN-06 for an Open cycle. There is no other way to start a cycle: the old free seed lot path is closed.
+    /// </summary>
+    [HttpPost("api/cultivation-cycles")]
+    [RequestSizeLimit(MaxUploadBytes)]
+    [UploadField(PhotosField)]
+    [Consumes("multipart/form-data")]
     [ProducesResponseType<CycleStarted>(StatusCodes.Status201Created)]
-    public async Task<IActionResult> Start(Guid raftId, StartCycleRequest request, CancellationToken cancellationToken) =>
-        (await cycles.StartAsync(raftId, request, cancellationToken)).ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
+    public async Task<IActionResult> Create([FromForm] CyclePlanForm form, CancellationToken cancellationToken) =>
+        !Request.HasFormContentType
+            ? StatusCode(StatusCodes.Status415UnsupportedMediaType)
+            : (await cycles.CreateAsync(form.ToCreate(Request.Form.Files.HasPartOtherThan(PhotosField)), await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
+                .ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
+
+    /// <summary>The same start with the raft in the route (the quick button of the raft detail): <c>raftId</c> of the form is ignored.</summary>
+    [HttpPost("api/rafts/{raftId:guid}/cultivation-cycles")]
+    [RequestSizeLimit(MaxUploadBytes)]
+    [UploadField(PhotosField)]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType<CycleStarted>(StatusCodes.Status201Created)]
+    public async Task<IActionResult> CreateOnRaft(Guid raftId, [FromForm] CyclePlanForm form, CancellationToken cancellationToken) =>
+        !Request.HasFormContentType
+            ? StatusCode(StatusCodes.Status415UnsupportedMediaType)
+            : (await cycles.CreateAsync(form.ToCreate(Request.Form.Files.HasPartOtherThan(PhotosField), raftId), await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
+                .ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
+    /// <summary>
+    /// Changes the plan photos of a cycle: <c>rowVersion</c>, one <c>keepPhotoIds</c> field per photo to keep and the new <c>photos</c>; 1 to 3 remain.
+    /// </summary>
+    [HttpPut("api/cultivation-cycles/{cycleId:guid}/plan-photos")]
+    [RequestSizeLimit(MaxUploadBytes)]
+    [UploadField(PhotosField)]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType<CycleSaved>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ChangePlanPhotos(Guid cycleId, [FromForm] CyclePlanForm form, CancellationToken cancellationToken) =>
+        !Request.HasFormContentType
+            ? StatusCode(StatusCodes.Status415UnsupportedMediaType)
+            : (await cycles.ChangePlanPhotosAsync(cycleId, form.ToPhotos(Request.Form.Files.HasPartOtherThan(PhotosField)), await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
+                .ToActionResult(Ok);
 
     /// <summary>The cycles of the raft with their start and close dates, the newest first (CYCLE-05.1).</summary>
     [HttpGet("api/rafts/{raftId:guid}/cultivation-cycles")]
@@ -49,7 +89,7 @@ public sealed class CultivationCyclesController(
     public async Task<IActionResult> Get(Guid cycleId, CancellationToken cancellationToken) =>
         (await reads.GetAsync(cycleId, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Edits the start date and the plan estimates of an Open cycle (CYCLE-01.1).</summary>
+    /// <summary>Edits an Open cycle (CYCLE-01.1): the target yield, the start date and the note any time; the nursery batch only before the first seeding record (409 CYCLE_SEED_LOCKED).</summary>
     [HttpPut("api/cultivation-cycles/{cycleId:guid}")]
     [ProducesResponseType<CycleSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Edit(Guid cycleId, EditCycleRequest request, CancellationToken cancellationToken) =>

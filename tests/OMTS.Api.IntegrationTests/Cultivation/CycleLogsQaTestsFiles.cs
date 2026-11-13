@@ -175,9 +175,9 @@ public class CycleLogsQaTestsFiles(AuthApiFactory factory) : IClassFixture<AuthA
         Assert.Equal(keys, (await owner.GetLogAsync(log.Id())).PhotoKeys());
         Assert.Equal(foreign.PhotoKeys(), (await owner.GetLogAsync(foreign.Id())).PhotoKeys());
 
-        Assert.Equal(["Photos"], await (await owner.PutLogAsync(log.Id(), edit with { Photos = Enumerable.Repeat(Png, 9).ToList() })).InvalidFieldsAsync());
-        var ten = await (await owner.PutLogAsync(log.Id(), edit with { KeepPhotoKeys = [keys[1], keys[1], keys[1]], Photos = Enumerable.Repeat(Png, 9).ToList() })).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(Enumerable.Range(1, 10), ten.GetProperty("log").PhotoSlots());
+        Assert.Equal(["Photos"], await (await owner.PutLogAsync(log.Id(), edit with { Photos = Enumerable.Repeat(Png, 3).ToList() })).InvalidFieldsAsync());
+        var three = await (await owner.PutLogAsync(log.Id(), edit with { KeepPhotoKeys = [keys[1], keys[1], keys[1]], Photos = Enumerable.Repeat(Png, 2).ToList() })).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal(Enumerable.Range(1, 3), three.GetProperty("log").PhotoSlots());
     }
 
     public static TheoryData<byte[]> NotPhotos => new() { WebP, Pdf, "GIF89a-not-allowed"u8.ToArray(), Array.Empty<byte>() };

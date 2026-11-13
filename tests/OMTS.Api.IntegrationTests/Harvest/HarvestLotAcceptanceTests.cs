@@ -73,7 +73,7 @@ public class HarvestLotAcceptanceTests
         api.Clock.At = InVietnam(10, 26);
 
         var worked = await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1));
-        Assert.Equal((8, 50m, 400m), (worked.GetProperty("cageCount").GetInt32(), worked.Kg("kgPerCage"), worked.Kg("estimatedKg")));
+        Assert.Equal((8, 50m, 400m), (worked.GetProperty("cageCount").GetDecimal(), worked.Kg("kgPerCage"), worked.Kg("estimatedKg")));
 
         var changed = await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1) with { EstimatedKg = "385.5" });
         Assert.Equal((50m, 385.5m), (changed.Kg("kgPerCage"), changed.Kg("estimatedKg")));

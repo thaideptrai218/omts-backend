@@ -1,6 +1,7 @@
 using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Cultivation.Cycles;
+using OMTS.Application.Features.Cultivation.Nursery;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
@@ -17,6 +18,8 @@ public sealed class CycleSummaryReader(
     ISeedingRecordRepository seedingRecords,
     IHarvestLotRepository harvestLots,
     LaneStateReader laneStates,
+    ILaneIncidentRepository laneIncidents,
+    INurseryBatchRepository nurseries,
     TimeProvider timeProvider)
 {
     /// <summary>The summary of a cycle, which comes with its raft: of a Closed cycle as of its close date, of an Open one as if it closed today.</summary>
@@ -28,6 +31,7 @@ public sealed class CycleSummaryReader(
         var sessions = await seedingRecords.ListByCycleAsync(cycle.Id, cancellationToken);
         var lots = await harvestLots.ListByCycleAsync(cycle.Id, cancellationToken);
         var states = (await laneStates.ReadAsync(raft, asOf, cancellationToken)).States;
+        var nursery = cycle.NurseryBatchId is null || !(await nurseries.FactsByCycleAsync([cycle.Id], cancellationToken)).TryGetValue(cycle.Id, out var facts) ? null : NurseryRules.SummaryOf(facts);
 
         var lastLot = lots.Count == 0 ? (DateOnly?)null : lots.Max(l => l.HarvestDate);
         var notHarvested = NotHarvestedLanes(raft, states);
@@ -47,12 +51,17 @@ public sealed class CycleSummaryReader(
             lastLot,
             CycleDaysOfFarming.Count(cycle.StartDate, lastLot, asOf, today),
             cycle.ExpectedSeedQuantity,
-            cycle.ExpectedHarvestDate,
             cycle.TargetYieldKg,
             early,
             early ? sessions.Count == 0 ? EarlyCloseReason.NoSeedingSession : EarlyCloseReason.LanesNotHarvested : null,
             notHarvested,
-            isOpen ? null : cycle.Assessment);
+            isOpen ? null : cycle.Assessment,
+            lots.Sum(l => l.CageCount),
+            cycle.TargetYieldKg is { } target ? target - lots.Sum(l => l.EstimatedKg) : null,
+            Seeding.SeedingPlanRules.Percent(cycle.ExpectedSeedQuantity, sessions.Sum(s => s.Quantity)),
+            (await laneIncidents.LossEventsOfCycleAsync(cycle.Id, cancellationToken)).Select(i => new LaneLossView(i.Lane.LaneNumber, i.OccurredOn, i.Reason, i.ReasonCode)).ToList(),
+            isOpen ? raft.Lanes.Where(l => l.StatusId == StatusIds.Lane.InUse && l.IsDamaged && !l.IsOutOfService).Select(l => l.LaneNumber).Order().ToList() : [],
+            nursery);
     }
 
     /// <summary>

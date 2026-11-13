@@ -97,7 +97,8 @@ public sealed class InputMovementService(
     {
         var m = r.Movement;
         return new InputMovementView(
-            m.Id, m.Sequence, m.Kind, m.DocumentId, m.DocumentCode, m.OccurredAt, m.Quantity, r.BalanceAfter, m.UnitCost, m.TransactionPrice, m.PartyName, m.SeedLotLineId, r.SeedLotCode, m.ReversesMovementId);
+            m.Id, m.Sequence, m.Kind, m.DocumentId, m.DocumentCode, m.OccurredAt, m.Quantity, r.BalanceAfter, m.UnitCost, m.TransactionPrice, m.PartyName, m.SeedLotLineId, r.SeedLotCode, m.ReversesMovementId,
+            r.Source?.Kind, r.Source?.RecordId, r.Source?.CycleId, r.Source?.RaftId, r.Source?.ZoneId);
     }
 
     /// <summary>The movements that match the query, newest first, each with the balance after it in time order.</summary>

@@ -42,7 +42,8 @@ public class TraceCorrectionsQaTestsFiles
 
         Assert.Equal(logFiles, StoredKeys(api, LogPhotos));
         Assert.Equal(lotFiles, StoredKeys(api, LotPhotos));
-        Assert.Empty((await api.LotRowAsync(t.LotId)).Photos);
+        // The lot keeps the one photo it was recorded with (a new lot needs a photo since 12/11/2026); the refused save added none.
+        Assert.Single((await api.LotRowAsync(t.LotId)).Photos);
         Assert.Equal(keys, (await t.Owner.Client.GetLogAsync(logId)).PhotoKeys());
     }
 

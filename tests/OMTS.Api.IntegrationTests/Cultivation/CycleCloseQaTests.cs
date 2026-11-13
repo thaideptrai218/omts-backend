@@ -99,7 +99,8 @@ public class CycleCloseQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
 
         foreach (var summary in new[] { (await owner.ClosePreviewAsync(setup.CycleId)).GetProperty("summary"), (await owner.CloseCycleAsync(setup.CycleId)).GetProperty("summary") })
         {
-            Assert.True(summary.IsNull("expectedSeedQuantity") && summary.IsNull("expectedHarvestDate") && summary.IsNull("targetYieldKg"), summary.GetRawText());
+            Assert.True(summary.IsNull("expectedSeedQuantity") && summary.IsNull("targetYieldKg") && summary.IsNull("nursery"), summary.GetRawText());
+            Assert.False(summary.TryGetProperty("expectedHarvestDate", out _));
             Assert.Equal(10m, summary.Number("seedHung"));
         }
     }

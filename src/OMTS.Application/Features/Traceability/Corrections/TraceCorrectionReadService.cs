@@ -37,7 +37,7 @@ public sealed class TraceCorrectionReadService(
         }
 
         var ofRaft = await cycles.ListByRaftAsync(raftId, cancellationToken);
-        return new TraceCorrectionCycles(raft.Id, raft.Code, ofRaft.Select(cycleViews.ListItem).ToList(), !await guard.IsOwnerAsync(cancellationToken));
+        return new TraceCorrectionCycles(raft.Id, raft.Code, ofRaft.Select(c => cycleViews.ListItem(c)).ToList(), !await guard.IsOwnerAsync(cancellationToken));
     }
 
     /// <summary>Step 3, or MSG-GEN-10 with empty lists when the cycle has no such record (TRACE-03.0.E1).</summary>

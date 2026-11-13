@@ -84,18 +84,20 @@ public class SeedingBlockedByHarvestLotTests(AuthApiFactory factory) : IClassFix
         var raft = await factory.SeededRaftAsync(1, 2, 3);
         var owner = raft.Owner.Client;
         var free = await owner.SeedingRecordAsync(raft.CycleId, raft.Lot.Session([4]));
+        // Lane 3 holds half, so it can be hung again below (a lane never holds more than 100 %).
+        await (await owner.PutSeedingAsync(raft.Session.Id(), raft.Session.AsCorrection() with { LanePercents = new Dictionary<int, decimal> { [3] = 50m } })).ReadAsync(HttpStatusCode.OK);
         await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1, 2).FinishedLanes(2));
 
         var list = await owner.SeedingListAsync(raft.CycleId);
         Assert.Equal(("BeingHarvested", "Harvested", "Growing"), (list.StateOf(1), list.StateOf(2), list.StateOf(3)));
 
         var refused = await (await owner.PostSeedingAsync(raft.CycleId, raft.Lot.Session([1, 2, 3]))).ReadAsync(HttpStatusCode.BadRequest);
-        Assert.Equal(("Lanes", "Lanes 1, 2 cannot be seeded now."), (refused.Text("field"), refused.Text("hint")));
+        Assert.Equal(("Lanes", "Không thể thả giống vào làn 1, 2 lúc này."), (refused.Text("field"), refused.Text("hint")));
 
         var added = await (await owner.PutSeedingAsync(free.Id(), free.AsCorrection() with { LaneNumbers = [4, 1] })).ReadAsync(HttpStatusCode.BadRequest);
         Assert.Equal("Lanes", added.Text("field"));
 
-        Assert.Equal(raft.Lot.LineId, (await owner.SeedingRecordAsync(raft.CycleId, raft.Lot.Session([3]))).GetProperty("seedLot").Id());
+        Assert.Equal(raft.Lot.LineId, (await owner.SeedingRecordAsync(raft.CycleId, raft.Lot.Session([3]).Percents(50m, 3))).GetProperty("seedLot").Id());
     }
 
     // BR-FARM-03: Growing lanes and Not seeded lanes count as before; a lane in a lot still has seed.

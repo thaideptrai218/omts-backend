@@ -22,6 +22,7 @@ public sealed class MaterialUsageService(
     IRaftRepository rafts,
     IFarmingInputItemRepository items,
     MaterialUsageCycleGuard cycleGuard,
+    MaterialUsageStockSync stockSync,
     RaftViews raftViews,
     MaterialUsageViews views,
     ZoneAccessGuard zoneAccess,
@@ -82,6 +83,11 @@ public sealed class MaterialUsageService(
             {
                 RaftId = raft.Id, UsageDate = date, RepairReason = repairReason, ItemId = item.Id, Quantity = line.Quantity!.Value, RecordedByAccountId = recorder,
             };
+            if (await stockSync.PostAsync(usage, item, raft, cancellationToken) is { } stockRefused)
+            {
+                return stockRefused;
+            }
+
             usages.Add(usage);
             audit.Record(MaterialUsageValues.Entry(MaterialUsageValues.Created, usage, raft) with { After = MaterialUsageValues.Snapshot(usage, raft, item) });
             saved.Add(usage);

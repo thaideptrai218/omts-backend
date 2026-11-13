@@ -84,7 +84,7 @@ public class TraceCorrectionAccessTests(AuthApiFactory factory) : IClassFixture<
         var closed = await t.Owner.Client.TraceRecordsAsync(t.CycleId);
         Assert.Equal(log.Id(), Assert.Single(closed.GetProperty("cultivationLogs").EnumerateArray()).Id());
         var lot = Assert.Single(closed.GetProperty("harvestLots").EnumerateArray());
-        Assert.Equal((t.LotCode, "NotPublished", 8), (lot.Text("lotCode"), lot.Text("originState"), lot.GetProperty("cageCount").GetInt32()));
+        Assert.Equal((t.LotCode, "NotPublished", 8), (lot.Text("lotCode"), lot.Text("originState"), lot.GetProperty("cageCount").GetDecimal()));
         Assert.False(closed.Flag("needsOwnerApproval"));
     }
 

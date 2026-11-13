@@ -34,13 +34,17 @@ public class HarvestLot : AuditableEntity, IHasStatus
     /// <summary>The business date (UTC+7) of <see cref="HarvestedAt"/>.</summary>
     public DateOnly HarvestDate { get; set; }
 
-    public int CageCount { get; set; }
+    /// <summary>Cages harvested on the trip, in steps of 0.01 (half a cage is 0.5): the Owner or Zone Manager counts them, so a part of a cage is allowed.</summary>
+    public decimal CageCount { get; set; }
 
     /// <summary>A copy of the average kg per cage at record time; later settings do not change it (BR-HARVEST-02).</summary>
     public decimal KgPerCage { get; set; }
 
     /// <summary>Cages times <see cref="KgPerCage"/> unless the Zone Manager changed it (BR-HARVEST-02).</summary>
     public decimal EstimatedKg { get; set; }
+
+    /// <summary>Why the cycle harvested kg went above its target yield, when the Zone Manager confirmed it (over 110 % of the target); null otherwise.</summary>
+    public string? OverPlanReason { get; set; }
 
     /// <summary>Who recorded it: a Zone Manager corrects or removes only the lots they recorded (BR-HARVEST-05).</summary>
     public Guid RecordedByAccountId { get; set; }
@@ -79,6 +83,9 @@ public class HarvestLot : AuditableEntity, IHasStatus
 
     public ICollection<HarvestLotLane> Lanes { get; set; } = [];
     public ICollection<HarvestLotPhoto> Photos { get; set; } = [];
+
+    /// <summary>The employees who worked on the trip, optional (decision of 12/11/2026).</summary>
+    public ICollection<HarvestLotCrewMember> Crew { get; set; } = [];
 
     /// <summary>Open and Reopened lots can be chosen on a sales invoice (BR-HARVEST-04).</summary>
     public bool IsForSale => StatusId is StatusIds.HarvestLot.Open or StatusIds.HarvestLot.Reopened;

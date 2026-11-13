@@ -6,11 +6,23 @@ using OMTS.Application.Features.Farming.Rafts;
 
 namespace OMTS.Application.Features.Cultivation.Cycles;
 
-/// <summary>CYCLE-01.0. Without <see cref="StartDate"/> the cycle starts today; the plan estimates are optional.</summary>
-public sealed record StartCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, DateOnly? ExpectedHarvestDate, decimal? TargetYieldKg);
+/// <summary>
+/// CYCLE-01.0. Without <see cref="StartDate"/> the cycle starts today; the plan estimates are optional. There is no expected harvest date any more (owner decision of 12/11/2026): a field sent for it is ignored.
+/// The plan carries 1 to 3 photos, sent beside it; <paramref name="OtherFilePart"/>: a file came in a part not named <c>photos</c>.
+/// </summary>
+public sealed record StartCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, decimal? TargetYieldKg, bool OtherFilePart = false);
 
-/// <summary>CYCLE-01.1: the start date and the plan estimates as they should be; a plan estimate sent empty is cleared.</summary>
-public sealed record EditCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, DateOnly? ExpectedHarvestDate, decimal? TargetYieldKg, string? RowVersion);
+/// <summary>
+/// CYCLE-01.0 (v2, 13/11/2026): a cycle is started by hand from a nursery batch that is ready. Without <see cref="StartDate"/> the cycle starts today; <see cref="NurseryBatchId"/> and a <see cref="TargetYieldKg"/> above
+/// 0 are required. The plan carries 1 to 3 photos beside it. <see cref="RaftId"/> is read from the form, or from the route of the raft. There is no product to send (13/11/2026): the cycle farms the product of the seed item of the batch.
+/// </summary>
+public sealed record CreateCycleRequest(Guid? RaftId, Guid? NurseryBatchId, DateOnly? StartDate, decimal? TargetYieldKg, string? Note, bool OtherFilePart = false);
+
+/// <summary>
+/// CYCLE-01.1: the start date and the plan estimates as they should be; a plan estimate sent empty is cleared. A cycle that draws from a nursery batch (v2) keeps what is left out (null) and takes only the target yield,
+/// the start date, the <paramref name="Note"/> (sent empty to clear) and the <paramref name="NurseryBatchId"/> (only before the first seeding record, 409 CYCLE_SEED_LOCKED).
+/// </summary>
+public sealed record EditCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, decimal? TargetYieldKg, string? RowVersion, string? Note = null, Guid? NurseryBatchId = null);
 
 /// <summary>CYCLE-01.2.</summary>
 public sealed record CancelCycleRequest(string? RowVersion);
@@ -18,6 +30,14 @@ public sealed record CancelCycleRequest(string? RowVersion);
 /// <param name="DaysOfFarming">Both the first and the last day count; the last day of an Open cycle is today, of a closed one its last harvest lot, or else the close date.</param>
 /// <param name="CanEdit">The cycle is Open on a raft In Use in a zone In Use (CYCLE-01 PRE-3).</param>
 /// <param name="CanCancel">The cycle can be edited and has no record yet (CYCLE-01 PRE-3).</param>
+/// <param name="NurseryBatchId">The nursery batch the cycle draws its seed from; null on a cycle started the old way (no nursery), whose other nursery fields are null too.</param>
+/// <param name="NurserySeeded">The pieces this cycle has seeded from the batch; <paramref name="NurseryRemaining"/> what is left in the pool of the batch for every cycle.</param>
+/// <param name="SeedLot">The seed lot of the batch (read only), traced to its receipt and supplier.</param>
+/// <param name="CanChangeNursery">The cycle is Open and has no seeding record yet: the batch can still be changed (CYCLE-01.1, v2).</param>
+/// <param name="ProductId">The product the cycle will yield and sell, which a harvest lot's purchase request must match (13/11/2026); null on a cycle started before, which is not checked.</param>
+/// <param name="CanChangeProduct">The same condition as <paramref name="CanChangeNursery"/>: the product can still change, by changing the batch (it is derived from the seed item of the batch).</param>
+/// <param name="SeedItemName">The seed item the cycle farms: that of the batch's seed lot (whose product the cycle yields), or on a cycle started the old way that of its main seeding lot; null when it has no seed yet.</param>
+/// <param name="SeedItemNames">A cycle started the old way and seeded from more than one seed item: the distinct names, the one with most seed first; null otherwise.</param>
 public sealed record CycleView(
     Guid Id,
     Guid RaftId,
@@ -25,7 +45,6 @@ public sealed record CycleView(
     DateOnly StartDate,
     DateOnly? CloseDate,
     decimal? ExpectedSeedQuantity,
-    DateOnly? ExpectedHarvestDate,
     decimal? TargetYieldKg,
     DateOnly? SeedingCompletedOn,
     string? Assessment,
@@ -35,7 +54,30 @@ public sealed record CycleView(
     string Status,
     bool CanEdit,
     bool CanCancel,
-    string RowVersion);
+    string RowVersion,
+    Guid? NurseryBatchId = null,
+    string? NurseryCode = null,
+    decimal? NurserySeeded = null,
+    decimal? NurseryRemaining = null,
+    IReadOnlyList<CyclePlanPhotoView>? PlanPhotos = null,
+    bool PlanPhotosFromNursery = false,
+    string? Note = null,
+    SeedLotRef? SeedLot = null,
+    bool CanChangeNursery = false,
+    Guid? ProductId = null,
+    string? ProductName = null,
+    bool CanChangeProduct = false,
+    string? SeedItemName = null,
+    IReadOnlyList<string>? SeedItemNames = null);
+
+/// <summary>A photo of the plan of a cycle: <paramref name="Url"/> is a signed link that expires.</summary>
+public sealed record CyclePlanPhotoView(Guid Id, int SortOrder, string Url);
+
+/// <summary>
+/// Change the photos of the plan of a cycle (decision of 12/11/2026): the plan then keeps exactly the photos of <paramref name="KeepPhotoIds"/> and the new ones, 1 to 3.
+/// <paramref name="RowVersion"/> is the version of the cycle; <paramref name="OtherFilePart"/>: a file came in a part not named <c>photos</c>.
+/// </summary>
+public sealed record ChangePlanPhotosRequest(string? RowVersion, IReadOnlyList<Guid>? KeepPhotoIds, bool OtherFilePart = false);
 
 /// <summary>Answer of a cycle edit (CYCLE-01.1).</summary>
 /// <param name="Message">MSG-GEN-05 "Cultivation cycle saved.".</param>
@@ -51,7 +93,19 @@ public sealed record CycleStarted(CycleView Cycle, DateOnly? PreviousCloseDate, 
 
 /// <summary>A cycle in the list of a raft (CYCLE-05.1), the newest first.</summary>
 /// <param name="ClosedEarly">A Closed cycle was closed early (BR-CYCLE-07); false for an Open one.</param>
-public sealed record CycleListItem(Guid Id, DateOnly StartDate, DateOnly? CloseDate, int StatusId, string Status, string RowVersion, bool ClosedEarly);
+/// <param name="NurseryBatchId">The nursery batch the cycle was created from; null on a cycle started the old way.</param>
+/// <param name="NurseryCode">The code of that batch (NU000007).</param>
+/// <param name="SeedItemName">The seed the cycle farms (what a raft shows as "Đang nuôi"): the item of the batch's seed lot, or on a cycle started the old way the item of its main seeding lot; null when it has no seed yet.</param>
+/// <param name="SeedLot">The batch's seed lot, or on a cycle started the old way the seeding lot with the most seed (code and item).</param>
+/// <param name="SeedItemNames">The distinct seed item names of a cycle started the old way that was seeded from more than one item, the one with most seed first; null otherwise.</param>
+public sealed record CycleListItem(
+    Guid Id, DateOnly StartDate, DateOnly? CloseDate, int StatusId, string Status, string RowVersion, bool ClosedEarly, Guid? NurseryBatchId = null,
+    string? NurseryCode = null, string? SeedItemName = null, CycleSeedLot? SeedLot = null, IReadOnlyList<string>? SeedItemNames = null)
+{
+    /// <summary>The same item with the seed it farms (a null label leaves it as it is).</summary>
+    public CycleListItem WithSeed(CycleSeedLabel? label) =>
+        label is null ? this : this with { NurseryCode = label.NurseryCode, SeedItemName = label.SeedItemName, SeedLot = label.SeedLot, SeedItemNames = label.SeedItemNames };
+}
 
 /// <summary>A raft on the Cultivation cycles screen (SCR-CYCLE-01). The commands are true only when the use case would accept them.</summary>
 /// <param name="LaneCount">The number of lanes In Use.</param>
@@ -72,8 +126,21 @@ public sealed record ZoneCycleItem(
     bool CanCancel,
     bool CanClose);
 
-/// <summary>A lane on a date: its status In Use or Removed, and the state worked out for that date (BR-FARM-03).</summary>
-public sealed record LaneDayView(Guid Id, int LaneNumber, int StatusId, string Status, LaneState State);
+/// <summary>
+/// A lane on a date: its status In Use or Removed, and the state worked out for that date (BR-FARM-03).
+/// </summary>
+/// <param name="IsDamaged">Damaged now and not repaired: the state is the one it had, and no seeding or harvest is possible. <paramref name="ReasonCode"/> says why it cannot be used.</param>
+/// <param name="IsOutOfService">Put out of service (decision of 12/11/2026). The state shows <c>OutOfService</c> when seed hung on the lane in the cycle (the lane counts as finished at the close).</param>
+/// <param name="LineLengthM">The line length in effect (the lane's own, else the raft's); null when unknown.</param>
+/// <param name="ReasonCode">Why the lane cannot take seed or a harvest from its own flags: <c>LaneDamaged</c> or <c>LaneOutOfService</c>; null otherwise.</param>
+/// <param name="SeededPercent">The share of the lane hung in the cycle, 0 to 100 (owner decision of 12/11/2026); the state follows from it and <paramref name="HarvestedPercent"/>.</param>
+/// <param name="HarvestedPercent">The share harvested, 0 to 100; null when nobody entered it (a lane harvested in lots before the percentages).</param>
+/// <param name="LastModifiedByName">Who last changed the percentages by hand, with <paramref name="LastModifiedAt"/>; null when nobody did. <paramref name="ProgressHistory"/> lists those changes, the newest first.</param>
+public sealed record LaneDayView(
+    Guid Id, int LaneNumber, int StatusId, string Status, LaneState State,
+    bool IsDamaged = false, bool IsOutOfService = false, decimal? LineLengthM = null, string? ReasonCode = null,
+    decimal SeededPercent = 0m, decimal? HarvestedPercent = null, string? LastModifiedByName = null, DateTimeOffset? LastModifiedAt = null,
+    IReadOnlyList<LaneProgressChangeView>? ProgressHistory = null);
 
 /// <summary>CYCLE-05: the lanes of a raft on a date with the cycle that was open then.</summary>
 /// <param name="Cycle">The cycle open on <paramref name="Date"/>, or null: the raft had none, so every lane is Not seeded.</param>

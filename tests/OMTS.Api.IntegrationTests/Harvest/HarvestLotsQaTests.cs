@@ -183,7 +183,6 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     }
 
     [Theory]
-    [InlineData("8.0")]
     [InlineData("8,5")]
     [InlineData("1e3")]
     [InlineData("0x10")]
@@ -233,7 +232,7 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     [InlineData(33.33, "3", 99.99)]
     [InlineData(0.01, "1", 0.01)]
     [InlineData(12.35, "7", 86.45)]
-    [InlineData(50, "20000000", 1000000000)]
+    [InlineData(50, "100000", 5000000)]
     public async Task The_estimate_is_worked_out_exactly_from_the_setting(decimal average, string cages, decimal estimate)
     {
         var raft = await factory.SeededRaftAsync();
@@ -246,16 +245,16 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
     }
 
     [Fact]
-    public async Task A_worked_out_estimate_above_the_limit_is_refused_and_a_sent_one_decides_for_a_huge_count()
+    public async Task Cages_above_the_maximum_are_refused_and_a_sent_kg_far_from_the_cages_only_warns()
     {
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
 
-        var refused = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields { Cages = "20000001" })).ReadAsync(HttpStatusCode.BadRequest);
-        Assert.Equal("Estimated kg", refused.Text("field"));
+        var refused = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields { Cages = "100000.01" })).ReadAsync(HttpStatusCode.BadRequest);
+        Assert.Equal("Number of cages", refused.Text("field"));
 
-        var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Cages = "2147483647", EstimatedKg = "1" });
-        Assert.Equal((2147483647, 1m), (lot.GetProperty("cageCount").GetInt32(), lot.Kg("estimatedKg")));
+        var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields { Cages = "100000", EstimatedKg = "1" });
+        Assert.Equal((100000m, 1m), (lot.GetProperty("cageCount").GetDecimal(), lot.Kg("estimatedKg")));
     }
 
     // The preview is a query of a whole number of days: whatever else comes answers MSG-GEN-01.
@@ -430,27 +429,27 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
 
         var saved = await owner.RecordHarvestAsync(raft.RaftId, new HarvestFields { Lanes = ["1"], Photos = [Jpeg] });
 
-        Assert.Equal(Sorted("lot", "everySeededLaneHarvested", "cycleRowVersion", "message", "messageCode"), Names(saved));
+        Assert.Equal(Sorted("lot", "everySeededLaneHarvested", "cycleRowVersion", "message", "messageCode", "warnings"), Names(saved));
         Assert.Equal(("Harvest lot saved.", "MSG-GEN-05"), (saved.Text("message"), saved.Text("messageCode")));
         var lot = saved.GetProperty("lot");
         Assert.Equal(
             Sorted("id", "lotCode", "cycleId", "raftId", "raftCode", "zoneId", "zoneCode", "harvestedAt", "harvestDate", "laneNumbers", "finishedLaneNumbers", "cageCount", "kgPerCage", "estimatedKg", "figures", "statusId", "status", "reopenedOn", "closeDate", "leftoverKg", "closeReason", "originState", "publishedAt", "withdrawnAt", "originMissing", "canPublish", "photos", "recordedByAccountId", "recordedByName", "canCorrect", "canRemove", "canClose", "rowVersion",
-                "purchaseRequestId", "purchaseRequestCode"),
+                "purchaseRequestId", "purchaseRequestCode", "overPlanReason", "crew", "lanePercents"),
             Names(lot));
         Assert.Equal(Sorted("invoicedKg", "returnedKg", "soldKg", "remainingKg", "lostKg", "differenceKg", "notFinal"), Names(lot.GetProperty("figures")));
-        Assert.Equal(Sorted("key", "sortOrder", "url"), Names(lot.GetProperty("photos")[0]));
+        Assert.Equal(Sorted("id", "key", "sortOrder", "url"), Names(lot.GetProperty("photos")[0]));
         Assert.Equal("NotPublished", lot.Text("originState"));
         Assert.Equal(Names(lot), Names(await owner.GetHarvestLotAsync(lot.Id())));
 
         var screen = await owner.HarvestScreenAsync(raft.RaftId);
-        Assert.Equal(Sorted("raftId", "raftCode", "cycle", "averageKgPerCage", "canRecordHarvest", "lanes", "lots", "orders"), Names(screen));
+        Assert.Equal(Sorted("raftId", "raftCode", "cycle", "averageKgPerCage", "canRecordHarvest", "lanes", "lots", "orders", "harvestedCages", "harvestedKg", "targetYieldKg", "remainingKg", "targetPercent", "overTarget"), Names(screen));
         Assert.Equal(
             Sorted("id", "code", "customerName", "productName", "acceptedCages", "harvestedCages", "pickupDate", "workDate", "plannedOnRaft"),
             Names(screen.GetProperty("orders")[0]));
-        Assert.Equal(Sorted("id", "laneNumber", "statusId", "status", "state", "canHarvest"), Names(screen.GetProperty("lanes")[0]));
+        Assert.Equal(Sorted("id", "laneNumber", "statusId", "status", "state", "canHarvest", "reason", "reasonCode", "canFinish", "lotCount", "lastHarvestDate", "seedLotCodes", "harvestedCages", "isDamaged", "isOutOfService", "lineLengthM", "seededPercent", "harvestedPercent", "lastModifiedByName", "lastModifiedAt", "progressHistory"), Names(screen.GetProperty("lanes")[0]));
         Assert.Equal(
             Sorted("id", "lotCode", "harvestedAt", "harvestDate", "laneNumbers", "finishedLaneNumbers", "cageCount", "kgPerCage", "estimatedKg", "invoicedKg", "remainingKg", "statusId", "status", "originState", "originMissing", "canPublish", "canCorrect", "canRemove", "canClose", "rowVersion",
-                "purchaseRequestId", "purchaseRequestCode"),
+                "purchaseRequestId", "purchaseRequestCode", "crew"),
             Names(screen.GetProperty("lots")[0]));
 
         var settings = await owner.HarvestSettingsAsync();

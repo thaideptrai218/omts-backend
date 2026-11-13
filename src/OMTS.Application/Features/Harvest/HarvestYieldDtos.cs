@@ -39,7 +39,9 @@ public sealed record HarvestYieldLot(
     decimal SoldKg,
     decimal LostKg,
     decimal DifferenceKg,
-    bool NotFinal);
+    bool NotFinal,
+    decimal CageCount = 0m,
+    decimal RemainingKg = 0m);
 
 /// <summary>One raft, zone or cycle of the report: each figure is the total of the same figure of its lots (POST-1).</summary>
 /// <param name="Key">The id of the raft, zone or cycle.</param>
@@ -49,6 +51,7 @@ public sealed record HarvestYieldLot(
 /// <param name="CycleStatus">The cycle's status now ("Open" or "Closed"): an Open cycle can still get lots.</param>
 /// <param name="NotFinal">A lot of the group is still for sale (MSG-HARVEST-04).</param>
 /// <param name="Lots">The lots of the group, oldest harvest first.</param>
+/// <param name="NurseryQuantityIn">Pieces put into the nursery for the cycles of the group, in proportion to their share of their batch; all four nursery figures are estimates (survivors are counted by eye) and null when no cycle of the group came from a nursery.</param>
 public sealed record HarvestYieldGroup(
     Guid Key,
     string Label,
@@ -67,10 +70,22 @@ public sealed record HarvestYieldGroup(
     decimal LostKg,
     decimal DifferenceKg,
     bool NotFinal,
-    IReadOnlyList<HarvestYieldLot> Lots);
+    IReadOnlyList<HarvestYieldLot> Lots,
+    decimal HarvestedCages = 0m,
+    decimal HarvestedKg = 0m,
+    decimal? TargetYieldKg = null,
+    decimal? RemainingKg = null,
+    decimal? SeedQuantity = null,
+    string? SeedUnit = null,
+    decimal AvailableKg = 0m,
+    decimal? NurseryQuantityIn = null,
+    decimal? NurserySurvivors = null,
+    decimal? NurseryLossPieces = null,
+    decimal? NurseryLossPercent = null);
 
 /// <summary>The totals of every lot of the report.</summary>
-public sealed record HarvestYieldTotals(int LotCount, decimal EstimatedKg, decimal SoldKg, decimal LostKg, decimal DifferenceKg, bool NotFinal);
+/// <param name="HarvestedCages">The cages of every lot of the report.</param>
+public sealed record HarvestYieldTotals(int LotCount, decimal EstimatedKg, decimal SoldKg, decimal LostKg, decimal DifferenceKg, bool NotFinal, decimal HarvestedCages = 0m);
 
 /// <summary>HARVEST-04 step 3 (SCR-HARVEST-03).</summary>
 /// <param name="From">The period applied, defaults resolved.</param>

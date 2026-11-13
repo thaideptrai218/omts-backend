@@ -32,6 +32,9 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<Raft> Rafts => Set<Raft>();
     public DbSet<RaftPhoto> RaftPhotos => Set<RaftPhoto>();
     public DbSet<Lane> Lanes => Set<Lane>();
+    public DbSet<LaneIncident> LaneIncidents => Set<LaneIncident>();
+    public DbSet<LaneIncidentPhoto> LaneIncidentPhotos => Set<LaneIncidentPhoto>();
+    public DbSet<LaneIncidentMaterial> LaneIncidentMaterials => Set<LaneIncidentMaterial>();
 
     // Seed, cultivation and water measurements
     public DbSet<FarmingInputItem> FarmingInputItems => Set<FarmingInputItem>();
@@ -60,10 +63,17 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<CultivationLogPhoto> CultivationLogPhotos => Set<CultivationLogPhoto>();
     public DbSet<SeedingRecord> SeedingRecords => Set<SeedingRecord>();
     public DbSet<SeedingRecordLane> SeedingRecordLanes => Set<SeedingRecordLane>();
+    public DbSet<SeedingRecordPhoto> SeedingRecordPhotos => Set<SeedingRecordPhoto>();
+    public DbSet<CyclePlanPhoto> CyclePlanPhotos => Set<CyclePlanPhoto>();
+    public DbSet<LaneProgressChange> LaneProgressChanges => Set<LaneProgressChange>();
+    public DbSet<NurseryBatch> NurseryBatches => Set<NurseryBatch>();
+    public DbSet<NurseryBatchAllocation> NurseryBatchAllocations => Set<NurseryBatchAllocation>();
+    public DbSet<NurseryBatchPhoto> NurseryBatchPhotos => Set<NurseryBatchPhoto>();
     public DbSet<WaterMeasurement> WaterMeasurements => Set<WaterMeasurement>();
     public DbSet<HarvestLot> HarvestLots => Set<HarvestLot>();
     public DbSet<HarvestLotLane> HarvestLotLanes => Set<HarvestLotLane>();
     public DbSet<HarvestLotPhoto> HarvestLotPhotos => Set<HarvestLotPhoto>();
+    public DbSet<HarvestLotCrewMember> HarvestLotCrew => Set<HarvestLotCrewMember>();
 
     // Products and customers
     public DbSet<Product> Products => Set<Product>();

@@ -14,4 +14,7 @@ public interface IMaterialUsageRepository
     Task<IReadOnlyList<MaterialUsage>> ListByRaftAsync(Guid raftId, CancellationToken cancellationToken);
 
     void Add(MaterialUsage usage);
+
+    /// <summary>Removes the record; the audit log keeps it with the reason.</summary>
+    void Remove(MaterialUsage usage);
 }

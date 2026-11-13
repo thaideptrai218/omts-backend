@@ -90,9 +90,10 @@ public class SeedingAccessAndProgressTests(AuthApiFactory factory) : IClassFixtu
         var setup = await factory.CycleAsync();
         var owner = setup.Owner.Client;
         var (first, second) = (await owner.SeedLotAsync(), await owner.SeedLotAsync());
-        await owner.RecordSeedingAsync(setup.CycleId, first.Session([1, 2], Today.AddDays(-5)));
-        await owner.RecordSeedingAsync(setup.CycleId, second.Session([2], Today.AddDays(-3)));
-        await owner.RecordSeedingAsync(setup.CycleId, first.Session([2], Today.AddDays(-2), 3m));
+        // Lane 2 is hung three times, a share of it each (a lane never holds more than 100 %).
+        await owner.RecordSeedingAsync(setup.CycleId, first.Session([1, 2], Today.AddDays(-5)).Percents(40m, 2));
+        await owner.RecordSeedingAsync(setup.CycleId, second.Session([2], Today.AddDays(-3)).Percents(30m, 2));
+        await owner.RecordSeedingAsync(setup.CycleId, first.Session([2], Today.AddDays(-2), 3m).Percents(30m, 2));
 
         var progress = await owner.ProgressAsync(setup.RaftId);
 
@@ -121,8 +122,8 @@ public class SeedingAccessAndProgressTests(AuthApiFactory factory) : IClassFixtu
         var setup = await factory.CycleAsync();
         var owner = setup.Owner.Client;
         var lot = await owner.SeedLotAsync();
-        var record = await owner.SeedingRecordAsync(setup.CycleId, lot.Session([1], Today.AddDays(-4), 7m));
-        await owner.RecordSeedingAsync(setup.CycleId, lot.Session([1, 2], Today.AddDays(-3), 5m));
+        var record = await owner.SeedingRecordAsync(setup.CycleId, lot.Session([1], Today.AddDays(-4), 7m).Percents(50m, 1));
+        await owner.RecordSeedingAsync(setup.CycleId, lot.Session([1, 2], Today.AddDays(-3), 5m).Percents(50m, 1));
 
         var lane = await owner.GetFromJsonAsync<JsonElement>($"/api/rafts/{setup.RaftId}/lanes/1/progress");
 

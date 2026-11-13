@@ -178,7 +178,7 @@ public class MaterialUsagesQaTestsItems(AuthApiFactory factory) : IClassFixture<
         Assert.Equal(["message", "messageCode", "records"], created.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         var record = created.GetProperty("records")[0];
         Assert.Equal(
-            ["canEdit", "cycleId", "id", "itemCode", "itemId", "itemName", "quantity", "raftCode", "raftId", "recordedAt", "recordedByAccountId", "recordedByName", "repairReason", "rowVersion", "unit", "usageDate"],
+            ["canEdit", "cycleId", "id", "issueCode", "issueId", "itemCode", "itemId", "itemName", "quantity", "raftCode", "raftId", "recordedAt", "recordedByAccountId", "recordedByName", "repairReason", "rowVersion", "unit", "usageDate"],
             record.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.Equal(Today.ToString("yyyy-MM-dd"), record.Text("usageDate"));
 
@@ -199,15 +199,15 @@ public class MaterialUsagesQaTestsItems(AuthApiFactory factory) : IClassFixture<
         Assert.Equal(setup.Owner.Account.Id, row.ActorAccountId);
     }
 
-    // CYCLE-03 has no remove, as the client list says. With a quantity above 0 required, a wrong repair can only be moved or edited: see the report, P4.
+    // Decision of 12/11/2026: a wrong repair is removed with a reason (POST .../remove, see FarmingRemovalAndHistoryTests); there is still no DELETE.
     [Fact]
-    public async Task P4_there_is_no_way_to_remove_a_record()
+    public async Task P4_a_record_has_no_delete_and_its_remove_needs_the_version_and_a_reason()
     {
         var setup = await factory.CycleAsync();
         var record = await setup.Owner.Client.RecordUsageAsync(setup.RaftId, await factory.ItemAsync());
 
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await setup.Owner.Client.DeleteAsync($"/api/material-usages/{record.Id()}")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await setup.Owner.Client.PostAsJsonAsync($"/api/material-usages/{record.Id()}/remove", new { reason = "wrong" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await setup.Owner.Client.PostAsJsonAsync($"/api/material-usages/{record.Id()}/remove", new { reason = "wrong" })).StatusCode);
     }
 
     // ---- Quantity and text limits. ----

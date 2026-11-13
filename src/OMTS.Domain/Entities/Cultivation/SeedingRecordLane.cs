@@ -10,4 +10,10 @@ public class SeedingRecordLane
 
     public Guid LaneId { get; set; }
     public Lane Lane { get; set; } = null!;
+
+    /// <summary>
+    /// The share of the lane this session hung, above 0 and at most 100, two decimals (owner decision of 12/11/2026). Entered in the form, default 100 (a whole lane); the shares of a lane add up to at most 100
+    /// in a cycle. Rows saved before the percentages are 100.
+    /// </summary>
+    public decimal SeededPercent { get; set; } = 100m;
 }
