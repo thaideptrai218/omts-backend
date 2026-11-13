@@ -84,7 +84,10 @@ public interface IInputIssueTypeRepository
 }
 
 /// <summary>One movement of an item with the running balance computed when read.</summary>
-public sealed record InputMovementRow(InputStockMovement Movement, decimal BalanceAfter, string? SeedLotCode);
+/// <summary>Where a movement of an issue came from: the farming record that posted it, with its cycle, raft and zone (null for other documents and manual issues).</summary>
+public sealed record InputMovementSource(InputIssueSource Kind, Guid? RecordId, Guid? CycleId, Guid? RaftId, Guid? ZoneId);
+
+public sealed record InputMovementRow(InputStockMovement Movement, decimal BalanceAfter, string? SeedLotCode, InputMovementSource? Source = null);
 
 public interface IInputMovementQuery
 {

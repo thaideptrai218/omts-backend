@@ -18,6 +18,8 @@ internal sealed class HarvestLotConfiguration : IEntityTypeConfiguration<Harvest
         builder.HasOne(x => x.PurchaseRequest).WithMany().HasForeignKey(x => x.PurchaseRequestId);
         // The invoice whose "sold the whole lot" tick closed the lot (SALE-05); only that invoice reopens it (SALE-07, SALE-08).
         builder.HasOne<SalesInvoice>().WithMany().HasForeignKey(x => x.ClosedBySalesInvoiceId);
+        builder.Property(x => x.CageCount).HasPrecision(9, 2);
+        builder.Property(x => x.OverPlanReason).HasMaxLength(Lengths.Reason);
         builder.Property(x => x.KgPerCage).HasPrecision(9, 2);
         builder.Property(x => x.EstimatedKg).HasPrecision(18, 3);
         builder.Property(x => x.LeftoverKg).HasPrecision(18, 3);
@@ -45,6 +47,9 @@ internal sealed class HarvestLotLaneConfiguration : IEntityTypeConfiguration<Har
         builder.HasKey(x => new { x.LotId, x.LaneId });
         builder.HasOne(x => x.Lot).WithMany(l => l.Lanes).HasForeignKey(x => x.LotId);
         builder.HasOne(x => x.Lane).WithMany().HasForeignKey(x => x.LaneId);
+        // The share of the lane this lot harvested; null when nobody entered it (before the percentages, or no share and the lane not finished).
+        builder.Property(x => x.HarvestedPercent).HasPrecision(5, 2);
+        builder.ToTable(t => t.HasCheckConstraint("CK_HarvestLotLane_HarvestedPercent", "[HarvestedPercent] IS NULL OR ([HarvestedPercent] > 0 AND [HarvestedPercent] <= 100)"));
     }
 }
 
@@ -58,5 +63,17 @@ internal sealed class HarvestLotPhotoConfiguration : IEntityTypeConfiguration<Ha
         // One file per slot and only the allowed slots: no save can leave more than the maximum on a lot.
         builder.HasIndex(x => new { x.LotId, x.SortOrder }).IsUnique();
         builder.ToTable(t => t.HasCheckConstraint("CK_HarvestLotPhoto_SortOrder", $"[SortOrder] BETWEEN 1 AND {HarvestLot.MaxPhotos}"));
+    }
+}
+
+internal sealed class HarvestLotCrewMemberConfiguration : IEntityTypeConfiguration<HarvestLotCrewMember>
+{
+    public void Configure(EntityTypeBuilder<HarvestLotCrewMember> builder)
+    {
+        // One row per employee on the lot; the same employee may be on lots of other rafts the same day (decision of 12/11/2026).
+        builder.HasKey(x => new { x.LotId, x.EmployeeId });
+        builder.HasOne(x => x.Lot).WithMany(l => l.Crew).HasForeignKey(x => x.LotId);
+        builder.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(x => x.EmployeeId);
     }
 }

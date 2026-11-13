@@ -161,7 +161,7 @@ public class HarvestCorrectionsQaTestsForSale
         var saved = await api.CorrectLotAsync(manager.Client, lot.Id(), new HarvestFields { Cages = "9" });
 
         Assert.Equal(
-            new[] { "cycleRowVersion", "everySeededLaneHarvested", "lot", "message", "messageCode" },
+            new[] { "cycleRowVersion", "everySeededLaneHarvested", "lot", "message", "messageCode", "warnings" },
             saved.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.Equal(("Harvest lot saved.", "MSG-GEN-05"), (saved.Text("message"), saved.Text("messageCode")));
         Assert.Equal((true, true), (saved.GetProperty("lot").Flag("canCorrect"), saved.GetProperty("lot").Flag("canRemove")));

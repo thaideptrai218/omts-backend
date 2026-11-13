@@ -92,7 +92,7 @@ public sealed class TraceCorrectionsController(
     [ProducesResponseType<TraceHarvestLotCorrected>(StatusCodes.Status200OK)]
     public async Task<IActionResult> CorrectLot(Guid lotId, [FromForm] TraceHarvestLotForm form, CancellationToken cancellationToken)
     {
-        TryInt(form.CageCount, out var cageCount);
+        TryDecimal(form.CageCount, out var cageCount);
         var estimatedIsRead = TryDecimal(form.EstimatedKg, out var estimatedKg);
         var request = new CorrectHarvestLotRequest(
             Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, form.KeepPhotoKeys, form.Reason, form.RowVersion, !estimatedIsRead,

@@ -209,11 +209,17 @@ internal sealed class InputMovementReader(OmtsDbContext db) : IInputMovementQuer
             ? new Dictionary<Guid, string>()
             : (await db.PurchaseReceiptLines.AsNoTracking().Where(l => lotIds.Contains(l.Id)).Select(l => new { l.Id, ReceiptCode = l.Receipt.Code, l.LineNumber }).ToListAsync(cancellationToken))
                 .ToDictionary(r => r.Id, r => $"{r.ReceiptCode}-{r.LineNumber}");
+        var documentIds = rows.Where(m => m.DocumentId != null).Select(m => m.DocumentId!.Value).Distinct().ToList();
+        var sources = documentIds.Count == 0
+            ? new Dictionary<Guid, InputMovementSource>()
+            : (await db.InputIssues.AsNoTracking().Where(i => documentIds.Contains(i.Id) && i.SourceKind != InputIssueSource.None)
+                .Select(i => new { i.Id, i.SourceKind, i.SourceRecordId, i.CycleId, i.RaftId, i.ZoneId }).ToListAsync(cancellationToken))
+                .ToDictionary(i => i.Id, i => new InputMovementSource(i.SourceKind, i.SourceRecordId, i.CycleId, i.RaftId, i.ZoneId));
         var balance = 0m;
         return rows.Select(m =>
         {
             balance += m.Quantity;
-            return new InputMovementRow(m, balance, m.SeedLotLineId is { } lot ? codes.GetValueOrDefault(lot) : null);
+            return new InputMovementRow(m, balance, m.SeedLotLineId is { } lot ? codes.GetValueOrDefault(lot) : null, m.DocumentId is { } doc ? sources.GetValueOrDefault(doc) : null);
         }).ToList();
     }
 

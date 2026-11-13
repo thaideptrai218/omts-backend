@@ -12,6 +12,7 @@ using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Files;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Purchasing;
+using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Purchasing.Items;
@@ -26,6 +27,7 @@ public sealed class FarmingInputItemService(
     IInputStockRepository stock,
     IInputUnitRepository units,
     IInputItemCategoryRepository groups,
+    IProductRepository products,
     IInputItemListQuery list,
     FarmingInputItemCodeService codes,
     InputItemAccess access,
@@ -365,7 +367,7 @@ public sealed class FarmingInputItemService(
     }
 
     private sealed record Values(
-        string Name, InputItemGroup Group, string? Description, string? Notes, Guid? ItemGroupId, decimal? MinQuantity, decimal? MaxQuantity, decimal? CostPrice, decimal? OpeningQuantity);
+        string Name, InputItemGroup Group, string? Description, string? Notes, Guid? ItemGroupId, decimal? MinQuantity, decimal? MaxQuantity, decimal? CostPrice, decimal? OpeningQuantity, Product? Product);
 
     private async Task<(Values Values, List<string> Invalid)> ValidateAsync(SaveFarmingInputItemRequest request, CancellationToken cancellationToken)
     {
@@ -410,6 +412,18 @@ public sealed class FarmingInputItemService(
             check.Add("Item group");
         }
 
+        // The product sold when this seed is grown (13/11/2026): Seed items only, the other types ignore it; it must be in the catalogue and still sold.
+        Product? product = null;
+        if (request.Group == InputItemGroup.Seed && request.ProductId is { } productId)
+        {
+            product = await products.GetForEditAsync(productId, cancellationToken);
+            if (product is null || product.StatusId != StatusIds.Usage.InUse)
+            {
+                check.Add("ProductId");
+                product = null;
+            }
+        }
+
         var minOk = Amount(request.MinQuantity, "Min quantity", MaxQuantity, 3);
         var maxOk = Amount(request.MaxQuantity, "Max quantity", MaxQuantity, 3);
         if (minOk && maxOk && request.MinQuantity > request.MaxQuantity)
@@ -421,7 +435,7 @@ public sealed class FarmingInputItemService(
         Amount(request.OpeningQuantity, "Opening quantity", MaxQuantity, 2);
         return (new Values(
             name, request.Group ?? default, description.Length == 0 ? null : description, notes.Length == 0 ? null : notes, request.ItemGroupId,
-            request.MinQuantity, request.MaxQuantity, request.CostPrice, request.OpeningQuantity), check);
+            request.MinQuantity, request.MaxQuantity, request.CostPrice, request.OpeningQuantity, product), check);
     }
 
     private static void Apply(FarmingInputItem item, Values values)
@@ -434,6 +448,8 @@ public sealed class FarmingInputItemService(
         item.MinQuantity = values.MinQuantity;
         item.MaxQuantity = values.MaxQuantity;
         item.CostPrice = values.CostPrice;
+        item.ProductId = values.Product?.Id;
+        item.Product = values.Product;
     }
 
     /// <summary>One unit of the item as it will be saved: an existing row (<see cref="Row"/>) or a new one, with its catalogue unit, factor and code.</summary>
@@ -613,7 +629,7 @@ public sealed class FarmingInputItemService(
 
     private static object Snapshot(FarmingInputItem i, IReadOnlyList<UnitPlan>? plans) => new
     {
-        i.Code, i.Name, i.Group, i.ItemGroupId, i.Unit, i.Description, i.Notes, i.MinQuantity, i.MaxQuantity, i.CostPrice,
+        i.Code, i.Name, i.Group, i.ItemGroupId, i.Unit, i.Description, i.Notes, i.MinQuantity, i.MaxQuantity, i.CostPrice, i.ProductId,
         Units = plans is null
             ? i.Units.OrderByDescending(u => u.IsBase).ThenBy(u => u.Factor).Select(u => new { Unit = u.Unit?.Name ?? string.Empty, u.Factor, u.Code, u.IsBase }).ToList()
             : plans.OrderByDescending(p => p.IsBase).ThenBy(p => p.Factor).Select(p => new { Unit = p.Catalogue.Name, p.Factor, p.Code, p.IsBase }).ToList(),
@@ -713,7 +729,7 @@ public sealed class FarmingInputItemService(
                 i.Units.OrderByDescending(u => u.IsBase).ThenBy(u => u.Factor).Select(u => new ItemUnitView(u.Id, u.UnitId, u.Unit.Name, u.Factor, u.Code, u.IsBase, usedUnits.Contains(u.Id))).ToList(),
                 i.Description, i.Notes, photo, i.MinQuantity, i.MaxQuantity, i.CostPrice, i.LastPurchasePrice, onHand, onHand * (i.CostPrice ?? 0m),
                 used.Contains(i.Id), i.StatusId, statusCatalog.DisplayNameOf(i.StatusId), i.CreatedAt, i.CreatedBy is { } id ? names.GetValueOrDefault(id) : null,
-                RowVersionGuard.Encode(i.RowVersion)));
+                RowVersionGuard.Encode(i.RowVersion), i.ProductId, i.Product?.Name));
         }
 
         return result;

@@ -30,6 +30,10 @@ public static class UserMessages
     /// <param name="action">What is done, in the words of the SRS, e.g. "correct traceability data".</param>
     public static UserMessage ConfirmAction(string action) => new(Gen04, $"Are you sure you want to {action}? This action is recorded in the audit log.", Legacy.Msg09);
 
+    /// <summary>MSG-GEN-04 for a seeding session that takes the cycle above 110 % of its planned seed: the client asks again with <c>confirmOverPlan</c> and a reason.</summary>
+    public static UserMessage SeedingOverPlanQuestion(decimal totalQuantity, decimal plannedQuantity) => ConfirmAction(
+        $"record this seeding, which takes the cycle to {Quantity(totalQuantity)} seed, above its planned seed of {Quantity(plannedQuantity)}");
+
     /// <summary>MSG-GEN-05: a record is saved.</summary>
     public static UserMessage Saved(string what) => new(Gen05, $"{what} saved.", Legacy.Msg10);
 
@@ -40,6 +44,22 @@ public static class UserMessages
     /// <summary>MSG-GEN-08 (GFR-02): the role or zone access does not allow the function; nothing is changed.</summary>
     public static readonly UserMessage NoPermission = new(
         Gen08, "You do not have permission to perform this action. Nothing has been changed.", Legacy.Msg02);
+    /// <summary>MSG-GEN-09 in Vietnamese for a lane put out of service that cannot be restored while an Open cycle still holds seed on it (owner decision of 12/11/2026).</summary>
+    public static UserMessage LaneStillHoldsSeed(int laneNumber) => new(
+        Gen09, $"Làn {laneNumber} chưa thể đưa vào hoạt động lại: chu kỳ đang mở vẫn còn giống trên làn này. Hãy đóng hoặc kết thúc chu kỳ trước.", Legacy.Msg61);
+
+
+    /// <summary>
+    /// MSG-GEN-09 in Vietnamese for the nursery (ươm giống, decision of 12/11/2026): the generic code stands in until the SRS gives MSG-NURSERY-xx a number of its own. The caller adds a
+    /// <c>reasonCode</c> to the details so a client can tell the refusals apart.
+    /// </summary>
+    public static UserMessage NurseryRefused(string text) => new(Gen09, text, Legacy.Msg61);
+
+    /// <summary>
+    /// MSG-GEN-09 in Vietnamese for finishing a harvest (QA of 13/11/2026: the English detail of the refusals shown to the Owner on the live demo): the same code and legacy code as
+    /// <see cref="WrongStatus"/>, with a text the screen can show as it is.
+    /// </summary>
+    public static UserMessage HarvestRefused(string text) => new(Gen09, text, Legacy.Msg61);
 
     /// <summary>MSG-GEN-09 (GBR-01): a record in this status cannot be used for the change asked for.</summary>
     /// <param name="objectName">e.g. "Farming zone"; the first letter is capitalized.</param>
@@ -317,6 +337,13 @@ public static class UserMessages
         };
     }
 
+    /// <summary>MSG-CYCLE-01 when no lane has seed yet: finishing the seeding of an empty raft needs <c>confirmEmpty</c> (PM decision 11/11/2026).</summary>
+    public static UserMessage FinishEmptySeedingQuestion(string raftCode) => new(
+        Cycle01, $"No lane of raft {raftCode} has seed yet. Finish the seeding anyway? The Cooperative Owner will be asked to review the seeding.")
+    {
+        Parameters = new Dictionary<string, object?> { ["raft_code"] = raftCode, ["count"] = 0 },
+    };
+
     /// <summary>MSG-CYCLE-02 (CYCLE-02.1): notification to the Cooperative Owner when the seeding of a raft is marked complete.</summary>
     public static UserMessage SeedingFinished(string raftCode, int seededCount, int laneCount) => new(
         Cycle02, $"Raft {raftCode}: seeding is finished; {seededCount} of {laneCount} lanes have seed. Please review the seeding sessions.")
@@ -392,15 +419,15 @@ public static class UserMessages
     };
 
     /// <summary>MSG-HARVEST-01 (BF-03 step 7): notification to the Cooperative Owner when a harvest lot is recorded.</summary>
-    public static UserMessage HarvestLotRecorded(string raftCode, DateOnly harvestDate, string lotCode, int cageCount, decimal estimatedKg) => new(
-        Harvest01, $"Raft {raftCode}: the harvest of {Date(harvestDate)} is recorded as lot {lotCode} ({cageCount.ToString(CultureInfo.InvariantCulture)} cages, about {Quantity(estimatedKg)} kg).")
+    public static UserMessage HarvestLotRecorded(string raftCode, DateOnly harvestDate, string lotCode, decimal cageCount, decimal estimatedKg) => new(
+        Harvest01, $"Raft {raftCode}: the harvest of {Date(harvestDate)} is recorded as lot {lotCode} ({Quantity(cageCount)} cages, about {Quantity(estimatedKg)} kg).")
     {
         Parameters = new Dictionary<string, object?>
         {
             ["raft_code"] = raftCode,
             ["harvest_date"] = harvestDate,
             ["lot_code"] = lotCode,
-            ["cage_count"] = cageCount,
+            ["cage_count"] = decimal.Parse(Quantity(cageCount), CultureInfo.InvariantCulture),
             ["estimated_kg"] = decimal.Parse(Quantity(estimatedKg), CultureInfo.InvariantCulture),
         },
     };

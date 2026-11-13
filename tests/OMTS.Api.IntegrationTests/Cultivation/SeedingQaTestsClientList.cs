@@ -96,9 +96,10 @@ public class SeedingQaTestsClientList(AuthApiFactory factory) : IClassFixture<Au
         var owner = setup.Owner.Client;
         var lot = await owner.SeedLotAsync();
 
+        // The quantity travels as the text the client typed (a multipart field since 12/11/2026).
         async Task<HttpResponseMessage> PostRawAsync(string quantity, int lane) => await owner.PostAsync(
             $"/api/cultivation-cycles/{setup.CycleId}/seeding-records",
-            new StringContent($"{{\"seedingDate\":\"{Today:yyyy-MM-dd}\",\"seedLotId\":\"{lot.LineId}\",\"laneNumbers\":[{lane}],\"quantity\":{quantity}}}", System.Text.Encoding.UTF8, "application/json"));
+            StepFormKit.FormOf(new { seedingDate = Today, seedLotId = lot.LineId, laneNumbers = new[] { lane }, quantity = (object)null! }, photos: 1).WithField("quantity", quantity));
 
         await (await PostRawAsync("1.100", 1)).ReadAsync(HttpStatusCode.Created);
         await (await PostRawAsync("0.01", 2)).ReadAsync(HttpStatusCode.Created);
@@ -323,8 +324,8 @@ public class SeedingQaTestsClientList(AuthApiFactory factory) : IClassFixture<Au
         var owner = setup.Owner.Client;
         var lot = await owner.SeedLotAsync(quantity: 100m);
 
-        await owner.RecordSeedingAsync(setup.CycleId, lot.Session([1], quantity: 30m));
-        await owner.RecordSeedingAsync(setup.CycleId, lot.Session([1], quantity: 30m));
+        await owner.RecordSeedingAsync(setup.CycleId, lot.Session([1], quantity: 30m).Percents(50m, 1));
+        await owner.RecordSeedingAsync(setup.CycleId, lot.Session([1], quantity: 30m).Percents(50m, 1));
 
         Assert.Equal(2, (await owner.SeedingListAsync(setup.CycleId)).GetProperty("records").GetArrayLength());
         Assert.Equal(40m, (await owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts/{lot.ReceiptId}")).LineViewOf(lot.ItemId).Money("returnable"));

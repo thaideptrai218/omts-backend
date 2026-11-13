@@ -28,6 +28,16 @@ public interface ICultivationCycleRepository
     /// <summary>How many records hold the cycle: the same seeding sessions and logs as <see cref="WithRecordsAsync"/>.</summary>
     Task<int> CountRecordsAsync(Guid cycleId, CancellationToken cancellationToken);
 
+    /// <summary>The photos of the plan of the cycle in slot order, read only (decision of 12/11/2026).</summary>
+    Task<IReadOnlyList<CyclePlanPhoto>> PlanPhotosAsync(Guid cycleId, CancellationToken cancellationToken);
+
+    /// <summary>The same, tracked for editing.</summary>
+    Task<IReadOnlyList<CyclePlanPhoto>> PlanPhotosForEditAsync(Guid cycleId, CancellationToken cancellationToken);
+
+    void AddPlanPhoto(CyclePlanPhoto photo);
+
+    void RemovePlanPhoto(CyclePlanPhoto photo);
+
     void Add(CultivationCycle cycle);
 
     void Remove(CultivationCycle cycle);

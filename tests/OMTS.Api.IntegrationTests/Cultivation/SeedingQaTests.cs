@@ -195,7 +195,7 @@ public class SeedingQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         var refused = await (await owner.CancelAsync(receipt.Id(), "Wrong")).ProblemAsync(HttpStatusCode.Conflict, "MSG-PURCHASE-09");
 
         Assert.Equal(("Seeded", $"{code}-2"), (refused.Text("cause"), refused.Text("causeCode")));
-        Assert.Equal($"Receipt {code} cannot be cancelled: seed lot {code}-2 has already been seeded. The Cooperative Owner can correct it instead.", refused.Text("detail"));
+        Assert.Equal($"Receipt {code} cannot be cancelled: seed lot {code}-2 has already been used. The Cooperative Owner can correct it instead.", refused.Text("detail"));
 
         await (await owner.RemoveSeedingAsync(record.Id())).ReadAsync(HttpStatusCode.NoContent);
         Assert.Equal("Returned", (await (await owner.CancelAsync(receipt.Id(), "Wrong")).ProblemAsync(HttpStatusCode.Conflict, "MSG-PURCHASE-09")).Text("cause"));
@@ -243,7 +243,7 @@ public class SeedingQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
 
         // Re-hanging is over: a new session or an added lane that already has seed is refused and named.
         var refused = await (await owner.PostSeedingAsync(setup.CycleId, lot.Session([3, 4]))).ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
-        Assert.Equal(("Lanes", "Lanes 3 cannot be seeded now."), (refused.Text("field"), refused.Text("hint")));
+        Assert.Equal(("Lanes", "Không thể thả giống vào làn 3 lúc này."), (refused.Text("field"), refused.Text("hint")));
         Assert.Equal("Lanes", (await (await owner.PutSeedingAsync(record.Id(), edit with { LaneNumbers = [1, 2, 3] })).ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01")).Text("field"));
 
         // A lane of the session stays allowed, a lane Not seeded may be added, and a lane given back shows Not seeded.
@@ -360,24 +360,35 @@ public class SeedingQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         var owner = setup.Owner.Client;
         var lot = await owner.SeedLotAsync();
         var record = await owner.SeedingRecordAsync(setup.CycleId, lot.Session());
+        // The session itself is a multipart form since 12/11/2026 (photos beside it): an unreadable value is refused by name, and a JSON body is no longer accepted there.
         var routes = new (string Method, string Url)[]
         {
             ("POST", $"/api/cultivation-cycles/{setup.CycleId}/seeding-records"),
             ("PUT", $"/api/seeding-records/{record.Id()}"),
         };
-        var bodies = new[]
+        var fieldValues = new (string Field, string Value)[]
         {
-            "", "null", "[]", "{", "{\"laneNumbers\":[\"x\"]}", "{\"laneNumbers\":[1.5]}", "{\"laneNumbers\":[99999999999]}", "{\"laneNumbers\":[null]}", "{\"laneNumbers\":1}",
-            "{\"quantity\":\"many\"}", "{\"quantity\":1e400}", "{\"seedLotId\":\"not-a-guid\"}", "{\"seedingDate\":\"2026-02-30\"}", "{\"seedingDate\":20260101}",
+            ("laneNumbers", "x"), ("laneNumbers", "1.5"), ("laneNumbers", "99999999999"), ("quantity", "many"), ("quantity", "1e400"), ("seedLotId", "not-a-guid"), ("seedingDate", "2026-02-30"),
+            ("seedingDate", "20260101"), ("lanePercents", "[1,2]"), ("lanePercents", "{\"x\":1}"), ("lanePercents", "{\"1\":\"many\"}"),
         };
 
         foreach (var (method, url) in routes)
         {
-            foreach (var body in bodies)
+            foreach (var (field, value) in fieldValues)
             {
-                var answer = await owner.SendAsync(new HttpRequestMessage(new HttpMethod(method), url) { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") });
-                Assert.True(answer.StatusCode == HttpStatusCode.BadRequest, $"{method} {url} with {body}: {(int)answer.StatusCode} {await answer.Content.ReadAsStringAsync()}");
+                // The unreadable value replaces the field of the valid form (a repeated single-value field would read its first value).
+                var body = new Dictionary<string, object?>
+                {
+                    ["seedingDate"] = Today.AddDays(-1), ["seedLotId"] = lot.LineId, ["laneNumbers"] = new[] { 1 }, ["quantity"] = 1, ["reason"] = "x", ["rowVersion"] = "",
+                };
+                body[field] = value;
+                var form = StepFormKit.FormOf(body, photos: 1);
+                var answer = await owner.SendAsync(new HttpRequestMessage(new HttpMethod(method), url) { Content = form });
+                Assert.True(answer.StatusCode == HttpStatusCode.BadRequest, $"{method} {url} with {field}={value}: {(int)answer.StatusCode} {await answer.Content.ReadAsStringAsync()}");
             }
+
+            var json = await owner.SendAsync(new HttpRequestMessage(new HttpMethod(method), url) { Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json") });
+            Assert.Equal(HttpStatusCode.UnsupportedMediaType, json.StatusCode);
         }
 
         foreach (var body in new[] { "", "null", "{", "{\"reason\":1}", "{\"rowVersion\":[]}" })
@@ -401,7 +412,9 @@ public class SeedingQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         var owner = setup.Owner.Client;
         var lot = await owner.SeedLotAsync();
 
-        Assert.Equal(["Lanes"], await (await owner.PostSeedingAsync(setup.CycleId, lot.Session(Enumerable.Range(1, 5000).ToList()))).InvalidFieldsAsync());
+        // A form carries fewer than 1,024 fields (the host's limit), so a "huge" list is 900 lanes here; more is refused before the service, still with a 400.
+        Assert.Equal(["Lanes"], await (await owner.PostSeedingAsync(setup.CycleId, lot.Session(Enumerable.Range(1, 900).ToList()))).InvalidFieldsAsync());
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostSeedingAsync(setup.CycleId, lot.Session(Enumerable.Range(1, 5000).ToList()))).StatusCode);
         Assert.Equal(["Lanes"], await (await owner.PostSeedingAsync(setup.CycleId, lot.Session([1, int.MaxValue]))).InvalidFieldsAsync());
         Assert.Equal(["Lanes"], await (await owner.PostSeedingAsync(setup.CycleId, lot.Session([int.MinValue]))).InvalidFieldsAsync());
     }

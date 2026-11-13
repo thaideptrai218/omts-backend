@@ -152,10 +152,22 @@ public class StackMergeQaTestsMigrations
             Assert.True(await db.SeedingRecords.AnyAsync() && await db.PurchaseReturns.AnyAsync() && await db.MaterialUsages.AnyAsync() && await db.CultivationLogs.AnyAsync());
             var schema = await ReadAsync(db, SchemaQuery);
 
+            var refused = false;
             foreach (var target in Interleave.Reverse().Skip(1))
             {
                 try
                 {
+                    await migrator.MigrateAsync(target);
+                }
+                catch (SqlException failure) when (!refused && failure.Message.Contains("Down refused", StringComparison.Ordinal))
+                {
+                    // The demo has draft purchase returns, and Down of PurchaseDiscountsZonesAndDraftReturns refuses to delete a live feature (PM 12/11):
+                    // the user finishes or removes them first, which the test does with the same three deletes, then goes on.
+                    refused = true;
+                    await db.Database.ExecuteSqlRawAsync(
+                        "DELETE FROM SupplierPayments WHERE PurchaseReturnId IN (SELECT Id FROM PurchaseReturns WHERE StatusId = 1903 OR ReceiptId IS NULL);"
+                        + " DELETE rl FROM PurchaseReturnLines rl JOIN PurchaseReturns r ON r.Id = rl.ReturnId WHERE r.StatusId = 1903 OR r.ReceiptId IS NULL OR rl.ReceiptLineId IS NULL;"
+                        + " DELETE FROM PurchaseReturns WHERE StatusId = 1903 OR ReceiptId IS NULL;");
                     await migrator.MigrateAsync(target);
                 }
                 catch (SqlException failure)
@@ -168,6 +180,7 @@ public class StackMergeQaTestsMigrations
                 Assert.Equal(receipts, await db.Database.SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM PurchaseReceipts").SingleAsync());
             }
 
+            Assert.True(refused, "Down of the draft purchase returns should have refused while the demo returns were there.");
             await migrator.MigrateAsync();
 
             db.ChangeTracker.Clear();
@@ -238,8 +251,8 @@ public class StackMergeQaTestsMigrations
         Assert.Equal(statuses.Count, statuses.Select(s => (s.Group, s.Code)).Distinct().Count());
         foreach (var group in statuses.GroupBy(s => s.Group))
         {
-            // A purchase return starts as a Draft or is recorded at once (PURCHASE-02), so its group has two initial statuses.
-            var initials = group.Key == StatusGroups.PurchaseReturn ? 2 : 1;
+            // A purchase return starts as a Draft or is recorded at once (PURCHASE-02), and a customer payment starts Awaiting confirmation or Pending transfer (VietQR), so those groups have two initial statuses.
+            var initials = group.Key is StatusGroups.PurchaseReturn or StatusGroups.CustomerPayment ? 2 : 1;
             Assert.True(group.Count(s => s.IsInitial) == initials, $"group {group.Key} has {group.Count(s => s.IsInitial)} initial statuses");
             Assert.Equal(group.Count(), group.Select(s => s.SortOrder).Distinct().Count());
             Assert.Single(group.Select(s => s.Id / 100).Distinct());
@@ -274,10 +287,10 @@ public class StackMergeQaTestsMigrations
         var oldSchema = await ReadAsync(db, SchemaQuery);
         var cycle = new CultivationCycle { Raft = new Raft { Zone = new FarmingZone { CooperativeId = await OldSchemaRows.CooperativeAsync(db), Code = "KV01", Name = "A" }, Code = "B01", Size = "1" }, StartDate = new DateOnly(2026, 1, 1) };
         var account = new Account { Username = "owner", DisplayName = "Owner", SubjectType = SubjectType.CooperativeOwner, StatusId = StatusIds.Account.Active };
-        var item = new FarmingInputItem { Code = "VT001", Name = "Seed", Group = InputItemGroup.Seed, Unit = "con" };
-        db.AddRange(cycle, account, item);
+        // The item is a row of the old schema: the entity has columns that this schema does not have yet.
+        db.AddRange(cycle, account);
         await db.SaveChangesAsync();
-        var lineId = await OldSchemaRows.CompletedReceiptLineAsync(db, await OldSchemaRows.SupplierAsync(db), account.Id, item.Id, "con");
+        var lineId = await OldSchemaRows.CompletedReceiptLineAsync(db, await OldSchemaRows.SupplierAsync(db), account.Id, await OldSchemaRows.InputItemAsync(db, "VT001", "Seed", "Seed", "con"), "con");
         await db.Database.ExecuteSqlAsync($"INSERT INTO SeedingEvents (Id, CycleId, SeedLotId, SeedingDate, RecordedByAccountId, EvidenceUrls, CreatedAt) VALUES (NEWID(), {cycle.Id}, {lineId}, '2026-01-02', {account.Id}, N'[]', SYSDATETIMEOFFSET())");
         db.ChangeTracker.Clear();
 

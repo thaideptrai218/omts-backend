@@ -48,7 +48,7 @@ public sealed class SeedingCompletionService(
         }
 
         var (_, figures) = await FiguresAsync(cycle!, cancellationToken);
-        var question = UserMessages.FinishSeedingQuestion(cycle!.Raft.Code, figures.NotSeededLanes);
+        var question = figures.SeededCount == 0 ? UserMessages.FinishEmptySeedingQuestion(cycle!.Raft.Code) : UserMessages.FinishSeedingQuestion(cycle!.Raft.Code, figures.NotSeededLanes);
         return new SeedingCompletionPreview(
             cycle.Id, cycle.Raft.Code, figures.LaneCount, figures.SeededCount, figures.NotSeededLanes, question.Text, question.Code, RowVersionGuard.Encode(cycle.RowVersion));
     }
@@ -67,6 +67,14 @@ public sealed class SeedingCompletionService(
         }
 
         var (raft, figures) = await FiguresAsync(cycle!, cancellationToken);
+        if (figures.SeededCount == 0 && !request.ConfirmEmpty)
+        {
+            // PM decision 11/11/2026: finishing the seeding of a raft with no seeded lane needs a confirmation (MSG-CYCLE-01 style); nothing is saved until it comes back with the flag.
+            return AppError.Conflict(
+                UserMessages.FinishEmptySeedingQuestion(raft.Code),
+                new Dictionary<string, object?> { ["confirmFlag"] = "confirmEmpty", ["laneNumbers"] = figures.NotSeededLanes });
+        }
+
         cycle!.SeedingCompletedOn = timeProvider.Today();
         audit.Record(new AuditEntry(SeedingValues.CycleCompleted, nameof(CultivationCycle))
         {

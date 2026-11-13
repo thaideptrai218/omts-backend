@@ -49,7 +49,7 @@ public class TraceCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         await (await t.Owner.Client.PutSeedingTraceAsync(t.SessionId, t.Session.SeedingCorrection(quantity: 12m))).ReadAsync(HttpStatusCode.OK);
 
         var saved = await (await factory.SendLotTraceAsync(t.Owner.Client, t.LotId, HarvestFields.OfLanes(1) with { Cages = "9" })).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(9, saved.GetProperty("lot").GetProperty("cageCount").GetInt32());
+        Assert.Equal(9, saved.GetProperty("lot").GetProperty("cageCount").GetDecimal());
     }
 
     /// <summary>
@@ -63,8 +63,9 @@ public class TraceCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         var (t, _) = await ClosedAsync();
         await factory.PublishLotAsync(t.LotId);
 
+        var keepPhotoKeys = (await t.Owner.Client.GetHarvestLotAsync(t.LotId)).PhotoKeysOfLot();
         var preview = await (await t.Manager.Client.PreviewLotAsync(t.LotId,
-            new { laneNumbers = new[] { 1 }, finishedLaneNumbers = Array.Empty<int>(), cageCount = 9, reason = Reason })).ReadAsync(HttpStatusCode.OK);
+            new { laneNumbers = new[] { 1 }, finishedLaneNumbers = Array.Empty<int>(), cageCount = 9, keepPhotoKeys, reason = Reason })).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal(["cageCount", "estimatedKg"], preview.Strings("changedFields"));
         Assert.Empty(preview.Strings("affectedPublishedLotCodes"));

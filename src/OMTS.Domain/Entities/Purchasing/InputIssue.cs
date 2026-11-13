@@ -53,6 +53,13 @@ public class InputIssue : AuditableEntity, IHasStatus
     public DateTimeOffset? CompletedAt { get; set; }
     public DateTimeOffset? CancelledAt { get; set; }
     public string? CancelReason { get; set; }
+    /// <summary>The farming record that posted this issue and owns it; <see cref="InputIssueSource.None"/> for a manual issue.</summary>
+    public InputIssueSource SourceKind { get; set; }
+
+    /// <summary>The seeding session or material usage of <see cref="SourceKind"/>: the link the other way round, with its cycle (null for a usage outside any cycle).</summary>
+    public Guid? SourceRecordId { get; set; }
+    public Guid? CycleId { get; set; }
+
     public ICollection<InputIssueLine> Lines { get; set; } = [];
 }
 

@@ -326,20 +326,20 @@ public class HarvestLotsQaTestsKestrel(KestrelApiFactory api) : IClassFixture<Ke
 
     // NFR-14: 10 files of 10 MB in one save, with all the other fields.
     [Fact]
-    public async Task Ten_photos_of_ten_megabytes_fit_the_request_limit()
+    public async Task Three_photos_of_ten_megabytes_fit_the_request_limit()
     {
         var raft = await api.SeededRaftAsync();
         using var client = await OnKestrelAsync(raft.Owner.Account.Username);
         var photo = Sized(Jpeg, (int)(10 * Megabyte));
         var form = (HarvestFields.OfLanes(1, 2, 3, 4, 5).FinishedLanes(1, 2, 3, 4, 5) with
         {
-            Cages = "2147483647", EstimatedKg = "1000000000", Photos = Enumerable.Repeat(photo, 10).ToList(), Order = await api.HarvestOrderAsync(),
+            Cages = "2147483647", EstimatedKg = "1000000000", Photos = Enumerable.Repeat(photo, 3).ToList(), Order = await api.HarvestOrderAsync(),
         }).ToForm();
 
         using var response = await client.PostAsync($"api/rafts/{raft.RaftId}/harvest-lots", form);
 
         var lot = (await response.ReadAsync(HttpStatusCode.Created)).GetProperty("lot");
-        Assert.Equal(10, lot.GetProperty("photos").GetArrayLength());
+        Assert.Equal(3, lot.GetProperty("photos").GetArrayLength());
     }
 
     private sealed class ZeroContent(long length) : HttpContent

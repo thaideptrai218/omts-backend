@@ -64,7 +64,7 @@ public class HarvestLotOrderTests
 
         var offered = Assert.Single((await owner.HarvestScreenAsync(raft.RaftId)).GetProperty("orders").EnumerateArray());
 
-        Assert.Equal((open, 15, 1000), (offered.Id(), offered.GetProperty("harvestedCages").GetInt32(), offered.GetProperty("acceptedCages").GetInt32()));
+        Assert.Equal((open, 15, HarvestOrderKit.DefaultAcceptedCages), (offered.Id(), offered.GetProperty("harvestedCages").GetInt32(), offered.GetProperty("acceptedCages").GetInt32()));
         Assert.False(offered.GetProperty("plannedOnRaft").GetBoolean());
         Assert.StartsWith("Thương lái thu hoạch", offered.Text("customerName"));
     }

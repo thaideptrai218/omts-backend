@@ -16,6 +16,7 @@ using OMTS.Application.Features.Cultivation.Closing;
 using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Cultivation.CultivationLogs;
 using OMTS.Application.Features.Cultivation.MaterialUsages;
+using OMTS.Application.Features.Cultivation.Nursery;
 using OMTS.Application.Features.Cultivation.Seeding;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Dashboard;
@@ -175,14 +176,24 @@ public static class DependencyInjection
         services.AddScoped<RaftReadService>();
         services.AddScoped<RaftViews>();
         services.AddScoped<RaftPhotoService>();
+        services.AddScoped<LaneIncidentViews>();
+        services.AddScoped<LaneIncidentNotifier>();
+        services.AddScoped<LaneIncidentService>();
+        services.AddScoped<LaneIncidentReadService>();
+        services.AddScoped<LaneIncidentPhotoService>();
         services.AddScoped<RaftStatusService>();
 
         // CYCLE – cultivation cycles and the lane states derived from their records
         services.AddScoped<LaneStateReader>();
+        services.AddScoped<LaneProgressViews>();
+        services.AddScoped<LanePercentGuard>();
+        services.AddScoped<LaneProgressService>();
         services.AddScoped<CultivationCycleViews>();
+        services.AddScoped<CycleSeedLabels>();
         services.AddScoped<CycleWriteGuard>();
         services.AddScoped<CultivationLogViews>();
         services.AddScoped<RecordPhotoStore>();
+        services.AddScoped<StepPhotoService>();
         services.AddScoped<CultivationLogService>();
         services.AddScoped<CultivationLogCorrectionService>();
         services.AddScoped<CultivationLogReadService>();
@@ -190,12 +201,25 @@ public static class DependencyInjection
         services.AddScoped<SeedingViews>();
         services.AddScoped<SeedingReadService>();
         services.AddScoped<SeedingRecordService>();
+        services.AddScoped<SeedingStockSync>();
         services.AddScoped<SeedingRecordCorrectionService>();
         services.AddScoped<SeedingCompletionService>();
+
+        // NURSERY – ươm giống: batches of one seed lot per zone, completed into a pool the cycles seed from (v2)
+        services.AddScoped<NurseryBatchViews>();
+        services.AddScoped<NurseryNotifier>();
+        services.AddScoped<NurseryStockSync>();
+        services.AddScoped<NurseryBatchService>();
+        services.AddScoped<NurseryBatchEditService>();
+        services.AddScoped<NurseryCompletionService>();
+        services.AddScoped<NurseryReadService>();
         services.AddScoped<MaterialUsageCycleGuard>();
         services.AddScoped<MaterialUsageViews>();
         services.AddScoped<MaterialUsageService>();
+        services.AddScoped<MaterialUsageStockSync>();
         services.AddScoped<MaterialUsageEditService>();
+        services.AddScoped<MaterialUsageRemoveService>();
+        services.AddScoped<RecordHistoryService>();
         services.AddScoped<MaterialUsageReadService>();
         services.AddScoped<CultivationCycleService>();
         services.AddScoped<CultivationCycleReadService>();
@@ -205,7 +229,10 @@ public static class DependencyInjection
         // HARVEST-01, HARVEST-03 and what SALE and CLAIM call on a lot
         services.AddScoped<HarvestLotViews>();
         services.AddScoped<HarvestLotNotifier>();
+        services.AddScoped<HarvestCrewService>();
         services.AddScoped<HarvestLotRecordingService>();
+        services.AddScoped<HarvestLaneFinishService>();
+        services.AddScoped<HarvestLanesFinishService>();
         services.AddScoped<HarvestLotEditReader>();
         services.AddScoped<HarvestLotCorrectionService>();
         services.AddScoped<HarvestLotRemovalService>();
@@ -258,6 +285,7 @@ public static class DependencyInjection
         services.AddScoped<InputIssueAccess>();
         services.AddScoped<InputIssueCodeService>();
         services.AddScoped<InputIssueService>();
+        services.AddScoped<FarmingStockIssuer>();
         services.AddScoped<InputIssueTypeService>();
         services.AddScoped<InputMovementService>();
         services.AddScoped<FarmingInputItemDeletionService>();

@@ -104,16 +104,16 @@ public class HarvestYieldAcceptanceTests
         Assert.Equal("Cycle", report.Text("groupBy"));
         var group = Assert.Single(report.Groups());
         Assert.Equal(
-            ["cycleCloseDate", "cycleId", "cycleStartDate", "cycleStatus", "differenceKg", "estimatedKg", "key", "label", "lostKg", "lotCount", "lots", "notFinal", "raftCode",
-                "raftId", "soldKg", "zoneCode", "zoneId", "zoneName"],
+            ["availableKg", "cycleCloseDate", "cycleId", "cycleStartDate", "cycleStatus", "differenceKg", "estimatedKg", "harvestedCages", "harvestedKg", "key", "label", "lostKg", "lotCount", "lots", "notFinal", "nurseryLossPercent", "nurseryLossPieces", "nurseryQuantityIn", "nurserySurvivors", "raftCode",
+                "raftId", "remainingKg", "seedQuantity", "seedUnit", "soldKg", "targetYieldKg", "zoneCode", "zoneId", "zoneName"],
             group.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.Equal((setup.Raft.CycleId, "Open"), (group.GetProperty("key").GetGuid(), group.Text("cycleStatus")));
         Assert.Equal(
-            ["cycleId", "differenceKg", "estimatedKg", "harvestDate", "id", "inPeriod", "invoicedKg", "lostKg", "lotCode", "notFinal", "raftCode", "raftId", "returnedKg", "soldKg",
+            ["cageCount", "cycleId", "differenceKg", "estimatedKg", "harvestDate", "id", "inPeriod", "invoicedKg", "lostKg", "lotCode", "notFinal", "raftCode", "raftId", "remainingKg", "returnedKg", "soldKg",
                 "status", "statusId", "zoneCode", "zoneId"],
             report.YieldLot(lot.Id()).EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.Equal(
-            ["differenceKg", "estimatedKg", "lostKg", "lotCount", "notFinal", "soldKg"],
+            ["differenceKg", "estimatedKg", "harvestedCages", "lostKg", "lotCount", "notFinal", "soldKg"],
             report.GetProperty("totals").EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
     }
 }

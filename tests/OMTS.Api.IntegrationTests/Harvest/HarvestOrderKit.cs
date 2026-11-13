@@ -25,11 +25,15 @@ public static class HarvestOrderKit
 
     public static Task<Guid> HarvestOrderAsync(this AuthApiFactory factory) => DefaultOrderAsync(factory.Services);
 
+    /// <summary>The cages of the default order: the lots of a request never add up to more than it accepted (13/11/2026), and the tests of a host record many, up to the 100,000 cage maximum.</summary>
+    public const int DefaultAcceptedCages = 1_000_000;
+
     private static Task<Guid> DefaultOrderAsync(IServiceProvider services) =>
-        DefaultOrders.GetValue(services, s => new Lazy<Task<Guid>>(() => OrderAsync(s))).Value;
+        DefaultOrders.GetValue(services, s => new Lazy<Task<Guid>>(() => OrderAsync(s, acceptedCages: DefaultAcceptedCages))).Value;
 
     /// <summary>A request of a new customer profile and product, written in <paramref name="statusId"/>; Accepted for 1,000 cages unless said otherwise.</summary>
-    public static async Task<Guid> OrderAsync(IServiceProvider services, int statusId = StatusIds.PurchaseRequest.Accepted, bool harvestDone = false)
+    public static async Task<Guid> OrderAsync(
+        IServiceProvider services, int statusId = StatusIds.PurchaseRequest.Accepted, bool harvestDone = false, int acceptedCages = 1000)
     {
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
@@ -47,12 +51,12 @@ public static class HarvestOrderKit
             ProductId = product.Id,
             Product = product,
             ProductName = product.Name,
-            RequestedCages = 1000,
+            RequestedCages = acceptedCages,
             PickupDate = today.AddDays(2),
             ClientOperationId = Guid.NewGuid(),
             SentAt = now,
             StatusId = statusId,
-            AcceptedCages = accepted ? 1000 : null,
+            AcceptedCages = accepted ? acceptedCages : null,
             AgreedPickupDate = accepted ? today.AddDays(2) : null,
             PayLaterAgreed = accepted ? false : null,
             ResponseNote = statusId == StatusIds.PurchaseRequest.Declined ? "Hết hàu" : null,

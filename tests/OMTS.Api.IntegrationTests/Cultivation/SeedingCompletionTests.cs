@@ -87,10 +87,10 @@ public class SeedingCompletionTests(AuthApiFactory factory) : IClassFixture<Auth
         var manager = await factory.ManagerAsync(setup.ZoneId);
         var lot = await setup.Owner.Client.SeedLotAsync();
         var other = await setup.Owner.Client.SeedLotAsync();
-        var first = await manager.Client.SeedingRecordAsync(setup.CycleId, lot.Session([1, 2]));
+        var first = await manager.Client.SeedingRecordAsync(setup.CycleId, lot.Session([1, 2]).Percents(50m, 2));
 
-        // Re-hanging: the lane traces back to both lots.
-        await manager.Client.RecordSeedingAsync(setup.CycleId, other.Session([2, 3]));
+        // Re-hanging: the lane traces back to both lots, and holds half of each.
+        await manager.Client.RecordSeedingAsync(setup.CycleId, other.Session([2, 3]).Percents(50m, 2));
         var before = await manager.Client.SeedingListAsync(setup.CycleId);
         Assert.Equal((true, true, true), (LaneFlag(before, 1), LaneFlag(before, 2), LaneFlag(before, 4)));
 
@@ -102,7 +102,7 @@ public class SeedingCompletionTests(AuthApiFactory factory) : IClassFixture<Auth
         Assert.True(after.Flag("canRecord"));
 
         var refused = await (await manager.Client.PostSeedingAsync(setup.CycleId, lot.Session([2, 4]))).ReadAsync(HttpStatusCode.BadRequest);
-        Assert.Equal(("MSG-GEN-01", "Lanes", "Lanes 2 cannot be seeded now."), (refused.Text("code"), refused.Text("field"), refused.Text("hint")));
+        Assert.Equal(("MSG-GEN-01", "Lanes", "Không thể thả giống vào làn 2 lúc này."), (refused.Text("code"), refused.Text("field"), refused.Text("hint")));
 
         await manager.Client.RecordSeedingAsync(setup.CycleId, lot.Session([4, 5]));
         Assert.Equal(told, (await factory.SeedingNoticesAsync(setup.CycleId)).Count);
@@ -121,8 +121,8 @@ public class SeedingCompletionTests(AuthApiFactory factory) : IClassFixture<Auth
         var owner = setup.Owner.Client;
         var lot = await owner.SeedLotAsync();
 
-        Assert.False((await owner.RecordSeedingAsync(setup.CycleId, lot.Session([1, 2, 3, 4]))).Flag("offerMarkComplete"));
-        Assert.True((await owner.RecordSeedingAsync(setup.CycleId, lot.Session([4, 5]))).Flag("offerMarkComplete"));
+        Assert.False((await owner.RecordSeedingAsync(setup.CycleId, lot.Session([1, 2, 3, 4]).Percents(50m, 4))).Flag("offerMarkComplete"));
+        Assert.True((await owner.RecordSeedingAsync(setup.CycleId, lot.Session([4, 5]).Percents(50m, 4))).Flag("offerMarkComplete"));
 
         var other = await factory.CycleAsync();
         await other.Owner.Client.MarkSeedingCompleteAsync(other.CycleId);

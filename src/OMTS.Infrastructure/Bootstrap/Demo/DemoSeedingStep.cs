@@ -80,9 +80,14 @@ internal sealed class DemoSeedingStep : IDemoSeedStep
             2 => [(first, lanes.Take(lanes.Count - 1).ToList(), 4000m)],
             _ => [(first, lanes, 6000m)],
         };
+        // A lane re-hung by a second session shares it with the first: half each, as a lane never holds more than 100 % (owner decision of 12/11/2026).
+        IReadOnlyDictionary<int, decimal>? sharedLane = number == 1 ? new Dictionary<int, decimal> { [lanes[half - 1]] = 50m } : null;
+        var photoNumber = 0;
         foreach (var (date, numbers, quantity) in sessions)
         {
-            DemoSeedContext.Ensure(await service.RecordAsync(cycle.Id, new RecordSeedingRequest(date, lot.Id, numbers, quantity), cancellationToken), $"seeding of raft {raftCode}");
+            DemoSeedContext.Ensure(
+                await service.RecordAsync(cycle.Id, new RecordSeedingRequest(date, lot.Id, numbers, quantity, LanePercents: sharedLane), [DemoFiles.SeedingPhoto(number * 10 + ++photoNumber)], cancellationToken),
+                $"seeding of raft {raftCode}");
         }
 
         if (number == 1)

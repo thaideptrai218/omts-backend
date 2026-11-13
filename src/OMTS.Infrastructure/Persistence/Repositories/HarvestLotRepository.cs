@@ -18,7 +18,7 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
         WithAll(db.HarvestLots.AsNoTracking()).FirstOrDefaultAsync(l => l.Id == lotId, cancellationToken);
 
     public async Task<IReadOnlyList<HarvestLot>> ListByCycleAsync(Guid cycleId, CancellationToken cancellationToken) =>
-        await db.HarvestLots.AsNoTracking().Include(l => l.Lanes).ThenInclude(l => l.Lane).Include(l => l.PurchaseRequest)
+        await db.HarvestLots.AsNoTracking().Include(l => l.Lanes).ThenInclude(l => l.Lane).Include(l => l.PurchaseRequest).Include(l => l.Crew).ThenInclude(c => c.Employee)
             .Where(l => l.CycleId == cycleId)
             .OrderByDescending(l => l.HarvestedAt)
             .ToListAsync(cancellationToken);
@@ -26,7 +26,7 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
     public async Task<IReadOnlyList<LaneHarvest>> LaneHarvestsAsync(Guid cycleId, CancellationToken cancellationToken) =>
         await db.HarvestLotLanes.AsNoTracking()
             .Where(l => l.Lot.CycleId == cycleId)
-            .Select(l => new LaneHarvest(cycleId, l.LaneId, l.Lot.HarvestDate, l.IsFinished))
+            .Select(l => new LaneHarvest(cycleId, l.LaneId, l.Lot.HarvestDate, l.IsFinished, l.HarvestedPercent, l.Lot.HarvestedAt, l.LotId))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<HarvestLotLane>> ListOfLaneAsync(Guid cycleId, Guid laneId, CancellationToken cancellationToken) =>
@@ -38,7 +38,7 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
     public async Task<IReadOnlyList<LotLaneFact>> LaneFactsAsync(Guid cycleId, CancellationToken cancellationToken) =>
         await db.HarvestLotLanes.AsNoTracking()
             .Where(l => l.Lot.CycleId == cycleId)
-            .Select(l => new LotLaneFact(l.LotId, l.LaneId, l.Lot.HarvestDate, l.Lot.HarvestedAt, l.IsFinished))
+            .Select(l => new LotLaneFact(l.LotId, l.LaneId, l.Lot.HarvestDate, l.Lot.HarvestedAt, l.IsFinished, l.HarvestedPercent))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<string>> CodesFromAsync(string baseCode, CancellationToken cancellationToken)
@@ -124,6 +124,15 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
         return await chosen.Include(l => l.Raft).ThenInclude(r => r.Zone).Include(l => l.Cycle).ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, decimal>> KgByCycleAsync(IReadOnlyCollection<Guid> cycleIds, CancellationToken cancellationToken)
+    {
+        var rows = await db.HarvestLots.AsNoTracking()
+            .Where(l => cycleIds.Contains(l.CycleId))
+            .Select(l => new { l.CycleId, l.EstimatedKg })
+            .ToListAsync(cancellationToken);
+        return rows.GroupBy(r => r.CycleId).ToDictionary(g => g.Key, g => g.Sum(r => r.EstimatedKg));
+    }
+
     public Task<int> CountForSaleAsync(Guid? zoneId, CancellationToken cancellationToken)
     {
         var forSale = ForSale(db.HarvestLots.AsNoTracking());
@@ -153,7 +162,7 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
             .OrderBy(l => l.HarvestedAt).ThenBy(l => l.LotCode)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyDictionary<Guid, int>> CagesOfPurchaseRequestsAsync(IReadOnlyCollection<Guid> purchaseRequestIds, CancellationToken cancellationToken)
+    public async Task<IReadOnlyDictionary<Guid, decimal>> CagesOfPurchaseRequestsAsync(IReadOnlyCollection<Guid> purchaseRequestIds, CancellationToken cancellationToken)
     {
         var ids = purchaseRequestIds.Distinct().ToList();
         return await db.HarvestLots.AsNoTracking()
@@ -169,6 +178,7 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
     {
         db.HarvestLotLanes.RemoveRange(lot.Lanes);
         db.HarvestLotPhotos.RemoveRange(lot.Photos);
+        db.HarvestLotCrew.RemoveRange(lot.Crew);
         db.HarvestLots.Remove(lot);
     }
 
@@ -180,12 +190,17 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
 
     public void RemovePhoto(HarvestLotPhoto photo) => db.HarvestLotPhotos.Remove(photo);
 
+    public void AddCrew(HarvestLotCrewMember member) => db.HarvestLotCrew.Add(member);
+
+    public void RemoveCrew(HarvestLotCrewMember member) => db.HarvestLotCrew.Remove(member);
+
     private static IQueryable<HarvestLot> ForSale(IQueryable<HarvestLot> lots) =>
         lots.Where(l => l.StatusId == StatusIds.HarvestLot.Open || l.StatusId == StatusIds.HarvestLot.Reopened);
 
     private static IQueryable<HarvestLot> WithAll(IQueryable<HarvestLot> lots) =>
         lots.Include(l => l.Lanes).ThenInclude(l => l.Lane)
             .Include(l => l.Photos)
+            .Include(l => l.Crew).ThenInclude(c => c.Employee)
             .Include(l => l.Cycle)
             .Include(l => l.PurchaseRequest)
             .Include(l => l.Raft).ThenInclude(r => r.Zone);

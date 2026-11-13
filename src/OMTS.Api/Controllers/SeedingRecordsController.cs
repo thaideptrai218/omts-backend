@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OMTS.Api.Common;
+using OMTS.Api.Filters;
 using OMTS.Application.Features.Cultivation.Seeding;
 
 namespace OMTS.Api.Controllers;
@@ -14,6 +15,11 @@ namespace OMTS.Api.Controllers;
 public sealed class SeedingRecordsController(
     SeedingReadService reads, SeedingRecordService records, SeedingRecordCorrectionService corrections, SeedingCompletionService completions) : ControllerBase
 {
+    private const string PhotosField = "Photos";
+
+    // Three photos of 10 MB plus the multipart envelope.
+    private const long MaxUploadBytes = 35 * 1024 * 1024;
+
     /// <summary>The seed lots to choose from, those bought for this raft first. With none: an empty list and MSG-CYCLE-03.</summary>
     [HttpGet("api/rafts/{raftId:guid}/seed-lots")]
     [ProducesResponseType<SeedLotList>(StatusCodes.Status200OK)]
@@ -32,11 +38,20 @@ public sealed class SeedingRecordsController(
     public async Task<IActionResult> List(Guid cycleId, CancellationToken cancellationToken) =>
         (await reads.ListAsync(cycleId, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Records a session while the cycle is Open. Notifies nobody.</summary>
+    /// <summary>
+    /// Records a session while the cycle is Open. Multipart (owner decision of 12/11/2026): <c>seedingDate</c>, <c>seedLotId</c>, one <c>laneNumbers</c> field per lane, <c>quantity</c>, optional <c>lanePercents</c>
+    /// (a JSON object, lane number to percent; a lane left out takes 100) and 1 to 3 <c>photos</c> parts (JPEG or PNG, at most 10 MB each; 400 on <c>Photos</c> otherwise). Notifies nobody.
+    /// </summary>
     [HttpPost("api/cultivation-cycles/{cycleId:guid}/seeding-records")]
+    [RequestSizeLimit(MaxUploadBytes)]
+    [UploadField(PhotosField)]
+    [Consumes("multipart/form-data")]
     [ProducesResponseType<SeedingRecordSaved>(StatusCodes.Status201Created)]
-    public async Task<IActionResult> Record(Guid cycleId, RecordSeedingRequest request, CancellationToken cancellationToken) =>
-        (await records.RecordAsync(cycleId, request, cancellationToken)).ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
+    public async Task<IActionResult> Record(Guid cycleId, [FromForm] SeedingRecordForm form, CancellationToken cancellationToken) =>
+        !Request.HasFormContentType
+            ? StatusCode(StatusCodes.Status415UnsupportedMediaType)
+            : (await records.RecordAsync(cycleId, form.ToRecord(Request.Form.Files.HasPartOtherThan(PhotosField)), await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
+                .ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
 
     /// <summary>The question before marking the seeding complete: MSG-CYCLE-01, with the lanes still Not seeded.</summary>
     [HttpGet("api/cultivation-cycles/{cycleId:guid}/seeding-complete/preview")]
@@ -55,11 +70,20 @@ public sealed class SeedingRecordsController(
     public async Task<IActionResult> Get(Guid recordId, CancellationToken cancellationToken) =>
         (await reads.GetAsync(recordId, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Corrects a session while the cycle is Open and no lane of it is in a harvest lot: the recording Zone Manager or the Cooperative Owner. Notifies nobody.</summary>
+    /// <summary>
+    /// Corrects a session while the cycle is Open and no lane of it is in a harvest lot: the recording Zone Manager or the Cooperative Owner. Multipart: the fields of a session, <c>reason</c>, <c>rowVersion</c>,
+    /// optional <c>lanePercents</c> (a lane left out keeps its share) and, to change the photos, <c>keepPhotoIds</c> (one field per photo to keep) and/or <c>photos</c>: a session with photos keeps 1 to 3. Notifies nobody.
+    /// </summary>
     [HttpPut("api/seeding-records/{recordId:guid}")]
+    [RequestSizeLimit(MaxUploadBytes)]
+    [UploadField(PhotosField)]
+    [Consumes("multipart/form-data")]
     [ProducesResponseType<SeedingRecordSaved>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Correct(Guid recordId, CorrectSeedingRequest request, CancellationToken cancellationToken) =>
-        (await corrections.CorrectAsync(recordId, request, cancellationToken)).ToActionResult(Ok);
+    public async Task<IActionResult> Correct(Guid recordId, [FromForm] SeedingRecordForm form, CancellationToken cancellationToken) =>
+        !Request.HasFormContentType
+            ? StatusCode(StatusCodes.Status415UnsupportedMediaType)
+            : (await corrections.CorrectAsync(recordId, form.ToCorrect(Request.Form.Files.HasPartOtherThan(PhotosField)), await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
+                .ToActionResult(Ok);
 
     /// <summary>Removes a session on the same conditions; ask with MSG-GEN-04 first. 204; the audit log keeps it with the reason.</summary>
     [HttpPost("api/seeding-records/{recordId:guid}/remove")]

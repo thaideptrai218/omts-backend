@@ -17,7 +17,9 @@ public sealed record SeedLotRow(
     string SupplierName,
     Guid? RaftId,
     decimal QuantityReceived,
-    decimal QuantitySeeded);
+    decimal QuantitySeeded,
+    decimal QuantityReturned = 0m,
+    decimal QuantityConsumed = 0m);
 
 /// <summary>The seed lots seeding can choose from (GBR-04): the Seed lines of Completed purchase receipts.</summary>
 public interface ISeedLotRepository

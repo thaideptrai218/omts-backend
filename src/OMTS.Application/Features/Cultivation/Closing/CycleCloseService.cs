@@ -123,7 +123,7 @@ public sealed class CycleCloseService(
                 Summary = new
                 {
                     closed.SeedHung, closed.SeedUnit, closed.KgHarvested, closed.LastHarvestDate, closed.DaysOfFarming,
-                    closed.ExpectedSeedQuantity, closed.ExpectedHarvestDate, closed.TargetYieldKg, closed.EarlyReason, closed.NotHarvestedLanes,
+                    closed.ExpectedSeedQuantity, closed.TargetYieldKg, closed.EarlyReason, closed.NotHarvestedLanes,
                 },
             },
         });
