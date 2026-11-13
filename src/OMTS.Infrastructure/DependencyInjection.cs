@@ -392,7 +392,7 @@ public static class DependencyInjection
         });
     }
 
-    private static void AddZalo(this IServiceCollection services, IConfiguration configuration)
+    internal static void AddZalo(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<ZaloOptions>().Bind(configuration.GetSection(ZaloOptions.SectionName));
         services.AddHttpClient<GraphZaloOpenApi>((provider, http) =>
@@ -400,7 +400,11 @@ public static class DependencyInjection
             var zalo = provider.GetRequiredService<IOptions<ZaloOptions>>().Value;
             http.BaseAddress = new Uri(zalo.BaseUrl);
             http.Timeout = TimeSpan.FromSeconds(zalo.TimeoutSeconds);
-        });
+        })
+        // Zalo answers -501 to a caller outside Vietnam: Zalo:ProxyUrl sends this client (and no other) through a Vietnamese proxy.
+        // A bad URL throws here, when the Graph adapter is built at startup, like a missing App secret.
+        .ConfigurePrimaryHttpMessageHandler(provider =>
+            ZaloProxyHandlerFactory.Create(provider.GetRequiredService<IOptions<ZaloOptions>>().Value));
         services.AddSingleton<FakeZaloOpenApi>();
         services.AddSingleton<NotConfiguredZaloOpenApi>();
         // Unset fails closed (MSG04, nobody is linked) instead of trusting tokens nobody checked.
