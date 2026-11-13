@@ -7,7 +7,16 @@ public interface ICustomerPaymentRepository
 {
     void Add(CustomerPayment payment);
 
-    /// <summary>Tracked, with its customer and invoice.</summary>
+    /// <summary>Deletes a part of a payment (a short transfer cuts its allocation).</summary>
+    void RemoveAllocation(CustomerPaymentAllocation allocation);
+
+    /// <summary>The id of the payment with this code regardless of letter case, other than <paramref name="exceptPaymentId"/>; cancelled ones included.</summary>
+    Task<Guid?> FindIdByCodeAsync(string code, Guid? exceptPaymentId, CancellationToken cancellationToken);
+
+    /// <summary>The payments waiting for their transfer, tracked, with their customer, allocations (and the invoices of those) and bank account, oldest first.</summary>
+    Task<IReadOnlyList<CustomerPayment>> GetPendingTransfersAsync(CancellationToken cancellationToken);
+
+    /// <summary>Tracked, with its customer, invoice, allocations and bank account.</summary>
     Task<CustomerPayment?> GetForEditAsync(Guid paymentId, CancellationToken cancellationToken);
 
     /// <summary>Tracked, with their customers and invoices; the ids not found are left out.</summary>

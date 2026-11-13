@@ -10,4 +10,8 @@ public interface IDocumentNumberAllocator
 {
     /// <summary>The next number of <paramref name="key"/>, 1 for a key that has none yet.</summary>
     Task<long> NextAsync(string key, CancellationToken cancellationToken);
+
+    /// <summary>The number <see cref="NextAsync"/> would give now, without taking it (1 for a key that has none yet); only a proposal, as a parallel caller may take it first.</summary>
+    Task<long> PeekAsync(string key, CancellationToken cancellationToken) => throw new NotSupportedException("This allocator cannot preview the next number.");
 }
+

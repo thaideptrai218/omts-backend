@@ -94,7 +94,7 @@ internal sealed class DemoStaffAndEmployeeStep : IDemoSeedStep
                 : await context.Db.FarmingZones.Where(z => z.Code == plan.GrantZone).Select(z => z.Id).SingleAsync(cancellationToken);
             account = new NewEmployeeAccount(
                 plan.Username, null,
-                [new GrantDraft(grantZoneId, Role: FixedRoles.Of(plan.Role).Code)]);
+                plan.Login == DemoLoginKind.EmployeeArea ? [] : [new GrantDraft(grantZoneId, Role: FixedRoles.Of(plan.Role).Code)]);
         }
 
         var jobTypeIds = await DemoLaborSettingsStep.JobTypesInUseAsync(context, plan.JobTypes ?? [], cancellationToken);
@@ -124,6 +124,12 @@ internal sealed class DemoStaffAndEmployeeStep : IDemoSeedStep
         account.MustChangePassword = mustChange;
         account.TemporaryPasswordIssuedAt = mustChange ? NeverExpiresIssuedAt : null;
         account.PhoneVerifiedAt = plan.Login == DemoLoginKind.PhoneUnverified ? null : context.Now;
+        if (plan.Login == DemoLoginKind.EmployeeArea)
+        {
+            // A made-up id no Zalo user has: it only lets the employee without a pair log in, as after linking.
+            account.ZaloAccountId ??= $"demo-{plan.Username}";
+        }
+
         context.Get<AuditLogService>().Record(new AuditEntry(DemoSeedContext.DemoLoginSetAction, nameof(Account))
         {
             RecordId = account.Id,

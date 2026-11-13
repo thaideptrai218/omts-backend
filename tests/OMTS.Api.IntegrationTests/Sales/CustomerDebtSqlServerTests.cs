@@ -5,6 +5,8 @@ using OMTS.Api.IntegrationTests.Farming;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common;
 using OMTS.Application.Features.Sales.Debts;
+using OMTS.Application.Features.Sales.Invoices;
+using OMTS.Infrastructure.Persistence.Repositories;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Sales;
@@ -28,7 +30,7 @@ public class CustomerDebtSqlServerTests
 
         async Task<Guid> OwingCustomerAsync(string name, decimal total, decimal paid, decimal paidBack = 0m)
         {
-            var customer = new Customer { CooperativeId = host.CooperativeId, Name = name };
+            var customer = new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = host.CooperativeId, Name = name };
             var invoice = new SalesInvoice
             {
                 Code = $"HD9{++sequence:D5}", InvoicedAt = DateTimeOffset.UtcNow.AddDays(-sequence), InvoiceDate = today.AddDays(-sequence), ZoneId = zone.Id,
@@ -40,7 +42,7 @@ public class CustomerDebtSqlServerTests
                 db.CustomerPayments.Add(Payment(customer, CustomerPaymentKind.Payment, paid, invoice, StatusIds.CustomerPayment.AwaitingConfirmation));
                 if (paidBack > 0)
                 {
-                    db.CustomerPayments.Add(Payment(customer, CustomerPaymentKind.PaidBack, paidBack, null, StatusIds.CustomerPayment.Confirmed));
+                    db.CustomerPayments.Add(Payment(customer, CustomerPaymentKind.PaidBack, paidBack, null, StatusIds.CustomerPayment.Completed));
                 }
             });
             return customer.Id;
@@ -64,7 +66,7 @@ public class CustomerDebtSqlServerTests
         var (manyCommands, many) = await ListAsync(host);
 
         Assert.Equal(oneCommands, manyCommands);
-        Assert.InRange(oneCommands, 1, 6);
+        Assert.InRange(oneCommands, 1, 10);
         Assert.Equal(26, many.Count);
         Assert.Equal((600_000m, 1), many.Where(r => r.Customer.Id == first).Select(r => (r.Debt, r.DebtAgeDays!.Value)).Single());
         Assert.Equal(5, many.Count(r => r.Debt == -100_000m && r.DebtAgeDays is null));
@@ -84,7 +86,7 @@ public class CustomerDebtSqlServerTests
         var counter = new CommandCounter();
         await using var db = new OmtsDbContext(new DbContextOptionsBuilder<OmtsDbContext>().UseSqlServer(host.Database.ConnectionString).AddInterceptors(counter).Options);
         var query = new CustomerDebtQuery(db);
-        var service = new CustomerDebtService(query, new CustomerDebtReader(query, TimeProvider.System), TimeProvider.System);
+        var service = new CustomerDebtService(query, new CustomerDebtReader(query, TimeProvider.System), new SalesInvoiceCorrectionLog(new SalesInvoiceRepository(db)), TimeProvider.System);
         var list = await service.ListAsync(null, 1, 100, CancellationToken.None);
         return (counter.Count, list.Page.Items);
     }

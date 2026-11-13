@@ -17,8 +17,28 @@ namespace OMTS.Api.Controllers;
 [Route("api/sales-invoices")]
 [Authorize]
 public sealed class SalesInvoicesController(
-    SalesInvoiceService invoices, SalesInvoiceReadService reads, SalesInvoiceSendingService sending, PendingSaleService pendingSales, SalesInvoiceSearchService search, SalesInvoiceExportService exports) : ControllerBase
+    SalesInvoiceService invoices, SalesInvoiceReadService reads, SalesInvoiceSendingService sending, SalesInvoiceSearchService search, SalesInvoiceExportService exports,
+    SalesInvoiceCorrectionService corrections, SalesInvoiceCancellationService cancellations, PendingSaleService pendingSales) : ControllerBase
 {
+    /// <summary>
+    /// SALE-07, Owner only: a correction of a data entry error, or a price cut after a claim. 409 MSG-SALE-17/19 asks a question, answered by the flag in <c>confirmationField</c>;
+    /// 409 MSG-SALE-20 (a sales return), MSG-SALE-21 (walk-in total raised), MSG-GEN-09 (Cancelled or a lot no longer for sale), MSG06 (the row version is stale). The invoice is sent again.
+    /// </summary>
+    [HttpPut("{id:guid}/correction")]
+    [RequireCooperativeOwner]
+    [ProducesResponseType<SalesInvoiceSent>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Correct(Guid id, CorrectSalesInvoiceRequest request, CancellationToken cancellationToken) =>
+        (await corrections.CorrectAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// SALE-08, Owner only: cancels the invoice with a reason. 409 MSG-SALE-23/19/17 asks a question, answered by the field in <c>confirmationField</c>; 409 MSG-SALE-20, MSG-GEN-09, MSG06.
+    /// </summary>
+    [HttpPost("{id:guid}/cancel")]
+    [RequireCooperativeOwner]
+    [ProducesResponseType<SalesInvoiceSent>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Cancel(Guid id, CancelSalesInvoiceRequest request, CancellationToken cancellationToken) =>
+        (await cancellations.CancelAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
     /// <summary>SALE-09 steps 1-3: the invoices of the zones the caller may view, today by default, with the total of the Completed ones; 200 with MSG-GEN-10 when nothing matches; 400 MSG-GEN-01 for a wrong period.</summary>
     [HttpGet]
     [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.View, PermissionScope.AnyZone)]

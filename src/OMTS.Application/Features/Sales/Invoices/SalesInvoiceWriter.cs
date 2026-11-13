@@ -48,6 +48,7 @@ public sealed class SalesInvoiceWriter(
             CustomerId = facts.Customer?.Id,
             Customer = facts.Customer,
             PurchaseRequestId = facts.Request?.Id,
+            PortWeighingId = facts.Weighing?.Id,
             TakesRequestInFull = entries.TakesRequestInFull,
             DiscountAmount = entries.Discount,
             DiscountDecidedByOwner = entries.Discount > 0m,
@@ -126,6 +127,7 @@ public sealed class SalesInvoiceWriter(
             CustomerId = invoice.CustomerId,
             Kind = CustomerPaymentKind.Payment,
             PaymentDate = today,
+            PaidAt = invoice.InvoicedAt,
             Amount = amount,
             Method = CustomerPaymentMethod.Cash,
             InvoiceId = invoice.Id,
@@ -160,6 +162,12 @@ public sealed class SalesInvoiceWriter(
         {
             unitOfWork.MarkChanged(request);
         }
+
+        // Two invoices from one weighing: one of the two saves fails and reads it as invoiced.
+        if (facts.Weighing is { } weighing)
+        {
+            unitOfWork.MarkChanged(weighing);
+        }
     }
 
     private object Snapshot(SalesInvoice invoice, SalesInvoiceEntries entries, SalesInvoiceFacts facts) => new
@@ -170,6 +178,7 @@ public sealed class SalesInvoiceWriter(
         invoice.CustomerId,
         WalkInCustomer = invoice.CustomerId is null,
         invoice.PurchaseRequestId,
+        invoice.PortWeighingId,
         invoice.TakesRequestInFull,
         Lines = invoice.Lines.Select(l => new { l.LineNumber, l.ProductId, ProductName = l.Product.Name, l.HarvestLotId, LotCode = l.HarvestLot.LotCode, l.Kg, l.UnitPrice, l.ListPrice, l.PriceSource, l.Amount, l.SoldWholeLot }),
         invoice.Subtotal,

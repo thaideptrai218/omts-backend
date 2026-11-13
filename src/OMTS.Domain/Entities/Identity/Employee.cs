@@ -2,6 +2,7 @@ using OMTS.Domain.Common;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Labor;
 using OMTS.Domain.Entities.Platform;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Domain.Entities.Identity;
 
@@ -10,6 +11,12 @@ public class Employee : AuditableEntity, IHasStatus
 {
     public Guid CooperativeId { get; set; }
     public Cooperative Cooperative { get; set; } = null!;
+
+    /// <summary>
+    /// Employee code, NV000001 from the NV document sequence when the user leaves it empty, or typed (upper-case letters, digits and
+    /// "-", at most 20 characters). Unique within the cooperative; null only for a row older than the column (the migration fills those).
+    /// </summary>
+    public string? Code { get; set; }
 
     public string FullName { get; set; } = string.Empty;
 
@@ -24,6 +31,14 @@ public class Employee : AuditableEntity, IHasStatus
     public Account? Account { get; set; }
 
     public DateOnly? Birthday { get; set; }
+
+    public Gender? Gender { get; set; }
+
+    /// <summary>Citizen ID (CCCD) of 12 digits, or an older 9-digit ID card. Personal data: shown only to those who maintain the employee, never exported.</summary>
+    public string? IdNumber { get; set; }
+
+    /// <summary>The first day of work; not the same as the date the employee type applies from.</summary>
+    public DateOnly? StartDate { get; set; }
     public string? Address { get; set; }
     public string? Area { get; set; }
     public string? Ward { get; set; }

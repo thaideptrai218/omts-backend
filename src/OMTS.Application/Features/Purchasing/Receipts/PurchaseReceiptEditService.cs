@@ -6,6 +6,7 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Purchasing;
@@ -28,6 +29,7 @@ public sealed class PurchaseReceiptEditService(
     PurchaseReceiptValidator validator,
     PurchaseReceiptViews views,
     PurchaseReceiptAccess access,
+    InputStockLedger ledger,
     RowVersionGuard rowVersions,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
@@ -75,7 +77,7 @@ public sealed class PurchaseReceiptEditService(
         var seeded = await seedUsage.SeededAsync(existing.Keys.ToList(), cancellationToken);
         var returned = PurchaseReceiptViews.ReturnedQuantities(receipt);
         var named = receipt.Returns.SelectMany(rt => rt.Lines).Where(l => l.ReceiptLineId != null).Select(l => l.ReceiptLineId!.Value).ToHashSet();
-        if (UsedLineError(inputs, existing, seeded, returned, named) is { } usedError)
+        if (UsedLineError(inputs, existing, refs, seeded, returned, named) is { } usedError)
         {
             return usedError;
         }
@@ -95,12 +97,19 @@ public sealed class PurchaseReceiptEditService(
         }
 
         var before = Snapshot(receipt);
+        var ledgerBefore = LedgerKey(receipt);
         PurchaseReceiptService.SetReceived(receipt, receivedAt);
         receipt.ReceivedByAccountId = request.ReceivedById ?? receipt.ReceivedByAccountId;
         receipt.Notes = PurchaseReceiptService.Trimmed(request.Notes);
         receipt.Discount = request.Discount;
         receipt.ZoneId = request.ZoneId ?? receipt.ZoneId;
         ApplyLines(receipt, inputs, existing, refs);
+        // The quantities of the receipt on the ledger follow the new lines: the old rows are undone, the new ones written.
+        if (LedgerKey(receipt) != ledgerBefore)
+        {
+            await ledger.ReverseAsync(receipt.Id, afterReceiptRemoved: false, cancellationToken);
+            await ledger.PostReceiptAsync(receipt, cancellationToken);
+        }
         // Lines are rows of their own: the receipt still gets a new row version, so a parallel edit or return answers MSG06.
         unitOfWork.MarkChanged(receipt);
         var after = Snapshot(receipt);
@@ -189,6 +198,11 @@ public sealed class PurchaseReceiptEditService(
                 invalid.Add($"Line {i + 1} supplier lot code");
             }
 
+            if (input.ItemUnitId is not null && (item is null || ReceiptLineUnits.Resolve(item, input.ItemUnitId) is null))
+            {
+                invalid.Add($"Line {i + 1} unit");
+            }
+
             if (input.RaftId is { } raftId && raftId != stored?.RaftId && !PurchaseReceiptValidator.RaftAllowed(item, refs.Rafts.GetValueOrDefault(raftId), raftZones))
             {
                 invalid.Add($"Line {i + 1} raft");
@@ -209,7 +223,7 @@ public sealed class PurchaseReceiptEditService(
             return false;
         }
 
-        var keptQuantity = input.LineId is { } lineId && existing[lineId].Quantity == quantity;
+        var keptQuantity = input.LineId is { } lineId && existing[lineId].EnteredQuantity == quantity;
         return PurchaseReceiptValidator.LineValuesAllowed(keptQuantity ? decimal.Round(quantity, 2) : quantity, input.UnitPrice, input.Discount ?? 0)
             && quantity > 0 && quantity <= PurchaseReceiptValidator.MaxQuantity;
     }
@@ -218,6 +232,7 @@ public sealed class PurchaseReceiptEditService(
     private static AppError? UsedLineError(
         IReadOnlyList<ReceiptLineInput> inputs,
         IReadOnlyDictionary<Guid, PurchaseReceiptLine> existing,
+        ReceiptLineRefs refs,
         IReadOnlyDictionary<Guid, decimal> seeded,
         IReadOnlyDictionary<Guid, decimal> returned,
         IReadOnlySet<Guid> namedByReturns)
@@ -251,14 +266,31 @@ public sealed class PurchaseReceiptEditService(
             }
 
             var (lineSeeded, lineReturned) = (seeded.GetValueOrDefault(lineId), returned.GetValueOrDefault(lineId));
-            // Seeding does not compare with what is left (GBR-04), so an unchanged quantity may already be below the sum.
-            if (inputs[i].Quantity != line.Quantity && inputs[i].Quantity < lineSeeded + lineReturned)
+            // Seeding does not compare with what is left (GBR-04), so an unchanged quantity may already be below the sum. Both are in base units.
+            var newBase = inputs[i].Quantity * UnitFactorOf(inputs[i], line, refs);
+            if (newBase != line.Quantity && newBase < lineSeeded + lineReturned)
             {
                 return PurchaseReceiptValidator.QuantityBelowUsed(line, $"Line {i + 1}", lineSeeded, lineReturned);
             }
         }
 
         return null;
+    }
+
+    /// <summary>The factor of the unit an input names: the unit of the item, or the unit the stored line keeps when the input names none for the same item.</summary>
+    private static decimal UnitFactorOf(ReceiptLineInput input, PurchaseReceiptLine? stored, ReceiptLineRefs refs)
+    {
+        if (input.ItemId is not { } itemId || !refs.Items.TryGetValue(itemId, out var item))
+        {
+            return 1m;
+        }
+
+        if (input.ItemUnitId is null && stored is not null && stored.ItemId == itemId)
+        {
+            return stored.UnitFactor;
+        }
+
+        return ReceiptLineUnits.Resolve(item, input.ItemUnitId)?.Factor ?? 1m;
     }
 
     /// <summary>Changes the kept lines, removes the others and adds the new ones after the highest line number the receipt had.</summary>
@@ -294,20 +326,27 @@ public sealed class PurchaseReceiptEditService(
 
     private static void Fill(PurchaseReceiptLine line, ReceiptLineInput input, FarmingInputItem item)
     {
+        // A kept line of the same item that names no unit keeps its own unit; a new line or another item takes the unit asked for (the base unit by default).
+        var keepsUnit = line.ItemId == item.Id && input.ItemUnitId is null && line.ItemUnitId is not null;
         if (line.ItemId != item.Id)
         {
             line.ItemId = item.Id;
             line.Item = item;
-            line.Unit = item.Unit;
         }
 
-        line.Quantity = input.Quantity;
-        line.UnitPrice = input.UnitPrice;
-        line.Discount = input.Discount ?? 0;
-        line.LineAmount = PurchaseMoney.LineAmount(line.Quantity, line.UnitPrice, line.Discount);
+        if (!keepsUnit)
+        {
+            ReceiptLineUnits.SetUnit(line, item, ReceiptLineUnits.Resolve(item, input.ItemUnitId));
+        }
+
+        ReceiptLineUnits.Fill(line, input.Quantity, input.UnitPrice, input.Discount ?? 0);
         line.SupplierLotCode = item.Group == InputItemGroup.Seed ? PurchaseReceiptService.Trimmed(input.SupplierLotCode) : null;
         line.RaftId = input.RaftId ?? line.RaftId;
     }
+
+    /// <summary>What the ledger rows of a receipt depend on: when it was received and, per line, the item, the base quantity and the net price per base unit.</summary>
+    private static string LedgerKey(PurchaseReceipt r) => string.Join(
+        ";", r.Lines.OrderBy(l => l.LineNumber).Select(l => $"{l.Id}|{l.ItemId}|{l.Quantity}|{ReceiptLineUnits.NetPricePerBase(l)}")) + $"@{r.ReceivedAt:O}";
 
     /// <summary>The receipt as the audit log keeps it: the header, every line and the totals.</summary>
     private static object Snapshot(PurchaseReceipt r)
@@ -317,8 +356,10 @@ public sealed class PurchaseReceiptEditService(
         {
             r.ReceiptDate, r.ReceivedAt, r.ReceivedByAccountId, r.Notes, r.Discount, r.ZoneId,
             Lines = r.Lines.OrderBy(l => l.LineNumber)
-                .Select(l => new { l.LineNumber, l.ItemId, l.Quantity, l.UnitPrice, l.Discount, l.LineAmount, l.SupplierLotCode, l.RaftId }).ToList(),
+                .Select(l => new { l.LineNumber, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, Discount = l.EnteredDiscount, l.LineAmount, l.SupplierLotCode, l.RaftId }).ToList(),
             Totals = new { figures.Total, figures.Payable, figures.Returned },
         };
     }
 }
+
+

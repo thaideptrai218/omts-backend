@@ -33,7 +33,7 @@ public partial class AccountRulesQaTestsForcedChange(AuthApiFactory factory) : I
     private static readonly string[] OpenInTheSecondStep =
     [
         "DELETE api/me/zalo-link", // Like logout, unlinking ends the current session; the endpoint sweep must not call it.
-        "GET api/me", "POST api/auth/logout", "POST api/me/password", "POST api/me/password/code", "POST api/me/phone-verification", "POST api/me/phone-verification/confirm",
+        "GET api/me", "POST api/auth/logout", "POST api/me/password", "POST api/me/phone-verification", "POST api/me/phone-verification/confirm",
     ];
 
     // Fine: every endpoint that needs a login answers 403 in the phone step, for an Owner, a staff member and a trader.

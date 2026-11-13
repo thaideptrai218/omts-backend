@@ -3,8 +3,10 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
+using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Features.AccessManagement;
 using OMTS.Application.Features.Accounts;
+using OMTS.Application.Features.Accounts.Dtos;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.CashBook;
 using OMTS.Application.Features.Cooperatives;
@@ -28,7 +30,10 @@ using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Application.Features.Traceability.Tracing;
 using OMTS.Application.Features.Traceability.Withdrawal;
 using OMTS.Application.Features.Labor;
+using OMTS.Application.Features.Labor.Payrolls;
+using OMTS.Application.Features.Labor.Work;
 using OMTS.Application.Features.Purchasing;
+using OMTS.Application.Features.Purchasing.Issues;
 using OMTS.Application.Features.Purchasing.Items;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
@@ -46,6 +51,7 @@ using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Notifications;
 using OMTS.Application.Features.WaterQuality;
+using OMTS.Application.Features.WaterQuality.Dtos;
 
 namespace OMTS.Application;
 
@@ -62,6 +68,14 @@ public static class DependencyInjection
         services.AddScoped<SessionManagementService>();
         services.AddScoped<ZaloLinkService>();
         services.AddScoped<ZaloLocationService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseHarvestService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseStaffingService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Requests.PurchaseHarvestReader>();
+        services.AddScoped<OMTS.Application.Features.Sales.Products.SalesProductService>();
+        services.AddOptions<OMTS.Application.Features.Testing.Options.TestRoleOptions>();
+        services.AddScoped<OMTS.Application.Features.Testing.TestRoleService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.WorkPlanAccessService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.WorkDayPlanService>();
 
         services.AddSingleton<PermissionCache>();
         services.AddSingleton<IPermissionCacheInvalidator>(provider => provider.GetRequiredService<PermissionCache>());
@@ -107,7 +121,10 @@ public static class DependencyInjection
         services.AddScoped<EmployeeCallerAccess>();
         services.AddScoped<EmployeeViewBuilder>();
         services.AddScoped<EmployeeProfileValidator>();
+        services.AddScoped<EmployeeCodeAllocator>();
         services.AddScoped<EmployeeQueryService>();
+        services.AddScoped<EmployeeFileService>();
+        services.AddScoped<EmployeeImportService>();
         services.AddScoped<EmployeeService>();
         services.AddScoped<EmployeeWorkingZoneService>();
         services.AddScoped<EmploymentService>();
@@ -128,6 +145,18 @@ public static class DependencyInjection
 
         // LABOR-11 job types and rates, LABOR-15 attendance settings, LABOR-16 payroll settings, the pay period lock (BR-LABOR-13)
         services.AddScoped<PayPeriodLock>();
+
+        // LABOR-02 work assignment, LABOR-04 attendance, LABOR-05 and LABOR-10 employee requests, LABOR-08 my work
+        services.AddScoped<WorkAssignmentService>();
+        services.AddScoped<AttendanceRecordingService>();
+        services.AddScoped<AttendanceCorrectionService>();
+        services.AddScoped<EmployeeRequestService>();
+        services.AddScoped<WorkQueryService>();
+        services.AddScoped<PayrollLineSync>();
+        services.AddScoped<PayrollQueryService>();
+        services.AddScoped<PayrollService>();
+        services.AddScoped<PayrollPaymentService>();
+        services.AddScoped<PayrollExportService>();
         services.AddScoped<JobTypeQueryService>();
         services.AddScoped<JobTypeService>();
         services.AddScoped<PayRateService>();
@@ -204,6 +233,7 @@ public static class DependencyInjection
         services.AddScoped<LotTraceService>();
         // ORIGIN-01 – the public provenance page of an invoice QR code (anonymous)
         services.AddScoped<ProvenancePageService>();
+        services.AddScoped<PublicOriginService>();
         // TRACE-04 – withdraw the origin information of a lot and tell its traders
         services.AddScoped<WithdrawalNotices>();
         services.AddScoped<LotWithdrawalService>();
@@ -216,9 +246,27 @@ public static class DependencyInjection
         services.AddScoped<SupplierService>();
         services.AddScoped<SupplierFileService>();
         services.AddScoped<FarmingInputItemService>();
+        services.AddScoped<FarmingInputItemCodeService>();
+        services.AddScoped<FarmingInputItemFileService>();
+        services.AddScoped<InputItemAccess>();
+        services.AddScoped<InputStockLedger>();
+        services.AddScoped<InputUnitService>();
+        services.AddScoped<InputItemGroupService>();
+        services.AddScoped<InputInventorySettingsService>();
+        services.AddScoped<ReceiptPriceSetupService>();
+        services.AddScoped<InputIssueAccess>();
+        services.AddScoped<InputIssueCodeService>();
+        services.AddScoped<InputIssueService>();
+        services.AddScoped<InputIssueTypeService>();
+        services.AddScoped<InputMovementService>();
+        services.AddScoped<FarmingInputItemDeletionService>();
         services.AddScoped<ProductService>();
         services.AddScoped<ProductReadService>();
         services.AddScoped<CustomerService>();
+        services.AddScoped<CustomerSettingsService>();
+        services.AddScoped<CustomerDebtStandings>();
+        services.AddScoped<CustomerCodeService>();
+        services.AddScoped<CustomerFileService>();
         services.AddScoped<CustomerMergeService>();
         services.AddScoped<PurchaseRequestViews>();
         services.AddScoped<PurchaseRequestNotifications>();
@@ -242,6 +290,8 @@ public static class DependencyInjection
         services.AddScoped<CustomerPaymentStatusChanges>();
         services.AddScoped<CustomerPaymentNotifications>();
         services.AddScoped<CustomerPaymentService>();
+        services.AddScoped<CustomerPaymentCodeService>();
+        services.AddScoped<CustomerDebtAdjustmentService>();
         services.AddScoped<CustomerPaymentStatusService>();
         services.AddScoped<SalesInvoiceFactsReader>();
         services.AddScoped<SalesInvoiceWriter>();
@@ -259,9 +309,21 @@ public static class DependencyInjection
         services.AddScoped<BankTransferNoticeService>();
         services.AddScoped<SalesInvoiceSearchService>();
         services.AddScoped<SalesInvoiceExportService>();
+        services.AddScoped<MyInvoiceService>();
+        services.AddScoped<SalesInvoiceWeighingReader>();
+        services.AddScoped<OMTS.Application.Features.Sales.Weighings.PortWeighingService>();
+        services.AddScoped<OMTS.Application.Features.Sales.Weighings.MyPortWeighingService>();
         // SALE-06 sending the invoice, and the end of the sale with the QR code
         services.AddScoped<SalesInvoiceMessages>();
         services.AddScoped<SalesInvoiceSendingService>();
+        services.AddScoped<SalesInvoiceChangeGuard>();
+        services.AddScoped<SalesInvoiceChangeSending>();
+        services.AddScoped<SalesInvoiceCorrectionPlanner>();
+        services.AddScoped<SalesInvoiceCorrectionWriter>();
+        services.AddScoped<SalesInvoiceCorrectionService>();
+        services.AddScoped<SalesInvoiceCorrectionLog>();
+        services.AddScoped<SalesInvoiceOwedBackNotifier>();
+        services.AddScoped<SalesInvoiceCancellationService>();
         services.AddScoped<PurchaseReceiptAccess>();
         services.AddScoped<PurchaseReceiptValidator>();
         services.AddScoped<PurchaseReceiptViews>();
@@ -307,3 +369,5 @@ public static class DependencyInjection
         return services;
     }
 }
+
+

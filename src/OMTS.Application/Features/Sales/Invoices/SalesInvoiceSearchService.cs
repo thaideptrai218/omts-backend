@@ -101,7 +101,7 @@ public sealed class SalesInvoiceSearchService(
                 : StatusIds.MessageDelivery.NotSent;
             return new SalesInvoiceRow(
                 row.Id, row.Code, row.InvoicedAt, row.InvoiceDate, new SalesInvoiceZoneView(row.ZoneId, row.ZoneCode, row.ZoneName),
-                row.CustomerId is { } customerId ? new SalesInvoiceCustomerView(customerId, row.CustomerName!, row.CustomerPhone) : null,
+                row.CustomerId is { } customerId ? new SalesInvoiceCustomerView(customerId, row.CustomerName!, row.CustomerPhone, row.CustomerCode) : null,
                 row.CustomerId is null, row.Total, row.StatusId, statusCatalog.DisplayNameOf(row.StatusId), row.PaymentTerm, state.IsPaid, state.Unpaid, delivery,
                 statusCatalog.DisplayNameOf(delivery), cash?.GetValueOrDefault(key.Id));
         }).ToList();

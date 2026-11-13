@@ -75,6 +75,13 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         });
     }
 
+    /// <summary>Lets a helper given only the client reach this host's database (<see cref="TestHosts"/>).</summary>
+    protected override void ConfigureClient(HttpClient client)
+    {
+        base.ConfigureClient(client);
+        TestHosts.Register(client, Services);
+    }
+
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);

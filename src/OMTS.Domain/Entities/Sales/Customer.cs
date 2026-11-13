@@ -1,16 +1,52 @@
 using OMTS.Domain.Common;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
+using OMTS.Domain.Entities.Platform;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Domain.Entities.Sales;
 
 /// <summary>
 /// The customer profile of a trader (SALE-04, BR-SALE-04). It may exist before the trader has an account and is linked to
-/// at most one account (BR-ACCOUNT-04). It has no zone and no status: "Merged" is worked out from
-/// <see cref="MergedIntoCustomerId"/>. A walk-in customer has no profile at all (BR-SALE-07).
+/// at most one account (BR-ACCOUNT-04). It has no zone. A profile that has been used is Discontinued instead of deleted and can be
+/// resumed; "Merged" is worked out from <see cref="MergedIntoCustomerId"/>. A walk-in customer has no profile at all (BR-SALE-07).
 /// </summary>
-public class Customer : AuditableEntity
+public class Customer : AuditableEntity, IHasStatus
 {
     private string? _phoneNumber;
+
+    /// <summary>KH000123: one cooperative-wide sequence; the user may type another code, unique regardless of letter case.</summary>
+    public string Code { get; set; } = string.Empty;
+
+    public int StatusId { get; set; } = StatusIds.Usage.InUse;
+    public Status Status { get; set; } = null!;
+
+    public CustomerType CustomerType { get; set; }
+    public Gender? Gender { get; set; }
+    public DateOnly? BirthDate { get; set; }
+
+    /// <summary>A second contact number; not unique and not checked against the other profiles.</summary>
+    public string? PhoneNumber2 { get; set; }
+
+    public string? Facebook { get; set; }
+
+    /// <summary>Storage key of the photo (JPEG or PNG, at most 2 MB).</summary>
+    public string? PhotoUrl { get; set; }
+
+    public string? Province { get; set; }
+    public string? Ward { get; set; }
+
+    /// <summary>Invoice data: the company and its tax code.</summary>
+    public string? CompanyName { get; set; }
+    public string? TaxCode { get; set; }
+
+    /// <summary>Personal data (CCCD): shown on the detail only, never in a list, an export or the audit log.</summary>
+    public string? IdentityNumber { get; set; }
+
+    /// <summary>The bank account the customer is paid back to: the bank of the bank list and the number.</summary>
+    public string? BankBin { get; set; }
+    public string? BankName { get; set; }
+    public string? BankAccountNumber { get; set; }
 
     public Guid CooperativeId { get; set; }
     public Cooperative Cooperative { get; set; } = null!;

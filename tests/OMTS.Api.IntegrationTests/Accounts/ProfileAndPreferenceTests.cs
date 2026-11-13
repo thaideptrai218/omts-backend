@@ -74,9 +74,9 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
     {
         var cooperative = await factory.EnsureCooperativeAsync();
         var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader);
-        var own = new Customer { CooperativeId = cooperative.Id, AccountId = trader.Id, Name = "Own", PhoneNumber = trader.PhoneNumber };
+        var own = new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = cooperative.Id, AccountId = trader.Id, Name = "Own", PhoneNumber = trader.PhoneNumber };
         var phone = NewPhone();
-        var offline = new Customer { CooperativeId = cooperative.Id, Name = "Offline", PhoneNumber = phone };
+        var offline = new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = cooperative.Id, Name = "Offline", PhoneNumber = phone };
         await factory.UseDbAsync(db => db.Customers.AddRange(own, offline));
         var client = await factory.LoginAsync(trader.Username);
 
@@ -113,7 +113,7 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         var traderTypes = await TypesAsync(await factory.LoginAsync(trader.Username, PreferencePassword));
 
         Assert.Equal(
-            ["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "ZONE_LICENSE_EXPIRY", "COOPERATIVE_CERTIFICATION_EXPIRY", "EMPLOYEE_LOGIN_CODE", "PURCHASE_REQUEST_NEW", "PURCHASE_REQUEST_CANCELLED", "CYCLE_SEEDING_COMPLETED", "HARVEST_LOT_RECORDED", "HARVEST_LOT_AUTO_CLOSE_WARNING", "CYCLE_CLOSE_REMINDER", "CYCLE_CLOSED", "PURCHASE_RECEIPT_COMPLETED", "PURCHASE_RECEIPT_CANCELLED_ADVANCE", "SUPPLIER_TRANSACTION", "CULTIVATION_LOG_RECORDED", "SALE_COMPLETED", "CUSTOMER_PAYMENT_TRANSACTION", "TRADER_ACCESS_REQUESTED", "QUALITY_CLAIM_NEW"],
+            ["NEW_ORDER", "WORK_PLAN_RESPONDED", "PURCHASE_SHIFT_RESPONDED", "EMPLOYEE_LEAVE_REQUESTED", "WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "ZONE_LICENSE_EXPIRY", "COOPERATIVE_CERTIFICATION_EXPIRY", "EMPLOYEE_LOGIN_CODE", "EMPLOYEE_REQUEST_NEW", "PURCHASE_REQUEST_NEW", "PURCHASE_REQUEST_CANCELLED", "CYCLE_SEEDING_COMPLETED", "HARVEST_LOT_RECORDED", "HARVEST_LOT_AUTO_CLOSE_WARNING", "CYCLE_CLOSE_REMINDER", "CYCLE_CLOSED", "PURCHASE_RECEIPT_COMPLETED", "PURCHASE_RECEIPT_CANCELLED_ADVANCE", "SUPPLIER_TRANSACTION", "CULTIVATION_LOG_RECORDED", "SALE_COMPLETED", "CUSTOMER_PAYMENT_TRANSACTION", "CUSTOMER_MONEY_OWED_BACK", "TRADER_ACCESS_REQUESTED", "QUALITY_CLAIM_NEW"],
             ownerTypes.Keys);
         Assert.Equal((false, true), ownerTypes["CULTIVATION_LOG_RECORDED"]);
         // BR-SALE-03: the sale notice is not among the mandatory types of BR-ACCOUNT-11.
@@ -124,13 +124,13 @@ public class ProfileAndPreferenceTests(AuthApiFactory factory) : IClassFixture<A
         Assert.Equal((true, true), ownerTypes["CYCLE_CLOSE_REMINDER"]);
         // MSG-CYCLE-06, the summary of a closed cycle, is not mandatory either (BR-ACCOUNT-11).
         Assert.Equal((false, true), ownerTypes["CYCLE_CLOSED"]);
-        Assert.Equal(["WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "EMPLOYEE_LOGIN_CODE", "HARVEST_LOT_AUTO_CLOSE_WARNING", "CYCLE_CLOSE_REMINDER"], managerTypes.Keys);
+        Assert.Equal(["WORK_PLAN_REQUESTED", "WORK_PLAN_STAFF_RESPONDED", "WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "EMPLOYEE_LOGIN_CODE", "HARVEST_LOT_AUTO_CLOSE_WARNING", "CYCLE_CLOSE_REMINDER"], managerTypes.Keys);
         Assert.Equal((true, true), managerTypes["CYCLE_CLOSE_REMINDER"]);
         // GFR-05: MSG-HARVEST-05 is not among the mandatory types of BR-ACCOUNT-11.
         Assert.Equal((false, true), managerTypes["HARVEST_LOT_AUTO_CLOSE_WARNING"]);
-        Assert.Equal(["PURCHASE_RECEIPT_CANCELLED_ADVANCE"], accountantTypes.Keys);
+        Assert.Equal(["PURCHASE_RECEIPT_CANCELLED_ADVANCE", "CUSTOMER_MONEY_OWED_BACK"], accountantTypes.Keys);
         // BR-ACCOUNT-11: a trader receives the response to a request (SALE-03), the withdrawal of a provenance record (TRACE-04) and the approval of a Zalo access request.
-        Assert.Equal(["PURCHASE_REQUEST_RESPONSE", "PROVENANCE_WITHDRAWN", "TRADER_ACCESS_APPROVED", "QUALITY_CLAIM_RESPONSE"], traderTypes.Keys);
+        Assert.Equal(["PURCHASE_REQUEST_RESPONDED", "PURCHASE_REQUEST_RESPONSE", "PROVENANCE_WITHDRAWN", "TRADER_ACCESS_APPROVED", "QUALITY_CLAIM_RESPONSE"], traderTypes.Keys);
         Assert.Equal((true, true), ownerTypes["WATER_ALERT"]);
         Assert.Equal((true, true), ownerTypes["ZONE_LICENSE_EXPIRY"]);
         Assert.Equal((true, true), ownerTypes["COOPERATIVE_CERTIFICATION_EXPIRY"]);

@@ -54,6 +54,17 @@ public static class PurchaseMoney
         return total > 0 ? RoundHalfUp(NetUnitPrice(line) * (total - receipt.Discount) / total) : NetUnitPrice(line);
     }
 
+    /// <summary>
+    /// <see cref="ReturnUnitPrice"/> in the unit the line was entered in, the price a return of the line is typed at: the typed price less the typed discount, less the receipt discount share
+    /// (prorated by line amount), half up to the dong. Equal to <see cref="ReturnUnitPrice"/> for a line in its base unit.
+    /// </summary>
+    public static decimal ReturnPriceInLineUnit(PurchaseReceipt receipt, PurchaseReceiptLine line)
+    {
+        var net = (line.EnteredUnitPrice ?? 0) - line.EnteredDiscount;
+        var total = Total(receipt.Lines);
+        return total > 0 ? RoundHalfUp(net * (total - receipt.Discount) / total) : net;
+    }
+
     /// <summary>The total of a receipt: the sum of its rounded line amounts, not the rounded sum of the products (BR-PURCHASE-02).</summary>
     public static decimal Total(IEnumerable<PurchaseReceiptLine> lines) => lines.Sum(l => l.LineAmount);
 
@@ -66,3 +77,4 @@ public static class PurchaseMoney
         RecordedReturns(receipt).SelectMany(r => r.Lines).Sum(l => l.ReturnValue) - RecordedReturns(receipt).Sum(r => r.Discount),
         receipt.Discount);
 }
+

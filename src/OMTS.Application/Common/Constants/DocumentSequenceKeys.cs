@@ -9,6 +9,9 @@ public static class DocumentSequenceKeys
     /// <summary>Suppliers, NCC000123.</summary>
     public const string Supplier = "NCC";
 
+    /// <summary>Employees, NV000123 (LABOR-01).</summary>
+    public const string Employee = "NV";
+
     /// <summary>Purchase receipts, PN000123 (GBR-04).</summary>
     public const string PurchaseReceipt = "PN";
 
@@ -27,6 +30,18 @@ public static class DocumentSequenceKeys
     /// <summary>Quality claims, KN000123 (BR-CLAIM-01 gives no prefix: PM default).</summary>
     public const string QualityClaim = "KN";
 
+    /// <summary>Customer profiles, KH000123.</summary>
+    public const string Customer = "KH";
+
+    /// <summary>Customer debt adjustments, DC000123.</summary>
+    public const string CustomerDebtAdjustment = "DC";
+
+    /// <summary>Payroll sheets, BL000123 (LABOR-12).</summary>
+    public const string PayrollSheet = "BL";
+
+    /// <summary>Payslips, PL000123 (LABOR-12).</summary>
+    public const string PayrollLine = "PL";
+
     /// <summary>Cash book receipt vouchers of the Cash fund, TTM000123.</summary>
     public const string CashReceiptCash = "TTM";
 
@@ -44,4 +59,20 @@ public static class DocumentSequenceKeys
 
     /// <summary>Cash book payment vouchers of the EWallet fund, CVD000123.</summary>
     public const string CashPaymentEWallet = "CVD";
+
+    /// <summary>Seed items of the input catalogue, GI000123.</summary>
+    public const string InputItemSeed = "GI";
+
+    /// <summary>Material items of the input catalogue, VT000123.</summary>
+    public const string InputItemMaterial = "VT";
+
+    /// <summary>Other items of the input catalogue, HK000123.</summary>
+    public const string InputItemOther = "HK";
+
+    /// <summary>Use issues of input items, XD000123.</summary>
+    public const string InputIssueUse = "XD";
+
+    /// <summary>Disposals of input items, XH000123.</summary>
+    public const string InputIssueDisposal = "XH";
 }
+

@@ -101,17 +101,20 @@ public class SalesCatalogueQaAccessTests(AuthApiFactory factory) : IClassFixture
     }
 
     [Fact]
-    public async Task An_accountant_of_one_zone_has_neither_function()
+    public async Task An_accountant_of_one_zone_has_no_product_function_and_keeps_customers()
     {
         var owner = await factory.PurchasingOwnerAsync();
         var (product, customer, other) = (await owner.CreateProductAsync(), await owner.CreateCustomerAsync(), await owner.CreateCustomerAsync());
         var (accountant, _, _) = await StaffAsync(StaffRole.Accountant, await ZoneAsync());
 
-        foreach (var (name, call) in Routes(accountant, product, customer, other))
+        foreach (var (name, call) in Routes(accountant, product, customer, other).Where(r => r.Name.Contains("product") || r.Name is "discontinue" or "resume"))
         {
             var response = await call();
             Assert.True(await response.CodeOrStatusAsync() == "403 MSG-GEN-08", $"{name}: {await response.Content.ReadAsStringAsync()}");
         }
+
+        await (await accountant.GetAsync("/api/customers")).ReadAsync(HttpStatusCode.OK);
+        await (await accountant.GetAsync($"/api/customers/{customer.Id()}")).ReadAsync(HttpStatusCode.OK);
     }
 
     [Fact]

@@ -22,6 +22,7 @@ public sealed class SalesInvoiceViews(
     IAccountRepository accounts,
     ISalesInvoiceRepository invoices,
     CustomerDebtReader debts,
+    SalesInvoiceCorrectionLog corrections,
     ZoneAccessGuard zoneAccess,
     IStatusCatalog statusCatalog,
     IOptions<ProvenanceOptions> provenance,
@@ -50,7 +51,8 @@ public sealed class SalesInvoiceViews(
         var people = invoice.Payments.Select(p => p.CollectedByAccountId).OfType<Guid>().Append(invoice.CreatedByAccountId).Distinct().ToList();
         var names = await accounts.GetDisplayNamesAsync(people, cancellationToken);
         var lines = invoice.Lines.OrderBy(l => l.LineNumber).Select(l => new SalesInvoiceLineView(
-            l.Id, l.LineNumber, l.ProductId, l.Product.Name, l.HarvestLotId, l.HarvestLot.LotCode, l.Kg, l.UnitPrice, l.ListPrice, l.PriceSource, l.Amount, l.SoldWholeLot)).ToList();
+            l.Id, l.LineNumber, l.ProductId, l.Product.Name, l.HarvestLotId, l.HarvestLot.LotCode, l.Kg, l.UnitPrice, l.ListPrice, l.PriceSource, l.Amount, l.SoldWholeLot,
+            CageKgsOf(invoice, l.HarvestLotId))).ToList();
         var payments = invoice.Payments.OrderBy(p => p.CreatedAt).ThenBy(p => p.Code).Select(p => new CustomerPaymentView(
             p.Id, p.Code, p.Kind, p.Method, p.Amount, p.PaymentDate, p.CreatedAt, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId),
             p.CollectedByAccountId is { } collector ? Person(collector, names) : null)).ToList();
@@ -58,8 +60,7 @@ public sealed class SalesInvoiceViews(
         var latest = LatestStatus(sendings);
         var debtEffect = await DebtEffectAsync(invoice, cancellationToken);
         var allowedActions = SalesInvoiceAllowedActions.Of(
-            // CLAIM-03 seam: a sales return that is not cancelled goes in here when returns exist; none can exist yet.
-            new SalesInvoiceActionFacts(invoice.StatusId, latest, SaleFinished: invoice.QrDecidedAt is not null, HasSalesReturn: false),
+            new SalesInvoiceActionFacts(invoice.StatusId, latest, SaleFinished: invoice.QrDecidedAt is not null, HasSalesReturn: SalesInvoiceAllowedActions.HasSalesReturn(invoice)),
             await RightsAsync(invoice.ZoneId, cancellationToken));
         return new SalesInvoiceView(
             invoice.Id,
@@ -67,7 +68,7 @@ public sealed class SalesInvoiceViews(
             invoice.InvoicedAt,
             invoice.InvoiceDate,
             new SalesInvoiceZoneView(invoice.Zone.Id, invoice.Zone.Code, invoice.Zone.Name),
-            invoice.Customer is { } c ? new SalesInvoiceCustomerView(c.Id, c.Name, c.PhoneNumber) : null,
+            invoice.Customer is { } c ? new SalesInvoiceCustomerView(c.Id, c.Name, c.PhoneNumber, c.Code) : null,
             invoice.CustomerId is null,
             invoice.PurchaseRequestId,
             invoice.TakesRequestInFull,
@@ -93,8 +94,19 @@ public sealed class SalesInvoiceViews(
             RowVersionGuard.Encode(invoice.RowVersion),
             invoice.PriceCuts.OrderBy(c => c.CutDate).ThenBy(c => c.Id).Select(c => new SalesInvoicePriceCutView(c.Amount, c.CutDate, c.Reason)).ToList(),
             debtEffect,
-            allowedActions);
+            allowedActions,
+            invoice.PortWeighingId,
+            invoice.LastCorrectionKind,
+            invoice.LastCorrectedAt,
+            invoice.LastCorrectionReason,
+            await corrections.OfAsync(invoice.Id, cancellationToken),
+            invoice.CancelledAt,
+            invoice.CancelReason);
     }
+
+    /// <summary>The kg of each cage of the lot in the weighing of the invoice, in the order weighed; empty for a sale without a weighing.</summary>
+    public static IReadOnlyList<decimal> CageKgsOf(SalesInvoice invoice, Guid lotId) =>
+        invoice.PortWeighing is { } weighing ? weighing.Cages.Where(c => c.HarvestLotId == lotId).OrderBy(c => c.CageNumber).Select(c => c.Kg).ToList() : [];
 
     /// <summary>The paid state of the invoice (BR-DEBT-05) and the debt of its profile now (BR-DEBT-02).</summary>
     private async Task<SalesInvoiceDebtEffect> DebtEffectAsync(SalesInvoice invoice, CancellationToken cancellationToken)

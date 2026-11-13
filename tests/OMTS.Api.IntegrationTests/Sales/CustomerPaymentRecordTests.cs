@@ -30,10 +30,10 @@ public class CustomerPaymentRecordTests
 
         var paid = transfer.Payment();
         Assert.Equal((700_000m, "MSG-GEN-05", $"Payment {paid.Text("code")} saved."), (transfer.Money("debtAfter"), transfer.Text("messageCode"), transfer.Text("message")));
-        Assert.Equal(("Confirmed", "Payment", "OtherTransfer", "Bank statement 07/11"), (paid.Text("status"), paid.Text("kind"), paid.Text("method"), paid.Text("note")));
+        Assert.Equal(("Completed", "Payment", "OtherTransfer", "Bank statement 07/11"), (paid.Text("status"), paid.Text("kind"), paid.Text("method"), paid.Text("note")));
         Assert.Equal(accountant.Account.Id, paid.GetProperty("recordedBy").Id());
         Assert.Equal(accountant.Account.Id, paid.GetProperty("confirmedBy").Id());
-        Assert.Equal(JsonValueKind.Null, paid.GetProperty("collectedBy").ValueKind);
+        Assert.Equal(accountant.Account.Id, paid.GetProperty("collectedBy").Id());
         Assert.Equal((500_000m, sale.Manager.Account.Id), (cash.Money("debtAfter"), cash.Payment().GetProperty("collectedBy").Id()));
         Assert.Equal(JsonValueKind.Null, cash.Payment().GetProperty("bankReference").ValueKind);
 
@@ -104,7 +104,7 @@ public class CustomerPaymentRecordTests
         Assert.Equal(("MSG-DEBT-06", "Amount", 200_000m), (tooMuch.Text("code"), tooMuch.Text("field"), tooMuch.Money("owedBackAmount")));
 
         var paidBack = await (await accountant.PayBackAsync(MoneyBody(sale.CustomerId, 150_000m, "Cash"))).ReadAsync(HttpStatusCode.Created);
-        Assert.Equal((-50_000m, "PaidBack", "Confirmed"), (paidBack.Money("debtAfter"), paidBack.Payment().Text("kind"), paidBack.Payment().Text("status")));
+        Assert.Equal((-50_000m, "PaidBack", "Completed"), (paidBack.Money("debtAfter"), paidBack.Payment().Text("kind"), paidBack.Payment().Text("status")));
         Assert.Equal($"Money paid back {paidBack.Payment().Text("code")} saved.", paidBack.Text("message"));
         Assert.Equal((-50_000m, -50_000m, -50_000m), await sale.Owner.Client.DebtsEverywhereAsync(sale.CustomerId));
         var entry = (await accountant.StatementAsync(sale.CustomerId)).GetProperty("entries").EnumerateArray().Single(e => e.Text("kind") == "PaidBack");
@@ -130,8 +130,7 @@ public class CustomerPaymentRecordTests
         Assert.Equal(["Customer", "Payment date", "Amount", "Method"], empty.GetProperty("fields").EnumerateArray().Select(f => f.GetString()));
         foreach (var (body, field) in new (Dictionary<string, object?>, string)[]
         {
-            (MoneyBody(sale.CustomerId, 1_000m, "Cash"), "Zone Manager"),
-            (MoneyBody(sale.CustomerId, 1_000m, "Cash", accountant.Account.Id), "Zone Manager"),
+            (MoneyBody(sale.CustomerId, 1_000m, "Cash", Guid.NewGuid()), "Collected by"),
             (MoneyBody(sale.CustomerId, 1_000m).With("bankReference", null), "Bank reference"),
             (MoneyBody(sale.CustomerId, 1_000m, date: PurchaseRequestTestKit.Today.AddDays(1)), "Payment date"),
             (MoneyBody(sale.CustomerId, 1_000m, "VietQrInvoice"), "Method"),
@@ -156,7 +155,7 @@ public class CustomerPaymentRecordTests
         (await sale.Owner.Client.MergeAsync(trader.Profile.Id, sale.CustomerId, ownerApproved: true)).EnsureSuccessStatusCode();
         var merged = await (await client.RecordAsync(MoneyBody(sale.CustomerId, 1_000m).With("confirmAboveDebt", true))).ReadAsync(HttpStatusCode.Conflict);
         Assert.Equal("MSG-GEN-09", merged.Text("code"));
-        Assert.Equal(StatusIds.CustomerPayment.Confirmed, await api.QueryAsync(db => db.CustomerPayments.Where(p => p.Id == first.Payment().Id()).Select(p => p.StatusId).SingleAsync()));
+        Assert.Equal(StatusIds.CustomerPayment.Completed, await api.QueryAsync(db => db.CustomerPayments.Where(p => p.Id == first.Payment().Id()).Select(p => p.StatusId).SingleAsync()));
         Assert.Equal(-10_000m, await sale.Owner.Client.CustomerDebtAsync(trader.Profile.Id));
     }
 }

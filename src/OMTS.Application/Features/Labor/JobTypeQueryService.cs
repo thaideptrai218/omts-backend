@@ -15,8 +15,29 @@ public sealed class JobTypeQueryService(IJobTypeRepository jobTypes, IStatusCata
 {
     private const int MaxPageSize = 100;
 
-    public async Task<Paged<JobTypeView>> SearchAsync(string? search, int? statusId, int page, int pageSize, CancellationToken cancellationToken)
+    /// <param name="sortBy">name (default), rate, effectiveFrom or status; rate and effectiveFrom are those in force today.</param>
+    /// <param name="sortDir">asc (default) or desc. A value that does not exist is MSG-GEN-01 naming the parameter.</param>
+    public async Task<Result<Paged<JobTypeView>>> SearchAsync(
+        string? search, int? statusId, string? sortBy, string? sortDir, int page, int pageSize, CancellationToken cancellationToken)
     {
+        var sort = sortBy switch
+        {
+            null or "name" => (JobTypeSort?)JobTypeSort.Name,
+            "rate" => JobTypeSort.Rate,
+            "effectiveFrom" => JobTypeSort.EffectiveFrom,
+            "status" => JobTypeSort.Status,
+            _ => null,
+        };
+        if (sort is null)
+        {
+            return AppError.Invalid("Sort by");
+        }
+
+        if (sortDir is not (null or "asc" or "desc"))
+        {
+            return AppError.Invalid("Sort direction");
+        }
+
         // The upper bound keeps (page - 1) * pageSize inside int.
         (page, pageSize) = (Math.Clamp(page, 1, int.MaxValue / MaxPageSize), Math.Clamp(pageSize, 1, MaxPageSize));
         var text = DisplayNames.Normalize(search);
@@ -25,7 +46,7 @@ public sealed class JobTypeQueryService(IJobTypeRepository jobTypes, IStatusCata
             return new Paged<JobTypeView>([], page, pageSize, 0);
         }
 
-        var (items, total) = await jobTypes.SearchAsync(text, statusId, page, pageSize, cancellationToken);
+        var (items, total) = await jobTypes.SearchAsync(text, statusId, sort.Value, sortDir == "desc", timeProvider.Today(), page, pageSize, cancellationToken);
         return new Paged<JobTypeView>(items.Select(View).ToList(), page, pageSize, total);
     }
 

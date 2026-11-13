@@ -35,6 +35,14 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
 
     // Seed, cultivation and water measurements
     public DbSet<FarmingInputItem> FarmingInputItems => Set<FarmingInputItem>();
+    public DbSet<InputUnit> InputUnits => Set<InputUnit>();
+    public DbSet<InputItemUnit> InputItemUnits => Set<InputItemUnit>();
+    public DbSet<InputItemCategory> InputItemGroups => Set<InputItemCategory>();
+    public DbSet<InputItemPhoto> InputItemPhotos => Set<InputItemPhoto>();
+    public DbSet<InputStockMovement> InputStockMovements => Set<InputStockMovement>();
+    public DbSet<InputIssueType> InputIssueTypes => Set<InputIssueType>();
+    public DbSet<InputIssue> InputIssues => Set<InputIssue>();
+    public DbSet<InputIssueLine> InputIssueLines => Set<InputIssueLine>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
     public DbSet<PurchaseReceipt> PurchaseReceipts => Set<PurchaseReceipt>();
     public DbSet<PurchaseReceiptLine> PurchaseReceiptLines => Set<PurchaseReceiptLine>();
@@ -65,17 +73,29 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<QualityClaimPhoto> QualityClaimPhotos => Set<QualityClaimPhoto>();
     public DbSet<SalesInvoice> SalesInvoices => Set<SalesInvoice>();
     public DbSet<SalesInvoiceLine> SalesInvoiceLines => Set<SalesInvoiceLine>();
+    public DbSet<PortWeighing> PortWeighings => Set<PortWeighing>();
+    public DbSet<PortWeighingCage> PortWeighingCages => Set<PortWeighingCage>();
     public DbSet<SalesInvoicePriceCut> SalesInvoicePriceCuts => Set<SalesInvoicePriceCut>();
     public DbSet<CustomerPayment> CustomerPayments => Set<CustomerPayment>();
+    public DbSet<CustomerPaymentAllocation> CustomerPaymentAllocations => Set<CustomerPaymentAllocation>();
+    public DbSet<CustomerDebtAdjustment> CustomerDebtAdjustments => Set<CustomerDebtAdjustment>();
     public DbSet<PendingSale> PendingSales => Set<PendingSale>();
 
-    // Labor (LABOR-01, LABOR-11, LABOR-15; the attendance and work assignment tables come with LABOR-04 and LABOR-02)
+    // Labor (LABOR-01, LABOR-02, LABOR-04, LABOR-05, LABOR-10, LABOR-11, LABOR-15)
     public DbSet<EmployeeTypePeriod> EmployeeTypePeriods => Set<EmployeeTypePeriod>();
     public DbSet<JobType> JobTypes => Set<JobType>();
     public DbSet<EmployeeJobType> EmployeeJobTypes => Set<EmployeeJobType>();
     public DbSet<PayRate> PayRates => Set<PayRate>();
     public DbSet<AttendanceSettingsVersion> AttendanceSettingsVersions => Set<AttendanceSettingsVersion>();
     public DbSet<Payroll> Payrolls => Set<Payroll>();
+    public DbSet<PayrollLine> PayrollLines => Set<PayrollLine>();
+    public DbSet<PayrollLineJob> PayrollLineJobs => Set<PayrollLineJob>();
+    public DbSet<PayrollSelectedEmployee> PayrollSelectedEmployees => Set<PayrollSelectedEmployee>();
+    public DbSet<WagePayment> WagePayments => Set<WagePayment>();
+    public DbSet<PayrollAdvanceDeduction> PayrollAdvanceDeductions => Set<PayrollAdvanceDeduction>();
+    public DbSet<WorkAssignment> WorkAssignments => Set<WorkAssignment>();
+    public DbSet<Attendance> Attendances => Set<Attendance>();
+    public DbSet<EmployeeRequest> EmployeeRequests => Set<EmployeeRequest>();
 
     // Employee app (LABOR-03, LABOR-06): login codes, the linked device and the sessions of employees, apart from the staff ones
     public DbSet<EmployeeLoginCode> EmployeeLoginCodes => Set<EmployeeLoginCode>();
@@ -117,3 +137,5 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
         }
     }
 }
+
+

@@ -23,6 +23,7 @@ internal sealed class CustomerReferences(OmtsDbContext db) : ICustomerReferences
         new Reference<QualityClaim>("Quality claims", c => c.CustomerId),
         new Reference<SalesInvoice>("Sales invoices", i => i.CustomerId),
         new Reference<CustomerPayment>("Customer payments", p => p.CustomerId),
+        new Reference<CustomerDebtAdjustment>("Customer debt adjustments", a => a.CustomerId),
         // The invoice the transfer saves then names the kept profile.
         new Reference<PendingSale>("Sales awaiting their transfer", s => s.CustomerId),
     ];

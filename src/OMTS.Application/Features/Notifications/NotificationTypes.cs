@@ -1,3 +1,4 @@
+using OMTS.Application.Common.Interfaces.Messaging;
 using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using static OMTS.Application.Features.Notifications.NotificationPushPolicy;
@@ -11,6 +12,12 @@ namespace OMTS.Application.Features.Notifications;
 /// </summary>
 public static class NotificationTypes
 {
+    public const string WorkAssignment = "WORK_ASSIGNMENT";
+    public const string PayrollSentBack = "PAYROLL_SENT_BACK";
+    public const string NewOrder = "NEW_ORDER";
+    public const string TraceQrSent = "TRACE_QR_SENT";
+    public const string TraderAccessRequested = "TRADER_ACCESS_REQUESTED";
+    public const string TraderAccessApproved = "TRADER_ACCESS_APPROVED";
     /// <summary>MSG-WATER-03 to the Owner and the Zone Managers of the zone (BR-WATER-05); mandatory.</summary>
     public const string WaterAlert = "WATER_ALERT";
 
@@ -31,10 +38,8 @@ public static class NotificationTypes
     public const string CooperativeCertificationExpiry = "COOPERATIVE_CERTIFICATION_EXPIRY";
 
     /// <summary>To the Cooperative Owner: a trader asked for an account from the Zalo Mini App.</summary>
-    public const string TraderAccessRequested = "TRADER_ACCESS_REQUESTED";
 
     /// <summary>To the trader: the Cooperative Owner approved the request.</summary>
-    public const string TraderAccessApproved = "TRADER_ACCESS_APPROVED";
 
     /// <summary>MSG-LABOR-02, the reminder to lock a staff account after an end of employment: kept, never pushed (BR-LABOR-04).</summary>
     public const string StaffAccountLockReminder = "STAFF_ACCOUNT_LOCK_REMINDER";
@@ -44,6 +49,8 @@ public static class NotificationTypes
     /// kept in the list and pushed unless turned off, and never sent to the employee.
     /// </summary>
     public const string EmployeeLoginCode = "EMPLOYEE_LOGIN_CODE";
+    /// <summary>MSG-LABOR-23, a new employee request, to the Owner (LABOR-10 step 6, BR-LABOR-04); push can be turned off.</summary>
+    public const string EmployeeRequestNew = "EMPLOYEE_REQUEST_NEW";
 
     /// <summary>MSG-SALE-01, a new purchase request, to the Owner (BR-SALE-03); mandatory (BR-ACCOUNT-11).</summary>
     public const string PurchaseRequestNew = "PURCHASE_REQUEST_NEW";
@@ -92,6 +99,9 @@ public static class NotificationTypes
     /// <summary>MSG-TRACE-05, the withdrawal of the origin information of a lot the trader bought, to the trader account (TRACE-04.1, BR-TRACE-07); not mandatory (BR-ACCOUNT-11).</summary>
     public const string ProvenanceWithdrawn = "PROVENANCE_WITHDRAWN";
 
+    /// <summary>MSG-SALE-18, a correction or a cancellation of a sales invoice leaves the customer debt below zero, to the Accountant and the Owner (BR-SALE-03); not mandatory.</summary>
+    public const string CustomerMoneyOwedBack = "CUSTOMER_MONEY_OWED_BACK";
+
     /// <summary>MSG-CLAIM-01, a new quality claim, to the Cooperative Owner (BR-CLAIM-01); not mandatory (BR-CLAIM-01 says so).</summary>
     public const string QualityClaimNew = "QUALITY_CLAIM_NEW";
 
@@ -100,6 +110,20 @@ public static class NotificationTypes
 
     public static readonly IReadOnlyList<NotificationTypeDefinition> All =
     [
+        new("WORK_ASSIGNMENT", "work assignment", Default, [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
+        new("PAYROLL_SENT_BACK", "payroll sent back", NeverPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new("NEW_ORDER", "new order", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new("TRACE_QR_SENT", "trace qr sent", NeverPush, [Trader], NotificationOpenAccess.TraderOfTheRecord),
+        new("WORK_PLAN_REQUESTED", "work plan requested", Default, [ZoneManager], NotificationOpenAccess.InZone(PermissionFunctions.WorkAssignments, PermissionAction.View)),
+        new("WORK_PLAN_RESPONDED", "work plan responded", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new("WORK_PLAN_STAFF_RESPONDED", "work plan staff responded", Default, [ZoneManager], NotificationOpenAccess.InZone(PermissionFunctions.WorkAssignments, PermissionAction.View)),
+        new("PURCHASE_SHIFT_INVITED", "purchase shift invited", Default, [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
+        new("PURCHASE_SHIFT_RESPONDED", "purchase shift responded", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new("PURCHASE_SHIFT_CLOSED", "purchase shift closed", Default, [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
+        new("PURCHASE_SHIFT_CONFIRMED", "purchase shift confirmed", Default, [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
+        new("EMPLOYEE_LEAVE_REQUESTED", "employee leave requested", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
+        new("EMPLOYEE_LEAVE_REVIEWED", "employee leave reviewed", Default, [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
+        new("PURCHASE_REQUEST_RESPONDED", "purchase request responded", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
         new(WaterAlert, "Water alert", AlwaysPush, [CooperativeOwner, ZoneManager],
             NotificationOpenAccess.InZone(PermissionFunctions.WaterMeasurements, PermissionAction.View),
             NotificationSmsRule.MessageTextTo(CooperativeOwner, ZoneManager)),
@@ -118,6 +142,8 @@ public static class NotificationTypes
         // Issued by the Owner or a Zone Manager of the employee (BR-LABOR-02); the row opens nothing (the code is in its text).
         new(EmployeeLoginCode, "Employee login code", Default, [CooperativeOwner, ZoneManager],
             NotificationOpenAccess.InZone(PermissionFunctions.LaborWorkers, PermissionAction.Edit)),
+        // Opens Review employee request (LABOR-05.1).
+        new(EmployeeRequestNew, "New employee request", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         // Opens Respond to purchase request (SALE-03.2).
         new(PurchaseRequestNew, "New purchase request", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
             NotificationSmsRule.MessageTextTo(CooperativeOwner)),
@@ -156,6 +182,9 @@ public static class NotificationTypes
             NotificationSmsRule.MoneyToOwner("amount")),
         // Opens nothing: the trader is asked to call the cooperative, and the list row has no related record (a lot is not the trader's record).
         new(ProvenanceWithdrawn, "Origin information withdrawn", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
+        // Opens the invoice (SALE-09); the money is paid back in DEBT-02.
+        new(CustomerMoneyOwedBack, "Money owed back to a customer", Default, [CooperativeOwner, Accountant],
+            NotificationOpenAccess.InZone(PermissionFunctions.SalesInvoices, PermissionAction.View)),
         // A trader asked for an account from the Zalo Mini App, and the Owner's approval (ACS-01, decision of 28/10/2026).
         new(TraderAccessRequested, "Trader access requested", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         new(TraderAccessApproved, "Trader access approved", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
@@ -172,4 +201,30 @@ public static class NotificationTypes
     /// <summary>The types a person holding <paramref name="roles"/> can receive and that are offered in the preferences.</summary>
     public static IReadOnlyList<NotificationTypeDefinition> OfferedTo(IReadOnlySet<NotificationRole> roles) =>
         All.Where(t => t.PushPolicy != NeverPush && t.Roles.Any(roles.Contains)).ToList();
+    private static readonly Dictionary<string, string> CategoryByType = new()
+    {
+        [WaterAlert] = NotificationCategories.WaterAlerts,
+        [WaterMeasurementOverdue] = NotificationCategories.DeadlineReminders,
+        [ZoneLicenseExpiry] = NotificationCategories.DeadlineReminders,
+        [WorkAssignment] = NotificationCategories.Work,
+        ["WORK_PLAN_REQUESTED"] = NotificationCategories.Work,
+        ["WORK_PLAN_RESPONDED"] = NotificationCategories.Work,
+        ["WORK_PLAN_STAFF_RESPONDED"] = NotificationCategories.Work,
+        ["PURCHASE_SHIFT_INVITED"] = NotificationCategories.Work,
+        ["PURCHASE_SHIFT_RESPONDED"] = NotificationCategories.Work,
+        ["PURCHASE_SHIFT_CLOSED"] = NotificationCategories.Work,
+        ["PURCHASE_SHIFT_CONFIRMED"] = NotificationCategories.Work,
+        ["EMPLOYEE_LEAVE_REQUESTED"] = NotificationCategories.Work,
+        ["EMPLOYEE_LEAVE_REVIEWED"] = NotificationCategories.Work,
+        [PayrollSentBack] = NotificationCategories.Work,
+        [NewOrder] = NotificationCategories.Orders,
+        ["PURCHASE_REQUEST_RESPONDED"] = NotificationCategories.Orders,
+        ["PURCHASE_REQUEST_CANCELLED"] = NotificationCategories.Orders,
+        [TraceQrSent] = NotificationCategories.TraceabilityQrSent,
+        [TraderAccessRequested] = NotificationCategories.Work,
+        [TraderAccessApproved] = NotificationCategories.Work,
+    };
+
+    /// <summary>Preference category of a type; an unknown type is its own category.</summary>
+    public static string CategoryOf(string type) => CategoryByType.GetValueOrDefault(type, type);
 }

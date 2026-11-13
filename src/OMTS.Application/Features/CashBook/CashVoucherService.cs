@@ -7,6 +7,8 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Purchasing.Payments;
+using OMTS.Application.Features.Sales.Payments;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.CashBook;
 using OMTS.Domain.Enums;
 
@@ -25,6 +27,7 @@ public sealed class CashVoucherService(
     IAccountRepository accounts,
     CashVoucherCodeService codes,
     CashBookLookupService lookups,
+    CustomerPaymentService customerPayments,
     ICurrentUser currentUser,
     RowVersionGuard rowVersions,
     AuditLogService audit,
@@ -38,6 +41,11 @@ public sealed class CashVoucherService(
 
     public async Task<Result<CashVoucherView>> CreateAsync(SaveCashVoucherRequest request, CancellationToken cancellationToken)
     {
+        if (request.CountInDebt)
+        {
+            return await CreateCustomerPaymentAsync(request, cancellationToken);
+        }
+
         var now = timeProvider.GetUtcNow();
         var (type, account) = await ReferencesAsync(request, cancellationToken);
         var invalid = CashBookRules.InvalidVoucher(request, type, account, now);
@@ -61,6 +69,65 @@ public sealed class CashVoucherService(
         audit.Record(new AuditEntry("CashVoucher.Recorded", RecordType) { RecordId = voucher.Id, RecordCode = voucher.Code, After = Snapshot(voucher) });
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return await ViewAsync(voucher, cancellationToken);
+    }
+
+    /// <summary>
+    /// "Tính vào công nợ": the voucher of a customer that counts in the debt is saved as a customer payment (a receipt, with its allocation to the invoices or only off the debt) or as
+    /// money paid back to the customer, so the debt, the invoices and the cash book all read the one record. The refusals of the payment (the customer owes nothing, the amount is above
+    /// what is owed or owed back) come back as they are. Any fund (Cash, Bank or EWallet); the type is the system type of the direction.
+    /// </summary>
+    private async Task<Result<CashVoucherView>> CreateCustomerPaymentAsync(SaveCashVoucherRequest request, CancellationToken cancellationToken)
+    {
+        var invalid = new List<string>();
+        if (request.PartyKind != CashPartyKind.Customer || request.PartyId is null)
+        {
+            invalid.Add("Party");
+        }
+
+        if (request.Direction is not { } direction || !Enum.IsDefined(direction))
+        {
+            invalid.Add("Direction");
+        }
+
+        var account = request.CashAccountId is { } accountId ? await cashAccounts.GetForEditAsync(accountId, cancellationToken) : null;
+        if (request.Fund is not { } fundChosen || !Enum.IsDefined(fundChosen) || !CashBookRules.AccountMatchesFund(fundChosen, request.CashAccountId, account))
+        {
+            invalid.Add("Cash account");
+        }
+
+        if (invalid.Count > 0)
+        {
+            return AppError.InvalidFields(invalid);
+        }
+
+        var kind = request.Direction == CashDirection.Receipt ? CustomerPaymentKind.Payment : CustomerPaymentKind.PaidBack;
+        var payment = new RecordCustomerPaymentRequest(
+            request.PartyId,
+            PaymentDate: null,
+            request.Amount,
+            request.Fund == CashFund.Cash ? CustomerPaymentMethod.Cash : request.Fund == CashFund.EWallet ? CustomerPaymentMethod.EWallet : CustomerPaymentMethod.OtherTransfer,
+            CollectedByAccountId: request.CollectorId,
+            Note: request.Note,
+            PaidAt: request.OccurredAt,
+            Code: request.Code,
+            CashAccountId: request.Fund == CashFund.Cash ? null : request.CashAccountId,
+            Allocations: kind == CustomerPaymentKind.Payment && request.DebtMode == CashDebtMode.DebtOnly ? [] : request.DebtAllocations);
+        var saved = await customerPayments.RecordFromCashVoucherAsync(payment, kind, cancellationToken);
+        if (!saved.IsSuccess)
+        {
+            return saved.Error!;
+        }
+
+        var p = saved.Value!.Payment;
+        var typeId = kind == CustomerPaymentKind.Payment ? CashVoucherTypeIds.ReceiptFromCustomer : CashVoucherTypeIds.PaymentToCustomer;
+        var read = await lookups.LoadAsync(
+            [typeId], p.CashAccount is { } cash ? [cash.Id] : [], new[] { p.CollectedBy?.Id, p.RecordedBy?.Id }.OfType<Guid>(),
+            p.Customer is { } customer ? [(CashPartyKind.Customer, customer.Id)] : [], cancellationToken);
+        return new CashVoucherView(
+            p.Id, p.Code, request.Direction!.Value, request.Fund!.Value, read.Account(p.CashAccount?.Id), read.Type(typeId), p.PaidAt, p.Amount, read.Person(p.CollectedBy?.Id),
+            p.Customer is { } party ? read.Party(CashPartyKind.Customer, party.Id, party.Name) : null, p.Note, false, CashEntryStatus.Recorded, null, null,
+            p.ConfirmedAt ?? p.PaidAt, read.Person(p.RecordedBy?.Id), null, p.RowVersion,
+            kind == CustomerPaymentKind.Payment ? CashSource.CustomerPayment : CashSource.CustomerPaidBack, new CashSourceDocument("CustomerPayment", p.Id, p.Code));
     }
 
     public async Task<Result<CashVoucherView>> UpdateAsync(Guid voucherId, SaveCashVoucherRequest request, CancellationToken cancellationToken)

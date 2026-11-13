@@ -16,7 +16,7 @@ public class CustomerDebtAllocatorTests
 
     internal static CustomerLedgerPayment Payment(
         decimal amount, CustomerLedgerInvoice? invoice = null, int daysAgo = 0, CustomerPaymentKind kind = CustomerPaymentKind.Payment,
-        int statusId = StatusIds.CustomerPayment.Confirmed) => new(
+        int statusId = StatusIds.CustomerPayment.Completed) => new(
         Customer, Guid.NewGuid(), "PT" + Guid.NewGuid().ToString("N")[..6], kind, Today.AddDays(-daysAgo), amount, CustomerPaymentMethod.Cash, invoice?.Id, invoice?.Code, statusId);
 
     private static CustomerLedgerPayment PaidBack(decimal amount, int daysAgo = 0) => Payment(amount, daysAgo: daysAgo, kind: CustomerPaymentKind.PaidBack);
@@ -142,7 +142,7 @@ public class CustomerDebtAllocatorTests
                 .Select(_ => Payment(
                     random.Next(1, 40) * 100_000m,
                     invoices.Length > 0 && random.Next(2) == 0 ? invoices[random.Next(invoices.Length)] : null,
-                    statusId: random.Next(6) == 0 ? StatusIds.CustomerPayment.Cancelled : StatusIds.CustomerPayment.Confirmed))
+                    statusId: random.Next(6) == 0 ? StatusIds.CustomerPayment.Cancelled : StatusIds.CustomerPayment.Completed))
                 .ToList();
             var received = payments.Where(p => !p.Cancelled).Sum(p => p.Amount);
             if (received > 0 && random.Next(3) == 0)

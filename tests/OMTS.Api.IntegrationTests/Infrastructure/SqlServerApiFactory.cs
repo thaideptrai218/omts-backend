@@ -24,6 +24,13 @@ public sealed class SqlServerApiFactory(SqlServerTestDatabase database, IReadOnl
     /// <summary>Every log line the host wrote, to check that secrets and duplicate values stay out of the logs.</summary>
     public CapturingLoggerProvider Logs { get; } = new();
 
+    /// <summary>Lets a helper given only the client reach this host's database (<see cref="TestHosts"/>).</summary>
+    protected override void ConfigureClient(HttpClient client)
+    {
+        base.ConfigureClient(client);
+        TestHosts.Register(client, Services);
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // Added last, so it wins over a developer's user-secrets.

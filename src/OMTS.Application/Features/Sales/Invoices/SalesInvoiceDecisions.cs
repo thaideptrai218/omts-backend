@@ -43,7 +43,12 @@ internal static class SalesInvoiceDecisions
             }
 
             var source = unitPrice == product.UnitPrice ? SalesPriceSource.PriceList : SalesPriceSource.DecidedByOwner;
-            lines.Add(new PricedLine(entry, product, lots[entry.LotId], unitPrice, source, InvoiceMoney.LineAmount(entry.Kg, unitPrice), product.UnitPrice));
+            if (!InvoiceMoney.TryLineAmount(entry.Kg, unitPrice, out var amount))
+            {
+                return AppError.Invalid($"Line {entry.LineNumber} amount");
+            }
+
+            lines.Add(new PricedLine(entry, product, lots[entry.LotId], unitPrice, source, amount, product.UnitPrice));
         }
 
         var subtotal = InvoiceMoney.Subtotal(lines.Select(l => l.Amount));
@@ -52,6 +57,11 @@ internal static class SalesInvoiceDecisions
         {
             // BR-SALE-06: the discount cannot bring the total below 0.
             return AppError.Invalid("Discount");
+        }
+
+        if (!InvoiceMoney.TotalsFit(subtotal, total))
+        {
+            return AppError.Invalid("Total");
         }
 
         if (entries.Discount > 0m && !facts.ByOwner && !entries.DiscountDecidedByOwner)
@@ -80,6 +90,12 @@ internal static class SalesInvoiceDecisions
             {
                 // BR-SALE-07 (5): otherwise the rest is paid now.
                 return AppError.Invalid("Cash amount", "The cash is less than the total: choose VietQR or Pay later for the rest, or take the whole total.");
+            }
+
+            // The debt warning of the settings: a customer over the limit gets no more debt, not even with the Owner's agreement.
+            if (facts is { AllowMoreDebtOverLimit: false, Standing: { Over: true } standing })
+            {
+                return AppError.Conflict(UserMessages.CustomerOverDebtLimit(customerName, facts.DebtBefore, standing.DebtDays, standing.OverAmount, standing.OverDays));
             }
 
             if (facts.Request?.PayLaterAgreed != true && !entries.PayLaterOwnerAgreed)

@@ -23,9 +23,9 @@ public class PhoneAndPasswordTests(AuthApiFactory factory) : IClassFixture<AuthA
     {
         var cooperative = await factory.EnsureCooperativeAsync();
         var trader = await factory.AddAccountAsync(NewCode(), Password, SubjectType.Trader, a => { a.PhoneNumber = null; a.PhoneVerifiedAt = null; });
-        var own = new Customer { CooperativeId = cooperative.Id, AccountId = trader.Id, Name = "Own" };
+        var own = new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = cooperative.Id, AccountId = trader.Id, Name = "Own" };
         var phone = NewPhone();
-        var offline = Enumerable.Range(0, offlineProfiles).Select(i => new Customer { CooperativeId = cooperative.Id, Name = $"Offline {i}", PhoneNumber = phone }).ToList();
+        var offline = Enumerable.Range(0, offlineProfiles).Select(i => new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = cooperative.Id, Name = $"Offline {i}", PhoneNumber = phone }).ToList();
         await factory.UseDbAsync(db => { db.Customers.Add(own); db.Customers.AddRange(offline); });
         var client = await factory.LoginAsync(trader.Username);
 
@@ -124,23 +124,6 @@ public class PhoneAndPasswordTests(AuthApiFactory factory) : IClassFixture<AuthA
         var fresh = factory.CreateClient();
         fresh.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", body.GetProperty("tokens").GetProperty("accessToken").GetString());
         Assert.Equal(HttpStatusCode.OK, (await fresh.GetAsync("/api/me")).StatusCode);
-    }
-
-    [Fact]
-    public async Task Change_password_with_an_email_code_or_guidance_without_a_verified_email()
-    {
-        var email = $"owner-{NewCode()}@example.com";
-        var withEmail = await factory.AddAccountAsync(NewCode(), Password, configure: a => { a.Email = email; a.EmailVerifiedAt = DateTimeOffset.UtcNow; });
-        var withoutEmail = await factory.AddAccountAsync(NewCode(), Password);
-        var client = await factory.LoginAsync(withEmail.Username);
-
-        var noEmail = await (await factory.LoginAsync(withoutEmail.Username)).PostAsync("/api/me/password/code", null);
-        var id = await VerificationIdAsync(await client.PostAsync("/api/me/password/code", null));
-        var token = await VerifyAsync(client, id, factory.LastEmailCode(email));
-        var changed = await client.PostAsJsonAsync("/api/me/password", new { verificationToken = token, newPassword = "NewPass2026", passwordConfirmation = "NewPass2026" });
-
-        Assert.Equal("MSG-ACCOUNT-15", await noEmail.ErrorCodeAsync());
-        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
     }
 
     // ACCOUNT-02.2, ACCOUNT-04.1: with a temporary password only the change is open and it asks for no current

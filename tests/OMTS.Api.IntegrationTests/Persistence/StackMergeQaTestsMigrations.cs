@@ -34,9 +34,11 @@ public class StackMergeQaTestsMigrations
         "20261105093720_AuditSearch", "20261105093736_EmployeesV2", "20261105122524_PurchaseRequests", "20261105140242_SupplierPaymentsV2", "20261105161142_RaftsV2",
         "20261105165022_CultivationCyclesV2", "20261105170348_PurchaseReturnsV2", "20261106081809_LaborSettings", "20261106083401_CultivationLogs", "20261106084757_MaterialUsages",
         "20261107050042_SeedingRecords", "20261107052218_HarvestLots", "20261107055301_HarvestLotCorrections", "20261107112721_SalesInvoices", "20261107145951_SalesInvoiceSending",
-        "20261107164749_HarvestLotAutoClose", "20261108020405_CustomerPayments", "20261108182824_VietQrPendingSales", "20261109084608_LoginSessionRefreshGrace", "20261109104138_QualityClaims",
-        "20261109104320_SupplierProfileFields", "20261109105053_LoginSessionRevokedAtIndex", "20261109110307_LoginSessionDeviceAndSignInMethod", "20261109152702_PurchaseDiscountsZonesAndDraftReturns", "20261109181525_PurchaseReceiptTimeReceiverAndLineDiscount",
-        "20261109192443_PurchaseReturnTimeAndSupplierPaymentAllocations", "20261110060643_CashBookVouchersAccountsAndTypes", "20261111064326_EmployeeAppAuth",
+        "20261107164749_HarvestLotAutoClose", "20261108020405_CustomerPayments", "20261108182824_VietQrPendingSales", "20261109053538_SalesInvoiceCorrectionAndCancellation", "20261109084608_LoginSessionRefreshGrace",
+        "20261109104138_QualityClaims", "20261109104320_SupplierProfileFields", "20261109105053_LoginSessionRevokedAtIndex", "20261109110307_LoginSessionDeviceAndSignInMethod", "20261109152702_PurchaseDiscountsZonesAndDraftReturns",
+        "20261109181525_PurchaseReceiptTimeReceiverAndLineDiscount", "20261109192443_PurchaseReturnTimeAndSupplierPaymentAllocations", "20261110060643_CashBookVouchersAccountsAndTypes", "20261110132829_CustomerProfilePaymentsAllocationsAndAdjustments", "20261110142548_CustomerPaymentsReceivingCashAccount",
+        "20261110180344_EmployeeCodeAndProfileFields", "20261110184644_RemoveEmployeeEmail", "20261110191810_WorkAssignmentsAttendanceAndEmployeeRequests", "20261110194730_InputItemUnitsGroupsCostAndStockLedger", "20261110201057_InputIssuesAndIssueTypes",
+        "20261110201319_PayrollSheetsPayslipsAndWagePayments", "20261110202530_CustomerSettings", "20261111080000_InputGroupParentsIssueHeaderRaftAndMovementCodes", "20261111135229_CageOrdersWorkPlansHarvestAndWeighing", "20261113082149_EmployeeAppAuth",
     ];
 
     private const string MigrationBeforeSeeding = "20261106084757_MaterialUsages";
@@ -87,7 +89,9 @@ public class StackMergeQaTestsMigrations
 
         Assert.Empty(await chain.Database.GetPendingMigrationsAsync());
         Assert.False(chain.Database.HasPendingModelChanges());
-        Assert.Equal(Interleave, (await chain.Database.GetAppliedMigrationsAsync()).TakeLast(Interleave.Length));
+        // The interleave is a run of the chain, not its tail: later migrations (employees, work, payroll) come after it.
+        var applied = (await chain.Database.GetAppliedMigrationsAsync()).ToList();
+        Assert.Equal(Interleave, applied.Skip(applied.IndexOf(Interleave[0])).Take(Interleave.Length));
         AssertSameLines(await ReadAsync(model, SchemaQuery), await ReadAsync(chain, SchemaQuery), "schema");
         AssertSameLines(await ReadAsync(model, CatalogQuery), await ReadAsync(chain, CatalogQuery), "status catalog");
 
@@ -233,7 +237,9 @@ public class StackMergeQaTestsMigrations
         Assert.Equal(statuses.Count, statuses.Select(s => (s.Group, s.Code)).Distinct().Count());
         foreach (var group in statuses.GroupBy(s => s.Group))
         {
-            Assert.True(group.Count(s => s.IsInitial) == 1, $"group {group.Key} has {group.Count(s => s.IsInitial)} initial statuses");
+            // A purchase return starts as a Draft or is recorded at once (PURCHASE-02), so its group has two initial statuses.
+            var initials = group.Key == StatusGroups.PurchaseReturn ? 2 : 1;
+            Assert.True(group.Count(s => s.IsInitial) == initials, $"group {group.Key} has {group.Count(s => s.IsInitial)} initial statuses");
             Assert.Equal(group.Count(), group.Select(s => s.SortOrder).Distinct().Count());
             Assert.Single(group.Select(s => s.Id / 100).Distinct());
         }
@@ -268,13 +274,10 @@ public class StackMergeQaTestsMigrations
         var cycle = new CultivationCycle { Raft = new Raft { Zone = new FarmingZone { CooperativeId = await OldSchemaRows.CooperativeAsync(db), Code = "KV01", Name = "A" }, Code = "B01", Size = "1" }, StartDate = new DateOnly(2026, 1, 1) };
         var account = new Account { Username = "owner", DisplayName = "Owner", SubjectType = SubjectType.CooperativeOwner, StatusId = StatusIds.Account.Active };
         var item = new FarmingInputItem { Code = "VT001", Name = "Seed", Group = InputItemGroup.Seed, Unit = "con" };
-        var receipt = new PurchaseReceipt { Code = "PN000001", SupplierId = await OldSchemaRows.SupplierAsync(db), ReceiptDate = new DateOnly(2026, 1, 1), RecordedByAccountId = Guid.Empty, StatusId = StatusIds.PurchaseReceipt.Completed };
-        db.AddRange(cycle, account, item, receipt);
-        receipt.RecordedByAccountId = account.Id;
-        var line = new PurchaseReceiptLine { Receipt = receipt, LineNumber = 1, Item = item, Unit = "con", Quantity = 10, UnitPrice = 1 };
-        db.Add(line);
+        db.AddRange(cycle, account, item);
         await db.SaveChangesAsync();
-        await db.Database.ExecuteSqlAsync($"INSERT INTO SeedingEvents (Id, CycleId, SeedLotId, SeedingDate, RecordedByAccountId, EvidenceUrls, CreatedAt) VALUES (NEWID(), {cycle.Id}, {line.Id}, '2026-01-02', {account.Id}, N'[]', SYSDATETIMEOFFSET())");
+        var lineId = await OldSchemaRows.CompletedReceiptLineAsync(db, await OldSchemaRows.SupplierAsync(db), account.Id, item.Id, "con");
+        await db.Database.ExecuteSqlAsync($"INSERT INTO SeedingEvents (Id, CycleId, SeedLotId, SeedingDate, RecordedByAccountId, EvidenceUrls, CreatedAt) VALUES (NEWID(), {cycle.Id}, {lineId}, '2026-01-02', {account.Id}, N'[]', SYSDATETIMEOFFSET())");
         db.ChangeTracker.Clear();
 
         await migrator.MigrateAsync();

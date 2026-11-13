@@ -146,6 +146,9 @@ MSG-CLAIM-03
 MSG-CLAIM-04
 MSG-CLAIM-05
 MSG-CLAIM-06
-# Cash book (added after the SRS 27/10 catalogue)
+# Cash book, input issues and customer settings (added after the SRS 27/10 catalogue)
 MSG-CASH-01
 MSG-CASH-02
+MSG-INPUT-01
+MSG-INPUT-02
+MSG-CUSTOMER-01

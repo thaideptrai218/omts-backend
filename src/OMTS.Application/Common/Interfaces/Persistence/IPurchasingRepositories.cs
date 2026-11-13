@@ -70,9 +70,14 @@ public sealed record SupplierHistoryRow(
 
 public interface IFarmingInputItemRepository
 {
+    /// <summary>The item with its units (and their catalogue rows), photos and group, tracked.</summary>
     Task<FarmingInputItem?> GetForEditAsync(Guid itemId, CancellationToken cancellationToken);
 
+    /// <summary>The items with their units, untracked.</summary>
     Task<IReadOnlyList<FarmingInputItem>> GetByIdsAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken);
+
+    /// <summary>The items with their units, tracked: the ones whose cost the ledger changes.</summary>
+    Task<IReadOnlyList<FarmingInputItem>> GetByIdsForUpdateAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken);
 
     /// <summary>Another item whose code equals <paramref name="code"/> ignoring case, discontinued items included.</summary>
     Task<FarmingInputItem?> FindByCodeAsync(string code, Guid? exceptItemId, CancellationToken cancellationToken);
@@ -80,27 +85,45 @@ public interface IFarmingInputItemRepository
     /// <summary>Another item whose name equals <paramref name="name"/> ignoring case, discontinued items included.</summary>
     Task<FarmingInputItem?> FindByNameAsync(string name, Guid? exceptItemId, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// The unit of the Seed items other than <paramref name="exceptItemId"/>, discontinued ones included: the unit of the
-    /// first one created, or null when there is no other Seed item (BR-PURCHASE-10).
-    /// </summary>
-    Task<string?> SeedUnitAsync(Guid? exceptItemId, CancellationToken cancellationToken);
+    /// <summary>The item that owns a code, as an item code or as the code of one of its units (ignoring case), other than the given item and item unit.</summary>
+    Task<CodeOwner?> FindCodeOwnerAsync(string code, Guid? exceptItemId, Guid? exceptItemUnitId, CancellationToken cancellationToken);
 
-    /// <summary>Every item code that starts with <paramref name="prefix"/> ignoring case, discontinued items included.</summary>
-    Task<IReadOnlyList<string>> CodesStartingWithAsync(string prefix, CancellationToken cancellationToken);
-
-    /// <summary>By code or name (contains), optional group and status, ordered by code.</summary>
+    /// <summary>The items that are not deleted, by code or name or a unit code (contains), optional type and status, ordered by code; units loaded.</summary>
     Task<IReadOnlyList<FarmingInputItem>> ListAsync(string? search, InputItemGroup? group, int? statusId, CancellationToken cancellationToken);
 
-    /// <summary>True when the item is on a receipt line or a material usage record: its group and unit are then fixed.</summary>
+    /// <summary>True when the item is on a receipt line or a material usage record: its type is then fixed.</summary>
     Task<bool> IsUsedAsync(Guid itemId, CancellationToken cancellationToken);
 
     /// <summary>Which of the items are on a receipt line or a material usage record (one query for a whole list).</summary>
     Task<IReadOnlySet<Guid>> UsedAmongAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken);
 
+    /// <summary>The item units of these items that a receipt or return line names: their factor and unit are then fixed.</summary>
+    Task<IReadOnlySet<Guid>> UsedUnitsAmongAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The price of one base unit on the latest line (by time received) of a Completed receipt, per item, leaving out the receipt <paramref name="exceptReceiptId"/>;
+    /// an item with no such line is absent.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, decimal>> LatestPurchasePricesAsync(IReadOnlyCollection<Guid> itemIds, Guid? exceptReceiptId, CancellationToken cancellationToken);
+
+    /// <summary>Whether any receipt line, return line, issue or movement row names the item.</summary>
+    Task<bool> HasMovementsAsync(Guid itemId, CancellationToken cancellationToken);
+
     void Add(FarmingInputItem item);
+
+    /// <summary>A new unit under a tracked item, added explicitly because its key is already set.</summary>
+    void AddUnit(InputItemUnit unit);
+
+    void RemoveUnit(InputItemUnit unit);
+
+    void AddPhoto(InputItemPhoto photo);
+
+    void RemovePhoto(InputItemPhoto photo);
 }
 
+/// <param name="ItemId">The item whose code or unit code it is.</param>
+/// <param name="IsUnitCode">True when the code is that of a unit of the item.</param>
+public sealed record CodeOwner(Guid ItemId, bool IsUnitCode);
 /// <summary>
 /// PURCHASE-03 filters; null means "any". The zone filters only: access follows the role (BR-FARM-08). The item group, item and
 /// raft filters are line filters: a receipt matches when one of its lines does, and only those lines count in the totals.
@@ -222,3 +245,4 @@ public interface ISupplierPaymentRepository
 
     void Add(SupplierPayment payment);
 }
+

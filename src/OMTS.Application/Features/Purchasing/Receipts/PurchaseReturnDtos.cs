@@ -21,9 +21,10 @@ public sealed record CreatePurchaseReturnRequest(
 /// <summary>
 /// A line of a return: <see cref="ReceiptLineId"/> on a return from a receipt, or <see cref="ItemId"/> and <see cref="UnitPrice"/>
 /// on one without. From a receipt, <see cref="UnitPrice"/> is optional, the price each unit is returned at: left out, a save
-/// takes what one unit was paid (<c>netUnitPrice</c> of the receipt line) and an edit of a Recorded return keeps its price.
+/// takes what one unit was paid (<c>netUnitPrice</c> of the receipt line) and an edit of a Recorded return keeps its price. A line of a receipt is returned in the unit of the receipt line;
+/// without a receipt <see cref="ItemUnitId"/> is the unit of the item the line is entered in (empty: the base unit). Quantity and price are in that unit.
 /// </summary>
-public sealed record PurchaseReturnLineInput(Guid? ReceiptLineId, Guid? ItemId, decimal? UnitPrice, decimal? Quantity);
+public sealed record PurchaseReturnLineInput(Guid? ReceiptLineId, Guid? ItemId, decimal? UnitPrice, decimal? Quantity, Guid? ItemUnitId = null);
 
 /// <summary>Money the supplier gives back when the return is completed: at most the value of the return.</summary>
 public sealed record ReturnRefundInput(decimal? Amount, PaymentMethod? Method, string? BankReference = null);
@@ -61,7 +62,8 @@ public sealed record CancelPurchaseReturnRequest(string? Reason, string? RowVers
 
 /// <param name="ReceiptLineId">Null on a return without a receipt.</param>
 public sealed record PurchaseReturnLineView(
-    Guid? ReceiptLineId, Guid ItemId, string ItemCode, string ItemName, string Unit, decimal Quantity, decimal UnitPrice, decimal ReturnValue);
+    Guid? ReceiptLineId, Guid ItemId, string ItemCode, string ItemName, string Unit, decimal Quantity, decimal UnitPrice, decimal ReturnValue,
+    Guid? ItemUnitId = null, decimal UnitFactor = 1, decimal? BaseQuantity = null);
 
 /// <summary>A money-paid-back record made with the return; a Cancelled one stays listed with its status.</summary>
 public sealed record ReturnRefundView(
@@ -121,3 +123,4 @@ public sealed record PurchaseReturnRow(
 /// <param name="Message">MSG-GEN-10 when no return matches.</param>
 public sealed record PurchaseReturnSearchResult(
     Paged<PurchaseReturnRow> Page, decimal TotalValue, DateOnly From, DateOnly To, string? Message, string? MessageCode);
+
