@@ -4702,6 +4702,28 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             IsInitial = false,
                             Meaning = "Closed with pieces left in the pool: the remainder is written off as an estimated loss; nothing is seeded from it any more.",
                             SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 4101,
+                            Code = "RECORDED",
+                            DisplayName = "Recorded",
+                            Group = "SALES_RETURN",
+                            IsFinal = false,
+                            IsInitial = true,
+                            Meaning = "Takes the invoice out of the customer debt and counts in the lots and the reports; cannot be edited.",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 4102,
+                            Code = "CANCELLED",
+                            DisplayName = "Cancelled",
+                            Group = "SALES_RETURN",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "Recorded by mistake; counts nowhere.",
+                            SortOrder = 2
                         });
                 });
 
@@ -5011,6 +5033,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             ToStatusId = 3702,
                             TriggerEvent = "Action",
                             UseCases = "CLAIM-02"
+                        },
+                        new
+                        {
+                            Id = 240,
+                            AllowedPerformers = "Cooperative Owner",
+                            FromStatusId = 4101,
+                            GuardCondition = "A return recorded by mistake; it no longer counts in the customer debt, the lots or the reports, and the invoice can again be corrected or cancelled.",
+                            ReasonRequired = true,
+                            ToStatusId = 4102,
+                            TriggerEvent = "Action",
+                            UseCases = "CLAIM-03"
                         },
                         new
                         {
@@ -7675,6 +7708,134 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesReturn", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CancelledByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("RecordedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("ReturnDate")
+                        .HasColumnType("date");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("StatusId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Value")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CancelledByAccountId");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("RecordedByAccountId");
+
+                    b.HasIndex("StatusId");
+
+                    b.HasIndex(new[] { "InvoiceId" }, "UX_SalesReturns_Invoice_Recorded")
+                        .IsUnique()
+                        .HasFilter("[StatusId] = 4101");
+
+                    b.ToTable("SalesReturns", t =>
+                        {
+                            t.HasCheckConstraint("CK_SalesReturn_Cancelled_Has_Reason", "[StatusId] <> 4102 OR ([CancelReason] IS NOT NULL AND [CancelledAt] IS NOT NULL AND [CancelledByAccountId] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_SalesReturn_Value_NotNegative", "[Value] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesReturnLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("DiscardedKg")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<Guid>("HarvestLotId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("InvoiceLineId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("ReturnId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("ReturnedKg")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HarvestLotId");
+
+                    b.HasIndex("ReturnId", "InvoiceLineId")
+                        .IsUnique();
+
+                    b.ToTable("SalesReturnLines", t =>
+                        {
+                            t.HasCheckConstraint("CK_SalesReturnLine_Discarded_Matches_Outcome", "([Outcome] = 'ThrownAway' AND [DiscardedKg] = [ReturnedKg]) OR ([Outcome] = 'BackForSale' AND [DiscardedKg] = 0)");
+
+                            t.HasCheckConstraint("CK_SalesReturnLine_ReturnedKg_Positive", "[ReturnedKg] > 0");
+                        });
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.CashBook.CashVoucher", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.CashBook.CashAccount", "CashAccount")
@@ -9701,6 +9862,55 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Invoice");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesReturn", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("CancelledByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesInvoice", "Invoice")
+                        .WithMany("Returns")
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("RecordedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
+                        .WithMany()
+                        .HasForeignKey("StatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Invoice");
+
+                    b.Navigation("Status");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesReturnLine", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Harvest.HarvestLot", "HarvestLot")
+                        .WithMany()
+                        .HasForeignKey("HarvestLotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Sales.SalesReturn", "Return")
+                        .WithMany("Lines")
+                        .HasForeignKey("ReturnId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("HarvestLot");
+
+                    b.Navigation("Return");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.CultivationCycle", b =>
                 {
                     b.Navigation("PlanPhotos");
@@ -9886,6 +10096,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Payments");
 
                     b.Navigation("PriceCuts");
+
+                    b.Navigation("Returns");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Sales.SalesReturn", b =>
+                {
+                    b.Navigation("Lines");
                 });
 #pragma warning restore 612, 618
         }

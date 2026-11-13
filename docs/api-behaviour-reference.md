@@ -225,6 +225,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | `TRADER_ACCESS_REQUESTED` | a trader asked for an account from the Zalo Mini App (`POST /api/auth/zalo/trader-requests`) | unless turned off | Owner |
 | `TRADER_ACCESS_APPROVED` | the Owner approved the request (`POST /api/trader-requests/{id}/approve`) | unless turned off | Trader |
 | `QUALITY_CLAIM_NEW` | MSG-CLAIM-01, a new quality claim (CLAIM-01) | unless turned off | Owner |
+| `SALES_RETURN_RECORDED` | MSG-CLAIM-05, a new sales return (CLAIM-03); to the Accountants, only when money is owed back, the same message goes as `CUSTOMER_MONEY_OWED_BACK` | unless turned off | Owner |
 | `QUALITY_CLAIM_RESPONSE` | MSG-CLAIM-02, the Owner's response (CLAIM-02); also sent as an SMS to the phone number of the profile | unless turned off | Trader |
 
 - Preferences (ACCOUNT-07): `GET`/`PUT /api/me/notification-preferences` list the types of the roles the account
@@ -323,8 +324,8 @@ SALE-09 (`SALES_INVOICES`, zones of the caller's pairs, BR-SALE-08): the Owner, 
 | Value | Offered to | When | Endpoint today |
 |---|---|---|---|
 | `Resend` | Zone Manager of the zone, Owner | not Cancelled, the sale is finished, the latest sending is not Sending | `POST /api/sales-invoices/{id}/resend` |
-| `CreateReturn` | Zone Manager of the zone, Owner | not Cancelled, no sales return that is not cancelled | none yet: CLAIM-03 |
-| `CancelReturn` | Owner | a sales return that is not cancelled (none can exist yet) | none yet: CLAIM-03.3 |
+| `CreateReturn` | Zone Manager of the zone, Owner | not Cancelled, no sales return that is not cancelled | `POST /api/sales-invoices/{id}/sales-return` |
+| `CancelReturn` | Owner | a sales return that is not cancelled | `POST /api/sales-returns/{id}/cancel` |
 | `Correct` | Owner | Completed, no sales return that is not cancelled | `PUT /api/sales-invoices/{id}/correction` |
 | `Cancel` | Owner | Completed, no sales return that is not cancelled | `POST /api/sales-invoices/{id}/cancel` |
 | `Print` | Whoever has Export in the zone | always | `GET /api/sales-invoices/{id}/print` |
@@ -355,6 +356,21 @@ A trader reports a quality problem on one of their invoices with photos; the Coo
 - `GET /api/me/quality-claims` (own claims, newest first, MSG-GEN-11 when none) and `GET /api/me/quality-claims/{id}` (404 for another trader's): the description, photo links, status, offer and response note. The photos are private (BR-CLAIM-01): signed links for 1 hour, never on the provenance page.
 - `GET /api/quality-claims` (`statusId`, `page`, `pageSize`; Awaiting response first) and `GET /api/quality-claims/{id}` (customer with phone number, invoice with lines, lots, kg, amounts, status and price cuts, the SMS sendings, `rowVersion`): QUALITY_CLAIMS View, so the Owner and the Zone Managers, who see the claims of invoices in their zones only (PM default; another zone answers 403). An Accountant has no access.
 - `POST /api/quality-claims/{id}/accept` (`{ offer: "ReturnAllGoods" | "PriceCutWholeInvoice", note?, rowVersion }`) and `POST /api/quality-claims/{id}/reject` (`{ note, rowVersion }`): Owner only, while Awaiting response; a response cannot be changed (409 MSG-GEN-09, or MSG06 when the form is stale). Accepting answers 409 MSG-CLAIM-03 when the invoice was cancelled or has a sales return (it can still be rejected). The offer only records what was proposed: the return is CLAIM-03 and the price cut SALE-07 (`PUT /api/sales-invoices/{id}/correction`, PriceCutAfterClaim), which the Owner runs after the trader chooses. Neither changes here. The trader gets a push and an SMS with MSG-CLAIM-02; a message that cannot be sent undoes nothing (GFR-06), it stays in the trader's list and the sending is listed Not sent on the claim; a profile without a phone number gets a Not sent row (`NO_PHONE_NUMBER`).
+
+
+### Sales returns (CLAIM-03)
+
+A sales return takes back all the goods of one invoice (BR-CLAIM-03); there is no partial return. The Zone Manager of the invoice's zone and the Owner record it (`SALES_RETURNS` Create; an Accountant has no access); it is made with or without a claim, and a claim is not linked to it (BR-CLAIM-02). Code `TL000123` (PM answer 12/11: `TH` is the purchase return's).
+
+- `GET /api/sales-invoices/{id}/sales-return/preview` (`?customerId=` the profile chosen for a walk-in invoice): the lines with their lots and statuses, `value` (the invoice total at its latest values), the debt before and after (`debtAfter`), the claims of the invoice, `requiresCustomer`, `ownerMustAgree` and `rowVersion`.
+- `POST /api/sales-invoices/{id}/sales-return` `{ reason, rowVersion, lines: [{ invoiceLineId, outcome: "BackForSale" | "ThrownAway" }], customerId?, ownerAgreed?, thrownAwayLots? }` answers 201 `{ return, debtAfter, owedBack, message, messageCode }`. A Zone Manager is asked MSG-CLAIM-04 (409, `confirmationField: ownerAgreed`). A walk-in invoice needs `customerId` (MSG-GEN-01): the invoice and its payments move to that profile first. A lot whose oysters are thrown away and that is still for sale is asked MSG-HARVEST-02 (`thrownAwayLots: [{ harvestLotId, stillForSale, leftoverKg?, closeReason? }]`); a lot that also takes oysters back for sale on the same return is not asked. A Zone Manager who ticks the close of a lot of another zone gets 403 MSG-GEN-08 with the lot named: the whole return is refused and the text says to untick the close or ask the Owner (PM answer 12/11).
+- The value takes the invoice out of the customer debt (BR-DEBT-02, shown in the statement of the customer on the return date), the return covers the invoice in the allocation (BR-DEBT-05), and the invoice is locked (SALE-07, SALE-08: 409 MSG-SALE-20). When the debt is now below zero the Owners see it in MSG-CLAIM-05 (type `SALES_RETURN_RECORDED`) and the Accountants get MSG-CLAIM-05 too (type `CUSTOMER_MONEY_OWED_BACK`) with the request to pay the money back (DEBT-02).
+- `GET /api/sales-returns/{id}`: the return with its lines and, for lots back for sale, `remainingKg` and `remainingAfterCancelKg` (SALES_RETURNS View in the zone). The invoice detail has `salesReturns` (cancelled ones included).
+- `POST /api/sales-returns/{id}/cancel` (Owner only, `{ reason, rowVersion, confirmNegativeRemaining? }`): the return counts nowhere and the invoice can again be corrected or cancelled. MSG-CLAIM-06 is the warning first when the kg that went back for sale were sold since (the remaining kg goes below zero). A return can be cancelled after the customer was paid back: nothing blocks it, the money paid back stays as it is and the debt goes up again (PM answer 12/11). Each lot keeps its status, whatever happened since; nothing reopens or closes. A cancellation sends no notification.
+- Lot figures (BR-HARVEST-07): returned, back-for-sale and discarded kg of returns that stand go into `IHarvestLotSalesQuery`, so HARVEST-04 and the remaining kg follow. TRACE-02 lists the returns under each invoice; a lot whose returned oysters were thrown away is left out of its invoice's provenance page; a TRACE-04 notice leaves out invoices taken back by a return (BR-TRACE-07).
+- Concurrency: a parallel correction, cancellation, payment or second return touches the same invoice or profile row, so one fails with 409 MSG06 (or MSG-GEN-09 with a filtered unique index on the invoice when the winner is a return); nothing is applied twice. The notification goes out after the commit.
+
+Migration `SalesReturns` is additive: two new tables, the `SALES_RETURN` statuses (4101, 4102) and transition 240.
 
 ### Operations dashboard (FARM-06)
 

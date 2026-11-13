@@ -156,7 +156,7 @@ internal static class StatusCatalogSeed
         NewTransition(183, S.PurchaseRequest.Accepted, S.PurchaseRequest.Cancelled, "SALE-02", Trader, Action, "The request is not Fulfilled; a reason is optional.", false),
         NewTransition(220, S.QualityClaim.AwaitingResponse, S.QualityClaim.Accepted, "CLAIM-02", Owner, Action, "The invoice is not cancelled and has no sales return; an offer is chosen and a note is optional.", false),
         NewTransition(221, S.QualityClaim.AwaitingResponse, S.QualityClaim.Rejected, "CLAIM-02", Owner, Action, "A note gives the reason.", true),
-        NewTransition(230, S.SalesReturn.Recorded, S.SalesReturn.Cancelled, "CLAIM-03", Owner, Action, "A return recorded by mistake; it no longer counts in the customer debt, the lots or the reports, and the invoice can again be corrected or cancelled.", true),
+        NewTransition(240, S.SalesReturn.Recorded, S.SalesReturn.Cancelled, "CLAIM-03", Owner, Action, "A return recorded by mistake; it no longer counts in the customer debt, the lots or the reports, and the invoice can again be corrected or cancelled.", true),
 
         // BR-HARVEST-04: closed in one of four ways; only the system reopens a lot. 80–140 are taken or reserved on other branches.
         NewTransition(150, S.HarvestLot.Open, S.HarvestLot.Closed, "HARVEST-02, GFR-05, SALE-05, SALE-07, CLAIM-03", LotCloser, Action, "Sold whole lot, closed with the leftover kg, or the time limit reached.", false),

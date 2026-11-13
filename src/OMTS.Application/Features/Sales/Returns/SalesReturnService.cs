@@ -29,7 +29,6 @@ public sealed class SalesReturnService(
     ISalesReturnRepository salesReturns,
     IInvoiceSalesReturnCheck returnsOfInvoices,
     IQualityClaimRepository claims,
-    ICustomerPaymentRepository payments,
     SalesReturnGuard guard,
     SalesReturnLots lots,
     SalesReturnViews views,
@@ -151,17 +150,16 @@ public sealed class SalesReturnService(
     private async Task<(SalesReturn SalesReturn, decimal DebtAfter)> RecordAsync(
         SalesInvoice invoice, string reason, IReadOnlyDictionary<Guid, SalesReturnOutcome> outcomes, Customer? chosen, CancellationToken cancellationToken)
     {
-        var ownRows = await payments.GetForEditOfInvoicesAsync([invoice.Id], cancellationToken);
         var customer = chosen ?? invoice.Customer!;
         var before = await debts.DebtAsync(customer.Id, cancellationToken);
         var debtAfter = invoice.CustomerId is null
             // The attached walk-in invoice counts and is taken back at once; only its own payments stay on the profile (BR-DEBT-02).
-            ? SalesInvoiceChangeMoney.AfterWalkInCancelled(before, SalesInvoiceChangeMoney.PaidOf(ownRows, null))
+            ? SalesInvoiceChangeMoney.AfterWalkInCancelled(before, SalesInvoiceChangeMoney.PaidOf(invoice.Payments))
             : SalesInvoiceChangeMoney.AfterReturn(before, invoice.Total);
 
         if (chosen is not null)
         {
-            foreach (var payment in SalesInvoiceOwnPayments.Moving(ownRows, invoice.Id, invoice.CustomerId))
+            foreach (var payment in invoice.Payments)
             {
                 payment.CustomerId = chosen.Id;
             }

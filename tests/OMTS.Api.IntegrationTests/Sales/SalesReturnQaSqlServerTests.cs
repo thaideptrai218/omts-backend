@@ -27,7 +27,7 @@ namespace OMTS.Api.IntegrationTests.Sales;
 public class SalesReturnQaSqlServerTests
 {
     // Migrations of other branches sort before and after it, so the test compares this step alone: its predecessor in the chain, and itself.
-    private const string ReturnsMigration = "20261109133559_SalesReturns";
+    private const string ReturnsMigration = "20261113150000_SalesReturns";
 
     private sealed record World(FarmingSqlServerHost Host, HttpClient Owner, HttpClient Manager, TraderActor Trader, Guid ZoneId, Guid ProductId, Guid[] LotIds);
 
@@ -92,7 +92,7 @@ public class SalesReturnQaSqlServerTests
         Assert.Equal(latest.Order(StringComparer.Ordinal), (await ColumnsAsync(db)).Order(StringComparer.Ordinal));
         Assert.Equal(2, await db.Statuses.CountAsync(s => s.Group == StatusGroups.SalesReturn));
         Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
-            "SELECT COUNT(*) AS [Value] FROM sys.indexes WHERE name = 'UX_SalesReturns_Invoice_Recorded' AND is_unique = 1 AND has_filter = 1 AND filter_definition LIKE '%3801%'").SingleAsync());
+            "SELECT COUNT(*) AS [Value] FROM sys.indexes WHERE name = 'UX_SalesReturns_Invoice_Recorded' AND is_unique = 1 AND has_filter = 1 AND filter_definition LIKE '%4101%'").SingleAsync());
         Assert.Equal(0, await db.Database.SqlQueryRaw<int>(
             "SELECT COUNT(*) AS [Value] FROM sys.foreign_keys WHERE parent_object_id IN (OBJECT_ID('SalesReturns'), OBJECT_ID('SalesReturnLines')) AND delete_referential_action <> 0").SingleAsync());
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());

@@ -60,7 +60,8 @@ public sealed class SalesReturnLots(IHarvestLotRepository lots, IHarvestLotSales
             {
                 if (await closing.CloseWithoutSavingAsync(lot, answer.LeftoverKg, answer.CloseReason, cancellationToken) is { } notClosed)
                 {
-                    return notClosed;
+                    // A lot of a zone the caller does not manage: the whole return is refused and the message says to untick the close or ask the Owner.
+                    return notClosed.Kind == ErrorKind.Forbidden ? new AppError(ErrorKind.Forbidden, UserMessages.SalesReturnLotCloseNotPermitted(lot.LotCode)) : notClosed;
                 }
 
                 closed.Add(lot.LotCode);

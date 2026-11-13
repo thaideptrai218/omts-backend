@@ -1329,6 +1329,13 @@ public static class UserMessages
         Parameters = new Dictionary<string, object?> { ["return_code"] = returnCode, ["lot_text"] = lotText },
     };
 
+    /// <summary>MSG-GEN-08 for a Zone Manager who ticked the close of a lot of another zone on a sales return (PM answer 12/11/2026, 8.5): the whole return is refused and the text says what to do.</summary>
+    public static UserMessage SalesReturnLotCloseNotPermitted(string lotCode) => new(
+        Gen08, $"You do not have permission to close lot {lotCode} from this sales return. Untick the close of lot {lotCode}, or ask the Cooperative Owner to record the return. Nothing has been changed.", Legacy.Msg02)
+    {
+        Parameters = new Dictionary<string, object?> { ["lot_code"] = lotCode },
+    };
+
     /// <summary>MSG-HARVEST-02 (HARVEST-02.1): the returned oysters of a lot still for sale are thrown away.</summary>
     public static UserMessage ThrownAwayLotStillForSale(string lotCode) => new(
         Harvest02, $"The returned oysters of lot {lotCode} will be thrown away. Is lot {lotCode} still for sale? Choose Yes to keep selling it, or No to close it now.")

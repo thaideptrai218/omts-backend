@@ -18,7 +18,6 @@ public sealed class SalesReturnViews(
     ISalesReturnRepository salesReturns,
     ISalesInvoiceRepository invoices,
     IQualityClaimRepository claims,
-    ICustomerPaymentRepository payments,
     IHarvestLotSalesQuery lotSales,
     CustomerDebtReader debts,
     IAccountRepository accounts,
@@ -96,7 +95,7 @@ public sealed class SalesReturnViews(
             }
 
             debt = await debts.DebtAsync(customerId.Value, cancellationToken);
-            var own = SalesInvoiceChangeMoney.PaidOf(await payments.ListOfInvoicesAsync([invoice.Id], cancellationToken), null);
+            var own = SalesInvoiceChangeMoney.PaidOf(invoice.Payments);
             debtAfter = SalesInvoiceChangeMoney.AfterWalkInCancelled(debt.Value, own);
         }
         else if (!walkIn)

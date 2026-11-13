@@ -49,7 +49,7 @@ public class SalesReturnRulesTests
         var standing = new CustomerLedgerReturn(Guid.NewGuid(), Guid.NewGuid(), "TL000001", invoice.Id, invoice.Code, Today.AddDays(-2), 1_000_000m, false, null, null);
         var cancelled = standing with { Id = Guid.NewGuid(), Code = "TL000002", Cancelled = true, CancelledAt = DateTimeOffset.UtcNow };
 
-        var lines = CustomerStatementLedger.Build([invoice], [], Today.AddDays(-10), Today, null, [standing, cancelled]);
+        var lines = CustomerStatementLedger.Build([invoice], [], Today.AddDays(-10), Today, returns: [standing, cancelled]);
 
         Assert.Equal(
             [(CustomerStatementEntryKind.Invoice, 1_000_000m, 1_000_000m), (CustomerStatementEntryKind.Return, -1_000_000m, 0m), (CustomerStatementEntryKind.Return, 0m, 0m)],

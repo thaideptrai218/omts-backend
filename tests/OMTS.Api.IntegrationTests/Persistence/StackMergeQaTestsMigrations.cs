@@ -38,7 +38,10 @@ public class StackMergeQaTestsMigrations
         "20261109104138_QualityClaims", "20261109104320_SupplierProfileFields", "20261109105053_LoginSessionRevokedAtIndex", "20261109110307_LoginSessionDeviceAndSignInMethod", "20261109152702_PurchaseDiscountsZonesAndDraftReturns",
         "20261109181525_PurchaseReceiptTimeReceiverAndLineDiscount", "20261109192443_PurchaseReturnTimeAndSupplierPaymentAllocations", "20261110060643_CashBookVouchersAccountsAndTypes", "20261110132829_CustomerProfilePaymentsAllocationsAndAdjustments", "20261110142548_CustomerPaymentsReceivingCashAccount",
         "20261110180344_EmployeeCodeAndProfileFields", "20261110184644_RemoveEmployeeEmail", "20261110191810_WorkAssignmentsAttendanceAndEmployeeRequests", "20261110194730_InputItemUnitsGroupsCostAndStockLedger", "20261110201057_InputIssuesAndIssueTypes",
-        "20261110201319_PayrollSheetsPayslipsAndWagePayments", "20261110202530_CustomerSettings", "20261111080000_InputGroupParentsIssueHeaderRaftAndMovementCodes", "20261111135229_CageOrdersWorkPlansHarvestAndWeighing", "20261113082149_EmployeeAppAuth",
+        "20261110201319_PayrollSheetsPayslipsAndWagePayments", "20261110202530_CustomerSettings", "20261111080000_InputGroupParentsIssueHeaderRaftAndMovementCodes", "20261111135229_CageOrdersWorkPlansHarvestAndWeighing", "20261111140000_HarvestLotFractionalCagesAndOverPlanReason",
+        "20261111150000_FarmingStockIssueLinks", "20261111160000_SeedingSessionOverPlanReason", "20261112100000_RaftGeometry", "20261112110000_LaneIncidents", "20261112120000_HarvestLotCrew",
+        "20261112124320_NurseryBatches", "20261112132826_LaneProgressPercentAndStepPhotos", "20261112214837_NurseryPoolV2", "20261113082149_EmployeeAppAuth", "20261113100000_CultivationCycleProduct",
+        "20261113130000_InputItemSoldProduct", "20261113150000_SalesReturns",
     ];
 
     private const string MigrationBeforeSeeding = "20261106084757_MaterialUsages";
