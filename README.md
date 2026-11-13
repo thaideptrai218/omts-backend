@@ -118,7 +118,7 @@ Dates are set relative to the day of the first seed and are not moved afterwards
 sent stays in memory until the API restarts. Read it in the dev inbox, also listed in Swagger:
 - `GET /api/dev/sms?phoneNumber=`
 - `GET /api/dev/email?to=`
-- `GET /api/dev/push?accountId=`
+- `GET /api/dev/push?accountId=` (or `?employeeId=` for a push to an employee of the employee app)
 
 `docker compose logs -f api` shows each fake message's id and masked recipient, never the code.
 
@@ -274,6 +274,82 @@ start without the connection string; `Sql`: the database always), `Revocation:Co
 without eviction (`maxmemory-policy noeviction`): evicting a key would silently drop a revocation until the next sweep
 notices, and a restart is harmless because the sweep refills it. `docker-compose.yml` does this.
 
+### Employee app login (LABOR-03, LABOR-06)
+
+An employee has no account. The employee app is a second kind of caller with tables of its own (`EmployeeLoginCodes`,
+`EmployeeDevices`, `EmployeeSessions`), a token of its own and an authentication scheme of its own, `EmployeeApp`.
+
+**Login code (LABOR-03).** `POST /api/employees/{id}/login-codes` (no body): the Cooperative Owner, or a Zone Manager who maintains the
+employee (a working zone among the zones of their pairs; `LABOR_WORKERS` Create). Another caller is 403 MSG-GEN-08, an unknown employee 404.
+201 `{ code, expiresAt, phoneNumber, employeeName, message, messageCode }` (MSG-LABOR-08); a Left employee, or one without a phone number, is
+409 MSG-LABOR-09 with `reason` `Left` or `NoPhone`. A code has 6 digits, works once, expires after 5 minutes and is cancelled by the 5th
+wrong entry; a new code cancels the earlier one (a filtered unique index keeps one open code per employee, also under parallel issuers).
+Only a keyed hash of it is stored (`IVerificationCodeHasher`, keyed by the row id with a key derived from `Jwt:SigningKey`), and it is never
+written to the audit log (`Employee.LoginCodeIssued` holds the expiry only) or to the logs. It is shown in this answer and sent to the
+issuer's own account as the notification `EMPLOYEE_LOGIN_CODE` (kept in their list, pushed unless they turn it off; its text holds the code,
+as MSG-LABOR-08 asks and for those 5 minutes); it is never sent to the employee. The answer is `Cache-Control: no-store` (and `Pragma: no-cache`),
+like the login and refresh answers that carry tokens. Rate limited per signed-in account, not per IP and apart from the anonymous code endpoints:
+`RateLimits:EmployeeLoginCodesPerMinute` (default 60, so a Zone Manager can issue a code for a whole crew; 429 `TOO_MANY_REQUESTS`). The limiter
+runs after authentication for this reason; a caller without an accepted token falls back to a per-IP bucket (and gets 401 anyway).
+When the 5th wrong entry cancels the open code, one audit row `Employee.LoginCodeCancelled` is written (the expiry and the number of tries, no
+code) and the account that issued the code gets a notification of type `EMPLOYEE_LOGIN_CODE` (message code MSG-LABOR-19, as the SRS has no
+message of its own for it; the text names the employee and holds no code). A phone number change or an end of employment also cancels the open
+codes. A per-employee limit on wrong entries across codes is not applied: a gap between wrong entries would have to skip the check of the code
+to stop a guess and would also lock out a real employee typing right after an attacker's wrong entry; the audit row and the notice are the
+countermeasure, and 5 tries over 10^6 codes keeps guessing hopeless.
+
+**Login (LABOR-06).** `POST /api/employee-app/login`, anonymous, `RateLimits:EmployeeAppLoginsPerMinute` per client IP (default 30, a policy of its
+own, not shared with the staff and Zalo logins; 429 `TOO_MANY_REQUESTS`); the answer is `Cache-Control: no-store`.
+Body `{ phoneNumber, deviceId?, deviceSecret?, loginCode?, platform?, deviceName? }`; the phone number is normalised like every other one.
+1. No employee who is Employed today has the number: 401 MSG-LABOR-18 (an unparsable number is 400 MSG-GEN-01).
+2. `deviceId` and `deviceSecret` of the employee's linked device: logged in with no code (LABOR-06.1). The secret is **rotated at every such
+   login**: the answer carries the new `deviceSecret`, which the app must store in place of the old one. Only one session per device stays open
+   (the login ends the earlier ones). The secret the last login replaced is kept as a hash; if it comes back (an app copied to another phone, or a
+   login whose answer was lost and then repeated), the device is unlinked with all its sessions, `Employee.DeviceUnlinked` is audited with the
+   reason "copied", and the answer is 401 MSG-LABOR-17: a new login code is the way back. A secret older than that is just wrong (also 401 MSG-LABOR-17).
+3. No `loginCode`: 401 MSG-LABOR-17 with `loginCodeRequired: true`.
+4. A code that is wrong, expired, spent or cancelled: 401 MSG-LABOR-19 (all the same answer; a wrong entry counts one of the 5 tries, an
+   expired code counts none). `platform` (`ios` or `android`) is checked first, 400, so a request that cannot link a device uses no try; so is
+   the format: an entry that is not exactly 6 digits is 400 MSG-GEN-01 and counts no try.
+5. A correct code is spent, the device linked before (if any) is unlinked with all its sessions, and this device becomes the linked one.
+
+Answer: `{ accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt, refreshTokenRotated, employee { id, fullName, type },
+deviceId, deviceSecret, qrKey, qrStepSeconds, serverTime }`. `deviceSecret` (256 random bits, stored only as a SHA-256 hash) is in the answer
+that linked the device and in the answer of each code-less login (which replaces it), nowhere else: the app keeps the latest with `deviceId` to log in again without a code. A refresh does not rotate it. `qrKey` is derived from the
+signing key and the device id, the same at every login of that device; the app signs its attendance QR code with it (LABOR-07, `qrStepSeconds`
+60), and `serverTime` lets it keep its clock in step offline. Linking audits `Employee.DeviceLinked` with the employee as the person (GBR-02).
+
+**Session.** The access token lasts 15 minutes. The refresh token (`POST /api/employee-app/refresh`, anonymous) lasts 30 days, sliding, 90 days
+at most (`Jwt:EmployeeRefreshTokenLifetime`, `Jwt:EmployeeSessionMaxLifetime`) and follows the rules of a staff refresh token: rotated on every
+refresh, the one it replaced is answered for `Jwt:RefreshGracePeriod` with `refreshTokenRotated: false`, any other old token is replay and ends
+the session; a refusal is 401 MSG19 with `reason` `expired`, `reuse` or `revoked`. `POST /api/employee-app/logout` ends the current session and
+keeps the device linked, so the next login on it needs no code. `PUT /api/employee-app/device/push-token` `{ pushToken, pushPermissionGranted }`
+sets the push token of the caller's device (empty clears it; at most 500 characters). Every request of the employee app asks the database
+whether the session is open, its device is still linked and the employee is Employed today (the day after the last working day, before the daily
+job has run, already counts as Left); employee sessions are not in the Redis revocation store.
+
+| Event | Sessions | Device |
+|---|---|---|
+| Logout | the current one | kept |
+| A code-less login on the linked device | the earlier ones (one session per device) | kept; secret rotated |
+| The replaced device secret presented again (a copy of the app) | all | unlinked (`CloneSuspected`) |
+| A code entered on another device | all | unlinked (`NewDevice`) |
+| The phone number of the profile changed or cleared (`PUT /api/employees/{id}`) | all; open login codes cancelled | unlinked (`PhoneChanged`) |
+| End of employment: a last working day before today, or the day after it (`EmploymentEndJob`) | all; open login codes cancelled | unlinked (`EmploymentEnded`) |
+| Resume | none (already unlinked) | a new code is needed |
+
+Each unlink is one audit row `Employee.DeviceUnlinked` (the person is the caller, the employee, or the system for the job).
+
+**Token isolation (BR-LABOR-02).** An employee token has the audience `Jwt:EmployeeAudience` (`omts-employee-app`, never equal to `Jwt:Audience`:
+the host does not start otherwise), is signed with a key derived from `Jwt:SigningKey` with a label of its own, and carries `employee_id`,
+`employee_session_id`, `employee_device_id` and `subject_type = Employee` but no `sub` and no `sid`. The default scheme (every plain
+`[Authorize]`, so every staff endpoint) refuses it, and only the endpoints that name the scheme
+(`[Authorize(AuthenticationSchemes = EmployeeAppAuthentication.Scheme)]`, today the `EmployeeAppController`) accept it and refuse a staff token. `ICurrentUser.AccountId`
+is null for an employee request, `ICurrentEmployee` (employee, session, device) is null for every other one. Tests sweep every endpoint in both directions.
+
+**Push to employees (BR-LABOR-04).** `IEmployeeNotifier` queues a push for the employee's linked device while one of its sessions is open and
+the device allows notifications; it keeps nothing (no account, no list). The development inbox lists it with `GET /api/dev/push?employeeId=`.
+
 ### Roles and zone access
 
 OMTS has three fixed roles (BR-FARM-07): Cooperative Owner, Zone Manager and Accountant. They are not created, edited or
@@ -311,6 +387,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | `ZONE_LICENSE_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
 | `COOPERATIVE_CERTIFICATION_EXPIRY` | MSG-FARM-01 / MSG-FARM-02 | always (mandatory) | Owner |
 | `STAFF_ACCOUNT_LOCK_REMINDER` | MSG-LABOR-02 (LABOR-01.3) | never: list only | Owner |
+| `EMPLOYEE_LOGIN_CODE` | MSG-LABOR-08, the login code of the employee app (LABOR-03), only to the account that issued it | unless turned off | Owner, Zone Manager |
 | `EMPLOYEE_REQUEST_NEW` | MSG-LABOR-23 (LABOR-10), when an employee sends a request (leave, missed check-in or check-out) | unless turned off | Owner |
 | `CULTIVATION_LOG_RECORDED` | MSG-CYCLE-04, when a cultivation log is saved, not on a correction, not to the Owner who recorded it | unless turned off | Owner |
 | `CYCLE_SEEDING_COMPLETED` | MSG-CYCLE-02, when the seeding of a raft is marked complete (once per cycle), not to the Owner who marked it | unless turned off | Owner |
@@ -693,7 +770,7 @@ created by a one-time command run on the server by the deployment operator (not 
 | File storage (`Storage:Provider` = `Local` or `AzureBlob`; `Storage:Local:SigningKey` is required outside Development; one container or folder per environment, see Background jobs) | `Storage:Local:RootPath`, `Storage:Local:SigningKey`, `Storage:AzureBlob:ConnectionString`, `Storage:AzureBlob:Container` |
 | Zalo Mini App "Liên kết tài khoản" (`POST api/auth/zalo/link`, `zalo/login`, `DELETE api/me/zalo-link`; a trader without an account sends `zalo/trader-requests`, which the Cooperative Owner approves or refuses at `api/trader-requests`). `Zalo:Provider` unset by default: linking answers MSG04; `Graph` calls graph.zalo.me and needs the Zalo App secret (developers.zalo.me), the host does not start without it; `Fake` (Development only) accepts `fake:<zalo user id>` access tokens and `fake:<phone number>` phone tokens | `Zalo:Provider`, `Zalo:AppSecret` (user-secrets / `Zalo__AppSecret`), `Zalo:TimeoutSeconds` (default 10) |
 | Bootstrap (see Deployment) | `Bootstrap:Cooperative:FullName`, `Bootstrap:Owner:*` |
-| Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30), `RateLimits:ProvenancePagesPerMinute` (default 60: the public provenance page), `RateLimits:PaymentNotificationsPerMinute` (default 600: the bank notification webhook) |
+| Rate limits per client IP (an IPv6 client per /64) and minute | `RateLimits:CodeRequestsPerMinute` (default 10: every endpoint that sends or checks a code), `RateLimits:LoginsPerMinute` (default 30), `RateLimits:EmployeeAppLoginsPerMinute` (default 30: the employee app login, per IP, apart from the other logins), `RateLimits:EmployeeLoginCodesPerMinute` (default 60: issuing employee login codes, **per signed-in account**, not per IP), `RateLimits:ProvenancePagesPerMinute` (default 60: the public provenance page), `RateLimits:PaymentNotificationsPerMinute` (default 600: the bank notification webhook) |
 | CORS: the web app and the Zalo Mini App call the API from the browser. Set their origins in every deployed environment; empty means no CORS. Development allows `http://localhost:3000` and `https://h5.zdn.vn`. | `Cors:AllowedOrigins` (array, e.g. `Cors__AllowedOrigins__0=https://<web host>`, `Cors__AllowedOrigins__1=https://h5.zdn.vn`) |
 | Provenance link: the QR code of a sales invoice and its SMS (MSG-SALE-15) link to `{PublicBaseUrl}/origin/{qrToken}`, the public page of the web app. **Required** in every environment: without an absolute `http`/`https` URL the host does not start (QR codes are permanent, so a relative link is never made). Development uses `http://localhost:3000`. | `Provenance:PublicBaseUrl` (e.g. `Provenance__PublicBaseUrl=https://<web host>`) |
 | Reverse proxy: X-Forwarded-For is trusted only from these addresses (and loopback), so the limits see the real client | `ForwardedHeaders:KnownProxies` (e.g. `10.0.0.4`), `ForwardedHeaders:KnownNetworks` (e.g. `10.0.0.0/24`) |

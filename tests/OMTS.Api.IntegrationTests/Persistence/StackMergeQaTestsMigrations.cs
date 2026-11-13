@@ -36,7 +36,9 @@ public class StackMergeQaTestsMigrations
         "20261107050042_SeedingRecords", "20261107052218_HarvestLots", "20261107055301_HarvestLotCorrections", "20261107112721_SalesInvoices", "20261107145951_SalesInvoiceSending",
         "20261107164749_HarvestLotAutoClose", "20261108020405_CustomerPayments", "20261108182824_VietQrPendingSales", "20261109053538_SalesInvoiceCorrectionAndCancellation", "20261109084608_LoginSessionRefreshGrace",
         "20261109104138_QualityClaims", "20261109104320_SupplierProfileFields", "20261109105053_LoginSessionRevokedAtIndex", "20261109110307_LoginSessionDeviceAndSignInMethod", "20261109152702_PurchaseDiscountsZonesAndDraftReturns",
-        "20261109181525_PurchaseReceiptTimeReceiverAndLineDiscount", "20261109192443_PurchaseReturnTimeAndSupplierPaymentAllocations", "20261110060643_CashBookVouchersAccountsAndTypes",
+        "20261109181525_PurchaseReceiptTimeReceiverAndLineDiscount", "20261109192443_PurchaseReturnTimeAndSupplierPaymentAllocations", "20261110060643_CashBookVouchersAccountsAndTypes", "20261110132829_CustomerProfilePaymentsAllocationsAndAdjustments", "20261110142548_CustomerPaymentsReceivingCashAccount",
+        "20261110180344_EmployeeCodeAndProfileFields", "20261110184644_RemoveEmployeeEmail", "20261110191810_WorkAssignmentsAttendanceAndEmployeeRequests", "20261110194730_InputItemUnitsGroupsCostAndStockLedger", "20261110201057_InputIssuesAndIssueTypes",
+        "20261110201319_PayrollSheetsPayslipsAndWagePayments", "20261110202530_CustomerSettings", "20261111080000_InputGroupParentsIssueHeaderRaftAndMovementCodes", "20261111135229_CageOrdersWorkPlansHarvestAndWeighing", "20261113082149_EmployeeAppAuth",
     ];
 
     private const string MigrationBeforeSeeding = "20261106084757_MaterialUsages";

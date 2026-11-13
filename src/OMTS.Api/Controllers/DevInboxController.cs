@@ -35,8 +35,9 @@ public sealed class DevInboxController(FakeSmsSender sms, FakeEmailSender email,
         return NoContent();
     }
 
+    /// <summary>Pushes to an account (<c>accountId</c>) or to an employee of the employee app (<c>employeeId</c>); no filter lists all.</summary>
     [HttpGet("push")]
-    public IReadOnlyList<FakeMessage> ListPush(Guid? accountId) => push.Inbox.List(accountId?.ToString());
+    public IReadOnlyList<FakeMessage> ListPush(Guid? accountId, Guid? employeeId) => push.Inbox.List((accountId ?? employeeId)?.ToString());
 
     [HttpDelete("push")]
     public IActionResult ClearPush()

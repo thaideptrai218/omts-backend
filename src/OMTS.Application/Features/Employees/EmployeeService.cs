@@ -8,6 +8,7 @@ using OMTS.Application.Features.AccessManagement;
 using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.EmployeeApp;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
 
@@ -22,6 +23,7 @@ public sealed class EmployeeService(
     IEmployeeRepository employees,
     ICooperativeRepository cooperatives,
     StaffAccountService staffAccounts,
+    EmployeeAppAccess employeeApp,
     EmployeeCallerAccess callers,
     EmployeeProfileValidator validator,
     EmployeeCodeAllocator codes,
@@ -132,6 +134,7 @@ public sealed class EmployeeService(
         var zoneIds = EmployeeProfileChanges.ZonesAfterEdit(employee, input.WorkingZoneIds, caller);
         var before = EmployeeProfileChanges.Snapshot(employee, employee.WorkingZones.Select(w => w.ZoneId).ToList(), employee.JobTypes.Select(j => j.JobTypeId).ToList());
         var accountNumberBefore = employee.BankAccount?.AccountNumber;
+        var phoneBefore = employee.PhoneNumber;
         EmployeeProfileChanges.ApplyFields(employee, input);
         var zonesChanged = EmployeeProfileChanges.SyncZones(employees, employee, zoneIds);
         var jobTypesChanged = EmployeeProfileChanges.SyncJobTypes(employees, employee, input.JobTypeIds);
@@ -143,7 +146,13 @@ public sealed class EmployeeService(
             unitOfWork.MarkChanged(employee);
         }
 
-        // LABOR-03 and LABOR-06 (L3): a changed phone number logs the employee out of the employee app (BR-LABOR-02), here.
+        // A changed or cleared phone number logs the employee out of the employee app and unlinks the device, so the new number needs a
+        // new login code (BR-LABOR-02), in the same save as the change.
+        if (employee.PhoneNumber != phoneBefore)
+        {
+            await employeeApp.RevokeAsync(employee.Id, OMTS.Domain.Enums.EmployeeDeviceUnlinkReason.PhoneChanged, cancellationToken);
+        }
+
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, EmployeeProfileChanges.Snapshot(employee, zoneIds, input.JobTypeIds, accountNumberBefore));
         if (changedAfter is not null)
         {
