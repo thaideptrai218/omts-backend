@@ -1,3 +1,4 @@
+using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Application.Features.WaterQuality.Dtos;
 using OMTS.Domain.Enums;
 
@@ -19,19 +20,20 @@ public enum CustomerStatementEntryKind
 /// <param name="DebtChange">What it changes in the debt: above 0 raises it, below 0 lowers it, 0 when cancelled or while a payment waits for its transfer.</param>
 /// <param name="InvoiceCode">The invoice a payment came with, or the invoice of a price cut.</param>
 /// <param name="Method">Payments and money paid back only.</param>
-/// <param name="CancelledAt">When a cancelled payment was cancelled (BR-DEBT-04); invoices get theirs with SALE-08 (PR 10).</param>
+/// <param name="CancelledAt">When a cancelled invoice or payment was cancelled (BR-DEBT-04).</param>
 /// <param name="RecordedBy">Payments, money paid back and adjustments, staff statement only (BR-DEBT-04): who recorded it; null when the system did.</param>
 /// <param name="ConfirmedBy">Who confirmed it; null while Awaiting confirmation.</param>
 /// <param name="CollectedBy">The person who collected the money ("Người thu"), or the Zone Manager who collected the cash at the port.</param>
 /// <param name="Note">The note of the payment, or the reason of an adjustment or price cut.</param>
-/// <param name="CancelReason">The reason of its cancellation (DEBT-02.4).</param>
+/// <param name="CancelReason">The reason of its cancellation (DEBT-02.4, SALE-08).</param>
 /// <param name="At">When it happened: the invoice time, the time the money moved, the time of the adjustment; null for a price cut (a date only).</param>
 /// <param name="Pending">A payment waiting for its bank transfer: it changes nothing yet.</param>
+/// <param name="Corrections">An invoice only: its corrections of data-entry errors, also those made after the period (BR-DEBT-04); its price cuts are entries of their own.</param>
 public sealed record CustomerStatementEntry(
     DateOnly Date, CustomerStatementEntryKind Kind, Guid Id, string Code, decimal Amount, decimal DebtChange, string? InvoiceCode,
     CustomerPaymentMethod? Method, bool AwaitingConfirmation, bool Cancelled, decimal DebtAfter, DateTimeOffset? CancelledAt = null,
     AccountRef? RecordedBy = null, AccountRef? ConfirmedBy = null, AccountRef? CollectedBy = null, string? Note = null, string? CancelReason = null,
-    DateTimeOffset? At = null, bool Pending = false);
+    DateTimeOffset? At = null, bool Pending = false, IReadOnlyList<SalesInvoiceCorrectionView>? Corrections = null);
 
 /// <summary>The debt at the start of a period, its entries in date order and the debt at its end (BR-DEBT-04).</summary>
 public sealed record CustomerStatementLines(decimal OpeningDebt, IReadOnlyList<CustomerStatementEntry> Entries, decimal ClosingDebt);
@@ -46,13 +48,17 @@ public static class CustomerStatementLedger
 {
     public static CustomerStatementLines Build(
         IEnumerable<CustomerLedgerInvoice> invoices, IEnumerable<CustomerLedgerPayment> payments, DateOnly from, DateOnly to,
-        IEnumerable<CustomerLedgerAdjustment>? adjustments = null)
+        IEnumerable<CustomerLedgerAdjustment>? adjustments = null,
+        IReadOnlyDictionary<Guid, IReadOnlyList<SalesInvoiceCorrectionView>>? corrections = null)
     {
         var all = new List<CustomerStatementEntry>();
         foreach (var i in invoices)
         {
+            // BR-DEBT-04: under each invoice, its corrections of data-entry errors, also those made after the period; its price cuts are entries of their own.
+            var entered = corrections?.GetValueOrDefault(i.Id)?.Where(c => c.Kind != SalesInvoiceCorrectionKind.PriceCutAfterClaim).ToList();
             all.Add(new CustomerStatementEntry(
-                i.InvoiceDate, CustomerStatementEntryKind.Invoice, i.Id, i.Code, i.OriginalTotal, i.Cancelled ? 0m : i.OriginalTotal, null, null, false, i.Cancelled, 0m, At: i.InvoicedAt));
+                i.InvoiceDate, CustomerStatementEntryKind.Invoice, i.Id, i.Code, i.OriginalTotal, i.Cancelled ? 0m : i.OriginalTotal, null, null, false, i.Cancelled, 0m,
+                i.CancelledAt, CancelReason: i.CancelReason, At: i.InvoicedAt, Corrections: entered?.Count > 0 ? entered : null));
             foreach (var cut in i.PriceCuts ?? [])
             {
                 all.Add(new CustomerStatementEntry(

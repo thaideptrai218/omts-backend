@@ -430,10 +430,21 @@ SALE-09 (`SALES_INVOICES`, zones of the caller's pairs, BR-SALE-08): the Owner, 
 | `Resend` | Zone Manager of the zone, Owner | not Cancelled, the sale is finished, the latest sending is not Sending | `POST /api/sales-invoices/{id}/resend` |
 | `CreateReturn` | Zone Manager of the zone, Owner | not Cancelled, no sales return that is not cancelled | none yet: CLAIM-03 |
 | `CancelReturn` | Owner | a sales return that is not cancelled (none can exist yet) | none yet: CLAIM-03.3 |
-| `Correct`, `Cancel` | Owner | Completed, no sales return that is not cancelled | none yet: SALE-07, SALE-08 |
+| `Correct` | Owner | Completed, no sales return that is not cancelled | `PUT /api/sales-invoices/{id}/correction` |
+| `Cancel` | Owner | Completed, no sales return that is not cancelled | `POST /api/sales-invoices/{id}/cancel` |
 | `Print` | Whoever has Export in the zone | always | `GET /api/sales-invoices/{id}/print` |
 
-The corrections and the cancel date and reason of SALE-09.1 step 2 have no data yet: they join the detail with SALE-07 and SALE-08.
+The endpoints refuse exactly what this table does not offer (`SalesInvoiceAllowedActions.ChangeRefusal`): 403 MSG-GEN-08, 409 MSG-GEN-09 for a Cancelled invoice, 409 MSG-SALE-20 with a sales return. The detail also has `corrections` (kind, date, reason, total before and after, from the audit log) and `lastCorrectionKind`, `lastCorrectedAt`, `lastCorrectionReason`; a Cancelled invoice has `cancelledAt` and `cancelReason`. The statement of a customer shows the corrections, price cuts and cancellation under each invoice (BR-DEBT-04).
+
+SALE-07 `PUT /api/sales-invoices/{id}/correction` and SALE-08 `POST /api/sales-invoices/{id}/cancel` (Owner only, `reason` and the `rowVersion` read are required; a stale version answers 409 MSG06, so two parallel changes apply once). Questions are answered by sending again the field named in `confirmationField`.
+
+- Correction `kind` `DataEntryError`: `lines` (all of them; unit price left out keeps the list price), `notSoldWholeLotIds`, `discount`, `otherCharges` (left out, kept) and `customerId` (another profile; the payments that name the invoice move with it and a linked request is unlinked). A lot added must be for sale (MSG-GEN-09), a lot already on the invoice may be Closed; a product already on the invoice may be discontinued. Only a changed mark acts on a lot: added closes it if still for sale, removed reopens it only when this invoice closed it (`ClosedBySalesInvoiceId`).
+- Correction `kind` `PriceCutAfterClaim`: `priceCutAmount` above 0 and at most the total; the lines stay, and price cuts add up (AC-08). A walk-in invoice given money back needs `customerId` (MSG-SALE-19); a price cut takes `customerId` only then, otherwise MSG-GEN-01.
+- A walk-in invoice cannot have its total raised (MSG-SALE-21), also when the same correction attaches a profile. A debt below zero after the change answers MSG-SALE-17 until `confirmOwedBack` is sent, then notifies the Owners and the Accountants (MSG-SALE-18, type `CUSTOMER_MONEY_OWED_BACK`).
+- The correction is sent again after its commit (`(corrected)`); before the end of the sale nothing is sent, the end of the sale does.
+- Cancel: each cash payment Awaiting confirmation is asked (MSG-SALE-23, `cashGivenBack: [{paymentId, givenBack}]`); only a Yes cancels it. A walk-in invoice with payments kept needs `customerId` (MSG-SALE-19). Only the lots this invoice closed reopen; a request it took in full is no longer Fulfilled, and every figure ignores it from its status. The trader gets MSG-SALE-22 (type `SALES_INVOICE_CANCELLED_MESSAGE`, not a sending of the invoice message) when the profile has a phone; failing to send never undoes the save (GFR-06).
+
+Migration `20261109053538_SalesInvoiceCorrectionAndCancellation` only adds nullable columns.
 
 ### Quality claims (CLAIM-01, CLAIM-02)
 
@@ -766,6 +777,35 @@ service, so there is no key to configure, store or refuse. The seed reads only `
 numbers of its employees are placeholders in `DemoEmployeePlans`, and it stores no cooperative bank account. Never enter
 a real bank account on this server, in an employee record or anywhere else. Whoever adds a payment provider also adds
 the refusal to `DemoSeedGate`.
+
+## Staging deploy (CD)
+
+The shared staging server (EC2, `/opt/omts`, public URL `https://d2zray6os5wptx.cloudfront.net`) is deployed by
+`.github/workflows/cd-staging.yml`:
+
+1. A push to `develop` runs CI. When CI passes, CD builds the image once and pushes it to GHCR as
+   `ghcr.io/thaideptrai218/omts-backend:sha-<7 chars>` (and the moving tag `staging`).
+2. Over SSH it copies `deploy/staging/compose.yml` and `deploy/staging/deploy.sh` to the host and runs
+   `deploy.sh <image>`: it sets `OMTS_IMAGE` in `/opt/omts/.env`, pulls, applies migrations with a plain
+   `seed --bootstrap` (retried while the Azure SQL serverless database resumes), restarts the API and waits for
+   `/health/db`. A failure, or the run being cancelled or cut off, brings back the last compose file that passed and
+   the image that ran before, checks the API again, and the run turns red. Seed and API output go to
+   `/opt/omts/deploy.log` on the host, not to the public Actions log.
+3. A last check calls `/health/db` through CloudFront.
+
+A CI run that is no longer the tip of `develop` (a newer push, or a re-run of an old run) deploys nothing.
+
+- **Roll back or redeploy:** Actions → "CD staging" → Run workflow on `develop` with `tag` = an earlier
+  `sha-xxxxxxx` (a commit of `develop`). An empty `tag` builds and deploys `develop` as it is. A rollback restores the
+  image only: **migrations are forward-only**, so a migration the newer image applied stays.
+- **Configuration:** edit `deploy/staging/compose.yml` here, through a pull request. Each deploy overwrites the copy on
+  the server. Secrets stay in the server's `.env` (never in the repository); the API listens on `127.0.0.1:8080` only,
+  behind nginx.
+- **Secrets of the `staging` environment** (repository admin; only `develop` may use them): `STAGING_SSH_HOST`,
+  `STAGING_SSH_USER`, `STAGING_SSH_KEY` (a key used for deploys only) and `STAGING_SSH_KNOWN_HOSTS` (the host key line).
+- The GHCR package must be public: the host pulls without logging in. GHCR makes a new package private, so the very
+  first run fails at the pull (and keeps the old API): make `omts-backend` public in the package settings, then re-run
+  the failed job.
 
 ## Design documents
 

@@ -22,6 +22,7 @@ public sealed class SalesInvoiceViews(
     IAccountRepository accounts,
     ISalesInvoiceRepository invoices,
     CustomerDebtReader debts,
+    SalesInvoiceCorrectionLog corrections,
     ZoneAccessGuard zoneAccess,
     IStatusCatalog statusCatalog,
     IOptions<ProvenanceOptions> provenance,
@@ -59,8 +60,7 @@ public sealed class SalesInvoiceViews(
         var latest = LatestStatus(sendings);
         var debtEffect = await DebtEffectAsync(invoice, cancellationToken);
         var allowedActions = SalesInvoiceAllowedActions.Of(
-            // CLAIM-03 seam: a sales return that is not cancelled goes in here when returns exist; none can exist yet.
-            new SalesInvoiceActionFacts(invoice.StatusId, latest, SaleFinished: invoice.QrDecidedAt is not null, HasSalesReturn: false),
+            new SalesInvoiceActionFacts(invoice.StatusId, latest, SaleFinished: invoice.QrDecidedAt is not null, HasSalesReturn: SalesInvoiceAllowedActions.HasSalesReturn(invoice)),
             await RightsAsync(invoice.ZoneId, cancellationToken));
         return new SalesInvoiceView(
             invoice.Id,
@@ -95,7 +95,13 @@ public sealed class SalesInvoiceViews(
             invoice.PriceCuts.OrderBy(c => c.CutDate).ThenBy(c => c.Id).Select(c => new SalesInvoicePriceCutView(c.Amount, c.CutDate, c.Reason)).ToList(),
             debtEffect,
             allowedActions,
-            invoice.PortWeighingId);
+            invoice.PortWeighingId,
+            invoice.LastCorrectionKind,
+            invoice.LastCorrectedAt,
+            invoice.LastCorrectionReason,
+            await corrections.OfAsync(invoice.Id, cancellationToken),
+            invoice.CancelledAt,
+            invoice.CancelReason);
     }
 
     /// <summary>The kg of each cage of the lot in the weighing of the invoice, in the order weighed; empty for a sale without a weighing.</summary>

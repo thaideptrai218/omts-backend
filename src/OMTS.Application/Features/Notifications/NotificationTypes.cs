@@ -94,6 +94,9 @@ public static class NotificationTypes
     /// <summary>MSG-TRACE-05, the withdrawal of the origin information of a lot the trader bought, to the trader account (TRACE-04.1, BR-TRACE-07); not mandatory (BR-ACCOUNT-11).</summary>
     public const string ProvenanceWithdrawn = "PROVENANCE_WITHDRAWN";
 
+    /// <summary>MSG-SALE-18, a correction or a cancellation of a sales invoice leaves the customer debt below zero, to the Accountant and the Owner (BR-SALE-03); not mandatory.</summary>
+    public const string CustomerMoneyOwedBack = "CUSTOMER_MONEY_OWED_BACK";
+
     /// <summary>MSG-CLAIM-01, a new quality claim, to the Cooperative Owner (BR-CLAIM-01); not mandatory (BR-CLAIM-01 says so).</summary>
     public const string QualityClaimNew = "QUALITY_CLAIM_NEW";
 
@@ -171,6 +174,9 @@ public static class NotificationTypes
             NotificationSmsRule.MoneyToOwner("amount")),
         // Opens nothing: the trader is asked to call the cooperative, and the list row has no related record (a lot is not the trader's record).
         new(ProvenanceWithdrawn, "Origin information withdrawn", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
+        // Opens the invoice (SALE-09); the money is paid back in DEBT-02.
+        new(CustomerMoneyOwedBack, "Money owed back to a customer", Default, [CooperativeOwner, Accountant],
+            NotificationOpenAccess.InZone(PermissionFunctions.SalesInvoices, PermissionAction.View)),
         // A trader asked for an account from the Zalo Mini App, and the Owner's approval (ACS-01, decision of 28/10/2026).
         new(TraderAccessRequested, "Trader access requested", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         new(TraderAccessApproved, "Trader access approved", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),

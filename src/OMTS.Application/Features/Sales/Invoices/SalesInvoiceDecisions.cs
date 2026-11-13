@@ -43,7 +43,12 @@ internal static class SalesInvoiceDecisions
             }
 
             var source = unitPrice == product.UnitPrice ? SalesPriceSource.PriceList : SalesPriceSource.DecidedByOwner;
-            lines.Add(new PricedLine(entry, product, lots[entry.LotId], unitPrice, source, InvoiceMoney.LineAmount(entry.Kg, unitPrice), product.UnitPrice));
+            if (!InvoiceMoney.TryLineAmount(entry.Kg, unitPrice, out var amount))
+            {
+                return AppError.Invalid($"Line {entry.LineNumber} amount");
+            }
+
+            lines.Add(new PricedLine(entry, product, lots[entry.LotId], unitPrice, source, amount, product.UnitPrice));
         }
 
         var subtotal = InvoiceMoney.Subtotal(lines.Select(l => l.Amount));
@@ -52,6 +57,11 @@ internal static class SalesInvoiceDecisions
         {
             // BR-SALE-06: the discount cannot bring the total below 0.
             return AppError.Invalid("Discount");
+        }
+
+        if (!InvoiceMoney.TotalsFit(subtotal, total))
+        {
+            return AppError.Invalid("Total");
         }
 
         if (entries.Discount > 0m && !facts.ByOwner && !entries.DiscountDecidedByOwner)

@@ -166,22 +166,22 @@ public sealed class SalesInvoiceSendingService(
     }
 
     // SALE-06 steps 4-5: the result given back is that of this sending; the invoice is read again as saved. A row that had nothing to send is already Not sent.
-    private async Task<SalesInvoiceSent> AnswerAsync(
-        Guid invoiceId, Notification sending, UserMessage? notSent, IReadOnlyList<InvoiceLotOriginView> lots, CancellationToken cancellationToken)
+    internal async Task<SalesInvoiceSent> AnswerAsync(
+        Guid invoiceId, Notification? sending, UserMessage? notSent, IReadOnlyList<InvoiceLotOriginView> lots, CancellationToken cancellationToken)
     {
-        if (notSent is null)
+        if (notSent is null && sending is not null)
         {
             await traderMessages.DeliverAsync(sending);
         }
 
-        var status = sending.DeliveryStatusId ?? StatusIds.MessageDelivery.NotSent;
+        var status = sending?.DeliveryStatusId ?? StatusIds.MessageDelivery.NotSent;
         var view = await ViewOfAsync(invoiceId, cancellationToken);
         return new SalesInvoiceSent(view, status, statusCatalog.DisplayNameOf(status), view.QrUrl, lots, notSent?.Text, notSent?.Code);
     }
 
     // The end of the sale called again: its decision, the QR code and the status of the latest sending as they are now (Sending while a parallel call still delivers it);
     // MSG-SALE-16 again when that sending had nothing to send. The origin states of the lots are not kept, so the lots are empty.
-    private async Task<SalesInvoiceSent> CurrentAsync(Guid invoiceId, CancellationToken cancellationToken)
+    internal async Task<SalesInvoiceSent> CurrentAsync(Guid invoiceId, CancellationToken cancellationToken)
     {
         var view = await ViewOfAsync(invoiceId, cancellationToken);
         var nothingSent = view.Sendings.Count > 0 && view.Sendings[^1].PhoneNumber is null && view.DeliveryStatusId == StatusIds.MessageDelivery.NotSent;
@@ -189,7 +189,7 @@ public sealed class SalesInvoiceSendingService(
         return new SalesInvoiceSent(view, view.DeliveryStatusId, view.DeliveryStatus, view.QrUrl, [], notSent?.Text, notSent?.Code);
     }
 
-    private async Task<SalesInvoiceView> ViewOfAsync(Guid invoiceId, CancellationToken cancellationToken)
+    internal async Task<SalesInvoiceView> ViewOfAsync(Guid invoiceId, CancellationToken cancellationToken)
     {
         var invoice = await invoices.GetAsync(invoiceId, cancellationToken) ?? throw new InvalidOperationException($"Sales invoice {invoiceId} was just saved and cannot be read.");
         return await views.ViewAsync(invoice, cancellationToken);
