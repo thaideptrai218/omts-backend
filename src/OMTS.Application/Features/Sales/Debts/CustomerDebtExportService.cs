@@ -5,6 +5,8 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Purchasing;
 using OMTS.Application.Features.Purchasing.Receipts;
+using OMTS.Application.Features.Sales.Invoices;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Sales.Debts;
 
@@ -68,18 +70,29 @@ public sealed class CustomerDebtExportService(CustomerDebtService debts, ISpread
         {
             new object?[] { Day(statement.From), "Debt at the start", statement.Customer.Name, null, null, null, null, statement.OpeningDebt },
         };
-        // The internal data of the payments, as the staff statement shows it (BR-DEBT-04); empty for invoices.
-        sheetRows.AddRange(statement.Entries.Select(e => (IReadOnlyList<object?>)
-        [
-            Day(e.Date), KindText(e.Kind), e.Code, e.InvoiceCode, e.Method?.ToString(), Status(e), e.Amount, e.DebtAfter,
-            e.RecordedBy?.Name, e.ConfirmedBy?.Name, e.CollectedBy?.Name, e.Note, e.CancelReason,
-        ]));
+        // The internal data of the payments, as the staff statement shows it (BR-DEBT-04); empty for invoices. Each invoice is followed by its corrections and price cuts, as on the screen.
+        sheetRows.AddRange(statement.Entries.SelectMany(e => (e.Corrections ?? []).Select(c => CorrectionRow(e, c)).Prepend(EntryRow(e))));
         sheetRows.Add(new object?[] { Day(statement.To), "Debt at the end", statement.Customer.Name, null, null, null, null, statement.ClosingDebt });
         return new SpreadsheetSheet(
             "Statement",
-            ["Date", "Entry", "Code", "Invoice", "Method", "Status", "Amount", "Debt after", "Recorded by", "Confirmed by", "Collected by", "Note", "Cancel reason"],
+            ["Date", "Entry", "Code", "Invoice", "Method", "Status", "Amount", "Debt after", "Recorded by", "Confirmed by", "Collected by", "Note", "Cancel reason", "Total before", "Total after"],
             sheetRows);
     }
+
+    private static IReadOnlyList<object?> EntryRow(CustomerStatementEntry e) =>
+    [
+        Day(e.Date), KindText(e.Kind), e.Code, e.InvoiceCode, e.Method?.ToString(), Status(e), e.Amount, e.DebtAfter,
+        e.RecordedBy?.Name, e.ConfirmedBy?.Name, e.CollectedBy?.Name, e.Note, e.CancelReason,
+    ];
+
+    // BR-DEBT-04: one row under the invoice, the amount of the invoice stays on the invoice's own row; the reason goes in the Note column.
+    private static IReadOnlyList<object?> CorrectionRow(CustomerStatementEntry invoice, SalesInvoiceCorrectionView correction) =>
+    [
+        Day(correction.Date), CorrectionText(correction.Kind), null, invoice.Code, null, null, null, null, null, null, null, correction.Reason, null, correction.TotalBefore, correction.TotalAfter,
+    ];
+
+    private static string CorrectionText(SalesInvoiceCorrectionKind kind) =>
+        kind == SalesInvoiceCorrectionKind.PriceCutAfterClaim ? "Price cut after claim" : "Data entry correction";
 
     private static SpreadsheetSheet UnpaidSheet(CustomerDebtStatement statement) => new(
         "Unpaid invoices",

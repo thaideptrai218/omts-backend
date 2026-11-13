@@ -85,4 +85,24 @@ public class InvoiceMoneyTests
         Assert.False(InvoiceMoney.IsWholeAmount(null));
         Assert.False(InvoiceMoney.IsWholeAmount(1_000_000_000_000_000_000m));
     }
+
+    [Fact]
+    public void A_line_amount_is_refused_when_it_does_not_fit_18_digits_or_a_decimal_at_all()
+    {
+        Assert.True(InvoiceMoney.TryLineAmount(12.345m, 30_001m, out var amount));
+        Assert.Equal(370_362m, amount);
+        Assert.True(InvoiceMoney.TryLineAmount(1m, 999_999_999_999_999_999m, out _));
+        Assert.False(InvoiceMoney.TryLineAmount(2m, 999_999_999_999_999_999m, out _));
+        Assert.False(InvoiceMoney.TryLineAmount(999_999_999_999_999.999m, 999_999_999_999_999_999m, out _));
+    }
+
+    [Fact]
+    public void Worked_out_amounts_fit_only_within_18_digits()
+    {
+        const decimal max = 999_999_999_999_999_999m;
+        Assert.True(InvoiceMoney.TotalsFit(max, max, max));
+        Assert.False(InvoiceMoney.TotalsFit(max + 1m, 0m));
+        Assert.False(InvoiceMoney.TotalsFit(0m, max + 1m));
+        Assert.False(InvoiceMoney.TotalsFit(0m, 0m, max + 1m));
+    }
 }

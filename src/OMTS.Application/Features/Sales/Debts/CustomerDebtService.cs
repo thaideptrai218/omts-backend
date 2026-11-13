@@ -4,6 +4,7 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Purchasing;
+using OMTS.Application.Features.Sales.Invoices;
 
 namespace OMTS.Application.Features.Sales.Debts;
 
@@ -15,7 +16,7 @@ namespace OMTS.Application.Features.Sales.Debts;
 /// <summary>The rows of the DEBT-03 list (after the search) and the cooperative totals (every profile, whatever the search).</summary>
 public sealed record CustomerDebtRows(IReadOnlyList<CustomerDebtRow> Rows, decimal TotalReceivables, decimal TotalOwedBack);
 
-public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebtReader debts, TimeProvider timeProvider)
+public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebtReader debts, SalesInvoiceCorrectionLog corrections, TimeProvider timeProvider)
 {
     private const int MaxPageSize = 100;
 
@@ -86,7 +87,9 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
         var (start, end) = period.Value;
         // The staff statement: payments with who recorded, confirmed and collected them, their note and cancel reason (BR-DEBT-04).
         var ledger = await queries.StatementLedgerAsync(customerId, cancellationToken);
-        var lines = CustomerStatementLedger.Build(ledger.Invoices, ledger.Payments, start, end, ledger.Adjustments);
+        // BR-DEBT-04: under each invoice, its corrections, also one made after the period (the price cuts are entries of their own).
+        var lines = CustomerStatementLedger.Build(
+            ledger.Invoices, ledger.Payments, start, end, ledger.Adjustments, await corrections.OfAsync(ledger.Invoices.Select(i => i.Id).ToList(), cancellationToken));
         var now = CustomerDebtAllocator.Allocate(ledger.Invoices, ledger.Payments, today, ledger.Adjustments);
         return new CustomerDebtStatement(
             View(customer), start, end, lines.OpeningDebt, lines.Entries, lines.ClosingDebt, now.Debt, now.DebtAgeDays, now.UnpaidInvoices);

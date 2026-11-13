@@ -1084,6 +1084,79 @@ public static class UserMessages
         };
     }
 
+    /// <summary>What the Not sent row of a corrected invoice keeps when MSG-SALE-15 could not be queued after the commit (SALE-07 POST-5). Never sent or shown: the row is in no list.</summary>
+    public static UserMessage InvoiceNotQueued(string invoiceCode) => new(Sale15, $"Corrected invoice {invoiceCode} could not be prepared for sending.");
+
+    /// <summary>MSG-SALE-17 (SALE-07 step 5, SALE-08 step 4): the debt of the customer will be below zero.</summary>
+    /// <param name="action">"correction" or "cancellation".</param>
+    public static UserMessage MoneyWillBeOwedBack(string action, string customerName, decimal owedBackAmount) => new(
+        Sale17,
+        $"After this {action}, the cooperative will owe {customerName} {Vnd(owedBackAmount)} VND. The Accountant will pay this money back, or subtract it from the next invoices.")
+    {
+        Parameters = new Dictionary<string, object?> { ["action"] = action, ["customer_name"] = customerName, ["owed_back_amount"] = owedBackAmount },
+    };
+
+    /// <summary>MSG-SALE-18 (SALE-07 step 10, SALE-08 step 8): the Accountant and the Owner hear of the money owed back; the Accountant is also asked to pay it back.</summary>
+    /// <param name="actionText">"corrected" or "cancelled".</param>
+    /// <param name="forAccountant">Adds the request to pay the money back.</param>
+    public static UserMessage MoneyOwedBackNotice(string userName, string actionText, string invoiceCode, string customerName, decimal owedBackAmount, bool forAccountant) => new(
+        Sale18,
+        $"{userName} {actionText} invoice {invoiceCode} of {customerName}. The cooperative now owes {customerName} {Vnd(owedBackAmount)} VND.{(forAccountant ? " Please pay the money back (DEBT-02)." : string.Empty)}")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["user_name"] = userName, ["action_text"] = actionText, ["invoice_code"] = invoiceCode, ["customer_name"] = customerName, ["owed_back_amount"] = owedBackAmount,
+        },
+    };
+
+    /// <summary>MSG-SALE-19 (SALE-07.2, SALE-08.2): a paid invoice of a walk-in customer would leave money owed back.</summary>
+    public static UserMessage WalkInBuyerProfileNeeded(string invoiceCode, decimal owedBackAmount) => new(
+        Sale19,
+        $"Invoice {invoiceCode} has no customer profile, and the cooperative will owe the buyer {Vnd(owedBackAmount)} VND. Please choose or add the customer profile of the buyer, so that the Accountant can pay the money back.")
+    {
+        Parameters = new Dictionary<string, object?> { ["invoice_code"] = invoiceCode, ["owed_back_amount"] = owedBackAmount },
+    };
+
+    /// <summary>MSG-SALE-20 (SALE-07.0.E1, SALE-08.0.E1).</summary>
+    public static UserMessage InvoiceHasSalesReturn(string invoiceCode) => new(Sale20, $"Invoice {invoiceCode} has a sales return, so it cannot be corrected or cancelled.")
+    {
+        Parameters = new Dictionary<string, object?> { ["invoice_code"] = invoiceCode },
+    };
+
+    /// <summary>MSG-SALE-21 (SALE-07.0.E4).</summary>
+    public static UserMessage WalkInTotalCannotBeRaised(string invoiceCode) => new(
+        Sale21, $"Invoice {invoiceCode} has no customer profile, so its total cannot be raised. Please create a new invoice for the extra goods.")
+    {
+        Parameters = new Dictionary<string, object?> { ["invoice_code"] = invoiceCode },
+    };
+
+    /// <summary>MSG-SALE-22 (SALE-08 step 7, BR-SALE-09): the cancellation notice to the trader; {money_text} is empty when no payment that is not Cancelled remains.</summary>
+    public static UserMessage InvoiceCancellationNotice(string cooperativeShortName, string invoiceCode, DateOnly invoiceDate, decimal totalAmount, decimal paidAmount, string cooperativePhone)
+    {
+        var moneyText = paidAmount > 0m ? $" We will pay back the {Vnd(paidAmount)} VND you paid, or subtract it from your debt." : string.Empty;
+        return new UserMessage(
+            Sale22,
+            $"{cooperativeShortName}: invoice {invoiceCode} of {Date(invoiceDate)} ({Vnd(totalAmount)} VND) has been cancelled.{moneyText} For details, please call {cooperativePhone}.")
+        {
+            Parameters = new Dictionary<string, object?>
+            {
+                ["cooperative_short_name"] = cooperativeShortName,
+                ["invoice_code"] = invoiceCode,
+                ["invoice_date"] = invoiceDate,
+                ["total_amount"] = totalAmount,
+                ["paid_amount"] = paidAmount,
+                ["cooperative_phone"] = cooperativePhone,
+            },
+        };
+    }
+
+    /// <summary>MSG-SALE-23 (SALE-08.3): a cash payment Awaiting confirmation; {customer_name} is "the buyer" for a walk-in customer.</summary>
+    public static UserMessage CashGivenBackQuestion(decimal amount, DateOnly paymentDate, string customerName) => new(
+        Sale23,
+        $"Did the Zone Manager give the {Vnd(amount)} VND paid in cash on {Date(paymentDate)} back to {customerName}? Choose Yes to cancel this payment with the invoice, or No to keep it.")
+    {
+        Parameters = new Dictionary<string, object?> { ["amount"] = amount, ["payment_date"] = paymentDate, ["customer_name"] = customerName },
+    };
     // ---- MSG-CLAIM ----
 
     /// <summary>MSG-CLAIM-01 (CLAIM-01, BR-CLAIM-01): a new quality claim, to the Cooperative Owner.</summary>

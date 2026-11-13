@@ -334,6 +334,14 @@ public static class DependencyInjection
         // SALE-06 sending the invoice, and the end of the sale with the QR code
         services.AddScoped<SalesInvoiceMessages>();
         services.AddScoped<SalesInvoiceSendingService>();
+        services.AddScoped<SalesInvoiceChangeGuard>();
+        services.AddScoped<SalesInvoiceChangeSending>();
+        services.AddScoped<SalesInvoiceCorrectionPlanner>();
+        services.AddScoped<SalesInvoiceCorrectionWriter>();
+        services.AddScoped<SalesInvoiceCorrectionService>();
+        services.AddScoped<SalesInvoiceCorrectionLog>();
+        services.AddScoped<SalesInvoiceOwedBackNotifier>();
+        services.AddScoped<SalesInvoiceCancellationService>();
         services.AddScoped<PurchaseReceiptAccess>();
         services.AddScoped<PurchaseReceiptValidator>();
         services.AddScoped<PurchaseReceiptViews>();

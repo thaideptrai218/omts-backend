@@ -154,7 +154,7 @@ dotnet ef migrations add <Name> --project src/OMTS.Infrastructure --startup-proj
 
 ## Deployment
 
-Summary; the full step list, upgrade notes and configuration keys are in the [operations reference](docs/operations-reference.md#deployment).
+Summary; the full step list, upgrade notes and configuration keys are in the [operations reference](docs/operations-reference.md#deployment); the shared staging server is deployed by CD ([staging deploy](docs/operations-reference.md#staging-deploy-cd)).
 
 1. Set the secrets (environment variables or the hosting secret store; `__` replaces `:` in names): `ConnectionStrings:OmtsDb`, `Jwt:SigningKey`, `Provenance:PublicBaseUrl`, the provider keys and the `Bootstrap:*` keys.
 2. Run `dotnet OMTS.Api.dll seed --bootstrap` once at handover. It applies migrations, creates the fixed roles, the cooperative and the first Owner. Running it again creates nothing that already exists.

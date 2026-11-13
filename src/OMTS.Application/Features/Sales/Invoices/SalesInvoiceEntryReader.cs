@@ -110,7 +110,7 @@ internal static class SalesInvoiceEntryReader
             request.PortWeighingId), invalid);
     }
 
-    private static List<SalesInvoiceLineEntries> ReadLines(IReadOnlyList<SalesInvoiceLineEntry?>? entries, List<string> invalid)
+    internal static List<SalesInvoiceLineEntries> ReadLines(IReadOnlyList<SalesInvoiceLineEntry?>? entries, List<string> invalid)
     {
         var lines = new List<SalesInvoiceLineEntries>();
         if (entries is null || entries.Count == 0 || entries.Count > MaxLines)

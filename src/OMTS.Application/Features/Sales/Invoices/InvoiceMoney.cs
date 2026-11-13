@@ -22,6 +22,22 @@ public static class InvoiceMoney
     /// </summary>
     public static decimal LineAmount(decimal kg, decimal unitPrice) => PurchaseMoney.RoundHalfUp(kg * unitPrice);
 
+    /// <summary>The amount of a line when it fits its column; false when kg × price is too large for an amount of 18 digits, or for a decimal at all (MSG-GEN-01, not a 500).</summary>
+    public static bool TryLineAmount(decimal kg, decimal unitPrice, out decimal amount)
+    {
+        try
+        {
+            amount = LineAmount(kg, unitPrice);
+        }
+        catch (OverflowException)
+        {
+            amount = 0m;
+            return false;
+        }
+
+        return IsWholeAmount(amount);
+    }
+
     /// <summary>The sum of the rounded line amounts, not the rounded sum of the products.</summary>
     public static decimal Subtotal(IEnumerable<decimal> lineAmounts) => lineAmounts.Sum();
 
@@ -45,6 +61,9 @@ public static class InvoiceMoney
 
     /// <summary>Whole VND, 0 or more: a dong cannot be split, and an amount of 18 digits fits the columns.</summary>
     public static bool IsWholeAmount(decimal? amount) => amount is >= 0m and <= MaxAmount && decimal.Truncate(amount.Value) == amount.Value;
+
+    /// <summary>The worked-out amounts of an invoice (never below 0 here) fit their decimal(18,0) columns: amounts that fit one by one can overflow together.</summary>
+    public static bool TotalsFit(decimal subtotal, decimal total, decimal priceCuts = 0m) => IsWholeAmount(subtotal) && IsWholeAmount(total) && IsWholeAmount(priceCuts);
 
     /// <summary>Above 0 and at most 3 decimals: more would be rounded by the column, possibly to 0.</summary>
     public static bool IsKg(decimal? kg) => kg is > 0m and <= MaxKg && decimal.Round(kg.Value, 3) == kg.Value;
