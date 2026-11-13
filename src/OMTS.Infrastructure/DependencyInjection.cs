@@ -94,6 +94,7 @@ public static class DependencyInjection
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
         services.AddScoped<ISalesProductRepository, SalesProductRepository>();
         services.AddScoped<IEmployeeWorkRecords, EmployeeWorkRecords>();
+        services.AddScoped<IEmployeeAppRepository, EmployeeAppRepository>();
         services.AddScoped<IJobTypeRepository, JobTypeRepository>();
         services.AddScoped<IAttendanceSettingsRepository, AttendanceSettingsRepository>();
         services.AddScoped<IPayrollRepository, PayrollRepository>();
@@ -126,6 +127,7 @@ public static class DependencyInjection
         services.AddScoped<ISalesInvoiceRepository, SalesInvoiceRepository>();
         services.AddScoped<IPortWeighingRepository, Persistence.Repositories.Sales.PortWeighingRepository>();
         services.AddScoped<ISalesInvoiceSearchReader, SalesInvoiceSearchReader>();
+        services.AddScoped<IOperationsDashboardQuery, OperationsDashboardQuery>();
         services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();
         services.AddScoped<ICustomerDebtAdjustmentRepository, CustomerDebtAdjustmentRepository>();
         services.AddScoped<IPendingSaleRepository, PendingSaleRepository>();
@@ -162,7 +164,14 @@ public static class DependencyInjection
         services.AddScoped<IWaterMeasurementRepository, WaterMeasurementRepository>();
         services.AddSingleton<IStatusCatalog, StatusCatalog>();
 
-        services.AddOptions<JwtOptions>().Bind(configuration.GetSection(JwtOptions.SectionName));
+        // The staff and the employee app schemes tell their tokens apart by audience (and signing key): one audience for both would
+        // let a token of one kind through the other's check, so the host does not start.
+        services.AddOptions<JwtOptions>()
+            .Bind(configuration.GetSection(JwtOptions.SectionName))
+            .Validate(
+                o => !string.IsNullOrWhiteSpace(o.EmployeeAudience) && !string.Equals(o.EmployeeAudience.TrimEnd('/'), o.Audience.TrimEnd('/'), StringComparison.OrdinalIgnoreCase),
+                $"{JwtOptions.SectionName}:EmployeeAudience must be set and differ from {JwtOptions.SectionName}:Audience.")
+            .ValidateOnStart();
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddSessionRevocation(configuration);
         services.AddSingleton<IVerificationCodeHasher, HmacVerificationCodeHasher>();

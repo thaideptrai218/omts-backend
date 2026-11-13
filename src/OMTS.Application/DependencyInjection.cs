@@ -10,6 +10,7 @@ using OMTS.Application.Features.Accounts.Dtos;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.CashBook;
 using OMTS.Application.Features.Cooperatives;
+using OMTS.Application.Features.EmployeeApp;
 using OMTS.Application.Features.Employees;
 using OMTS.Application.Features.Cultivation.Closing;
 using OMTS.Application.Features.Cultivation.Cycles;
@@ -18,6 +19,7 @@ using OMTS.Application.Features.Cultivation.MaterialUsages;
 using OMTS.Application.Features.Cultivation.Nursery;
 using OMTS.Application.Features.Cultivation.Seeding;
 using OMTS.Application.Features.Cultivation.Progress;
+using OMTS.Application.Features.Dashboard;
 using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Farming.Licenses;
 using OMTS.Application.Features.Farming.Rafts;
@@ -129,6 +131,15 @@ public static class DependencyInjection
         services.AddScoped<EmployeeWorkingZoneService>();
         services.AddScoped<EmploymentService>();
         services.AddScoped<EmploymentEndService>();
+
+        // LABOR-03 login codes, LABOR-06 log in to the employee app (a second kind of caller, apart from the staff accounts), employee push
+        services.AddScoped<EmployeeAppAccess>();
+        services.AddScoped<EmployeeAppTokenIssuer>();
+        services.AddScoped<EmployeeAppLoginService>();
+        services.AddScoped<EmployeeAppSessionService>();
+        services.AddScoped<EmployeeLoginCodeService>();
+        services.AddScoped<EmployeeDeviceService>();
+        services.AddScoped<IEmployeeNotifier, EmployeeNotifier>();
 
         // DEBT-01 receiving bank account
         services.AddScoped<ReceivingAccountAcceptance>();
@@ -383,6 +394,7 @@ public static class DependencyInjection
         services.AddScoped<WaterThresholdService>();
         services.AddScoped<WaterMeasurementOverdueReminder>();
         services.AddScoped<WaterZoneOverviewService>();
+        services.AddScoped<OperationsDashboardService>();
 
         return services;
     }

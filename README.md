@@ -86,7 +86,7 @@ Login accepts a phone number or a username with the password (the web form too).
 sent stays in memory until the API restarts. Read it in the dev inbox, also listed in Swagger:
 - `GET /api/dev/sms?phoneNumber=`
 - `GET /api/dev/email?to=`
-- `GET /api/dev/push?accountId=`
+- `GET /api/dev/push?accountId=` (or `?employeeId=` for a push to an employee of the employee app)
 
 `docker compose logs -f api` shows each fake message's id and masked recipient, never the code.
 

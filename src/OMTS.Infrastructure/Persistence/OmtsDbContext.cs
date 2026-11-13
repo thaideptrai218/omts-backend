@@ -107,6 +107,11 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<Attendance> Attendances => Set<Attendance>();
     public DbSet<EmployeeRequest> EmployeeRequests => Set<EmployeeRequest>();
 
+    // Employee app (LABOR-03, LABOR-06): login codes, the linked device and the sessions of employees, apart from the staff ones
+    public DbSet<EmployeeLoginCode> EmployeeLoginCodes => Set<EmployeeLoginCode>();
+    public DbSet<EmployeeDevice> EmployeeDevices => Set<EmployeeDevice>();
+    public DbSet<EmployeeSession> EmployeeSessions => Set<EmployeeSession>();
+
     // System
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();

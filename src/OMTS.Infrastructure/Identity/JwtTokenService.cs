@@ -92,6 +92,52 @@ internal sealed class JwtTokenService(IOptions<JwtOptions> options, TimeProvider
     public string HashRefreshToken(string refreshToken) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken)));
 
+    // No "sub" and no "sid": the token names no account, so the staff checks (session, account state, permissions) can never apply to it.
+    public AccessToken CreateEmployeeAccessToken(Employee employee, Guid sessionId, Guid deviceId, DateTimeOffset sessionExpiresAt)
+    {
+        var jwt = options.Value;
+        var now = timeProvider.GetUtcNow();
+        var expiresAt = now + jwt.AccessTokenLifetime;
+        if (sessionExpiresAt < expiresAt)
+        {
+            expiresAt = sessionExpiresAt;
+        }
+
+        var descriptor = new SecurityTokenDescriptor
+        {
+            Issuer = jwt.Issuer,
+            Audience = jwt.EmployeeAudience,
+            IssuedAt = now.UtcDateTime,
+            NotBefore = now.UtcDateTime,
+            Expires = expiresAt.UtcDateTime,
+            SigningCredentials = new SigningCredentials(jwt.CreateEmployeeSigningKey(), SecurityAlgorithms.HmacSha256),
+            Claims = new Dictionary<string, object>
+            {
+                [OmtsClaimTypes.EmployeeId] = employee.Id.ToString(),
+                [OmtsClaimTypes.EmployeeSessionId] = sessionId.ToString(),
+                [OmtsClaimTypes.EmployeeDeviceId] = deviceId.ToString(),
+                [OmtsClaimTypes.TokenId] = Guid.NewGuid().ToString(),
+                [OmtsClaimTypes.Name] = employee.FullName,
+                [OmtsClaimTypes.SubjectType] = OmtsClaimTypes.EmployeeSubjectType,
+            },
+        };
+
+        return new AccessToken(_handler.CreateToken(descriptor), expiresAt);
+    }
+
+    public SessionLifetime GetEmployeeSessionLifetime()
+    {
+        var jwt = options.Value;
+        return new SessionLifetime(jwt.EmployeeRefreshTokenLifetime, jwt.EmployeeSessionMaxLifetime, jwt.RefreshGracePeriod);
+    }
+
+    // The attendance QR code of a device is signed with this key by the app and checked by the server (LABOR-07).
+    public string DeriveEmployeeQrKey(Guid deviceId)
+    {
+        var key = HMACSHA256.HashData(options.Value.CreateSigningKey().Key, "omts-attendance-qr"u8);
+        return Base64UrlEncoder.Encode(HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(deviceId.ToString("N"))));
+    }
+
     public SessionLifetime GetSessionLifetime(ClientType clientType)
     {
         var jwt = options.Value;

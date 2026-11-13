@@ -32,4 +32,19 @@ public interface ITokenService
     string DeriveDeviceKey(string deviceId);
 
     SessionLifetime GetSessionLifetime(ClientType clientType);
+
+    /// <summary>
+    /// The access token of the employee app (BR-LABOR-02): another audience and another signing key than a staff token, claims that
+    /// name the employee, their session and their linked device, and no account. Expires as <see cref="CreateAccessToken"/> does.
+    /// </summary>
+    AccessToken CreateEmployeeAccessToken(Employee employee, Guid sessionId, Guid deviceId, DateTimeOffset sessionExpiresAt);
+
+    /// <summary>Refresh lifetime (sliding), hard limit and grace of an employee app session (30 and 90 days, as a mobile session).</summary>
+    SessionLifetime GetEmployeeSessionLifetime();
+
+    /// <summary>
+    /// The key from which the employee app signs the attendance QR code of a device (LABOR-07): derived from the signing key and
+    /// the device id, never stored, the same for every login of that device. 256 bits as base64url.
+    /// </summary>
+    string DeriveEmployeeQrKey(Guid deviceId);
 }

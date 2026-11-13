@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.ActionConstraints;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using OMTS.Api.Extensions;
 using OMTS.Api.IntegrationTests.Employees;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Domain.Entities.Identity;
@@ -214,8 +215,10 @@ public partial class AccountRulesQaTestsForcedChange(AuthApiFactory factory) : I
         {
             var template = action.AttributeRouteInfo?.Template;
             var methods = action.ActionConstraints?.OfType<HttpMethodActionConstraint>().SelectMany(c => c.HttpMethods).ToList();
-            // The test-only controller is not part of the API: it opens its own actions to test the gate.
-            if (template is null || methods is null || template.StartsWith("test-only/", StringComparison.Ordinal) || action.EndpointMetadata.OfType<IAllowAnonymous>().Any())
+            // The test-only controller is not part of the API: it opens its own actions to test the gate. The endpoints of the employee app
+            // take no account at all (a staff token is a 401 there, see EmployeeAppAuthIsolationTests), so the gate never applies to them.
+            if (template is null || methods is null || template.StartsWith("test-only/", StringComparison.Ordinal) || action.EndpointMetadata.OfType<IAllowAnonymous>().Any()
+                || action.EndpointMetadata.OfType<IAuthorizeData>().Any(a => a.AuthenticationSchemes == EmployeeAppAuthentication.Scheme))
             {
                 continue;
             }

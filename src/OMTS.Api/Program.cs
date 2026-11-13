@@ -29,6 +29,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtAuthentication();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+builder.Services.AddScoped<ICurrentEmployee, CurrentEmployee>();
 
 builder.Services.AddOmtsForwardedHeaders(builder.Configuration);
 builder.Services.AddOmtsBffClientHeaders(builder.Configuration);
@@ -75,10 +76,11 @@ if (app.Environment.IsDevelopment())
 // Docker image listens on plain HTTP 8080 only, so its requests are served as they are.
 app.UseHttpsRedirection();
 
-// Before the rate limiter and authentication, so browser preflight requests are answered without a token.
+// Before authentication, so browser preflight requests are answered without a token.
 app.UseOmtsCors();
-app.UseRateLimiter();
+// The rate limiter follows authentication: the employee login code limit is per signed-in account (see RateLimitingExtensions).
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();

@@ -792,6 +792,50 @@ public static class UserMessages
         };
     }
 
+    /// <summary>
+    /// MSG-LABOR-08 (LABOR-03 steps 3 and 4): the login code, shown to whoever issued it and kept in their notification list; never sent to the employee.
+    /// This is the one place that holds the code in clear, for its 5 minutes (it is what the SRS asks the notification to say).
+    /// </summary>
+    public static UserMessage LoginCodeIssued(string employeeName, string code, DateTimeOffset expiresAt, string phoneNumber) => new(
+        Labor08,
+        $"Login code for {employeeName}: {code}. It works once and expires at {BusinessClock.Format(expiresAt)}. Give it to {employeeName} in person or by calling {phoneNumber}.")
+    {
+        Parameters = new Dictionary<string, object?>
+        {
+            ["employee_name"] = employeeName, ["code"] = code, ["expiry_time"] = expiresAt.ToOffset(BusinessClock.UtcOffset), ["phone_number"] = phoneNumber,
+        },
+    };
+
+    /// <summary>MSG-LABOR-09 (LABOR-03.0.E1): no login code can be issued; <paramref name="reason"/> is the English reason as the SRS words it.</summary>
+    public static UserMessage LoginCodeNotIssued(string employeeName, string reason) => new(
+        Labor09, $"No login code can be issued for {employeeName}: {reason}.")
+    {
+        Parameters = new Dictionary<string, object?> { ["employee_name"] = employeeName, ["reason"] = reason },
+    };
+
+    /// <summary>
+    /// What the issuer is told when the 5th wrong entry cancelled the code. The SRS has no message for it, so it goes out under MSG-LABOR-19
+    /// (the code could not be used) with its own text and parameters; it holds no code. A PM decision may give it a code of its own.
+    /// </summary>
+    public static UserMessage LoginCodeCancelledByWrongEntries(string employeeName) => new(
+        Labor19,
+        $"The login code for {employeeName} was cancelled after 5 wrong entries. If it was not {employeeName} who entered them, someone else may know their phone number: issue a new code and give it in person.")
+    {
+        Parameters = new Dictionary<string, object?> { ["employee_name"] = employeeName, ["reason"] = "TooManyWrongEntries" },
+    };
+
+    /// <summary>MSG-LABOR-17 (LABOR-06 step 4): this device is not linked to the employee yet.</summary>
+    public static readonly UserMessage DeviceNotLinked = new(
+        Labor17, "This phone is not linked to you yet. Ask your Zone Manager for a login code, then enter it here.");
+
+    /// <summary>MSG-LABOR-18 (LABOR-06.0.E1): no Employed employee has the phone number.</summary>
+    public static readonly UserMessage EmployeePhoneNotRegistered = new(
+        Labor18, "This phone number cannot log in to the employee app. Please contact your Zone Manager.");
+
+    /// <summary>MSG-LABOR-19 (LABOR-06.0.E2): the login code is wrong, expired or cancelled.</summary>
+    public static readonly UserMessage LoginCodeRejected = new(
+        Labor19, "This login code is wrong or can no longer be used. Check it, or ask your Zone Manager for a new code.");
+
     /// <summary>MSG-LABOR-36 (LABOR-16 step 3): asked before saving the payroll settings.</summary>
     /// <param name="period1">The next pay period as shown to the user.</param>
     /// <param name="automatic">Automatic payroll is on: the note about it is added.</param>

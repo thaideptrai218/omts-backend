@@ -2886,6 +2886,77 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeDevice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeviceName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("DeviceSecretHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("LastQrStep")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("LastSeenAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("LinkedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("LinkedByLoginCodeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PreviousDeviceSecretHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<bool>("PushPermissionGranted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PushToken")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("UnlinkReason")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset?>("UnlinkedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_EmployeeDevices_OneLinkedPerEmployee")
+                        .HasFilter("[UnlinkedAt] IS NULL");
+
+                    b.HasIndex("LinkedByLoginCodeId");
+
+                    b.ToTable("EmployeeDevices");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeJobType", b =>
                 {
                     b.Property<Guid>("EmployeeId")
@@ -2899,6 +2970,56 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("JobTypeId");
 
                     b.ToTable("EmployeeJobTypes");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeLoginCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTimeOffset?>("ConsumedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("FailedAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("IssuedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("IssuedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_EmployeeLoginCodes_OneOpenPerEmployee")
+                        .HasFilter("[ConsumedAt] IS NULL AND [CancelledAt] IS NULL");
+
+                    b.HasIndex("IssuedByAccountId");
+
+                    b.ToTable("EmployeeLoginCodes");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeRequest", b =>
@@ -2991,6 +3112,69 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_EmployeeRequests_Period", "[ToDate] >= [FromDate]");
                         });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("AbsoluteExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("EmployeeDeviceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("LastRefreshedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("PreviousRefreshTokenGraceEndsAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("PreviousRefreshTokenHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTimeOffset>("RefreshTokenExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("RefreshTokenHash")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("RevokeCause")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("RevokeReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeDeviceId");
+
+                    b.HasIndex("PreviousRefreshTokenHash")
+                        .HasFilter("[PreviousRefreshTokenHash] IS NOT NULL");
+
+                    b.HasIndex("RefreshTokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("EmployeeId", "RevokedAt");
+
+                    b.ToTable("EmployeeSessions");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeTypePeriod", b =>
@@ -8345,6 +8529,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeDevice", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Labor.EmployeeLoginCode", "LinkedByLoginCode")
+                        .WithMany()
+                        .HasForeignKey("LinkedByLoginCodeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("LinkedByLoginCode");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeJobType", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
@@ -8362,6 +8565,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Employee");
 
                     b.Navigation("JobType");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeLoginCode", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", "IssuedBy")
+                        .WithMany()
+                        .HasForeignKey("IssuedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("IssuedBy");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeRequest", b =>
@@ -8386,6 +8608,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Employee");
 
                     b.Navigation("Status");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeSession", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Labor.EmployeeDevice", "EmployeeDevice")
+                        .WithMany()
+                        .HasForeignKey("EmployeeDeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("EmployeeDevice");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.EmployeeTypePeriod", b =>

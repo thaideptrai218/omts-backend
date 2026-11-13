@@ -11,6 +11,8 @@ public interface IPushSender
     Task<DeliveryResult> SendAsync(PushMessage message, CancellationToken cancellationToken = default);
 }
 
+/// <param name="RecipientAccountId">The account the push is for; null for a push to an employee of the employee app (<paramref name="RecipientEmployeeId"/>).</param>
+/// <param name="RecipientEmployeeId">The employee the push is for (BR-LABOR-04); employees have no account, no notification list and no kept row.</param>
 /// <param name="DeviceTokens">
 /// The recipient's devices that receive push now (ACS-07: registered by a session that is still logged in,
 /// notifications allowed); empty when there is none.
@@ -22,7 +24,7 @@ public interface IPushSender
 /// text in its own language; null when the message has none.
 /// </param>
 public sealed record PushMessage(
-    Guid RecipientAccountId,
+    Guid? RecipientAccountId,
     string Type,
     string Title,
     string? Body,
@@ -32,4 +34,5 @@ public sealed record PushMessage(
     Guid? NotificationId = null,
     string? MessageCode = null,
     Guid? RelatedRecordId = null,
-    string? MessageParams = null);
+    string? MessageParams = null,
+    Guid? RecipientEmployeeId = null);
