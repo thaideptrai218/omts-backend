@@ -25,6 +25,7 @@ public sealed partial class CultivationCycleService(
     ICultivationCycleQuery cycleQuery,
     IRaftRepository rafts,
     INurseryBatchRepository nurseries,
+    IProductRepository products,
     RaftViews raftViews,
     CultivationCycleViews views,
     CycleWriteGuard writes,
@@ -161,6 +162,12 @@ public sealed partial class CultivationCycleService(
             return AppError.InvalidFields(check.Invalid);
         }
 
+        var (newProduct, productError) = await CheckProductChangeAsync(cycle, request.ProductId, cancellationToken);
+        if (productError is not null)
+        {
+            return productError;
+        }
+
         if (await rowVersions.CheckAsync(cycle, request.RowVersion, cancellationToken) is { } conflict)
         {
             return conflict;
@@ -168,6 +175,7 @@ public sealed partial class CultivationCycleService(
 
         var before = CultivationCycleValues.Snapshot(cycle);
         values.ApplyTo(cycle);
+        ApplyProduct(cycle, newProduct);
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, CultivationCycleValues.Snapshot(cycle));
         if (changedAfter is not null)
         {

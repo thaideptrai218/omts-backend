@@ -94,6 +94,11 @@ public sealed class HarvestLotRecordingService(
             return wrongRequest;
         }
 
+        if (HarvestProductMatch.Refusal(open.Cycle, order!) is { } wrongProduct)
+        {
+            return wrongProduct;
+        }
+
         if ((await crews.ReadAsync(request.Crew, request.CrewUnreadable, cancellationToken)).Error is { } wrongCrew)
         {
             return wrongCrew;
@@ -200,6 +205,11 @@ public sealed class HarvestLotRecordingService(
         if (await PurchaseRequestRules.RefusesHarvestLotAsync(order, statuses, fulfilment, cancellationToken) is { } wrongRequest)
         {
             return wrongRequest;
+        }
+
+        if (HarvestProductMatch.Refusal(open.Cycle, order!) is { } wrongProduct)
+        {
+            return wrongProduct;
         }
 
         var (crew, crewError) = await crews.ReadAsync(request.Crew, request.CrewUnreadable, cancellationToken);

@@ -39,8 +39,9 @@ internal sealed record CultivationCycleValues(DateOnly StartDate, decimal? Expec
         cycle.TargetYieldKg = TargetYieldKg;
     }
 
-    public static object Snapshot(CultivationCycle c) => new { c.StartDate, c.ExpectedSeedQuantity, c.TargetYieldKg };
+    public static object Snapshot(CultivationCycle c) => new { c.StartDate, c.ExpectedSeedQuantity, c.TargetYieldKg, Product = c.Product?.Name };
 
     /// <summary>The audit values of a cycle that draws from a nursery batch (v2): the batch by its code, not its id.</summary>
-    public static object NurserySnapshot(CultivationCycle c, string? nurseryCode) => new { c.StartDate, c.TargetYieldKg, c.Note, NurseryBatch = nurseryCode };
+    public static object NurserySnapshot(CultivationCycle c, string? nurseryCode, string? productName = null) =>
+        new { c.StartDate, c.TargetYieldKg, c.Note, NurseryBatch = nurseryCode, Product = productName };
 }

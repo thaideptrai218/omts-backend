@@ -59,6 +59,12 @@ public sealed partial class CultivationCycleService
             return batchError;
         }
 
+        var (product, productError) = await CheckProductAsync(request.ProductId, cancellationToken);
+        if (productError is not null)
+        {
+            return productError;
+        }
+
         var today = timeProvider.Today();
         var previousClose = await cycles.LastCloseDateAsync(raft.Id, cancellationToken);
         var check = CultivationCycleValues.Read(request.StartDate ?? today, null, request.TargetYieldKg, new CycleDateLimits(today, previousClose, null), out var values);
@@ -81,7 +87,7 @@ public sealed partial class CultivationCycleService
             return uploaded.Error!;
         }
 
-        var cycle = new CultivationCycle { RaftId = raft.Id, Raft = raft, NurseryBatchId = batch!.Id, Note = note };
+        var cycle = new CultivationCycle { RaftId = raft.Id, Raft = raft, NurseryBatchId = batch!.Id, Note = note, ProductId = product!.Id, Product = product };
         values.ApplyTo(cycle);
         cycles.Add(cycle);
         var slot = 0;
@@ -95,7 +101,7 @@ public sealed partial class CultivationCycleService
         // The raft row and the batch row are part of this save: a parallel lane change or discontinue, or a parallel close or correction of the batch, read the state this start read, so one of the two fails with MSG06.
         unitOfWork.MarkChanged(raft);
         unitOfWork.MarkChanged(batch);
-        audit.Record(Entry("CultivationCycle.Started", cycle) with { After = CultivationCycleValues.NurserySnapshot(cycle, batch.Code) });
+        audit.Record(Entry("CultivationCycle.Started", cycle) with { After = CultivationCycleValues.NurserySnapshot(cycle, batch.Code, product.Name) });
         AppError? lost;
         try
         {
@@ -151,13 +157,19 @@ public sealed partial class CultivationCycleService
             newBatch = batch;
         }
 
+        var (newProduct, productError) = await CheckProductChangeAsync(cycle, request.ProductId, cancellationToken);
+        if (productError is not null)
+        {
+            return productError;
+        }
+
         if (await rowVersions.CheckAsync(cycle, request.RowVersion, cancellationToken) is { } conflict)
         {
             return conflict;
         }
 
         var oldBatch = cycle.NurseryBatchId is { } oldId ? await nurseries.GetForPoolAsync(oldId, cancellationToken) : null;
-        var before = CultivationCycleValues.NurserySnapshot(cycle, oldBatch?.Code);
+        var before = CultivationCycleValues.NurserySnapshot(cycle, oldBatch?.Code, cycle.Product?.Name);
         values.ApplyTo(cycle);
         cycle.Note = note;
         if (newBatch is not null)
@@ -166,7 +178,8 @@ public sealed partial class CultivationCycleService
             unitOfWork.MarkChanged(newBatch);
         }
 
-        var (changedBefore, changedAfter) = AuditDiff.Changed(before, CultivationCycleValues.NurserySnapshot(cycle, newBatch?.Code ?? oldBatch?.Code));
+        ApplyProduct(cycle, newProduct);
+        var (changedBefore, changedAfter) = AuditDiff.Changed(before, CultivationCycleValues.NurserySnapshot(cycle, newBatch?.Code ?? oldBatch?.Code, cycle.Product?.Name));
         if (changedAfter is not null)
         {
             audit.Record(Entry("CultivationCycle.Updated", cycle) with { Before = changedBefore, After = changedAfter });

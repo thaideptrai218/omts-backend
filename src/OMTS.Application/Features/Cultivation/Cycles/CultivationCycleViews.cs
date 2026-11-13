@@ -13,7 +13,7 @@ namespace OMTS.Application.Features.Cultivation.Cycles;
 
 /// <summary>The cycle answers, with the figures and commands worked out when shown.</summary>
 public sealed class CultivationCycleViews(
-    ICultivationCycleRepository cycles, IHarvestLotRepository harvestLots, INurseryBatchRepository nurseries, IFileStorage storage, IStatusCatalog statusCatalog, TimeProvider timeProvider)
+    ICultivationCycleRepository cycles, IHarvestLotRepository harvestLots, INurseryBatchRepository nurseries, IProductRepository products, IFileStorage storage, IStatusCatalog statusCatalog, TimeProvider timeProvider)
 {
     /// <summary>The cycle with its raft and zone loaded, for one cycle shown at a time: the list items hold no days of farming. An Open cycle counts to today, so only a closed one reads its last lot.</summary>
     public async Task<CycleView> ViewAsync(CultivationCycle cycle, CancellationToken cancellationToken)
@@ -36,6 +36,8 @@ public sealed class CultivationCycleViews(
             photos.Add(new CyclePlanPhotoView(id, sortOrder, await storage.GetReadUrlAsync(key, cancellationToken: cancellationToken)));
         }
 
+        // Most loads include the product; one that did not is read by id.
+        var productName = cycle.ProductId is not { } productId ? null : cycle.Product?.Name ?? (await products.GetForEditAsync(productId, cancellationToken))?.Name;
         var canEdit = CanEdit(cycle, cycle.Raft, zoneInUse);
         return new CycleView(
             cycle.Id,
@@ -62,6 +64,9 @@ public sealed class CultivationCycleViews(
             fromNursery,
             cycle.Note,
             batch is null ? null : SeedingViews.LotRef(batch.SeedLotLine),
+            canEdit && seededByCycle <= 0m,
+            cycle.ProductId,
+            productName,
             canEdit && seededByCycle <= 0m);
     }
     public CycleListItem ListItem(CultivationCycle cycle) => new(

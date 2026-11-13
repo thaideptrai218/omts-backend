@@ -43,6 +43,7 @@ internal static class DemoDataSeeder
         new DemoNurseryStep(),
         new DemoSalesInvoiceStep(),
         new DemoOpenHarvestRequestStep(),
+        new DemoCycleProductStep(),
         new DemoWaterMeasurementStep(),
         new DemoPayrollStep(),
         // Last, so that no step above takes these empty rafts into its data.

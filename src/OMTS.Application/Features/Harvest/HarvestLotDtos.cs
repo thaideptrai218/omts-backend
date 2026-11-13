@@ -164,6 +164,7 @@ public sealed record HarvestLaneView(
 /// <param name="Lanes">Lanes In Use, and Removed lanes that have records in the cycle shown, in number order.</param>
 /// <param name="Lots">The lots of the Open cycle: lots for sale first, then the latest harvest first.</param>
 /// <param name="Orders">What a new lot can be recorded for, when the caller may record: see <see cref="HarvestOrderOption"/>.</param>
+/// <param name="CycleProductId">The product the Open cycle farms; null with no Open cycle or a cycle with no product. <paramref name="CycleProductName"/> is its name.</param>
 public sealed record HarvestLotsScreen(
     Guid RaftId,
     string RaftCode,
@@ -178,7 +179,9 @@ public sealed record HarvestLotsScreen(
     decimal? TargetYieldKg = null,
     decimal? RemainingKg = null,
     decimal? TargetPercent = null,
-    bool OverTarget = false);
+    bool OverTarget = false,
+    Guid? CycleProductId = null,
+    string? CycleProductName = null);
 
 /// <summary>
 /// A purchase request a new lot can be recorded for (decision of 11/11/2026): Accepted and its harvest not marked done. The requests whose work plan sends the harvest to this
@@ -186,8 +189,11 @@ public sealed record HarvestLotsScreen(
 /// </summary>
 /// <param name="HarvestedCages">The cages of the lots already recorded for it, on every raft.</param>
 /// <param name="PlannedOnRaft">Its work plan names this raft: the form picks it first.</param>
+/// <param name="ProductId">The product the request asks for.</param>
+/// <param name="MatchesCycleProduct">True when the Open cycle has no product, or this is its product (13/11/2026): a lot is recorded only for such a request, else 400 HARVEST_PRODUCT_MISMATCH. The list keeps every open request; the client filters.</param>
 public sealed record HarvestOrderOption(
-    Guid Id, string Code, string CustomerName, string ProductName, int AcceptedCages, decimal HarvestedCages, DateOnly PickupDate, DateOnly? WorkDate, bool PlannedOnRaft);
+    Guid Id, string Code, string CustomerName, string ProductName, int AcceptedCages, decimal HarvestedCages, DateOnly PickupDate, DateOnly? WorkDate, bool PlannedOnRaft,
+    Guid? ProductId = null, bool MatchesCycleProduct = true);
 
 /// <summary>The harvest settings (HARVEST-03).</summary>
 public sealed record HarvestSettingsView(decimal AverageKgPerCage, int DaysBeforeAutoClose, string RowVersion);

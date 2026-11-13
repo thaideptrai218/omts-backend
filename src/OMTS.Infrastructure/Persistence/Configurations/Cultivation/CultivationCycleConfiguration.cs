@@ -20,6 +20,9 @@ internal sealed class CultivationCycleConfiguration : IEntityTypeConfiguration<C
         builder.HasOne<NurseryBatch>().WithMany().HasForeignKey(x => x.NurseryBatchId);
         builder.HasIndex(x => x.NurseryBatchId);
 
+        // The product the cycle will yield (13/11/2026); null on older cycles.
+        builder.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId);
+
         // A raft holds at most one Open cycle, even for parallel starts (BR-CYCLE-01).
         builder.HasIndex(x => x.RaftId)
             .IsUnique()

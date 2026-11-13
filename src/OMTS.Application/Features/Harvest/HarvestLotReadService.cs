@@ -85,20 +85,22 @@ public sealed class HarvestLotReadService(
             lanes.Any(l => l.CanHarvest),
             lanes,
             open is null ? [] : await views.ListAsync(ofCycle, open, raft, cancellationToken),
-            mayRecord ? await OrdersAsync(raft.Id, cancellationToken) : [],
+            mayRecord ? await OrdersAsync(raft.Id, open?.ProductId, cancellationToken) : [],
             ofCycle.Sum(lot => lot.CageCount),
             harvestedKg,
             open?.TargetYieldKg,
             open?.TargetYieldKg is { } target ? target - harvestedKg : null,
             HarvestQuantityRules.TargetPercent(open?.TargetYieldKg, harvestedKg),
-            open?.TargetYieldKg is > 0 and var over && harvestedKg > over);
+            open?.TargetYieldKg is > 0 and var over && harvestedKg > over,
+            open?.ProductId,
+            open?.Product?.Name);
     }
 
     /// <summary>
     /// What a new lot on the raft can be recorded for (decision of 11/11/2026): the requests planned on this raft first, then the earliest agreed pickup. A request taken in
     /// full before that decision is left out.
     /// </summary>
-    private async Task<IReadOnlyList<HarvestOrderOption>> OrdersAsync(Guid raftId, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<HarvestOrderOption>> OrdersAsync(Guid raftId, Guid? cycleProductId, CancellationToken cancellationToken)
     {
         var accepted = await requests.ListOpenForHarvestAsync(cancellationToken);
         var fulfilled = await fulfilment.FulfilledAmongAsync(accepted.Select(r => r.Id).ToList(), cancellationToken);
@@ -107,7 +109,7 @@ public sealed class HarvestLotReadService(
         return open
             .Select(r => new HarvestOrderOption(
                 r.Id, r.Code, r.Customer.Name, r.ProductName, r.AcceptedCages ?? 0, harvested.GetValueOrDefault(r.Id), r.AgreedPickupDate ?? r.PickupDate,
-                r.WorkDayPlan?.WorkDate ?? r.WorkDate, r.WorkDayPlan?.RaftId == raftId))
+                r.WorkDayPlan?.WorkDate ?? r.WorkDate, r.WorkDayPlan?.RaftId == raftId, r.ProductId, HarvestProductMatch.Matches(cycleProductId, r.ProductId)))
             .OrderByDescending(o => o.PlannedOnRaft)
             .ToList();
     }

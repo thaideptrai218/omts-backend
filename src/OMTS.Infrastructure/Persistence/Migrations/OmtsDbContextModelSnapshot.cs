@@ -449,6 +449,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("NurseryBatchId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("RaftId")
                         .HasColumnType("uniqueidentifier");
 
@@ -480,6 +483,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("NurseryBatchId");
+
+                    b.HasIndex("ProductId");
 
                     b.HasIndex("RaftId")
                         .IsUnique()
@@ -7488,6 +7493,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("NurseryBatchId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("OMTS.Domain.Entities.Sales.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
                         .WithMany("CultivationCycles")
                         .HasForeignKey("RaftId")
@@ -7499,6 +7509,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Product");
 
                     b.Navigation("Raft");
 
