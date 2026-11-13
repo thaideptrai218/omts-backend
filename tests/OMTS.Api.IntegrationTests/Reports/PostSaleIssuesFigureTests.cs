@@ -116,6 +116,27 @@ public class PostSaleIssuesFigureTests
         Assert.Equal(5_000m, withCut.Totals().Money("priceCutsAmount"));
     }
 
+    // PM answer 12/11: a claim of an invoice that is cancelled later still counts, but the price cut is undone with the invoice: its amount is not an event, the cancellation is.
+    [Fact]
+    public async Task The_price_cut_of_a_cancelled_invoice_is_dropped_but_its_claim_and_its_cancellation_count()
+    {
+        using var api = new AuthApiFactory();
+        var sale = await api.SaleSetupAsync();
+        var trader = await PurchaseRequestTestKit.TraderAsync(api);
+        var invoice = (await sale.SellKgAsync(trader.Profile.Id, 10m)).Id();
+        await trader.SendClaimAsync(invoice);
+        await sale.CutPriceAsync(invoice, 20_000m);
+        var kept = (await sale.SellKgAsync(trader.Profile.Id, 4m)).Id();
+        await sale.CutPriceAsync(kept, 5_000m);
+        await sale.CancelSaleAsync(invoice);
+
+        var report = await sale.Owner.Client.PostSaleAsync();
+
+        var group = Assert.Single(report.Groups());
+        Assert.Equal((1, 0, 1, 1), group.EventCounts());
+        Assert.Equal(5_000m, group.Money("priceCutsAmount"));
+    }
+
     // Four claims: Awaiting response, Rejected, Accepted, and one sent last month that this month does not count.
     [Fact]
     public async Task Claims_are_counted_by_the_time_they_were_sent_with_their_status()

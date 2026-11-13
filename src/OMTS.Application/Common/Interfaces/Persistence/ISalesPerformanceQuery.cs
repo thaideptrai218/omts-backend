@@ -20,9 +20,12 @@ public sealed record SalesPerformanceFacts(IReadOnlyList<SalesPerformanceInvoice
 
 /// <summary>The money of one customer profile for the customer grouping: the debt formula as at the end of the period, and the payments dated in the period (BR-DEBT-02, BR-DEBT-03).</summary>
 /// <param name="DebtAtEnd">The four sums of the formula over the entries dated up to the end of the period, Awaiting confirmation payments included, as the statement of DEBT-04 counts them.</param>
-/// <param name="ConfirmedReceived">Payments received that are Confirmed, with a payment date in the period.</param>
+/// <param name="ConfirmedReceived">Payments received that are Completed, with a payment date in the period.</param>
 /// <param name="PaidBack">Money paid back that is not cancelled, with a payment date in the period.</param>
 public sealed record SalesPerformanceCustomerMoney(CustomerDebtFigures DebtAtEnd, decimal ConfirmedReceived, decimal PaidBack);
+
+/// <summary>The money of the period that no profile has: the payments of walk-in sales and transfers completed with no customer, and money paid back with no customer.</summary>
+public sealed record SalesPerformanceUnassignedMoney(decimal Received, decimal PaidBack);
 
 /// <summary>What REPORT-01 reads, in a fixed number of commands whatever the number of invoices. Read only.</summary>
 public interface ISalesPerformanceQuery
@@ -33,4 +36,7 @@ public interface ISalesPerformanceQuery
     /// <summary>The money of each profile asked for; every id has an entry. Payments and debts have no zone, so no zone is asked here (BR-FARM-08).</summary>
     Task<IReadOnlyDictionary<Guid, SalesPerformanceCustomerMoney>> CustomerMoneyAsync(
         IReadOnlyCollection<Guid> customerIds, DateOnly from, DateOnly to, CancellationToken cancellationToken);
+
+    /// <summary>Completed payments received and money paid back with no customer, dated in the period (one command).</summary>
+    Task<SalesPerformanceUnassignedMoney> UnassignedMoneyAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken);
 }

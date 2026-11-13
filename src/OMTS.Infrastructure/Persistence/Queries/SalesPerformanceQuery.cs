@@ -51,7 +51,8 @@ internal sealed class SalesPerformanceQuery(OmtsDbContext db) : ISalesPerformanc
             return new Dictionary<Guid, SalesPerformanceCustomerMoney>();
         }
 
-        // The debt formula (BR-DEBT-02) over what is dated up to the end of the period: invoices not cancelled, returns that stand, payments and money paid back not cancelled.
+        // The debt formula (BR-DEBT-02) over what is dated up to the end of the period: invoices not cancelled, returns that stand, payments, discounts and money paid back not cancelled
+        // (a payment still waiting for its transfer counts nowhere) and the debt adjustments not cancelled.
         var invoiceRows = db.SalesInvoices.AsNoTracking()
             .Where(i => i.CustomerId != null && ids.Contains(i.CustomerId.Value) && i.StatusId != StatusIds.SalesInvoice.Cancelled && i.InvoiceDate <= to);
         var standing = db.SalesReturns.AsNoTracking().Where(SalesReturn.Standing);
@@ -62,30 +63,49 @@ internal sealed class SalesPerformanceQuery(OmtsDbContext db) : ISalesPerformanc
                 select new { CustomerId = g.Key, Total = g.Sum(x => x.Total), Returns = g.Sum(x => x.Value) })
             .ToDictionaryAsync(x => x.CustomerId, cancellationToken);
         var payments = db.CustomerPayments.AsNoTracking()
-            .Where(p => p.CustomerId != null && ids.Contains(p.CustomerId.Value) && p.StatusId != StatusIds.CustomerPayment.Cancelled);
+            .Where(p => p.CustomerId != null && ids.Contains(p.CustomerId.Value) && p.StatusId != StatusIds.CustomerPayment.Cancelled && p.StatusId != StatusIds.CustomerPayment.PendingTransfer);
         var upToEnd = await payments.Where(p => p.PaymentDate <= to)
             .GroupBy(p => new { CustomerId = p.CustomerId!.Value, p.Kind })
-            .Select(g => new { g.Key.CustomerId, g.Key.Kind, Amount = g.Sum(p => p.Amount) })
+            .Select(g => new { g.Key.CustomerId, g.Key.Kind, Amount = g.Sum(p => p.Amount), Discount = g.Sum(p => p.DiscountAmount) })
             .ToListAsync(cancellationToken);
-        // The money of the period itself: by payment date, Confirmed payments received and money paid back (BR-DEBT-03); Awaiting confirmation is not received yet.
+        var adjusted = await db.CustomerDebtAdjustments.AsNoTracking()
+            .Where(a => a.CancelledAt == null && ids.Contains(a.CustomerId) && a.AdjustmentDate <= to)
+            .GroupBy(a => a.CustomerId)
+            .Select(g => new { CustomerId = g.Key, Amount = g.Sum(a => a.Amount) })
+            .ToDictionaryAsync(x => x.CustomerId, x => x.Amount, cancellationToken);
+        // The money of the period itself: by payment date, Completed payments received and money paid back (BR-DEBT-03); Awaiting confirmation is not received yet.
         var inPeriod = await payments.Where(p => p.PaymentDate >= from && p.PaymentDate <= to)
             .GroupBy(p => new { CustomerId = p.CustomerId!.Value, p.Kind, p.StatusId })
             .Select(g => new { g.Key.CustomerId, g.Key.Kind, g.Key.StatusId, Amount = g.Sum(p => p.Amount) })
             .ToListAsync(cancellationToken);
 
-        var toEnd = upToEnd.ToDictionary(p => (p.CustomerId, p.Kind), p => p.Amount);
-        var received = inPeriod.Where(p => p.Kind == CustomerPaymentKind.Payment && p.StatusId == StatusIds.CustomerPayment.Confirmed)
+        var toEnd = upToEnd.ToDictionary(p => (p.CustomerId, p.Kind));
+        var received = inPeriod.Where(p => p.Kind == CustomerPaymentKind.Payment && p.StatusId == StatusIds.CustomerPayment.Completed)
             .ToDictionary(p => p.CustomerId, p => p.Amount);
         var backInPeriod = inPeriod.Where(p => p.Kind == CustomerPaymentKind.PaidBack).GroupBy(p => p.CustomerId).ToDictionary(g => g.Key, g => g.Sum(p => p.Amount));
         return ids.ToDictionary(id => id, id =>
         {
             invoiceSums.TryGetValue(id, out var sums);
+            var paid = toEnd.GetValueOrDefault((id, CustomerPaymentKind.Payment));
             var figures = new CustomerDebtFigures(
-                sums?.Total ?? 0m, sums?.Returns ?? 0m, toEnd.GetValueOrDefault((id, CustomerPaymentKind.Payment)), toEnd.GetValueOrDefault((id, CustomerPaymentKind.PaidBack)));
+                sums?.Total ?? 0m, sums?.Returns ?? 0m, paid?.Amount ?? 0m, toEnd.GetValueOrDefault((id, CustomerPaymentKind.PaidBack))?.Amount ?? 0m, paid?.Discount ?? 0m,
+                adjusted.GetValueOrDefault(id));
             return new SalesPerformanceCustomerMoney(figures, received.GetValueOrDefault(id), backInPeriod.GetValueOrDefault(id));
         });
     }
 
+    public async Task<SalesPerformanceUnassignedMoney> UnassignedMoneyAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken)
+    {
+        // A payment with no customer (a walk-in sale, a transfer held for settlement that was completed) is money received all the same; one waiting for its transfer is not.
+        var rows = await db.CustomerPayments.AsNoTracking()
+            .Where(p => p.CustomerId == null && p.PaymentDate >= from && p.PaymentDate <= to && p.StatusId != StatusIds.CustomerPayment.Cancelled && p.StatusId != StatusIds.CustomerPayment.PendingTransfer)
+            .GroupBy(p => new { p.Kind, p.StatusId })
+            .Select(g => new { g.Key.Kind, g.Key.StatusId, Amount = g.Sum(p => p.Amount) })
+            .ToListAsync(cancellationToken);
+        return new SalesPerformanceUnassignedMoney(
+            rows.Where(r => r.Kind == CustomerPaymentKind.Payment && r.StatusId == StatusIds.CustomerPayment.Completed).Sum(r => r.Amount),
+            rows.Where(r => r.Kind == CustomerPaymentKind.PaidBack).Sum(r => r.Amount));
+    }
     /// <summary>The invoices of the selection: in the period, not Cancelled, of the zones, customers and products chosen.</summary>
     private IQueryable<SalesInvoice> InvoicesOf(ReportFilter filter)
     {

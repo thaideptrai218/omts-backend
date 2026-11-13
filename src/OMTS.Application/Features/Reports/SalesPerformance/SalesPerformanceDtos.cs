@@ -23,16 +23,18 @@ public sealed record SalesPerformanceChoices(IReadOnlyList<ReportChoice> Zones, 
 
 /// <summary>
 /// The figures of a group or of the total (BR-REPORT-01). <see cref="NetRevenue"/> is the revenue minus the sales returns; <see cref="SoldKg"/> is the invoiced kg minus the returned kg
-/// (BR-HARVEST-07). <see cref="NetMoneyReceived"/> and <see cref="DebtAtEnd"/> are filled for the grouping by customer only: they have no zone and follow the customer, not the invoices.
+/// (BR-HARVEST-07). <see cref="NetMoneyReceived"/>, <see cref="Receivable"/>, <see cref="OwedBack"/> and <see cref="NetDebt"/> are filled for the grouping by customer only: they have no
+/// zone and follow the customer, not the invoices. The debts at the end of the period are split as DEBT-03 does: <see cref="Receivable"/> adds the debts above 0, <see cref="OwedBack"/>
+/// the money the cooperative owes customers (a positive amount), <see cref="NetDebt"/> is the first minus the second (PM answer 12/11).
 /// </summary>
 public sealed record SalesPerformanceFigures(
-    int InvoiceCount, decimal InvoicedKg, decimal Revenue, decimal PriceCuts, decimal SalesReturns, decimal NetRevenue, decimal SoldKg, decimal? NetMoneyReceived, decimal? DebtAtEnd);
+    int InvoiceCount, decimal InvoicedKg, decimal Revenue, decimal PriceCuts, decimal SalesReturns, decimal NetRevenue, decimal SoldKg,
+    decimal? NetMoneyReceived, decimal? Receivable, decimal? OwedBack, decimal? NetDebt);
 
-/// <param name="Key">What the invoices call sends back as <c>groupKey</c>: an id, a start date (yyyy-MM-dd) or a fixed name (walk-in, discounts, other-charges, price-cuts).</param>
+/// <param name="Key">What the invoices call sends back as <c>groupKey</c>: an id, a start date (yyyy-MM-dd) or a fixed name (walk-in, unassigned, discounts, other-charges, price-cuts).</param>
 public sealed record SalesPerformanceGroup(
     string Key, string Label, int InvoiceCount, decimal InvoicedKg, decimal Revenue, decimal PriceCuts, decimal SalesReturns, decimal NetRevenue, decimal SoldKg,
-    decimal? NetMoneyReceived, decimal? DebtAtEnd);
-
+    decimal? NetMoneyReceived, decimal? Receivable, decimal? OwedBack, decimal? NetDebt);
 /// <summary>REPORT-01 step 3: worked out when it is shown. <see cref="Message"/> is MSG-GEN-10 when no invoice matches (REPORT-01.2); the groups are then empty and the totals 0.</summary>
 public sealed record SalesPerformanceReport(
     DateTimeOffset ComputedAt, DateOnly From, DateOnly To, string GroupBy, SalesPerformanceChoices Filters, IReadOnlyList<SalesPerformanceGroup> Groups,

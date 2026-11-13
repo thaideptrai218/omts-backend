@@ -17,6 +17,8 @@ public sealed class SalesPerformanceService(ReportFilterResolver filters, ISales
 {
     public const string GroupByField = "Grouping";
     public const string GroupKeyField = "Group key";
+    public const string UnassignedKey = "unassigned";
+    public const string UnassignedLabel = "Not assigned to a customer";
 
     public Task<Result<SalesPerformanceReport>> ReportAsync(SalesPerformanceQuery request, CancellationToken cancellationToken) =>
         BuildAsync(request, PermissionAction.View, cancellationToken);
@@ -64,9 +66,10 @@ public sealed class SalesPerformanceService(ReportFilterResolver filters, ISales
     }
 
     /// <summary>
-    /// BR-REPORT-01, grouped by customer: the net money received in the period (Confirmed payments minus money paid back, by payment date, BR-DEBT-03) and the debt at the end of the
-    /// period (Awaiting confirmation payments count, BR-DEBT-02). Neither follows the zone filter, nor the invoices of the period: they are the customer's. Walk-in invoices have no profile
-    /// and no money here.
+    /// BR-REPORT-01, grouped by customer: the net money received in the period (Completed payments minus money paid back, by payment date, BR-DEBT-03) and the debts at the end of the
+    /// period (Awaiting confirmation payments count, BR-DEBT-02), split into the receivable and the money owed back, with their net (PM answer 12/11). None follows the zone filter,
+    /// nor the invoices of the period: they are the customer's. Walk-in invoices have no profile and no money here. Money received and paid back with no customer yet is one more row,
+    /// so the total matches the money received (PM answer 12/11); it is left out when customers were chosen.
     /// </summary>
     private async Task<(IReadOnlyList<SalesPerformanceGroup> Groups, SalesPerformanceFigures Totals)> WithCustomerMoneyAsync(
         SalesPerformanceCalculation calculation, ReportFilter filter, CancellationToken cancellationToken)
@@ -75,16 +78,34 @@ public sealed class SalesPerformanceService(ReportFilterResolver filters, ISales
         var money = await query.CustomerMoneyAsync(ids, filter.From, filter.To, cancellationToken);
         var groups = calculation.Groups.Select(g =>
         {
-            // The walk-in row has no profile, so no money: both figures stay empty.
+            // The walk-in row has no profile, so no money: the figures stay empty.
             if (!Guid.TryParse(g.Key, out var id) || !money.TryGetValue(id, out var m))
             {
                 return g;
             }
 
-            return g with { NetMoneyReceived = m.ConfirmedReceived - m.PaidBack, DebtAtEnd = CustomerDebtMath.Debt(m.DebtAtEnd) };
+            var debt = CustomerDebtMath.Debt(m.DebtAtEnd);
+            return g with
+            {
+                NetMoneyReceived = m.ConfirmedReceived - m.PaidBack,
+                Receivable = CustomerDebtMath.Receivable(debt),
+                OwedBack = CustomerDebtMath.OwedBack(debt),
+                NetDebt = debt,
+            };
         }).ToList();
-        // The totals add the rows: the debts are added with their signs, so money owed back lowers the total.
-        return (groups, calculation.Totals with { NetMoneyReceived = groups.Sum(g => g.NetMoneyReceived), DebtAtEnd = groups.Sum(g => g.DebtAtEnd) });
+        if (groups.Count > 0 && filter.Customers.Count == 0)
+        {
+            var unassigned = await query.UnassignedMoneyAsync(filter.From, filter.To, cancellationToken);
+            if (unassigned.Received != 0m || unassigned.PaidBack != 0m)
+            {
+                groups.Add(new SalesPerformanceGroup(UnassignedKey, UnassignedLabel, 0, 0m, 0m, 0m, 0m, 0m, 0m, unassigned.Received - unassigned.PaidBack, 0m, 0m, 0m));
+            }
+        }
+
+        // The totals add the rows; the net debt is the receivable minus the money owed back.
+        var receivable = groups.Sum(g => g.Receivable);
+        var owedBack = groups.Sum(g => g.OwedBack);
+        return (groups, calculation.Totals with { NetMoneyReceived = groups.Sum(g => g.NetMoneyReceived), Receivable = receivable, OwedBack = owedBack, NetDebt = receivable - owedBack });
     }
 
     private Task<Result<ReportFilter>> ResolveAsync(

@@ -105,8 +105,8 @@ public class SalesPerformanceRulesTests
         Assert.Equal($"sales-performance-customer-{from:yyyyMMdd}-{today:yyyyMMdd}.xlsx", file.Content.Headers.ContentDisposition!.FileName!.Trim('"'));
         using var book = new XLWorkbook(await file.Content.ReadAsStreamAsync());
         var figures = book.Worksheet("Sales performance");
-        Assert.Equal(["Customer", "Invoices", "Invoiced kg", "Revenue", "Price cuts", "Sales returns", "Net revenue", "Sold kg", "Net money received", "Debt at end of period"],
-            figures.Row(1).Cells(1, 10).Select(c => c.GetString()));
+        Assert.Equal(["Customer", "Invoices", "Invoiced kg", "Revenue", "Price cuts", "Sales returns", "Net revenue", "Sold kg", "Net money received", "Receivable at end of period", "Owed back at end of period", "Net debt at end of period"],
+            figures.Row(1).Cells(1, 12).Select(c => c.GetString()));
         var row = figures.Row(2);
         Assert.False(row.Cell(1).HasFormula);
         Assert.Equal((XLDataType.Text, formulaName), (row.Cell(1).DataType, row.Cell(1).GetString()));

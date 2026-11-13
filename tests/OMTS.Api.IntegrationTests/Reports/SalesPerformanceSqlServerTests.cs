@@ -44,7 +44,7 @@ public class SalesPerformanceSqlServerTests
         await host.UseDbAsync(db => db.CustomerPayments.Add(new CustomerPayment
         {
             Code = "PT" + AcsTestKit.NewCode(), CustomerId = customerId, Kind = CustomerPaymentKind.Payment, Amount = 100_000m, Method = CustomerPaymentMethod.OtherTransfer,
-            PaymentDate = PurchaseRequestTestKit.Today, StatusId = StatusIds.CustomerPayment.Confirmed,
+            PaymentDate = PurchaseRequestTestKit.Today, StatusId = StatusIds.CustomerPayment.Completed,
         }));
 
         foreach (var grouping in new[] { "customer", "product", "zone", "day", "week", "month" })
@@ -60,8 +60,8 @@ public class SalesPerformanceSqlServerTests
 
         // By customer: 100,000 received, and the debt of the profile is the one every debt screen shows (675,000 invoices - 180,000 returned - 100,000 paid).
         var customer = (await owner.ReportAsync("groupBy=customer")).Group(customerId.ToString());
-        Assert.Equal((100_000m, 395_000m), (customer.Money("netMoneyReceived"), customer.Money("debtAtEnd")));
-        Assert.Equal(await owner.CustomerDebtAsync(customerId), customer.Money("debtAtEnd"));
+        Assert.Equal((100_000m, 395_000m), (customer.Money("netMoneyReceived"), customer.Money("netDebt")));
+        Assert.Equal(await owner.CustomerDebtAsync(customerId), customer.Money("netDebt"));
 
         var drillDown = await (await owner.GetGroupInvoicesAsync($"groupBy=customer&groupKey={customerId}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal([0m, 495_000m], drillDown.GetProperty("invoices").EnumerateArray().Select(i => i.Money("net")).Order());

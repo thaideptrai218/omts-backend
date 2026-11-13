@@ -93,7 +93,7 @@ public class SalesPerformanceZoneAndPeriodTests
         // Period groupings have no customer money; every grouping adds up to the same total.
         Assert.Equal(180_000m, weeks.Totals().Money("revenue"));
         Assert.Equal(180_000m, days.SumOf("revenue"));
-        Assert.Equal(JsonValueKind.Null, weeks.Groups()[0].GetProperty("debtAtEnd").ValueKind);
+        Assert.Equal(JsonValueKind.Null, weeks.Groups()[0].GetProperty("netDebt").ValueKind);
     }
 
     private static Task DateAtAsync(AuthApiFactory api, Guid invoiceId, DateOnly date, DateTimeOffset at) =>

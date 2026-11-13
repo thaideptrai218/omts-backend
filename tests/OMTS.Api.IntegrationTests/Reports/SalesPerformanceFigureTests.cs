@@ -104,7 +104,7 @@ public class SalesPerformanceFigureTests
         var walkIn = report.Group("walk-in");
         Assert.Equal(("Walk-in customers", 2, 150_000m), (walkIn.Text("label"), walkIn.GetProperty("invoiceCount").GetInt32(), walkIn.Money("revenue")));
         // The cash of a walk-in sale has no profile: it is in no customer's money.
-        Assert.Equal((JsonValueKind.Null, JsonValueKind.Null), (walkIn.GetProperty("netMoneyReceived").ValueKind, walkIn.GetProperty("debtAtEnd").ValueKind));
+        Assert.Equal((JsonValueKind.Null, JsonValueKind.Null), (walkIn.GetProperty("netMoneyReceived").ValueKind, walkIn.GetProperty("netDebt").ValueKind));
         Assert.Equal(0m, report.Group(sale.CustomerId.ToString()).Money("netMoneyReceived"));
         Assert.Equal(180_000m, report.Totals().Money("revenue"));
     }

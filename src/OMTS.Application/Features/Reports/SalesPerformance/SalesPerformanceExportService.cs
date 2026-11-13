@@ -33,24 +33,24 @@ public sealed class SalesPerformanceExportService(SalesPerformanceService report
         var headers = new List<string> { GroupHeader(shown.GroupBy), "Invoices", "Invoiced kg", "Revenue", "Price cuts", "Sales returns", "Net revenue", "Sold kg" };
         if (withMoney)
         {
-            headers.AddRange(["Net money received", "Debt at end of period"]);
+            headers.AddRange(["Net money received", "Receivable at end of period", "Owed back at end of period", "Net debt at end of period"]);
         }
 
         var rows = shown.Groups
-            .Select(g => Row(g.Label, g.InvoiceCount, g.InvoicedKg, g.Revenue, g.PriceCuts, g.SalesReturns, g.NetRevenue, g.SoldKg, g.NetMoneyReceived, g.DebtAtEnd, withMoney))
+            .Select(g => Row(g.Label, g.InvoiceCount, g.InvoicedKg, g.Revenue, g.PriceCuts, g.SalesReturns, g.NetRevenue, g.SoldKg, g.NetMoneyReceived, g.Receivable, g.OwedBack, g.NetDebt, withMoney))
             .ToList();
         var t = shown.Totals;
-        rows.Add(Row("Total", t.InvoiceCount, t.InvoicedKg, t.Revenue, t.PriceCuts, t.SalesReturns, t.NetRevenue, t.SoldKg, t.NetMoneyReceived, t.DebtAtEnd, withMoney));
+        rows.Add(Row("Total", t.InvoiceCount, t.InvoicedKg, t.Revenue, t.PriceCuts, t.SalesReturns, t.NetRevenue, t.SoldKg, t.NetMoneyReceived, t.Receivable, t.OwedBack, t.NetDebt, withMoney));
         return new SpreadsheetSheet(FiguresSheetName, headers, rows);
     }
 
     private static IReadOnlyList<object?> Row(
-        string label, int invoices, decimal kg, decimal revenue, decimal priceCuts, decimal returns, decimal net, decimal soldKg, decimal? received, decimal? debt, bool withMoney)
+        string label, int invoices, decimal kg, decimal revenue, decimal priceCuts, decimal returns, decimal net, decimal soldKg, decimal? received, decimal? receivable, decimal? owedBack, decimal? netDebt, bool withMoney)
     {
         var cells = new List<object?> { label, invoices, kg, revenue, priceCuts, returns, net, soldKg };
         if (withMoney)
         {
-            cells.AddRange([received, debt]);
+            cells.AddRange([received, receivable, owedBack, netDebt]);
         }
 
         return cells;

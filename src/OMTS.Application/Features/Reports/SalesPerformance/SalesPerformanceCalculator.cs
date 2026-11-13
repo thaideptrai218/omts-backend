@@ -67,7 +67,7 @@ public static class SalesPerformanceCalculator
             .ThenBy(r => (grouping is SalesPerformanceGrouping.Customer or SalesPerformanceGrouping.Product) ? -r.Revenue : 0m)
             .ThenBy(r => r.Label, StringComparer.Ordinal)
             .ThenBy(r => r.Key, StringComparer.Ordinal)
-            .Select(r => new SalesPerformanceGroup(r.Key, r.Label, r.InvoiceCount, r.InvoicedKg, r.Revenue, r.PriceCuts, r.Returns, r.Revenue - r.Returns, r.SoldKg, null, null))
+            .Select(r => new SalesPerformanceGroup(r.Key, r.Label, r.InvoiceCount, r.InvoicedKg, r.Revenue, r.PriceCuts, r.Returns, r.Revenue - r.Returns, r.SoldKg, null, null, null, null))
             .ToList();
         // Period buckets read in time order: their keys are dates.
         if (grouping is SalesPerformanceGrouping.Day or SalesPerformanceGrouping.Week or SalesPerformanceGrouping.Month)
@@ -76,7 +76,7 @@ public static class SalesPerformanceCalculator
         }
 
         return new SalesPerformanceCalculation(
-            groups, new SalesPerformanceFigures(total.InvoiceCount, total.InvoicedKg, total.Revenue, total.PriceCuts, total.Returns, total.Revenue - total.Returns, total.SoldKg, null, null));
+            groups, new SalesPerformanceFigures(total.InvoiceCount, total.InvoicedKg, total.Revenue, total.PriceCuts, total.Returns, total.Revenue - total.Returns, total.SoldKg, null, null, null, null));
     }
 
     /// <summary>The invoices of the group a report row names, newest first (REPORT-01.3). A key that names no group of this grouping gives none.</summary>

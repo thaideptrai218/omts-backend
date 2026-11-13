@@ -43,6 +43,8 @@ internal sealed class PostSaleIssuesQuery(OmtsDbContext db) : IPostSaleIssuesQue
         var priceCuts = await (
                 from cut in db.SalesInvoicePriceCuts.AsNoTracking().Where(x => x.CutDate >= firstDay && x.CutDate <= lastDay)
                 join i in invoices on cut.InvoiceId equals i.Id
+                // A price cut is undone with its invoice (PM answer 12/11): the cut of a cancelled invoice is no event; the cancellation itself is.
+                where i.StatusId != StatusIds.SalesInvoice.Cancelled
                 select new
                 {
                     cut.Id, cut.CutDate, cut.Reason, cut.Amount, Invoice = i.Id, i.Code, i.ZoneId, ZoneName = i.Zone.Name, i.CustomerId,

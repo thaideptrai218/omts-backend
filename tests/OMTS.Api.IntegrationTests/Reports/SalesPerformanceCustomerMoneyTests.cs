@@ -39,10 +39,10 @@ public class SalesPerformanceCustomerMoneyTests
         var zoneA = await a.Owner.Client.ReportAsync($"{period}&groupBy=customer&zoneIds={a.ZoneId}");
 
         // The invoices follow the zone filter; the money does not (payments and debts have no zone, BR-FARM-08).
-        Assert.Equal((300_000m, 250_000m, 550_000m), (all.Money("revenue"), all.Money("netMoneyReceived"), all.Money("debtAtEnd")));
+        Assert.Equal((300_000m, 250_000m, 550_000m), (all.Money("revenue"), all.Money("netMoneyReceived"), all.Money("netDebt")));
         var inZoneA = zoneA.Group(customer.ToString());
-        Assert.Equal((200_000m, 250_000m, 550_000m), (inZoneA.Money("revenue"), inZoneA.Money("netMoneyReceived"), inZoneA.Money("debtAtEnd")));
-        Assert.Equal((250_000m, 550_000m), (zoneA.Totals().Money("netMoneyReceived"), zoneA.Totals().Money("debtAtEnd")));
+        Assert.Equal((200_000m, 250_000m, 550_000m), (inZoneA.Money("revenue"), inZoneA.Money("netMoneyReceived"), inZoneA.Money("netDebt")));
+        Assert.Equal((250_000m, 550_000m), (zoneA.Totals().Money("netMoneyReceived"), zoneA.Totals().Money("netDebt")));
         // The debt now (today) differs: it also counts the payment of today and what is dated after the period.
         Assert.Equal(480_000m, await a.Owner.Client.CustomerDebtAsync(customer));
     }
@@ -61,8 +61,8 @@ public class SalesPerformanceCustomerMoneyTests
         var beforeReturn = (await sale.Owner.Client.ReportAsync($"{Period(today.AddDays(-5), today.AddDays(-1))}&groupBy=customer")).Group(sale.CustomerId.ToString());
         var afterReturn = (await sale.Owner.Client.ReportAsync($"{Period(today.AddDays(-5), today)}&groupBy=customer")).Group(sale.CustomerId.ToString());
 
-        Assert.Equal((300_000m, 300_000m, 300_000m), (beforeReturn.Money("revenue"), beforeReturn.Money("salesReturns"), beforeReturn.Money("debtAtEnd")));
-        Assert.Equal((300_000m, 300_000m, 0m), (afterReturn.Money("revenue"), afterReturn.Money("salesReturns"), afterReturn.Money("debtAtEnd")));
+        Assert.Equal((300_000m, 300_000m, 300_000m), (beforeReturn.Money("revenue"), beforeReturn.Money("salesReturns"), beforeReturn.Money("netDebt")));
+        Assert.Equal((300_000m, 300_000m, 0m), (afterReturn.Money("revenue"), afterReturn.Money("salesReturns"), afterReturn.Money("netDebt")));
     }
 
     // REPORT-01.3: the invoices of a group with their code, date, customer, zone, total, value of the sales return and the net amount.

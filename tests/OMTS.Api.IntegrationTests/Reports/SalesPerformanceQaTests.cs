@@ -33,8 +33,8 @@ public class SalesPerformanceQaTests
         var drill = await (await owner.GetGroupInvoicesAsync($"groupBy=customer&groupKey={sale.CustomerId}")).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal((300_000m, 0m, 300_000m, 10m, 10m), (row.Money("revenue"), row.Money("salesReturns"), row.Money("netRevenue"), row.Kg("invoicedKg"), row.Kg("soldKg")));
-        Assert.Equal(300_000m, row.Money("debtAtEnd"));
-        Assert.Equal(await owner.CustomerDebtAsync(sale.CustomerId), row.Money("debtAtEnd"));
+        Assert.Equal(300_000m, row.Money("netDebt"));
+        Assert.Equal(await owner.CustomerDebtAsync(sale.CustomerId), row.Money("netDebt"));
         Assert.Equal(0m, byProduct.Group(sale.ProductId.ToString()).Money("salesReturns"));
         var line = Assert.Single(drill.GetProperty("invoices").EnumerateArray());
         Assert.Equal((0m, 300_000m), (line.Money("returnValue"), line.Money("net")));
@@ -55,8 +55,8 @@ public class SalesPerformanceQaTests
         var row = (await owner.ReportAsync("groupBy=customer")).Group(sale.CustomerId.ToString());
 
         Assert.Equal((1, 300_000m, 10m), (row.GetProperty("invoiceCount").GetInt32(), row.Money("revenue"), row.Kg("invoicedKg")));
-        Assert.Equal((150_000m, 150_000m), (row.Money("netMoneyReceived"), row.Money("debtAtEnd")));
-        Assert.Equal(await owner.CustomerDebtAsync(sale.CustomerId), row.Money("debtAtEnd"));
+        Assert.Equal((150_000m, 150_000m), (row.Money("netMoneyReceived"), row.Money("netDebt")));
+        Assert.Equal(await owner.CustomerDebtAsync(sale.CustomerId), row.Money("netDebt"));
     }
 
     // BR-FARM-08: the drill-down of an Accountant of zone A never shows an invoice of zone B, by zone key or by customer key; naming zone B is refused.
@@ -115,10 +115,10 @@ public class SalesPerformanceQaTests
         }
     }
 
-    // Documents the chosen default (coder note): the total debt adds the debts with their signs, so money owed back to one customer lowers the total receivable of the others.
-    // BR-DEBT-02 / BR-FARM-10 show receivables and money owed back apart; the PM decides which the report total should be.
+    // PM answer 12/11: the debts at the end are split as DEBT-03 does: the receivable (debts above 0), the money owed back (debts below 0, a positive amount) and their net, so the
+    // money the cooperative owes back to one customer is shown and not hidden in the receivable of the others.
     [Fact]
-    public async Task The_total_debt_at_the_end_adds_the_signed_debts_of_the_rows()
+    public async Task The_debts_at_the_end_are_split_into_the_receivable_the_money_owed_back_and_the_net()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
@@ -130,11 +130,39 @@ public class SalesPerformanceQaTests
 
         var report = await owner.ReportAsync("groupBy=customer");
 
-        Assert.Equal(300_000m, report.Group(sale.CustomerId.ToString()).Money("debtAtEnd"));
-        Assert.Equal(-100_000m, report.Group(other.ToString()).Money("debtAtEnd"));
-        Assert.Equal(200_000m, report.Totals().Money("debtAtEnd"));
+        var debtor = report.Group(sale.CustomerId.ToString());
+        Assert.Equal((300_000m, 0m, 300_000m), (debtor.Money("receivable"), debtor.Money("owedBack"), debtor.Money("netDebt")));
+        var creditor = report.Group(other.ToString());
+        Assert.Equal((0m, 100_000m, -100_000m), (creditor.Money("receivable"), creditor.Money("owedBack"), creditor.Money("netDebt")));
+        var totals = report.Totals();
+        Assert.Equal((300_000m, 100_000m, 200_000m), (totals.Money("receivable"), totals.Money("owedBack"), totals.Money("netDebt")));
     }
 
+    // PM answer 12/11: money received with no customer is a row of its own, so the total of the money received matches the payments of the period; it is left out when customers
+    // are chosen.
+    [Fact]
+    public async Task Money_received_with_no_customer_is_a_row_of_its_own_and_is_in_the_total()
+    {
+        using var api = new AuthApiFactory();
+        var sale = await api.SaleSetupAsync();
+        var owner = sale.Owner.Client;
+        var today = PurchaseRequestTestKit.Today;
+        await sale.SellKgAsync(sale.CustomerId, 10m);
+        await api.RecordPaymentAsync(sale.CustomerId, 100_000m, today);
+        var held = await api.RecordPaymentAsync(sale.CustomerId, 80_000m, today);
+        await api.UpdateAsync<OMTS.Domain.Entities.Sales.CustomerPayment>(held.Id, p => p.CustomerId = null);
+        var waiting = await api.RecordPaymentAsync(sale.CustomerId, 5_000m, today, statusId: OMTS.Domain.Constants.StatusIds.CustomerPayment.PendingTransfer);
+        await api.UpdateAsync<OMTS.Domain.Entities.Sales.CustomerPayment>(waiting.Id, p => p.CustomerId = null);
+
+        var all = await owner.ReportAsync("groupBy=customer");
+        var chosen = await owner.ReportAsync($"groupBy=customer&customerIds={sale.CustomerId}");
+
+        var unassigned = all.Group("unassigned");
+        Assert.Equal(("Not assigned to a customer", 0m, 0m, 80_000m), (unassigned.Text("label"), unassigned.Money("revenue"), unassigned.Money("netDebt"), unassigned.Money("netMoneyReceived")));
+        Assert.Equal(100_000m, all.Group(sale.CustomerId.ToString()).Money("netMoneyReceived"));
+        Assert.Equal(180_000m, all.Totals().Money("netMoneyReceived"));
+        Assert.DoesNotContain(chosen.Groups(), g => g.Text("key") == "unassigned");
+    }
     private static void AssertSameRow(System.Text.Json.JsonElement figures, string label, IXLRow row)
     {
         Assert.Equal(label, row.Cell(1).GetString());
