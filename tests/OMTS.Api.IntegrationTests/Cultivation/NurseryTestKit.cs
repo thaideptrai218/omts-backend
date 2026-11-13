@@ -2,10 +2,14 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Farming;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Platform;
+using OMTS.Domain.Entities.Sales;
+using OMTS.Infrastructure.Persistence;
 
 namespace OMTS.Api.IntegrationTests.Cultivation;
 
@@ -119,10 +123,16 @@ public static class NurseryTestKit
         client.GetFromJsonAsync<JsonElement>($"/api/nursery-batches/available{(zoneId is null ? string.Empty : $"?zoneId={zoneId}")}");
 
     /// <summary>The v2 start of a cycle: <c>POST /api/cultivation-cycles</c> with the batch, the target yield and <paramref name="photos"/> plan photos.</summary>
-    public static Task<HttpResponseMessage> PostNurseryCycleAsync(
-        this HttpClient client, Guid raftId, Guid? batchId, string? targetYieldKg = "2000", string? startDate = null, string? note = null, int photos = 1)
+    /// <summary>A cycle carries the product it farms (13/11/2026): the start sends <paramref name="productId"/>, or a new product of the host when none is named; <paramref name="noProduct"/> sends none.</summary>
+    public static async Task<HttpResponseMessage> PostNurseryCycleAsync(
+        this HttpClient client, Guid raftId, Guid? batchId, string? targetYieldKg = "2000", string? startDate = null, string? note = null, int photos = 1, Guid? productId = null, bool noProduct = false)
     {
         var form = new MultipartFormDataContent { { new StringContent(raftId.ToString()), "raftId" } };
+        if (!noProduct)
+        {
+            form.Add(new StringContent((productId ?? await ProductRowAsync(TestHosts.ServicesOf(client))).ToString()), "productId");
+        }
+
         void Add(string? value, string name)
         {
             if (value is not null)
@@ -140,7 +150,18 @@ public static class NurseryTestKit
             form.Add(FarmingTestKit.FileContent(FarmingTestKit.Jpeg, "image/jpeg"), "photos", "plan.jpg");
         }
 
-        return client.PostAsync("/api/cultivation-cycles", form);
+        return await client.PostAsync("/api/cultivation-cycles", form);
+    }
+
+    /// <summary>A product written straight to the database of the host (In Use unless said otherwise): the kind of oyster a cycle farms and a purchase request asks for.</summary>
+    public static async Task<Guid> ProductRowAsync(IServiceProvider services, int statusId = StatusIds.Usage.InUse)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
+        var product = new Product { Name = $"Hàu nuôi {Guid.NewGuid():N}"[..20], UnitPrice = 30_000m, StatusId = statusId };
+        db.Products.Add(product);
+        await db.SaveChangesAsync();
+        return product.Id;
     }
 
     /// <summary>Starts a cycle from a batch and returns the saved cycle, the <c>cycle</c> of the answer.</summary>
