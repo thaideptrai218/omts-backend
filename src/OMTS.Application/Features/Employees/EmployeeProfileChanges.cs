@@ -19,6 +19,24 @@ internal static class EmployeeProfileChanges
         employee.OtherInformation = input.OtherInformation;
         employee.Notes = input.Notes;
         employee.BankAccount = input.BankAccount;
+
+        // Added later than the fields above: a field left out of an edit keeps its value (see EmployeeInput).
+        employee.Code = input.Code ?? employee.Code;
+        employee.Gender = input.Gender ?? employee.Gender;
+        employee.StartDate = input.StartDate ?? employee.StartDate;
+        employee.IdNumber = input.IdNumber is null ? employee.IdNumber : input.IdNumber.Length == 0 ? null : input.IdNumber;
+    }
+
+    /// <summary>A new profile with its working zones, job types and first type period, added to the unit of work; the caller gives it its code.</summary>
+    public static Employee AddNew(IEmployeeRepository employees, Guid cooperativeId, EmployeeInput input)
+    {
+        var employee = new Employee { CooperativeId = cooperativeId };
+        ApplyFields(employee, input);
+        employees.Add(employee);
+        SyncZones(employees, employee, input.WorkingZoneIds);
+        SyncJobTypes(employees, employee, input.JobTypeIds);
+        ChangeType(employees, employee, input.Type!.Value, input.TypeFrom!.Value);
+        return employee;
     }
 
     /// <summary>
@@ -76,11 +94,11 @@ internal static class EmployeeProfileChanges
         return true;
     }
 
-    /// <summary>The audit snapshot; the bank number is masked, as everywhere in the audit log.</summary>
+    /// <summary>The audit snapshot; the bank number is masked, as everywhere in the audit log, and the ID number only says whether one is held.</summary>
     /// <param name="accountNumberBefore">On the snapshot after an edit: the real number before it, see <see cref="BankSnapshot"/>.</param>
     public static object Snapshot(Employee e, IReadOnlyCollection<Guid> zoneIds, IReadOnlyCollection<Guid> jobTypeIds, string? accountNumberBefore = null) => new
     {
-        e.FullName, e.PhoneNumber, e.Birthday, e.Address, e.Area, e.Ward, e.OtherInformation, e.Notes, e.AccountId,
+        e.Code, e.FullName, e.PhoneNumber, e.Birthday, e.Gender, e.StartDate, HasIdNumber = e.IdNumber is not null, e.Address, e.Area, e.Ward, e.OtherInformation, e.Notes, e.AccountId,
         WorkingZoneIds = zoneIds.Order().ToList(),
         JobTypeIds = jobTypeIds.Order().ToList(),
         TypeHistory = e.TypePeriods.OrderBy(p => p.EffectiveFrom).Select(p => new { p.Type, p.EffectiveFrom }).ToList(),

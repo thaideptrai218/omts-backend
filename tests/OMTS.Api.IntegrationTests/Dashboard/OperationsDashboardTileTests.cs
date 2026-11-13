@@ -176,7 +176,7 @@ public class OperationsDashboardTileTests
 
             // Each record has a label to show it without opening it.
             string Label(string kind) => dashboard.PendingGroup(kind).GetProperty("oldest")[0].GetProperty("label").GetString()!;
-            Assert.Matches(@" – \d+(\.\d+)? kg .+, pickup \d{2}/\d{2}/\d{4}$", Label(PendingTaskKinds.PurchaseRequest));
+            Assert.Matches(@" – \d+ cages .+, pickup \d{2}/\d{2}/\d{4}$", Label(PendingTaskKinds.PurchaseRequest));
             Assert.Matches(@" – invoice \S+$", Label(PendingTaskKinds.QualityClaim));
             Assert.Matches(@"^Payroll \d{2}/\d{2}/\d{4}–\d{2}/\d{2}/\d{4}$", Label(PendingTaskKinds.Payroll));
         }

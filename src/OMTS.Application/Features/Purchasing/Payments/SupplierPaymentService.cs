@@ -420,7 +420,7 @@ public sealed class SupplierPaymentService(
 
     private SupplierPaymentView View(
         SupplierPayment p, IReadOnlyDictionary<Guid, string> names, decimal? debtAfter, IReadOnlyList<PaymentAllocationView>? allocationViews) => new(
-        p.Id, p.Code, new SupplierRef(p.Supplier.Id, p.Supplier.Name, p.Supplier.PhoneNumber), p.Kind, p.Amount, p.PaymentDate, p.Method,
+        p.Id, p.Code, new SupplierRef(p.Supplier.Id, p.Supplier.Name, p.Supplier.PhoneNumber, p.Supplier.Code), p.Kind, p.Amount, p.PaymentDate, p.Method,
         p.BankReference, p.Note, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId), p.CancelledAt, p.CancelReason,
         new AccountRef(p.RecordedByAccountId, names.GetValueOrDefault(p.RecordedByAccountId) ?? string.Empty),
         RowVersionGuard.Encode(p.RowVersion), debtAfter, p.DiscountAmount, p.PurchaseReturnId,

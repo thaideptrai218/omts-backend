@@ -42,7 +42,7 @@ public class CustomerPaymentConfirmationTests
 
         Assert.Equal(("MSG-GEN-05", 2, 1), (answer.Text("messageCode"), answer.GetProperty("confirmed").GetArrayLength(), answer.GetProperty("cancelled").GetArrayLength()));
         var confirmed = answer.GetProperty("confirmed")[0];
-        Assert.Equal(("Confirmed", accountant.Account.Id), (confirmed.Text("status"), confirmed.GetProperty("confirmedBy").Id()));
+        Assert.Equal(("Completed", accountant.Account.Id), (confirmed.Text("status"), confirmed.GetProperty("confirmedBy").Id()));
         var cancelled = answer.GetProperty("cancelled")[0];
         Assert.Equal(("Cancelled", "The cash was not handed over"), (cancelled.Text("status"), cancelled.Text("cancelReason")));
         // The confirmations change no debt (they already counted); the cancelled cash no longer counts (BR-DEBT-02).

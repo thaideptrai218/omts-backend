@@ -139,9 +139,9 @@ public class SalesCatalogueQaMigrationTests
         await using (db)
         {
             await db.Database.MigrateAsync();
-            var kept = new Customer { CooperativeId = cooperative, Name = "Kept", PhoneNumber = "0900000093", Address = "Vân Đồn", Note = "Sáng" };
+            var kept = new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = cooperative, Name = "Kept", PhoneNumber = "0900000093", Address = "Vân Đồn", Note = "Sáng" };
             kept.PhoneCheckedByStaff = true;
-            var merged = new Customer { CooperativeId = cooperative, Name = "Merged", PhoneNumber = "0900000093", MergedIntoCustomerId = kept.Id };
+            var merged = new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = cooperative, Name = "Merged", PhoneNumber = "0900000093", MergedIntoCustomerId = kept.Id };
             merged.PhoneCheckedByStaff = true;
             db.Customers.AddRange(kept, merged);
             db.Products.AddRange(new Product { Name = "Hàu sữa", UnitPrice = 60_000 }, new Product { Name = "Hàu béo", UnitPrice = 75_000, StatusId = StatusIds.Usage.Discontinued });

@@ -52,17 +52,20 @@ public class PurchaseRequestEdgeTests(AuthApiFactory factory) : IClassFixture<Au
         var responses = scope.ServiceProvider.GetRequiredService<PurchaseRequestResponseService>();
 
         // 00:30 on 05/11 in Vietnam, still 04/11 by UTC.
-        var yesterday = await traders.PlaceAsync(trader.Id, new PlacePurchaseRequest(product.Id, 1m, fifth.AddDays(-1), null), CancellationToken.None);
+        var yesterday = await traders.PlaceAsync(trader.Id, new PlacePurchaseRequest(product.Id, 1, fifth.AddDays(-1), null), CancellationToken.None);
         Assert.Equal("MSG-GEN-01", yesterday.Error!.Message.Code);
-        var today = await traders.PlaceAsync(trader.Id, new PlacePurchaseRequest(product.Id, 1m, fifth, null), CancellationToken.None);
+        var today = await traders.PlaceAsync(trader.Id, new PlacePurchaseRequest(product.Id, 1, fifth, null), CancellationToken.None);
         Assert.True(today.IsSuccess);
 
         // 23:59 on 05/11 in Vietnam, then a minute later it is the 6th there, and still the 5th by UTC.
         clocked.Clock.Now = new DateTimeOffset(2026, 11, 5, 16, 59, 0, TimeSpan.Zero);
         var request = today.Value!.Request;
-        Assert.True((await responses.AcceptAsync(request.Id, new AcceptPurchaseRequest(1m, fifth, false, null, request.RowVersion), CancellationToken.None)).IsSuccess);
+        var owner = await clocked.AddAccountAsync(NewCode(), Password);
+        var staffedVersion = await PurchaseRequestTestKit.StaffAsync(clocked.Services, owner.Id, request.Id, 1, fifth, request.RowVersion);
+        scope.ServiceProvider.GetRequiredService<OMTS.Infrastructure.Persistence.OmtsDbContext>().ChangeTracker.Clear();
+        Assert.True((await responses.AcceptAsync(request.Id, new AcceptPurchaseRequest(1, fifth, false, null, staffedVersion), CancellationToken.None)).IsSuccess);
         clocked.Clock.Now = new DateTimeOffset(2026, 11, 5, 17, 0, 0, TimeSpan.Zero);
-        var late = await traders.PlaceAsync(trader.Id, new PlacePurchaseRequest(product.Id, 1m, fifth, null), CancellationToken.None);
+        var late = await traders.PlaceAsync(trader.Id, new PlacePurchaseRequest(product.Id, 1, fifth, null), CancellationToken.None);
         Assert.Equal("MSG-GEN-01", late.Error!.Message.Code);
     }
 

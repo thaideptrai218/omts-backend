@@ -59,7 +59,7 @@ public static class OperationsDashboardTestKit
     {
         var request = new PurchaseRequest
         {
-            CustomerId = sale.CustomerId, ProductId = sale.ProductId, RequestedKg = 100m, PickupDate = Today.AddDays(2), SentAt = DateTimeOffset.UtcNow - (sentAgo ?? TimeSpan.FromHours(1)),
+            CustomerId = sale.CustomerId, ProductId = sale.ProductId, RequestedCages = 10, PickupDate = Today.AddDays(2), SentAt = DateTimeOffset.UtcNow - (sentAgo ?? TimeSpan.FromHours(1)),
             StatusId = statusId,
         };
         await api.UseDbAsync(db => db.PurchaseRequests.Add(request));

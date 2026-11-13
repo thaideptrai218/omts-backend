@@ -83,7 +83,8 @@ internal sealed class SalesInvoiceSearchReader(OmtsDbContext db) : ISalesInvoice
             .Where(i => ids.Contains(i.Id))
             .Select(i => new SalesInvoiceSearchRow(
                 i.Id, i.Code, i.InvoicedAt, i.InvoiceDate, i.ZoneId, i.Zone.Code, i.Zone.Name,
-                i.CustomerId, i.Customer == null ? null : i.Customer.Name, i.Customer == null ? null : i.Customer.PhoneNumber, i.Total, i.StatusId, i.PaymentTerm))
+                i.CustomerId, i.Customer == null ? null : i.Customer.Name, i.Customer == null ? null : i.Customer.PhoneNumber, i.Total, i.StatusId, i.PaymentTerm,
+                i.Customer == null ? null : i.Customer.Code))
             .ToListAsync(cancellationToken);
     }
 

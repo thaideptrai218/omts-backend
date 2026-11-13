@@ -98,7 +98,7 @@ public class PurchaseRequestQaContractSqlServerTests
         var answered = new List<Guid>();
         for (var i = 0; i < 6; i++)
         {
-            var request = await trader.Client.PlaceAsync(productId, 10m + i);
+            var request = await trader.Client.PlaceAsync(productId, 10 + i);
             if (i % 2 == 0)
             {
                 (await owner.AcceptAsync(request)).EnsureSuccessStatusCode();
@@ -131,7 +131,7 @@ public class PurchaseRequestQaContractSqlServerTests
         await using var host = await FarmingHost.StartAsync();
         var (owner, trader, productId) = await PurchaseRequestSqlServerTests.WorldAsync(host);
         var accepted = await trader.Client.PlaceAsync(productId, note: "Sáng");
-        (await owner.AcceptAsync(accepted, 50m, payLater: true, note: "Đủ 50")).EnsureSuccessStatusCode();
+        (await owner.AcceptAsync(accepted, 50, payLater: true, note: "Đủ 50")).EnsureSuccessStatusCode();
         (await trader.Client.CancelAsync(await trader.Client.MineAsync(accepted.Id()), "Đổi lịch")).EnsureSuccessStatusCode();
         var declined = await trader.Client.PlaceAsync(productId);
         (await owner.DeclineAsync(declined, "Chưa đủ")).EnsureSuccessStatusCode();
@@ -142,9 +142,10 @@ public class PurchaseRequestQaContractSqlServerTests
         Assert.Contains("AWAITING_RESPONSE", sent.After);
         var accept = rows.Single(e => e.Action == "PurchaseRequest.Accepted");
         Assert.Equal(host.Owner.Account.Id, accept.ActorAccountId);
-        Assert.Contains("AWAITING_RESPONSE", accept.Before);
+        // An accept follows the staffing plan whose staff agreed (decision of 31/10/2026), so the request was Awaiting staff.
+        Assert.Contains("AWAITING_STAFF", accept.Before);
         var values = JsonDocument.Parse(accept.After!).RootElement;
-        Assert.Equal(("ACCEPTED", 50m, true), (values.GetProperty("Status").GetString(), values.GetProperty("AcceptedKg").GetDecimal(), values.GetProperty("PayLaterAgreed").GetBoolean()));
+        Assert.Equal(("ACCEPTED", 50, true), (values.GetProperty("Status").GetString(), values.GetProperty("AcceptedCages").GetDecimal(), values.GetProperty("PayLaterAgreed").GetBoolean()));
         var cancel = rows.Single(e => e.Action == "PurchaseRequest.Cancelled");
         Assert.Equal((trader.Account.Id, "Đổi lịch"), (cancel.ActorAccountId, cancel.Reason));
         Assert.Contains("ACCEPTED", cancel.Before);

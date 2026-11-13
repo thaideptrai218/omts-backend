@@ -91,6 +91,19 @@ public static class MessageCodes
     public const string Labor02 = "MSG-LABOR-02";
     public const string Labor03 = "MSG-LABOR-03";
     public const string Labor04 = "MSG-LABOR-04";
+    public const string Labor06 = "MSG-LABOR-06";
+    public const string Labor07 = "MSG-LABOR-07";
+    public const string Labor12 = "MSG-LABOR-12";
+    public const string Labor13 = "MSG-LABOR-13";
+    public const string Labor14 = "MSG-LABOR-14";
+    public const string Labor16 = "MSG-LABOR-16";
+    public const string Labor22 = "MSG-LABOR-22";
+    public const string Labor23 = "MSG-LABOR-23";
+    public const string Labor25 = "MSG-LABOR-25";
+    public const string Labor26 = "MSG-LABOR-26";
+    public const string Labor28 = "MSG-LABOR-28";
+    public const string Labor31 = "MSG-LABOR-31";
+    public const string Labor34 = "MSG-LABOR-34";
     public const string Labor36 = "MSG-LABOR-36";
 
     public const string Debt01 = "MSG-DEBT-01";
@@ -115,6 +128,13 @@ public static class MessageCodes
     public const string Sale14 = "MSG-SALE-14";
     public const string Sale15 = "MSG-SALE-15";
     public const string Sale16 = "MSG-SALE-16";
+    public const string Sale17 = "MSG-SALE-17";
+    public const string Sale18 = "MSG-SALE-18";
+    public const string Sale19 = "MSG-SALE-19";
+    public const string Sale20 = "MSG-SALE-20";
+    public const string Sale21 = "MSG-SALE-21";
+    public const string Sale22 = "MSG-SALE-22";
+    public const string Sale23 = "MSG-SALE-23";
 
     public const string Claim01 = "MSG-CLAIM-01";
     public const string Claim02 = "MSG-CLAIM-02";
@@ -122,6 +142,11 @@ public static class MessageCodes
 
     public const string Cash01 = "MSG-CASH-01";
     public const string Cash02 = "MSG-CASH-02";
+
+    public const string Input01 = "MSG-INPUT-01";
+    public const string Input02 = "MSG-INPUT-02";
+
+    public const string Customer01 = "MSG-CUSTOMER-01";
 
     /// <summary>
     /// SRS 27/10 codes for situations that had no message before, so they name no legacy code: MSG-ACCOUNT-01, the
@@ -145,13 +170,17 @@ public static class MessageCodes
     /// cancelled invoice on the public provenance page (ORIGIN-01 is new in PR O1); MSG-TRACE-05/06, the withdrawal notice
     /// to a trader and a withdrawal with no trader to notify (TRACE-04 is new in PR T3);
     /// MSG-SALE-13/14, VietQR without a receiving bank account and the question before Stop sale (the VietQR sale is new in PR 7);
+    /// MSG-SALE-17/18/19/20/21/22/23, the correction and the cancellation of a sales invoice: money owed back and its notice, the profile of a walk-in buyer, the sales return that blocks them, the
+    /// total of a walk-in invoice, the cancellation notice and the question on cash collected (SALE-07 and SALE-08 are new in PR 10);
     /// MSG-CLAIM-01/02/03, the new quality claim, its response and a claim that cannot be accepted (CLAIM-01 and CLAIM-02 are new in PR 12);
-    /// MSG-CASH-01/02, the cash book refusals: the VietQR account and the system voucher types are protected.
+    /// MSG-CASH-01/02, the cash book refusals: the VietQR account and the system voucher types are protected;
+    /// MSG-INPUT-01/02, the input issue refusals: an item or seed lot would go below zero, and the system issue types are protected;
+    /// MSG-CUSTOMER-01, an invoice that leaves a debt for a customer over the debt limit while the settings do not allow more debt.
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
         Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Harvest04, Harvest05, Trace01, Trace02, Trace03, Trace04, Trace05, Trace06,
-        Origin01, Origin02, Origin03, Origin04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04, Claim01, Claim02, Claim03, Cash01, Cash02,
+        Origin01, Origin02, Origin03, Origin04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor06, Labor07, Labor12, Labor13, Labor14, Labor16, Labor22, Labor23, Labor25, Labor26, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04, Claim01, Claim02, Claim03, Cash01, Cash02, Input01, Input02, Customer01, Sale17, Sale18, Sale19, Sale20, Sale21, Sale22, Sale23,
     };
 
     /// <summary>
@@ -160,6 +189,19 @@ public static class MessageCodes
     /// </summary>
     public static class Legacy
     {
+        // Existing Mini App linking and work messages have no equivalent in the SRS catalogue.
+        public const string ZaloTokenInvalid = "ZALO_TOKEN_INVALID";
+        public const string ZaloPhoneTokenInvalid = "ZALO_PHONE_TOKEN_INVALID";
+        public const string ZaloPhoneNotFound = "ZALO_PHONE_NOT_FOUND";
+        public const string ZaloApprovalPending = "ZALO_APPROVAL_PENDING";
+        public const string ZaloRequestRejected = "ZALO_REQUEST_REJECTED";
+        public const string ZaloAccountExists = "ZALO_ACCOUNT_EXISTS";
+        public const string ZaloPhoneUnsupported = "ZALO_PHONE_UNSUPPORTED";
+        public const string ZaloAlreadyLinked = "ZALO_ALREADY_LINKED";
+        public const string ZaloNotLinked = "ZALO_NOT_LINKED";
+        public const string ZaloDeviceRevoked = "ZALO_DEVICE_REVOKED";
+        public const string MiniAppNotification = "MINI_APP_NOTIFICATION";
+
         public const string Msg01 = "MSG01";
         public const string Msg02 = "MSG02";
         public const string Msg03 = "MSG03";
@@ -198,18 +240,6 @@ public static class MessageCodes
         public const string NoVerifiedEmail = "NO_VERIFIED_EMAIL";
         public const string UnexpectedError = "UNEXPECTED_ERROR";
         public const string PasswordChangeRequired = "PASSWORD_CHANGE_REQUIRED";
-        // The Zalo Mini App linking messages have no equivalent in the SRS catalogue.
-        public const string MiniAppNotification = "MINI_APP_NOTIFICATION";
-        public const string ZaloTokenInvalid = "ZALO_TOKEN_INVALID";
-        public const string ZaloPhoneTokenInvalid = "ZALO_PHONE_TOKEN_INVALID";
-        public const string ZaloPhoneNotFound = "ZALO_PHONE_NOT_FOUND";
-        public const string ZaloApprovalPending = "ZALO_APPROVAL_PENDING";
-        public const string ZaloRequestRejected = "ZALO_REQUEST_REJECTED";
-        public const string ZaloAccountExists = "ZALO_ACCOUNT_EXISTS";
-        public const string ZaloPhoneUnsupported = "ZALO_PHONE_UNSUPPORTED";
-        public const string ZaloAlreadyLinked = "ZALO_ALREADY_LINKED";
-        public const string ZaloNotLinked = "ZALO_NOT_LINKED";
-        public const string ZaloDeviceRevoked = "ZALO_DEVICE_REVOKED";
         public const string LicenseReplaced = "LICENSE_REPLACED";
 
         /// <summary>

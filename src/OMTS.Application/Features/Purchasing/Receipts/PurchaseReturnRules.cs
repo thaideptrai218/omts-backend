@@ -112,6 +112,7 @@ public static class PurchaseReturnRules
 
         return line.ReceiptLineId is null
             && line.ItemId is { } itemId && items.TryGetValue(itemId, out var item) && item.StatusId == StatusIds.Usage.InUse
+            && (line.ItemUnitId is null || ReceiptLineUnits.Resolve(item, line.ItemUnitId) is not null)
             && line.UnitPrice is { } price && IsWholeAmount(price) && quantity * price <= PurchaseReceiptValidator.MaxAmount;
     }
 
@@ -208,7 +209,8 @@ public static class PurchaseReturnRules
             var seededQuantity = seeded.GetValueOrDefault(line.Id);
             var lineReturned = returned.GetValueOrDefault(line.Id);
             var returnable = PurchaseReceiptViews.Returnable(line, seededQuantity, lineReturned);
-            if (quantity <= 0 || quantity > returnable)
+            // The quantity is typed in the unit of the receipt line; the limit is in base units.
+            if (quantity <= 0 || quantity * line.UnitFactor > returnable)
             {
                 return OutsideLimit(line, field, returnable, seededQuantity, lineReturned);
             }
@@ -230,19 +232,20 @@ public static class PurchaseReturnRules
     private static AppError OutsideLimit(PurchaseReceiptLine line, string field, decimal returnable, decimal seeded, decimal returned)
     {
         var received = line.Quantity ?? 0;
-        var seededText = seeded > 0 ? $", seeded {Quantity(seeded)} {line.Unit}" : string.Empty;
-        var explanation = $"Received {Quantity(received)} {line.Unit}{seededText}, already returned {Quantity(returned)} {line.Unit}.";
+        var baseUnit = line.Item?.Unit ?? line.Unit;
+        var seededText = seeded > 0 ? $", seeded {Quantity(seeded)} {baseUnit}" : string.Empty;
+        var explanation = $"Received {Quantity(received)} {baseUnit}{seededText}, already returned {Quantity(returned)} {baseUnit}.";
         var itemName = line.Item?.Name ?? string.Empty;
         return new AppError(
             ErrorKind.Validation,
-            UserMessages.ReturnQuantityOutsideLimit(itemName, Quantity(returnable), line.Unit, explanation),
+            UserMessages.ReturnQuantityOutsideLimit(itemName, Quantity(returnable), baseUnit, explanation),
             new Dictionary<string, object?>
             {
                 ["field"] = field,
                 ["receiptLineId"] = line.Id,
                 ["item"] = itemName,
                 ["maxQuantity"] = returnable,
-                ["unit"] = line.Unit,
+                ["unit"] = baseUnit,
                 ["received"] = received,
                 ["seeded"] = seeded,
                 ["returned"] = returned,
@@ -251,3 +254,4 @@ public static class PurchaseReturnRules
 
     private static string Quantity(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 }
+

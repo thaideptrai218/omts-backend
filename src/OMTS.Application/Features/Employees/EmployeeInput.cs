@@ -19,7 +19,11 @@ public sealed partial record EmployeeInput(
     string? Notes,
     IReadOnlyList<Guid> WorkingZoneIds,
     IReadOnlyList<Guid> JobTypeIds,
-    BankAccountInfo? BankAccount)
+    BankAccountInfo? BankAccount,
+    string? Code = null,
+    Gender? Gender = null,
+    string? IdNumber = null,
+    DateOnly? StartDate = null)
 {
     /// <summary>The normalised input, or the names of every invalid field.</summary>
     /// <param name="adding">A new employee needs a type and a working zone; an edit may leave the type out, and its zones are checked with those it keeps.</param>
@@ -67,11 +71,33 @@ public sealed partial record EmployeeInput(
             invalid.Add("Job types");
         }
 
+        var code = EmployeeCodes.Typed(request.Code, out var codeValid);
+        if (!codeValid)
+        {
+            invalid.Add("Code");
+        }
+
+        if (request.Gender is { } gender && !Enum.IsDefined(gender))
+        {
+            invalid.Add("Gender");
+        }
+
+        if (request.StartDate > today)
+        {
+            invalid.Add("Start date");
+        }
+
+        var idNumber = Clearable(request.IdNumber);
+        if (idNumber is { Length: > 0 } && !IdNumberPattern().IsMatch(idNumber))
+        {
+            invalid.Add("ID number");
+        }
+
         var bank = Bank(request.BankAccount, invalid);
         var typeFrom = request.EmployeeTypeFrom ?? (adding ? today : null);
         return invalid.Count > 0
             ? (null, invalid)
-            : (new EmployeeInput(fullName, phone, request.EmployeeType, typeFrom, request.Birthday, address, area, ward, other, notes, zones, jobTypes, bank), invalid);
+            : (new EmployeeInput(fullName, phone, request.EmployeeType, typeFrom, request.Birthday, address, area, ward, other, notes, zones, jobTypes, bank, code, request.Gender, idNumber, request.StartDate), invalid);
     }
 
     /// <summary>A phone number is optional: empty gives none, anything else must be a valid number.</summary>
@@ -83,6 +109,12 @@ public sealed partial record EmployeeInput(
 
     /// <summary>"999900000001" → "********0001": bank numbers appear masked in the audit log.</summary>
     public static string MaskAccountNumber(string number) => Common.Masking.AccountNumber(number);
+
+    /// <summary>
+    /// The fields added after the first clients (code, gender, ID number, start date): null is "not sent" and leaves the
+    /// value of an edited profile as it is, so older clients keep working; an empty text is "clear it" (null on a new profile).
+    /// </summary>
+    private static string? Clearable(string? value) => value is null ? null : value.Trim();
 
     private static string? Optional(string? value, int max, string field, List<string> invalid)
     {
@@ -117,4 +149,8 @@ public sealed partial record EmployeeInput(
 
     [GeneratedRegex(@"\A[0-9]{6,20}\z")]
     private static partial Regex AccountNumberPattern();
+
+    /// <summary>A citizen ID card of 12 digits (CCCD) or an older one of 9 (CMND).</summary>
+    [GeneratedRegex(@"\A([0-9]{9}|[0-9]{12})\z")]
+    private static partial Regex IdNumberPattern();
 }

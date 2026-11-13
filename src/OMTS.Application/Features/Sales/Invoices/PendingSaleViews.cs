@@ -59,7 +59,7 @@ public sealed class PendingSaleViews(
                 sale.Code,
                 sale.Status,
                 new SalesInvoiceZoneView(sale.Zone.Id, sale.Zone.Code, sale.Zone.Name),
-                sale.Customer is { } c ? new SalesInvoiceCustomerView(c.Id, c.Name, c.PhoneNumber) : null,
+                sale.Customer is { } c ? new SalesInvoiceCustomerView(c.Id, c.Name, c.PhoneNumber, c.Code) : null,
                 sale.CustomerId is null,
                 sale.Total,
                 sale.CashAmount,

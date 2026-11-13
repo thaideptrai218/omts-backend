@@ -54,7 +54,7 @@ public class CustomerLinkedPhoneTests(AuthApiFactory factory) : IClassFixture<Au
         var owner = await factory.PurchasingOwnerAsync();
         var (trader, linked) = await factory.LinkedProfileAsync();
         var cooperative = await factory.EnsureCooperativeAsync();
-        var offline = new Customer { CooperativeId = cooperative.Id, Name = "Offline", PhoneNumber = trader.PhoneNumber };
+        var offline = new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = cooperative.Id, Name = "Offline", PhoneNumber = trader.PhoneNumber };
         await factory.UseDbAsync(db => db.Customers.Add(offline));
 
         var linkedView = await owner.CustomerAsync(linked.Id);

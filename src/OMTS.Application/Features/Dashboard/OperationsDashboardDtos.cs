@@ -29,7 +29,7 @@ public sealed record DashboardAlertZone(Guid ZoneId, string Code, string Name, D
 public sealed record DashboardWaterAlertsTile(int Count, IReadOnlyList<DashboardAlertZone> Zones);
 
 /// <summary>
-/// One record that waits for the Owner: <c>Id</c> opens it, <c>Code</c> is null for a record with no code. <c>Label</c> names it on the list without opening it: the customer, kg,
+/// One record that waits for the Owner: <c>Id</c> opens it, <c>Code</c> is null for a record with no code. <c>Label</c> names it on the list without opening it: the customer, cages,
 /// product and pickup date of a purchase request; the customer and the invoice of a quality claim; the period of a payroll (dates dd/MM/yyyy).
 /// </summary>
 public sealed record DashboardPendingTask(Guid Id, string? Code, string Label, DateTimeOffset Since);

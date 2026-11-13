@@ -55,10 +55,19 @@ public class SalesCatalogueQaReadFieldsTests(AuthApiFactory factory) : IClassFix
         var (_, linked) = await factory.LinkedProfileAsync(name: $"Linked {NewCode()}");
         var list = await (await owner.GetAsync($"/api/customers?search={Uri.EscapeDataString(linked.Name)}")).ReadAsync(HttpStatusCode.OK);
 
-        Assert.Equal(["address", "hasTraderAccount", "id", "name", "phoneNumber", "rowVersion"], Keys(Assert.Single(list.GetProperty("items").EnumerateArray())));
+        Assert.Equal(
+            [
+                "address", "birthDate", "code", "companyName", "createdAt", "createdBy", "currentDebt", "customerType", "email", "facebook", "gender", "hasTraderAccount", "id",
+                "lastTransactionAt", "name", "netSales", "note", "phoneNumber", "phoneNumber2", "photoUrl", "province", "rowVersion", "status", "statusId", "taxCode", "totalSales", "ward",
+            ],
+            Keys(Assert.Single(list.GetProperty("items").EnumerateArray())));
         var view = await owner.CustomerAsync(linked.Id);
         Assert.Equal(
-            ["address", "currentDebt", "email", "id", "mergedIntoCustomerId", "name", "note", "phoneLocked", "phoneNumber", "rowVersion", "traderAccount"],
+            [
+                "address", "bankAccountNumber", "bankBin", "bankName", "birthDate", "code", "companyName", "createdAt", "createdBy", "currentDebt", "customerType", "email", "facebook",
+                "gender", "id", "identityNumber", "isUsed", "mergedIntoCustomerId", "name", "note", "phoneLocked", "phoneNumber", "phoneNumber2", "photoUrl", "province", "rowVersion",
+                "status", "statusId", "taxCode", "traderAccount", "ward",
+            ],
             Keys(view));
         Assert.Equal(["accountId", "displayName", "username"], Keys(view.GetProperty("traderAccount")));
     }

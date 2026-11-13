@@ -123,6 +123,9 @@ public class CyclesQaTestsMigrationAndDemo
             await db.CustomerPayments.ExecuteDeleteAsync();
             await db.SalesInvoiceLines.ExecuteDeleteAsync();
             await db.SalesInvoices.ExecuteDeleteAsync();
+            // Current demo sales also have port weighings; the simulated older database had neither.
+            await db.Set<OMTS.Domain.Entities.Sales.PortWeighingCage>().ExecuteDeleteAsync();
+            await db.Set<OMTS.Domain.Entities.Sales.PortWeighing>().ExecuteDeleteAsync();
             await db.HarvestLots.ExecuteDeleteAsync();
             await db.SeedingRecordLanes.ExecuteDeleteAsync();
             await db.SeedingRecords.ExecuteDeleteAsync();

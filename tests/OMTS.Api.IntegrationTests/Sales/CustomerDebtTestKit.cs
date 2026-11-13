@@ -36,7 +36,7 @@ public static class CustomerDebtTestKit
     /// <summary>A payment (or money paid back) that came with no invoice, as the Accountant records it in DEBT-02 (PR 8b): Confirmed, by another transfer.</summary>
     public static async Task<CustomerPayment> RecordPaymentAsync(
         this AuthApiFactory api, Guid customerId, decimal amount, DateOnly? date = null, CustomerPaymentKind kind = CustomerPaymentKind.Payment,
-        int statusId = StatusIds.CustomerPayment.Confirmed)
+        int statusId = StatusIds.CustomerPayment.Completed)
     {
         var payment = new CustomerPayment
         {

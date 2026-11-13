@@ -20,7 +20,7 @@ public sealed class CustomerPaymentStatusChanges(AuditLogService audit, IStatusC
     public void Confirm(CustomerPayment payment)
     {
         var before = payment.StatusId;
-        payment.StatusId = StatusIds.CustomerPayment.Confirmed;
+        payment.StatusId = StatusIds.CustomerPayment.Completed;
         payment.ConfirmedByAccountId = currentUser.AccountId;
         payment.ConfirmedAt = timeProvider.GetUtcNow();
         Audit(payment, ConfirmedAction, before, null);

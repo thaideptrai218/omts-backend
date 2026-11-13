@@ -31,9 +31,9 @@ internal sealed class OperationsDashboardQuery(OmtsDbContext db) : IOperationsDa
         // The label fields are read in SQL and put together here, so no formatting has to be translated.
         var oldestRequests = (await requests
                 .OrderBy(r => r.SentAt).ThenBy(r => r.Id).Take(oldestCount)
-                .Select(r => new { r.Id, Customer = r.Customer.Name, Product = r.Product.Name, r.RequestedKg, r.PickupDate, r.SentAt })
+                .Select(r => new { r.Id, Customer = r.Customer.Name, Product = r.Product.Name, r.RequestedCages, r.PickupDate, r.SentAt })
                 .ToListAsync(cancellationToken))
-            .Select(r => new PendingTaskRecord(r.Id, null, $"{r.Customer} – {Kg(r.RequestedKg)} kg {r.Product}, pickup {Date(r.PickupDate)}", r.SentAt))
+            .Select(r => new PendingTaskRecord(r.Id, null, $"{r.Customer} – {r.RequestedCages} cages {r.Product}, pickup {Date(r.PickupDate)}", r.SentAt))
             .ToList();
         var oldestClaims = (await claims
                 .OrderBy(c => c.SentAt).ThenBy(c => c.Id).Take(oldestCount)
@@ -56,7 +56,6 @@ internal sealed class OperationsDashboardQuery(OmtsDbContext db) : IOperationsDa
         ];
     }
 
-    private static string Kg(decimal kg) => kg.ToString("0.###", CultureInfo.InvariantCulture);
 
     private static string Date(DateOnly date) => date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
 }

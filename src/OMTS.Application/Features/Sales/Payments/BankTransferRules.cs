@@ -46,9 +46,26 @@ public static partial class BankTransferRules
     /// <summary>Bank clocks run a little ahead at most; a time further in the future is a malformed field.</summary>
     public static readonly TimeSpan MaxClockAhead = TimeSpan.FromDays(1);
 
-    /// <summary>The reason a transfer is not recorded, or null when it is (before the invoice code is looked up).</summary>
+    /// <summary>
+    /// Whether the content carries the code of a payment (a PT code or one the user typed): the code as a word of its own, not part of a longer number or word, in any letter case.
+    /// "MBVCB.1234.PT000123.CT tu" carries PT000123; "PT0001234" does not.
+    /// </summary>
+    public static bool ContainsPaymentCode(string? content, string paymentCode)
+    {
+        if (string.IsNullOrWhiteSpace(content) || string.IsNullOrWhiteSpace(paymentCode))
+        {
+            return false;
+        }
+
+        var code = paymentCode.Trim();
+        var after = char.IsAsciiDigit(code[^1]) ? @"(?!\d)" : "(?![A-Za-z0-9])";
+        return Regex.IsMatch(
+            content, $"(?<![A-Za-z0-9]){Regex.Escape(code)}{after}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(1000));
+    }
+
+    /// <summary>The reason a notice is not a transfer in at all (a field malformed, or money out), or null; whatever the account and the content.</summary>
     /// <param name="now">The time of the check: a transfer time more than <see cref="MaxClockAhead"/> after it is <see cref="BankTransferIgnoredReason.Invalid"/>.</param>
-    public static BankTransferIgnoredReason? Ignored(BankTransferNotice notice, string? receivingAccountNumber, DateTimeOffset? now = null)
+    public static BankTransferIgnoredReason? NotATransfer(BankTransferNotice notice, DateTimeOffset? now = null)
     {
         if (string.IsNullOrWhiteSpace(notice.BankReference) || notice.BankReference.Trim().Length > MaxBankReferenceLength
             || !InvoiceMoney.IsWholeAmount(notice.Amount) || notice.Amount <= 0m || string.IsNullOrWhiteSpace(notice.AccountNumber)
@@ -57,9 +74,16 @@ public static partial class BankTransferRules
             return BankTransferIgnoredReason.Invalid;
         }
 
-        if (notice.Direction != BankTransferDirection.In)
+        return notice.Direction != BankTransferDirection.In ? BankTransferIgnoredReason.Outgoing : null;
+    }
+
+    /// <summary>The reason a transfer is not recorded as one of an invoice, or null when it is (before the invoice code is looked up).</summary>
+    /// <param name="now">The time of the check: a transfer time more than <see cref="MaxClockAhead"/> after it is <see cref="BankTransferIgnoredReason.Invalid"/>.</param>
+    public static BankTransferIgnoredReason? Ignored(BankTransferNotice notice, string? receivingAccountNumber, DateTimeOffset? now = null)
+    {
+        if (NotATransfer(notice, now) is { } notTransfer)
         {
-            return BankTransferIgnoredReason.Outgoing;
+            return notTransfer;
         }
 
         if (receivingAccountNumber is null || !SameAccount(notice.AccountNumber, receivingAccountNumber))

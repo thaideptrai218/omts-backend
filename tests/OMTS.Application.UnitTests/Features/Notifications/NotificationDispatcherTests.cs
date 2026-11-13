@@ -115,7 +115,7 @@ public class NotificationDispatcherTests
         var account = Guid.NewGuid();
         _notifications.Preferences[account] = [];
 
-        await Assert.ThrowsAsync<ArgumentException>(() => NotifyAsync([account], "WORK_ASSIGNMENT"));
+        await Assert.ThrowsAsync<ArgumentException>(() => NotifyAsync([account], "NOT_A_NOTIFICATION_TYPE"));
         Assert.Empty(_notifications.Added);
     }
 

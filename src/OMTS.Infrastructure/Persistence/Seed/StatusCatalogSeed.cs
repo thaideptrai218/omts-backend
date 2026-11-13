@@ -63,7 +63,7 @@ internal static class StatusCatalogSeed
         NewStatus(S.Lane.Removed, G.Lane, "REMOVED", "Removed", "Removed at the end of the raft; keeps its number and records."),
         // STD-PURCHASE-REQUEST. Fulfilled is worked out from the invoices, so it has no row (BR-SALE-01).
         NewStatus(S.PurchaseRequest.AwaitingResponse, G.PurchaseRequest, "AWAITING_RESPONSE", "Awaiting response", "Sent by the trader; not answered yet.", initial: true),
-        NewStatus(S.PurchaseRequest.Accepted, G.PurchaseRequest, "ACCEPTED", "Accepted", "Accepted by the Cooperative Owner, possibly for fewer kg; invoices may be linked to it."),
+        NewStatus(S.PurchaseRequest.Accepted, G.PurchaseRequest, "ACCEPTED", "Accepted", "Accepted by the Cooperative Owner, possibly for fewer cages; invoices may be linked to it."),
         NewStatus(S.PurchaseRequest.Declined, G.PurchaseRequest, "DECLINED", "Declined", "Declined by the Cooperative Owner with a note.", final: true),
         NewStatus(S.PurchaseRequest.Cancelled, G.PurchaseRequest, "CANCELLED", "Cancelled", "Cancelled by the trader; no invoice can be linked to it.", final: true),
 
@@ -77,6 +77,15 @@ internal static class StatusCatalogSeed
         NewStatus(S.Payroll.AwaitingFinalization, G.Payroll, "AWAITING_FINALIZATION", "Awaiting finalization", "Sent to the Cooperative Owner; the records of the period are locked."),
         NewStatus(S.Payroll.SentBack, G.Payroll, "SENT_BACK", "Sent back", "Returned with a note for correction; the records of the period can change again."),
         NewStatus(S.Payroll.Finalized, G.Payroll, "FINALIZED", "Finalized", "The amounts are saved; never changed or reopened.", final: true),
+        // The web contract's Creating and Cancelled (PAYROLL_API_CONTRACT); its Provisional is the Draft above.
+        NewStatus(S.Payroll.Creating, G.Payroll, "CREATING", "Creating", "The sheet is being made."),
+        NewStatus(S.Payroll.Cancelled, G.Payroll, "CANCELLED", "Cancelled", "Dropped before it was finalized; it no longer counts.", final: true),
+
+        // STD-EMPLOYEE-REQUEST (BR-LABOR-08): a reviewed or cancelled request does not change any more.
+        NewStatus(S.EmployeeRequest.AwaitingReview, G.EmployeeRequest, "AWAITING_REVIEW", "Awaiting review", "Sent by the employee; not reviewed yet.", initial: true),
+        NewStatus(S.EmployeeRequest.Approved, G.EmployeeRequest, "APPROVED", "Approved", "Approved by the Cooperative Owner; leave is recorded, a missed time is in the attendance.", final: true),
+        NewStatus(S.EmployeeRequest.Rejected, G.EmployeeRequest, "REJECTED", "Rejected", "Rejected by the Cooperative Owner with a note.", final: true),
+        NewStatus(S.EmployeeRequest.Cancelled, G.EmployeeRequest, "CANCELLED", "Cancelled", "Cancelled by the employee while it was awaiting review; kept in the list.", final: true),
 
         NewStatus(S.HarvestLot.Open, G.HarvestLot, "OPEN", "Open", "For sale: it can be chosen on a sales invoice.", initial: true),
         NewStatus(S.HarvestLot.Reopened, G.HarvestLot, "REOPENED", "Reopened", "Closed earlier and for sale again; the days before automatic close count from the day it was reopened."),
@@ -88,8 +97,13 @@ internal static class StatusCatalogSeed
 
         // STD-CUSTOMER-PAYMENT (BR-DEBT-03): a payment counts in the debt from its recording.
         NewStatus(S.CustomerPayment.AwaitingConfirmation, G.CustomerPayment, "AWAITING_CONFIRMATION", "Awaiting confirmation", "Recorded at the port or by the system; counts in the debt until the Accountant confirms or cancels it.", initial: true),
-        NewStatus(S.CustomerPayment.Confirmed, G.CustomerPayment, "CONFIRMED", "Confirmed", "Checked or recorded by the Accountant."),
+        NewStatus(S.CustomerPayment.Completed, G.CustomerPayment, "COMPLETED", "Completed", "The money has arrived or was recorded by the Accountant; counts in the debt."),
         NewStatus(S.CustomerPayment.Cancelled, G.CustomerPayment, "CANCELLED", "Cancelled", "Recorded by mistake or never received; no longer counts.", final: true),
+        NewStatus(S.PurchaseRequest.AwaitingStaff, G.PurchaseRequest, "AWAITING_STAFF", "Awaiting staff confirmation", "User decision 31/10/2026: employees approve their shift before the Owner accepts the request."),
+        NewStatus(S.CustomerPayment.PendingTransfer, G.CustomerPayment, "PENDING_TRANSFER", "Pending transfer", "A VietQR code was made for the payment and the transfer has not arrived; counts nowhere until it does.", initial: true),
+        NewStatus(S.InputIssue.Draft, G.InputIssue, "DRAFT", "Draft", "Being prepared; holds no quantity. Removed, never cancelled.", initial: true),
+        NewStatus(S.InputIssue.Completed, G.InputIssue, "COMPLETED", "Completed", "The quantities have left the stock; may still be edited, which writes them again."),
+        NewStatus(S.InputIssue.Cancelled, G.InputIssue, "CANCELLED", "Cancelled", "Recorded by mistake; the quantities are back in the stock and it counts nowhere.", final: true),
     ];
 
     public static readonly StatusTransition[] Transitions =
@@ -126,7 +140,7 @@ internal static class StatusCatalogSeed
 
         NewTransition(76, S.Lane.InUse, S.Lane.Removed, "FARM-04", Owner, Action, "The raft has no open cycle; the last lanes are removed first (BR-FARM-04).", false),
         NewTransition(77, S.Lane.Removed, S.Lane.InUse, "FARM-04", Owner, Action, "The raft has no open cycle; Removed lanes return in number order before new numbers (BR-FARM-04).", false),
-        NewTransition(180, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Accepted, "SALE-03", Owner, Action, "The accepted kg is above 0 and not more than the requested kg; the pickup date is not before today.", false),
+        NewTransition(180, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Accepted, "SALE-03", Owner, Action, "The accepted cages are above 0 and not more than the requested cages; the pickup date is not before today.", false),
         NewTransition(181, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Declined, "SALE-03", Owner, Action, "A note gives the reason.", true),
         NewTransition(182, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Cancelled, "SALE-02", Trader, Action, "The trader cancels; a reason is optional.", false),
         NewTransition(183, S.PurchaseRequest.Accepted, S.PurchaseRequest.Cancelled, "SALE-02", Trader, Action, "The request is not Fulfilled; a reason is optional.", false),
@@ -140,9 +154,30 @@ internal static class StatusCatalogSeed
 
         // STD-SALES-INVOICE and STD-CUSTOMER-PAYMENT; the creation of each is SALE-05 (and GFR-08 for a VietQR payment).
         NewTransition(200, S.SalesInvoice.Completed, S.SalesInvoice.Cancelled, "SALE-08", Owner, Action, "The invoice has no sales return that is not cancelled; a cash payment is cancelled with it only when the cash was given back.", true),
-        NewTransition(210, S.CustomerPayment.AwaitingConfirmation, S.CustomerPayment.Confirmed, "DEBT-02", Accountant, Action, "The cash or the transfer that arrived matches the payment.", false),
+        NewTransition(210, S.CustomerPayment.AwaitingConfirmation, S.CustomerPayment.Completed, "DEBT-02", Accountant, Action, "The cash or the transfer that arrived matches the payment.", false),
         NewTransition(211, S.CustomerPayment.AwaitingConfirmation, S.CustomerPayment.Cancelled, "DEBT-02, SALE-08", $"{Accountant}; {Owner}", Action, "The customer did not pay, or the cash was given back when the invoice was cancelled.", true),
-        NewTransition(212, S.CustomerPayment.Confirmed, S.CustomerPayment.Cancelled, "DEBT-02", Accountant, Action, "Recorded by mistake, or the money never arrived.", true),
+        NewTransition(212, S.CustomerPayment.Completed, S.CustomerPayment.Cancelled, "DEBT-02", Accountant, Action, "Recorded by mistake, or the money never arrived.", true),
+        NewTransition(30078, S.CustomerPayment.PendingTransfer, S.CustomerPayment.Completed, "DEBT-02, GFR-08", $"{SystemActor}; {Accountant}", Action, "The transfer with the payment code arrived; the payment takes the amount received.", false),
+        NewTransition(30079, S.CustomerPayment.PendingTransfer, S.CustomerPayment.Cancelled, "DEBT-02", $"{Accountant}; {Owner}", Action, "The customer did not transfer, or the code was made by mistake.", true),
+        NewTransition(30080, S.InputIssue.Draft, S.InputIssue.Completed, "INPUT-ISSUE", $"{OwnerOrZoneManager}", Action, "The issue is complete and no item or seed lot would go below zero when that is not allowed.", false),
+        NewTransition(30081, S.InputIssue.Completed, S.InputIssue.Cancelled, "INPUT-ISSUE", $"{OwnerOrZoneManager}", Action, "An issue recorded by mistake; its quantities go back in the stock.", true),
+
+        // STD-EMPLOYEE-REQUEST (BR-LABOR-08, LABOR-05, LABOR-10.2).
+        NewTransition(230, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Approved, "LABOR-05", Owner, Action, "The payroll of the pay period of the day is not Awaiting finalization or Finalized, and the times stay in order.", false),
+        NewTransition(231, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Rejected, "LABOR-05", Owner, Action, "A note gives the reason.", true),
+        NewTransition(232, S.EmployeeRequest.AwaitingReview, S.EmployeeRequest.Cancelled, "LABOR-10", "Employee", Action, "The employee cancels their own request before it is reviewed.", false),
+
+        // Payroll sheets (LABOR-12, LABOR-13; the Draft is the web contract's Provisional). Not in SRS v8, which sends a payroll to the Owner and back.
+        NewTransition(233, S.Payroll.Creating, S.Payroll.Draft, "LABOR-12", Owner, Action, "The lines of the period are calculated.", false),
+        NewTransition(234, S.Payroll.Draft, S.Payroll.Finalized, "LABOR-13", Owner, Action, "The period has ended, no attendance of it is incomplete, no hours lack a rate and no request for it awaits review.", false),
+        NewTransition(235, S.Payroll.Draft, S.Payroll.Cancelled, "LABOR-12", Owner, Action, "A payroll sheet dropped before it is finalized.", false),
+        NewTransition(236, S.Payroll.Creating, S.Payroll.Cancelled, "LABOR-12", Owner, Action, "A sheet still being made is dropped.", false),
+
+        // STD-PURCHASE-REQUEST: the staffing plan before the response (decision of 31/10/2026).
+        NewTransition(30082, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.AwaitingStaff, "SALE-03", Owner, Action, "The Owner sends dated shift invitations with a cage capacity.", false),
+        NewTransition(30083, S.PurchaseRequest.AwaitingStaff, S.PurchaseRequest.Declined, "SALE-03", Owner, Action, "The Owner declines with a reason.", true),
+        NewTransition(30084, S.PurchaseRequest.AwaitingStaff, S.PurchaseRequest.Cancelled, "SALE-02", "Trader", Action, "Only the requesting customer may cancel; release shift reservations.", false),
+        NewTransition(30085, S.PurchaseRequest.AwaitingStaff, S.PurchaseRequest.Accepted, "SALE-03", Owner, Action, "Enough distinct employees have approved the dated shift; cages and pickup match the staffing plan.", false),
 
         // Trader accounts requested from the Zalo Mini App (not in the SRS table yet, decision of 28/10/2026).
         NewTransition(30074, S.Account.PendingApproval, S.Account.Active, "ACS-01 (Zalo)", Owner, Action, "Approve the trader's request.", false),

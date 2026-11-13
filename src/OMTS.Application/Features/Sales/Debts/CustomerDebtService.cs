@@ -4,6 +4,7 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Purchasing;
+using OMTS.Application.Features.Sales.Invoices;
 
 namespace OMTS.Application.Features.Sales.Debts;
 
@@ -15,7 +16,7 @@ namespace OMTS.Application.Features.Sales.Debts;
 /// <summary>The rows of the DEBT-03 list (after the search) and the cooperative totals (every profile, whatever the search).</summary>
 public sealed record CustomerDebtRows(IReadOnlyList<CustomerDebtRow> Rows, decimal TotalReceivables, decimal TotalOwedBack);
 
-public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebtReader debts, TimeProvider timeProvider)
+public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebtReader debts, SalesInvoiceCorrectionLog corrections, TimeProvider timeProvider)
 {
     private const int MaxPageSize = 100;
 
@@ -94,12 +95,58 @@ public sealed class CustomerDebtService(ICustomerDebtQuery queries, CustomerDebt
 
         var (start, end) = period.Value;
         // The staff statement: payments with who recorded, confirmed and collected them, their note and cancel reason (BR-DEBT-04).
-        var (invoices, payments) = await queries.StatementLedgerAsync(customerId, cancellationToken);
-        var lines = CustomerStatementLedger.Build(invoices, payments, start, end);
-        var now = CustomerDebtAllocator.Allocate(invoices, payments, today);
+        var ledger = await queries.StatementLedgerAsync(customerId, cancellationToken);
+        // BR-DEBT-04: under each invoice, its corrections, also one made after the period (the price cuts are entries of their own).
+        var lines = CustomerStatementLedger.Build(
+            ledger.Invoices, ledger.Payments, start, end, ledger.Adjustments, await corrections.OfAsync(ledger.Invoices.Select(i => i.Id).ToList(), cancellationToken));
+        var now = CustomerDebtAllocator.Allocate(ledger.Invoices, ledger.Payments, today, ledger.Adjustments);
         return new CustomerDebtStatement(
             View(customer), start, end, lines.OpeningDebt, lines.Entries, lines.ClosingDebt, now.Debt, now.DebtAgeDays, now.UnpaidInvoices);
     }
 
-    private static CustomerDebtCustomer View(DebtCustomerRow c) => new(c.Id, c.Name, c.PhoneNumber);
+    /// <summary>
+    /// The debt tab of one profile: its debt now, the unpaid invoices and its whole history (or a period, or some kinds) newest first. The debt after each entry is worked out
+    /// over the whole history, so a filter never changes it. The caller needs CUSTOMER_DEBTS View (API).
+    /// </summary>
+    public async Task<Result<CustomerDebtTab>> TabAsync(Guid customerId, CustomerDebtTabQuery query, CancellationToken cancellationToken)
+    {
+        if ((await queries.CustomersAsync([customerId], null, cancellationToken)).FirstOrDefault() is not { } customer)
+        {
+            return AppError.NotFound;
+        }
+
+        if (query.From > query.To)
+        {
+            return AppError.Invalid("Period");
+        }
+
+        var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
+        var ledger = await queries.StatementLedgerAsync(customerId, cancellationToken);
+        var lines = CustomerStatementLedger.Build(ledger.Invoices, ledger.Payments, DateOnly.MinValue, DateOnly.MaxValue, ledger.Adjustments);
+        var now = CustomerDebtAllocator.Allocate(ledger.Invoices, ledger.Payments, timeProvider.Today(), ledger.Adjustments);
+        var entries = lines.Entries.AsEnumerable().Reverse();
+        if (query.From is { } from)
+        {
+            entries = entries.Where(e => e.Date >= from);
+        }
+
+        if (query.To is { } to)
+        {
+            entries = entries.Where(e => e.Date <= to);
+        }
+
+        if (query.Kinds is { Count: > 0 } kinds)
+        {
+            entries = entries.Where(e => kinds.Contains(e.Kind));
+        }
+
+        var matching = entries.ToList();
+        var opening = query.From is { } start ? lines.Entries.Where(e => e.Date < start).Select(e => e.DebtAfter).LastOrDefault() : 0m;
+        return new CustomerDebtTab(
+            View(customer), now.Debt, now.DebtAgeDays, now.UnpaidInvoices,
+            new Paged<CustomerStatementEntry>(matching.Skip((page - 1) * pageSize).Take(pageSize).ToList(), page, pageSize, matching.Count), opening,
+            ledger.Payments.Count(p => p.AwaitingConfirmation), ledger.Payments.Count(p => p.Pending));
+    }
+
+    private static CustomerDebtCustomer View(DebtCustomerRow c) => new(c.Id, c.Name, c.PhoneNumber, c.Code);
 }

@@ -47,12 +47,9 @@ public class SeedingRecordsMigrationTests
         var cycle = new CultivationCycle { Raft = new Raft { Zone = zone, Code = "B01", Size = "1", Lanes = [lane] }, StartDate = new DateOnly(2026, 1, 1) };
         var account = new Account { Username = "owner", DisplayName = "Owner", SubjectType = SubjectType.CooperativeOwner, StatusId = StatusIds.Account.Active };
         var item = new FarmingInputItem { Code = "VT001", Name = "Seed", Group = InputItemGroup.Seed, Unit = "con" };
-        var receipt = new PurchaseReceipt { Code = "PN000001", SupplierId = await OldSchemaRows.SupplierAsync(db), ReceiptDate = new DateOnly(2026, 1, 1), RecordedByAccountId = Guid.Empty, StatusId = StatusIds.PurchaseReceipt.Completed };
-        db.AddRange(cycle, account, item, receipt);
-        receipt.RecordedByAccountId = account.Id;
-        var line = new PurchaseReceiptLine { Receipt = receipt, LineNumber = 1, Item = item, Unit = "con", Quantity = 10, UnitPrice = 1 };
-        db.Add(line);
+        db.AddRange(cycle, account, item);
         await db.SaveChangesAsync();
+        var lineId = await OldSchemaRows.CompletedReceiptLineAsync(db, await OldSchemaRows.SupplierAsync(db), account.Id, item.Id, "con");
 
         await migrator.MigrateAsync();
 
@@ -71,7 +68,7 @@ public class SeedingRecordsMigrationTests
 
         var record = new SeedingRecord
         {
-            CycleId = cycle.Id, SeedingDate = new DateOnly(2026, 1, 2), SeedLotLineId = line.Id, Quantity = 5, RecordedByAccountId = account.Id,
+            CycleId = cycle.Id, SeedingDate = new DateOnly(2026, 1, 2), SeedLotLineId = lineId, Quantity = 5, RecordedByAccountId = account.Id,
             Lanes = [new SeedingRecordLane { LaneId = lane.Id }],
         };
         db.SeedingRecords.Add(record);

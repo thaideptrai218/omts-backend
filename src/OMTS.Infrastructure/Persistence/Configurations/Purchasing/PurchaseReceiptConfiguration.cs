@@ -32,9 +32,15 @@ internal sealed class PurchaseReceiptLineConfiguration : IEntityTypeConfiguratio
         builder.HasOne(x => x.Item).WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Raft).WithMany(r => r.PurchaseReceiptLines).HasForeignKey(x => x.RaftId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(x => x.Unit).HasMaxLength(30);
-        builder.Property(x => x.Quantity).HasPrecision(18, 3);
+        builder.HasOne(x => x.ItemUnit).WithMany().HasForeignKey(x => x.ItemUnitId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(x => x.UnitFactor).HasPrecision(18, 3);
+        // Base units: an entered quantity of 2 decimals times a factor of 3 decimals has up to 5.
+        builder.Property(x => x.Quantity).HasPrecision(18, 5);
         builder.Property(x => x.UnitPrice).HasPrecision(18, 0);
         builder.Property(x => x.Discount).HasPrecision(18, 0);
+        builder.Property(x => x.EnteredQuantity).HasPrecision(18, 3);
+        builder.Property(x => x.EnteredUnitPrice).HasPrecision(18, 0);
+        builder.Property(x => x.EnteredDiscount).HasPrecision(18, 0);
         // Rounded half up to the dong, not to thousands (BR-PURCHASE-02): PurchaseMoney.RoundHalfUp.
         builder.Property(x => x.LineAmount).HasPrecision(18, 0);
         builder.Property(x => x.SupplierLotCode).HasMaxLength(Lengths.ShortText);
@@ -67,8 +73,12 @@ internal sealed class PurchaseReturnLineConfiguration : IEntityTypeConfiguration
         builder.HasOne(x => x.ReceiptLine).WithMany().HasForeignKey(x => x.ReceiptLineId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Item).WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(x => x.Unit).HasMaxLength(30);
+        builder.HasOne(x => x.ItemUnit).WithMany().HasForeignKey(x => x.ItemUnitId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(x => x.UnitFactor).HasPrecision(18, 3);
         builder.Property(x => x.UnitPrice).HasPrecision(18, 0);
-        builder.Property(x => x.Quantity).HasPrecision(18, 3);
+        builder.Property(x => x.Quantity).HasPrecision(18, 5);
+        builder.Property(x => x.EnteredQuantity).HasPrecision(18, 3);
+        builder.Property(x => x.EnteredUnitPrice).HasPrecision(18, 0);
         // Rounded half up to the dong when recorded (BR-PURCHASE-02), and kept: PM 03/11.
         builder.Property(x => x.ReturnValue).HasPrecision(18, 0);
     }
@@ -109,3 +119,4 @@ internal sealed class SupplierPaymentAllocationConfiguration : IEntityTypeConfig
         builder.Property(x => x.Amount).HasPrecision(18, 0);
     }
 }
+

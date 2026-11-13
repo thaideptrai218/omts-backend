@@ -7,12 +7,13 @@ namespace OMTS.Application.Features.Purchasing.Receipts;
 /// <summary>
 /// A line as entered (PURCHASE-01 step 3). On a Draft every field may be empty; completing needs the item, the quantity and
 /// the unit price. <see cref="Discount"/> is whole VND off each unit, 0 (when left out) to the unit price.
+/// <see cref="ItemUnitId"/> is the unit of the item the line is entered in (empty: the base unit); <see cref="Quantity"/>, <see cref="UnitPrice"/> and <see cref="Discount"/> are in that unit.
 /// <see cref="RaftId"/> is optional, only on a Seed or Material line, among the rafts In Use of the caller's zones (the Owner:
 /// any); <see cref="SupplierLotCode"/> only on a Seed line (ignored on the others). <see cref="LineId"/> names the line kept
 /// when a Completed receipt is edited (a line without it is new); a Draft save ignores it and replaces every line.
 /// </summary>
 public sealed record ReceiptLineInput(
-    Guid? ItemId, decimal? Quantity, decimal? UnitPrice, string? SupplierLotCode = null, Guid? RaftId = null, decimal? Discount = null, Guid? LineId = null);
+    Guid? ItemId, decimal? Quantity, decimal? UnitPrice, string? SupplierLotCode = null, Guid? RaftId = null, decimal? Discount = null, Guid? LineId = null, Guid? ItemUnitId = null);
 
 /// <summary>
 /// PURCHASE-01 create, Draft edit and edit of a Completed receipt. <see cref="Complete"/> false saves a Draft (only an In Use
@@ -50,13 +51,16 @@ public sealed record CorrectionLineInput(Guid? LineId, decimal? Quantity, decima
 /// <summary>PURCHASE-06.2: the Owner corrects lines of a receipt that can no longer be cancelled, with a reason (an edit through PUT can do more).</summary>
 public sealed record CorrectReceiptRequest(string? Reason, IReadOnlyList<CorrectionLineInput>? Lines, string? RowVersion = null);
 
-public sealed record SupplierRef(Guid Id, string Name, string PhoneNumber);
+/// <param name="Code">The supplier code: links to the supplier list search by it, never by the name.</param>
+public sealed record SupplierRef(Guid Id, string Name, string PhoneNumber, string? Code = null);
 
 public sealed record RaftRef(Guid Id, string Code);
 
 /// <summary>The raft of a line with its zone.</summary>
 public sealed record LineRaftRef(Guid Id, string Code, Guid ZoneId, string ZoneCode);
 
+/// <param name="Unit">The name of the unit the line was entered in; <paramref name="Quantity"/>, <paramref name="UnitPrice"/>, <paramref name="Discount"/> and <paramref name="NetUnitPrice"/> are per unit of the line.</param>
+/// <param name="BaseQuantity">Quantity × unit factor, in the base unit <paramref name="BaseUnit"/>; seeded, returned and returnable are in base units too.</param>
 /// <param name="SeedLotCode">PN000123-1 on a Seed line of a Completed receipt (GBR-04); null otherwise.</param>
 /// <param name="Seeded">Quantity seeded from the seed lot (0 for other lines).</param>
 /// <param name="ReturnedQuantity">Quantity on its Recorded returns.</param>
@@ -85,7 +89,11 @@ public sealed record ReceiptLineView(
     decimal ReturnedQuantity,
     decimal Returnable,
     decimal Discount = 0,
-    decimal? NetUnitPrice = null);
+    decimal? NetUnitPrice = null,
+    Guid? ItemUnitId = null,
+    decimal UnitFactor = 1,
+    decimal? BaseQuantity = null,
+    string? BaseUnit = null);
 
 /// <summary>A purchase return of the receipt, Cancelled ones included (with their reason) and Drafts left out; <paramref name="ReturnValue"/> is the amount as recorded.</summary>
 /// <param name="ReturnedAt">When the goods went back, at UTC+7; <paramref name="ReturnDate"/> is its date.</param>
@@ -152,3 +160,4 @@ public sealed record CancelBlock(string Kind, string Code, string Message, strin
 /// </summary>
 public sealed record CancelPreview(
     bool CanCancel, CancelBlock? Blocked, decimal DebtBefore, decimal DebtAfter, decimal AdvanceAfter, string? Warning, string? WarningCode);
+

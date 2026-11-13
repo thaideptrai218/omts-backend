@@ -51,6 +51,12 @@ public class CustomerPaymentSqlServerTests
     {
         public void Add(CustomerPayment payment) => inner.Add(payment);
 
+        public void RemoveAllocation(CustomerPaymentAllocation allocation) => inner.RemoveAllocation(allocation);
+
+        public Task<Guid?> FindIdByCodeAsync(string code, Guid? exceptPaymentId, CancellationToken cancellationToken) => inner.FindIdByCodeAsync(code, exceptPaymentId, cancellationToken);
+
+        public Task<IReadOnlyList<CustomerPayment>> GetPendingTransfersAsync(CancellationToken cancellationToken) => inner.GetPendingTransfersAsync(cancellationToken);
+
         public async Task<CustomerPayment?> GetForEditAsync(Guid paymentId, CancellationToken cancellationToken) =>
             await HoldAsync(await inner.GetForEditAsync(paymentId, cancellationToken));
 
@@ -145,7 +151,7 @@ public class CustomerPaymentSqlServerTests
 
         await OneWinsAsync(await SqlKit.InParallelAsync(2, _ => accountant.ConfirmAsync([cash])));
 
-        Assert.Equal(StatusIds.CustomerPayment.Confirmed, await StatusOfAsync(w, cash));
+        Assert.Equal(StatusIds.CustomerPayment.Completed, await StatusOfAsync(w, cash));
         Assert.Equal(1, await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == cash && e.Action == "CustomerPayment.Confirmed")));
         Assert.Equal(1, await NoticesAsync(w));
         Assert.Equal(200_000m, await w.Owner.CustomerDebtAsync(w.CustomerId));

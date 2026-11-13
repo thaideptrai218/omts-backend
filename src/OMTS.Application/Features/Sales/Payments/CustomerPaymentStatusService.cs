@@ -108,7 +108,22 @@ public sealed class CustomerPaymentStatusService(
         }
     }
 
-    /// <summary>DEBT-02.4 on its own: a payment or money paid back that is not cancelled, with a reason; the Owner is told at once.</summary>
+    /// <summary>The confirmation of one payment Awaiting confirmation (cash at the port): the same save as a list of one; 409 MSG-GEN-09 when it is no longer Awaiting confirmation.</summary>
+    public async Task<Result<CustomerPaymentSaved>> ConfirmOneAsync(Guid paymentId, CancellationToken cancellationToken)
+    {
+        var confirmed = await ConfirmAsync(new ConfirmCustomerPaymentsRequest([paymentId]), cancellationToken);
+        if (!confirmed.IsSuccess)
+        {
+            return confirmed.Error!;
+        }
+
+        var payment = confirmed.Value!.Confirmed[0];
+        decimal? debt = payment.Customer is { } customer ? await debts.DebtAsync(customer.Id, cancellationToken) : null;
+        var message = UserMessages.Saved($"Payment {payment.Code}");
+        return new CustomerPaymentSaved(payment, debt, message.Text, message.Code);
+    }
+
+    /// <summary>DEBT-02.4 on its own: a payment or money paid back that is not cancelled (one waiting for its transfer too), with a reason; the Owner is told at once, unless nothing counted.</summary>
     public async Task<Result<CustomerPaymentSaved>> CancelAsync(Guid paymentId, CancelCustomerPaymentRequest request, CancellationToken cancellationToken)
     {
         for (var attempt = 1; ; attempt++)
@@ -135,8 +150,13 @@ public sealed class CustomerPaymentStatusService(
             }
 
             var debtAfter = (await DebtsAfterCancellingAsync([payment], cancellationToken)).Select(d => (decimal?)d.Debt).SingleOrDefault();
+            var counted = payment.StatusId != StatusIds.CustomerPayment.PendingTransfer;
             statusChanges.Cancel(payment, reason);
-            await notifications.TransactionAsync(payment, cancelled: true, debtAfter, cancellationToken);
+            if (counted)
+            {
+                await notifications.TransactionAsync(payment, cancelled: true, debtAfter, cancellationToken);
+            }
+
             try
             {
                 await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -161,7 +181,10 @@ public sealed class CustomerPaymentStatusService(
         foreach (var group in ofProfiles)
         {
             unitOfWork.MarkChanged(group.Key);
-            after.Add((group.Key.Name, group.Aggregate(before[group.Key.Id], (debt, p) => CustomerPaymentRules.DebtAfter(debt, p.Kind, p.Amount, cancelled: true))));
+            // A payment that never counted (waiting for its transfer) leaves the debt as it is.
+            after.Add((group.Key.Name, group.Aggregate(
+                before[group.Key.Id],
+                (debt, p) => p.StatusId == StatusIds.CustomerPayment.PendingTransfer ? debt : CustomerPaymentRules.DebtAfter(debt, p.Kind, p.Amount, cancelled: true, p.DiscountAmount))));
         }
 
         return after;
