@@ -72,6 +72,13 @@ public static class UserMessages
     public static UserMessage NoDataForFilters(string filterDescription) => new(
         Gen10, $"There is no data for the {filterDescription} you chose. Please choose again.", Legacy.Msg08);
 
+    /// <summary>
+    /// MSG-GEN-01 for a list export that selects more rows than the file may hold (PM answer 12/11/2026, OMTS-224 [5.7]): the caller names the field <c>Filters</c> and nothing is written.
+    /// </summary>
+    /// <param name="item">What is exported, plural, e.g. "sales invoices".</param>
+    public static UserMessage ExportTooLarge(string item, int limit) => new(
+        Gen01, $"The selection has more than {limit.ToString("N0", CultureInfo.InvariantCulture)} {item}, too many for one file. Narrow the period or the filters and export again.", Legacy.Msg01);
+
     // ---- MSG-FARM ----
 
     /// <summary>MSG-FARM-01 (GFR-03): notification to the Owner when a zone license becomes Expiring soon.</summary>

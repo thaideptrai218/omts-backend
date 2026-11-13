@@ -19,6 +19,9 @@ public interface IPendingSaleRepository
     /// <summary>The sales still Awaiting whose sale may name this harvest lot (a text search of the sale; the caller reads each one to be sure), read only.</summary>
     Task<IReadOnlyList<PendingSale>> ListAwaitingNamingLotAsync(Guid lotId, CancellationToken cancellationToken);
 
+    /// <summary>The codes of the sales still Awaiting that were created before <paramref name="before"/>, oldest first: what the stop at the end of the business day reads.</summary>
+    Task<IReadOnlyList<string>> ListAwaitingCodesCreatedBeforeAsync(DateTimeOffset before, CancellationToken cancellationToken);
+
     /// <summary>The sales still Awaiting in these zones (every zone when null), oldest first, read only with their zone and customer.</summary>
     Task<IReadOnlyList<PendingSale>> ListAwaitingAsync(IReadOnlySet<Guid>? zoneIds, CancellationToken cancellationToken);
 }

@@ -34,7 +34,7 @@ public sealed record SalesInvoiceActionFacts(int StatusId, int LatestDeliverySta
 /// <summary>What the caller may do in the zone of the invoice (GFR-02, §I.4.4).</summary>
 /// <param name="MaySell">SALES_INVOICES Create in the zone: the Zone Manager of the zone and the Owner.</param>
 /// <param name="MayCreateReturn">SALES_RETURNS Create in the zone: the Zone Manager of the zone and the Owner.</param>
-/// <param name="MayPrint">SALES_INVOICES Export in the zone: the Accountant only views (§I.4.4, R).</param>
+/// <param name="MayPrint">SALES_INVOICES Export in the zone: the Zone Manager, the Accountant (PM answer 12/11/2026) and the Owner.</param>
 public sealed record SalesInvoiceCallerRights(bool IsCooperativeOwner, bool MaySell, bool MayCreateReturn, bool MayPrint);
 
 /// <summary>Why SALE-07 and SALE-08 refuse an invoice; the endpoints answer this, and the same rule decides what is offered.</summary>

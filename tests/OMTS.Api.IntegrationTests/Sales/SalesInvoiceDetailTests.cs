@@ -76,7 +76,8 @@ public class SalesInvoiceDetailTests
         Assert.Equal(["Resend", "CreateReturn", "Correct", "Cancel", "Print"], (await sale.Owner.Client.InvoiceAsync(invoice.Id())).Actions());
         Assert.Equal(["Resend", "CreateReturn", "Print"], (await sale.Manager.Client.InvoiceAsync(invoice.Id())).Actions());
         Assert.Equal(["Resend", "CreateReturn", "Print"], (await managerAll.Client.InvoiceAsync(invoice.Id())).Actions());
-        Assert.Empty((await accountant.Client.InvoiceAsync(invoice.Id())).Actions());
+        // The Accountant views and prints (PM answer 12/11/2026) but resends, returns, corrects and cancels nothing.
+        Assert.Equal(["Print"], (await accountant.Client.InvoiceAsync(invoice.Id())).Actions());
     }
 
     // A person may hold different roles in different zones (BR-FARM-08): the commands follow the pair for the zone of the invoice.
@@ -96,7 +97,8 @@ public class SalesInvoiceDetailTests
         var client = await api.LoginAsync(account.Username);
 
         Assert.Equal(["Resend", "CreateReturn", "Print"], (await client.InvoiceAsync(inA.Id())).Actions());
-        Assert.Empty((await client.InvoiceAsync(inB.Id())).Actions());
+        // The Accountant pair (All zones) opens zone B: it prints there and does nothing else.
+        Assert.Equal(["Print"], (await client.InvoiceAsync(inB.Id())).Actions());
     }
 
     [Fact]

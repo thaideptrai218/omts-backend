@@ -9,7 +9,7 @@ using OMTS.Application.Features.Sales.Invoices;
 namespace OMTS.Api.Controllers;
 
 /// <summary>
-/// SALE-05 (SCR-SALE-04): the Zone Manager and the Owner sell at the port; the Accountant only views (§I.4.4). The filter needs the right in some zone; the service checks the zone of the
+/// SALE-05 (SCR-SALE-04): the Zone Manager and the Owner sell at the port; the Accountant views, prints and exports (§I.4.4, PM answer 12/11/2026). The filter needs the right in some zone; the service checks the zone of the
 /// invoice and of every lot (BR-SALE-06, BR-SALE-08). The products come from <c>GET api/products</c>, the lots from <c>GET api/harvest-lots/for-sale</c> and a new profile from
 /// <c>POST api/customers</c> (SALE-05.1).
 /// </summary>
@@ -46,7 +46,7 @@ public sealed class SalesInvoicesController(
     public async Task<IActionResult> Search([FromQuery] SalesInvoiceSearchQuery query, CancellationToken cancellationToken) =>
         (await search.SearchAsync(query, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>SALE-09.2: the matches of the same filters and their total, every page, as an .xlsx file.</summary>
+    /// <summary>SALE-09.2: the matches of the same filters and their total, every page, as an .xlsx file; at most 5,000 invoices: 400 MSG-GEN-01 naming <c>Filters</c> above that, nothing written.</summary>
     [HttpGet("export")]
     [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Export, PermissionScope.AnyZone)]
     public async Task<IActionResult> Export([FromQuery] SalesInvoiceSearchQuery query, CancellationToken cancellationToken) =>

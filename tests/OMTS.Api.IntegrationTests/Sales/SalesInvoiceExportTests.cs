@@ -6,6 +6,7 @@ using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
+using static OMTS.Api.IntegrationTests.Sales.SalesInvoiceSearchTestKit;
 using static OMTS.Api.IntegrationTests.Sales.SalesInvoiceTestKit;
 
 namespace OMTS.Api.IntegrationTests.Sales;
@@ -16,29 +17,29 @@ public class SalesInvoiceExportTests
     private static async Task<XLWorkbook> WorkbookAsync(HttpResponseMessage file) => new(await file.Content.ReadAsStreamAsync());
 
     [Fact]
-    public async Task The_zone_manager_and_the_owner_export_and_the_accountant_may_not()
+    public async Task The_zone_manager_the_accountant_and_the_owner_export_and_print()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
+        var other = await api.SaleSetupAsync();
         var invoice = await sale.Manager.Client.SoldAsync(sale, sale.LotId);
+        var inOther = await other.Manager.Client.SoldAsync(other, other.LotId);
         var zone = await api.ZoneEntityAsync(sale.ZoneId);
         var accountant = await api.StaffAsync(zone, StaffRole.Accountant);
         var accountantAll = await api.StaffAsync(null, StaffRole.Accountant);
 
-        foreach (var client in new[] { sale.Manager.Client, sale.Owner.Client })
+        // PM answer 12/11/2026 (OMTS-224 [5.1]): the Accountant prints and exports like the Zone Manager, in its zones.
+        foreach (var client in new[] { sale.Manager.Client, sale.Owner.Client, accountant.Client, accountantAll.Client })
         {
             Assert.Equal(HttpStatusCode.OK, (await client.ExportInvoicesAsync()).StatusCode);
             Assert.Equal(HttpStatusCode.OK, (await client.PrintInvoiceAsync(invoice.Id())).StatusCode);
         }
 
-        foreach (var client in new[] { accountant.Client, accountantAll.Client })
-        {
-            foreach (var response in new[] { await client.ExportInvoicesAsync(), await client.PrintInvoiceAsync(invoice.Id()) })
-            {
-                Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-                Assert.Equal("MSG-GEN-08", await response.ErrorCodeAsync());
-            }
-        }
+        Assert.Equal(HttpStatusCode.OK, (await accountantAll.Client.PrintInvoiceAsync(inOther.Id())).StatusCode);
+        var outside = await accountant.Client.PrintInvoiceAsync(inOther.Id());
+        Assert.Equal((HttpStatusCode.Forbidden, "MSG-GEN-08"), (outside.StatusCode, await outside.ErrorCodeAsync()));
+        using var zoneFile = await WorkbookAsync(await accountant.Client.ExportInvoicesAsync());
+        Assert.Equal(3, zoneFile.Worksheet(SalesInvoiceExportSheets.ListSheet).LastRowUsed()!.RowNumber());
     }
 
     [Fact]
@@ -95,8 +96,8 @@ public class SalesInvoiceExportTests
 
         using var withCash = await WorkbookAsync(await client.ExportInvoicesAsync("?cashCollectedByMe=true"));
         var cashSheet = withCash.Worksheet(SalesInvoiceExportSheets.ListSheet);
-        Assert.Equal("Cash awaiting confirmation", cashSheet.Cell(1, 11).GetString());
-        Assert.Equal(60_000m, cashSheet.Cell(2, 11).GetValue<decimal>());
+        Assert.Equal(("Order", "Cash awaiting confirmation"), (cashSheet.Cell(1, 11).GetString(), cashSheet.Cell(1, 12).GetString()));
+        Assert.Equal(60_000m, cashSheet.Cell(2, 12).GetValue<decimal>());
 
         var day = PurchaseRequestTestKit.Today.AddDays(-20);
         using var empty = await WorkbookAsync(await client.ExportInvoicesAsync($"?from={day:yyyy-MM-dd}&to={day:yyyy-MM-dd}"));
@@ -127,6 +128,69 @@ public class SalesInvoiceExportTests
         Assert.Equal(("Cash", 100_000m), (payments.Cell(2, 3).GetString(), payments.Cell(2, 4).GetValue<decimal>()));
         Assert.Equal(1, workbook.Worksheet(SalesInvoiceExportSheets.SendingsSheet).LastRowUsed()!.RowNumber() - 1);
     }
+
+    // PM answer 12/11/2026 (OMTS-224 [5.7]): at most 5,000 invoices in one file; above that 400 MSG-GEN-01 on Filters and nothing is written.
+    [Fact]
+    public async Task A_selection_of_more_than_five_thousand_invoices_is_refused_and_exactly_five_thousand_are_exported()
+    {
+        using var api = new AuthApiFactory();
+        var sale = await api.SaleSetupAsync();
+        var accountId = sale.Owner.Account.Id;
+        var invoices = Enumerable.Range(0, SalesInvoiceSearchService.MaxExportRows)
+            .Select(n => SalesInvoiceSearchQaTests.NewInvoice(sale.ZoneId, accountId, code: $"HDX{n:D5}")).ToList();
+        await api.UseDbAsync(db => db.SalesInvoices.AddRange(invoices));
+
+        var atTheLimit = await sale.Manager.Client.ExportInvoicesAsync();
+        Assert.Equal(HttpStatusCode.OK, atTheLimit.StatusCode);
+        using (var workbook = await WorkbookAsync(atTheLimit))
+        {
+            Assert.Equal(SalesInvoiceSearchService.MaxExportRows + 2, workbook.Worksheet(SalesInvoiceExportSheets.ListSheet).LastRowUsed()!.RowNumber());
+        }
+
+        await api.UseDbAsync(db => db.SalesInvoices.Add(SalesInvoiceSearchQaTests.NewInvoice(sale.ZoneId, accountId, code: "HDXLAST")));
+
+        var refused = await sale.Manager.Client.ExportInvoicesAsync();
+        var problem = await refused.ReadAsync(HttpStatusCode.BadRequest);
+        Assert.Equal(("MSG-GEN-01", "Filters"), (problem.Text("code"), problem.Text("field")));
+        Assert.Contains("Narrow the period or the filters", problem.Text("detail"));
+        // The screen still lists them: only the file is limited, and narrowing the filters opens it again.
+        Assert.Equal(SalesInvoiceSearchService.MaxExportRows + 1, (await sale.Manager.Client.InvoiceListAsync()).GetProperty("page").GetProperty("total").GetInt32());
+        Assert.Equal(HttpStatusCode.OK, (await sale.Manager.Client.ExportInvoicesAsync("?code=HDXLAST")).StatusCode);
+    }
+
+    // PM answer 12/11/2026 (OMTS-224 [5.5]): the filter by the code (DH) of the purchase request the invoice fulfils, and the code in the list and the file.
+    [Fact]
+    public async Task The_order_code_filters_the_list_and_the_file_and_shows_in_both()
+    {
+        using var api = new AuthApiFactory();
+        var sale = await api.SaleSetupAsync();
+        var client = sale.Manager.Client;
+        var ordered = await client.SoldAsync(sale, sale.LotId, 2m);
+        var plain = await client.SoldAsync(sale, sale.LotId, 3m);
+        var orderCode = "DH" + AcsTestKit.NewCode();
+        var request = new PurchaseRequest
+        {
+            Code = orderCode, CustomerId = sale.CustomerId, ProductId = sale.ProductId, ProductName = "Oyster", RequestedCages = 10, PickupDate = PurchaseRequestTestKit.Today, SentAt = DateTimeOffset.UtcNow,
+        };
+        await api.UseDbAsync(db => db.PurchaseRequests.Add(request));
+        await api.UpdateAsync<SalesInvoice>(ordered.Id(), i => i.PurchaseRequestId = request.Id);
+
+        var list = await client.InvoiceListAsync(Query(("orderCode", orderCode)));
+        Assert.Equal([ordered.Text("code")], list.Codes());
+        Assert.Equal(orderCode, list.Rows()[0].Text("orderCode"));
+        Assert.Equal([ordered.Text("code")], (await client.InvoiceListAsync(Query(("orderCode", " " + orderCode[..4] + " ")))).Codes());
+        var wildcard = await client.InvoiceListAsync(Query(("orderCode", "DH%")));
+        Assert.Equal(("MSG-GEN-10", 0), (wildcard.Text("messageCode"), wildcard.Rows().Count));
+        var all = await client.InvoiceListAsync();
+        Assert.Equal(2, all.Rows().Count);
+        Assert.Equal(JsonValueKindNull, all.Rows().Single(r => r.Text("code") == plain.Text("code")).GetProperty("orderCode").ValueKind);
+
+        using var file = await WorkbookAsync(await client.ExportInvoicesAsync(Query(("orderCode", orderCode))));
+        var sheet = file.Worksheet(SalesInvoiceExportSheets.ListSheet);
+        Assert.Equal(("Order", ordered.Text("code"), orderCode, 3), (sheet.Cell(1, 11).GetString(), sheet.Cell(2, 1).GetString(), sheet.Cell(2, 11).GetString(), sheet.LastRowUsed()!.RowNumber()));
+    }
+
+    private const System.Text.Json.JsonValueKind JsonValueKindNull = System.Text.Json.JsonValueKind.Null;
 
     // No formula injection, in the list and the invoice file.
     [Fact]

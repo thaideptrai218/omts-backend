@@ -9,7 +9,8 @@ public class SalesInvoiceAllowedActionsTests
 {
     private static readonly SalesInvoiceCallerRights Owner = new(IsCooperativeOwner: true, MaySell: true, MayCreateReturn: true, MayPrint: true);
     private static readonly SalesInvoiceCallerRights Manager = new(IsCooperativeOwner: false, MaySell: true, MayCreateReturn: true, MayPrint: true);
-    private static readonly SalesInvoiceCallerRights Accountant = new(IsCooperativeOwner: false, MaySell: false, MayCreateReturn: false, MayPrint: false);
+    // The Accountant holds Export on SALES_INVOICES (PM answer 12/11/2026, OMTS-224 [5.1]): it prints and sells, returns, corrects and cancels nothing.
+    private static readonly SalesInvoiceCallerRights Accountant = new(IsCooperativeOwner: false, MaySell: false, MayCreateReturn: false, MayPrint: true);
 
     private static SalesInvoiceActionFacts Facts(
         int status = StatusIds.SalesInvoice.Completed, int delivery = StatusIds.MessageDelivery.Sent, bool finished = true, bool hasReturn = false) =>
@@ -27,8 +28,8 @@ public class SalesInvoiceAllowedActionsTests
         Check(Manager, Facts(), Resend, CreateReturn, Print);
 
     [Fact]
-    public void The_accountant_is_offered_no_command() =>
-        Check(Accountant, Facts());
+    public void The_accountant_is_offered_print_only() =>
+        Check(Accountant, Facts(), Print);
 
     // BR-SALE-09: not while the latest sending is Sending. Not sent and Sent both can be sent again.
     [Theory]
@@ -54,7 +55,7 @@ public class SalesInvoiceAllowedActionsTests
     {
         Check(Owner, Facts(status: StatusIds.SalesInvoice.Cancelled), Print);
         Check(Manager, Facts(status: StatusIds.SalesInvoice.Cancelled), Print);
-        Check(Accountant, Facts(status: StatusIds.SalesInvoice.Cancelled));
+        Check(Accountant, Facts(status: StatusIds.SalesInvoice.Cancelled), Print);
     }
 
     // BR-CLAIM-03: a sales return that is not cancelled blocks Correct, Cancel and a second return; only the Owner cancels it.
@@ -63,7 +64,7 @@ public class SalesInvoiceAllowedActionsTests
     {
         Check(Owner, Facts(hasReturn: true), Resend, CancelReturn, Print);
         Check(Manager, Facts(hasReturn: true), Resend, Print);
-        Check(Accountant, Facts(hasReturn: true));
+        Check(Accountant, Facts(hasReturn: true), Print);
     }
 
     // A Cancelled invoice cannot have an active return in practice: CancelReturn would still be the only way out, so the rule is kept.
