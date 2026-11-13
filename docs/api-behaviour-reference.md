@@ -491,7 +491,7 @@ payment, each with exactly one choice (400 MSG-GEN-01 `Settlement` otherwise, wi
   date of the transfer**; invalid fields are named (`Payment date`, `Method`, `Bank reference`, `Cash account`, `Note`). Both lines are in
   the cash book and no customer debt moves.
 
-200 answers the list as before plus `settled: [{ payment, paidBack, debtAfter }]` (`debtAfter` null when paid back). Only payments
+200 answers the list as before plus `settled: [{ payment, paidBack, debtAfter }]` (`debtAfter` null when paid back; it is the profile's debt after the whole list, so two payments of one profile show the same number). Only payments
 still Awaiting confirmation can be named: a settlement sent again, or lost to a parallel save (row version, unique index on the money
 paid back), is 409 MSG-GEN-09 naming the payment and applies nothing twice. A payment that is not marked (already on a profile, cash at
 the port) is 409 MSG-GEN-09 too. One MSG-DEBT-03 goes to the Owners for the whole list (BR-DEBT-06): `settled_codes`, `settled_count`,
