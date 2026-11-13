@@ -46,10 +46,10 @@ public class SeedingRecordsMigrationTests
         var lane = new Lane { LaneNumber = 1 };
         var cycle = new CultivationCycle { Raft = new Raft { Zone = zone, Code = "B01", Size = "1", Lanes = [lane] }, StartDate = new DateOnly(2026, 1, 1) };
         var account = new Account { Username = "owner", DisplayName = "Owner", SubjectType = SubjectType.CooperativeOwner, StatusId = StatusIds.Account.Active };
-        var item = new FarmingInputItem { Code = "VT001", Name = "Seed", Group = InputItemGroup.Seed, Unit = "con" };
-        db.AddRange(cycle, account, item);
+        // The item is a row of the old schema: the entity has columns that this schema does not have yet.
+        db.AddRange(cycle, account);
         await db.SaveChangesAsync();
-        var lineId = await OldSchemaRows.CompletedReceiptLineAsync(db, await OldSchemaRows.SupplierAsync(db), account.Id, item.Id, "con");
+        var lineId = await OldSchemaRows.CompletedReceiptLineAsync(db, await OldSchemaRows.SupplierAsync(db), account.Id, await OldSchemaRows.InputItemAsync(db, "VT001", "Seed", "Seed", "con"), "con");
 
         await migrator.MigrateAsync();
 

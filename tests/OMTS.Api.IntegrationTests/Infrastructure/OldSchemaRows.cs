@@ -17,6 +17,13 @@ public static class OldSchemaRows
         return id;
     }
 
+    /// <summary>An input item with the columns of every schema before InputItemUnitsGroupsCostAndStockLedger, which adds the units, the group link, the cost and the hidden flag.</summary>
+    public static async Task<Guid> InputItemAsync(OmtsDbContext db, string code, string name, string group, string unit)
+    {
+        var id = Guid.NewGuid();
+        await db.Database.ExecuteSqlAsync($"INSERT INTO FarmingInputItems (Id, Code, Name, [Group], Unit, StatusId, CreatedAt) VALUES ({id}, {code}, {name}, {group}, {unit}, 101, SYSDATETIMEOFFSET())");
+        return id;
+    }
     /// <summary>A supplier with the columns of every schema before SupplierProfileFields, which adds the code.</summary>
     public static async Task<Guid> SupplierAsync(OmtsDbContext db)
     {
