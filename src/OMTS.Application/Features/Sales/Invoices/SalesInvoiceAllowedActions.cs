@@ -1,4 +1,5 @@
 using OMTS.Domain.Constants;
+using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Application.Features.Sales.Invoices;
 
@@ -14,10 +15,10 @@ public enum SalesInvoiceAction
     /// <summary>CLAIM-03.3 (no endpoint yet).</summary>
     CancelReturn,
 
-    /// <summary>SALE-07 (no endpoint yet).</summary>
+    /// <summary>SALE-07.</summary>
     Correct,
 
-    /// <summary>SALE-08 (no endpoint yet).</summary>
+    /// <summary>SALE-08.</summary>
     Cancel,
 
     /// <summary>SALE-09.2: the invoice as a file.</summary>
@@ -36,12 +37,30 @@ public sealed record SalesInvoiceActionFacts(int StatusId, int LatestDeliverySta
 /// <param name="MayPrint">SALES_INVOICES Export in the zone: the Accountant only views (§I.4.4, R).</param>
 public sealed record SalesInvoiceCallerRights(bool IsCooperativeOwner, bool MaySell, bool MayCreateReturn, bool MayPrint);
 
+/// <summary>Why SALE-07 and SALE-08 refuse an invoice; the endpoints answer this, and the same rule decides what is offered.</summary>
+public enum SalesInvoiceChangeRefusal
+{
+    NotCooperativeOwner,
+    NotCompleted,
+    HasSalesReturn,
+}
+
 /// <summary>
 /// SALE-09.1 step 3, "only the commands that the role of the user allows": the rules of BR-SALE-09 (Resend), BR-CLAIM-03 (the sales return), BR-SALE-10 and BR-SALE-11 (Correct and
 /// Cancel, Owner only). Pure, so each role and state has one answer; the commands whose endpoint comes later are worked out here too, so the client does not change when they arrive.
 /// </summary>
 public static class SalesInvoiceAllowedActions
 {
+    /// <summary>BR-SALE-10 and BR-SALE-11: null when the invoice can be corrected or cancelled, which is exactly when <see cref="Of"/> offers Correct and Cancel.</summary>
+    public static SalesInvoiceChangeRefusal? ChangeRefusal(int statusId, bool hasSalesReturn, bool isCooperativeOwner) =>
+        !isCooperativeOwner ? SalesInvoiceChangeRefusal.NotCooperativeOwner
+        : statusId != StatusIds.SalesInvoice.Completed ? SalesInvoiceChangeRefusal.NotCompleted
+        : hasSalesReturn ? SalesInvoiceChangeRefusal.HasSalesReturn
+        : null;
+
+    /// <summary>The CLAIM-03 seam: a sales return that is not cancelled counts here once returns exist (BR-CLAIM-03); none can exist yet.</summary>
+    public static bool HasSalesReturn(SalesInvoice invoice) => false;
+
     public static IReadOnlyList<SalesInvoiceAction> Of(SalesInvoiceActionFacts facts, SalesInvoiceCallerRights rights)
     {
         var cancelled = facts.StatusId == StatusIds.SalesInvoice.Cancelled;
@@ -61,7 +80,7 @@ public static class SalesInvoiceAllowedActions
             actions.Add(SalesInvoiceAction.CancelReturn);
         }
 
-        if (rights.IsCooperativeOwner && facts.StatusId == StatusIds.SalesInvoice.Completed && !facts.HasSalesReturn)
+        if (ChangeRefusal(facts.StatusId, facts.HasSalesReturn, rights.IsCooperativeOwner) is null)
         {
             actions.Add(SalesInvoiceAction.Correct);
             actions.Add(SalesInvoiceAction.Cancel);

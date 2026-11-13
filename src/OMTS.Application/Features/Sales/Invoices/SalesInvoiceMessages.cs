@@ -26,12 +26,37 @@ public sealed class SalesInvoiceMessages(
     /// <summary>Error code of the Not sent row of a customer profile without a phone number (MSG-SALE-16 cause).</summary>
     public const string NoPhoneNumber = "NO_PHONE_NUMBER";
 
+    /// <summary>Error code of the Not sent row of a corrected invoice whose message could not be queued after the commit (SALE-07 POST-5).</summary>
+    public const string NotQueued = "NOT_QUEUED";
+
+    /// <summary>The type of the rows that keep the cancellation notice (SALE-08 step 7): not a sending of the invoice message, and in no list (BR-SALE-09).</summary>
+    public const string CancellationType = "SALES_INVOICE_CANCELLED_MESSAGE";
+
+    /// <summary>
+    /// MSG-SALE-22 added to the caller's save as Sending, to deliver after it; null when nothing is sent (SALE-08.1: a walk-in customer or a profile without a phone number).
+    /// </summary>
+    /// <param name="paidAmount">The payments that are not Cancelled after the cancellation.</param>
+    public async Task<Notification?> QueueCancellationAsync(SalesInvoice invoice, decimal paidAmount, CancellationToken cancellationToken)
+    {
+        if (invoice.Customer is not { } customer || string.IsNullOrWhiteSpace(customer.PhoneNumber))
+        {
+            return null;
+        }
+
+        var cooperative = await cooperatives.GetCurrentAsync(cancellationToken)
+            ?? throw new InvalidOperationException("The cooperative has not been created yet (run the bootstrap command).");
+        var message = UserMessages.InvoiceCancellationNotice(
+            cooperative.ShortName ?? cooperative.FullName, invoice.Code, invoice.InvoiceDate, invoice.Total, paidAmount, cooperative.PhoneNumber ?? "HTX");
+        var content = new NotificationContent(CancellationType, Title, message, new RelatedRecord(RelatedRecordTypes.SalesInvoice, invoice.Id, invoice.Code));
+        return traderMessages.Queue(customer.AccountId, customer.PhoneNumber, content);
+    }
+
     /// <summary>
     /// The sending row, Sending, to deliver after the save. When nothing can be sent (a walk-in customer, or a profile without a phone number, SALE-06.0.E1) the row is
     /// already Not sent, has no phone and keeps MSG-SALE-16 with its cause as the error code, and <c>NotSent</c> is MSG-SALE-16: the invoice then shows Not sent even after
     /// an earlier Sent (SALE-06 POST-1). That row names no receiving account, so the DEBT-01 count never sees it.
     /// </summary>
-    /// <param name="corrected">Sent again after a correction (SALE-07, PR 10).</param>
+    /// <param name="corrected">Sent again after a correction (SALE-07).</param>
     public async Task<(Notification Sending, UserMessage? NotSent)> QueueAsync(SalesInvoice invoice, bool corrected, CancellationToken cancellationToken)
     {
         if (invoice.Customer is not { } customer || string.IsNullOrWhiteSpace(customer.PhoneNumber))
@@ -59,5 +84,15 @@ public sealed class SalesInvoiceMessages(
             invoice.QrToken is { } token ? provenance.Value.LinkOf(token) : null);
         var content = new NotificationContent(MessageType, Title, message, new RelatedRecord(RelatedRecordTypes.SalesInvoice, invoice.Id, invoice.Code));
         return (traderMessages.Queue(customer.AccountId, customer.PhoneNumber, content), null);
+    }
+
+    /// <summary>
+    /// A sending of the corrected invoice that never reached the service, added to the caller's save already Not sent, so the invoice no longer shows an older Sent. It keeps the phone
+    /// like a sending the service refused: MSG-SALE-16 is only for no profile or no phone.
+    /// </summary>
+    public void AddNotQueued(SalesInvoice invoice)
+    {
+        var content = new NotificationContent(MessageType, Title, UserMessages.InvoiceNotQueued(invoice.Code), new RelatedRecord(RelatedRecordTypes.SalesInvoice, invoice.Id, invoice.Code));
+        traderMessages.NotSent(invoice.Customer?.AccountId, content, NotQueued).PhoneNumber = invoice.Customer?.PhoneNumber;
     }
 }

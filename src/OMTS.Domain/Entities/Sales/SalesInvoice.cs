@@ -76,6 +76,16 @@ public class SalesInvoice : AuditableEntity, IHasStatus
     /// <summary>When the end of the sale answered the QR question (SALE-05 step 9) and sent the invoice the first time: it happens once, with or without a QR code.</summary>
     public DateTimeOffset? QrDecidedAt { get; set; }
 
+    /// <summary>The kind, time and reason of the latest correction (SALE-07 POST-1); each correction is kept as one event in the audit log (BR-SALE-10).</summary>
+    public SalesInvoiceCorrectionKind? LastCorrectionKind { get; set; }
+    public DateTimeOffset? LastCorrectedAt { get; set; }
+    public string? LastCorrectionReason { get; set; }
+
+    /// <summary>Set by SALE-08: a Cancelled invoice keeps its cancel date and reason (BR-SALE-11).</summary>
+    public DateTimeOffset? CancelledAt { get; set; }
+    public Guid? CancelledByAccountId { get; set; }
+    public string? CancelReason { get; set; }
+
     public ICollection<SalesInvoiceLine> Lines { get; set; } = [];
     public ICollection<SalesInvoicePriceCut> PriceCuts { get; set; } = [];
     public ICollection<CustomerPayment> Payments { get; set; } = [];

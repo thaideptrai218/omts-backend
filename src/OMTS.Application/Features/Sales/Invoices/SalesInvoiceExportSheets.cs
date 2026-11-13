@@ -11,6 +11,7 @@ public static class SalesInvoiceExportSheets
     public const string LinesSheet = "Lines";
     public const string PaymentsSheet = "Payments";
     public const string SendingsSheet = "Sendings";
+    public const string CorrectionsSheet = "Corrections";
 
     /// <summary>The list, with the total of the Completed invoices of the search as its last row.</summary>
     public static IReadOnlyList<SpreadsheetSheet> List(IReadOnlyList<SalesInvoiceRow> rows, decimal completedTotal, bool withCashAwaiting)
@@ -39,7 +40,7 @@ public static class SalesInvoiceExportSheets
         return [new SpreadsheetSheet(ListSheet, headers, sheetRows)];
     }
 
-    /// <summary>One invoice: its heading, its lines with their amounts down to the total, its payments and its sendings (SALE-09.1 step 2).</summary>
+    /// <summary>One invoice: its heading (with the cancel date and reason once cancelled), its lines with their amounts down to the total, its payments, its sendings and its corrections (SALE-09.1 step 2).</summary>
     public static IReadOnlyList<SpreadsheetSheet> Invoice(SalesInvoiceView invoice) =>
     [
         new SpreadsheetSheet(InvoiceSheet, ["Item", "Value"],
@@ -55,6 +56,7 @@ public static class SalesInvoiceExportSheets
             ["Paid", Paid(invoice.DebtEffect.IsPaid)],
             ["Unpaid", invoice.DebtEffect.Unpaid],
             ["Delivery status", invoice.DeliveryStatus],
+            .. Cancellation(invoice),
         ]),
         new SpreadsheetSheet(LinesSheet, ["Line", "Product", "Harvest lot", "Kg", "Unit price", "Price source", "Amount"],
         [
@@ -69,7 +71,13 @@ public static class SalesInvoiceExportSheets
             invoice.Payments.Select(p => (IReadOnlyList<object?>)[p.Code, p.Kind.ToString(), p.Method.ToString(), p.Amount, p.PaymentDate, Local(p.CreatedAt), p.Status, p.CollectedBy?.Name]).ToList()),
         new SpreadsheetSheet(SendingsSheet, ["Channel", "Delivery status", "Time"],
             invoice.Sendings.Select(s => (IReadOnlyList<object?>)[s.Channel, s.DeliveryStatus, s.DeliveryStatusAt is { } at ? Local(at) : null]).ToList()),
+        new SpreadsheetSheet(CorrectionsSheet, ["Kind", "Date", "Reason", "Total before", "Total after"],
+            invoice.Corrections.Select(c => (IReadOnlyList<object?>)[c.Kind.ToString(), c.Date, c.Reason, c.TotalBefore, c.TotalAfter]).ToList()),
     ];
+
+    private static IReadOnlyList<IReadOnlyList<object?>> Cancellation(SalesInvoiceView invoice) => invoice.CancelledAt is { } cancelledAt
+        ? [["Cancelled at", Local(cancelledAt)], ["Cancel reason", invoice.CancelReason]]
+        : [];
 
     private static string? Paid(bool? isPaid) => isPaid switch
     {
