@@ -112,6 +112,16 @@ public sealed class HarvestLotCorrectionService(
             return invalid;
         }
 
+        // The cages stay within the request (13/11/2026): checked when they grow only, so a lot recorded before the rule can still be corrected in its other fields.
+        if (lot.PurchaseRequest is { } order && read!.CageCount > lot.CageCount)
+        {
+            var others = (await lots.CagesOfPurchaseRequestsAsync([order.Id], cancellationToken)).GetValueOrDefault(order.Id) - lot.CageCount;
+            if (HarvestOrderCages.Refusal(order, others, read.CageCount) is { } tooManyCages)
+            {
+                return tooManyCages;
+            }
+        }
+
         var (crew, crewError) = await crews.ReadAsync(request.Crew, request.CrewUnreadable, cancellationToken);
         if (crewError is not null)
         {

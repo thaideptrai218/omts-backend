@@ -54,7 +54,7 @@ public sealed class HarvestLotRecordingService(
 
     private sealed record OpenRaft(CultivationCycle Cycle, IReadOnlyDictionary<Guid, LaneState> States, decimal KgPerCage);
 
-    private sealed record PreparedLot(HarvestLot Lot, CultivationCycle Cycle, Raft Raft, bool EverySeededLaneHarvested);
+    private sealed record PreparedLot(HarvestLot Lot, CultivationCycle Cycle, Raft Raft, bool EverySeededLaneHarvested, int? OrderCagesTotal, decimal OrderCagesHarvested);
 
     public async Task<Result<HarvestLotSaved>> RecordAsync(Guid raftId, RecordHarvestRequest request, IReadOnlyList<IncomingFile> photos, CancellationToken cancellationToken)
     {
@@ -97,6 +97,11 @@ public sealed class HarvestLotRecordingService(
         if (HarvestProductMatch.Refusal(open.Cycle, order!) is { } wrongProduct)
         {
             return wrongProduct;
+        }
+
+        if (HarvestOrderCages.Refusal(order!, await CagesOfOrderAsync(order!.Id, cancellationToken), firstFields!.CageCount) is { } tooManyCages)
+        {
+            return tooManyCages;
         }
 
         if ((await crews.ReadAsync(request.Crew, request.CrewUnreadable, cancellationToken)).Error is { } wrongCrew)
@@ -170,7 +175,10 @@ public sealed class HarvestLotRecordingService(
                 Common.Concurrency.RowVersionGuard.Encode(done.Cycle.RowVersion),
                 saved.Text,
                 saved.Code,
-                HarvestQuantityRules.KgWarnings(done.Lot.CageCount, done.Lot.KgPerCage, done.Lot.EstimatedKg));
+                HarvestQuantityRules.KgWarnings(done.Lot.CageCount, done.Lot.KgPerCage, done.Lot.EstimatedKg),
+                done.OrderCagesTotal,
+                done.OrderCagesHarvested,
+                HarvestOrderCages.Reached(done.OrderCagesTotal, done.OrderCagesHarvested));
         }
     }
 
@@ -210,6 +218,13 @@ public sealed class HarvestLotRecordingService(
         if (HarvestProductMatch.Refusal(open.Cycle, order!) is { } wrongProduct)
         {
             return wrongProduct;
+        }
+
+        // The lots of the request are read again here, after the uploads: a parallel lot of the same request moved the request row, so the new attempt counts it.
+        var harvestedBefore = await CagesOfOrderAsync(order!.Id, cancellationToken);
+        if (HarvestOrderCages.Refusal(order, harvestedBefore, fields!.CageCount) is { } tooManyCages)
+        {
+            return tooManyCages;
         }
 
         var (crew, crewError) = await crews.ReadAsync(request.Crew, request.CrewUnreadable, cancellationToken);
@@ -263,8 +278,12 @@ public sealed class HarvestLotRecordingService(
             await notifier.CloseReminderAsync(cycle, raft, recorder, cancellationToken);
         }
 
-        return new PreparedLot(lot, cycle, raft, everyHarvested);
+        return new PreparedLot(lot, cycle, raft, everyHarvested, order.AcceptedCages, harvestedBefore + lot.CageCount);
     }
+
+    /// <summary>The cages of the lots already recorded for the request, on every raft.</summary>
+    private async Task<decimal> CagesOfOrderAsync(Guid orderId, CancellationToken cancellationToken) =>
+        (await lots.CagesOfPurchaseRequestsAsync([orderId], cancellationToken)).GetValueOrDefault(orderId);
 
     /// <summary>The share each lane of the new lot takes (<see cref="LanePercentGuard.ForHarvest"/>), checked against what the other lots and the manual changes of the cycle already hold.</summary>
     private async Task<Result<IReadOnlyDictionary<Guid, decimal?>>> SharesAsync(RecordHarvestRequest request, HarvestLotFields fields, Guid cycleId, CancellationToken cancellationToken) =>

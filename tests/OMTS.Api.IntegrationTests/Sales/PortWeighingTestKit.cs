@@ -1,9 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Farming;
 using OMTS.Api.IntegrationTests.Harvest;
 using OMTS.Api.IntegrationTests.Infrastructure;
+using OMTS.Infrastructure.Persistence;
 
 namespace OMTS.Api.IntegrationTests.Sales;
 
@@ -20,13 +23,28 @@ public static class PortWeighingTestKit
     {
         int[] counts = cagesOfLots.Length == 0 ? [8, 8] : cagesOfLots;
         var lots = new List<Guid>();
+        // The lots of a request never exceed its accepted cages (13/11/2026): a small request the sale tests harvest more than it accepted is given room while the lots are recorded, then back its own cages.
+        var accepted = await SetAcceptedCagesAsync(sale.Owner.Client, request.Id(), atLeast: counts.Sum());
         foreach (var cages in counts)
         {
             lots.Add((await sale.Owner.Client.HarvestLotAsync(sale.RaftId, new HarvestFields { Lanes = ["3"], Cages = cages.ToString() }.For(request.Id()))).Id());
         }
 
+        await SetAcceptedCagesAsync(sale.Owner.Client, request.Id(), exactly: accepted);
         await sale.Owner.Client.MarkHarvestDoneAsync(request.Id());
         return sale with { LotId = lots[0], OtherLotId = lots.Count > 1 ? lots[1] : sale.OtherLotId };
+    }
+
+    /// <summary>Writes the accepted cages of a request straight to the database: at least <paramref name="atLeast"/>, or exactly <paramref name="exactly"/>. Answers what it was before.</summary>
+    private static async Task<int?> SetAcceptedCagesAsync(HttpClient client, Guid requestId, int? atLeast = null, int? exactly = null)
+    {
+        using var scope = TestHosts.ServicesOf(client).CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
+        var row = await db.PurchaseRequests.SingleAsync(r => r.Id == requestId);
+        var before = row.AcceptedCages;
+        row.AcceptedCages = atLeast is { } least ? Math.Max(before ?? 0, least) : exactly;
+        await db.SaveChangesAsync();
+        return before;
     }
 
     /// <summary>A line of an invoice made from a weighing: the kg is the weighed one.</summary>

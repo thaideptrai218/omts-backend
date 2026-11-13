@@ -118,8 +118,12 @@ public sealed record HarvestLotView(
 /// <param name="CycleRowVersion">The new version of the cycle, as every lot moves it.</param>
 /// <param name="Message">MSG-GEN-05 "Harvest lot saved.".</param>
 /// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
+/// <param name="OrderCagesTotal">The cages the purchase request accepted; set when a lot is recorded (null after a correction).</param>
+/// <param name="OrderCagesHarvested">The cages harvested for the request including this lot.</param>
+/// <param name="OrderComplete">This lot brought the request to its accepted cages (e.g. 15/15): the web says so. The harvest is not marked done by it; that stays the Owner's act.</param>
 public sealed record HarvestLotSaved(
-    HarvestLotView Lot, bool EverySeededLaneHarvested, string CycleRowVersion, string Message, string MessageCode, IReadOnlyList<Features.Farming.FarmingWarning>? Warnings = null);
+    HarvestLotView Lot, bool EverySeededLaneHarvested, string CycleRowVersion, string Message, string MessageCode, IReadOnlyList<Features.Farming.FarmingWarning>? Warnings = null,
+    int? OrderCagesTotal = null, decimal? OrderCagesHarvested = null, bool OrderComplete = false);
 
 /// <summary>A lane on the Harvest lots screen, with its state today (BR-FARM-03).</summary>
 /// <param name="CanHarvest">The lane can be chosen for a new lot now: In Use, Growing or Being harvested, on a raft that can record.</param>
@@ -191,9 +195,13 @@ public sealed record HarvestLotsScreen(
 /// <param name="PlannedOnRaft">Its work plan names this raft: the form picks it first.</param>
 /// <param name="ProductId">The product the request asks for.</param>
 /// <param name="MatchesCycleProduct">True when the Open cycle has no product, or this is its product (13/11/2026): a lot is recorded only for such a request, else 400 HARVEST_PRODUCT_MISMATCH. The list keeps every open request; the client filters.</param>
+/// <param name="Trips">Where the harvested cages came from (13/11/2026: one request is often gathered from several rafts, also in other zones): the lots already recorded for it grouped per raft, newest first, at most 10. Empty when nothing was harvested.</param>
 public sealed record HarvestOrderOption(
     Guid Id, string Code, string CustomerName, string ProductName, int AcceptedCages, decimal HarvestedCages, DateOnly PickupDate, DateOnly? WorkDate, bool PlannedOnRaft,
-    Guid? ProductId = null, bool MatchesCycleProduct = true);
+    Guid? ProductId = null, bool MatchesCycleProduct = true, IReadOnlyList<HarvestOrderTrip>? Trips = null);
+
+/// <summary>The cages harvested for a request from one raft: the raft, its zone, the total of its lots and the date of the latest one.</summary>
+public sealed record HarvestOrderTrip(string RaftCode, string ZoneCode, decimal Cages, DateOnly RecordedOn);
 
 /// <summary>The harvest settings (HARVEST-03).</summary>
 public sealed record HarvestSettingsView(decimal AverageKgPerCage, int DaysBeforeAutoClose, string RowVersion);
