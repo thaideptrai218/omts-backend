@@ -314,51 +314,7 @@ public sealed class CustomerPaymentService(
             return [];
         }
 
-        var unpaid = reading.UnpaidInvoices.ToDictionary(u => u.Id);
-        if (request.Allocations is { } sent)
-        {
-            var parts = new List<(Guid InvoiceId, decimal Amount)>();
-            for (var i = 0; i < sent.Count; i++)
-            {
-                var field = $"Allocation {i + 1}";
-                if (!unpaid.TryGetValue(sent[i].InvoiceId!.Value, out var invoice))
-                {
-                    error = AppError.Invalid(field, "Not an invoice of this customer with money left to pay.");
-                    return [];
-                }
-
-                if (sent[i].Amount > invoice.Unpaid)
-                {
-                    error = AppError.Invalid(field, $"Invoice {invoice.Code} has {invoice.Unpaid:0} VND left to pay.");
-                    return [];
-                }
-
-                parts.Add((invoice.Id, sent[i].Amount!.Value));
-            }
-
-            return parts;
-        }
-
-        if (!oldestFirstWhenNone)
-        {
-            return [];
-        }
-
-        var oldestFirst = new List<(Guid InvoiceId, decimal Amount)>();
-        var remaining = covers;
-        foreach (var invoice in reading.UnpaidInvoices)
-        {
-            if (remaining <= 0)
-            {
-                break;
-            }
-
-            var part = Math.Min(remaining, invoice.Unpaid);
-            oldestFirst.Add((invoice.Id, part));
-            remaining -= part;
-        }
-
-        return oldestFirst;
+        return CustomerPaymentAllocationParts.Of(request.Allocations, covers, reading, oldestFirstWhenNone, out error);
     }
 
     /// <summary>The VietQR code of a payment waiting for its transfer: its code as the content, its amount, the bank account chosen. Null when the account cannot make one.</summary>

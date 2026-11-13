@@ -151,16 +151,19 @@ public static class UserMessages
     public const int BatchDebtsNamed = 5;
 
     /// <summary>
-    /// MSG-DEBT-03 for one list of payments Awaiting confirmation (DEBT-02.2 step 6): one notice names the payments confirmed and cancelled. Confirmations change no debt
-    /// (BR-DEBT-02); the debt text names the debt after each cancellation of a profile's payment. A list may hold up to 200 payments (CustomerPaymentRules.MaxBatchSize),
-    /// so the notice names the first <see cref="BatchCodesNamed"/> codes of each part and the first <see cref="BatchDebtsNamed"/> debts and counts the rest: its text and
-    /// parameters always fit the Notification row (2000 characters each), which would otherwise cut the text and drop the parameters.
+    /// MSG-DEBT-03 for one list of payments Awaiting confirmation (DEBT-02.2 step 6): one notice names the payments confirmed, cancelled and settled (BR-DEBT-06). Confirmations
+    /// change no debt (BR-DEBT-02); the debt text names the debt after each cancellation of a profile's payment and each attachment to a profile. A list may hold up to 200
+    /// payments (CustomerPaymentRules.MaxBatchSize), so the notice names the first <see cref="BatchCodesNamed"/> codes of each part and the first <see cref="BatchDebtsNamed"/>
+    /// debts and counts the rest: its text and parameters always fit the Notification row (2000 characters each), which would otherwise cut the text and drop the parameters.
     /// </summary>
-    /// <param name="debts">The debt after the save of each profile a cancelled payment belonged to.</param>
+    /// <param name="debts">The debt after the save of each profile a cancelled or attached payment belonged to.</param>
+    /// <param name="settled">The payments settled from the list (DEBT-02.6).</param>
     public static UserMessage CustomerPaymentsBatch(
         string userName, IReadOnlyList<(string Code, decimal Amount)> confirmed, IReadOnlyList<(string Code, decimal Amount)> cancelled,
-        IReadOnlyList<(string CustomerName, decimal Debt)> debts)
+        IReadOnlyList<(string CustomerName, decimal Debt)> debts, IReadOnlyList<(string Code, decimal Amount)>? settled = null)
     {
+        settled ??= [];
+
         static string Codes(IReadOnlyList<(string Code, decimal Amount)> payments) =>
             string.Join(", ", payments.Take(BatchCodesNamed).Select(p => p.Code)) + (payments.Count > BatchCodesNamed ? $" and {payments.Count - BatchCodesNamed} more" : "");
 
@@ -180,9 +183,14 @@ public static class UserMessages
             parts.Add(Part("cancelled", cancelled));
         }
 
+        if (settled.Count > 0)
+        {
+            parts.Add(Part("settled", settled));
+        }
+
         var namedDebts = debts.Take(BatchDebtsNamed).ToList();
         var moreDebts = More(debts.Count, BatchDebtsNamed);
-        var debtText = cancelled.Count == 0
+        var debtText = cancelled.Count == 0 && debts.Count == 0
             ? "The customer debts have not changed."
             : string.Join(' ', namedDebts.Select(d => CustomerDebtAfterText(d.CustomerName, d.Debt)))
                 + (moreDebts == 0 ? "" : moreDebts == 1 ? " The debt of 1 more customer has changed." : $" The debts of {moreDebts} more customers have changed.");
@@ -200,7 +208,11 @@ public static class UserMessages
                 ["cancelled_count"] = cancelled.Count,
                 ["cancelled_more_count"] = More(cancelled.Count, BatchCodesNamed),
                 ["cancelled_amount"] = cancelled.Sum(p => p.Amount),
-                ["amount"] = confirmed.Sum(p => p.Amount) + cancelled.Sum(p => p.Amount),
+                ["settled_codes"] = settled.Take(BatchCodesNamed).Select(p => p.Code).ToList(),
+                ["settled_count"] = settled.Count,
+                ["settled_more_count"] = More(settled.Count, BatchCodesNamed),
+                ["settled_amount"] = settled.Sum(p => p.Amount),
+                ["amount"] = confirmed.Sum(p => p.Amount) + cancelled.Sum(p => p.Amount) + settled.Sum(p => p.Amount),
                 ["debts"] = namedDebts.Select(d => new Dictionary<string, object?> { ["customer_name"] = d.CustomerName, ["debt_amount"] = d.Debt }).ToList(),
                 ["debts_more_count"] = moreDebts,
             },

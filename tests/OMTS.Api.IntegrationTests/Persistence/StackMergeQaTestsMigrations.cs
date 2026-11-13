@@ -39,6 +39,7 @@ public class StackMergeQaTestsMigrations
         "20261109181525_PurchaseReceiptTimeReceiverAndLineDiscount", "20261109192443_PurchaseReturnTimeAndSupplierPaymentAllocations", "20261110060643_CashBookVouchersAccountsAndTypes", "20261110132829_CustomerProfilePaymentsAllocationsAndAdjustments", "20261110142548_CustomerPaymentsReceivingCashAccount",
         "20261110180344_EmployeeCodeAndProfileFields", "20261110184644_RemoveEmployeeEmail", "20261110191810_WorkAssignmentsAttendanceAndEmployeeRequests", "20261110194730_InputItemUnitsGroupsCostAndStockLedger", "20261110201057_InputIssuesAndIssueTypes",
         "20261110201319_PayrollSheetsPayslipsAndWagePayments", "20261110202530_CustomerSettings", "20261111080000_InputGroupParentsIssueHeaderRaftAndMovementCodes", "20261111135229_CageOrdersWorkPlansHarvestAndWeighing", "20261113082149_EmployeeAppAuth",
+        "20261113114954_SettleCustomerPayments",
     ];
 
     private const string MigrationBeforeSeeding = "20261106084757_MaterialUsages";

@@ -664,8 +664,9 @@ same `bankReference` again to replay it.
   A transfer time before 2000 or more than a day ahead is `Invalid`. A sale that can no longer be saved when its transfer arrives
   (a record it names is gone) never fails the notification: it is stopped by the system (audit `SalesInvoice.SaleStopped`, the
   reason says why) and the transfer is kept `WithoutCustomer`.
-- What a transfer becomes (GFR-08), a customer payment with the method VietQR code of the invoice, Awaiting confirmation,
-  recorded by the system (audit actor: the system), with the amount, bank reference and time reported:
+- What a transfer becomes (GFR-08), a customer payment with the method VietQR code of the invoice, Completed when a saved
+  invoice has the code and Awaiting confirmation when none has, recorded by the system (audit actor: the system), with the
+  amount, bank reference and time reported, and the bank account of the cash book that is the receiving account when there is one:
   - `Ignored` (nothing recorded): `Outgoing`, `NotTheReceivingAccount` (another account, or the account before a change,
     BR-DEBT-01), `NoInvoiceCode` (no `HD` + 6 to 12 digits in the content, not glued to letters before it; case and a separator after HD are tolerated),
     `Invalid`.
@@ -676,9 +677,42 @@ same `bankReference` again to replay it.
     as it is) and MSG-SALE-08 to the Owners; the invoice and its cash are the Zone Manager's (creator, collector, audit actor).
   - `WithoutCustomer`: no saved invoice has the code (Stop sale, an unknown code, or less than the sale awaits, which then keeps
     waiting and shows it in `receivedAmount`): no customer and no invoice, the code kept in `transferInvoiceCode` of the
-    payment, listed Awaiting confirmation for the Accountant (DEBT-02.6). Until DEBT-02.6 (settle: attach to a profile, or pay it
-    back) ships in PR 7b, such a payment cannot be confirmed (409 MSG-GEN-09 "Customer payment PT… is without a customer profile …",
-    `needsSettlement: true`), so it stays in the list; it can be cancelled.
+    payment, listed Awaiting confirmation for the Accountant (DEBT-02.6). Such a payment cannot be confirmed plainly (409
+    MSG-GEN-09 "Customer payment PT… is without a customer profile …", `needsSettlement: true`): it is settled, see below; it can
+    be cancelled.
+
+#### Settling a payment without a customer (DEBT-02.6)
+
+A transfer held `WithoutCustomer` (no customer, no saved invoice) is marked `needsSettlement: true` in the rows of
+`GET /api/customer-payments/awaiting-confirmation` (and `GET /api/customer-payments/{id}`) while it is Awaiting confirmation. The
+Accountant or the Owner (`CUSTOMER_PAYMENTS` Edit; Zone Manager and trader 403, anonymous 401) settles it in the same list save as
+the confirmations and cancellations, `POST /api/customer-payments/confirmations`, which now also takes `settle`: one entry per
+payment, each with exactly one choice (400 MSG-GEN-01 `Settlement` otherwise, with `paymentId`):
+
+- `{ id, customerId, allocations? }` attaches the payment to a customer profile. It is allocated like every other payment:
+  `allocations` `[{ invoiceId, amount }]` names the unpaid invoices of the profile it pays (at most what each has left, together at
+  most the amount), left out it covers the oldest unpaid invoices first, `[]` only takes it off the debt. It becomes **Completed**
+  (confirmed by the caller), counts in the debt of the profile and, with the bank account it arrived in (`cashAccount`), is a line of
+  the Bank fund of the cash book. A merged profile is 409 MSG-GEN-09, an unknown one 400 `Customer`; two payments of one list on one
+  profile cannot pay the same invoice twice (400 `Allocation n`, naming the payment).
+- `{ id, payBack: { paymentDate, method, bankReference?, note?, confirmDuplicateBankReference?, cashAccountId? } }` pays all of it
+  back: the payment becomes **Completed** with no customer and a money paid back of the same amount is recorded (Completed, no
+  customer, `paidBackForPaymentId` = the payment, collected by the caller). `method` is `Cash` (the Cash fund) or `OtherTransfer`
+  (needs `bankReference`, MSG-DEBT-05 when a payment that is not cancelled has it, also an earlier pay back of the same list; leaves
+  the Bank account `cashAccountId`, by default the one the transfer arrived in). `paymentDate` is not after today and **not before the
+  date of the transfer**; invalid fields are named (`Payment date`, `Method`, `Bank reference`, `Cash account`, `Note`). Both lines are in
+  the cash book and no customer debt moves.
+
+200 answers the list as before plus `settled: [{ payment, paidBack, debtAfter }]` (`debtAfter` null when paid back). Only payments
+still Awaiting confirmation can be named: a settlement sent again, or lost to a parallel save (row version, unique index on the money
+paid back), is 409 MSG-GEN-09 naming the payment and applies nothing twice. A payment that is not marked (already on a profile, cash at
+the port) is 409 MSG-GEN-09 too. One MSG-DEBT-03 goes to the Owners for the whole list (BR-DEBT-06): `settled_codes`, `settled_count`,
+`settled_more_count`, `settled_amount` join the confirmed and cancelled ones, `amount` covers all three, and `debts` also lists the
+profiles a payment was attached to. Audit: `CustomerPayment.Settled` (settlement kind, profile, bank account, parts, money paid back),
+`CustomerPayment.Recorded` on the money paid back. Money paid back is cancelled with `POST /api/customer-payments/{id}/cancel`: the
+payment it settled goes back to Awaiting confirmation, out of the cash book, marked again (audit `CustomerPayment.SettlementUndone`);
+while money paid back stands, cancelling the payment itself is 409 MSG-GEN-09 `hasMoneyPaidBack: true`. A transfer short of a sale
+still awaiting it counts in `receivedAmount` of that sale only while it is Awaiting confirmation.
 
 ### Background jobs
 

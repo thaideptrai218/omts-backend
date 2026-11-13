@@ -289,6 +289,7 @@ public static class DependencyInjection
         // DEBT-02 customer payments, money paid back, confirmations and cancellations
         services.AddScoped<CustomerPaymentViews>();
         services.AddScoped<CustomerPaymentStatusChanges>();
+        services.AddScoped<CustomerPaymentSettlements>();
         services.AddScoped<CustomerPaymentNotifications>();
         services.AddScoped<CustomerPaymentService>();
         services.AddScoped<CustomerPaymentCodeService>();

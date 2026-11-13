@@ -320,6 +320,10 @@ public class VietQrWebhookQaTests
 
         public void RemoveAllocation(CustomerPaymentAllocation allocation) => inner.RemoveAllocation(allocation);
 
+        public void AddAllocation(CustomerPaymentAllocation allocation) => inner.AddAllocation(allocation);
+
+        public Task<bool> HasMoneyPaidBackAsync(Guid paymentId, CancellationToken cancellationToken) => inner.HasMoneyPaidBackAsync(paymentId, cancellationToken);
+
         public Task<Guid?> FindIdByCodeAsync(string code, Guid? exceptPaymentId, CancellationToken cancellationToken) => inner.FindIdByCodeAsync(code, exceptPaymentId, cancellationToken);
 
         public Task<IReadOnlyList<CustomerPayment>> GetPendingTransfersAsync(CancellationToken cancellationToken) => inner.GetPendingTransfersAsync(cancellationToken);
