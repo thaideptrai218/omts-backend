@@ -5199,6 +5199,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<Guid?>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -5230,6 +5233,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Name")
                         .IsUnique();
+
+                    b.HasIndex("ProductId");
 
                     b.HasIndex("StatusId");
 
@@ -8663,6 +8668,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ItemGroupId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("OMTS.Domain.Entities.Sales.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Platform.Status", "Status")
                         .WithMany()
                         .HasForeignKey("StatusId")
@@ -8670,6 +8680,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("ItemGroup");
+
+                    b.Navigation("Product");
 
                     b.Navigation("Status");
                 });

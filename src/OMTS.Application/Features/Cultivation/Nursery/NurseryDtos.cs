@@ -47,7 +47,8 @@ public sealed record NurseryUsageView(Guid CycleId, DateOnly CycleStartDate, str
 public sealed record NurseryBatchListItem(
     Guid Id, string Code, Guid ZoneId, string ZoneCode, string ZoneName, string SeedLotCode, string? ItemName, string Unit, string SupplierName, decimal QuantityIn, DateOnly StartDate,
     int DaysNursing, int StatusId, string Status, string StatusLabel, DateOnly? CompletedOn, decimal? Survivors, decimal? LossPieces, decimal? LossPercent, bool Estimated,
-    string RowVersion, decimal? Seeded = null, decimal? Remaining = null, DateOnly? ClosedOn = null, decimal? CloseLossPieces = null);
+    string RowVersion, decimal? Seeded = null, decimal? Remaining = null, DateOnly? ClosedOn = null, decimal? CloseLossPieces = null,
+    Guid? ProductId = null, string? ProductName = null, string? SeedItemName = null);
 
 /// <summary>A batch in full (NURSERY-02).</summary>
 /// <param name="SeedLotOnHand">What the lot has on hand now (received, less returns and everything consumed), in <c>unit</c>.</param>
@@ -63,7 +64,8 @@ public sealed record NurseryBatchView(
     IReadOnlyList<NurseryPhotoView> StartPhotos, IReadOnlyList<NurseryPhotoView> CompletionPhotos,
     bool CanEdit, bool CanComplete, bool CanCorrectSurvivors, string RowVersion,
     decimal? Seeded = null, decimal? Remaining = null, DateOnly? ClosedOn = null, decimal? CloseLossPieces = null, string? CloseReason = null, bool CanClose = false,
-    IReadOnlyList<NurseryUsageView>? Usage = null);
+    IReadOnlyList<NurseryUsageView>? Usage = null,
+    Guid? ProductId = null, string? ProductName = null, string? SeedItemName = null);
 
 /// <param name="Message">MSG-GEN-05 "Nursery batch saved.".</param>
 public sealed record NurseryBatchSaved(NurseryBatchView Batch, string Message, string MessageCode);
@@ -84,9 +86,13 @@ public sealed record NurseryListQuery(
 /// <summary>The seed lots a nursery can take (a lot with something on hand), for the form of NURSERY-01.</summary>
 public sealed record NurserySeedLotList(Guid ZoneId, IReadOnlyList<SeedLotOption> Lots, string? Message, string? MessageCode);
 
-/// <summary>A batch ready to be chosen when a cycle is started (v2): Completed with pieces left in the pool.</summary>
+/// <summary>
+/// A batch ready to be chosen when a cycle is started (v2): Completed with pieces left in the pool. <paramref name="ProductId"/>/<paramref name="ProductName"/> are the product the seed item sells as (13/11/2026; null when
+/// the item has none: starting a cycle from the batch is then refused with SEED_ITEM_WITHOUT_PRODUCT); <paramref name="SeedItemName"/> is the name of the seed item (as <paramref name="ItemName"/>).
+/// </summary>
 public sealed record AvailableNurseryBatch(
-    Guid Id, string Code, Guid ZoneId, string ZoneCode, string SeedLotCode, string? ItemName, string Unit, decimal QuantityIn, decimal Survivors, decimal Seeded, decimal Remaining, DateOnly? CompletedOn);
+    Guid Id, string Code, Guid ZoneId, string ZoneCode, string SeedLotCode, string? ItemName, string Unit, decimal QuantityIn, decimal Survivors, decimal Seeded, decimal Remaining, DateOnly? CompletedOn,
+    Guid? ProductId = null, string? ProductName = null, string? SeedItemName = null);
 
 public sealed record AvailableNurseryList(IReadOnlyList<AvailableNurseryBatch> Batches);
 

@@ -17,13 +17,14 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 internal sealed class DemoNurseryStep : IDemoSeedStep
 {
     /// <param name="MinOnHand">What the lot must still have on hand to be used.</param>
+    /// <param name="ItemCodes">The seed items the lot is taken from when one of them has stock (so the demo shows both a "Hàu béo" seed, VT001/VT002, and a "Hàu sữa" one, VT003, ready); any lot otherwise.</param>
     /// <param name="Survivors">When set, the batch is completed right away with these survivors, <paramref name="CompletedDaysAgo"/> days ago.</param>
-    private sealed record Plan(string Note, decimal Pieces, int StartedDaysAgo, decimal MinOnHand, decimal? Survivors = null, int CompletedDaysAgo = 0);
+    private sealed record Plan(string Note, decimal Pieces, int StartedDaysAgo, decimal MinOnHand, decimal? Survivors = null, int CompletedDaysAgo = 0, string[]? ItemCodes = null);
 
     private static readonly Plan[] Plans =
     [
-        new("Đợt ươm demo 1: đã ươm xong, sẵn sàng thả (9.500 mảnh sống sót)", 10_000m, 12, 10_000m, 9_500m, 3),
-        new("Đợt ươm demo 2: đã ươm xong, sẵn sàng thả (6.000 mảnh sống sót)", 6_500m, 9, 6_500m, 6_000m, 2),
+        new("Đợt ươm demo 1: đã ươm xong, sẵn sàng thả (9.500 mảnh sống sót)", 10_000m, 12, 10_000m, 9_500m, 3, ["VT001", "VT002"]),
+        new("Đợt ươm demo 2: đã ươm xong, sẵn sàng thả (6.000 mảnh sống sót)", 6_500m, 9, 6_500m, 6_000m, 2, ["VT003"]),
         new("Đợt ươm demo 3: vào ươm 7 ngày trước, chờ ươm xong", 3_500m, 7, 3_500m),
     ];
 
@@ -49,7 +50,13 @@ internal sealed class DemoNurseryStep : IDemoSeedStep
             var lots = DemoSeedContext.Ensure(await context.Get<NurseryReadService>().SeedLotsAsync(zoneId, cancellationToken), "seed lots for the demo nursery");
             var start = context.Today.AddDays(-plan.StartedDaysAgo);
             var fitting = lots.Lots.Where(l => l.OnHand >= plan.MinOnHand && l.ReceivedDate <= start).OrderByDescending(l => l.OnHand).ToList();
-            var lot = fitting.FirstOrDefault(l => !usedLots.Contains(l.Id)) ?? fitting.FirstOrDefault();
+            var preferred = plan.ItemCodes is null ? fitting : fitting.Where(l => plan.ItemCodes.Contains(l.ItemCode)).ToList();
+            if (preferred.Count == 0)
+            {
+                preferred = fitting;
+            }
+
+            var lot = preferred.FirstOrDefault(l => !usedLots.Contains(l.Id)) ?? preferred.FirstOrDefault();
             if (lot is null)
             {
                 context.Notes.Add($"Demo nursery: no seed lot has enough stock left for \"{plan.Note}\", so that nursery batch was not started.");

@@ -16,9 +16,6 @@ public sealed class CyclePlanForm
     /// <summary>The nursery batch the cycle draws its seed from (v2, 13/11/2026): required to start a cycle.</summary>
     public string? NurseryBatchId { get; set; }
 
-    /// <summary>The product the cycle will yield and sell (13/11/2026): required to start a cycle.</summary>
-    public string? ProductId { get; set; }
-
     public string? Note { get; set; }
 
     public string? StartDate { get; set; }
@@ -40,7 +37,7 @@ public sealed class CyclePlanForm
     /// <summary>The start of a cycle (v2): a blank raft in the form takes <paramref name="routeRaftId"/>; ids that cannot be read become none, which the service refuses by name.</summary>
     public CreateCycleRequest ToCreate(bool otherFilePart, Guid? routeRaftId = null) => new(
         routeRaftId ?? (Guid.TryParse(RaftId, out var raft) ? raft : null), Guid.TryParse(NurseryBatchId, out var batch) ? batch : null, Date(StartDate),
-        Number(TargetYieldKg), Note, otherFilePart, Guid.TryParse(ProductId, out var product) ? product : null);
+        Number(TargetYieldKg), Note, otherFilePart);
 
     /// <summary>The OLD start without a nursery batch: used only by the test seam; no public route reads it since v2.</summary>
     public StartCycleRequest ToStart(bool otherFilePart)

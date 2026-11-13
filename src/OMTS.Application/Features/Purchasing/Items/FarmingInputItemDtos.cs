@@ -19,6 +19,7 @@ public sealed record ItemUnitInput(Guid? Id, Guid? UnitId, string? UnitName, dec
 /// <param name="ItemGroupId">A user group, optional.</param>
 /// <param name="OpeningQuantity">Base units on hand when the item is created, or the correction of the opening quantity while it is the item's only movement.</param>
 /// <param name="Unit">The base unit by name when <paramref name="Units"/> is omitted on a create.</param>
+/// <param name="ProductId">Seed items only (ignored for the other types): the product sold when this seed is grown (13/11/2026). Like every field, left out = cleared.</param>
 public sealed record SaveFarmingInputItemRequest(
     string? Code,
     string? Name,
@@ -32,7 +33,8 @@ public sealed record SaveFarmingInputItemRequest(
     decimal? MaxQuantity = null,
     decimal? CostPrice = null,
     decimal? OpeningQuantity = null,
-    IReadOnlyList<ItemUnitInput>? Units = null);
+    IReadOnlyList<ItemUnitInput>? Units = null,
+    Guid? ProductId = null);
 
 /// <param name="IsUsed">On a receipt or return line (or planned by a cultivation cycle): the factor and unit of this item unit are fixed and it cannot be removed.</param>
 public sealed record ItemUnitView(Guid Id, Guid UnitId, string Name, decimal Factor, string Code, bool IsBase, bool IsUsed);
@@ -67,7 +69,9 @@ public sealed record FarmingInputItemListItem(
     string Status,
     DateTimeOffset CreatedAt,
     string? CreatedBy,
-    string RowVersion);
+    string RowVersion,
+    Guid? ProductId = null,
+    string? ProductName = null);
 
 /// <summary>The detail of an item: every column of the list plus every photo.</summary>
 /// <param name="HasMovements">A receipt, return, material usage or movement names the item: the base unit is then fixed.</param>
@@ -98,11 +102,13 @@ public sealed record FarmingInputItemView(
     string RowVersion,
     IReadOnlyList<ItemPhotoView> Photos,
     bool HasMovements,
-    decimal? OpeningQuantity)
+    decimal? OpeningQuantity,
+    Guid? ProductId = null,
+    string? ProductName = null)
 {
     public static FarmingInputItemView Of(FarmingInputItemListItem i, IReadOnlyList<ItemPhotoView> photos, bool hasMovements, decimal? openingQuantity) => new(
         i.Id, i.Code, i.Name, i.Group, i.ItemGroupId, i.ItemGroupName, i.Unit, i.Units, i.Description, i.Notes, photos.Count > 0 ? photos[0].Url : null, i.MinQuantity, i.MaxQuantity,
-        i.CostPrice, i.LastPurchasePrice, i.OnHand, i.StockValue, i.IsUsed, i.StatusId, i.Status, i.CreatedAt, i.CreatedBy, i.RowVersion, photos, hasMovements, openingQuantity);
+        i.CostPrice, i.LastPurchasePrice, i.OnHand, i.StockValue, i.IsUsed, i.StatusId, i.Status, i.CreatedAt, i.CreatedBy, i.RowVersion, photos, hasMovements, openingQuantity, i.ProductId, i.ProductName);
 }
 public enum InputItemStatusFilter
 {

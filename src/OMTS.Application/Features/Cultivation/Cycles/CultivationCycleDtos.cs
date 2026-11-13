@@ -14,15 +14,15 @@ public sealed record StartCycleRequest(DateOnly? StartDate, decimal? ExpectedSee
 
 /// <summary>
 /// CYCLE-01.0 (v2, 13/11/2026): a cycle is started by hand from a nursery batch that is ready. Without <see cref="StartDate"/> the cycle starts today; <see cref="NurseryBatchId"/> and a <see cref="TargetYieldKg"/> above
-/// 0 are required. The plan carries 1 to 3 photos beside it. <see cref="RaftId"/> is read from the form, or from the route of the raft.
+/// 0 are required. The plan carries 1 to 3 photos beside it. <see cref="RaftId"/> is read from the form, or from the route of the raft. There is no product to send (13/11/2026): the cycle farms the product of the seed item of the batch.
 /// </summary>
-public sealed record CreateCycleRequest(Guid? RaftId, Guid? NurseryBatchId, DateOnly? StartDate, decimal? TargetYieldKg, string? Note, bool OtherFilePart = false, Guid? ProductId = null);
+public sealed record CreateCycleRequest(Guid? RaftId, Guid? NurseryBatchId, DateOnly? StartDate, decimal? TargetYieldKg, string? Note, bool OtherFilePart = false);
 
 /// <summary>
 /// CYCLE-01.1: the start date and the plan estimates as they should be; a plan estimate sent empty is cleared. A cycle that draws from a nursery batch (v2) keeps what is left out (null) and takes only the target yield,
 /// the start date, the <paramref name="Note"/> (sent empty to clear) and the <paramref name="NurseryBatchId"/> (only before the first seeding record, 409 CYCLE_SEED_LOCKED).
 /// </summary>
-public sealed record EditCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, decimal? TargetYieldKg, string? RowVersion, string? Note = null, Guid? NurseryBatchId = null, Guid? ProductId = null);
+public sealed record EditCycleRequest(DateOnly? StartDate, decimal? ExpectedSeedQuantity, decimal? TargetYieldKg, string? RowVersion, string? Note = null, Guid? NurseryBatchId = null);
 
 /// <summary>CYCLE-01.2.</summary>
 public sealed record CancelCycleRequest(string? RowVersion);
@@ -35,7 +35,8 @@ public sealed record CancelCycleRequest(string? RowVersion);
 /// <param name="SeedLot">The seed lot of the batch (read only), traced to its receipt and supplier.</param>
 /// <param name="CanChangeNursery">The cycle is Open and has no seeding record yet: the batch can still be changed (CYCLE-01.1, v2).</param>
 /// <param name="ProductId">The product the cycle will yield and sell, which a harvest lot's purchase request must match (13/11/2026); null on a cycle started before, which is not checked.</param>
-/// <param name="CanChangeProduct">The same condition as <paramref name="CanChangeNursery"/>: the product can still be changed.</param>
+/// <param name="CanChangeProduct">The same condition as <paramref name="CanChangeNursery"/>: the product can still change, by changing the batch (it is derived from the seed item of the batch).</param>
+/// <param name="SeedItemName">The seed item of the batch's seed lot, whose product the cycle farms; null without a batch.</param>
 public sealed record CycleView(
     Guid Id,
     Guid RaftId,
@@ -64,7 +65,8 @@ public sealed record CycleView(
     bool CanChangeNursery = false,
     Guid? ProductId = null,
     string? ProductName = null,
-    bool CanChangeProduct = false);
+    bool CanChangeProduct = false,
+    string? SeedItemName = null);
 
 /// <summary>A photo of the plan of a cycle: <paramref name="Url"/> is a signed link that expires.</summary>
 public sealed record CyclePlanPhotoView(Guid Id, int SortOrder, string Url);

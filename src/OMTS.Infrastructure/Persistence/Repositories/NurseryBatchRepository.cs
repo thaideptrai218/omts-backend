@@ -20,7 +20,7 @@ internal sealed class NurseryBatchRepository(OmtsDbContext db) : INurseryBatchRe
     public Task<NurseryBatch?> GetForPoolAsync(Guid batchId, CancellationToken cancellationToken) =>
         db.NurseryBatches
             .Include(b => b.Zone)
-            .Include(b => b.SeedLotLine).ThenInclude(l => l.Item)
+            .Include(b => b.SeedLotLine).ThenInclude(l => l.Item).ThenInclude(i => i!.Product)
             .Include(b => b.SeedLotLine).ThenInclude(l => l.Receipt).ThenInclude(r => r.Supplier)
             .AsSplitQuery()
             .FirstOrDefaultAsync(b => b.Id == batchId, cancellationToken);
@@ -43,7 +43,7 @@ internal sealed class NurseryBatchRepository(OmtsDbContext db) : INurseryBatchRe
             await query.CountAsync(b => b.StatusId == StatusIds.NurseryBatch.Closed, cancellationToken));
         var rows = await Sorted(query, filter)
             .Include(b => b.Zone)
-            .Include(b => b.SeedLotLine).ThenInclude(l => l.Item)
+            .Include(b => b.SeedLotLine).ThenInclude(l => l.Item).ThenInclude(i => i!.Product)
             .Include(b => b.SeedLotLine).ThenInclude(l => l.Receipt).ThenInclude(r => r.Supplier)
             .AsSplitQuery()
             .Skip((page - 1) * pageSize).Take(pageSize)
@@ -56,7 +56,7 @@ internal sealed class NurseryBatchRepository(OmtsDbContext db) : INurseryBatchRe
         var zones = zoneIds?.ToList();
         return await db.NurseryBatches.AsNoTracking()
             .Include(b => b.Zone)
-            .Include(b => b.SeedLotLine).ThenInclude(l => l.Item)
+            .Include(b => b.SeedLotLine).ThenInclude(l => l.Item).ThenInclude(i => i!.Product)
             .Include(b => b.SeedLotLine).ThenInclude(l => l.Receipt)
             .Where(b => b.StatusId == StatusIds.NurseryBatch.Completed && (zoneId == null || b.ZoneId == zoneId) && (zones == null || zones.Contains(b.ZoneId)))
             .OrderByDescending(b => b.CompletedOn).ThenByDescending(b => b.Code)
@@ -134,7 +134,7 @@ internal sealed class NurseryBatchRepository(OmtsDbContext db) : INurseryBatchRe
 
     private static IQueryable<NurseryBatch> Detailed(IQueryable<NurseryBatch> batches) => batches
         .Include(b => b.Zone)
-        .Include(b => b.SeedLotLine).ThenInclude(l => l.Item)
+        .Include(b => b.SeedLotLine).ThenInclude(l => l.Item).ThenInclude(i => i!.Product)
         .Include(b => b.SeedLotLine).ThenInclude(l => l.Receipt).ThenInclude(r => r.Supplier)
         .Include(b => b.Issue)
         .Include(b => b.Photos);

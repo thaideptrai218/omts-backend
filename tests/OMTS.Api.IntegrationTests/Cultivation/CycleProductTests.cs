@@ -8,50 +8,68 @@ using OMTS.Api.IntegrationTests.Harvest;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
+using OMTS.Domain.Entities.Purchasing;
 using OMTS.Infrastructure.Persistence;
 
 namespace OMTS.Api.IntegrationTests.Cultivation;
 
 /// <summary>
-/// The product a cycle farms (owner decision of 13/11/2026): required to start a cycle from a batch, changeable only before the first seeding record, and the one a harvest lot's purchase request must match.
+/// The product a cycle farms (owner decision of 13/11/2026): derived from the seed item of its nursery batch (one choice only), followed when the batch changes before the first seeding record, and the one a harvest lot's purchase request must match.
 /// </summary>
 public sealed class CycleProductTests
 {
     [Fact]
-    public async Task A_cycle_needs_a_product_in_use_and_changes_it_only_before_its_first_seeding_record()
+    public async Task A_cycle_farms_the_product_of_the_seed_item_of_its_batch_and_follows_it_when_the_batch_changes()
     {
         using var api = new AuthApiFactory();
         var world = await api.NurseryWorldAsync();
         var client = world.Owner.Client;
         var batch = await client.ReadyNurseryAsync(api, world.ZoneId, world.Lot, "10000", "9500");
+        var other = await client.SeedLotAsync(10_000m);
+        var batchOfOther = await client.ReadyNurseryAsync(api, world.ZoneId, other, "5000", "4800");
+        var first = await NurseryTestKit.EnsureSeedItemProductAsync(api.Services, world.Lot.LineId);
+        var second = await NurseryTestKit.EnsureSeedItemProductAsync(api.Services, other.LineId);
+        Assert.NotEqual(first, second);
 
-        Assert.Equal(["ProductId"], await (await client.PostNurseryCycleAsync(world.Raft1, batch.Id(), noProduct: true)).InvalidFieldsAsync());
-        Assert.Equal(["ProductId"], await (await client.PostNurseryCycleAsync(world.Raft1, batch.Id(), productId: Guid.NewGuid())).InvalidFieldsAsync());
-        var stopped = await NurseryTestKit.ProductRowAsync(api.Services, StatusIds.Usage.Discontinued);
-        Assert.Equal(["ProductId"], await (await client.PostNurseryCycleAsync(world.Raft1, batch.Id(), productId: stopped)).InvalidFieldsAsync());
+        // The batch is chosen, the product follows from its seed item; an item that sells as nothing yet is refused on the batch.
+        await NurseryTestKit.ClearSeedItemProductAsync(api.Services, world.Lot.LineId);
+        var refused = await (await client.PostNurseryCycleAsync(world.Raft1, batch.Id())).ReadAsync(HttpStatusCode.BadRequest);
+        Assert.Equal(("MSG-GEN-01", "NurseryBatchId", "SEED_ITEM_WITHOUT_PRODUCT"), (refused.Text("code"), refused.Text("field"), refused.Text("reasonCode")));
+        Assert.Contains("chọn loại hàu bán ra", refused.Text("hint"));
         Assert.False(await api.QueryAsync(db => db.CultivationCycles.AnyAsync(c => c.RaftId == world.Raft1)));
 
-        var first = await NurseryTestKit.ProductRowAsync(api.Services);
-        var second = await NurseryTestKit.ProductRowAsync(api.Services);
-        var cycle = await (await client.PostNurseryCycleAsync(world.Raft1, batch.Id(), productId: first)).ReadAsync(HttpStatusCode.Created);
-        var started = cycle.GetProperty("cycle");
-        var firstName = await api.QueryAsync(db => db.Products.Where(p => p.Id == first).Select(p => p.Name).SingleAsync());
-        Assert.Equal((first, firstName, true), (started.GetProperty("productId").GetGuid(), started.Text("productName"), started.Flag("canChangeProduct")));
-        Assert.Equal(first, (await client.CycleViewAsync(started.Id())).GetProperty("productId").GetGuid());
+        await NurseryTestKit.EnsureSeedItemProductAsync(api.Services, world.Lot.LineId, first);
+        var started = (await (await client.PostNurseryCycleAsync(world.Raft1, batch.Id())).ReadAsync(HttpStatusCode.Created)).GetProperty("cycle");
+        var (firstName, itemName) = await api.QueryAsync(async db => (
+            await db.Products.Where(p => p.Id == first).Select(p => p.Name).SingleAsync(), await db.FarmingInputItems.Where(i => i.Id == world.Lot.ItemId).Select(i => i.Name).SingleAsync()));
+        Assert.Equal((first, firstName, itemName), (started.GetProperty("productId").GetGuid(), started.Text("productName"), started.Text("seedItemName")));
 
-        // Before the first seeding record the product can change; a product In Use is needed.
-        var changed = (await (await client.PutAsJsonAsync($"/api/cultivation-cycles/{started.Id()}", new { productId = second, rowVersion = await api.IssueRowVersionAsync<CultivationCycle>(started.Id()) })).ReadAsync(HttpStatusCode.OK)).GetProperty("cycle");
-        Assert.Equal(second, changed.GetProperty("productId").GetGuid());
-        Assert.Equal(["ProductId"], await (await client.PutAsJsonAsync($"/api/cultivation-cycles/{started.Id()}", new { productId = stopped, rowVersion = await api.IssueRowVersionAsync<CultivationCycle>(started.Id()) })).InvalidFieldsAsync());
-
-        // The first seeding record locks it; the same product sent again is no change.
-        await client.SeedingRecordAsync(started.Id(), NurseryTestKit.NurserySession([1], 500m));
-        var locked = await (await client.PutAsJsonAsync($"/api/cultivation-cycles/{started.Id()}", new { productId = first, rowVersion = await api.IssueRowVersionAsync<CultivationCycle>(started.Id()) })).ReadAsync(HttpStatusCode.Conflict);
-        Assert.Equal(("CYCLE_SEED_LOCKED", "MSG-GEN-09", "ProductId"), (locked.Text("reasonCode"), locked.Text("code"), locked.Text("field")));
-        var same = (await (await client.PutAsJsonAsync($"/api/cultivation-cycles/{started.Id()}", new { productId = second, targetYieldKg = 2100, rowVersion = await api.IssueRowVersionAsync<CultivationCycle>(started.Id()) })).ReadAsync(HttpStatusCode.OK)).GetProperty("cycle");
-        Assert.Equal((second, false), (same.GetProperty("productId").GetGuid(), same.Flag("canChangeProduct")));
+        // A product sent with the edit is ignored; changing the batch (before the first seeding record) moves the product to the one of the new batch's seed item.
+        var edited = (await (await client.PutAsJsonAsync($"/api/cultivation-cycles/{started.Id()}", new { productId = first, nurseryBatchId = batchOfOther.Id(), rowVersion = await api.IssueRowVersionAsync<CultivationCycle>(started.Id()) })).ReadAsync(HttpStatusCode.OK)).GetProperty("cycle");
+        Assert.Equal(second, edited.GetProperty("productId").GetGuid());
+        Assert.Equal(second, await api.QueryAsync(db => db.CultivationCycles.Where(c => c.Id == started.Id()).Select(c => c.ProductId).SingleAsync()));
     }
 
+    [Fact]
+    public async Task A_seed_item_carries_the_product_it_sells_as_and_other_types_ignore_it()
+    {
+        using var api = new AuthApiFactory();
+        var owner = (await api.OwnerAsync()).Client;
+        var product = await NurseryTestKit.ProductRowAsync(api.Services);
+        var stopped = await NurseryTestKit.ProductRowAsync(api.Services, StatusIds.Usage.Discontinued);
+
+        Assert.Equal(["ProductId"], await (await owner.PostAsJsonAsync("/api/farming-input-items", new { name = "Giống A", group = "Seed", unit = "con", productId = Guid.NewGuid() })).InvalidFieldsAsync());
+        Assert.Equal(["ProductId"], await (await owner.PostAsJsonAsync("/api/farming-input-items", new { name = "Giống A", group = "Seed", unit = "con", productId = stopped })).InvalidFieldsAsync());
+        var seed = await (await owner.PostAsJsonAsync("/api/farming-input-items", new { name = "Giống B", group = "Seed", unit = "con", productId = product })).ReadAsync(HttpStatusCode.Created);
+        var material = await (await owner.PostAsJsonAsync("/api/farming-input-items", new { name = "Phao B", group = "Material", unit = "cái", productId = product })).ReadAsync(HttpStatusCode.Created);
+        Assert.Equal(product, seed.GetProperty("productId").GetGuid());
+        Assert.NotNull(seed.Text("productName"));
+        Assert.Equal(JsonValueKind.Null, material.GetProperty("productId").ValueKind);
+
+        // Like every field of the form, a save without the product clears it.
+        var cleared = await (await owner.PutAsJsonAsync($"/api/farming-input-items/{seed.Id()}", new { name = "Giống B", group = "Seed", unit = "con", rowVersion = await api.IssueRowVersionAsync<FarmingInputItem>(seed.Id()) })).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal(JsonValueKind.Null, cleared.GetProperty("productId").ValueKind);
+    }
     [Fact]
     public async Task A_lot_is_recorded_only_for_a_request_of_the_product_the_cycle_farms_and_the_screen_says_which_match()
     {

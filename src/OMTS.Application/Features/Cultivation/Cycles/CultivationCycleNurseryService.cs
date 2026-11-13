@@ -11,6 +11,7 @@ using OMTS.Application.Features.Files;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
+using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Application.Features.Cultivation.Cycles;
 
@@ -59,7 +60,7 @@ public sealed partial class CultivationCycleService
             return batchError;
         }
 
-        var (product, productError) = await CheckProductAsync(request.ProductId, cancellationToken);
+        var (product, productError) = ProductOfBatch(batch!);
         if (productError is not null)
         {
             return productError;
@@ -139,6 +140,7 @@ public sealed partial class CultivationCycleService
         }
 
         NurseryBatch? newBatch = null;
+        Product? newProduct = null;
         if (request.NurseryBatchId is { } wanted && wanted != cycle.NurseryBatchId)
         {
             if ((await nurseries.SeededByCycleAsync([cycle.Id], cancellationToken)).GetValueOrDefault(cycle.Id) > 0m)
@@ -154,13 +156,15 @@ public sealed partial class CultivationCycleService
                 return batchError;
             }
 
-            newBatch = batch;
-        }
+            // The product follows the batch: the one the new batch's seed item sells as.
+            var (batchProduct, productError) = ProductOfBatch(batch!);
+            if (productError is not null)
+            {
+                return productError;
+            }
 
-        var (newProduct, productError) = await CheckProductChangeAsync(cycle, request.ProductId, cancellationToken);
-        if (productError is not null)
-        {
-            return productError;
+            newBatch = batch;
+            newProduct = batchProduct;
         }
 
         if (await rowVersions.CheckAsync(cycle, request.RowVersion, cancellationToken) is { } conflict)
@@ -178,7 +182,11 @@ public sealed partial class CultivationCycleService
             unitOfWork.MarkChanged(newBatch);
         }
 
-        ApplyProduct(cycle, newProduct);
+        if (newProduct is not null)
+        {
+            ApplyProduct(cycle, newProduct);
+        }
+
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, CultivationCycleValues.NurserySnapshot(cycle, newBatch?.Code ?? oldBatch?.Code, cycle.Product?.Name));
         if (changedAfter is not null)
         {

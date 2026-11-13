@@ -96,7 +96,8 @@ public sealed class NurseryReadService(
             .OrderByDescending(x => x.Batch.CompletedOn).ThenByDescending(x => x.Batch.Code, StringComparer.Ordinal)
             .Select(x => new AvailableNurseryBatch(
                 x.Batch.Id, x.Batch.Code, x.Batch.ZoneId, x.Batch.Zone.Code, SeedingValues.LotCode(x.Batch.SeedLotLine), x.Batch.SeedLotLine.Item?.Name, NurseryBatchViews.UnitOf(x.Batch.SeedLotLine),
-                x.Batch.QuantityIn, x.Batch.Survivors ?? 0m, x.Seeded, x.Remaining, x.Batch.CompletedOn))
+                x.Batch.QuantityIn, x.Batch.Survivors ?? 0m, x.Seeded, x.Remaining, x.Batch.CompletedOn,
+                x.Batch.SeedLotLine.Item?.ProductId, x.Batch.SeedLotLine.Item?.Product?.Name, x.Batch.SeedLotLine.Item?.Name))
             .ToList();
         return new AvailableNurseryList(batches);
     }

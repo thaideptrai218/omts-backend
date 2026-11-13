@@ -1,6 +1,7 @@
 using OMTS.Domain.Common;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Platform;
+using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Domain.Entities.Purchasing;
@@ -35,6 +36,12 @@ public class FarmingInputItem : AuditableEntity, IHasStatus
 
     /// <summary>A deleted item: its history stays, no list shows it.</summary>
     public bool IsHidden { get; set; }
+
+    /// <summary>
+    /// The oyster the farm sells when it grows this seed ("loại hàu bán ra", owner decision of 13/11/2026), set once here; Seed items only, optional. A cycle started from a nursery batch of this seed farms this product.
+    /// </summary>
+    public Guid? ProductId { get; set; }
+    public Product? Product { get; set; }
 
     public ICollection<InputItemUnit> Units { get; set; } = [];
     public ICollection<InputItemPhoto> Photos { get; set; } = [];

@@ -46,7 +46,8 @@ public sealed class NurseryBatchViews(
             batch.IssueId, batch.Issue?.Code, batch.CancelReason, batch.CancelledAt, batch.CreatedBy, recordedBy, batch.CreatedAt,
             await PhotosAsync(batch, NurseryPhotoPhase.Start, cancellationToken), await PhotosAsync(batch, NurseryPhotoPhase.Completion, cancellationToken),
             nursing && mayEdit, nursing && mayCreate, completed && mayEdit, RowVersionGuard.Encode(batch.RowVersion),
-            seeded, remaining, batch.ClosedOn, batch.CloseLossPieces, batch.CloseReason, completed && mayEdit && remaining > 0, usage);
+            seeded, remaining, batch.ClosedOn, batch.CloseLossPieces, batch.CloseReason, completed && mayEdit && remaining > 0, usage,
+            lot.Item?.ProductId, lot.Item?.Product?.Name, lot.Item?.Name);
     }
 
     /// <summary>A row of the list: the batch comes with its zone and seed lot (item, receipt, supplier); <paramref name="seededByBatch"/> holds what every batch of the page had seeded.</summary>
@@ -59,7 +60,8 @@ public sealed class NurseryBatchViews(
         return new NurseryBatchListItem(
             batch.Id, batch.Code, batch.ZoneId, batch.Zone.Code, batch.Zone.Name, SeedingValues.LotCode(lot), lot.Item?.Name, UnitOf(lot), lot.Receipt.Supplier.Name, batch.QuantityIn, batch.StartDate,
             DaysNursing(batch), batch.StatusId, statusCatalog.DisplayNameOf(batch.StatusId), NurseryValues.StatusLabel(batch.StatusId), batch.CompletedOn, batch.Survivors, loss?.Pieces, loss?.Percent, loss is not null,
-            RowVersionGuard.Encode(batch.RowVersion), seeded, pooled ? NurseryRules.PoolRemaining(batch, seeded!.Value) : null, batch.ClosedOn, batch.CloseLossPieces);
+            RowVersionGuard.Encode(batch.RowVersion), seeded, pooled ? NurseryRules.PoolRemaining(batch, seeded!.Value) : null, batch.ClosedOn, batch.CloseLossPieces,
+            lot.Item?.ProductId, lot.Item?.Product?.Name, lot.Item?.Name);
     }
 
     /// <summary>The totals of the filtered list: "completed" counts the batches done nursing (Completed and Closed), so the survivors and the loss cover both and the loss includes what the closes wrote off.</summary>

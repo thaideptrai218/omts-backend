@@ -69,8 +69,45 @@ public static class NurseryTestKit
         return new NurseryWorld(owner, zoneId, raft1, raft2, await owner.Client.SeedLotAsync(lotQuantity));
     }
 
-    public static Task<HttpResponseMessage> PostNurseryAsync(this HttpClient client, Guid zoneId, NurseryFields fields) =>
-        client.PostAsync($"/api/zones/{zoneId}/nursery-batches", fields.ToForm());
+    /// <summary>
+    /// A cycle farms the product of the seed item of its batch (13/11/2026), so every batch of the tests is started from a lot whose seed item already sells as a product (a new one of the host when it has none);
+    /// a test that needs an item without a product takes it away with <see cref="ClearSeedItemProductAsync"/>.
+    /// </summary>
+    public static async Task<HttpResponseMessage> PostNurseryAsync(this HttpClient client, Guid zoneId, NurseryFields fields)
+    {
+        if (fields.SeedLotId is { } lotId)
+        {
+            await EnsureSeedItemProductAsync(TestHosts.ServicesOf(client), lotId);
+        }
+
+        return await client.PostAsync($"/api/zones/{zoneId}/nursery-batches", fields.ToForm());
+    }
+
+    /// <summary>Gives the seed item of the lot (a receipt line) the product it sells as, a new product of the host unless <paramref name="productId"/> is named, when it has none; returns the product the item sells as.</summary>
+    public static async Task<Guid> EnsureSeedItemProductAsync(IServiceProvider services, Guid seedLotLineId, Guid? productId = null)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
+        var item = await db.PurchaseReceiptLines.Where(l => l.Id == seedLotLineId).Select(l => l.Item!).SingleAsync();
+        if (productId is null && item.ProductId is { } existing)
+        {
+            return existing;
+        }
+
+        item.ProductId = productId ?? await ProductRowAsync(services);
+        await db.SaveChangesAsync();
+        return item.ProductId.Value;
+    }
+
+    /// <summary>The seed item of the lot sells as no product (what the Owner has not set yet).</summary>
+    public static async Task ClearSeedItemProductAsync(IServiceProvider services, Guid seedLotLineId)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
+        var item = await db.PurchaseReceiptLines.Where(l => l.Id == seedLotLineId).Select(l => l.Item!).SingleAsync();
+        item.ProductId = null;
+        await db.SaveChangesAsync();
+    }
 
     /// <summary>Starts a nursery of the lot (default 1000 pieces) and returns the saved batch.</summary>
     public static async Task<JsonElement> StartNurseryAsync(this HttpClient client, Guid zoneId, SeedLotMade lot, string quantity = "1000") =>
@@ -122,17 +159,11 @@ public static class NurseryTestKit
     public static Task<JsonElement> AvailableNurseriesAsync(this HttpClient client, Guid? zoneId) =>
         client.GetFromJsonAsync<JsonElement>($"/api/nursery-batches/available{(zoneId is null ? string.Empty : $"?zoneId={zoneId}")}");
 
-    /// <summary>The v2 start of a cycle: <c>POST /api/cultivation-cycles</c> with the batch, the target yield and <paramref name="photos"/> plan photos.</summary>
-    /// <summary>A cycle carries the product it farms (13/11/2026): the start sends <paramref name="productId"/>, or a new product of the host when none is named; <paramref name="noProduct"/> sends none.</summary>
+    /// <summary>The v2 start of a cycle: <c>POST /api/cultivation-cycles</c> with the batch, the target yield and <paramref name="photos"/> plan photos; the cycle farms the product of the batch's seed item, so none is sent.</summary>
     public static async Task<HttpResponseMessage> PostNurseryCycleAsync(
-        this HttpClient client, Guid raftId, Guid? batchId, string? targetYieldKg = "2000", string? startDate = null, string? note = null, int photos = 1, Guid? productId = null, bool noProduct = false)
+        this HttpClient client, Guid raftId, Guid? batchId, string? targetYieldKg = "2000", string? startDate = null, string? note = null, int photos = 1)
     {
         var form = new MultipartFormDataContent { { new StringContent(raftId.ToString()), "raftId" } };
-        if (!noProduct)
-        {
-            form.Add(new StringContent((productId ?? await ProductRowAsync(TestHosts.ServicesOf(client))).ToString()), "productId");
-        }
-
         void Add(string? value, string name)
         {
             if (value is not null)

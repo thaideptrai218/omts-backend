@@ -50,6 +50,7 @@ internal sealed class InputItemListReader(OmtsDbContext db) : IInputItemListQuer
         var items = (await db.FarmingInputItems.AsNoTracking()
             .Include(i => i.Units).ThenInclude(u => u.Unit)
             .Include(i => i.ItemGroup)
+            .Include(i => i.Product)
             .Include(i => i.Photos)
             .Where(i => ids.Contains(i.Id)).AsSplitQuery().ToListAsync(cancellationToken)).ToDictionary(i => i.Id);
         var sums = await db.InputStockMovements.AsNoTracking().Where(m => ids.Contains(m.ItemId))

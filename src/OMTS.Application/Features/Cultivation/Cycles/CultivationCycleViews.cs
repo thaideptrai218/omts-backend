@@ -67,7 +67,8 @@ public sealed class CultivationCycleViews(
             canEdit && seededByCycle <= 0m,
             cycle.ProductId,
             productName,
-            canEdit && seededByCycle <= 0m);
+            canEdit && seededByCycle <= 0m,
+            batch?.SeedLotLine.Item?.Name);
     }
     public CycleListItem ListItem(CultivationCycle cycle) => new(
         cycle.Id, cycle.StartDate, cycle.CloseDate, cycle.StatusId, statusCatalog.DisplayNameOf(cycle.StatusId), RowVersionGuard.Encode(cycle.RowVersion), cycle.ClosedEarly, cycle.NurseryBatchId);
