@@ -69,9 +69,12 @@ public class PurchaseRequestMigrationAndDemoTests
             {
                 var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
                 var statuses = await db.PurchaseRequests.AsNoTracking().Select(r => r.StatusId).OrderBy(s => s).ToListAsync();
+                // The trader's four requests, one in each state, and the Accepted ones that the open harvest request step adds for the Owner to harvest for.
                 Assert.Equal(
                     [StatusIds.PurchaseRequest.AwaitingResponse, StatusIds.PurchaseRequest.Accepted, StatusIds.PurchaseRequest.Declined, StatusIds.PurchaseRequest.Cancelled],
-                    statuses);
+                    statuses.Distinct());
+                Assert.Equal((1, 1, 1), (statuses.Count(s => s == StatusIds.PurchaseRequest.AwaitingResponse), statuses.Count(s => s == StatusIds.PurchaseRequest.Declined), statuses.Count(s => s == StatusIds.PurchaseRequest.Cancelled)));
+                Assert.True(statuses.Count(s => s == StatusIds.PurchaseRequest.Accepted) > 1);
                 // The answers to the requests; the demo cash sale also sends its invoice (MSG-SALE-15, PR T1a).
                 var sendings = await db.Notifications.AsNoTracking()
                     .CountAsync(n => n.Channel == NotificationChannel.Sms && n.Type != OMTS.Application.Features.Sales.Invoices.SalesInvoiceMessages.MessageType);

@@ -17,6 +17,21 @@ public static class OldSchemaRows
         return id;
     }
 
+    /// <summary>
+    /// An Open cycle on a raft of a zone, with the columns of every schema before the nursery, the cycle product and the raft size (cycle: <c>NurseryBatchId</c>, <c>ProductId</c>; raft: <c>LengthM</c>,
+    /// <c>WidthM</c>, <c>Note</c>). Returns the id of the cycle.
+    /// </summary>
+    public static async Task<Guid> OpenCycleAsync(OmtsDbContext db, Guid cooperativeId)
+    {
+        var (zoneId, raftId, cycleId) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        await db.Database.ExecuteSqlAsync($"""
+            INSERT INTO FarmingZones (Id, CooperativeId, Code, Name, StatusId, CreatedAt) VALUES ({zoneId}, {cooperativeId}, N'KV01', N'A', {StatusIds.Usage.InUse}, SYSDATETIMEOFFSET());
+            INSERT INTO Rafts (Id, ZoneId, Code, Size, StatusId, CreatedAt) VALUES ({raftId}, {zoneId}, N'B01', N'1', {StatusIds.Usage.InUse}, SYSDATETIMEOFFSET());
+            INSERT INTO CultivationCycles (Id, RaftId, StartDate, StatusId, ClosedEarly, CreatedAt) VALUES ({cycleId}, {raftId}, '2026-01-01', {StatusIds.CultivationCycle.Open}, 0, SYSDATETIMEOFFSET());
+            """);
+        return cycleId;
+    }
+
     /// <summary>An input item with the columns of every schema before InputItemUnitsGroupsCostAndStockLedger, which adds the units, the group link, the cost and the hidden flag.</summary>
     public static async Task<Guid> InputItemAsync(OmtsDbContext db, string code, string name, string group, string unit)
     {

@@ -10,6 +10,7 @@ using OMTS.Api.IntegrationTests.Farming;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common.Constants;
 using OMTS.Application.Common.Interfaces.Identity;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Platform;
 using OMTS.Infrastructure.Bootstrap;
 using OMTS.Infrastructure.Persistence;
@@ -105,7 +106,9 @@ public class HarvestLotCorrectionsMigrationAndDemoTests
             Assert.Contains(rerun.Messages, m => m == "Demo harvest lots: already there.");
             Assert.Equal(count - 1, await UseDbAsync(api, db => db.HarvestLots.CountAsync()));
 
-            var next = (await client.RecordHarvestAsync(raftId, HarvestFields.OfLanes(1))).GetProperty("lot");
+            // A lot is recorded for a request of the product the cycle farms (13/11/2026): the demo raft farms "Hàu béo", so the demo's Accepted request for it, not the kit's default one.
+            var demoOrder = await UseDbAsync(api, db => db.PurchaseRequests.Where(r => r.StatusId == StatusIds.PurchaseRequest.Accepted && r.ProductName == "Hàu béo" && r.AcceptedCages == 100).Select(r => r.Id).FirstAsync());
+            var next = (await client.RecordHarvestAsync(raftId, HarvestFields.OfLanes(1).For(demoOrder))).GetProperty("lot");
             Assert.NotEqual(top, next.Text("lotCode"));
         }
         finally

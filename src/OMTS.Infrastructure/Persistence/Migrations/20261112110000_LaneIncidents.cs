@@ -106,7 +106,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             migrationBuilder.CreateIndex(name: "IX_LaneIncidentMaterials_IssueId", table: "LaneIncidentMaterials", column: "IssueId");
             migrationBuilder.CreateIndex(name: "IX_LaneIncidentMaterials_ItemId", table: "LaneIncidentMaterials", column: "ItemId");
             migrationBuilder.CreateIndex(name: "IX_LaneIncidentMaterials_MaterialUsageId", table: "LaneIncidentMaterials", column: "MaterialUsageId");
-            migrationBuilder.CreateIndex(name: "IX_LaneIncidentPhotos_IncidentId_SortOrder", table: "LaneIncidentPhotos", columns: new[] { "IncidentId", "SortOrder" }, unique: true);
+            // Raw SQL: this migration has no Designer, so its model is empty and EF cannot see that both columns are NOT NULL; CreateIndex would add the filter "IS NOT NULL" that the model has not.
+            migrationBuilder.Sql("CREATE UNIQUE INDEX [IX_LaneIncidentPhotos_IncidentId_SortOrder] ON [LaneIncidentPhotos] ([IncidentId], [SortOrder])");
             migrationBuilder.CreateIndex(name: "IX_LaneIncidents_CycleId", table: "LaneIncidents", column: "CycleId");
             migrationBuilder.CreateIndex(name: "IX_LaneIncidents_LaneId_OccurredAt", table: "LaneIncidents", columns: new[] { "LaneId", "OccurredAt" });
             migrationBuilder.CreateIndex(name: "IX_LaneIncidents_RecordedByAccountId", table: "LaneIncidents", column: "RecordedByAccountId");
