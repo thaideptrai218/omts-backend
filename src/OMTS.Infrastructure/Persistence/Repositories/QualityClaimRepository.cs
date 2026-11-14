@@ -15,11 +15,17 @@ internal sealed class QualityClaimRepository(OmtsDbContext db) : IQualityClaimRe
     public Task<bool> HasAwaitingAsync(Guid invoiceId, CancellationToken cancellationToken) =>
         db.QualityClaims.AnyAsync(c => c.InvoiceId == invoiceId && c.StatusId == StatusIds.QualityClaim.AwaitingResponse, cancellationToken);
 
+    public Task<QualityClaim?> GetAwaitingForUpdateAsync(Guid invoiceId, CancellationToken cancellationToken) =>
+        db.QualityClaims.FirstOrDefaultAsync(c => c.InvoiceId == invoiceId && c.StatusId == StatusIds.QualityClaim.AwaitingResponse, cancellationToken);
+
     public Task<QualityClaim?> GetForEditAsync(Guid claimId, CancellationToken cancellationToken) =>
         db.QualityClaims.Include(c => c.Customer).Include(c => c.Invoice).FirstOrDefaultAsync(c => c.Id == claimId, cancellationToken);
 
     public Task<QualityClaim?> GetDetailAsync(Guid claimId, CancellationToken cancellationToken) =>
         Detail().FirstOrDefaultAsync(c => c.Id == claimId, cancellationToken);
+
+    public async Task<IReadOnlyList<QualityClaim>> ListOfInvoiceAsync(Guid invoiceId, CancellationToken cancellationToken) =>
+        await db.QualityClaims.AsNoTracking().Where(c => c.InvoiceId == invoiceId).OrderByDescending(c => c.SentAt).ThenBy(c => c.Id).ToListAsync(cancellationToken);
 
     public async Task<(IReadOnlyList<QualityClaim> Items, int Total)> SearchAsync(PermittedZones zones, int? statusId, int page, int pageSize, CancellationToken cancellationToken)
     {

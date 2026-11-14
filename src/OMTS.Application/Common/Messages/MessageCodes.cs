@@ -30,6 +30,7 @@ public static class MessageCodes
     public const string Cycle08 = "MSG-CYCLE-08";
 
     public const string Harvest01 = "MSG-HARVEST-01";
+    public const string Harvest02 = "MSG-HARVEST-02";
     public const string Harvest03 = "MSG-HARVEST-03";
     public const string Harvest04 = "MSG-HARVEST-04";
     public const string Harvest05 = "MSG-HARVEST-05";
@@ -144,6 +145,9 @@ public static class MessageCodes
     public const string Claim01 = "MSG-CLAIM-01";
     public const string Claim02 = "MSG-CLAIM-02";
     public const string Claim03 = "MSG-CLAIM-03";
+    public const string Claim04 = "MSG-CLAIM-04";
+    public const string Claim05 = "MSG-CLAIM-05";
+    public const string Claim06 = "MSG-CLAIM-06";
 
     public const string Cash01 = "MSG-CASH-01";
     public const string Cash02 = "MSG-CASH-02";
@@ -180,12 +184,13 @@ public static class MessageCodes
     /// MSG-CLAIM-01/02/03, the new quality claim, its response and a claim that cannot be accepted (CLAIM-01 and CLAIM-02 are new in PR 12);
     /// MSG-CASH-01/02, the cash book refusals: the VietQR account and the system voucher types are protected;
     /// MSG-INPUT-01/02, the input issue refusals: an item or seed lot would go below zero, and the system issue types are protected;
-    /// MSG-CUSTOMER-01, an invoice that leaves a debt for a customer over the debt limit while the settings do not allow more debt.
+    /// MSG-CUSTOMER-01, an invoice that leaves a debt for a customer over the debt limit while the settings do not allow more debt;
+    /// MSG-CLAIM-04/05/06 and MSG-HARVEST-02, the Owner's agreement to a sales return, its notice, the warning before cancelling one, and the question on the lot of oysters thrown away (CLAIM-03).
     /// </summary>
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
-        Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest03, Harvest04, Harvest05, Trace01, Trace02, Trace03, Trace04, Trace05, Trace06,
-        Origin01, Origin02, Origin03, Origin04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor06, Labor07, Labor12, Labor13, Labor14, Labor16, Labor22, Labor23, Labor25, Labor26, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04, Claim01, Claim02, Claim03, Cash01, Cash02, Input01, Input02, Customer01, Sale17, Sale18, Sale19, Sale20, Sale21, Sale22, Sale23, Labor08, Labor09, Labor17, Labor18, Labor19,
+        Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest02, Harvest03, Harvest04, Harvest05, Trace01, Trace02, Trace03, Trace04, Trace05, Trace06,
+        Origin01, Origin02, Origin03, Origin04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor06, Labor07, Labor12, Labor13, Labor14, Labor16, Labor22, Labor23, Labor25, Labor26, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04, Claim01, Claim02, Claim03, Claim04, Claim05, Claim06, Cash01, Cash02, Input01, Input02, Customer01, Sale17, Sale18, Sale19, Sale20, Sale21, Sale22, Sale23, Labor08, Labor09, Labor17, Labor18, Labor19,
     };
 
     /// <summary>

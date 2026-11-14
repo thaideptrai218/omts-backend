@@ -101,7 +101,8 @@ public sealed class SalesInvoiceViews(
             invoice.LastCorrectionReason,
             await corrections.OfAsync(invoice.Id, cancellationToken),
             invoice.CancelledAt,
-            invoice.CancelReason);
+            invoice.CancelReason,
+            invoice.Returns.OrderBy(r => r.ReturnDate).ThenBy(r => r.Code).Select(r => new SalesInvoiceReturnSummary(r.Id, r.Code, r.ReturnDate, r.Value, r.StatusId, statusCatalog.DisplayNameOf(r.StatusId))).ToList());
     }
 
     /// <summary>The kg of each cage of the lot in the weighing of the invoice, in the order weighed; empty for a sale without a weighing.</summary>
@@ -115,7 +116,7 @@ public sealed class SalesInvoiceViews(
         var ownPayments = invoice.Payments.Where(p => p.Kind == CustomerPaymentKind.Payment && p.StatusId != StatusIds.CustomerPayment.Cancelled).Sum(p => p.Amount);
         var state = SalesInvoicePaidState.Of(invoice.Id, invoice.StatusId, invoice.Total, invoice.CustomerId, ownPayments, allocation);
         return new SalesInvoiceDebtEffect(
-            state.IsPaid, state.Covered, state.Unpaid, invoice.CustomerId is not null && invoice.StatusId != StatusIds.SalesInvoice.Cancelled, allocation?.Debt);
+            state.IsPaid, state.Covered, state.Unpaid, invoice.CustomerId is not null && invoice.StatusId != StatusIds.SalesInvoice.Cancelled && !SalesInvoiceAllowedActions.HasSalesReturn(invoice), allocation?.Debt);
     }
 
     private async Task<SalesInvoiceCallerRights> RightsAsync(Guid zoneId, CancellationToken cancellationToken) =>

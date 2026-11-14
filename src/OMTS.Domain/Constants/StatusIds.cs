@@ -148,6 +148,13 @@ public static class StatusIds
         public const int Cancelled = 3502;
     }
 
+    /// <summary>STD-SALES-RETURN (BR-CLAIM-03): Recorded counts in the debt, the lots and the reports; a Cancelled one counts nowhere.</summary>
+    public static class SalesReturn
+    {
+        public const int Recorded = 4101;
+        public const int Cancelled = 4102;
+    }
+
     /// <summary>STD-CUSTOMER-PAYMENT (BR-DEBT-03): counts in the debt from its recording, also while Awaiting confirmation; Pending transfer counts nowhere until the transfer arrives.</summary>
     public static class CustomerPayment
     {

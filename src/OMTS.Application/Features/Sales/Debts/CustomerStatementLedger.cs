@@ -4,7 +4,7 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Sales.Debts;
 
-/// <summary>Kinds of statement entries, in the order they appear on one day. Sales returns come with CLAIM-03.</summary>
+/// <summary>Kinds of statement entries, in the order they appear on one day.</summary>
 public enum CustomerStatementEntryKind
 {
     Invoice,
@@ -40,7 +40,7 @@ public sealed record CustomerStatementLines(decimal OpeningDebt, IReadOnlyList<C
 
 /// <summary>
 /// BR-DEBT-04 as a pure function: the debt at the start of the period counts the entries dated before it; each entry of the period is followed by the debt after it.
-/// A cancelled invoice, payment or adjustment stays on its own date, marked Cancelled, and counts 0, so a past period can change after a later cancellation; so does a
+/// A cancelled invoice, payment, sales return or adjustment stays on its own date, marked Cancelled, and counts 0, so a past period can change after a later cancellation; so does a
 /// payment that waits for its transfer, until the transfer arrives. A payment with a discount gives two entries (the money and the discount), an invoice with price cuts
 /// one entry for what it was worth and one per cut. Same day: invoices, price cuts, returns, payments, discounts, money paid back and adjustments, each by time, then code.
 /// </summary>
@@ -49,7 +49,7 @@ public static class CustomerStatementLedger
     public static CustomerStatementLines Build(
         IEnumerable<CustomerLedgerInvoice> invoices, IEnumerable<CustomerLedgerPayment> payments, DateOnly from, DateOnly to,
         IEnumerable<CustomerLedgerAdjustment>? adjustments = null,
-        IReadOnlyDictionary<Guid, IReadOnlyList<SalesInvoiceCorrectionView>>? corrections = null)
+        IReadOnlyDictionary<Guid, IReadOnlyList<SalesInvoiceCorrectionView>>? corrections = null, IEnumerable<CustomerLedgerReturn>? returns = null)
     {
         var all = new List<CustomerStatementEntry>();
         foreach (var i in invoices)
@@ -64,6 +64,12 @@ public static class CustomerStatementLedger
                 all.Add(new CustomerStatementEntry(
                     cut.CutDate, CustomerStatementEntryKind.PriceCut, cut.Id, i.Code, cut.Amount, i.Cancelled ? 0m : -cut.Amount, i.Code, null, false, i.Cancelled, 0m, Note: cut.Reason));
             }
+        }
+
+        foreach (var r in returns ?? [])
+        {
+            all.Add(new CustomerStatementEntry(
+                r.ReturnDate, CustomerStatementEntryKind.Return, r.Id, r.Code, r.Value, r.Cancelled ? 0m : -r.Value, r.InvoiceCode, null, false, r.Cancelled, 0m, r.CancelledAt, CancelReason: r.CancelReason));
         }
 
         foreach (var p in payments)

@@ -41,6 +41,10 @@ using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
 using OMTS.Application.Features.Purchasing.Suppliers;
 using OMTS.Application.Features.ReceivingBankAccounts;
+using OMTS.Application.Features.Reports;
+using OMTS.Application.Features.Reports.PostSaleIssues;
+using OMTS.Application.Features.Reports.PriceTrends;
+using OMTS.Application.Features.Reports.SalesPerformance;
 using OMTS.Application.Features.Sales.Customers;
 using OMTS.Application.Features.Sales.Debts;
 using OMTS.Application.Features.Sales.Payments;
@@ -48,6 +52,7 @@ using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Application.Features.Sales.Products;
 using OMTS.Application.Features.Sales.PurchaseRequests;
 using OMTS.Application.Features.Sales.QualityClaims;
+using OMTS.Application.Features.Sales.Returns;
 using OMTS.Application.Features.Verification;
 using OMTS.Application.Features.Auth;
 using OMTS.Application.Features.Authorization;
@@ -309,11 +314,27 @@ public static class DependencyInjection
         services.AddScoped<QualityClaimReadService>();
         services.AddScoped<QualityClaimSubmissionService>();
         services.AddScoped<QualityClaimResponseService>();
+        // CLAIM-03 sales returns
+        services.AddScoped<SalesReturnGuard>();
+        services.AddScoped<SalesReturnLots>();
+        services.AddScoped<SalesReturnNotifications>();
+        services.AddScoped<SalesReturnViews>();
+        services.AddScoped<SalesReturnService>();
+        services.AddScoped<SalesReturnCancellationService>();
         // SALE-05 sales invoices and the customer debt (BR-DEBT-02)
         services.AddScoped<CustomerDebtReader>();
         // DEBT-03 customer debts, statement and export (read only)
         services.AddScoped<CustomerDebtService>();
         services.AddScoped<CustomerDebtExportService>();
+        // REPORT-01 sales performance (read only); the filter resolver is shared with REPORT-02 and REPORT-03
+        services.AddScoped<ReportFilterResolver>();
+        services.AddScoped<SalesPerformanceService>();
+        services.AddScoped<SalesPerformanceExportService>();
+        // REPORT-02 price trends and REPORT-03 post-sale issues (read only)
+        services.AddScoped<PriceTrendsService>();
+        services.AddScoped<PriceTrendsExportService>();
+        services.AddScoped<PostSaleIssuesService>();
+        services.AddScoped<PostSaleIssuesExportService>();
         // DEBT-02 customer payments, money paid back, confirmations and cancellations
         services.AddScoped<CustomerPaymentViews>();
         services.AddScoped<CustomerPaymentStatusChanges>();

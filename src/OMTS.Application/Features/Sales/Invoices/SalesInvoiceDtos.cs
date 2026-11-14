@@ -87,7 +87,10 @@ public sealed record SalesInvoiceView(
     AccountRef CreatedBy, string? QrToken, string? QrUrl, DateTimeOffset? QrDecidedAt, int DeliveryStatusId, string DeliveryStatus,
     IReadOnlyList<SalesInvoiceSendingView> Sendings, string RowVersion, IReadOnlyList<SalesInvoicePriceCutView> PriceCuts, SalesInvoiceDebtEffect DebtEffect,
     IReadOnlyList<SalesInvoiceAction> AllowedActions, Guid? PortWeighingId, SalesInvoiceCorrectionKind? LastCorrectionKind, DateTimeOffset? LastCorrectedAt, string? LastCorrectionReason,
-    IReadOnlyList<SalesInvoiceCorrectionView> Corrections, DateTimeOffset? CancelledAt, string? CancelReason);
+    IReadOnlyList<SalesInvoiceCorrectionView> Corrections, DateTimeOffset? CancelledAt, string? CancelReason, IReadOnlyList<SalesInvoiceReturnSummary> SalesReturns);
+
+/// <summary>A sales return in the detail of its invoice (SALE-09.1), cancelled ones included; <c>GET /api/sales-returns/{id}</c> has its lines.</summary>
+public sealed record SalesInvoiceReturnSummary(Guid Id, string Code, DateOnly ReturnDate, decimal Value, int StatusId, string Status);
 
 /// <summary>The end of the sale (SALE-05 steps 9-11).</summary>
 /// <param name="WantsQrCode">The answer to MSG-SALE-07; null asks it (409 with <c>confirmationField</c>).</param>

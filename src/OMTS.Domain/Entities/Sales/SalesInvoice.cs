@@ -89,6 +89,9 @@ public class SalesInvoice : AuditableEntity, IHasStatus
     public ICollection<SalesInvoiceLine> Lines { get; set; } = [];
     public ICollection<SalesInvoicePriceCut> PriceCuts { get; set; } = [];
     public ICollection<CustomerPayment> Payments { get; set; } = [];
+
+    /// <summary>The sales returns (CLAIM-03), cancelled ones included; at most one is not cancelled (BR-CLAIM-03).</summary>
+    public ICollection<SalesReturn> Returns { get; set; } = [];
 }
 
 /// <summary>One product sold from one harvest lot, with the kg weighed at the port (BR-SALE-06). It links the sale to the lot for the yield figures and the forward trace.</summary>

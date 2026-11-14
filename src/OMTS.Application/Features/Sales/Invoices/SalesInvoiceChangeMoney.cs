@@ -28,4 +28,7 @@ public static class SalesInvoiceChangeMoney
 
     /// <summary>SALE-08 on a walk-in invoice given a profile: the invoice counts nowhere, its kept payments now count for the profile (SALE-08.2).</summary>
     public static decimal AfterWalkInCancelled(decimal debtBefore, decimal keptPayments) => debtBefore - keptPayments;
+
+    /// <summary>CLAIM-03 on a profile: the value of the return lowers the debt (BR-DEBT-02). On a walk-in invoice given a profile the invoice nets out: see <see cref="AfterWalkInCancelled"/>.</summary>
+    public static decimal AfterReturn(decimal debtBefore, decimal returnValue) => debtBefore - returnValue;
 }

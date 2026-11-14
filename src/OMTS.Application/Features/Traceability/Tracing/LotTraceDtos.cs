@@ -33,7 +33,7 @@ public sealed record TraceLane(int LaneNumber, bool IsFinished, IReadOnlyList<Tr
 /// <param name="Amount">Null in the same case.</param>
 public sealed record TraceInvoiceLine(int LineNumber, string ProductName, decimal Kg, decimal? UnitPrice, decimal? Amount);
 
-/// <summary>A sales return of the invoice (CLAIM-03, not built yet: always empty). A return takes back the whole invoice (BF-05.1).</summary>
+/// <summary>A sales return of the invoice that stands (CLAIM-03), per outcome, with this lot's kg. A return takes back the whole invoice (BF-05.1).</summary>
 public sealed record TraceSalesReturn(Guid Id, string Code, DateOnly ReturnDate, decimal Kg, string Outcome);
 
 /// <summary>A sales invoice that sells the lot, not cancelled, at its latest values, with its trader and the lines of this lot (BR-TRACE-03).</summary>

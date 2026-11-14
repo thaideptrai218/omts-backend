@@ -120,6 +120,9 @@ public static class NotificationTypes
     /// <summary>MSG-CLAIM-02, the response to a quality claim, to the trader account (BR-CLAIM-02); also sent by SMS or Zalo OA.</summary>
     public const string QualityClaimResponse = "QUALITY_CLAIM_RESPONSE";
 
+    /// <summary>MSG-CLAIM-05, a new sales return, to the Cooperative Owner (BR-CLAIM-03); to the Accountant the same message goes as <see cref="CustomerMoneyOwedBack"/>, only when money is owed back.</summary>
+    public const string SalesReturnRecorded = "SALES_RETURN_RECORDED";
+
     public static readonly IReadOnlyList<NotificationTypeDefinition> All =
     [
         new("WORK_ASSIGNMENT", "work assignment", Default, [Employee], NotificationOpenAccess.EmployeeOfTheRecord),
@@ -210,6 +213,9 @@ public static class NotificationTypes
         new(QualityClaimNew, "New quality claim", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         // Opens the claim (CLAIM-02 response), for the trader the claim belongs to now.
         new(QualityClaimResponse, "Response to your quality claim", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
+        // Opens the invoice (SALE-09), which shows the return.
+        new(SalesReturnRecorded, "New sales return", Default, [CooperativeOwner],
+            NotificationOpenAccess.InZone(PermissionFunctions.SalesInvoices, PermissionAction.View)),
     ];
 
     private static readonly Dictionary<string, NotificationTypeDefinition> ByCode = All.ToDictionary(t => t.Code, StringComparer.Ordinal);
