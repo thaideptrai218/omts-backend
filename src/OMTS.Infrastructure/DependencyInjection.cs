@@ -137,6 +137,10 @@ public static class DependencyInjection
             .Validate(o => o.HasWebAddress(), ProvenanceOptions.InvalidPublicBaseUrl)
             .ValidateOnStart();
         services.AddScoped<ICustomerDebtQuery, CustomerDebtQuery>();
+        services.AddScoped<ISalesPerformanceQuery, SalesPerformanceQuery>();
+        services.AddScoped<IPriceTrendsQuery, PriceTrendsQuery>();
+        services.AddScoped<IPostSaleIssuesQuery, PostSaleIssuesQuery>();
+        services.AddScoped<IReportFilterLookup, ReportFilterLookup>();
         services.AddScoped<SeedLotRepository>();
         services.AddScoped<ISeedLotRepository>(provider => provider.GetRequiredService<SeedLotRepository>());
         services.AddScoped<ISeedLotUsageQuery>(provider => provider.GetRequiredService<SeedLotRepository>());
