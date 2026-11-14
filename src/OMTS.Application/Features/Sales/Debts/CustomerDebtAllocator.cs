@@ -12,13 +12,17 @@ public sealed record CustomerLedgerPriceCut(Guid Id, DateOnly CutDate, decimal A
 /// <param name="PriceCuts">The price cuts that made <paramref name="Total"/> lower than what the invoice was saved with; the statement shows each as its own entry.</param>
 /// <param name="CancelledAt">When SALE-08 cancelled it, shown in the statement (BR-DEBT-04).</param>
 /// <param name="CancelReason">Why it was cancelled.</param>
+/// <param name="ReturnValue">The value of its sales return that is not cancelled, 0 when it has none: the return covers the invoice in full (BR-DEBT-05 (1)).</param>
 public sealed record CustomerLedgerInvoice(
     Guid CustomerId, Guid Id, string Code, DateTimeOffset InvoicedAt, DateOnly InvoiceDate, decimal Total, bool Cancelled, IReadOnlyList<CustomerLedgerPriceCut>? PriceCuts = null,
-    DateTimeOffset? CancelledAt = null, string? CancelReason = null)
+    DateTimeOffset? CancelledAt = null, string? CancelReason = null, decimal ReturnValue = 0m)
 {
     /// <summary>What the invoice was worth before its price cuts.</summary>
     public decimal OriginalTotal => Total + (PriceCuts?.Sum(c => c.Amount) ?? 0m);
 }
+
+/// <summary>A sales return of an invoice of the profile, cancelled ones included (the statement lists them; the debt counts only those that stand).</summary>
+public sealed record CustomerLedgerReturn(Guid CustomerId, Guid Id, string Code, Guid InvoiceId, string InvoiceCode, DateOnly ReturnDate, decimal Value, bool Cancelled, DateTimeOffset? CancelledAt, string? CancelReason);
 
 /// <summary>The part of a payment set against one invoice.</summary>
 public sealed record CustomerLedgerAllocation(Guid InvoiceId, decimal Amount);
@@ -79,7 +83,7 @@ public sealed record CustomerDebtAllocation(decimal Debt, IReadOnlyList<UnpaidIn
 /// <summary>
 /// BR-DEBT-05 – which invoices of a customer profile are still unpaid, as a pure function of its rows, so every screen (DEBT-01, DEBT-03, MSG-SALE-15) gives one answer.
 /// The debt stays one running total (BR-DEBT-02); this only shows how the money received covers the invoices:
-/// (1) each invoice that is not cancelled needs its total at its latest values (a sales return covering it in full comes with CLAIM-03);
+/// (1) each invoice that is not cancelled needs its total at its latest values, less the sales return that covers it in full (CLAIM-03);
 /// (2) the parts of a payment set against an invoice cover that invoice first (at most what it needs), and so does a payment that came with an invoice and names no part
 /// (cash at the port, VietQR code of the invoice); what they do not cover goes to the pool;
 /// (3) the rest of every payment, and its discount, goes to the pool; (4) money paid back and an adjustment that raises the debt are taken from the pool;
@@ -97,7 +101,7 @@ public static class CustomerDebtAllocator
         var counted = payments.Where(p => p.Counts).OrderBy(p => p.PaymentDate).ThenBy(p => p.PaidAt).ThenBy(p => p.Code, StringComparer.Ordinal).ToList();
         var standing = (adjustments ?? []).Where(a => !a.Cancelled).ToList();
         var covered = open.ToDictionary(i => i.Id, _ => 0m);
-        var needs = open.ToDictionary(i => i.Id, i => i.Total);
+        var needs = open.ToDictionary(i => i.Id, i => Math.Max(0m, i.Total - i.ReturnValue));
 
         var pool = 0m;
         foreach (var payment in counted)
@@ -138,7 +142,7 @@ public static class CustomerDebtAllocator
         {
             foreach (var invoice in open)
             {
-                var part = Math.Min(pool, invoice.Total - covered[invoice.Id]);
+                var part = Math.Min(pool, needs[invoice.Id] - covered[invoice.Id]);
                 covered[invoice.Id] += part;
                 pool -= part;
             }
@@ -156,14 +160,14 @@ public static class CustomerDebtAllocator
 
         var debt = CustomerDebtMath.Debt(new CustomerDebtFigures(
             open.Sum(i => i.Total),
-            0m,
+            open.Sum(i => i.ReturnValue),
             counted.Where(p => p.Kind == CustomerPaymentKind.Payment).Sum(p => p.Amount),
             counted.Where(p => p.Kind == CustomerPaymentKind.PaidBack).Sum(p => p.Amount),
             counted.Where(p => p.Kind == CustomerPaymentKind.Payment).Sum(p => p.DiscountAmount),
             standing.Sum(a => a.Amount)));
         var unpaid = open
-            .Where(i => i.Total > covered[i.Id])
-            .Select(i => new UnpaidInvoice(i.Id, i.Code, i.InvoiceDate, i.Total, covered[i.Id], i.Total - covered[i.Id], today.DayNumber - i.InvoiceDate.DayNumber))
+            .Where(i => needs[i.Id] > covered[i.Id])
+            .Select(i => new UnpaidInvoice(i.Id, i.Code, i.InvoiceDate, i.Total, i.Total - needs[i.Id] + covered[i.Id], needs[i.Id] - covered[i.Id], today.DayNumber - i.InvoiceDate.DayNumber))
             .ToList();
         // A debt with no unpaid invoice comes only from money paid back above the payments, or an adjustment (no invoice left to explain it): it is as old as that entry.
         var oldest = debt <= 0

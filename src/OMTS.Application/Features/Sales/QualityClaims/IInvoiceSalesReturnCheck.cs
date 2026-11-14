@@ -1,8 +1,8 @@
 namespace OMTS.Application.Features.Sales.QualityClaims;
 
 /// <summary>
-/// Whether an invoice has a sales return that is not cancelled (BR-CLAIM-01, BR-CLAIM-02). The sales returns come with CLAIM-03 (PR 13), which replaces the implementation that answers
-/// "no" with the real query; CLAIM-01 and CLAIM-02 already ask it, so they do not change then.
+/// Whether an invoice has a sales return that is not cancelled (BR-CLAIM-01, BR-CLAIM-02), by the rule <c>SalesReturn.Standing</c>: the same one as
+/// <c>SalesInvoiceAllowedActions.HasSalesReturn</c>, for callers that hold no loaded invoice.
 /// </summary>
 public interface IInvoiceSalesReturnCheck
 {

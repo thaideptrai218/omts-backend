@@ -90,6 +90,8 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<CustomerPaymentAllocation> CustomerPaymentAllocations => Set<CustomerPaymentAllocation>();
     public DbSet<CustomerDebtAdjustment> CustomerDebtAdjustments => Set<CustomerDebtAdjustment>();
     public DbSet<PendingSale> PendingSales => Set<PendingSale>();
+    public DbSet<SalesReturn> SalesReturns => Set<SalesReturn>();
+    public DbSet<SalesReturnLine> SalesReturnLines => Set<SalesReturnLine>();
 
     // Labor (LABOR-01, LABOR-02, LABOR-04, LABOR-05, LABOR-10, LABOR-11, LABOR-15)
     public DbSet<EmployeeTypePeriod> EmployeeTypePeriods => Set<EmployeeTypePeriod>();

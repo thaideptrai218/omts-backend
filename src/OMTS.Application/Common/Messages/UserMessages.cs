@@ -1311,6 +1311,60 @@ public static class UserMessages
         },
     };
 
+    /// <summary>MSG-CLAIM-04 (CLAIM-03 step 4): a Zone Manager confirms the Owner agreed to the return and decided which oysters go back for sale.</summary>
+    public static UserMessage SalesReturnOwnerAgreed(string invoiceCode, decimal returnValue) => new(
+        Claim04, $"Has the Cooperative Owner agreed to take back all the goods of invoice {invoiceCode} ({Vnd(returnValue)} VND) and decided which oysters go back for sale?")
+    {
+        Parameters = new Dictionary<string, object?> { ["invoice_code"] = invoiceCode, ["return_value"] = returnValue },
+    };
+
+    /// <summary>MSG-CLAIM-05 (CLAIM-03 step 9): to the Owners and, when the debt is now below zero, the Accountants, who are also asked to pay the money back (BR-CLAIM-03).</summary>
+    /// <param name="debtAfter">The customer debt after the return: below zero it is money owed back.</param>
+    /// <param name="forAccountant">Adds the request to pay the money back.</param>
+    public static UserMessage SalesReturnRecorded(
+        string userName, string returnCode, string invoiceCode, string customerName, decimal returnValue, decimal backForSaleKg, decimal discardedKg, decimal debtAfter, bool forAccountant)
+    {
+        var debtText = CustomerDebtAfterText(customerName, debtAfter) + (forAccountant && debtAfter < 0m ? " Please pay the money back (DEBT-02)." : string.Empty);
+        return new UserMessage(
+            Claim05,
+            $"{userName} recorded sales return {returnCode} of invoice {invoiceCode} ({customerName}, {Vnd(returnValue)} VND): {Kg(backForSaleKg)} kg back for sale, {Kg(discardedKg)} kg thrown away. {debtText}")
+        {
+            Parameters = new Dictionary<string, object?>
+            {
+                ["user_name"] = userName,
+                ["return_code"] = returnCode,
+                ["invoice_code"] = invoiceCode,
+                ["customer_name"] = customerName,
+                ["return_value"] = returnValue,
+                ["back_for_sale_kg"] = KgValue(backForSaleKg),
+                ["discarded_kg"] = KgValue(discardedKg),
+                ["debt_amount"] = debtAfter,
+            },
+        };
+    }
+
+    /// <summary>MSG-CLAIM-06 (CLAIM-03.3): taking the kg back out of a lot brings its remaining kg below zero.</summary>
+    /// <param name="lotText">The lots with the remaining kg after the cancellation, e.g. "L-001 (-20 kg)".</param>
+    public static UserMessage SalesReturnNegativeRemaining(string returnCode, string lotText) => new(
+        Claim06, $"Oysters that sales return {returnCode} put back for sale have been sold since. After the cancellation, the remaining kg will be below zero: {lotText}.")
+    {
+        Parameters = new Dictionary<string, object?> { ["return_code"] = returnCode, ["lot_text"] = lotText },
+    };
+
+    /// <summary>MSG-GEN-08 for a Zone Manager who ticked the close of a lot of another zone on a sales return (PM answer 12/11/2026, 8.5): the whole return is refused and the text says what to do.</summary>
+    public static UserMessage SalesReturnLotCloseNotPermitted(string lotCode) => new(
+        Gen08, $"You do not have permission to close lot {lotCode} from this sales return. Untick the close of lot {lotCode}, or ask the Cooperative Owner to record the return. Nothing has been changed.", Legacy.Msg02)
+    {
+        Parameters = new Dictionary<string, object?> { ["lot_code"] = lotCode },
+    };
+
+    /// <summary>MSG-HARVEST-02 (HARVEST-02.1): the returned oysters of a lot still for sale are thrown away.</summary>
+    public static UserMessage ThrownAwayLotStillForSale(string lotCode) => new(
+        Harvest02, $"The returned oysters of lot {lotCode} will be thrown away. Is lot {lotCode} still for sale? Choose Yes to keep selling it, or No to close it now.")
+    {
+        Parameters = new Dictionary<string, object?> { ["lot_code"] = lotCode },
+    };
+
     // ---- Old codes still sent as the code (Legacy.KeptAsCode) ----
 
     /// <summary>MSG05: an export file could not be generated, or a stored file could not be read.</summary>

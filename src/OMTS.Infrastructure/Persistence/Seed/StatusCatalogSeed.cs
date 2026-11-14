@@ -112,6 +112,10 @@ internal static class StatusCatalogSeed
         NewStatus(S.NurseryBatch.Completed, G.NurseryBatch, "COMPLETED", "Completed", "The survivors are recorded (Đã ươm xong): the batch is a pool that cycles seed from; the survivors can still be corrected, not below what is seeded. It is closed once the rafts are seeded.", final: false),
         NewStatus(S.NurseryBatch.Cancelled, G.NurseryBatch, "CANCELLED", "Cancelled", "Recorded by mistake before it was completed; the pieces are back in the stock.", final: true),
         NewStatus(S.NurseryBatch.Closed, G.NurseryBatch, "CLOSED", "Closed", "Closed with pieces left in the pool: the remainder is written off as an estimated loss; nothing is seeded from it any more.", final: true),
+
+        // STD-SALES-RETURN (BR-CLAIM-03).
+        NewStatus(S.SalesReturn.Recorded, G.SalesReturn, "RECORDED", "Recorded", "Takes the invoice out of the customer debt and counts in the lots and the reports; cannot be edited.", initial: true),
+        NewStatus(S.SalesReturn.Cancelled, G.SalesReturn, "CANCELLED", "Cancelled", "Recorded by mistake; counts nowhere.", final: true),
     ];
 
     public static readonly StatusTransition[] Transitions =
@@ -156,6 +160,7 @@ internal static class StatusCatalogSeed
         NewTransition(221, S.QualityClaim.AwaitingResponse, S.QualityClaim.Rejected, "CLAIM-02", Owner, Action, "A note gives the reason.", true),
         NewTransition(222, S.QualityClaim.OfferMade, S.QualityClaim.Accepted, "CLAIM-02", Trader, Action, "The trader of the claim accepts the offer; the Owner then runs the return (CLAIM-03) or the price cut (SALE-07).", false),
         NewTransition(223, S.QualityClaim.OfferMade, S.QualityClaim.OfferDeclined, "CLAIM-02", Trader, Action, "The trader of the claim declines the offer; a note is optional.", false),
+        NewTransition(240, S.SalesReturn.Recorded, S.SalesReturn.Cancelled, "CLAIM-03", Owner, Action, "A return recorded by mistake; it no longer counts in the customer debt, the lots or the reports, and the invoice can again be corrected or cancelled.", true),
 
         // BR-HARVEST-04: closed in one of four ways; only the system reopens a lot. 80–140 are taken or reserved on other branches.
         NewTransition(150, S.HarvestLot.Open, S.HarvestLot.Closed, "HARVEST-02, GFR-05, SALE-05, SALE-07, CLAIM-03", LotCloser, Action, "Sold whole lot, closed with the leftover kg, or the time limit reached.", false),
