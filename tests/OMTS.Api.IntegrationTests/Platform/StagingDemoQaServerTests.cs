@@ -211,7 +211,7 @@ public partial class StagingDemoQaServerTests(StagingDemoQaServerFixture server)
 
         Assert.Empty(found);
         var audit = await db.AuditEvents.Where(e => e.Action == "Account.DemoCredentialsSet").ToListAsync();
-        Assert.Equal(7, audit.Count);
+        Assert.Equal(9, audit.Count);
         Assert.All(audit, row => Assert.DoesNotContain("Password\":\"", $"{row.Before}{row.After}"));
     }
 

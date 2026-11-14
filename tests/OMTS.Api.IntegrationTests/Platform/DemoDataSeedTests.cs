@@ -167,9 +167,9 @@ public class DemoDataSeedTests
         Assert.All(cycles, c => Assert.True(c.StartDate < businessToday.AddDays(-30)));
         // The plan has no expected harvest date any more (owner decision of 12/11/2026): the demo sets none.
         Assert.Equal(0, cycles.Count(c => c.ExpectedHarvestDate is not null));
-        Assert.Equal(9, await db.Employees.CountAsync());
+        Assert.Equal(11, await db.Employees.CountAsync());
         // Everyone has a type (BR-LABOR-01): those with a login are Staff, the others seasonal workers; one has no phone number.
-        Assert.Equal(9, await db.EmployeeTypePeriods.Select(p => p.EmployeeId).Distinct().CountAsync());
+        Assert.Equal(11, await db.EmployeeTypePeriods.Select(p => p.EmployeeId).Distinct().CountAsync());
         Assert.Equal(3, await db.EmployeeTypePeriods.CountAsync(p => p.Type == OMTS.Domain.Enums.EmployeeType.SeasonalWorker));
         Assert.Equal(1, await db.Employees.CountAsync(e => e.PhoneNumber == null));
         Assert.True(await db.Employees.Where(e => e.BankAccount != null).AllAsync(e => e.BankAccount!.AccountNumber.StartsWith("9999")));
@@ -229,9 +229,10 @@ public class DemoDataSeedTests
         Assert.Equal(1, await db.JobTypes.CountAsync(j => j.StatusId == StatusIds.Usage.Discontinued));
         Assert.True(await db.JobTypes.AllAsync(j => j.Rates.Any()));
         Assert.Equal(6, await db.PayRates.CountAsync());
-        Assert.Equal(4, await db.EmployeeJobTypes.CountAsync());
+        Assert.Equal(6, await db.EmployeeJobTypes.CountAsync());
         var seasonal = await db.EmployeeTypePeriods.Where(p => p.Type == OMTS.Domain.Enums.EmployeeType.SeasonalWorker).Select(p => p.EmployeeId).ToListAsync();
-        Assert.True(await db.EmployeeJobTypes.AllAsync(j => seasonal.Contains(j.EmployeeId)));
+        // The demo also gives job types to the employees of the employee app (OMTS-227), so not only the seasonal workers have them.
+        Assert.True(await db.EmployeeJobTypes.AnyAsync(j => seasonal.Contains(j.EmployeeId)));
         Assert.Equal(2, await db.AttendanceSettingsVersions.CountAsync());
 
         var cooperative = await db.Cooperatives.SingleAsync();
