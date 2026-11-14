@@ -424,10 +424,10 @@ records at the moment of the call and nothing is stored (BR-FARM-10); `computedA
   (BR-HARVEST-04; list them with `GET /api/harvest-lots/for-sale?zoneId=`); `waterAlerts` are the zones In Use whose latest Active
   measurement is outside its thresholds, one entry per zone however many values are outside (BR-WATER-04, WATER-03).
 - Pending tasks, one group per `kind`: `PurchaseRequest` Awaiting response (SALE-03), `QualityClaim` Awaiting response (CLAIM-02),
-  `Payroll` Awaiting finalization (LABOR-13). `count` is every record; `oldest` is the 5 that wait longest (`id` opens the record,
+  `Payroll` Awaiting finalization (LABOR-13), `EmployeeRequest` Awaiting review (LABOR-05: leave, missed check-in or check-out; no zone). `count` is every record; `oldest` is the 5 that wait longest (`id` opens the record,
   `code` is null for a record with no code, `since` is when it began to wait). `label` names the record without opening it:
   `{customer} – {cages} cages {product}, pickup dd/MM/yyyy` for a purchase request, `{customer} – invoice {code}` for a quality claim,
-  `Payroll dd/MM/yyyy–dd/MM/yyyy` for a payroll. The employee requests Awaiting review come with LABOR-05/08/10 as one more group.
+  `Payroll dd/MM/yyyy–dd/MM/yyyy` for a payroll, `{employee} – leave dd/MM/yyyy[–dd/MM/yyyy]` or `{employee} – missed check-in|check-out dd/MM/yyyy` for an employee request.
 
 ### Work assignment, attendance and employee requests (LABOR-02, LABOR-04, LABOR-05, LABOR-10)
 
