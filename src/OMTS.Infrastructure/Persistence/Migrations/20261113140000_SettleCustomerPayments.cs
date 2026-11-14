@@ -52,6 +52,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             migrationBuilder.DeleteData(
                 table: "StatusTransitions",
                 keyColumn: "Id",
+                keyColumnType: "int",
                 keyValue: 213);
 
             migrationBuilder.DropColumn(

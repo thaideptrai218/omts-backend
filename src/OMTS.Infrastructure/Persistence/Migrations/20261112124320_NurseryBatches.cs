@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -296,31 +296,37 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             migrationBuilder.DeleteData(
                 table: "InputIssueTypes",
                 keyColumn: "Id",
+                keyColumnType: "uniqueidentifier",
                 keyValue: new Guid("6e1f0b20-0000-4d4a-8b20-000000000004"));
 
             migrationBuilder.DeleteData(
                 table: "StatusTransitions",
                 keyColumn: "Id",
+                keyColumnType: "int",
                 keyValue: 30090);
 
             migrationBuilder.DeleteData(
                 table: "StatusTransitions",
                 keyColumn: "Id",
+                keyColumnType: "int",
                 keyValue: 30091);
 
             migrationBuilder.DeleteData(
                 table: "Statuses",
                 keyColumn: "Id",
+                keyColumnType: "int",
                 keyValue: 4001);
 
             migrationBuilder.DeleteData(
                 table: "Statuses",
                 keyColumn: "Id",
+                keyColumnType: "int",
                 keyValue: 4002);
 
             migrationBuilder.DeleteData(
                 table: "Statuses",
                 keyColumn: "Id",
+                keyColumnType: "int",
                 keyValue: 4003);
 
             migrationBuilder.DropColumn(
