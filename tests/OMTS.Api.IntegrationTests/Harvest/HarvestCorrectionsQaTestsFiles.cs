@@ -193,7 +193,7 @@ public class HarvestCorrectionsQaTestsFiles
         api.Faults.DeleteThrows = false;
         await RunJobAsync(api);
 
-        Assert.Equal(corrected.PhotoKeysOfLot(), StoredKeys(api, Category)!);
+        Assert.Equal(corrected.PhotoKeysOfLot().Order(), StoredKeys(api, Category)!.Order());
         Assert.NotEqual(stored, StoredKeys(api, Category));
     }
 

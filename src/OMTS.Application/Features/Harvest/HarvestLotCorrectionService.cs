@@ -79,7 +79,7 @@ public sealed class HarvestLotCorrectionService(
     /// A form read before another save is told so first (NFR-09): its kept keys and lanes were never judged against that save, so they are not its mistake.
     /// </summary>
     private async Task<Result<Checked>> CheckAsync(
-        Guid lotId, CorrectHarvestLotRequest request, HashSet<string> keep, IReadOnlyList<IncomingFile> newPhotos, CancellationToken cancellationToken)
+        Guid lotId, CorrectHarvestLotRequest request, HashSet<string> keep, IReadOnlyList<IncomingFile> newPhotos, CancellationToken cancellationToken, int uploadedCount = 0)
     {
         var lot = await lots.GetForEditAsync(lotId, cancellationToken);
         if (lot is null)
@@ -101,7 +101,8 @@ public sealed class HarvestLotCorrectionService(
         var (raft, facts) = await edits.FactsAsync(lot, cancellationToken);
         var kept = lot.Photos.Where(p => keep.Contains(p.FileKey)).ToList();
         // A lot that has photos keeps 1 to 3 after the correction (owner decision of 12/11/2026); one recorded before the photos stays valid without.
-        var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(newPhotos, request.OtherFilePart, kept.Count, kept.Count == keep.Count, lot.Photos.Count > 0 ? StepPhotoService.MinPhotos : 0);
+        var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(
+            newPhotos, request.OtherFilePart, kept.Count + uploadedCount, kept.Count == keep.Count, lot.Photos.Count > 0 ? StepPhotoService.MinPhotos : 0);
 
         // BR-HARVEST-02: left out, the estimate stays, unless the cages changed: then it is worked out again with the kg per cage of the lot, never the current setting.
         var estimatedKg = request.EstimatedKg ?? (request.CageCount == lot.CageCount ? lot.EstimatedKg : null);
@@ -150,7 +151,8 @@ public sealed class HarvestLotCorrectionService(
     /// <summary>Changes the row as it is after the uploads. The cap on photos still holds, as the kept photos can only be the same ones.</summary>
     private async Task<Result<Applied>> ApplyAsync(Guid lotId, CorrectHarvestLotRequest request, HashSet<string> keep, IReadOnlyList<string> newKeys, CancellationToken cancellationToken)
     {
-        var current = await CheckAsync(lotId, request, keep, [], cancellationToken);
+        // The new photos are already uploaded (newKeys): they count towards the 1 to 3 the lot ends with, as in the first look.
+        var current = await CheckAsync(lotId, request, keep, [], cancellationToken, newKeys.Count);
         if (!current.IsSuccess)
         {
             return current.Error!;

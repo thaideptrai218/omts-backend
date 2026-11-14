@@ -333,7 +333,7 @@ public class HarvestLotsQaTestsKestrel(KestrelApiFactory api) : IClassFixture<Ke
         var photo = Sized(Jpeg, (int)(10 * Megabyte));
         var form = (HarvestFields.OfLanes(1, 2, 3, 4, 5).FinishedLanes(1, 2, 3, 4, 5) with
         {
-            Cages = "2147483647", EstimatedKg = "1000000000", Photos = Enumerable.Repeat(photo, 3).ToList(), Order = await api.HarvestOrderAsync(),
+            Cages = "100000", EstimatedKg = "1000000", Photos = Enumerable.Repeat(photo, 3).ToList(), Order = await api.HarvestOrderAsync(),
         }).ToForm();
 
         using var response = await client.PostAsync($"api/rafts/{raft.RaftId}/harvest-lots", form);

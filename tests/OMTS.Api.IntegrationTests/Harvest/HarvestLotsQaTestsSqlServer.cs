@@ -237,7 +237,8 @@ public class HarvestLotsQaTestsSqlServer
         Assert.Equal(1, await host.QueryAsync(db => db.Notifications.CountAsync(n => n.Type == "HARVEST_LOT_RECORDED" && n.RelatedRecordId == loser.Id())));
         Assert.Equal(1, await host.QueryAsync(db => db.HarvestLotPhotos.CountAsync(p => p.LotId == loser.Id())));
         Assert.Equal(2, await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.Action == "HarvestLot.Created")));
-        Assert.Single(host.StoredKeys(FileCategories.HarvestLotPhotos));
+        // Each lot has its photo (a new lot needs 1 to 3, owner decision of 12/11/2026): the winner's and the loser's, and no file of an attempt that was not saved.
+        Assert.Equal(2, host.StoredKeys(FileCategories.HarvestLotPhotos).Count);
     }
 
     [SqlServerFact]
@@ -257,7 +258,10 @@ public class HarvestLotsQaTestsSqlServer
             var answers = await Task.WhenAll(rafts.Select(r => manager.Client.PostHarvestAsync(r.RaftId, new HarvestFields { Photos = [Jpeg], Lanes = ["1", "2"], Finished = ["1"] })));
 
             await AssertNoServerErrorAsync(answers);
-            Assert.All(answers, a => Assert.Equal(HttpStatusCode.Created, a.StatusCode));
+            // The lots of one request move its row (the cages never add up to more than it accepted, 13/11/2026): lots that were read together are all saved or lose on the row version of the
+            // request with 409 MSG06, never a 500, and at least one is saved each round.
+            Assert.All(answers, a => Assert.Contains(a.StatusCode, new[] { HttpStatusCode.Created, HttpStatusCode.Conflict }));
+            Assert.Contains(answers, a => a.StatusCode == HttpStatusCode.Created);
         }
     }
 
