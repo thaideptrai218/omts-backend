@@ -21,6 +21,9 @@ x-api-environment: &api-environment
   Sms__Provider: None
   Zalo__Provider: ${ZALO_PROVIDER:-}
   Zalo__AppSecret: ${ZALO_APP_SECRET:-}
+  # Zalo refuses callers outside Vietnam (-501): the Vietnamese forward proxy for the Zalo calls only. It holds the proxy
+  # password, so the value lives in .env; unset, the API connects to Zalo directly.
+  Zalo__ProxyUrl: ${ZALO_PROXY_URL:-}
   # Save Azure SQL serverless vCore: no 10 s Redis sweeper (sessions checked in SQL per request),
   # and every daily job in one 06:00-06:05 window so the database wakes once a day.
   Revocation__Mode: Sql

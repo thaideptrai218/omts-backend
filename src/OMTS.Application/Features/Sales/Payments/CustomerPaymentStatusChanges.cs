@@ -8,23 +8,67 @@ using OMTS.Domain.Entities.Sales;
 namespace OMTS.Application.Features.Sales.Payments;
 
 /// <summary>
-/// The two moves of STD-CUSTOMER-PAYMENT that DEBT-02 makes on a saved payment, with their audit rows (GBR-02), in the caller's unit of work: Awaiting confirmation →
-/// Confirmed (DEBT-02.2, changes no debt) and Awaiting confirmation or Confirmed → Cancelled with a reason (DEBT-02.4, the payment leaves the debt).
-/// The caller checks the status first.
+/// The moves of STD-CUSTOMER-PAYMENT that DEBT-02 makes on a saved payment, with their audit rows (GBR-02), in the caller's unit of work: Awaiting confirmation →
+/// Completed (DEBT-02.2, changes no debt), the same move when settling a payment without a customer (DEBT-02.6), Awaiting confirmation or Completed → Cancelled with a reason
+/// (DEBT-02.4, the payment leaves the debt), and Completed → Awaiting confirmation when the money paid back that settled a payment is cancelled. The caller checks the status first.
 /// </summary>
 public sealed class CustomerPaymentStatusChanges(AuditLogService audit, IStatusCatalog statusCatalog, ICurrentUser currentUser, TimeProvider timeProvider)
 {
     public const string ConfirmedAction = "CustomerPayment.Confirmed";
     public const string CancelledAction = "CustomerPayment.Cancelled";
     public const string CancelledAfterConfirmAction = "CustomerPayment.CancelledAfterConfirm";
+    public const string SettledAction = "CustomerPayment.Settled";
+    public const string SettlementUndoneAction = "CustomerPayment.SettlementUndone";
 
     public void Confirm(CustomerPayment payment)
     {
         var before = payment.StatusId;
+        SetCompleted(payment);
+        Audit(payment, ConfirmedAction, before, null);
+    }
+
+    /// <summary>DEBT-02.6 step 4: Completed (the Accountant found the money on the bank statement; it enters the cash book), and how it was settled.</summary>
+    /// <param name="settlement">AttachedToCustomer or PaidBack.</param>
+    /// <param name="paidBack">The money paid back; null when the payment went to a profile.</param>
+    /// <param name="allocations">The invoices the payment pays once attached to a profile.</param>
+    public void Settle(CustomerPayment payment, string settlement, CustomerPayment? paidBack, IReadOnlyList<(Guid InvoiceId, decimal Amount)> allocations)
+    {
+        var before = payment.StatusId;
+        SetCompleted(payment);
+        audit.Record(new AuditEntry(SettledAction, SalesInvoiceWriter.PaymentRecordType)
+        {
+            RecordId = payment.Id,
+            RecordCode = payment.Code,
+            Before = new { Status = statusCatalog.CodeOf(before), CustomerId = (Guid?)null },
+            After = new
+            {
+                Status = statusCatalog.CodeOf(payment.StatusId), Settlement = settlement, payment.CustomerId, payment.CashAccountId, PaidBackCode = paidBack?.Code, PaidBackAmount = paidBack?.Amount,
+                Allocations = allocations.Select(a => new { a.InvoiceId, a.Amount }).ToList(),
+            },
+        });
+    }
+
+    /// <summary>The money paid back that settled this payment was cancelled (DEBT-02.4): the payment goes back to the list, out of the cash book, and is settled again.</summary>
+    public void UndoSettlement(CustomerPayment payment, string paidBackCode)
+    {
+        var before = payment.StatusId;
+        payment.StatusId = StatusIds.CustomerPayment.AwaitingConfirmation;
+        payment.ConfirmedByAccountId = null;
+        payment.ConfirmedAt = null;
+        audit.Record(new AuditEntry(SettlementUndoneAction, SalesInvoiceWriter.PaymentRecordType)
+        {
+            RecordId = payment.Id,
+            RecordCode = payment.Code,
+            Before = new { Status = statusCatalog.CodeOf(before) },
+            After = new { Status = statusCatalog.CodeOf(payment.StatusId), PaidBackCode = paidBackCode },
+        });
+    }
+
+    private void SetCompleted(CustomerPayment payment)
+    {
         payment.StatusId = StatusIds.CustomerPayment.Completed;
         payment.ConfirmedByAccountId = currentUser.AccountId;
         payment.ConfirmedAt = timeProvider.GetUtcNow();
-        Audit(payment, ConfirmedAction, before, null);
     }
 
     public void Cancel(CustomerPayment payment, string reason)

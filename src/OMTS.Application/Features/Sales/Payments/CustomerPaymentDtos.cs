@@ -46,10 +46,27 @@ public sealed record RecordCustomerPaymentRequest(
 /// <summary>DEBT-02.4: the reason is required. <paramref name="RowVersion"/>, when sent, must be the version shown.</summary>
 public sealed record CancelCustomerPaymentRequest(string? Reason, string? RowVersion = null);
 
-/// <summary>DEBT-02.2 step 3: the payments whose money arrived, and those cancelled from the list (DEBT-02.4), saved together with one notice.</summary>
-public sealed record ConfirmCustomerPaymentsRequest(IReadOnlyList<Guid>? Confirm = null, IReadOnlyList<CancelInConfirmations>? Cancel = null);
+/// <summary>DEBT-02.2 step 3: the payments whose money arrived, those cancelled from the list (DEBT-02.4) and those settled (DEBT-02.6), saved together with one notice.</summary>
+public sealed record ConfirmCustomerPaymentsRequest(
+    IReadOnlyList<Guid>? Confirm = null, IReadOnlyList<CancelInConfirmations>? Cancel = null, IReadOnlyList<SettleInConfirmations>? Settle = null);
 
 public sealed record CancelInConfirmations(Guid Id, string? Reason);
+
+/// <summary>DEBT-02.6 step 2 for a payment without a customer: exactly one of <paramref name="CustomerId"/> and <paramref name="PayBack"/>.</summary>
+/// <param name="CustomerId">Attach the payment to this customer profile: it then counts like any other payment of the profile.</param>
+/// <param name="Allocations">With <paramref name="CustomerId"/>: the unpaid invoices of the profile the payment pays, as when a payment is recorded; left out, it covers the oldest unpaid invoices first.</param>
+/// <param name="PayBack">Pay all of the money back.</param>
+public sealed record SettleInConfirmations(
+    Guid Id, Guid? CustomerId = null, IReadOnlyList<CustomerPaymentAllocationInput>? Allocations = null, SettlementPayBack? PayBack = null);
+
+/// <summary>DEBT-02.6 step 2, Pay money back; the amount is the amount of the payment, and it is paid back from the cash fund or a bank account of the cash book.</summary>
+/// <param name="PaymentDate">The date paid back: not after today and not before the date of the transfer.</param>
+/// <param name="Method">Cash or OtherTransfer.</param>
+/// <param name="BankReference">Required for a transfer, ignored for cash.</param>
+/// <param name="ConfirmDuplicateBankReference">Yes to MSG-DEBT-05.</param>
+/// <param name="CashAccountId">A transfer: the Bank account of the cash book the money is paid from; left out, the account the transfer arrived in.</param>
+public sealed record SettlementPayBack(
+    DateOnly? PaymentDate, CustomerPaymentMethod? Method, string? BankReference = null, string? Note = null, bool ConfirmDuplicateBankReference = false, Guid? CashAccountId = null);
 
 public sealed record CustomerPaymentInvoiceRef(Guid Id, string Code);
 
@@ -67,12 +84,15 @@ public sealed record CustomerPaymentAllocationView(Guid InvoiceId, string Invoic
 /// <param name="DiscountAmount">Debt written off with the payment.</param>
 /// <param name="CashAccount">The bank account of a transfer.</param>
 /// <param name="Allocations">The invoices it pays, in the order of their invoices; empty when it names none (the oldest invoices are covered).</param>
+/// <param name="NeedsSettlement">DEBT-02.2 step 2: a payment Awaiting confirmation that has no customer and no invoice (a transfer whose code matches no saved invoice): it is settled (DEBT-02.6), never confirmed plainly.</param>
+/// <param name="PaidBackForPaymentId">Money paid back that settles a payment (DEBT-02.6): that payment.</param>
 public sealed record CustomerPaymentDetails(
     Guid Id, string Code, CustomerDebtCustomer? Customer, CustomerPaymentKind Kind, decimal Amount, DateOnly PaymentDate, CustomerPaymentMethod Method,
     string? BankReference, CustomerPaymentInvoiceRef? Invoice, AccountRef? CollectedBy, AccountRef? RecordedBy, string? Note,
     int StatusId, string Status, AccountRef? ConfirmedBy, DateTimeOffset? ConfirmedAt, AccountRef? CancelledBy, DateTimeOffset? CancelledAt, string? CancelReason,
     string RowVersion, string? TransferInvoiceCode = null, DateTimeOffset? TransferredAt = null,
-    DateTimeOffset PaidAt = default, decimal DiscountAmount = 0m, CashAccountRef? CashAccount = null, IReadOnlyList<CustomerPaymentAllocationView>? Allocations = null);
+    DateTimeOffset PaidAt = default, decimal DiscountAmount = 0m, CashAccountRef? CashAccount = null, IReadOnlyList<CustomerPaymentAllocationView>? Allocations = null,
+    bool NeedsSettlement = false, Guid? PaidBackForPaymentId = null);
 
 /// <summary>The VietQR code of a payment waiting for its transfer: the client draws the image from <paramref name="Payload"/>.</summary>
 /// <param name="Payload">The EMVCo text to draw as a QR code.</param>
@@ -101,8 +121,12 @@ public sealed record CustomerPaymentForm(
 /// <param name="Message">MSG-GEN-11 when nothing is Awaiting confirmation (DEBT-02.2.E1).</param>
 public sealed record AwaitingCustomerPayments(Paged<CustomerPaymentDetails> Page, decimal TotalAmount, string? Message, string? MessageCode);
 
-/// <summary>The answer of a list of confirmations: what was confirmed and cancelled, and MSG-GEN-05.</summary>
-public sealed record CustomerPaymentsConfirmed(IReadOnlyList<CustomerPaymentDetails> Confirmed, IReadOnlyList<CustomerPaymentDetails> Cancelled, string Message, string MessageCode);
+/// <summary>The answer of a list of confirmations: what was confirmed, cancelled and settled, and MSG-GEN-05.</summary>
+public sealed record CustomerPaymentsConfirmed(
+    IReadOnlyList<CustomerPaymentDetails> Confirmed, IReadOnlyList<CustomerPaymentDetails> Cancelled, string Message, string MessageCode, IReadOnlyList<CustomerPaymentSettled>? Settled = null);
+
+/// <summary>DEBT-02.6: the payment settled (Completed), the money paid back (null when it went to a profile) and the debt of the profile after the list (null without a profile).</summary>
+public sealed record CustomerPaymentSettled(CustomerPaymentDetails Payment, CustomerPaymentDetails? PaidBack, decimal? DebtAfter);
 
 /// <summary>A debt adjustment: above 0 the customer owes more, below 0 less.</summary>
 /// <param name="Amount">Signed whole VND, never 0.</param>
