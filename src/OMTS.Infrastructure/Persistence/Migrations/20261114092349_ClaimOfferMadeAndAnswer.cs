@@ -43,13 +43,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 nullable: true);
 
             migrationBuilder.UpdateData(
-                table: "StatusTransitions",
-                keyColumn: "Id",
-                keyValue: 220,
-                columns: new[] { "GuardCondition", "ToStatusId" },
-                values: new object[] { "The invoice is not cancelled and has no sales return; an offer is chosen, a price cut has its amount, and a note is optional.", 3704 });
-
-            migrationBuilder.UpdateData(
                 table: "Statuses",
                 keyColumn: "Id",
                 keyValue: 3703,
@@ -64,6 +57,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     { 3704, "OFFER_MADE", null, "Offer made", "QUALITY_CLAIM", false, false, "The Cooperative Owner proposed a return of all the goods or a price cut of the whole invoice; the trader has not answered yet.", 4 },
                     { 3705, "OFFER_DECLINED", null, "Offer declined", "QUALITY_CLAIM", true, false, "The trader declined the offer of the Cooperative Owner.", 5 }
                 });
+
+            migrationBuilder.UpdateData(
+                table: "StatusTransitions",
+                keyColumn: "Id",
+                keyValue: 220,
+                columns: new[] { "GuardCondition", "ToStatusId" },
+                values: new object[] { "The invoice is not cancelled and has no sales return; an offer is chosen, a price cut has its amount, and a note is optional.", 3704 });
 
             migrationBuilder.InsertData(
                 table: "StatusTransitions",
@@ -122,6 +122,14 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             // Down: an offer made, accepted or declined by the trader is again a claim accepted by the Owner (the trader's answer is lost).
             migrationBuilder.Sql("UPDATE [QualityClaims] SET [StatusId] = 3703 WHERE [StatusId] IN (3704, 3705)");
 
+            // The transition 220 goes back to Accepted before the status Offer made is deleted (foreign key).
+            migrationBuilder.UpdateData(
+                table: "StatusTransitions",
+                keyColumn: "Id",
+                keyValue: 220,
+                columns: new[] { "GuardCondition", "ToStatusId" },
+                values: new object[] { "The invoice is not cancelled and has no sales return; an offer is chosen and a note is optional.", 3703 });
+
             migrationBuilder.DeleteData(
                 table: "StatusTransitions",
                 keyColumn: "Id",
@@ -153,13 +161,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
             migrationBuilder.DropColumn(
                 name: "OfferAmount",
                 table: "QualityClaims");
-
-            migrationBuilder.UpdateData(
-                table: "StatusTransitions",
-                keyColumn: "Id",
-                keyValue: 220,
-                columns: new[] { "GuardCondition", "ToStatusId" },
-                values: new object[] { "The invoice is not cancelled and has no sales return; an offer is chosen and a note is optional.", 3703 });
 
             migrationBuilder.UpdateData(
                 table: "Statuses",
