@@ -167,6 +167,7 @@ public class QualityClaimQaSqlServerTests
         var index = (await db.Database.SqlQueryRaw<IndexRow>("SELECT is_unique AS IsUnique, CAST(has_filter AS bit) AS HasFilter, filter_definition AS FilterDefinition FROM sys.indexes WHERE name = 'UX_QualityClaims_Invoice_Awaiting'").ToListAsync()).Single();
         Assert.True(index.IsUnique && index.HasFilter);
         Assert.Contains("3701", index.FilterDefinition);
+        Assert.Contains("3704", index.FilterDefinition);
         var cascades = await db.Database.SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM sys.foreign_keys WHERE parent_object_id IN (OBJECT_ID('QualityClaims'), OBJECT_ID('QualityClaimPhotos')) AND delete_referential_action <> 0").SingleAsync();
         Assert.Equal(0, cascades);
 
@@ -180,7 +181,8 @@ public class QualityClaimQaSqlServerTests
 
         await db.Database.MigrateAsync();
         Assert.Contains("QualityClaims", await TablesAsync(db));
-        Assert.Equal(3, await db.Statuses.CountAsync(s => s.Group == "QUALITY_CLAIM"));
+        // Awaiting response, Rejected, Accepted, Offer made and Offer declined (PM answer 12/11).
+        Assert.Equal(5, await db.Statuses.CountAsync(s => s.Group == "QUALITY_CLAIM"));
         Assert.Equal(2, await db.StatusTransitions.CountAsync(t => t.Id == 220 || t.Id == 221));
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
     }
