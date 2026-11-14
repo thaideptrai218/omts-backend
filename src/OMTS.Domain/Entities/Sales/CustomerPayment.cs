@@ -63,6 +63,13 @@ public class CustomerPayment : AuditableEntity, IHasStatus
     /// <summary>The time of the transfer that the Payment Notification Service reported (GFR-08); null for a payment recorded by a person.</summary>
     public DateTimeOffset? TransferredAt { get; set; }
 
+    /// <summary>
+    /// Money paid back for a transfer without a customer that the Accountant settled by paying it back (DEBT-02.6): the payment it settles, which stays without a customer. At most one
+    /// that is not cancelled per payment. Null otherwise.
+    /// </summary>
+    public Guid? PaidBackForPaymentId { get; set; }
+    public CustomerPayment? PaidBackForPayment { get; set; }
+
     public string? Note { get; set; }
 
     /// <summary>A repeated key returns the first payment and creates nothing (NFR-04).</summary>

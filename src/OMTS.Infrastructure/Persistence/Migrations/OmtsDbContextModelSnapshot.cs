@@ -5091,6 +5091,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
+                            Id = 213,
+                            AllowedPerformers = "Accountant; Cooperative Owner",
+                            FromStatusId = 3602,
+                            GuardCondition = "The money paid back that settled a payment without a customer was cancelled, so the payment is settled again.",
+                            ReasonRequired = false,
+                            ToStatusId = 3601,
+                            TriggerEvent = "Action",
+                            UseCases = "DEBT-02.4, DEBT-02.6"
+                        },
+                        new
+                        {
                             Id = 30078,
                             AllowedPerformers = "System; Accountant",
                             FromStatusId = 3604,
@@ -6749,6 +6760,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("PaidAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<Guid?>("PaidBackForPaymentId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateOnly>("PaymentDate")
                         .HasColumnType("date");
 
@@ -6805,6 +6819,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasIndex("CustomerId", "StatusId");
 
                     b.HasIndex("StatusId", "PaymentDate");
+
+                    b.HasIndex(new[] { "PaidBackForPaymentId" }, "IX_CustomerPayments_PaidBackForPayment")
+                        .IsUnique()
+                        .HasFilter("[PaidBackForPaymentId] IS NOT NULL AND [StatusId] <> 3603");
 
                     b.HasIndex(new[] { "BankReference" }, "IX_CustomerPayments_VietQrBankReference")
                         .IsUnique()
@@ -9380,6 +9398,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("InvoiceId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("OMTS.Domain.Entities.Sales.CustomerPayment", "PaidBackForPayment")
+                        .WithMany()
+                        .HasForeignKey("PaidBackForPaymentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
                         .WithMany()
                         .HasForeignKey("RecordedByAccountId")
@@ -9396,6 +9419,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Customer");
 
                     b.Navigation("Invoice");
+
+                    b.Navigation("PaidBackForPayment");
 
                     b.Navigation("Status");
                 });

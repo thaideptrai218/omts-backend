@@ -41,6 +41,7 @@ public sealed class CustomerPaymentViews(IAccountRepository accounts, IStatusCat
             p.PaidAt, p.DiscountAmount, p.CashAccount is { } account ? new CashAccountRef(account.Id, account.ProviderName, account.AccountNumber) : null,
             p.Allocations
                 .OrderBy(a => a.Invoice.InvoicedAt).ThenBy(a => a.Invoice.Code, StringComparer.Ordinal)
-                .Select(a => new CustomerPaymentAllocationView(a.InvoiceId, a.Invoice.Code, a.Invoice.InvoicedAt, a.Invoice.Total, a.Amount)).ToList())).ToList();
+                .Select(a => new CustomerPaymentAllocationView(a.InvoiceId, a.Invoice.Code, a.Invoice.InvoicedAt, a.Invoice.Total, a.Amount)).ToList(),
+            CustomerPaymentSettlementRules.NeedsSettlement(p), p.PaidBackForPaymentId)).ToList();
     }
 }

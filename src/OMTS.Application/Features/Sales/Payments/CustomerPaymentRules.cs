@@ -137,17 +137,17 @@ public static class CustomerPaymentRules
     /// The shape of the allocations: kind Payment only, one per invoice, whole VND above zero, together at most the money plus the discount. Whether each invoice has that much
     /// left is read from the debt by the service.
     /// </summary>
-    private static List<string> InvalidAllocations(RecordCustomerPaymentRequest request, CustomerPaymentKind kind)
+    private static List<string> InvalidAllocations(RecordCustomerPaymentRequest request, CustomerPaymentKind kind) =>
+        request.Allocations is { Count: > 0 } && kind != CustomerPaymentKind.Payment
+            ? new List<string> { "Allocations" }
+            : InvalidAllocations(request.Allocations, (request.Amount ?? 0) + request.DiscountAmount);
+
+    /// <summary>The shape of parts sent for a payment that covers <paramref name="covers"/> (the money and its discount): one per invoice, whole VND above zero, together at most that.</summary>
+    public static List<string> InvalidAllocations(IReadOnlyList<CustomerPaymentAllocationInput>? allocations, decimal covers)
     {
         var invalid = new List<string>();
-        if (request.Allocations is not { } allocations)
+        if (allocations is null)
         {
-            return invalid;
-        }
-
-        if (allocations.Count > 0 && kind != CustomerPaymentKind.Payment)
-        {
-            invalid.Add("Allocations");
             return invalid;
         }
 
@@ -159,8 +159,7 @@ public static class CustomerPaymentRules
             }
         }
 
-        if (allocations.Select(a => a?.InvoiceId).Distinct().Count() != allocations.Count
-            || allocations.Sum(a => a?.Amount ?? 0) > (request.Amount ?? 0) + request.DiscountAmount)
+        if (allocations.Select(a => a?.InvoiceId).Distinct().Count() != allocations.Count || allocations.Sum(a => a?.Amount ?? 0) > covers)
         {
             invalid.Add("Allocations");
         }
