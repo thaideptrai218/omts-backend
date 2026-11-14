@@ -1232,11 +1232,13 @@ public static class UserMessages
 
     /// <summary>MSG-CLAIM-02 (CLAIM-02, BR-CLAIM-02): the response, to the trader account and the phone number of the profile. <paramref name="note"/> is the Owner's note, cut for SMS by the caller.</summary>
     /// <param name="offer">The offer when accepted: <c>ReturnAllGoods</c> or <c>PriceCutWholeInvoice</c>; null when rejected.</param>
-    public static UserMessage QualityClaimResponse(string cooperativeShortName, string invoiceCode, bool accepted, string? offer, string? note, string? cooperativePhone)
+    public static UserMessage QualityClaimResponse(
+        string cooperativeShortName, string invoiceCode, bool accepted, string? offer, string? note, string? cooperativePhone, decimal? offerAmount = null)
     {
         var result = !accepted
             ? "not accepted"
-            : offer == "ReturnAllGoods" ? "accepted: the cooperative offers a return of all the goods" : "accepted: the cooperative offers a price cut of the whole invoice";
+            : offer == "ReturnAllGoods" ? "accepted: the cooperative offers a return of all the goods" : offerAmount is { } cut ? $"accepted: the cooperative offers a price cut of {Vnd(cut)} VND on the whole invoice"
+            : "accepted: the cooperative offers a price cut of the whole invoice";
         var callText = $"Please call {cooperativePhone ?? "the cooperative"}.";
         return new UserMessage(Claim02, $"{cooperativeShortName}: your quality claim on invoice {invoiceCode} is {result}.{(note is null ? "" : " " + note)} {callText}")
         {
@@ -1246,6 +1248,7 @@ public static class UserMessages
                 ["invoice_code"] = invoiceCode,
                 ["result"] = accepted ? "Accepted" : "Rejected",
                 ["offer"] = offer,
+                ["offer_amount"] = offerAmount,
                 ["note"] = note,
                 ["cooperative_phone"] = cooperativePhone,
             },

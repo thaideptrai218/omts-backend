@@ -48,14 +48,14 @@ public class QualityClaimRespondTests
 
         var answer = await (await c.Owner.AcceptClaimAsync(c.Id, c.RowVersion, "PriceCutWholeInvoice", "Giam 10%")).ReadAsync(HttpStatusCode.OK);
 
-        Assert.Equal((StatusIds.QualityClaim.Accepted, "Accepted"), (answer.GetProperty("statusId").GetInt32(), answer.Text("status")));
+        Assert.Equal((StatusIds.QualityClaim.OfferMade, "Offer made"), (answer.GetProperty("statusId").GetInt32(), answer.Text("status")));
         Assert.Equal(QualityClaimOffer.PriceCutWholeInvoice, answer.ReadOffer());
         Assert.Equal("Giam 10%", answer.GetProperty("response").Text("note"));
 
         var rows = await api.NotificationRowsAsync(c.Id);
         var inApp = Assert.Single(Rows(rows.InList(), NotificationTypes.QualityClaimResponse));
         Assert.Equal(("MSG-CLAIM-02", c.World.Trader.Account.Id, c.Claim.Text("code")), (inApp.MessageCode, inApp.RecipientAccountId, inApp.RelatedRecordCode));
-        Assert.Contains("is accepted: the cooperative offers a price cut of the whole invoice", inApp.Body);
+        Assert.Contains("is accepted: the cooperative offers a price cut of 30,000 VND on the whole invoice", inApp.Body);
         Assert.Contains("Giam 10%", inApp.Body);
         var sending = Assert.Single(rows.Sendings());
         Assert.Equal((StatusIds.MessageDelivery.Sent, profile.PhoneNumber), (sending.DeliveryStatusId, sending.PhoneNumber));
@@ -65,7 +65,7 @@ public class QualityClaimRespondTests
         var invoiceAfter = await api.QueryAsync(db => db.SalesInvoices.AsNoTracking().SingleAsync(i => i.Id == c.World.InvoiceId));
         Assert.Equal((invoiceBefore.StatusId, invoiceBefore.Total, invoiceBefore.PriceCutTotal), (invoiceAfter.StatusId, invoiceAfter.Total, invoiceAfter.PriceCutTotal));
         Assert.Equal(debtBefore, await c.Owner.CustomerDebtAsync(profile.Id));
-        Assert.Equal(1, await api.QueryAsync(db => db.AuditEvents.CountAsync(e => e.Action == "QualityClaim.Accepted" && e.RecordId == c.Id && e.ZoneId == c.World.Sale.ZoneId)));
+        Assert.Equal(1, await api.QueryAsync(db => db.AuditEvents.CountAsync(e => e.Action == "QualityClaim.OfferMade" && e.RecordId == c.Id && e.ZoneId == c.World.Sale.ZoneId)));
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public class QualityClaimRespondTests
 
         var answer = await (await c.Owner.AcceptClaimAsync(c.Id, c.RowVersion)).ReadAsync(HttpStatusCode.OK);
 
-        Assert.Equal(StatusIds.QualityClaim.Accepted, answer.GetProperty("statusId").GetInt32());
+        Assert.Equal(StatusIds.QualityClaim.OfferMade, answer.GetProperty("statusId").GetInt32());
         var sending = answer.GetProperty("sendings").EnumerateArray().Single();
         Assert.Equal(StatusIds.MessageDelivery.NotSent, sending.GetProperty("deliveryStatusId").GetInt32());
         Assert.Single(Rows((await api.NotificationRowsAsync(c.Id)).InList(), NotificationTypes.QualityClaimResponse));

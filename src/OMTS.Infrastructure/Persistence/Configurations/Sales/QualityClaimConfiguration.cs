@@ -17,17 +17,25 @@ internal sealed class QualityClaimConfiguration : IEntityTypeConfiguration<Quali
         builder.ReferencesAccount(nameof(QualityClaim.RespondedByAccountId));
         builder.Property(x => x.Description).HasMaxLength(QualityClaim.MaxDescriptionLength);
         builder.Property(x => x.ResponseNote).HasMaxLength(Lengths.Reason);
+        builder.Property(x => x.OfferAmount).HasPrecision(18, 0);
+        builder.Property(x => x.AnswerNote).HasMaxLength(Lengths.Reason);
 
-        // BR-CLAIM-01: at most one claim Awaiting response per invoice; an answered claim does not stop a new one.
+        // BR-CLAIM-01: at most one open claim per invoice, Awaiting response or with an offer the trader has not answered; a finished claim does not stop a new one.
         builder.HasIndex(x => x.InvoiceId, "UX_QualityClaims_Invoice_Awaiting")
             .IsUnique()
-            .HasFilter($"[StatusId] = {StatusIds.QualityClaim.AwaitingResponse}");
+            .HasFilter($"[StatusId] IN ({StatusIds.QualityClaim.AwaitingResponse}, {StatusIds.QualityClaim.OfferMade})");
         builder.HasIndex(x => new { x.CustomerId, x.SentAt });
         builder.HasIndex(x => new { x.StatusId, x.SentAt });
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("CK_QualityClaim_Rejected_Has_Note", $"[StatusId] <> {StatusIds.QualityClaim.Rejected} OR [ResponseNote] IS NOT NULL");
-            t.HasCheckConstraint("CK_QualityClaim_Accepted_Has_Offer", $"[StatusId] <> {StatusIds.QualityClaim.Accepted} OR [Offer] IS NOT NULL");
+            t.HasCheckConstraint(
+                "CK_QualityClaim_Offered_Has_Offer",
+                $"[StatusId] NOT IN ({StatusIds.QualityClaim.OfferMade}, {StatusIds.QualityClaim.Accepted}, {StatusIds.QualityClaim.OfferDeclined}) OR [Offer] IS NOT NULL");
+            t.HasCheckConstraint("CK_QualityClaim_OfferAmount", "[OfferAmount] IS NULL OR [OfferAmount] > 0");
+            t.HasCheckConstraint(
+                "CK_QualityClaim_Answered_By_Trader",
+                $"[StatusId] NOT IN ({StatusIds.QualityClaim.Accepted}, {StatusIds.QualityClaim.OfferDeclined}) OR [AnsweredAt] IS NOT NULL");
             t.HasCheckConstraint(
                 "CK_QualityClaim_Answered_Has_Response",
                 $"[StatusId] = {StatusIds.QualityClaim.AwaitingResponse} OR ([RespondedAt] IS NOT NULL AND [RespondedByAccountId] IS NOT NULL)");

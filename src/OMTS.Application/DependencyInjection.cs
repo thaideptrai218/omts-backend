@@ -314,6 +314,7 @@ public static class DependencyInjection
         services.AddScoped<QualityClaimReadService>();
         services.AddScoped<QualityClaimSubmissionService>();
         services.AddScoped<QualityClaimResponseService>();
+        services.AddScoped<QualityClaimAnswerService>();
         // CLAIM-03 sales returns
         services.AddScoped<SalesReturnGuard>();
         services.AddScoped<SalesReturnLots>();

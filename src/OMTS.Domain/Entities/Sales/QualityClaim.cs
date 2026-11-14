@@ -7,7 +7,8 @@ namespace OMTS.Domain.Entities.Sales;
 
 /// <summary>
 /// A quality problem a trader reports in the app on one sales invoice (CLAIM-01, BR-CLAIM-01). It is on the whole invoice and records no kg. The Cooperative Owner responds once
-/// (CLAIM-02, BR-CLAIM-02); the response changes neither the invoice nor the customer debt, and the return or price cut that may follow is not linked to it.
+/// (CLAIM-02, BR-CLAIM-02): a rejection, or an offer of a return or a price cut that the trader accepts or declines (PM answer 12/11). Neither changes the invoice or the customer debt; the
+/// return or price cut that follows an accepted offer is not linked to the claim.
 /// </summary>
 public class QualityClaim : AuditableEntity, IHasStatus
 {
@@ -30,14 +31,23 @@ public class QualityClaim : AuditableEntity, IHasStatus
 
     public ICollection<QualityClaimPhoto> Photos { get; set; } = [];
 
-    /// <summary>Set when Accepted (BR-CLAIM-02); null otherwise.</summary>
+    /// <summary>What the Owner proposed (BR-CLAIM-02); set from Offer made on, null when the Owner rejected the claim.</summary>
     public QualityClaimOffer? Offer { get; set; }
 
-    /// <summary>Optional when Accepted; the reason when Rejected.</summary>
+    /// <summary>The amount of a price cut offer, its own field (PM answer 12/11): required when <see cref="Offer"/> is a price cut, above 0 and at most the invoice total; null for a return.</summary>
+    public decimal? OfferAmount { get; set; }
+
+    /// <summary>Optional with an offer; the reason when the Owner rejected the claim.</summary>
     public string? ResponseNote { get; set; }
 
     public DateTimeOffset? RespondedAt { get; set; }
     public Guid? RespondedByAccountId { get; set; }
+
+    /// <summary>When the trader accepted or declined the offer (null before).</summary>
+    public DateTimeOffset? AnsweredAt { get; set; }
+
+    /// <summary>The optional note of the trader with their answer.</summary>
+    public string? AnswerNote { get; set; }
 
     public int StatusId { get; set; } = StatusIds.QualityClaim.AwaitingResponse;
     public Status Status { get; set; } = null!;

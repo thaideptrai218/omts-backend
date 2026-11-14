@@ -139,6 +139,8 @@ public static class StatusIds
         public const int AwaitingResponse = 3701;
         public const int Rejected = 3702;
         public const int Accepted = 3703;
+        public const int OfferMade = 3704;
+        public const int OfferDeclined = 3705;
     }
 
     /// <summary>STD-SALES-INVOICE (BR-SALE-08): saved only when paid or put on the debt, so no draft; Paid and the delivery status are worked out.</summary>

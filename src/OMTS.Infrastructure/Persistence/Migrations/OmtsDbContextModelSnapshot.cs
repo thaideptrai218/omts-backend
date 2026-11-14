@@ -4403,8 +4403,30 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Group = "QUALITY_CLAIM",
                             IsFinal = true,
                             IsInitial = false,
-                            Meaning = "Accepted by the Cooperative Owner, who offered a return of all the goods or a price cut of the whole invoice.",
+                            Meaning = "The trader accepted the offer of the Cooperative Owner (a return of all the goods or a price cut of the whole invoice).",
                             SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 3704,
+                            Code = "OFFER_MADE",
+                            DisplayName = "Offer made",
+                            Group = "QUALITY_CLAIM",
+                            IsFinal = false,
+                            IsInitial = false,
+                            Meaning = "The Cooperative Owner proposed a return of all the goods or a price cut of the whole invoice; the trader has not answered yet.",
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 3705,
+                            Code = "OFFER_DECLINED",
+                            DisplayName = "Offer declined",
+                            Group = "QUALITY_CLAIM",
+                            IsFinal = true,
+                            IsInitial = false,
+                            Meaning = "The trader declined the offer of the Cooperative Owner.",
+                            SortOrder = 5
                         },
                         new
                         {
@@ -5017,9 +5039,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Id = 220,
                             AllowedPerformers = "Cooperative Owner",
                             FromStatusId = 3701,
-                            GuardCondition = "The invoice is not cancelled and has no sales return; an offer is chosen and a note is optional.",
+                            GuardCondition = "The invoice is not cancelled and has no sales return; an offer is chosen, a price cut has its amount, and a note is optional.",
                             ReasonRequired = false,
-                            ToStatusId = 3703,
+                            ToStatusId = 3704,
                             TriggerEvent = "Action",
                             UseCases = "CLAIM-02"
                         },
@@ -5031,6 +5053,28 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             GuardCondition = "A note gives the reason.",
                             ReasonRequired = true,
                             ToStatusId = 3702,
+                            TriggerEvent = "Action",
+                            UseCases = "CLAIM-02"
+                        },
+                        new
+                        {
+                            Id = 222,
+                            AllowedPerformers = "Trader",
+                            FromStatusId = 3704,
+                            GuardCondition = "The trader of the claim accepts the offer; the Owner then runs the return (CLAIM-03) or the price cut (SALE-07).",
+                            ReasonRequired = false,
+                            ToStatusId = 3703,
+                            TriggerEvent = "Action",
+                            UseCases = "CLAIM-02"
+                        },
+                        new
+                        {
+                            Id = 223,
+                            AllowedPerformers = "Trader",
+                            FromStatusId = 3704,
+                            GuardCondition = "The trader of the claim declines the offer; a note is optional.",
+                            ReasonRequired = false,
+                            ToStatusId = 3705,
                             TriggerEvent = "Action",
                             UseCases = "CLAIM-02"
                         },
@@ -7360,6 +7404,13 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AnswerNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("AnsweredAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -7385,6 +7436,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<string>("Offer")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal?>("OfferAmount")
+                        .HasPrecision(18)
+                        .HasColumnType("decimal(18,0)");
 
                     b.Property<DateTimeOffset?>("RespondedAt")
                         .HasColumnType("datetimeoffset");
@@ -7427,13 +7482,17 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex(new[] { "InvoiceId" }, "UX_QualityClaims_Invoice_Awaiting")
                         .IsUnique()
-                        .HasFilter("[StatusId] = 3701");
+                        .HasFilter("[StatusId] IN (3701, 3704)");
 
                     b.ToTable("QualityClaims", t =>
                         {
-                            t.HasCheckConstraint("CK_QualityClaim_Accepted_Has_Offer", "[StatusId] <> 3703 OR [Offer] IS NOT NULL");
+                            t.HasCheckConstraint("CK_QualityClaim_Answered_By_Trader", "[StatusId] NOT IN (3703, 3705) OR [AnsweredAt] IS NOT NULL");
 
                             t.HasCheckConstraint("CK_QualityClaim_Answered_Has_Response", "[StatusId] = 3701 OR ([RespondedAt] IS NOT NULL AND [RespondedByAccountId] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_QualityClaim_OfferAmount", "[OfferAmount] IS NULL OR [OfferAmount] > 0");
+
+                            t.HasCheckConstraint("CK_QualityClaim_Offered_Has_Offer", "[StatusId] NOT IN (3704, 3703, 3705) OR [Offer] IS NOT NULL");
 
                             t.HasCheckConstraint("CK_QualityClaim_Rejected_Has_Note", "[StatusId] <> 3702 OR [ResponseNote] IS NOT NULL");
                         });
