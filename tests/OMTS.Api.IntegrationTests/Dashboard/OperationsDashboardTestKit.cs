@@ -6,6 +6,7 @@ using OMTS.Domain.Entities.Sales;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Api.IntegrationTests.Sales;
 using OMTS.Domain.Entities.Labor;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Api.IntegrationTests.Dashboard;
 
@@ -78,6 +79,24 @@ public static class OperationsDashboardTestKit
     }
 
     /// <summary>A payroll of one month, <paramref name="monthsAgo"/> months back, in the given status.</summary>
+    /// <summary>An employee request of an employee of the cooperative (no zone), sent <paramref name="sentAgo"/> ago.</summary>
+    public static async Task<EmployeeRequest> AddEmployeeRequestAsync(
+        this AuthApiFactory api, int statusId, EmployeeRequestType type = EmployeeRequestType.Leave, int days = 1, TimeSpan? sentAgo = null, string? employeeName = null)
+    {
+        var employee = new OMTS.Domain.Entities.Identity.Employee { CooperativeId = (await api.EnsureCooperativeAsync()).Id, FullName = employeeName ?? AcsTestKit.NewCode() };
+        var request = new EmployeeRequest
+        {
+            EmployeeId = employee.Id, Type = type, FromDate = Today, ToDate = Today.AddDays(days - 1), Reason = "Việc nhà",
+            RequestedTime = type == EmployeeRequestType.Leave ? null : new TimeOnly(7, 30), SentAt = DateTimeOffset.UtcNow - (sentAgo ?? TimeSpan.Zero), StatusId = statusId, ClientOperationId = Guid.NewGuid(),
+        };
+        await api.UseDbAsync(db =>
+        {
+            db.Employees.Add(employee);
+            db.EmployeeRequests.Add(request);
+        });
+        return request;
+    }
+
     public static async Task<Payroll> AddPayrollAsync(this AuthApiFactory api, int statusId, int monthsAgo)
     {
         var first = new DateOnly(Today.Year, Today.Month, 1).AddMonths(-monthsAgo);

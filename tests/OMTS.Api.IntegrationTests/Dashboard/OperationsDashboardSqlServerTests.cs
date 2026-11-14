@@ -38,7 +38,8 @@ public class OperationsDashboardSqlServerTests
             var dashboard = await owner.DashboardAsync(query);
             Assert.Equal((2 * ListPrice, 1, 1, 0m, 0), (dashboard.RevenueTotal(), dashboard.RevenueCount(), dashboard.OpenLots(), dashboard.Receivables(), dashboard.WaterAlerts()));
             Assert.Equal(0, dashboard.PendingTotal());
-            Assert.Equal(3, dashboard.GetProperty("pendingTasks").GetProperty("groups").GetArrayLength());
+            // Purchase requests, quality claims, payrolls and employee requests.
+            Assert.Equal(4, dashboard.GetProperty("pendingTasks").GetProperty("groups").GetArrayLength());
         }
 
         Assert.Equal(PendingTaskKinds.PurchaseRequest, (await owner.DashboardAsync()).GetProperty("pendingTasks").GetProperty("groups")[0].GetProperty("kind").GetString());

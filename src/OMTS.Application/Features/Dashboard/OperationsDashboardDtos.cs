@@ -11,6 +11,9 @@ public static class PendingTaskKinds
 
     /// <summary>A payroll Awaiting finalization (LABOR-13).</summary>
     public const string Payroll = "Payroll";
+
+    /// <summary>An employee request (leave, a missed check-in or check-out) Awaiting review by the Owner (LABOR-05).</summary>
+    public const string EmployeeRequest = "EmployeeRequest";
 }
 
 /// <summary>Daily revenue (BR-FARM-10): the invoices of the period that are not Cancelled, at their latest values. <c>From</c>/<c>To</c> are the business dates actually used.</summary>
@@ -30,7 +33,7 @@ public sealed record DashboardWaterAlertsTile(int Count, IReadOnlyList<Dashboard
 
 /// <summary>
 /// One record that waits for the Owner: <c>Id</c> opens it, <c>Code</c> is null for a record with no code. <c>Label</c> names it on the list without opening it: the customer, cages,
-/// product and pickup date of a purchase request; the customer and the invoice of a quality claim; the period of a payroll (dates dd/MM/yyyy).
+/// product and pickup date of a purchase request; the customer and the invoice of a quality claim; the period of a payroll; the employee, the kind and the day or days of an employee request (dates dd/MM/yyyy).
 /// </summary>
 public sealed record DashboardPendingTask(Guid Id, string? Code, string Label, DateTimeOffset Since);
 

@@ -9,6 +9,7 @@ using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Harvest;
 using OMTS.Domain.Entities.Sales;
+using OMTS.Domain.Enums;
 using Water = OMTS.Api.IntegrationTests.WaterQuality.WaterTestKit;
 using static OMTS.Api.IntegrationTests.Dashboard.OperationsDashboardTestKit;
 using static OMTS.Api.IntegrationTests.Sales.SalesInvoiceSearchTestKit;
@@ -179,6 +180,31 @@ public class OperationsDashboardTileTests
             Assert.Matches(@" – \d+ cages .+, pickup \d{2}/\d{2}/\d{4}$", Label(PendingTaskKinds.PurchaseRequest));
             Assert.Matches(@" – invoice \S+$", Label(PendingTaskKinds.QualityClaim));
             Assert.Matches(@"^Payroll \d{2}/\d{2}/\d{4}–\d{2}/\d{2}/\d{4}$", Label(PendingTaskKinds.Payroll));
+        }
+    }
+
+    // LABOR-05: the requests an employee sent that the Owner has not reviewed; an approved, rejected or cancelled one is not a task. No zone, so the zone filter does not reach them.
+    [Fact]
+    public async Task Employee_requests_awaiting_review_are_a_kind_with_the_employee_the_kind_and_the_days_in_its_label()
+    {
+        using var api = new AuthApiFactory();
+        var sale = await api.SaleSetupAsync();
+        var otherZone = await api.AddZoneAsync(AcsTestKit.NewCode());
+        var leave = await api.AddEmployeeRequestAsync(StatusIds.EmployeeRequest.AwaitingReview, days: 3, sentAgo: TimeSpan.FromHours(3), employeeName: "Nguyen Van A");
+        var missed = await api.AddEmployeeRequestAsync(StatusIds.EmployeeRequest.AwaitingReview, EmployeeRequestType.MissedCheckOut, sentAgo: TimeSpan.FromHours(1), employeeName: "Tran Thi B");
+        await api.AddEmployeeRequestAsync(StatusIds.EmployeeRequest.Approved);
+        await api.AddEmployeeRequestAsync(StatusIds.EmployeeRequest.Rejected);
+        await api.AddEmployeeRequestAsync(StatusIds.EmployeeRequest.Cancelled);
+
+        foreach (var query in new[] { "", Query(("zoneId", otherZone.Id)) })
+        {
+            var dashboard = await sale.Owner.Client.DashboardAsync(query);
+            Assert.Equal((2, 2), (dashboard.PendingTotal(), dashboard.PendingCount(PendingTaskKinds.EmployeeRequest)));
+            Assert.Equal([leave.Id, missed.Id], dashboard.PendingIds(PendingTaskKinds.EmployeeRequest));
+            var labels = dashboard.PendingGroup(PendingTaskKinds.EmployeeRequest).GetProperty("oldest").EnumerateArray().Select(t => t.GetProperty("label").GetString()).ToList();
+            Assert.Equal(
+                [$"Nguyen Van A – leave {Today:dd/MM/yyyy}–{Today.AddDays(2):dd/MM/yyyy}", $"Tran Thi B – missed check-out {Today:dd/MM/yyyy}"],
+                labels);
         }
     }
 
