@@ -25,11 +25,14 @@ public sealed class SalesInvoiceSearchService(
 {
     private const int MaxPageSize = 100;
 
+    /// <summary>The most invoices one list file holds.</summary>
+    public const int MaxExportRows = 5_000;
+
     public async Task<Result<SalesInvoiceSearchResult>> SearchAsync(SalesInvoiceSearchQuery query, CancellationToken cancellationToken)
     {
         // The page number is capped so the offset cannot overflow.
         var (page, pageSize) = (Math.Clamp(query.Page, 1, int.MaxValue / MaxPageSize), Math.Clamp(query.PageSize, 1, MaxPageSize));
-        var found = await FindAsync(query, PermissionAction.View, page, pageSize, cancellationToken);
+        var found = await FindAsync(query, PermissionAction.View, page, pageSize, null, cancellationToken);
         if (!found.IsSuccess)
         {
             return found.Error!;
@@ -42,12 +45,15 @@ public sealed class SalesInvoiceSearchService(
             new Paged<SalesInvoiceRow>(matches.Rows, page, pageSize, matches.Count), matches.CompletedTotal, matches.From, matches.To, empty?.Text, empty?.Code);
     }
 
-    /// <summary>SALE-09.2: every match, in the zones where the caller may export.</summary>
+    /// <summary>
+    /// SALE-09.2: every match, in the zones where the caller may export, at most <see cref="MaxExportRows"/> (PM answer 12/11/2026, OMTS-224 [5.7]): a larger selection is 400 MSG-GEN-01
+    /// naming <c>Filters</c>, and no more than one row above the limit is ever read. The limit counts the matches of the database filters, before the paid filter narrows them.
+    /// </summary>
     internal Task<Result<SalesInvoiceMatches>> ExportRowsAsync(SalesInvoiceSearchQuery query, CancellationToken cancellationToken) =>
-        FindAsync(query, PermissionAction.Export, 1, int.MaxValue, cancellationToken);
+        FindAsync(query, PermissionAction.Export, 1, int.MaxValue, MaxExportRows, cancellationToken);
 
     private async Task<Result<SalesInvoiceMatches>> FindAsync(
-        SalesInvoiceSearchQuery query, PermissionAction action, int page, int pageSize, CancellationToken cancellationToken)
+        SalesInvoiceSearchQuery query, PermissionAction action, int page, int pageSize, int? maxMatches, CancellationToken cancellationToken)
     {
         var zones = await zoneAccess.PermittedZonesAsync(PermissionFunctions.SalesInvoices, action, cancellationToken);
         if (zones.IsEmpty || query.ZoneId is { } chosen && !zones.Allows(chosen))
@@ -65,7 +71,13 @@ public sealed class SalesInvoiceSearchService(
         IReadOnlyCollection<Guid>? zoneIds = query.ZoneId is { } zoneId ? [zoneId] : zones.AllZones ? null : zones.ZoneIds.ToList();
         var collector = query.CashCollectedByMe ? currentUser.AccountId : null;
         var keys = await queries.MatchingAsync(
-            new SalesInvoiceSearchFilter(from, to, zoneIds, query.CustomerId, query.HarvestLotId, query.RaftId, query.StatusId, query.Code, collector), cancellationToken);
+            new SalesInvoiceSearchFilter(
+                from, to, zoneIds, query.CustomerId, query.HarvestLotId, query.RaftId, query.StatusId, query.Code, collector, query.OrderCode, maxMatches is { } max ? max + 1 : null),
+            cancellationToken);
+        if (maxMatches is { } limit && keys.Count > limit)
+        {
+            return new AppError(ErrorKind.Validation, UserMessages.ExportTooLarge("sales invoices", limit), new Dictionary<string, object?> { ["field"] = "Filters" });
+        }
 
         IReadOnlyDictionary<Guid, CustomerDebtAllocation> allocations = new Dictionary<Guid, CustomerDebtAllocation>();
         if (query.Paid is { } paid)
@@ -103,7 +115,7 @@ public sealed class SalesInvoiceSearchService(
                 row.Id, row.Code, row.InvoicedAt, row.InvoiceDate, new SalesInvoiceZoneView(row.ZoneId, row.ZoneCode, row.ZoneName),
                 row.CustomerId is { } customerId ? new SalesInvoiceCustomerView(customerId, row.CustomerName!, row.CustomerPhone, row.CustomerCode) : null,
                 row.CustomerId is null, row.Total, row.StatusId, statusCatalog.DisplayNameOf(row.StatusId), row.PaymentTerm, state.IsPaid, state.Unpaid, delivery,
-                statusCatalog.DisplayNameOf(delivery), cash?.GetValueOrDefault(key.Id));
+                statusCatalog.DisplayNameOf(delivery), cash?.GetValueOrDefault(key.Id), row.OrderCode);
         }).ToList();
     }
 

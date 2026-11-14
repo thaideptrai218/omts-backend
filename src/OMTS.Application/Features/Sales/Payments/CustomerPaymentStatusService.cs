@@ -212,7 +212,16 @@ public sealed class CustomerPaymentStatusService(
 
             var debtAfter = (await DebtsAfterAsync([payment], [], cancellationToken)).Select(d => (decimal?)d.Debt).SingleOrDefault();
             var counted = payment.StatusId != StatusIds.CustomerPayment.PendingTransfer;
-            statusChanges.Cancel(payment, reason);
+            // No row version and the payment is Confirmed: the cancel may have lost a race with a confirmation. Allowed, with a second audit row saying so (PM answer 12/11/2026).
+            if (request.RowVersion is null && payment.StatusId == StatusIds.CustomerPayment.Completed)
+            {
+                statusChanges.CancelConfirmed(payment, reason);
+            }
+            else
+            {
+                statusChanges.Cancel(payment, reason);
+            }
+
             if (counted)
             {
                 await notifications.TransactionAsync(payment, cancelled: true, debtAfter, cancellationToken);

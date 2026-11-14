@@ -16,7 +16,7 @@ public static class SalesInvoiceExportSheets
     /// <summary>The list, with the total of the Completed invoices of the search as its last row.</summary>
     public static IReadOnlyList<SpreadsheetSheet> List(IReadOnlyList<SalesInvoiceRow> rows, decimal completedTotal, bool withCashAwaiting)
     {
-        List<string> headers = ["Code", "Time", "Zone", "Customer", "Total", "Status", "Payment term", "Paid", "Unpaid", "Delivery status"];
+        List<string> headers = ["Code", "Time", "Zone", "Customer", "Total", "Status", "Payment term", "Paid", "Unpaid", "Delivery status", "Order"];
         if (withCashAwaiting)
         {
             headers.Add("Cash awaiting confirmation");
@@ -27,7 +27,7 @@ public static class SalesInvoiceExportSheets
             List<object?> cells =
             [
                 r.Code, Local(r.InvoicedAt), r.Zone.Name, r.Customer?.Name ?? SalesInvoiceNotifications.WalkInCustomerName, r.Total, r.Status,
-                r.PaymentTerm.ToString(), Paid(r.IsPaid), r.UnpaidAmount, r.DeliveryStatus,
+                r.PaymentTerm.ToString(), Paid(r.IsPaid), r.UnpaidAmount, r.DeliveryStatus, r.OrderCode,
             ];
             if (withCashAwaiting)
             {

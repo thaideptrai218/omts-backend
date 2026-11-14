@@ -126,15 +126,17 @@ public class SalesInvoiceSearchQaTests
         Assert.Equal(HttpStatusCode.OK, (await manager.GetInvoiceAsync(invoice.Id())).StatusCode);
     }
 
-    // Mixed pairs: the Accountant pair views, the Zone Manager pair exports. Developer decision 11: a file with fewer invoices than the screen, and no warning (see L finding).
+    // Mixed pairs: the Zone Manager pair and the Accountant pair both view and export (the Accountant exports since the PM answer of 12/11/2026), so the file holds the same invoices as the screen.
     [Fact]
-    public async Task With_a_zone_manager_pair_and_an_accountant_pair_the_list_shows_both_zones_and_the_file_only_the_managed_one()
+    public async Task With_a_zone_manager_pair_and_an_accountant_pair_the_list_and_the_file_show_both_zones_and_a_third_zone_is_refused()
     {
         using var api = new AuthApiFactory();
         var a = await api.SaleSetupAsync();
         var b = await api.SaleSetupAsync();
-        var inA = await a.Manager.Client.SoldAsync(a, a.LotId, 1m);
+        var c = await api.SaleSetupAsync();
+        await a.Manager.Client.SoldAsync(a, a.LotId, 1m);
         await b.Manager.Client.SoldAsync(b, b.LotId, 2m);
+        await c.Manager.Client.SoldAsync(c, c.LotId, 4m);
         var (account, _) = await api.StaffAccountAsync(await api.ZoneEntityAsync(a.ZoneId));
         await api.GrantAsync(account, StaffRole.Accountant, await api.ZoneEntityAsync(b.ZoneId));
         var client = await api.LoginAsync(account.Username);
@@ -142,8 +144,9 @@ public class SalesInvoiceSearchQaTests
         Assert.Equal(2, (await client.InvoiceListAsync()).Rows().Count);
         using var workbook = new XLWorkbook(await (await client.ExportInvoicesAsync()).Content.ReadAsStreamAsync());
         var sheet = workbook.Worksheet(SalesInvoiceExportSheets.ListSheet);
-        Assert.Equal((inA.Text("code"), 3, 30_000m), (sheet.Cell(2, 1).GetString(), sheet.LastRowUsed()!.RowNumber(), sheet.Cell(3, 5).GetValue<decimal>()));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.ExportInvoicesAsync(Query(("zoneId", b.ZoneId)))).StatusCode);
+        Assert.Equal((4, 90_000m), (sheet.LastRowUsed()!.RowNumber(), sheet.Cell(4, 5).GetValue<decimal>()));
+        Assert.Equal(HttpStatusCode.OK, (await client.ExportInvoicesAsync(Query(("zoneId", b.ZoneId)))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.ExportInvoicesAsync(Query(("zoneId", c.ZoneId)))).StatusCode);
     }
 
     [Theory]

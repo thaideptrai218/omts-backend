@@ -95,6 +95,7 @@ public class FixedRolesMatrixTests
     /// supplier payment (PURCHASE-05) and exports the list it can already see; §I.4.4 shows PURCHASE-07 as No. The
     /// Accountant's R on PURCHASE-03 "includes exporting to a file", so it views and exports receipts (lead decision, QA P2 Q1). The Accountant also
     /// looks up, adds, edits and exports customers (the customer screen holds their debts and payments), but does not delete them.
+    /// The Accountant prints and exports sales invoices too (SALE-09 R in the SRS; PM answer 12/11/2026, OMTS-224 [5.1]).
     /// </summary>
     private static readonly Dictionary<(string Uc, StaffRole Role), string> Deviations = new()
     {
@@ -103,6 +104,7 @@ public class FixedRolesMatrixTests
         [("SALE-04", StaffRole.Accountant)] = Full,
         [("SALE-04.2", StaffRole.Accountant)] = RExport,
         [("INPUT-ISSUES", StaffRole.Accountant)] = RExport,
+        [("SALE-09", StaffRole.Accountant)] = RExport,
     };
 
     [Theory]

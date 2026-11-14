@@ -183,6 +183,8 @@ public class CustomerPaymentSqlServerTests
         Assert.Equal(300_000m, await w.Owner.CustomerDebtAsync(w.CustomerId));
         Assert.Equal(successes, await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == cash && (e.Action == "CustomerPayment.Confirmed" || e.Action == "CustomerPayment.Cancelled"))));
         Assert.Equal(successes, await NoticesAsync(w));
+        // PM answer 12/11/2026 (OMTS-224 [1.6]): a cancellation that read the payment Confirmed (the confirmation won, no rowVersion sent) says so in an audit row; one that won writes none.
+        Assert.Equal(codes[0] == "200" ? 1 : 0, await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == cash && e.Action == "CustomerPayment.CancelledAfterConfirm")));
     }
 
     // Both read one debt; the loser on the customer profile reads it again, so each notice and answer tells the debt its save left.

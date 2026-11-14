@@ -52,14 +52,28 @@ internal sealed class SalesInvoiceSearchReader(OmtsDbContext db) : ISalesInvoice
             query = query.Where(i => i.Code.Contains(code));
         }
 
+        if (!string.IsNullOrWhiteSpace(filter.OrderCode))
+        {
+            // Same rule as the invoice code, on the request the invoice fulfils: an invoice without a request never matches.
+            var orderCode = filter.OrderCode.Trim();
+            if (orderCode.Length > Lengths.Code)
+            {
+                return [];
+            }
+
+            query = query.Where(i => i.PurchaseRequest != null && i.PurchaseRequest.Code.Contains(orderCode));
+        }
+
         if (filter.CashCollectedBy is { } collector)
         {
             query = query.Where(i => i.Payments.Any(p => p.CollectedByAccountId == collector && p.Method == CustomerPaymentMethod.Cash && p.Kind == CustomerPaymentKind.Payment
                 && p.StatusId == StatusIds.CustomerPayment.AwaitingConfirmation));
         }
 
-        return await query
-            .OrderByDescending(i => i.InvoicedAt).ThenByDescending(i => i.Code)
+        var ordered = query.OrderByDescending(i => i.InvoicedAt).ThenByDescending(i => i.Code);
+        // The export reads one match more than its limit, to know the selection is too large without reading all of it.
+        var limited = filter.Take is { } take ? ordered.Take(take) : ordered;
+        return await limited
             .Select(i => new SalesInvoiceSearchKey(
                 i.Id,
                 i.CustomerId,
@@ -84,7 +98,7 @@ internal sealed class SalesInvoiceSearchReader(OmtsDbContext db) : ISalesInvoice
             .Select(i => new SalesInvoiceSearchRow(
                 i.Id, i.Code, i.InvoicedAt, i.InvoiceDate, i.ZoneId, i.Zone.Code, i.Zone.Name,
                 i.CustomerId, i.Customer == null ? null : i.Customer.Name, i.Customer == null ? null : i.Customer.PhoneNumber, i.Total, i.StatusId, i.PaymentTerm,
-                i.Customer == null ? null : i.Customer.Code))
+                i.Customer == null ? null : i.Customer.Code, i.PurchaseRequest == null ? null : i.PurchaseRequest.Code))
             .ToListAsync(cancellationToken);
     }
 

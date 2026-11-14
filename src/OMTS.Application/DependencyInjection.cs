@@ -333,6 +333,7 @@ public static class DependencyInjection
         services.AddScoped<PendingSaleWriter>();
         services.AddScoped<PendingSaleViews>();
         services.AddScoped<PendingSaleService>();
+        services.AddScoped<PendingSaleEndOfDayService>();
         services.AddScoped<PendingSaleCompletion>();
         services.AddScoped<PendingSaleLotQuery>();
         services.AddScoped<TransferPaymentWriter>();

@@ -195,9 +195,10 @@ public static class NotificationTypes
         // Opens the invoice (SALE-09), in the zone of the invoice (BR-SALE-08).
         new(SaleCompleted, "New sale", Default, [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.SalesInvoices, PermissionAction.View)),
-        // Customer payments have no zone (BR-FARM-08); a money type, so its SMS carries the code and the amount only.
+        // Customer payments have no zone (BR-FARM-08); a money type, so its SMS carries the code and the amount only. A list of confirmations and cancellations shows the
+        // total confirmed and the total cancelled apart in the SMS (PM answer 12/11/2026), the amount of the push and the list staying their sum.
         new(CustomerPaymentTransaction, "Customer payment transaction", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
-            NotificationSmsRule.MoneyToOwner("amount")),
+            NotificationSmsRule.MoneyToOwnerSplit("amount", "confirmed_amount", "cancelled_amount")),
         // Opens nothing: the trader is asked to call the cooperative, and the list row has no related record (a lot is not the trader's record).
         new(ProvenanceWithdrawn, "Origin information withdrawn", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
         // Opens the invoice (SALE-09); the money is paid back in DEBT-02.

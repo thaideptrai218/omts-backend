@@ -102,8 +102,9 @@ public class FixedRolesScopeQaTests
             Assert.Equal([ZoneC], zones.ZoneIds);
         }
 
-        // View only on invoices (SALE-09 R), view and export on receipts (PURCHASE-03 R includes the export), nothing of the
-        // Zone Manager.
+        // View and export on invoices (SALE-09, PM answer 12/11/2026) but no creation, view and export on receipts (PURCHASE-03 R
+        // includes the export), nothing of the Zone Manager.
+        Assert.True(access.Allows(SalesInvoices, Export, PermissionScope.ZoneScoped, ZoneC));
         Assert.False(access.Allows(PurchaseReceipts, Create, PermissionScope.AnyZone, null));
         Assert.True(access.Allows(PurchaseReceipts, Export, PermissionScope.AnyZone, null));
         Assert.False(access.Allows(SalesInvoices, Create, PermissionScope.ZoneScoped, ZoneC));
@@ -124,7 +125,8 @@ public class FixedRolesScopeQaTests
         Assert.True(access.Allows(SalesInvoices, View, PermissionScope.ZoneScoped, ZoneC));
         Assert.False(access.Allows(SalesInvoices, View, PermissionScope.ZoneScoped, ZoneB));
         Assert.Equal(new[] { ZoneA, ZoneC }.Order(), access.PermittedZonesFor(SalesInvoices, View).ZoneIds.Order());
-        Assert.Equal([ZoneA], access.PermittedZonesFor(SalesInvoices, Export).ZoneIds);
+        // The Accountant of zone C exports invoices too (PM answer 12/11/2026), so the export zones add up like the view zones.
+        Assert.Equal(new[] { ZoneA, ZoneC }.Order(), access.PermittedZonesFor(SalesInvoices, Export).ZoneIds.Order());
         // Purchase receipts have no zone: every receipt for the Zone Manager role, rafts of zone A only (PairZonesFor).
         Assert.True(access.PermittedZonesFor(PurchaseReceipts, Delete).AllZones);
         Assert.Equal([ZoneA], access.PairZonesFor(PurchaseReceipts, Create).ZoneIds);
