@@ -27,18 +27,20 @@ public sealed class CustomerPaymentNotifications(
         await NotifyAsync(message, new RelatedRecord(RelatedRecordTypes.CustomerPayment, payment.Id, payment.Code), cancellationToken);
     }
 
-    /// <param name="debts">The debt after the save of each profile a cancelled payment belonged to.</param>
+    /// <param name="settled">The payments settled from the same list (DEBT-02.6).</param>
+    /// <param name="debts">The debt after the save of each profile a cancelled or attached payment belonged to.</param>
     public async Task BatchAsync(
-        IReadOnlyList<CustomerPayment> confirmed, IReadOnlyList<CustomerPayment> cancelled, IReadOnlyList<(string CustomerName, decimal Debt)> debts,
-        CancellationToken cancellationToken)
+        IReadOnlyList<CustomerPayment> confirmed, IReadOnlyList<CustomerPayment> cancelled, IReadOnlyList<CustomerPayment> settled,
+        IReadOnlyList<(string CustomerName, decimal Debt)> debts, CancellationToken cancellationToken)
     {
         var message = UserMessages.CustomerPaymentsBatch(
             await ActorNameAsync(cancellationToken),
             confirmed.Select(p => (p.Code, p.Amount)).ToList(),
             cancelled.Select(p => (p.Code, p.Amount)).ToList(),
-            debts);
+            debts,
+            settled.Select(p => (p.Code, p.Amount)).ToList());
         // One payment opens it; a list of several opens none (ACCOUNT-08: no related record).
-        var all = confirmed.Concat(cancelled).ToList();
+        var all = confirmed.Concat(cancelled).Concat(settled).ToList();
         var record = all.Count == 1 ? new RelatedRecord(RelatedRecordTypes.CustomerPayment, all[0].Id, all[0].Code) : null;
         await NotifyAsync(message, record, cancellationToken);
     }

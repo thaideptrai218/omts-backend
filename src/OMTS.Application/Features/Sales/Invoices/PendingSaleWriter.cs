@@ -12,6 +12,7 @@ public sealed class PendingSaleWriter(IPendingSaleRepository sales, AuditLogServ
 {
     public const string StoppedAction = "SalesInvoice.SaleStopped";
     public const string StopReason = "Stop sale";
+    public const string EndOfDayStopReason = $"{StopReason}: the transfer did not arrive by the end of the business day";
 
     internal PendingSale Add(CreateSalesInvoiceRequest request, SalesInvoiceFacts facts, SalesInvoiceDecision decision, string code, string? deduplicationKey)
     {
@@ -51,6 +52,12 @@ public sealed class PendingSaleWriter(IPendingSaleRepository sales, AuditLogServ
 
     /// <summary>SALE-05.0.E4 step 3, BR-SALE-08: nothing is saved but the code, written to the audit log with the reason Stop sale.</summary>
     public void Stop(PendingSale sale) => Stop(sale, currentUser.AccountId, StopReason);
+
+    /// <summary>
+    /// A sale still awaiting its transfer when its business day ended is stopped by the system (council of 03/11, PM answer 12/11/2026, OMTS-224 [3.4]): the same end as the Stop of the
+    /// port (BR-SALE-08: the code in the audit log, nothing saved on the invoice side), the actor the system (no account), the reason saying why.
+    /// </summary>
+    public void StopAtEndOfDay(PendingSale sale) => Stop(sale, by: null, EndOfDayStopReason);
 
     /// <summary>
     /// The transfer arrived but the invoice can no longer be saved: the sale is stopped by the system, its code written to the audit log with why, and the transfer is kept

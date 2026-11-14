@@ -9,10 +9,11 @@ namespace OMTS.Application.Features.Sales.Invoices;
 /// <param name="RaftId">Invoices with a line of a lot of this raft.</param>
 /// <param name="Paid">True: paid; false: not fully paid. A Cancelled invoice has no payment state, so it matches neither.</param>
 /// <param name="Code">Part of the invoice code, read as plain text.</param>
+/// <param name="OrderCode">Part of the code (DH) of the purchase request the invoice fulfils, read as plain text like <paramref name="Code"/> (PM answer 12/11/2026, OMTS-224 [5.5]).</param>
 /// <param name="CashCollectedByMe">"Cash I collected that is not confirmed yet" (SALE-09 step 3).</param>
 public sealed record SalesInvoiceSearchQuery(
     DateOnly? From = null, DateOnly? To = null, Guid? ZoneId = null, Guid? CustomerId = null, Guid? HarvestLotId = null, Guid? RaftId = null,
-    int? StatusId = null, bool? Paid = null, string? Code = null, bool CashCollectedByMe = false, int Page = 1, int PageSize = 20);
+    int? StatusId = null, bool? Paid = null, string? Code = null, string? OrderCode = null, bool CashCollectedByMe = false, int Page = 1, int PageSize = 20);
 
 /// <summary>One row of the list (SALE-09 step 1).</summary>
 /// <param name="Customer">Null for a walk-in customer.</param>
@@ -20,9 +21,11 @@ public sealed record SalesInvoiceSearchQuery(
 /// <param name="UnpaidAmount">What is still to pay; 0 for a Cancelled invoice.</param>
 /// <param name="DeliveryStatusId">The status of the latest sending, Not sent when there is none (BR-SALE-09).</param>
 /// <param name="CashAwaitingConfirmation">Only with the cash filter: the cash of this invoice the caller collected that is Awaiting confirmation.</param>
+/// <param name="OrderCode">The code (DH) of the purchase request the invoice fulfils; null for a sale without a request.</param>
 public sealed record SalesInvoiceRow(
     Guid Id, string Code, DateTimeOffset InvoicedAt, DateOnly InvoiceDate, SalesInvoiceZoneView Zone, SalesInvoiceCustomerView? Customer, bool WalkInCustomer, decimal Total,
-    int StatusId, string Status, SalesPaymentTerm PaymentTerm, bool? IsPaid, decimal UnpaidAmount, int DeliveryStatusId, string DeliveryStatus, decimal? CashAwaitingConfirmation);
+    int StatusId, string Status, SalesPaymentTerm PaymentTerm, bool? IsPaid, decimal UnpaidAmount, int DeliveryStatusId, string DeliveryStatus, decimal? CashAwaitingConfirmation,
+    string? OrderCode = null);
 
 /// <param name="Page">The rows of the page, newest first; <c>Total</c> counts every match.</param>
 /// <param name="CompletedTotal">The total of the Completed invoices among all the matches, not only this page.</param>

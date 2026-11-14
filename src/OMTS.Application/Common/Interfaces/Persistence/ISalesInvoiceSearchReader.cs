@@ -6,8 +6,11 @@ namespace OMTS.Application.Common.Interfaces.Persistence;
 /// <param name="ZoneIds">Null: every zone.</param>
 /// <param name="Code">Part of the invoice code, read as plain text; empty for none.</param>
 /// <param name="CashCollectedBy">Only invoices with a cash payment this account collected that is Awaiting confirmation.</param>
+/// <param name="OrderCode">Part of the code of the purchase request the invoice fulfils, read as plain text; empty for none.</param>
+/// <param name="Take">At most this many matches are read (newest first); null reads them all.</param>
 public sealed record SalesInvoiceSearchFilter(
-    DateOnly From, DateOnly To, IReadOnlyCollection<Guid>? ZoneIds, Guid? CustomerId, Guid? HarvestLotId, Guid? RaftId, int? StatusId, string? Code, Guid? CashCollectedBy);
+    DateOnly From, DateOnly To, IReadOnlyCollection<Guid>? ZoneIds, Guid? CustomerId, Guid? HarvestLotId, Guid? RaftId, int? StatusId, string? Code, Guid? CashCollectedBy,
+    string? OrderCode = null, int? Take = null);
 
 /// <summary>One match, as much as the paid filter and the totals need.</summary>
 /// <param name="OwnPayments">The payments of the invoice that are not cancelled, for a walk-in invoice only (0 with a profile).</param>
@@ -15,7 +18,7 @@ public sealed record SalesInvoiceSearchKey(Guid Id, Guid? CustomerId, decimal To
 
 public sealed record SalesInvoiceSearchRow(
     Guid Id, string Code, DateTimeOffset InvoicedAt, DateOnly InvoiceDate, Guid ZoneId, string ZoneCode, string ZoneName, Guid? CustomerId, string? CustomerName, string? CustomerPhone,
-    decimal Total, int StatusId, SalesPaymentTerm PaymentTerm, string? CustomerCode = null);
+    decimal Total, int StatusId, SalesPaymentTerm PaymentTerm, string? CustomerCode = null, string? OrderCode = null);
 
 /// <summary>The latest sending of an invoice as its Notification row keeps it.</summary>
 public sealed record SalesInvoiceLatestSending(int? DeliveryStatusId, DateTimeOffset? DeliveryStatusAt);

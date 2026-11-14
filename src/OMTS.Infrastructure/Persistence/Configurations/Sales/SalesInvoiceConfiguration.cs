@@ -111,6 +111,11 @@ internal sealed class CustomerPaymentConfiguration : IEntityTypeConfiguration<Cu
             .HasFilter("[Method] = 'VietQrInvoice' AND [BankReference] IS NOT NULL");
         builder.Property(x => x.TransferInvoiceCode).HasMaxLength(Lengths.Code);
         builder.HasIndex(x => x.TransferInvoiceCode);
+        // DEBT-02.6: a transfer is settled once by money paid back, whatever two saves read at the same moment; a cancelled one no longer counts, so the transfer can be settled again.
+        builder.HasOne(x => x.PaidBackForPayment).WithMany().HasForeignKey(x => x.PaidBackForPaymentId).OnDelete(DeleteBehavior.NoAction);
+        builder.HasIndex(x => x.PaidBackForPaymentId, "IX_CustomerPayments_PaidBackForPayment")
+            .IsUnique()
+            .HasFilter($"[PaidBackForPaymentId] IS NOT NULL AND [StatusId] <> {StatusIds.CustomerPayment.Cancelled}");
         builder.Property(x => x.Note).HasMaxLength(Lengths.Reason);
         builder.Property(x => x.DeduplicationKey).HasMaxLength(Lengths.ShortText);
         builder.HasIndex(x => x.DeduplicationKey).IsUnique();

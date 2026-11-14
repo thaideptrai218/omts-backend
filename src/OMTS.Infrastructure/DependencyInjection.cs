@@ -214,6 +214,8 @@ public static class DependencyInjection
         // GFR-05: harvest lots still for sale after the days before automatic close, and the warning the day before
         services.AddOptions<HarvestLotAutoCloseOptions>().Bind(configuration.GetSection(HarvestLotAutoCloseOptions.SectionName));
         services.AddSingleton<HarvestLotAutoCloseJob>();
+        // Council of 03/11 (PM answer 12/11/2026): the sales awaiting a VietQR transfer are stopped at the end of the business day, by the hosted service just before the close check
+        services.AddSingleton<PendingSaleEndOfDayStopJob>();
         services.AddSingleton<OMTS.Application.Features.Harvest.IHarvestAutoCloseSchedule, HarvestAutoCloseSchedule>();
         services.AddHostedService<HarvestLotAutoCloseHostedService>();
 
@@ -397,7 +399,7 @@ public static class DependencyInjection
         });
     }
 
-    private static void AddZalo(this IServiceCollection services, IConfiguration configuration)
+    internal static void AddZalo(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<ZaloOptions>().Bind(configuration.GetSection(ZaloOptions.SectionName));
         services.AddHttpClient<GraphZaloOpenApi>((provider, http) =>
@@ -405,7 +407,11 @@ public static class DependencyInjection
             var zalo = provider.GetRequiredService<IOptions<ZaloOptions>>().Value;
             http.BaseAddress = new Uri(zalo.BaseUrl);
             http.Timeout = TimeSpan.FromSeconds(zalo.TimeoutSeconds);
-        });
+        })
+        // Zalo answers -501 to a caller outside Vietnam: Zalo:ProxyUrl sends this client (and no other) through a Vietnamese proxy.
+        // A bad URL throws here, when the Graph adapter is built at startup, like a missing App secret.
+        .ConfigurePrimaryHttpMessageHandler(provider =>
+            ZaloProxyHandlerFactory.Create(provider.GetRequiredService<IOptions<ZaloOptions>>().Value));
         services.AddSingleton<FakeZaloOpenApi>();
         services.AddSingleton<NotConfiguredZaloOpenApi>();
         // Unset fails closed (MSG04, nobody is linked) instead of trusting tokens nobody checked.

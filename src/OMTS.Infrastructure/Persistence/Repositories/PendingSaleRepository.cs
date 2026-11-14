@@ -27,6 +27,13 @@ internal sealed class PendingSaleRepository(OmtsDbContext db) : IPendingSaleRepo
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<string>> ListAwaitingCodesCreatedBeforeAsync(DateTimeOffset before, CancellationToken cancellationToken) =>
+        await db.PendingSales.AsNoTracking()
+            .Where(s => s.Status == PendingSaleStatus.Awaiting && s.CreatedAt < before)
+            .OrderBy(s => s.CreatedAt).ThenBy(s => s.Code)
+            .Select(s => s.Code)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<PendingSale>> ListAwaitingAsync(IReadOnlySet<Guid>? zoneIds, CancellationToken cancellationToken)
     {
         var awaiting = db.PendingSales.AsNoTracking().Include(s => s.Zone).Include(s => s.Customer).Where(s => s.Status == PendingSaleStatus.Awaiting);

@@ -220,7 +220,7 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
 | `PURCHASE_RECEIPT_COMPLETED` | MSG-PURCHASE-01, when a receipt is completed (never for a draft), also when the Owner completed it | unless turned off | Owner |
 | `PURCHASE_RECEIPT_CANCELLED_ADVANCE` | MSG-PURCHASE-08, when a cancelled receipt leaves the supplier debt below zero | unless turned off | Owner, Accountant |
 | `SUPPLIER_TRANSACTION` | MSG-PURCHASE-04, for a supplier payment, money paid back or a cancelled one, also when the Owner did it | always (mandatory) | Owner |
-| `CUSTOMER_PAYMENT_TRANSACTION` | MSG-DEBT-03, for a customer payment, money paid back or a cancellation saved in DEBT-02, and one notice per list of confirmations (no related record when the list holds several payments), also when the Owner did it | always (mandatory) | Owner |
+| `CUSTOMER_PAYMENT_TRANSACTION` | MSG-DEBT-03, for a customer payment, money paid back or a cancellation saved in DEBT-02, and one notice per list of confirmations (no related record when the list holds several payments), also when the Owner did it. A cancellation of a payment found Confirmed, with no `rowVersion` sent (it may have lost a race with a confirmation), is allowed and writes a second audit row `CustomerPayment.CancelledAfterConfirm` (payment code, reason, who confirmed it and when) beside `CustomerPayment.Cancelled` | always (mandatory) | Owner |
 | `PROVENANCE_WITHDRAWN` | MSG-TRACE-05, when the Owner withdraws the origin information of a lot the trader bought (TRACE-04); the row opens nothing | unless turned off | Trader |
 | `TRADER_ACCESS_REQUESTED` | a trader asked for an account from the Zalo Mini App (`POST /api/auth/zalo/trader-requests`) | unless turned off | Owner |
 | `TRADER_ACCESS_APPROVED` | the Owner approved the request (`POST /api/trader-requests/{id}/approve`) | unless turned off | Trader |
@@ -279,7 +279,9 @@ to (BR-ACCOUNT-11); a module that sends a new type registers it there, and the d
   commits, never for a failed save, never retried, and not kept as a row. A failed or slow SMS changes nothing; a
   recipient without a verified phone number gets none and a log line. The text is the MSG text without Vietnamese marks,
   at most 160 GSM 7-bit characters; a money type (`MoneyToOwner`) carries only its name, document code and amount, so
-  never a bank account number. Operational texts read as their fields do, digits included. At 160 the values, allowed
+  never a bank account number. The SMS of a list of confirmations and cancellations (`CUSTOMER_PAYMENT_TRANSACTION`,
+  `MoneyToOwnerSplit`, PM answer of 12/11/2026) shows the two totals apart, "Customer payment transaction: thu 5,000,000 VND,
+  huy 300,000 VND." (a part of 0 is left out); the `amount` of the push and the list stays their sum. Operational texts read as their fields do, digits included. At 160 the values, allowed
   ranges, time, expiry date and, for a new purchase request, kg and pickup date stay; in order the free text gives way to
   a short minimum (zone name or list, raft code or license type name, license number; note, customer, product), then the
   closing sentence, then the longer wording of the water alert, then the free text below its minimum. Logs hold the type
@@ -313,11 +315,11 @@ SALE-05 gave the invoice (22 characters); only the exact code opens the page.
 
 ### Sales invoices
 
-SALE-09 (`SALES_INVOICES`, zones of the caller's pairs, BR-SALE-08): the Owner, the Zone Manager of the zone and the Accountant view; the Zone Manager and the Owner also print. Any other zone answers 403 MSG-GEN-08.
+SALE-09 (`SALES_INVOICES`, zones of the caller's pairs, BR-SALE-08): the Owner, the Zone Manager of the zone and the Accountant view; the three also print and export (the Accountant holds Export on `SALES_INVOICES` since the PM answer of 12/11/2026, OMTS-224 [5.1]). Any other zone answers 403 MSG-GEN-08.
 
-- `GET /api/sales-invoices`: newest first, paged (`page`, `pageSize` up to 100). Filters: `from`/`to` (Vietnam dates, both included; today when neither is given, only `to` is that one day, only `from` runs to today, at most 5 years, else MSG-GEN-01), `zoneId`, `customerId`, `harvestLotId`, `raftId` (a line of a lot of the raft), `statusId`, `code` (part of the code, `%`, `_`, `[` are plain text), `paid` (true/false; a Cancelled invoice matches neither) and `cashCollectedByMe=true` (cash this caller collected that is Awaiting confirmation; each row then has `cashAwaitingConfirmation`). No match: 200 with an empty page and MSG-GEN-10 in `message`. A row has `code`, `invoicedAt`, `zone`, `customer` (null for a walk-in), `total`, `status`, `paymentTerm`, `isPaid` (null for a Cancelled invoice), `unpaidAmount` and `deliveryStatus`. `completedTotal` is the total of every Completed match, not of the page; `isPaid` comes from the debt allocation (BR-DEBT-05), a walk-in invoice from its own payments.
+- `GET /api/sales-invoices`: newest first, paged (`page`, `pageSize` up to 100). Filters: `from`/`to` (Vietnam dates, both included; today when neither is given, only `to` is that one day, only `from` runs to today, at most 5 years, else MSG-GEN-01), `zoneId`, `customerId`, `harvestLotId`, `raftId` (a line of a lot of the raft), `statusId`, `code` (part of the code, `%`, `_`, `[` are plain text), `orderCode` (part of the code DH of the purchase request the invoice fulfils, read like `code`; a sale without a request never matches; each row has `orderCode`, null without a request), `paid` (true/false; a Cancelled invoice matches neither) and `cashCollectedByMe=true` (cash this caller collected that is Awaiting confirmation; each row then has `cashAwaitingConfirmation`). No match: 200 with an empty page and MSG-GEN-10 in `message`. A row has `code`, `invoicedAt`, `zone`, `customer` (null for a walk-in), `total`, `status`, `paymentTerm`, `isPaid` (null for a Cancelled invoice), `unpaidAmount` and `deliveryStatus`. `completedTotal` is the total of every Completed match, not of the page; `isPaid` comes from the debt allocation (BR-DEBT-05), a walk-in invoice from its own payments.
 - `GET /api/sales-invoices/{id}`: the invoice with `lines`, `payments`, `sendings`, `priceCuts`, `debtEffect` (`isPaid`, `covered`, `unpaid`, `countsInCustomerDebt`, `customerDebt`) and `allowedActions` (SALE-09.1 step 3). The same fields are in the answers of `POST` create, `finish` and `resend`.
-- `GET /api/sales-invoices/export` (the filters above, every page) and `GET /api/sales-invoices/{id}/print`: an `.xlsx` file for download and print, Export right in the zone of the invoice (the Accountant only views, §I.4.4 R: 403). Text is never a formula. An empty list is a header and a zero total.
+- `GET /api/sales-invoices/export` (the filters above, every page) and `GET /api/sales-invoices/{id}/print`: an `.xlsx` file for download and print, Export right in the zone of the invoice (403 MSG-GEN-08 elsewhere). Text is never a formula. An empty list is a header and a zero total. The list file holds at most 5,000 invoices (the list sheet has an `Order` column): a larger selection is 400 MSG-GEN-01 naming the field `Filters` (narrow the period or the filters) and nothing is written; at most 5,001 matches are read. The limit counts the matches before the `paid` filter narrows them.
 
 `allowedActions`, on the rules of the SRS:
 
@@ -486,9 +488,10 @@ Only the Cooperative Owner searches it (ACCOUNT-10, BR-ACCOUNT-13); every other 
   = `confirmed`); with it, status `Stopped`, nothing saved but the audit row `SalesInvoice.SaleStopped` (record code = the code,
   reason "Stop sale").
 - These need SALES_INVOICES Create in the zone of the sale (the Zone Managers of the zone and the Owner; others 403). A sale that
-  already ended answers 409 MSG-GEN-09 with `status` and `invoiceId`. A pending sale has no time limit. Its harvest lots cannot be
+  already ended answers 409 MSG-GEN-09 with `status` and `invoiceId`. A pending sale lasts until the end of its business day: the daily job stops it
+  automatically (PM answer of 12/11/2026, see Background jobs). Its harvest lots cannot be
   removed meanwhile (HARVEST-01.1: 409 MSG-GEN-09 "… is on a sale awaiting its transfer"), and the daily close (GFR-05) leaves its kg out of
-  the leftover kg it records, because the transfer invoices them on the closed lot.
+  the leftover kg it records, because the transfer invoices them on the closed lot; a sale of an earlier day is already stopped when the close runs.
 - `POST /api/integrations/payment-notifications` (API-13) is anonymous and rate limited (`RateLimits:PaymentNotificationsPerMinute`,
   256 KB): a notification the adapter does not find authentic answers 401. The fake adapter's format is
   `{ "transactions": [ { "bankReference", "accountNumber", "amount", "content", "occurredAt", "direction": "In" | "Out" } ] }`,
@@ -515,6 +518,39 @@ Only the Cooperative Owner searches it (ACCOUNT-10, BR-ACCOUNT-13); every other 
     payment, listed Awaiting confirmation for the Accountant (DEBT-02.6). Until DEBT-02.6 (settle: attach to a profile, or pay it back) is available, such a payment cannot be confirmed (409 MSG-GEN-09 "Customer payment PT… is without a customer profile …",
     `needsSettlement: true`), so it stays in the list; it can be cancelled.
 
+### Settling a payment without a customer (DEBT-02.6)
+
+A transfer held `WithoutCustomer` (no customer, no saved invoice) is marked `needsSettlement: true` in the rows of
+`GET /api/customer-payments/awaiting-confirmation` (and `GET /api/customer-payments/{id}`) while it is Awaiting confirmation. The
+Accountant or the Owner (`CUSTOMER_PAYMENTS` Edit; Zone Manager and trader 403, anonymous 401) settles it in the same list save as
+the confirmations and cancellations, `POST /api/customer-payments/confirmations`, which now also takes `settle`: one entry per
+payment, each with exactly one choice (400 MSG-GEN-01 `Settlement` otherwise, with `paymentId`):
+
+- `{ id, customerId, allocations? }` attaches the payment to a customer profile. It is allocated like every other payment:
+  `allocations` `[{ invoiceId, amount }]` names the unpaid invoices of the profile it pays (at most what each has left, together at
+  most the amount), left out it covers the oldest unpaid invoices first, `[]` only takes it off the debt. It becomes **Completed**
+  (confirmed by the caller), counts in the debt of the profile and, with the bank account it arrived in (`cashAccount`), is a line of
+  the Bank fund of the cash book. A merged profile is 409 MSG-GEN-09, an unknown one 400 `Customer`; two payments of one list on one
+  profile cannot pay the same invoice twice (400 `Allocation n`, naming the payment).
+- `{ id, payBack: { paymentDate, method, bankReference?, note?, confirmDuplicateBankReference?, cashAccountId? } }` pays all of it
+  back: the payment becomes **Completed** with no customer and a money paid back of the same amount is recorded (Completed, no
+  customer, `paidBackForPaymentId` = the payment, collected by the caller). `method` is `Cash` (the Cash fund) or `OtherTransfer`
+  (needs `bankReference`, MSG-DEBT-05 when a payment that is not cancelled has it, also an earlier pay back of the same list; leaves
+  the Bank account `cashAccountId`, by default the one the transfer arrived in). `paymentDate` is not after today and **not before the
+  date of the transfer**; invalid fields are named (`Payment date`, `Method`, `Bank reference`, `Cash account`, `Note`). Both lines are in
+  the cash book and no customer debt moves.
+
+200 answers the list as before plus `settled: [{ payment, paidBack, debtAfter }]` (`debtAfter` null when paid back; it is the profile's debt after the whole list, so two payments of one profile show the same number). Only payments
+still Awaiting confirmation can be named: a settlement sent again, or lost to a parallel save (row version, unique index on the money
+paid back), is 409 MSG-GEN-09 naming the payment and applies nothing twice. A payment that is not marked (already on a profile, cash at
+the port) is 409 MSG-GEN-09 too. One MSG-DEBT-03 goes to the Owners for the whole list (BR-DEBT-06): `settled_codes`, `settled_count`,
+`settled_more_count`, `settled_amount` join the confirmed and cancelled ones, `amount` covers all three, and `debts` also lists the
+profiles a payment was attached to. Audit: `CustomerPayment.Settled` (settlement kind, profile, bank account, parts, money paid back),
+`CustomerPayment.Recorded` on the money paid back. Money paid back is cancelled with `POST /api/customer-payments/{id}/cancel`: the
+payment it settled goes back to Awaiting confirmation, out of the cash book, marked again (audit `CustomerPayment.SettlementUndone`);
+while money paid back stands, cancelling the payment itself is 409 MSG-GEN-09 `hasMoneyPaidBack: true`. A transfer short of a sale
+still awaiting it counts in `receivedAmount` of that sale only while it is Awaiting confirmation.
+
 ### Background jobs
 
 Every daily job runs on one base (`DailyJobHostedService`): a run time in business time (UTC+7), an optional catch-up run
@@ -529,6 +565,15 @@ the repeat still counts from the last reminder. Like the expiry reminder (07:00)
 runs it once at start: a host that was down across 06:00 sends the reminders when it next starts after 06:00. A second run
 on the same day sends nothing. Each zone is saved on its own: a zone saved during the run, or one with nobody to notify,
 is simply checked again the next day, and the other zones are not affected.
+
+`PendingSaleEndOfDayStopJob` (the end of the business day, council of 03/11, PM answer of 12/11/2026) runs first in the same run as
+the daily close check below, so before it, also in the catch-up run: every sale still awaiting its VietQR transfer that was created
+before the business day of the run began (UTC+7) is stopped by the system, the Stop of the port (BR-SALE-08): status `Stopped`,
+nothing saved on the invoice side, the audit row `SalesInvoice.SaleStopped` with no actor and the reason "Stop sale: the transfer
+did not arrive by the end of the business day". A transfer that comes later is kept as a payment without a customer
+(`WithoutCustomer`). A sale a transfer, a change of payment or a stop by hand ended meanwhile is left as it ended: each sale is
+saved on its own and a transfer arriving at that moment (the same row version) makes the stop read the sale again and find it
+ended; a second run, or a second app instance, stops nothing more. Its kg are then leftover when their lot closes in the same run.
 
 `HarvestLotAutoCloseJob` runs every day at 00:05 (Asia/Ho_Chi_Minh), GFR-05: a harvest lot still for sale (Open or Reopened)
 counts its days before automatic close (harvest settings) from its harvest date, or from the day it was last reopened. When
