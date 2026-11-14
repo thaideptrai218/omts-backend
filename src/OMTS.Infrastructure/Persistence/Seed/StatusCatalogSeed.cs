@@ -70,7 +70,9 @@ internal static class StatusCatalogSeed
         // STD-QUALITY-CLAIM: a response cannot be changed (BR-CLAIM-02).
         NewStatus(S.QualityClaim.AwaitingResponse, G.QualityClaim, "AWAITING_RESPONSE", "Awaiting response", "Sent by the trader; not answered yet.", initial: true),
         NewStatus(S.QualityClaim.Rejected, G.QualityClaim, "REJECTED", "Rejected", "Rejected by the Cooperative Owner with a note.", final: true),
-        NewStatus(S.QualityClaim.Accepted, G.QualityClaim, "ACCEPTED", "Accepted", "Accepted by the Cooperative Owner, who offered a return of all the goods or a price cut of the whole invoice.", final: true),
+        NewStatus(S.QualityClaim.Accepted, G.QualityClaim, "ACCEPTED", "Accepted", "The trader accepted the offer of the Cooperative Owner (a return of all the goods or a price cut of the whole invoice).", final: true),
+        NewStatus(S.QualityClaim.OfferMade, G.QualityClaim, "OFFER_MADE", "Offer made", "The Cooperative Owner proposed a return of all the goods or a price cut of the whole invoice; the trader has not answered yet."),
+        NewStatus(S.QualityClaim.OfferDeclined, G.QualityClaim, "OFFER_DECLINED", "Offer declined", "The trader declined the offer of the Cooperative Owner.", final: true),
 
         // The transitions of a payroll come with LABOR-12 and LABOR-13, which perform them.
         NewStatus(S.Payroll.Draft, G.Payroll, "DRAFT", "Draft", "Being prepared; its lines are calculated from the current records.", initial: true),
@@ -150,8 +152,10 @@ internal static class StatusCatalogSeed
         NewTransition(181, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Declined, "SALE-03", Owner, Action, "A note gives the reason.", true),
         NewTransition(182, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Cancelled, "SALE-02", Trader, Action, "The trader cancels; a reason is optional.", false),
         NewTransition(183, S.PurchaseRequest.Accepted, S.PurchaseRequest.Cancelled, "SALE-02", Trader, Action, "The request is not Fulfilled; a reason is optional.", false),
-        NewTransition(220, S.QualityClaim.AwaitingResponse, S.QualityClaim.Accepted, "CLAIM-02", Owner, Action, "The invoice is not cancelled and has no sales return; an offer is chosen and a note is optional.", false),
+        NewTransition(220, S.QualityClaim.AwaitingResponse, S.QualityClaim.OfferMade, "CLAIM-02", Owner, Action, "The invoice is not cancelled and has no sales return; an offer is chosen, a price cut has its amount, and a note is optional.", false),
         NewTransition(221, S.QualityClaim.AwaitingResponse, S.QualityClaim.Rejected, "CLAIM-02", Owner, Action, "A note gives the reason.", true),
+        NewTransition(222, S.QualityClaim.OfferMade, S.QualityClaim.Accepted, "CLAIM-02", Trader, Action, "The trader of the claim accepts the offer; the Owner then runs the return (CLAIM-03) or the price cut (SALE-07).", false),
+        NewTransition(223, S.QualityClaim.OfferMade, S.QualityClaim.OfferDeclined, "CLAIM-02", Trader, Action, "The trader of the claim declines the offer; a note is optional.", false),
 
         // BR-HARVEST-04: closed in one of four ways; only the system reopens a lot. 80–140 are taken or reserved on other branches.
         NewTransition(150, S.HarvestLot.Open, S.HarvestLot.Closed, "HARVEST-02, GFR-05, SALE-05, SALE-07, CLAIM-03", LotCloser, Action, "Sold whole lot, closed with the leftover kg, or the time limit reached.", false),

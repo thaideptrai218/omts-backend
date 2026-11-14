@@ -77,8 +77,18 @@ public static class QualityClaimTestKit
     public static async Task<JsonElement> ClaimAsStaffAsync(this HttpClient staff, Guid claimId) =>
         await (await staff.GetAsync($"/api/quality-claims/{claimId}")).ReadAsync(HttpStatusCode.OK);
 
-    public static Task<HttpResponseMessage> AcceptClaimAsync(this HttpClient owner, Guid claimId, string? rowVersion, string offer = "ReturnAllGoods", string? note = "The cooperative is sorry") =>
-        owner.PostAsJsonAsync($"/api/quality-claims/{claimId}/accept", new { offer, note, rowVersion });
+    /// <summary>The Owner proposes an offer; a price cut offer carries its own amount (30,000 unless given).</summary>
+    public const decimal DefaultCutAmount = 30_000m;
+
+    public static Task<HttpResponseMessage> AcceptClaimAsync(
+        this HttpClient owner, Guid claimId, string? rowVersion, string offer = "ReturnAllGoods", string? note = "The cooperative is sorry", decimal? priceCutAmount = null) =>
+        owner.PostAsJsonAsync($"/api/quality-claims/{claimId}/accept", new { offer, note, rowVersion, priceCutAmount = priceCutAmount ?? (offer == "PriceCutWholeInvoice" ? DefaultCutAmount : (decimal?)null) });
+
+    public static Task<HttpResponseMessage> AcceptOfferAsync(this HttpClient trader, Guid claimId, string? note = null) =>
+        trader.PostAsJsonAsync($"/api/me/quality-claims/{claimId}/accept-offer", new { note });
+
+    public static Task<HttpResponseMessage> DeclineOfferAsync(this HttpClient trader, Guid claimId, string? note = null) =>
+        trader.PostAsJsonAsync($"/api/me/quality-claims/{claimId}/decline-offer", new { note });
 
     public static Task<HttpResponseMessage> RejectClaimAsync(this HttpClient owner, Guid claimId, string? rowVersion, string? note = "Not a quality problem") =>
         owner.PostAsJsonAsync($"/api/quality-claims/{claimId}/reject", new { note, rowVersion });

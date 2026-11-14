@@ -309,6 +309,7 @@ public static class DependencyInjection
         services.AddScoped<QualityClaimReadService>();
         services.AddScoped<QualityClaimSubmissionService>();
         services.AddScoped<QualityClaimResponseService>();
+        services.AddScoped<QualityClaimAnswerService>();
         // SALE-05 sales invoices and the customer debt (BR-DEBT-02)
         services.AddScoped<CustomerDebtReader>();
         // DEBT-03 customer debts, statement and export (read only)

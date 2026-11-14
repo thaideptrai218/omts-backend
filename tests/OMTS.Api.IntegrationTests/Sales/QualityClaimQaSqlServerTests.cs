@@ -113,7 +113,7 @@ public class QualityClaimQaSqlServerTests
 
         await AssertAnswersAsync(answers.Where(a => a.StatusCode != HttpStatusCode.OK), "409 MSG06", "409 MSG-GEN-09");
         Assert.Single(answers, a => a.StatusCode == HttpStatusCode.OK);
-        Assert.Equal(1, await w.Host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == claim.Id() && e.Action == "QualityClaim.Accepted")));
+        Assert.Equal(1, await w.Host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordId == claim.Id() && e.Action == "QualityClaim.OfferMade")));
     }
 
     [SqlServerFact]

@@ -36,7 +36,7 @@ public class QualityClaimQaListsTests
 
         var detail = await (await c.World.Trader.Client.GetAsync($"/api/me/quality-claims/{c.Id}")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(
-            new[] { "code", "description", "id", "invoice", "invoiceDate", "invoiceTotal", "lines", "offer", "photos", "response", "sentAt", "status", "statusId" }.Order().ToArray(),
+            new[] { "answer", "code", "description", "id", "invoice", "invoiceDate", "invoiceTotal", "lines", "offer", "offerAmount", "photos", "response", "sentAt", "status", "statusId" }.Order().ToArray(),
             Names(detail));
         Assert.Equal(new[] { "note", "respondedAt" }.Order().ToArray(), Names(detail.GetProperty("response")));
         Assert.Equal(new[] { "kg", "lotCode", "productName", "unitPrice", "amount" }.Order().ToArray(), Names(detail.GetProperty("lines")[0]));

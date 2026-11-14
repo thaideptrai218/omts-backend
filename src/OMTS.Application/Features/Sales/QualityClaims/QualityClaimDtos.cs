@@ -6,8 +6,14 @@ namespace OMTS.Application.Features.Sales.QualityClaims;
 /// <param name="OtherFilePart">The request held a file part with another name than the photos.</param>
 public sealed record SubmitQualityClaim(string? Description, bool OtherFilePart = false);
 
-/// <summary>CLAIM-02.0: the offer, and a note if needed, for example the price cut that is offered.</summary>
-public sealed record AcceptQualityClaim(QualityClaimOffer? Offer, string? Note, string? RowVersion);
+/// <summary>
+/// CLAIM-02.0: the Owner proposes an offer, with a note if needed. <paramref name="PriceCutAmount"/> is the amount of a price cut (its own field, PM answer 12/11): required, above 0 and at most the
+/// invoice total, when the offer is <c>PriceCutWholeInvoice</c>; it must be empty for a return. The trader then accepts or declines.
+/// </summary>
+public sealed record AcceptQualityClaim(QualityClaimOffer? Offer, string? Note, string? RowVersion, decimal? PriceCutAmount = null);
+
+/// <summary>The trader accepts or declines the offer; the note is optional.</summary>
+public sealed record AnswerQualityClaimOffer(string? Note);
 
 /// <summary>CLAIM-02.1: the note gives the reason.</summary>
 public sealed record RejectQualityClaim(string? Note, string? RowVersion);
@@ -18,7 +24,7 @@ public sealed record QualityClaimInvoiceRef(Guid Id, string Code);
 
 /// <summary>A row of the list: the claim, its invoice, and for staff the profile. The photos are in the detail.</summary>
 public sealed record QualityClaimRow(
-    Guid Id, string Code, DateTimeOffset SentAt, int StatusId, string Status, string Description, int PhotoCount, QualityClaimOffer? Offer,
+    Guid Id, string Code, DateTimeOffset SentAt, int StatusId, string Status, string Description, int PhotoCount, QualityClaimOffer? Offer, decimal? OfferAmount,
     QualityClaimInvoiceRef Invoice, QualityClaimCustomerView? Customer);
 
 /// <summary>A page of claims with MSG-GEN-11 or MSG-GEN-10 when it is empty.</summary>
@@ -28,6 +34,9 @@ public sealed record QualityClaimsPage(IReadOnlyList<QualityClaimRow> Items, int
 public sealed record QualityClaimPhotoView(int SortOrder, string Url);
 
 public sealed record QualityClaimResponseView(string? Note, DateTimeOffset RespondedAt);
+
+/// <summary>The answer of the trader to the offer: when, and the note they gave.</summary>
+public sealed record QualityClaimAnswerView(string? Note, DateTimeOffset AnsweredAt);
 
 public sealed record QualityClaimInvoiceLineView(string ProductName, string LotCode, decimal Kg, decimal? UnitPrice, decimal? Amount);
 
@@ -45,14 +54,14 @@ public sealed record QualityClaimSendingView(string Channel, string? PhoneNumber
 /// <param name="Message">MSG-GEN-05 in the answer to a response (CLAIM-02 step 5); null when the claim is only read.</param>
 /// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
 public sealed record QualityClaimView(
-    Guid Id, string Code, DateTimeOffset SentAt, int StatusId, string Status, string Description, IReadOnlyList<QualityClaimPhotoView> Photos, QualityClaimOffer? Offer,
-    QualityClaimResponseView? Response, QualityClaimCustomerView Customer, QualityClaimInvoiceView Invoice, IReadOnlyList<QualityClaimSendingView> Sendings, string RowVersion,
+    Guid Id, string Code, DateTimeOffset SentAt, int StatusId, string Status, string Description, IReadOnlyList<QualityClaimPhotoView> Photos, QualityClaimOffer? Offer, decimal? OfferAmount,
+    QualityClaimResponseView? Response, QualityClaimAnswerView? Answer, QualityClaimCustomerView Customer, QualityClaimInvoiceView Invoice, IReadOnlyList<QualityClaimSendingView> Sendings, string RowVersion,
     string? Message = null, string? MessageCode = null);
 
 /// <summary>A claim as its trader reads it: no profile or zone data, no prices, no sendings, no row version.</summary>
 public sealed record TraderQualityClaimView(
-    Guid Id, string Code, DateTimeOffset SentAt, int StatusId, string Status, string Description, IReadOnlyList<QualityClaimPhotoView> Photos, QualityClaimOffer? Offer,
-    QualityClaimResponseView? Response, QualityClaimInvoiceRef Invoice, DateOnly InvoiceDate, decimal InvoiceTotal, IReadOnlyList<QualityClaimInvoiceLineView> Lines);
+    Guid Id, string Code, DateTimeOffset SentAt, int StatusId, string Status, string Description, IReadOnlyList<QualityClaimPhotoView> Photos, QualityClaimOffer? Offer, decimal? OfferAmount,
+    QualityClaimResponseView? Response, QualityClaimAnswerView? Answer, QualityClaimInvoiceRef Invoice, DateOnly InvoiceDate, decimal InvoiceTotal, IReadOnlyList<QualityClaimInvoiceLineView> Lines);
 
 /// <summary>A sent claim with MSG-GEN-05 (CLAIM-01 step 5).</summary>
 public sealed record QualityClaimSaved(TraderQualityClaimView Claim, string Message, string MessageCode);
