@@ -21,15 +21,40 @@ public static class OldSchemaRows
     /// An Open cycle on a raft of a zone, with the columns of every schema before the nursery, the cycle product and the raft size (cycle: <c>NurseryBatchId</c>, <c>ProductId</c>; raft: <c>LengthM</c>,
     /// <c>WidthM</c>, <c>Note</c>). Returns the id of the cycle.
     /// </summary>
-    public static async Task<Guid> OpenCycleAsync(OmtsDbContext db, Guid cooperativeId)
+    public static async Task<Guid> OpenCycleAsync(OmtsDbContext db, Guid cooperativeId) => (await OpenCycleRowsAsync(db, cooperativeId)).CycleId;
+
+    /// <summary>The zone KV01, its raft B01 and an Open cycle on it, with the ids of the three.</summary>
+    public static async Task<(Guid ZoneId, Guid RaftId, Guid CycleId)> OpenCycleRowsAsync(OmtsDbContext db, Guid cooperativeId)
     {
-        var (zoneId, raftId, cycleId) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
-        await db.Database.ExecuteSqlAsync($"""
-            INSERT INTO FarmingZones (Id, CooperativeId, Code, Name, StatusId, CreatedAt) VALUES ({zoneId}, {cooperativeId}, N'KV01', N'A', {StatusIds.Usage.InUse}, SYSDATETIMEOFFSET());
-            INSERT INTO Rafts (Id, ZoneId, Code, Size, StatusId, CreatedAt) VALUES ({raftId}, {zoneId}, N'B01', N'1', {StatusIds.Usage.InUse}, SYSDATETIMEOFFSET());
-            INSERT INTO CultivationCycles (Id, RaftId, StartDate, StatusId, ClosedEarly, CreatedAt) VALUES ({cycleId}, {raftId}, '2026-01-01', {StatusIds.CultivationCycle.Open}, 0, SYSDATETIMEOFFSET());
-            """);
-        return cycleId;
+        var zoneId = await ZoneAsync(db, cooperativeId);
+        var raftId = await RaftAsync(db, zoneId, "B01");
+        var cycleId = Guid.NewGuid();
+        await db.Database.ExecuteSqlAsync($"INSERT INTO CultivationCycles (Id, RaftId, StartDate, StatusId, ClosedEarly, CreatedAt) VALUES ({cycleId}, {raftId}, '2026-01-01', {StatusIds.CultivationCycle.Open}, 0, SYSDATETIMEOFFSET())");
+        return (zoneId, raftId, cycleId);
+    }
+
+    /// <summary>The zone KV01 In Use, with the columns of every schema before the later ones of the model.</summary>
+    public static async Task<Guid> ZoneAsync(OmtsDbContext db, Guid cooperativeId)
+    {
+        var id = Guid.NewGuid();
+        await db.Database.ExecuteSqlAsync($"INSERT INTO FarmingZones (Id, CooperativeId, Code, Name, StatusId, CreatedAt) VALUES ({id}, {cooperativeId}, N'KV01', N'A', {StatusIds.Usage.InUse}, SYSDATETIMEOFFSET())");
+        return id;
+    }
+
+    /// <summary>A raft In Use of a zone (no size columns of the later schema: <c>LengthM</c>, <c>WidthM</c>, <c>Note</c>).</summary>
+    public static async Task<Guid> RaftAsync(OmtsDbContext db, Guid zoneId, string code)
+    {
+        var id = Guid.NewGuid();
+        await db.Database.ExecuteSqlAsync($"INSERT INTO Rafts (Id, ZoneId, Code, Size, StatusId, CreatedAt) VALUES ({id}, {zoneId}, {code}, N'1', {StatusIds.Usage.InUse}, SYSDATETIMEOFFSET())");
+        return id;
+    }
+
+    /// <summary>A lane In Use of a raft (no <c>IsDamaged</c>, <c>LineLengthM</c> or <c>OutOfServiceOn</c> of the later schema).</summary>
+    public static async Task<Guid> LaneAsync(OmtsDbContext db, Guid raftId, int number)
+    {
+        var id = Guid.NewGuid();
+        await db.Database.ExecuteSqlAsync($"INSERT INTO Lanes (Id, RaftId, LaneNumber, StatusId, CreatedAt) VALUES ({id}, {raftId}, {number}, {StatusIds.Lane.InUse}, SYSDATETIMEOFFSET())");
+        return id;
     }
 
     /// <summary>An input item with the columns of every schema before InputItemUnitsGroupsCostAndStockLedger, which adds the units, the group link, the cost and the hidden flag.</summary>

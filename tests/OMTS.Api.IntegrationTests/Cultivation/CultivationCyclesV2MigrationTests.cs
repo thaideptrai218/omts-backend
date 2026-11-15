@@ -30,19 +30,18 @@ public class CultivationCyclesV2MigrationTests
         // Seed only columns of this historical schema; later migrations add fields to the current Cooperative model.
         var cooperativeId = Guid.NewGuid();
         await db.Database.ExecuteSqlAsync($"INSERT INTO Cooperatives (Id, FullName, CreatedAt) VALUES ({cooperativeId}, N'HTX', SYSDATETIMEOFFSET())");
-        var zone = new FarmingZone { CooperativeId = cooperativeId, Code = "KV01", Name = "A" };
-        var (raft, raftTwo) = (new Raft { Zone = zone, Code = "B01", Size = "1" }, new Raft { Zone = zone, Code = "B02", Size = "1" });
-        db.Rafts.AddRange(raft, raftTwo);
-        await db.SaveChangesAsync();
+        // The zone and the rafts are rows of the old schema: the entities have columns that later migrations add.
+        var zoneId = await OldSchemaRows.ZoneAsync(db, cooperativeId);
+        var (raftId, raftTwoId) = (await OldSchemaRows.RaftAsync(db, zoneId, "B01"), await OldSchemaRows.RaftAsync(db, zoneId, "B02"));
 
         var (open, closed, noCloseTime) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         // 18:00 UTC is already the next day in UTC+7; 16:59 UTC is still the same day.
         await db.Database.ExecuteSqlAsync($"""
             INSERT INTO CultivationCycles (Id, RaftId, OpenedAt, ClosedAt, SeedingCompletedAt, SeedingCompletionReason, ClosingSummary, StatusId, CreatedAt)
             VALUES
-                ({closed}, {raft.Id}, '2026-01-01T18:00:00+00:00', '2026-02-10T16:59:00+00:00', '2026-01-05T00:00:00+00:00', N'done', N'a summary', 602, SYSDATETIMEOFFSET()),
-                ({noCloseTime}, {raft.Id}, '2026-03-01T00:00:00+07:00', NULL, NULL, NULL, NULL, 602, SYSDATETIMEOFFSET()),
-                ({open}, {raft.Id}, '2026-04-01T17:30:00+00:00', '2026-05-01T00:00:00+00:00', NULL, NULL, NULL, 601, SYSDATETIMEOFFSET());
+                ({closed}, {raftId}, '2026-01-01T18:00:00+00:00', '2026-02-10T16:59:00+00:00', '2026-01-05T00:00:00+00:00', N'done', N'a summary', 602, SYSDATETIMEOFFSET()),
+                ({noCloseTime}, {raftId}, '2026-03-01T00:00:00+07:00', NULL, NULL, NULL, NULL, 602, SYSDATETIMEOFFSET()),
+                ({open}, {raftId}, '2026-04-01T17:30:00+00:00', '2026-05-01T00:00:00+00:00', NULL, NULL, NULL, 601, SYSDATETIMEOFFSET());
             """);
 
         await migrator.MigrateAsync();
@@ -79,9 +78,9 @@ public class CultivationCyclesV2MigrationTests
         var defaults = await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.columns WHERE object_id = OBJECT_ID('CultivationCycles') AND name = 'StartDate' AND default_object_id <> 0");
         Assert.Equal(0, defaults);
 
-        db.CultivationCycles.Add(new CultivationCycle { RaftId = raftTwo.Id, StartDate = new DateOnly(2026, 6, 1) });
+        db.CultivationCycles.Add(new CultivationCycle { RaftId = raftTwoId, StartDate = new DateOnly(2026, 6, 1) });
         await db.SaveChangesAsync();
-        db.CultivationCycles.Add(new CultivationCycle { RaftId = raftTwo.Id, StartDate = new DateOnly(2026, 6, 2) });
+        db.CultivationCycles.Add(new CultivationCycle { RaftId = raftTwoId, StartDate = new DateOnly(2026, 6, 2) });
         var second = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
         Assert.Contains("UX_CultivationCycles_RaftId_Open", second.InnerException!.Message);
     }

@@ -100,7 +100,8 @@ public class CultivationLogSqlServerTests
         var taken = await Assert.ThrowsAsync<DbUpdateException>(() => host.UseDbAsync(db => db.CultivationLogPhotos.Add(Photo(1))));
         Assert.Contains("IX_CultivationLogPhotos_LogId_SortOrder", taken.InnerException!.Message);
         var inUse = await Assert.ThrowsAsync<SqlException>(() => host.QueryAsync(db => db.CultivationCycles.Where(c => c.Id == cycle.Id()).ExecuteDeleteAsync()));
-        Assert.Contains("FK_CultivationLogs_CultivationCycles_CycleId", inUse.Message);
+        // The cycle is referenced by its logs and by other records of the cycle: the database refuses the delete whichever foreign key it names first.
+        Assert.Contains("REFERENCE constraint", inUse.Message);
     }
 
     // A log and a cancel of one cycle: the cycle row decides. Never a log on no cycle, a cancelled cycle with a file left, or a 500.
