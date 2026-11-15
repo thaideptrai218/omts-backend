@@ -111,7 +111,7 @@ public class SeedingRaceTests
         {
             var (_, cycle) = await NewCycleAsync(owner, zoneId);
 
-            var answers = await InParallelAsync(4, _ => manager.Client.PostSeedingCompleteAsync(cycle.Id(), cycle.Text("rowVersion")));
+            var answers = await InParallelAsync(4, _ => manager.Client.PostSeedingCompleteAsync(cycle.Id(), cycle.Text("rowVersion"), confirmEmpty: true));
 
             await AssertAnsweredAsync(answers);
             Assert.Equal(1, answers.Count(a => a.StatusCode == HttpStatusCode.OK));
