@@ -48,6 +48,8 @@ public class PostSaleIssuesSqlServerTests
             // An accepted claim carries its offer and who answered it (CK_QualityClaim_Accepted_Has_Offer, CK_QualityClaim_Answered_Has_Response).
             StatusId = StatusIds.QualityClaim.Accepted, Offer = OMTS.Domain.Enums.QualityClaimOffer.PriceCutWholeInvoice,
             RespondedAt = DateTimeOffset.UtcNow, RespondedByAccountId = host.Owner.Account.Id,
+            // Accepted is the trader's answer to the offer (PM answer 12/11), so it carries when they answered (CK_QualityClaim_Answered_By_Trader).
+            AnsweredAt = DateTimeOffset.UtcNow,
         }));
         await owner.CorrectedAsync(cut, PriceCut(await owner.InvoiceAsync(cut), 20_000m));
         // Thrown-away kg ask MSG-HARVEST-02 about the lot: it stays for sale, the cancelled invoice still sells from it.
