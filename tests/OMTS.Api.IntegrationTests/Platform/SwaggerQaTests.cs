@@ -25,10 +25,15 @@ public class SwaggerQaTests(AuthApiFactory factory) : IClassFixture<AuthApiFacto
         Assert.Contains("SupplierId", receiptFilters);
         Assert.Contains("PageSize", receiptFilters);
         Assert.DoesNotContain("itemGroup", receiptFilters);
-        // Plain action parameters were already camelCase and stay so.
+        // The list of employees is a [FromQuery] record too (EmployeeListQuery): its fields keep their property names.
         var employeeFilters = paths.GetProperty("/api/employees").GetProperty("get").GetProperty("parameters").EnumerateArray()
             .Select(p => p.GetProperty("name").GetString()!).ToList();
-        Assert.Contains("pageSize", employeeFilters);
-        Assert.Contains("zoneId", employeeFilters);
+        Assert.Contains("PageSize", employeeFilters);
+        Assert.Contains("ZoneId", employeeFilters);
+        // Plain action parameters were already camelCase and stay so.
+        var salesSearch = paths.GetProperty("/api/quality-claims").GetProperty("get").GetProperty("parameters").EnumerateArray()
+            .Select(p => p.GetProperty("name").GetString()!).ToList();
+        Assert.Contains("pageSize", salesSearch);
+        Assert.Contains("statusId", salesSearch);
     }
 }

@@ -45,6 +45,7 @@ public class MaterialUsagesQaTestsItems(AuthApiFactory factory) : IClassFixture<
         var setup = await factory.CycleAsync();
         var owner = setup.Owner.Client;
         var itemId = await factory.ItemAsync();
+        await factory.AddBaseUnitAsync(itemId);
         await owner.RecordUsageAsync(setup.RaftId, itemId, quantity: 4m);
         var item = await ReadItemAsync(owner, itemId);
 
@@ -86,6 +87,7 @@ public class MaterialUsagesQaTestsItems(AuthApiFactory factory) : IClassFixture<
     {
         var owner = (await factory.OwnerAsync()).Client;
         var itemId = await factory.ItemAsync();
+        await factory.AddBaseUnitAsync(itemId);
         var item = await ReadItemAsync(owner, itemId);
 
         var saved = await (await owner.PutAsJsonAsync($"/api/farming-input-items/{itemId}", ItemBody(item, group: "Other", unit: "kg"))).ReadAsync(HttpStatusCode.OK);
@@ -187,7 +189,10 @@ public class MaterialUsagesQaTestsItems(AuthApiFactory factory) : IClassFixture<
 
         var group = (await owner.UsageListAsync(setup.RaftId)).GetProperty("groups")[0];
         Assert.Equal(["cycle", "locked", "repairs"], group.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
-        Assert.Equal(["closeDate", "closedEarly", "id", "rowVersion", "startDate", "status", "statusId"], group.GetProperty("cycle").EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
+        // The cycle view of the usage list grew with the nursery and the seed of the cycle (OMTS-132): the fields this screen needs are there, and no price.
+        var cycleFields = group.GetProperty("cycle").EnumerateObject().Select(p => p.Name).ToList();
+        Assert.All(new[] { "closeDate", "closedEarly", "id", "rowVersion", "startDate", "status", "statusId" }, name => Assert.Contains(name, cycleFields));
+        Assert.DoesNotContain(cycleFields, name => name.Contains("price", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(["records", "repairReason", "usageDate"], group.GetProperty("repairs")[0].EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
 
         // The audit values of §3: codes, with these names only.

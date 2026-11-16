@@ -71,6 +71,16 @@ public static class MaterialUsageTestKit
         return item.Id;
     }
 
+    /// <summary>
+    /// Gives an item written straight to the database its base unit row, as an item made through the API has it (units with factors, OMTS-218): the rule that a unit with movements does not change
+    /// looks at the units of the item.
+    /// </summary>
+    public static async Task AddBaseUnitAsync(this AuthApiFactory factory, Guid itemId)
+    {
+        var unit = new InputUnit { Name = $"piece {NewCode()}" };
+        await factory.UseDbAsync(db => db.AddRange(unit, new InputItemUnit { ItemId = itemId, UnitId = unit.Id, Factor = 1m, Code = NewCode(), IsBase = true }));
+    }
+
     public static async Task<Guid> ItemAsync(this FarmingSqlServerHost host)
     {
         var item = NewItem();

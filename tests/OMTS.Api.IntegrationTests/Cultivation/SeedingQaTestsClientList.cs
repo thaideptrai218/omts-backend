@@ -455,6 +455,7 @@ public class SeedingQaTestsDemo
             var removed = await UseDbAsync(api, db => db.SeedingRecords.Where(r => r.Cycle.Raft.Code == "B1-02").Select(r => r.Id).SingleAsync());
             await UseDbAsync(api, async db =>
             {
+                await db.SeedingRecordPhotos.Where(p => p.SeedingRecordId == removed).ExecuteDeleteAsync();
                 await db.SeedingRecordLanes.Where(l => l.SeedingRecordId == removed).ExecuteDeleteAsync();
                 return await db.SeedingRecords.Where(r => r.Id == removed).ExecuteDeleteAsync();
             });

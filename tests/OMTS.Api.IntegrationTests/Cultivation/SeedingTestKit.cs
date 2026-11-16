@@ -89,8 +89,9 @@ public static class SeedingTestKit
     public static Task<HttpResponseMessage> CompletionPreviewAsync(this HttpClient client, Guid cycleId) =>
         client.GetAsync($"/api/cultivation-cycles/{cycleId}/seeding-complete/preview");
 
-    public static Task<HttpResponseMessage> PostSeedingCompleteAsync(this HttpClient client, Guid cycleId, string? rowVersion = "") =>
-        client.PostAsJsonAsync($"/api/cultivation-cycles/{cycleId}/seeding-complete", new { rowVersion });
+    /// <param name="confirmEmpty">The answer Yes to MSG-CYCLE-01: finish the seeding although no lane has seed yet (the Owner is then asked to review it).</param>
+    public static Task<HttpResponseMessage> PostSeedingCompleteAsync(this HttpClient client, Guid cycleId, string? rowVersion = "", bool confirmEmpty = false) =>
+        client.PostAsJsonAsync($"/api/cultivation-cycles/{cycleId}/seeding-complete", new { rowVersion, confirmEmpty });
 
     /// <summary>Marks the seeding complete with the current version of the cycle and returns the answer.</summary>
     public static async Task<JsonElement> MarkSeedingCompleteAsync(this HttpClient client, Guid cycleId)

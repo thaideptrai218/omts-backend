@@ -109,7 +109,7 @@ public class CycleLogsQaTestsSqlServer
 
     // The longest values the checks allow must fit the columns, with ten keys in the audit row.
     [SqlServerFact]
-    public async Task The_longest_notes_and_reason_and_ten_photos_fit_the_columns_and_the_audit_log()
+    public async Task The_longest_notes_and_reason_and_three_photos_fit_the_columns_and_the_audit_log()
     {
         await using var host = await FarmingSqlServerHost.StartAsync();
         var owner = host.Owner.Client;
@@ -117,13 +117,14 @@ public class CycleLogsQaTestsSqlServer
         var notes = new string('ệ', 2000);
         var reason = new string('ạ', 1000);
 
-        var log = await owner.RecordLogAsync(cycle.Id(), new LogFields { Notes = notes, Photos = Enumerable.Repeat(Jpeg, 10).ToList() });
+        var log = await owner.RecordLogAsync(cycle.Id(), new LogFields { Notes = notes, Photos = Enumerable.Repeat(Jpeg, 3).ToList() });
         Assert.Equal(notes, log.Text("notes"));
 
-        var edit = new LogFields { Notes = new string('ố', 2000), Reason = reason, RowVersion = log.Text("rowVersion"), Photos = Enumerable.Repeat(Png, 10).ToList() };
+        var edit = new LogFields { Notes = new string('ố', 2000), Reason = reason, RowVersion = log.Text("rowVersion"), Photos = Enumerable.Repeat(Png, 3).ToList() };
         var saved = (await (await owner.PutLogAsync(log.Id(), edit)).ReadAsync(HttpStatusCode.OK)).GetProperty("log");
 
-        Assert.Equal(Enumerable.Range(1, 10), saved.PhotoSlots());
+        // A log holds at most 3 photos (decision of 12/11/2026).
+        Assert.Equal(Enumerable.Range(1, 3), saved.PhotoSlots());
         Assert.Equal(saved.PhotoKeys().Order(), host.StoredKeys(Category));
         var audit = await host.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.Action == "CultivationLog.Corrected" && e.RecordId == log.Id()));
         Assert.Equal(reason, audit.Reason);

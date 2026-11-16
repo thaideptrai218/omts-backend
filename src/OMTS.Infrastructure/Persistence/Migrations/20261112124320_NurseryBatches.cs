@@ -293,6 +293,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 name: "IX_CultivationCycles_NurseryBatchId",
                 table: "CultivationCycles");
 
+            // The issues of the nursery type go back to the seeding type before the nursery type is deleted (foreign key): the nursery batches are dropped here, their issues stay as seed issues.
+            migrationBuilder.Sql("UPDATE [InputIssues] SET [IssueTypeId] = '6e1f0b20-0000-4d4a-8b20-000000000001' WHERE [IssueTypeId] = '6e1f0b20-0000-4d4a-8b20-000000000004'");
+
             migrationBuilder.DeleteData(
                 table: "InputIssueTypes",
                 keyColumn: "Id",

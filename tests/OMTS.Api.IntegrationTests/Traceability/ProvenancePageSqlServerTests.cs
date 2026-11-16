@@ -27,15 +27,16 @@ public class ProvenancePageSqlServerTests
         var raftId = (await owner.CreateRaftAsync(zoneId)).Id();
         var cycleId = (await owner.StartCycleAsync(raftId, new CycleBody(Today.AddDays(-10)))).Id();
         var seed = await owner.SeedLotAsync();
-        await owner.SeedingRecordAsync(cycleId, seed.Session([1, 2, 3, 4, 5], date: Today.AddDays(-3)));
-        await owner.SeedingRecordAsync(cycleId, seed.Session([2], date: Today.AddDays(-1)));
+        await owner.SeedingRecordAsync(cycleId, seed.Session([1, 2, 3, 4, 5], date: Today.AddDays(-3)).Percents(50m, 2));
+        // Lane 2 is hung again; a lane never holds more than 100 %, so the two sessions share it.
+        await owner.SeedingRecordAsync(cycleId, seed.Session([2], date: Today.AddDays(-1)).Percents(50m, 2));
         var productId = (await Catalogue.CreateProductAsync(owner, unitPrice: ListPrice)).Id();
         var customerId = (await Catalogue.CreateCustomerAsync(owner)).Id();
         var lotId = (await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(1, 2))).Id();
         var withdrawnId = (await owner.HarvestLotAsync(raftId, HarvestFields.OfLanes(3))).Id();
         await host.UseDbAsync(db =>
         {
-            db.HarvestLotPhotos.Add(new HarvestLotPhoto { LotId = lotId, SortOrder = 1, FileKey = $"{FileCategories.HarvestLotPhotos}/2026/11/{Guid.NewGuid():N}.jpg" });
+            db.HarvestLotPhotos.Add(new HarvestLotPhoto { LotId = lotId, SortOrder = 2, FileKey = $"{FileCategories.HarvestLotPhotos}/2026/11/{Guid.NewGuid():N}.jpg" });
             db.RaftPhotos.Add(new RaftPhoto { RaftId = raftId, SortOrder = 1, FileKey = $"{FileCategories.RaftPhotos}/2026/11/{Guid.NewGuid():N}.jpg" });
         });
         var invoice = (await owner.SellAsync(Invoice(customerId, [Line(productId, lotId, 3m), Line(productId, withdrawnId, 2m)], Cash(5m * ListPrice), lotId, withdrawnId)))
@@ -53,7 +54,8 @@ public class ProvenancePageSqlServerTests
         var origin = lots[0].GetProperty("origin");
         Assert.Equal([(Today.AddDays(-3), item), (Today.AddDays(-1), item)],
             origin.GetProperty("seedings").EnumerateArray().Select(s => (s.Date("seedingDate"), s.Text("seedItemName"))));
-        Assert.Equal((3, 1, 1), (origin.GetProperty("daysOfFarming").GetInt32(), origin.GetProperty("harvestPhotoUrls").GetArrayLength(),
+        // The photo of the test and the one the lot was recorded with (a new lot needs a photo since 12/11/2026).
+        Assert.Equal((3, 2, 1), (origin.GetProperty("daysOfFarming").GetInt32(), origin.GetProperty("harvestPhotoUrls").GetArrayLength(),
             origin.GetProperty("raftPhotoUrls").GetArrayLength()));
         Assert.Equal("MSG-ORIGIN-01", lots[1].Text("messageCode"));
 

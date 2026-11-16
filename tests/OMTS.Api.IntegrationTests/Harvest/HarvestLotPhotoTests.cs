@@ -179,9 +179,9 @@ public class HarvestLotPhotoTests
         Assert.Equal([kept], StoredKeys(noLot, Category));
         Assert.Contains(noLot.Logs.Lines, l => l.StartsWith("Warning:") && l.Contains(Category) && l.Contains("never held a harvest lot"));
 
-        // A lot with no photo was recorded: no photo in use, but it is this database's, so the old file goes.
-        await raft.Owner.Client.HarvestLotAsync(raft.RaftId);
+        // A lot was recorded (with its one photo, which a new lot needs): the database is now this storage's own, so the old file that no lot uses goes and the photo of the lot stays.
+        var lot = await raft.Owner.Client.HarvestLotAsync(raft.RaftId);
         Assert.Equal(1, await RunJobAsync(noLot.Services));
-        Assert.Empty(StoredKeys(noLot, Category));
+        Assert.Equal(lot.PhotoKeysOfLot(), StoredKeys(noLot, Category)!);
     }
 }

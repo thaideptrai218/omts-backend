@@ -110,7 +110,7 @@ public class SalesInvoiceSqlServerTests
         {
             var lot = await setup.Owner.HarvestLotAsync(setup.RaftId, HarvestFields.OfLanes(round % 5 + 1));
             var lanes = lot.Numbers("laneNumbers").Select(n => n.ToString()).ToList();
-            var correction = new HarvestCorrection(new HarvestFields { Lanes = lanes, Cages = "9" }, "Wrong count", lot.Text("rowVersion"));
+            var correction = new HarvestCorrection(new HarvestFields { Lanes = lanes, Cages = "9" }, "Wrong count", lot.Text("rowVersion"), lot.PhotoKeysOfLot());
 
             var answers = await Task.WhenAll(
                 setup.Manager.PostInvoiceAsync(Invoice(setup.CustomerId, [Line(setup.ProductId, lot.Id(), 20m)], Cash(600_000m))),

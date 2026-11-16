@@ -429,7 +429,7 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
 
         var saved = await owner.RecordHarvestAsync(raft.RaftId, new HarvestFields { Lanes = ["1"], Photos = [Jpeg] });
 
-        Assert.Equal(Sorted("lot", "everySeededLaneHarvested", "cycleRowVersion", "message", "messageCode", "warnings"), Names(saved));
+        Assert.Equal(Sorted("lot", "everySeededLaneHarvested", "cycleRowVersion", "message", "messageCode", "warnings", "orderCagesTotal", "orderCagesHarvested", "orderComplete"), Names(saved));
         Assert.Equal(("Harvest lot saved.", "MSG-GEN-05"), (saved.Text("message"), saved.Text("messageCode")));
         var lot = saved.GetProperty("lot");
         Assert.Equal(
@@ -442,9 +442,9 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         Assert.Equal(Names(lot), Names(await owner.GetHarvestLotAsync(lot.Id())));
 
         var screen = await owner.HarvestScreenAsync(raft.RaftId);
-        Assert.Equal(Sorted("raftId", "raftCode", "cycle", "averageKgPerCage", "canRecordHarvest", "lanes", "lots", "orders", "harvestedCages", "harvestedKg", "targetYieldKg", "remainingKg", "targetPercent", "overTarget"), Names(screen));
+        Assert.Equal(Sorted("raftId", "raftCode", "cycle", "cycleProductId", "cycleProductName", "averageKgPerCage", "canRecordHarvest", "lanes", "lots", "orders", "harvestedCages", "harvestedKg", "targetYieldKg", "remainingKg", "targetPercent", "overTarget"), Names(screen));
         Assert.Equal(
-            Sorted("id", "code", "customerName", "productName", "acceptedCages", "harvestedCages", "pickupDate", "workDate", "plannedOnRaft"),
+            Sorted("id", "code", "customerName", "productName", "acceptedCages", "harvestedCages", "pickupDate", "workDate", "plannedOnRaft", "matchesCycleProduct", "productId", "trips"),
             Names(screen.GetProperty("orders")[0]));
         Assert.Equal(Sorted("id", "laneNumber", "statusId", "status", "state", "canHarvest", "reason", "reasonCode", "canFinish", "lotCount", "lastHarvestDate", "seedLotCodes", "harvestedCages", "isDamaged", "isOutOfService", "lineLengthM", "seededPercent", "harvestedPercent", "lastModifiedByName", "lastModifiedAt", "progressHistory"), Names(screen.GetProperty("lanes")[0]));
         Assert.Equal(

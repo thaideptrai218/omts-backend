@@ -63,7 +63,8 @@ public class EmployeesV2MigrationTests
 
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
         Assert.False(db.Database.HasPendingModelChanges());
-        Assert.Empty(Dropped.Intersect(await TablesAsync(db)));
+        // At the head, a later migration (WorkAssignmentsAttendanceAndEmployeeRequests) has made WorkAssignments again, a new table of the same name.
+        Assert.Empty(Dropped.Except(["WorkAssignments"]).Intersect(await TablesAsync(db)));
         Assert.Equal(4, await db.Employees.CountAsync());
         Assert.Equal(4, await db.EmployeeTypePeriods.CountAsync());
     }

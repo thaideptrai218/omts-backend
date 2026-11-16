@@ -287,13 +287,13 @@ public class StackMergeQaTestsMigrations
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync(MigrationBeforeSeeding);
         var oldSchema = await ReadAsync(db, SchemaQuery);
-        var cycle = new CultivationCycle { Raft = new Raft { Zone = new FarmingZone { CooperativeId = await OldSchemaRows.CooperativeAsync(db), Code = "KV01", Name = "A" }, Code = "B01", Size = "1" }, StartDate = new DateOnly(2026, 1, 1) };
         var account = new Account { Username = "owner", DisplayName = "Owner", SubjectType = SubjectType.CooperativeOwner, StatusId = StatusIds.Account.Active };
-        // The item is a row of the old schema: the entity has columns that this schema does not have yet.
-        db.AddRange(cycle, account);
+        // The zone, raft and cycle are rows of the old schema: the entities have columns that this schema does not have yet (nursery, cycle product, raft size).
+        var cycleId = await OldSchemaRows.OpenCycleAsync(db, await OldSchemaRows.CooperativeAsync(db));
+        db.Add(account);
         await db.SaveChangesAsync();
         var lineId = await OldSchemaRows.CompletedReceiptLineAsync(db, await OldSchemaRows.SupplierAsync(db), account.Id, await OldSchemaRows.InputItemAsync(db, "VT001", "Seed", "Seed", "con"), "con");
-        await db.Database.ExecuteSqlAsync($"INSERT INTO SeedingEvents (Id, CycleId, SeedLotId, SeedingDate, RecordedByAccountId, EvidenceUrls, CreatedAt) VALUES (NEWID(), {cycle.Id}, {lineId}, '2026-01-02', {account.Id}, N'[]', SYSDATETIMEOFFSET())");
+        await db.Database.ExecuteSqlAsync($"INSERT INTO SeedingEvents (Id, CycleId, SeedLotId, SeedingDate, RecordedByAccountId, EvidenceUrls, CreatedAt) VALUES (NEWID(), {cycleId}, {lineId}, '2026-01-02', {account.Id}, N'[]', SYSDATETIMEOFFSET())");
         db.ChangeTracker.Clear();
 
         await migrator.MigrateAsync();

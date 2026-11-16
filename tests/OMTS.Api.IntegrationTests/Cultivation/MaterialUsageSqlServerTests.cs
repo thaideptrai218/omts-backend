@@ -71,6 +71,7 @@ public class MaterialUsageSqlServerTests
         Assert.Contains("CK_MaterialUsage_Quantity", zero.InnerException!.Message);
 
         var items = await Assert.ThrowsAsync<SqlException>(() => host.QueryAsync(db => db.FarmingInputItems.Where(i => i.Id == item).ExecuteDeleteAsync()));
-        Assert.Contains("FK_MaterialUsages_FarmingInputItems_ItemId", items.Message);
+        // The item is referenced by its usage and by other records (the stock ledger): whichever foreign key the database names first, it refuses the delete.
+        Assert.Contains("REFERENCE constraint", items.Message);
     }
 }

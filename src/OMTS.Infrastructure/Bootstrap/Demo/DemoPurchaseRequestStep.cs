@@ -20,6 +20,9 @@ internal sealed class DemoPurchaseRequestStep : IDemoSeedStep
 {
     private const string TraderUsername = "thuonglai1";
 
+    /// <summary>The cages of the Accepted demo request that the demo harvest lots are recorded against.</summary>
+    internal const int DemoHarvestOrderCages = 100;
+
     public string Name => "purchase requests";
 
     public async Task<int> RunAsync(DemoSeedContext context, CancellationToken cancellationToken)
@@ -84,14 +87,16 @@ internal sealed class DemoPurchaseRequestStep : IDemoSeedStep
         // sees the trader's first request and adds nothing.
         await context.Db.SaveChangesAsync(cancellationToken);
 
-        var accepted = Place(fat, 6, 1, "Cần cho quán dịp cuối tuần");
+        // The demo harvest lots are recorded against this request and the cages of the lots of a request never add up to more than it accepted (owner decision of 13/11/2026), so it
+        // is a big order: the lots of the demo rafts hold 8 cages a trip and are well under 100.
+        var accepted = Place(fat, DemoHarvestOrderCages, 1, "Cần nhiều hàu cho đợt giao cuối tuần");
         await notices.NewRequestAsync(accepted, cancellationToken);
         if (answer)
         {
-            accepted.AcceptedCages = 5;
+            accepted.AcceptedCages = DemoHarvestOrderCages;
             accepted.AgreedPickupDate = context.Today.AddDays(2);
             accepted.PayLaterAgreed = true;
-            await AnswerAsync(accepted, StatusIds.PurchaseRequest.Accepted, "Bè còn đủ 5 lồng, trả sau như đã thỏa thuận");
+            await AnswerAsync(accepted, StatusIds.PurchaseRequest.Accepted, $"Bè còn đủ {DemoHarvestOrderCages} lồng, trả sau như đã thỏa thuận");
         }
 
         var declined = Place(small, 20, 3, "Lấy nhiều nếu có giá tốt");

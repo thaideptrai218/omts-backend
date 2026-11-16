@@ -83,6 +83,14 @@ public class PurchaseRequestQaDemoSqlServerTests
         api.DbAsync(db => db.Notifications.AsNoTracking()
             .Where(n => n.Channel == NotificationChannel.Sms && n.Type != OMTS.Application.Features.Sales.Invoices.SalesInvoiceMessages.MessageType).ToListAsync());
 
+    /// <summary>
+    /// The states of the requests of <c>DemoPurchaseRequestStep</c>, the four the step under test makes. <c>DemoOpenHarvestRequestStep</c> adds Accepted requests of its own (operation ids <c>0d132a00-…</c>) that
+    /// are not part of it, so they are left out.
+    /// </summary>
+    private static async Task<List<int>> StepRequestStatesAsync(WebApplicationFactory<Program> api) =>
+        (await api.DbAsync(db => db.PurchaseRequests.AsNoTracking().Select(r => new { r.ClientOperationId, r.StatusId }).ToListAsync()))
+            .Where(r => !r.ClientOperationId.ToString().StartsWith("0d132a00", StringComparison.Ordinal)).Select(r => r.StatusId).Order().ToList();
+
     private static Task<(int Requests, int Notifications, int Audit)> CountsAsync(WebApplicationFactory<Program> api) =>
         api.DbAsync(async db => (await db.PurchaseRequests.CountAsync(), await db.Notifications.CountAsync(), await db.AuditEvents.CountAsync()));
 
@@ -107,16 +115,15 @@ public class PurchaseRequestQaDemoSqlServerTests
         Assert.Equal(delivered, inbox.List(phone).Count);
 
         // The client list, §10: the demo trader's four, and what the Owner has in the list.
-        var (ownerList, states, responders) = await host.Api.DbAsync(async db =>
+        var (ownerList, responders) = await host.Api.DbAsync(async db =>
         {
             var owner = await db.Accounts.AsNoTracking().SingleAsync(a => a.Username == "owner");
             return (
                 await db.Notifications.AsNoTracking().CountAsync(n => n.RecipientAccountId == owner.Id && n.Channel == NotificationChannel.InApp && n.RelatedRecordType == RelatedRecordTypes.PurchaseRequest),
-                await db.PurchaseRequests.AsNoTracking().Select(r => r.StatusId).OrderBy(s => s).ToListAsync(),
                 await db.PurchaseRequests.AsNoTracking().Where(r => r.RespondedAt != null).Select(r => r.RespondedByAccountId).Distinct().ToListAsync());
         });
         Assert.Equal(5, ownerList);
-        Assert.Equal([3201, 3202, 3203, 3204], states);
+        Assert.Equal([3201, 3202, 3203, 3204], await StepRequestStatesAsync(host.Api));
         Assert.Single(responders);
         Assert.NotNull(responders[0]);
     }
@@ -162,11 +169,11 @@ public class PurchaseRequestQaDemoSqlServerTests
         await using var hooked = host.Api.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddScoped<OMTS.Application.Common.Interfaces.Persistence.ICooperativeOwnerQuery>(_ => new FailsOnSecondCall())));
 
         await Assert.ThrowsAnyAsync<Exception>(() => SeedAsync(hooked));
-        Assert.Equal(1, await host.Api.DbAsync(db => db.PurchaseRequests.CountAsync()));
+        Assert.Single(await StepRequestStatesAsync(host.Api));
 
         Assert.Equal(DeploymentBootstrapper.Success, (await SeedAsync(host.Api)).ExitCode);
 
-        Assert.Equal(1, await host.Api.DbAsync(db => db.PurchaseRequests.CountAsync()));
+        Assert.Single(await StepRequestStatesAsync(host.Api));
     }
 
     private sealed class FailsOnSecondCall : OMTS.Application.Common.Interfaces.Persistence.ICooperativeOwnerQuery
@@ -190,13 +197,13 @@ public class PurchaseRequestQaDemoSqlServerTests
         Assert.True(outcome.ExitCode == DeploymentBootstrapper.Success, string.Join(" | ", outcome.Messages));
         Assert.Empty(sms.Sent);
         Assert.Empty(await SendingsAsync(hooked));
-        Assert.Equal([3201, 3201, 3201, 3204], await hooked.DbAsync(db => db.PurchaseRequests.AsNoTracking().Select(r => r.StatusId).OrderBy(s => s).ToListAsync()));
+        Assert.Equal([3201, 3201, 3201, 3204], await StepRequestStatesAsync(hooked));
         Assert.Single(outcome.Messages, m => m.Contains("neither Fake nor None"));
 
         var rerun = await SeedAsync(hooked);
 
         Assert.DoesNotContain(rerun.Messages, m => m.Contains("neither Fake nor None"));
-        Assert.Equal(4, await hooked.DbAsync(db => db.PurchaseRequests.CountAsync()));
+        Assert.Equal(4, (await StepRequestStatesAsync(hooked)).Count);
     }
 
     // The step's own promise, now kept: nothing but the Fake or None is handed a message, whatever Sms:Provider says.

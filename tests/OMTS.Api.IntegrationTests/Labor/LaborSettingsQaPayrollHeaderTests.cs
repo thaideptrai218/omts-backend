@@ -17,7 +17,7 @@ namespace OMTS.Api.IntegrationTests.Labor;
 public class LaborSettingsQaPayrollHeaderTests
 {
     [SqlServerFact]
-    public async Task The_statuses_are_the_four_of_the_entity_in_their_own_group()
+    public async Task The_statuses_are_the_six_of_the_entity_in_their_own_group()
     {
         await using var database = SqlServerTestDatabase.Create();
         await using var api = await StartAsync(database);
@@ -31,9 +31,12 @@ public class LaborSettingsQaPayrollHeaderTests
                 (3402, "AWAITING_FINALIZATION", "Awaiting finalization", false, false),
                 (3403, "SENT_BACK", "Sent back", false, false),
                 (3404, "FINALIZED", "Finalized", false, true),
+                // The web contract adds Creating and Cancelled (LABOR-12, OMTS-227).
+                (3405, "CREATING", "Creating", false, false),
+                (3406, "CANCELLED", "Cancelled", false, true),
             ],
             statuses.Select(s => (s.Id, s.Code, s.DisplayName, s.IsInitial, s.IsFinal)));
-        Assert.Equal(4, sameIds);
+        Assert.Equal(6, sameIds);
         Assert.Equal((3401, 3402, 3403, 3404), (StatusIds.Payroll.Draft, StatusIds.Payroll.AwaitingFinalization, StatusIds.Payroll.SentBack, StatusIds.Payroll.Finalized));
         using var scope = api.Services.CreateScope();
         Assert.Equal("Awaiting finalization", scope.ServiceProvider.GetRequiredService<IStatusCatalog>().DisplayNameOf(3402));
@@ -48,7 +51,7 @@ public class LaborSettingsQaPayrollHeaderTests
         Assert.Equal(locked, new Payroll { StatusId = statusId }.IsLocked);
 
     [SqlServerFact]
-    public async Task A_new_payroll_is_a_draft_a_one_day_period_fits_and_the_same_period_is_refused()
+    public async Task A_new_payroll_is_a_draft_and_a_one_day_period_fits()
     {
         await using var database = SqlServerTestDatabase.Create();
         await using var api = await StartAsync(database);
@@ -58,8 +61,7 @@ public class LaborSettingsQaPayrollHeaderTests
 
         var stored = await QueryAsync(api, db => db.Payrolls.AsNoTracking().SingleAsync());
         Assert.Equal((StatusIds.Payroll.Draft, false), (stored.StatusId, stored.CreatedBySystem));
-        var again = await Assert.ThrowsAsync<DbUpdateException>(() => ChangeAsync(api, db => db.Payrolls.Add(new Payroll { PeriodStart = new(2026, 10, 26), PeriodEnd = new(2026, 10, 27) })));
-        Assert.Contains("IX_Payrolls_PeriodStart", (again.InnerException as SqlException)?.Message);
+        // The period is not a unique key of the table any more: a period that overlaps another is refused when the payroll is made (LABOR-12), see the next test.
     }
 
     // "That periods do not overlap is kept when a payroll is created (LABOR-12)" and "the status comes from the code": for L7, kept known.

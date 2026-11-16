@@ -93,7 +93,7 @@ public partial class StagingDemoQaDatabaseTests
         var accounts = await scope.ServiceProvider.GetRequiredService<OmtsDbContext>().Accounts.AsNoTracking().ToListAsync();
         Assert.Equal(DeploymentBootstrapper.Success, outcome.ExitCode);
         Assert.Equal(["owner", "quanlyvung1", "quanlyvung2"], accounts.Where(a => Holds(secondRun, a, first)).Select(a => a.Username).Order());
-        Assert.Contains("two passwords", File.ReadAllText(Path.Combine(StagingDemoQaRepositoryFiles.Root(), "README.md")));
+        Assert.Contains("two passwords", File.ReadAllText(Path.Combine(StagingDemoQaRepositoryFiles.Root(), "docs", "operations-reference.md")));
     }
 
     // After a crash, with the same secret: nothing is left half done and no account stays on a random temporary password.

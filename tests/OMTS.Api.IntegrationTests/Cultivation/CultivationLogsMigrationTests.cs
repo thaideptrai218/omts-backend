@@ -41,10 +41,10 @@ public class CultivationLogsMigrationTests
         var oldSchema = await SchemaAsync(db);
         Assert.Equal(0, await ScalarAsync(db, TablesOfLogs));
 
-        var zone = new FarmingZone { CooperativeId = await OldSchemaRows.CooperativeAsync(db), Code = "KV01", Name = "A" };
-        var cycle = new CultivationCycle { Raft = new Raft { Zone = zone, Code = "B01", Size = "1" }, StartDate = new DateOnly(2026, 1, 1) };
+        // The zone, raft and cycle are rows of the old schema: the entities have columns that later migrations add.
+        var (_, _, cycleId) = await OldSchemaRows.OpenCycleRowsAsync(db, await OldSchemaRows.CooperativeAsync(db));
         var account = new Account { Username = "owner", DisplayName = "Owner", SubjectType = SubjectType.CooperativeOwner, StatusId = StatusIds.Account.Active };
-        db.AddRange(cycle, account);
+        db.Add(account);
         await db.SaveChangesAsync();
 
         await migrator.MigrateAsync();
@@ -61,7 +61,7 @@ public class CultivationLogsMigrationTests
 
         var log = new CultivationLog
         {
-            CycleId = cycle.Id, VisitDate = new DateOnly(2026, 2, 1), RecordedByAccountId = account.Id,
+            CycleId = cycleId, VisitDate = new DateOnly(2026, 2, 1), RecordedByAccountId = account.Id,
             Photos = [new CultivationLogPhoto { SortOrder = 1, FileKey = "cultivation-log-photos/2026/02/a.jpg" }],
         };
         db.CultivationLogs.Add(log);
