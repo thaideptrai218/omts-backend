@@ -35,9 +35,9 @@ public class PublicProvenanceQaSqlServerTests
         var cycleId = (await owner.StartCycleAsync(raftId, new CycleBody(Today.AddDays(-10)))).Id();
         var seed = await owner.SeedLotAsync(quantity: 500m);
         var otherSeed = await owner.SeedLotAsync(quantity: 500m);
-        await owner.SeedingRecordAsync(cycleId, seed.Session(Enumerable.Range(1, ManyLots).ToList(), date: Today.AddDays(-5)));
-        // Lane 1 re-hung two days later with seed of another item (BR-CYCLE-02 re-hanging).
-        await owner.SeedingRecordAsync(cycleId, otherSeed.Session([1], date: Today.AddDays(-3)));
+        await owner.SeedingRecordAsync(cycleId, seed.Session(Enumerable.Range(1, ManyLots).ToList(), date: Today.AddDays(-5)).Percents(50m, 1));
+        // Lane 1 re-hung two days later with seed of another item (BR-CYCLE-02 re-hanging); a lane never holds more than 100 %, so the two sessions share it.
+        await owner.SeedingRecordAsync(cycleId, otherSeed.Session([1], date: Today.AddDays(-3)).Percents(50m, 1));
         var lotIds = new List<Guid>();
         for (var lane = 1; lane <= ManyLots; lane++)
         {
@@ -48,8 +48,9 @@ public class PublicProvenanceQaSqlServerTests
         {
             foreach (var lotId in lotIds)
             {
-                db.HarvestLotPhotos.Add(new HarvestLotPhoto { LotId = lotId, SortOrder = 1, FileKey = $"{FileCategories.HarvestLotPhotos}/2026/11/{Guid.NewGuid():N}.jpg" });
                 db.HarvestLotPhotos.Add(new HarvestLotPhoto { LotId = lotId, SortOrder = 2, FileKey = $"{FileCategories.HarvestLotPhotos}/2026/11/{Guid.NewGuid():N}.jpg" });
+                // Each lot was recorded with one photo (a new lot needs one since 12/11/2026), so the two of the test follow it.
+                db.HarvestLotPhotos.Add(new HarvestLotPhoto { LotId = lotId, SortOrder = 3, FileKey = $"{FileCategories.HarvestLotPhotos}/2026/11/{Guid.NewGuid():N}.jpg" });
             }
 
             db.RaftPhotos.Add(new RaftPhoto { RaftId = raftId, SortOrder = 1, FileKey = $"{FileCategories.RaftPhotos}/2026/11/{Guid.NewGuid():N}.jpg" });
@@ -79,7 +80,7 @@ public class PublicProvenanceQaSqlServerTests
         var items = await host.QueryAsync(db => db.FarmingInputItems.Where(i => i.Id == seed.ItemId || i.Id == otherSeed.ItemId).ToDictionaryAsync(i => i.Id, i => i.Name));
         Assert.Equal([(Today.AddDays(-5), items[seed.ItemId]), (Today.AddDays(-3), items[otherSeed.ItemId])],
             first.GetProperty("seedings").EnumerateArray().Select(s => (s.Date("seedingDate"), s.Text("seedItemName"))));
-        Assert.Equal((5, 2, 1), (first.GetProperty("daysOfFarming").GetInt32(), first.GetProperty("harvestPhotoUrls").GetArrayLength(), first.GetProperty("raftPhotoUrls").GetArrayLength()));
+        Assert.Equal((5, 3, 1), (first.GetProperty("daysOfFarming").GetInt32(), first.GetProperty("harvestPhotoUrls").GetArrayLength(), first.GetProperty("raftPhotoUrls").GetArrayLength()));
         Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetProvenanceAsync(manyToken.ToLowerInvariant() == manyToken ? manyToken.ToUpperInvariant() : manyToken.ToLowerInvariant())).StatusCode);
     }
 
