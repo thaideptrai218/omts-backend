@@ -76,7 +76,7 @@ public sealed partial class CultivationCycleService
             return AppError.InvalidFields(check.Invalid.Distinct().ToList());
         }
 
-        var files = StepPhotoService.Read(photos, otherFilePart: request.OtherFilePart, minimum: StepPhotoService.MinPhotos);
+        var files = StepPhotoService.Read(photos, otherFilePart: request.OtherFilePart, minimum: 0);
         if (!files.IsSuccess)
         {
             return files.Error!;
