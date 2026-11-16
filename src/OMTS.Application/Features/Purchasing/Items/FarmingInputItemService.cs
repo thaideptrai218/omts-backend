@@ -1,4 +1,4 @@
-using OMTS.Application.Common;
+﻿using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Exceptions;
@@ -149,7 +149,7 @@ public sealed class FarmingInputItemService(
         }
 
         audit.Record(new AuditEntry("FarmingInputItem.Created", RecordType) { RecordId = item.Id, RecordCode = item.Code, After = Snapshot(item, planned.Plans!) });
-        if (await SaveAsync(values.Name, item.Id, cancellationToken) is { } error)
+        if (await SaveAsync(values.Name, item.Code, item.Id, cancellationToken) is { } error)
         {
             return error;
         }
@@ -225,7 +225,7 @@ public sealed class FarmingInputItemService(
             audit.Record(new AuditEntry("FarmingInputItem.Updated", RecordType) { RecordId = item.Id, RecordCode = item.Code, Before = changedBefore, After = changedAfter });
         }
 
-        if (await SaveAsync(values.Name, item.Id, cancellationToken) is { } error)
+        if (await SaveAsync(values.Name, item.Code, item.Id, cancellationToken) is { } error)
         {
             return error;
         }
@@ -268,7 +268,12 @@ public sealed class FarmingInputItemService(
 
         var photo = new InputItemPhoto { ItemId = item.Id, StorageKey = uploaded.Key!, SortOrder = item.Photos.Select(p => p.SortOrder).DefaultIfEmpty(-1).Max() + 1 };
         items.AddPhoto(photo);
-        item.Photos.Add(photo);
+        // Adding the photo to the context already attaches it to the tracked item (the foreign key is set), so adding it again would list it twice in the answer and in the count of the audit.
+        if (!item.Photos.Contains(photo))
+        {
+            item.Photos.Add(photo);
+        }
+
         audit.Record(new AuditEntry("FarmingInputItem.Updated", RecordType)
         {
             RecordId = item.Id, RecordCode = item.Code, Before = new { Photos = item.Photos.Count - 1 }, After = new { Photos = item.Photos.Count },
@@ -352,7 +357,7 @@ public sealed class FarmingInputItemService(
         await items.FindByNameAsync(name, itemId, cancellationToken) is { } sameName ? AppError.AlreadyExists(ObjectName, sameName.Id, "Name") : null;
 
     /// <summary>The second of two parallel saves with one code, name or unit code gets MSG-GEN-02, like the pre-check.</summary>
-    private async Task<AppError?> SaveAsync(string name, Guid itemId, CancellationToken cancellationToken)
+    private async Task<AppError?> SaveAsync(string name, string code, Guid itemId, CancellationToken cancellationToken)
     {
         try
         {
@@ -362,7 +367,10 @@ public sealed class FarmingInputItemService(
         catch (DuplicateRecordException)
         {
             unitOfWork.DiscardChanges();
-            return await DuplicateNameAsync(name, itemId, cancellationToken) ?? AppError.Conflict(UserMessages.AlreadyExists(ObjectName));
+            // The name first, then the item code or a unit code, so the loser is told which record won and which entry clashed.
+            return await DuplicateNameAsync(name, itemId, cancellationToken)
+                ?? await codes.DuplicateAsync(code, itemId, null, cancellationToken)
+                ?? AppError.Conflict(UserMessages.AlreadyExists(ObjectName));
         }
     }
 

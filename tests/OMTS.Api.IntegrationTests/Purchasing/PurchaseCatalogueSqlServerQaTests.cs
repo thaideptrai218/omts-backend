@@ -50,22 +50,22 @@ public class PurchaseCatalogueSqlServerQaTests
         await using var host = await FarmingHost.StartAsync();
         var first = host.Owner.Client;
         var second = await host.LoginAsync((await host.Api.AddAccountAsync(NewCode(), Password)).Username);
-        Assert.Equal("VT001", await ProposedAsync(first));
-        Assert.Equal("VT001", await ProposedAsync(second));
+        Assert.Equal("VT000001", await ProposedAsync(first));
+        Assert.Equal("VT000001", await ProposedAsync(second));
 
-        // Both Add item forms hold VT001 (one typed in lower case); the Owners save at the same time.
+        // Both Add item forms hold VT000001 (one typed in lower case); the Owners save at the same time.
         var responses = await InParallelAsync(4, i => (i % 2 == 0 ? first : second).PostAsJsonAsync(Items, new
         {
-            code = i < 2 ? "VT001" : "vt001", name = $"Găng tay {i} {NewCode()}", group = "Other", unit = "đôi",
+            code = i < 2 ? "VT000001" : "vt000001", name = $"Găng tay {i} {NewCode()}", group = "Material", unit = "đôi",
         }));
 
         var winnerId = await WinnerAsync(responses, HttpStatusCode.Created, "Code");
-        Assert.Equal("VT002", await ProposedAsync(second));
+        Assert.Equal("VT000002", await ProposedAsync(second));
 
         // GBR-03: the code of a discontinued item stays reserved, for the proposal and for a typed code.
         await (await first.PostAsync($"{Items}/{winnerId}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal("VT002", await ProposedAsync(first));
-        var again = await second.PostAsJsonAsync(Items, new { code = "Vt001", name = $"Găng tay {NewCode()}", group = "Other", unit = "đôi" });
+        Assert.Equal("VT000002", await ProposedAsync(first));
+        var again = await second.PostAsJsonAsync(Items, new { code = "Vt000001", name = $"Găng tay {NewCode()}", group = "Material", unit = "đôi" });
         var problem = await again.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02");
         Assert.Equal((winnerId, "Code"), (problem.GetProperty("existingId").GetGuid(), problem.GetProperty("field").GetString()));
     }
@@ -116,11 +116,14 @@ public class PurchaseCatalogueSqlServerQaTests
         var codeProblem = await sameCode.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02");
         Assert.Equal((first, "Code"), (codeProblem.GetProperty("existingId").GetGuid(), codeProblem.GetProperty("field").GetString()));
 
-        // The proposal reads lower-case and discontinued codes, and the discontinued Seed item still sets the unit.
-        var proposal = await (await owner.GetAsync($"{Items}/next-code")).ReadAsync(HttpStatusCode.OK);
-        Assert.Equal(("VT121", "con"), (proposal.GetProperty("code").GetString(), proposal.GetProperty("seedUnit").GetString()));
-        var kg = await owner.PostAsJsonAsync(Items, new { code = "VT121", name = $"Hàu giống Cổ Trai {tag}", group = "Seed", unit = "kg" });
-        Assert.Equal("con", (await kg.ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01")).GetProperty("seedUnit").GetString());
+        // The proposal skips a generated code that a discontinued item holds (typed in lower case here, which SQL Server compares without case). Seed items may count in different units since
+        // 13/11/2026 (units with factors), so a second seed item in kg is saved and the proposal has no seed unit any more.
+        var held = await owner.PostAsJsonAsync(Items, new { code = "gi000001", name = $"Hàu giống giữ mã {tag}", group = "Seed", unit = "con" });
+        var heldId = (await held.ReadAsync(HttpStatusCode.Created)).Id();
+        await (await owner.PostAsync($"{Items}/{heldId}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
+        var proposal = await (await owner.GetAsync($"{Items}/next-code?group=Seed")).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal("GI000002", proposal.GetProperty("code").GetString());
+        await (await owner.PostAsJsonAsync(Items, new { code = "VT121", name = $"Hàu giống Cổ Trai {tag}", group = "Seed", unit = "kg" })).ReadAsync(HttpStatusCode.Created);
     }
 
     // BR-PURCHASE-10: "All seed items use one unit: the Cooperative Owner chooses it with the first seed item". The check
@@ -302,14 +305,15 @@ public class PurchaseCatalogueSqlServerQaTests
         foreach (var loser in responses.Except(winners))
         {
             var problem = await loser.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02");
-            Assert.Equal((winnerId, field), (problem.GetProperty("existingId").GetGuid(), problem.GetProperty("field").GetString()));
+            Assert.True(problem.TryGetProperty("existingId", out var existingId), problem.ToString());
+            Assert.Equal((winnerId, field), (existingId.GetGuid(), problem.GetProperty("field").GetString()));
         }
 
         return winnerId;
     }
 
-    private static async Task<string> ProposedAsync(HttpClient owner) =>
-        (await (await owner.GetAsync($"{Items}/next-code")).ReadAsync(HttpStatusCode.OK)).GetProperty("code").GetString()!;
+    private static async Task<string> ProposedAsync(HttpClient owner, string group = "Material") =>
+        (await (await owner.GetAsync($"{Items}/next-code?group={group}")).ReadAsync(HttpStatusCode.OK)).GetProperty("code").GetString()!;
 
     private static string MigrationBefore(DbContext db)
     {
