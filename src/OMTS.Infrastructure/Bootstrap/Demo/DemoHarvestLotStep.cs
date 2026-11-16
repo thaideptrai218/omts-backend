@@ -28,7 +28,10 @@ internal sealed class DemoHarvestLotStep : IDemoSeedStep
     {
         // A lot is recorded for a purchase request (decision of 11/11/2026): the demo trader's Accepted one, whose harvest is not marked done.
         var order = await context.Db.PurchaseRequests.AsNoTracking()
-            .Where(r => r.StatusId == StatusIds.PurchaseRequest.Accepted && r.HarvestCompletedAt == null)
+            .Where(r => r.StatusId == StatusIds.PurchaseRequest.Accepted && r.HarvestCompletedAt == null
+                // Only the big order of DemoPurchaseRequestStep holds the lots of the demo rafts. A smaller one that DemoOpenHarvestRequestStep adds is for the Owner to harvest through the API and would refuse
+                // them (product or cages), as on a rerun after a real SMS sender left the first requests unanswered.
+                && r.AcceptedCages >= DemoPurchaseRequestStep.DemoHarvestOrderCages)
             .OrderBy(r => r.AgreedPickupDate).ThenBy(r => r.SentAt)
             .Select(r => (Guid?)r.Id)
             .FirstOrDefaultAsync(cancellationToken);
