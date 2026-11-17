@@ -17,9 +17,6 @@ internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<Sales
         builder.HasOne(x => x.SalesOrder).WithMany().HasForeignKey(x => x.SalesOrderId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(x => x.SalesOrderId);
         builder.Property(x => x.Note).HasMaxLength(Lengths.Reason);
-        builder.HasOne(x => x.PortWeighing).WithMany(w => w.Invoices).HasForeignKey(x => x.PortWeighingId);
-        // One Completed invoice per weighing; a cancelled one frees it.
-        builder.HasIndex(x => x.PortWeighingId).IsUnique().HasFilter($"[PortWeighingId] IS NOT NULL AND [StatusId] = {StatusIds.SalesInvoice.Completed}");
         builder.HasOne(x => x.Status).WithMany().HasForeignKey(x => x.StatusId);
         builder.ReferencesAccount(nameof(SalesInvoice.CreatedByAccountId));
         builder.ReferencesAccount(nameof(SalesInvoice.CancelledByAccountId));
@@ -47,7 +44,6 @@ internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<Sales
             t.HasCheckConstraint("CK_SalesInvoice_Amounts", "[DiscountAmount] >= 0 AND [OtherCharges] >= 0 AND [Subtotal] >= 0 AND [PriceCutTotal] >= 0");
             t.HasCheckConstraint("CK_SalesInvoice_Total", "[Total] >= 0 AND [Total] = [Subtotal] - [DiscountAmount] + [OtherCharges] - [PriceCutTotal]");
             t.HasCheckConstraint("CK_SalesInvoice_Request_Has_Customer", "[PurchaseRequestId] IS NULL OR [CustomerId] IS NOT NULL");
-            t.HasCheckConstraint("CK_SalesInvoice_Weighing_Has_Request", "[PortWeighingId] IS NULL OR [PurchaseRequestId] IS NOT NULL");
             t.HasCheckConstraint("CK_SalesInvoice_PayLater_Has_Customer", "[PaymentTerm] <> 'PayLater' OR [CustomerId] IS NOT NULL");
         });
     }

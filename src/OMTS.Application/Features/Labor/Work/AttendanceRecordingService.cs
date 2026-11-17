@@ -61,7 +61,13 @@ public sealed class AttendanceRecordingService(
             return AppError.NotFound;
         }
 
-        if (!await zones.AllowsAsync(PermissionFunctions.Attendance, PermissionAction.Create, assignment.ZoneId, cancellationToken))
+        // The row names the first job period of the day; the worker may have been moved since. Attendance belongs to the zone of the CURRENT period, so that is the zone checked (a1 to a3 of the
+        // review of 13/11/2026), the same period the crew start reads.
+        var periods = await assignments.ListOfEmployeesAsync([assignment.EmployeeId], assignment.Date, cancellationToken);
+        var currentZone = periods.Count == 0
+            ? assignment.ZoneId
+            : periods.OrderBy(p => p.StartsAt is null ? 0 : 1).ThenBy(p => p.StartsAt).Last().ZoneId;
+        if (!await zones.AllowsAsync(PermissionFunctions.Attendance, PermissionAction.Create, currentZone, cancellationToken))
         {
             return AppError.Forbidden;
         }
@@ -73,7 +79,7 @@ public sealed class AttendanceRecordingService(
         }
 
         var employee = (await employeeReader.GetForWorkAsync([assignment.EmployeeId], cancellationToken))[0];
-        var recorded = await RecordAsync(employee, today, isCheckIn, request, assignment.ZoneId, cancellationToken);
+        var recorded = await RecordAsync(employee, today, isCheckIn, request, currentZone, cancellationToken);
         if (!recorded.IsSuccess)
         {
             return recorded.Error!;

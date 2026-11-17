@@ -13,12 +13,11 @@ namespace OMTS.Application.Features.Sales.Requests;
 
 /// <summary>
 /// The harvest mark of an Accepted request (decision of 11/11/2026): only the Cooperative Owner (API filter) marks it done once its lots
-/// are in, which closes the request to new lots and opens it to the weighing, and clears it again while the request has no weighing.
+/// are in, which closes the request to new lots, and clears it again.
 /// </summary>
 public sealed class PurchaseHarvestService(
     IPurchaseRequestRepository requests,
     IHarvestLotRepository lots,
-    IPortWeighingRepository weighings,
     PurchaseRequestViews views,
     PurchaseHarvestReader harvest,
     ICurrentUser currentUser,
@@ -86,11 +85,6 @@ public sealed class PurchaseHarvestService(
             return stale;
         }
 
-        if (await weighings.AnyOfRequestAsync(request.Id, cancellationToken))
-        {
-            return PurchaseRequestRules.WrongStatus(PurchaseRequestRules.WeighedStatus);
-        }
-
         request.HarvestCompletedAt = null;
         request.HarvestCompletedByAccountId = null;
         audit.Record(new AuditEntry("PurchaseRequest.HarvestDoneCleared", PurchaseRequestRules.RecordType)
@@ -100,7 +94,6 @@ public sealed class PurchaseHarvestService(
             Before = new { HarvestCompletedAt = markedAt },
         });
 
-        // A weighing saved in parallel marks this row changed, so one of the two saves answers MSG06.
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return await DetailAsync(request, cancellationToken);
     }

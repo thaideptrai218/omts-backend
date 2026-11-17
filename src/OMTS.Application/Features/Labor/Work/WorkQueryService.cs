@@ -27,7 +27,7 @@ public sealed class WorkQueryService(
     IAttendanceQrCodes qrCodes,
     ZoneAccessGuard zones,
     IStatusCatalog statusCatalog,
-    ICurrentUser currentUser,
+    ICurrentEmployee currentEmployee,
     TimeProvider timeProvider)
 {
     /// <summary>The longest range of My work (about two pay periods).</summary>
@@ -176,7 +176,8 @@ public sealed class WorkQueryService(
     }
 
     private async Task<Domain.Entities.Identity.Employee?> OwnEmployeeAsync(CancellationToken cancellationToken) =>
-        currentUser.AccountId is { } accountId ? await employees.GetByAccountIdAsync(accountId, cancellationToken) : null;
+        // The employee of the employee app token (LABOR-06), not of a staff account (PM decision of 17/11/2026).
+        currentEmployee.EmployeeId is { } employeeId ? await employees.GetByIdAsync(employeeId, cancellationToken) : null;
 
     private static readonly HashSet<int> EmployeeRequestStatuses =
     [

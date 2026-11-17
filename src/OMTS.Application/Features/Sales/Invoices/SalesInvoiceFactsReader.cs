@@ -10,7 +10,6 @@ using OMTS.Application.Features.Sales.Customers;
 using OMTS.Application.Features.Sales.Debts;
 using OMTS.Application.Features.Sales.Orders;
 using OMTS.Application.Features.Sales.PurchaseRequests;
-using OMTS.Application.Features.Sales.Weighings;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Harvest;
 using OMTS.Domain.Entities.Sales;

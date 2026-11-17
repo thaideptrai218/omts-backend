@@ -74,7 +74,7 @@ public class LaborProbeSqlServerTests
         Assert.Equal(DateTimeOffset.Parse(Time(PastDay, "13:00")), (await QueryAsync(api, db => db.Attendances.SingleAsync(a => a.EmployeeId == employee))).CheckOutAt);
     }
 
-    [SqlServerFact(Skip = "Finding of the review of 13/11 (OMTS-227): a correction of a day that got a record after the screen was read answers 400 MSG-GEN-01, not 409 MSG06. Remove the Skip when it is fixed.")]
+    [SqlServerFact]
     public async Task Probe_b1b_sql_a_correction_of_a_day_that_got_a_record_after_the_screen_was_read_is_refused_with_msg06()
     {
         // FAILURE MEANS: the Owner opened a day with no record (empty version), a check-in was recorded meanwhile, and the correction is answered 400 RowVersion (or overwrites the check-in) instead of 409 MSG06. Strict reading of NFR-09; the code treats an empty version of an existing record as invalid input.
@@ -93,6 +93,38 @@ public class LaborProbeSqlServerTests
 
         Assert.Equal(("MSG06", HttpStatusCode.Conflict), (await stale.ErrorCodeAsync(), stale.StatusCode));
         Assert.Equal(AttendanceMethod.Manual, (await QueryAsync(api, db => db.Attendances.SingleAsync(a => a.EmployeeId == employee))).CheckInMethod);
+    }
+
+    [SqlServerFact]
+    public async Task Probe_b3_sql_a_correction_does_not_silently_remove_a_job_period_added_after_the_screen_was_read()
+    {
+        // A new job period gives the attendance record a new row version, so the screen read before it is refused (409 MSG06) and the period survives. (In-memory has no row versions: this is the SQL Server twin.)
+        await using var database = SqlServerTestDatabase.Create();
+        await using var api = await StartAsync(database);
+        var s = await StartSetupAsync(api);
+        var raft2 = new Raft { ZoneId = s.Zone.Id, Code = $"{s.Zone.Code}-B02", Size = "1" };
+        await ChangeAsync(api, db => db.Rafts.Add(raft2));
+        var hanging = (await AddJobTypeAsync(s.Owner, $"Hanging {NewCode()}")).IdOf();
+        var employee = await NewEmployeeAsync(s);
+        var today = Today();
+        var rows = await (await AssignAsync(s.Owner, s.Raft.Id, s.Harvest, today, false, employee)).BodyAsync(HttpStatusCode.Created);
+        await (await CheckInAsync(s.Owner, RowId(rows, employee))).BodyAsync(HttpStatusCode.OK);
+        var screen = await s.Owner.GetFromJsonAsync<JsonElement>(DayUrl(employee, today));
+        var crew = await s.Owner.PostAsJsonAsync($"{Workforce}/crew-job", new { raftId = raft2.Id, jobTypeId = hanging, employeeIds = new[] { employee } });
+        Assert.Equal(HttpStatusCode.NoContent, crew.StatusCode);
+        var staleBody = new
+        {
+            checkInAt = screen.Str("checkedInAt"),
+            checkOutAt = (string?)null,
+            periods = new object[] { new { jobTypeId = s.Harvest, raftId = s.Raft.Id, startsAt = (string?)null } },
+            reason = "Fix the check-in time",
+            rowVersion = screen.Str("rowVersion"),
+        };
+
+        var stale = await s.Owner.PutAsJsonAsync(DayUrl(employee, today), staleBody);
+
+        Assert.Equal(("MSG06", HttpStatusCode.Conflict), (await stale.ErrorCodeAsync(), stale.StatusCode));
+        Assert.Equal(1, await QueryAsync(api, db => db.WorkAssignments.CountAsync(w => w.EmployeeId == employee && w.StartsAt != null)));
     }
 
     [SqlServerFact]
@@ -165,7 +197,7 @@ public class LaborProbeSqlServerTests
         }
     }
 
-    [SqlServerFact(Skip = "Finding of the review of 13/11 (OMTS-227): parallel leave requests for the same day leave several awaiting requests. Remove the Skip when it is fixed.")]
+    [SqlServerFact]
     public async Task Probe_d7_sql_parallel_leave_requests_for_the_same_day_leave_one_awaiting_request()
     {
         // FAILURE MEANS: the one-Awaiting-request-per-day-and-type rule (LABOR-10.0.E3) is only a read-then-insert check for leave (the filtered unique index covers missed times only), so parallel sends with different client operations save several requests.

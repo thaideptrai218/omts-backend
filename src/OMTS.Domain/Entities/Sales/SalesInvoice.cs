@@ -39,10 +39,6 @@ public class SalesInvoice : AuditableEntity, IHasStatus
     /// <summary>A free note of the seller, at most 1000 characters.</summary>
     public string? Note { get; set; }
 
-    /// <summary>Kept for invoices already linked to a port weighing; a new invoice is made from an order and does not set it.</summary>
-    public Guid? PortWeighingId { get; set; }
-    public PortWeighing? PortWeighing { get; set; }
-
     /// <summary>The request is Fulfilled while a Completed invoice linked to it keeps this mark (BR-SALE-01).</summary>
     public bool TakesRequestInFull { get; set; }
 
