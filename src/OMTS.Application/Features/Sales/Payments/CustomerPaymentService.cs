@@ -65,8 +65,8 @@ public sealed class CustomerPaymentService(
             .Select(a => new CustomerPaymentBankAccount(a.Id, a.BankBin!, a.ProviderName, a.AccountNumber, a.HolderName, a.IsVietQr))
             .ToList();
         return new CustomerPaymentForm(
-            new CustomerDebtCustomer(customer.Id, customer.Name, customer.PhoneNumber, customer.Code), allocation.Debt, CustomerDebtMath.OwedBack(allocation.Debt),
-            allocation.DebtAgeDays, allocation.UnpaidInvoices, collectors, banks);
+            new CustomerDebtCustomer(customer.Id, customer.Name, customer.PhoneNumber, customer.Code), allocation.Debt, CustomerDebtMath.OwedBack(allocation.DebtApartFromReserved),
+            allocation.DebtAgeDays, allocation.UnpaidInvoices, collectors, banks, allocation.ReservedAdvances);
     }
 
     public async Task<Result<CustomerPaymentDetails>> GetAsync(Guid paymentId, CancellationToken cancellationToken) =>
@@ -110,18 +110,74 @@ public sealed class CustomerPaymentService(
     public Task<Result<CustomerPaymentSaved>> CreatePendingTransferAsync(RecordCustomerPaymentRequest request, CancellationToken cancellationToken) =>
         SaveAsync(request, CustomerPaymentKind.Payment, CustomerPaymentMode.WaitsForTransfer, cancellationToken);
 
-    private async Task<Result<CustomerPaymentSaved>> SaveAsync(
-        RecordCustomerPaymentRequest request, CustomerPaymentKind kind, CustomerPaymentMode mode, CancellationToken cancellationToken)
+    /// <summary>
+    /// An advance on an order for money that has arrived, saved at once: cash waits for the Accountant to confirm it (Awaiting confirmation), a transfer (with its bank reference) is Completed. The money is reserved
+    /// for the order while it is open (<see cref="CustomerDebtAllocator"/>). The customer of the order is the payer; an advance carries no discount and names no invoice.
+    /// </summary>
+    public Task<Result<CustomerPaymentSaved>> RecordOrderAdvanceAsync(SalesOrder order, RecordCustomerPaymentRequest request, CancellationToken cancellationToken) =>
+        SaveAsync(request with { CustomerId = order.CustomerId, Allocations = null, DiscountAmount = 0m }, CustomerPaymentKind.Payment, CustomerPaymentMode.OrderAdvance, cancellationToken, order);
+
+    /// <summary>The same advance as a VietQR code that waits for the transfer of the customer (it counts nowhere until the transfer arrives).</summary>
+    public Task<Result<CustomerPaymentSaved>> CreateOrderAdvanceTransferAsync(SalesOrder order, RecordCustomerPaymentRequest request, CancellationToken cancellationToken) =>
+        SaveAsync(request with { CustomerId = order.CustomerId, Allocations = null, DiscountAmount = 0m }, CustomerPaymentKind.Payment, CustomerPaymentMode.WaitsForTransfer, cancellationToken, order);
+
+    /// <summary>
+    /// The advance of an order that is being saved: checked and added to the unit of work of the caller with its audit row, but not saved, so the order and its advance are one save. The caller reads the payment again
+    /// after the save (<see cref="ICustomerPaymentRepository.GetAsync"/>) for its view and, for a payment that waits for its transfer, its VietQR code (<see cref="QrOf"/>).
+    /// </summary>
+    public async Task<Result<CustomerPayment>> StageOrderAdvanceAsync(SalesOrder order, RecordCustomerPaymentRequest request, bool waitsForTransfer, CancellationToken cancellationToken)
     {
-        var waitsForTransfer = mode == CustomerPaymentMode.WaitsForTransfer;
+        var staged = await StageAsync(
+            request with { CustomerId = order.CustomerId, Allocations = null, DiscountAmount = 0m, DeduplicationKey = null }, CustomerPaymentKind.Payment,
+            waitsForTransfer ? CustomerPaymentMode.WaitsForTransfer : CustomerPaymentMode.OrderAdvance, order, cancellationToken);
+        return staged.IsSuccess ? staged.Value!.Payment : staged.Error!;
+    }
+
+    private async Task<Result<CustomerPaymentSaved>> SaveAsync(
+        RecordCustomerPaymentRequest request, CustomerPaymentKind kind, CustomerPaymentMode mode, CancellationToken cancellationToken, SalesOrder? order = null)
+    {
         var key = CustomerPaymentRules.Trimmed(request.DeduplicationKey);
         if (key is not null && await FirstOfKeyAsync(key, cancellationToken) is { } first)
         {
             return first;
         }
 
+        var staged = await StageAsync(request, kind, mode, order, cancellationToken);
+        if (!staged.IsSuccess)
+        {
+            return staged.Error!;
+        }
+
+        var (payment, debtAfter, waitsForTransfer) = staged.Value!;
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception exception) when (key is not null && exception is DuplicateRecordException or ConcurrencyConflictException)
+        {
+            // A parallel request with the same key was saved first: this one created nothing. With no payment of the key, another save won: MSG06, the key stays free.
+            if (await FirstOfKeyAsync(key, cancellationToken) is { } saved)
+            {
+                return saved;
+            }
+
+            throw;
+        }
+
+        var written = await payments.GetAsync(payment.Id, cancellationToken) ?? payment;
+        return await views.SavedAsync(written, debtAfter, cancelled: false, cancellationToken, waitsForTransfer ? QrOf(written) : null);
+    }
+
+    private sealed record StagedPayment(CustomerPayment Payment, decimal DebtAfter, bool WaitsForTransfer);
+
+    /// <summary>Everything of a save but the save itself: the checks, the payment, its audit row and the notice to the Owner, all in the unit of work of the caller.</summary>
+    private async Task<Result<StagedPayment>> StageAsync(
+        RecordCustomerPaymentRequest request, CustomerPaymentKind kind, CustomerPaymentMode mode, SalesOrder? order, CancellationToken cancellationToken)
+    {
+        var waitsForTransfer = mode == CustomerPaymentMode.WaitsForTransfer;
+        var key = CustomerPaymentRules.Trimmed(request.DeduplicationKey);
         var now = timeProvider.GetUtcNow();
-        var invalid = CustomerPaymentRules.InvalidFields(request, now, kind, mode);
+        var invalid = CustomerPaymentRules.InvalidFields(request, now, kind, mode, forOrder: order is not null);
         var customer = request.CustomerId is { } customerId ? await customers.GetForEditAsync(customerId, cancellationToken) : null;
         if (customer is null)
         {
@@ -161,20 +217,29 @@ public sealed class CustomerPaymentService(
         var discount = kind == CustomerPaymentKind.Payment ? request.DiscountAmount : 0m;
         var reading = await debts.AllocationAsync(customer.Id, cancellationToken);
         var debt = reading.Debt;
-        var refused = kind == CustomerPaymentKind.PaidBack
-            ? CustomerPaymentRules.PaidBackAboveOwedBack(customer.Name, debt, amount)
-            : mode == CustomerPaymentMode.FromCashVoucher
-                ? CountInDebtRefusal(debt, amount)
-                : CustomerPaymentRules.AboveDebtQuestion(customer.Name, debt, amount + discount, request.ConfirmAboveDebt);
+        // What the customer owes on invoices, or the credit that is really free: the money reserved for open orders is neither owed back nor a debt to pay down, so the limits below read the debt apart from it.
+        var limitDebt = reading.DebtApartFromReserved;
+        var refused = order is not null
+            ? null
+            : kind == CustomerPaymentKind.PaidBack
+                ? CustomerPaymentRules.PaidBackAboveOwedBack(customer.Name, limitDebt, amount)
+                : mode == CustomerPaymentMode.FromCashVoucher
+                    ? CountInDebtRefusal(limitDebt, amount)
+                    : CustomerPaymentRules.AboveDebtQuestion(customer.Name, limitDebt, amount + discount, request.ConfirmAboveDebt);
         if (refused is not null)
         {
             return refused;
         }
 
-        var parts = AllocationParts(request, kind, amount + discount, reading, waitsForTransfer || (mode == CustomerPaymentMode.FromCashVoucher && request.Allocations is null), out var partError);
-        if (partError is not null)
+        // An advance on an order names no invoice: its money is held for the invoices made from that order.
+        IReadOnlyList<(Guid InvoiceId, decimal Amount)> parts = [];
+        if (order is null)
         {
-            return partError;
+            parts = AllocationParts(request, kind, amount + discount, reading, waitsForTransfer || (mode == CustomerPaymentMode.FromCashVoucher && request.Allocations is null), out var partError);
+            if (partError is not null)
+            {
+                return partError;
+            }
         }
 
         var method = waitsForTransfer ? CustomerPaymentMethod.OtherTransfer : movesMoney ? request.Method!.Value : CustomerPaymentMethod.Cash;
@@ -211,10 +276,17 @@ public sealed class CustomerPaymentService(
             RecordedByAccountId = me,
             Note = CustomerPaymentRules.Trimmed(request.Note),
             DeduplicationKey = key,
+            SalesOrderId = order?.Id,
+            SalesOrder = order,
         };
         if (waitsForTransfer)
         {
             payment.StatusId = StatusIds.CustomerPayment.PendingTransfer;
+        }
+        else if (order is not null && method == CustomerPaymentMethod.Cash)
+        {
+            // Cash taken for an order is Awaiting confirmation until the Accountant confirms it, like the cash taken at the port with an invoice.
+            payment.StatusId = StatusIds.CustomerPayment.AwaitingConfirmation;
         }
         else
         {
@@ -240,31 +312,16 @@ public sealed class CustomerPaymentService(
                 payment.Kind, payment.CustomerId, payment.Amount, payment.DiscountAmount, payment.PaymentDate, payment.PaidAt, payment.Method, payment.BankReference,
                 payment.CashAccountId, payment.CollectedByAccountId, payment.Note, Status = statusCatalog.CodeOf(payment.StatusId),
                 Allocations = parts.Select(p => new { p.InvoiceId, p.Amount }).ToList(),
+                SalesOrderCode = order?.Code,
             },
         });
         var debtAfter = waitsForTransfer ? debt : CustomerPaymentRules.DebtAfter(debt, kind, amount, cancelled: false, discount);
-        if (!waitsForTransfer)
+        if (!waitsForTransfer && payment.StatusId == StatusIds.CustomerPayment.Completed)
         {
             await notifications.TransactionAsync(payment, cancelled: false, debtAfter, cancellationToken);
         }
 
-        try
-        {
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch (Exception exception) when (key is not null && exception is DuplicateRecordException or ConcurrencyConflictException)
-        {
-            // A parallel request with the same key was saved first: this one created nothing. With no payment of the key, another save won: MSG06, the key stays free.
-            if (await FirstOfKeyAsync(key, cancellationToken) is { } saved)
-            {
-                return saved;
-            }
-
-            throw;
-        }
-
-        var written = await payments.GetAsync(payment.Id, cancellationToken) ?? payment;
-        return await views.SavedAsync(written, debtAfter, cancelled: false, cancellationToken, waitsForTransfer ? QrOf(written) : null);
+        return new StagedPayment(payment, debtAfter, waitsForTransfer);
     }
 
     /// <summary>A receipt that counts in the debt needs a customer who owes, and at most what is owed.</summary>

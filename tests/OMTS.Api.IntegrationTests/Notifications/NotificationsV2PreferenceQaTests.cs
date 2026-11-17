@@ -115,7 +115,7 @@ public class NotificationsV2PreferenceQaTests(AuthApiFactory factory) : IClassFi
         var client = await factory.LoginAsync(staff.Username, TestPassword);
         Assert.Equal(HttpStatusCode.OK, (await client.SavePushAsync(("WATER_MEASUREMENT_OVERDUE", false))).StatusCode);
         // LABOR-03: the login code a Zone Manager issues comes back to them as EMPLOYEE_LOGIN_CODE while the pair grants LABOR_WORKERS.
-        Assert.Equal(["WORK_PLAN_REQUESTED", "WORK_PLAN_STAFF_RESPONDED", "WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "EMPLOYEE_LOGIN_CODE", "HARVEST_LOT_AUTO_CLOSE_WARNING", "CYCLE_CLOSE_REMINDER", "PURCHASE_RECEIPT_CANCELLED_ADVANCE", "CUSTOMER_MONEY_OWED_BACK"], (await client.OfferedTypesAsync()).Keys);
+        Assert.Equal(["WORK_PLAN_REQUESTED", "WORK_PLAN_STAFF_RESPONDED", "WATER_ALERT", "WATER_ALERT_WITHDRAWN", "WATER_MEASUREMENT_OVERDUE", "EMPLOYEE_LOGIN_CODE", "HARVEST_LOT_AUTO_CLOSE_WARNING", "CYCLE_CLOSE_REMINDER", "PURCHASE_RECEIPT_CANCELLED_ADVANCE", "HARVEST_PLAN_ASSIGNED", "CUSTOMER_MONEY_OWED_BACK"], (await client.OfferedTypesAsync()).Keys);
 
         var revoked = await ownerClient.PostAsJsonAsync($"/api/accounts/{staff.Id}/grants/{pair.Id}/revoke", new { reason = "Moved to the office" });
 

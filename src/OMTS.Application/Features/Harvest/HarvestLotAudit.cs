@@ -30,7 +30,6 @@ public static class HarvestLotAudit
                 lot.LotCode,
                 lot.HarvestedAt,
                 lot.HarvestDate,
-                lot.PurchaseRequestId,
                 Lanes = lot.Lanes.Select(l => l.Lane.LaneNumber).Order().ToList(),
                 FinishedLanes = lot.Lanes.Where(l => l.IsFinished).Select(l => l.Lane.LaneNumber).Order().ToList(),
                 LanePercents = LanePercents(lot),
@@ -39,6 +38,7 @@ public static class HarvestLotAudit
                 lot.EstimatedKg,
                 lot.OverPlanReason,
                 Photos = lot.Photos.OrderBy(p => p.SortOrder).Select(p => p.FileKey).ToList(),
+                ProductLines = HarvestLotProductLineService.Snapshot(lot),
                 Crew = HarvestCrewService.AuditNames(lot),
             }
             : new
@@ -46,7 +46,6 @@ public static class HarvestLotAudit
                 lot.LotCode,
                 lot.HarvestedAt,
                 lot.HarvestDate,
-                lot.PurchaseRequestId,
                 Lanes = lot.Lanes.Select(l => l.Lane.LaneNumber).Order().ToList(),
                 FinishedLanes = lot.Lanes.Where(l => l.IsFinished).Select(l => l.Lane.LaneNumber).Order().ToList(),
                 LanePercents = LanePercents(lot),
@@ -55,6 +54,7 @@ public static class HarvestLotAudit
                 lot.EstimatedKg,
                 lot.OverPlanReason,
                 Photos = lot.Photos.OrderBy(p => p.SortOrder).Select(p => p.FileKey).ToList(),
+                ProductLines = HarvestLotProductLineService.Snapshot(lot),
             };
 
     /// <summary>The share each lane took, as "lane: percent%" in lane order; "-" when nobody entered it.</summary>

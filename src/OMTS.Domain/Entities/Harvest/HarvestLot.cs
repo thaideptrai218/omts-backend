@@ -11,7 +11,7 @@ namespace OMTS.Domain.Entities.Harvest;
 /// <summary>
 /// The oysters of one harvest trip to one raft (BR-HARVEST-03), with the whole lanes harvested and the estimated kg. Its code and harvest time never change.
 /// It is for sale while Open or Reopened (BR-HARVEST-04). The estimated kg is for following the harvest and limits no sale (BR-HARVEST-02).
-/// A trip harvests for one purchase request, and a request gathers the lots of every raft it needs (decision of 11/11/2026).
+/// A lot may be recorded from a line of a harvest plan and may be split into the products it holds.
 /// </summary>
 public class HarvestLot : AuditableEntity, IHasStatus
 {
@@ -50,8 +50,7 @@ public class HarvestLot : AuditableEntity, IHasStatus
     public Guid RecordedByAccountId { get; set; }
 
     /// <summary>
-    /// The purchase request this trip harvested for (decision of 11/11/2026): required when a lot is recorded, never changed, and one request at most. Null only on lots
-    /// recorded before that decision.
+    /// Kept for the lots that already carry a purchase request. A new lot does not set it and nothing requires it: the lot is tied to the harvest plan line it was recorded from.
     /// </summary>
     public Guid? PurchaseRequestId { get; set; }
     public PurchaseRequest? PurchaseRequest { get; set; }
@@ -75,6 +74,10 @@ public class HarvestLot : AuditableEntity, IHasStatus
     /// </summary>
     public DateOnly? AutoCloseWarnedFor { get; set; }
 
+    /// <summary>The line of a harvest plan this lot was recorded from; null for a lot outside a plan. A line has at most one lot. Only a link: the lot code does not change.</summary>
+    public Guid? HarvestPlanLineId { get; set; }
+    public HarvestPlanLine? HarvestPlanLine { get; set; }
+
     public DateTimeOffset? PublishedAt { get; set; }
     public DateTimeOffset? WithdrawnAt { get; set; }
 
@@ -83,6 +86,9 @@ public class HarvestLot : AuditableEntity, IHasStatus
 
     public ICollection<HarvestLotLane> Lanes { get; set; } = [];
     public ICollection<HarvestLotPhoto> Photos { get; set; } = [];
+
+    /// <summary>The products the lot is split into; empty for a lot recorded before products. <see cref="CageCount"/> and <see cref="EstimatedKg"/> are the sums of the lines when there are any.</summary>
+    public ICollection<HarvestLotProductLine> ProductLines { get; set; } = [];
 
     /// <summary>The employees who worked on the trip, optional (decision of 12/11/2026).</summary>
     public ICollection<HarvestLotCrewMember> Crew { get; set; } = [];

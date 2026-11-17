@@ -6,6 +6,7 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
+using OMTS.Application.Features.Sales.Orders;
 using OMTS.Application.Features.Sales.Requests;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Sales;
@@ -25,6 +26,7 @@ public sealed class TraderPurchaseRequestService(
     PurchaseRequestViews views,
     IPurchaseRequestFulfilment fulfilment,
     PurchaseStaffingService staffing,
+    SalesOrderFromRequestService orderFromRequest,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
     AuditLogService audit,
@@ -38,7 +40,7 @@ public sealed class TraderPurchaseRequestService(
     /// SALE-01. The profile row is written too (<see cref="ICustomerReferences"/>): a merge at this moment conflicts, and so
     /// does a second tap on Send. A retry with the same client operation answers the request it saved, even on a later day. A
     /// product discontinued in the very moment of the save is not caught: the request names it, reserves nothing, and the Owner
-    /// declines it.
+    /// declines it. The request also makes a Draft order (see <see cref="SalesOrderFromRequestService"/>) and is Ordered when it was made.
     /// </summary>
     public async Task<Result<PurchaseRequestSaved>> PlaceAsync(Guid accountId, PlacePurchaseRequest entry, CancellationToken cancellationToken)
     {
@@ -120,6 +122,8 @@ public sealed class TraderPurchaseRequestService(
             ActorAccountId = accountId,
             After = new { Status = statusCatalog.CodeOf(request.StatusId), request.CustomerId, request.ProductId, ProductName = product.Name, request.RequestedCages, request.PickupDate, request.Note },
         });
+        // The Owner does not enter the order again: the request becomes a Draft order of the customer (source App) in the same save.
+        await orderFromRequest.CreateDraftAsync(request, accountId, cancellationToken);
         await notifications.NewRequestAsync(request, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return await SavedAsync(request, replayed: false, cancellationToken);

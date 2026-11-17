@@ -260,7 +260,7 @@ public class SalesInvoiceDetailQaTests
         var finished = (await both.FinishedAsync(created.Id(), wantsQrCode: false)).GetProperty("invoice");
         Assert.Equal(["Resend", "CreateReturn", "Print"], finished.Actions());
         Assert.Equal(["Resend", "CreateReturn", "Print"], (await both.InvoiceAsync(created.Id())).Actions());
-        Assert.Equal(["Resend", "CreateReturn", "Correct", "Cancel", "Print"], (await sale.Owner.Client.InvoiceAsync(created.Id())).Actions());
+        Assert.Equal(["Resend", "CreateReturn", "Edit", "Correct", "Cancel", "Print"], (await sale.Owner.Client.InvoiceAsync(created.Id())).Actions());
     }
 
     // The test changed by the developer (Ac_12): beside the same caller, another caller reads the same invoice, the commands apart.

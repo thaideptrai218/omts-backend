@@ -46,6 +46,11 @@ public static class FixedRoles
             new(LaborWorkers, [View, Create, Edit]),
             Full(WorkAssignments), Full(Attendance),
             Full(InputIssues),
+            Full(ProductDisposals),
+            // Every order (an order has no zone; the buyers at the port); cancelling an order is the Owner's.
+            new(SalesOrders, [View, Create, Edit]),
+            // The plans handed to its zones: it harvests from them with HARVESTS and leaves lanes out, but never makes or changes a plan.
+            new(HarvestPlans, [View]),
         ]);
 
     /// <summary>Office work, usually granted at All zones; views and exports sales invoices and purchase receipts, views lot traces.</summary>
@@ -59,6 +64,10 @@ public static class FixedRoles
             // The Accountant views and exports every input issue (the use issues of any zone, and the disposals); recording one is the Zone Manager's (use) or the Owner's.
             new(InputIssues, [View, Export]),
             Full(InputDisposals),
+            // The Accountant views and exports the product disposals of every zone it is granted; recording one is the Zone Manager's or the Owner's.
+            new(ProductDisposals, [View, Export]),
+            // The Accountant reads and exports the orders, whose advances it confirms as customer payments.
+            new(SalesOrders, [View, Export]),
             // SALE-09: the Accountant also prints and exports the invoice list and one invoice (PM answer 12/11/2026, OMTS-224 [5.1]); creating, correcting and cancelling stay with the Zone Manager and the Owner.
             new(SalesInvoices, [View, Export]),
             // PURCHASE-03 is R for the Accountant but "includes exporting to a file": view and export (lead decision, QA P2 Q1).

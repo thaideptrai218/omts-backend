@@ -10,8 +10,7 @@ using OMTS.Domain.Entities.Platform;
 namespace OMTS.Api.IntegrationTests.Harvest;
 
 /// <summary>
-/// The multipart fields of a recorded harvest; by default one lane, eight cages, no estimate, no photo, and the request the host's lots harvest for
-/// (<see cref="HarvestOrderKit"/>) unless <see cref="Order"/> names one or <see cref="WithoutOrder"/> sends none.
+/// The multipart fields of a recorded harvest; by default one lane, eight cages, no estimate and no photo (the kit adds one).
 /// </summary>
 public sealed record HarvestFields
 {
@@ -22,25 +21,27 @@ public sealed record HarvestFields
     public IReadOnlyList<byte[]> Photos { get; init; } = [];
     public string PhotoField { get; init; } = "photos";
 
+    /// <summary>The line of a harvest plan the lot is recorded from; the lanes then come from the plan.</summary>
+    public Guid? PlanLineId { get; init; }
+
+    public HarvestFields FromPlanLine(Guid lineId) => this with { PlanLineId = lineId };
+
+    /// <summary>The share of each product on the lot (product, cages, kg left empty to work it out); none keeps the old way of recording a lot.</summary>
+    public IReadOnlyList<(Guid ProductId, decimal Cages, decimal? Kg)> ProductLines { get; init; } = [];
+
+    public HarvestFields WithProducts(params (Guid ProductId, decimal Cages, decimal? Kg)[] lines) => this with { ProductLines = lines };
+
     /// <summary>The employees on the trip, one <c>crew</c> field each (decision of 12/11/2026); null sends none (a correction then keeps the crew); a single empty value clears it.</summary>
     public IReadOnlyList<string>? Crew { get; init; }
 
     /// <summary>Sends <c>replaceCrew=true</c>: the crew of a correction becomes exactly the <c>crew</c> fields, none clearing it.</summary>
     public bool ReplaceCrew { get; init; }
 
-    /// <summary>The purchase request the trip harvests for (decision of 11/11/2026).</summary>
-    public Guid? Order { get; init; }
-
-    /// <summary>Sends no purchase request, to see it refused.</summary>
-    public bool WithoutOrder { get; init; }
-
     /// <summary>Sends no photo when recording, to see it refused (the kit adds one otherwise).</summary>
     public bool NoPhoto { get; init; }
 
     /// <summary>The <c>lanePercents</c> field (lane number to percent, owner decision of 12/11/2026); null sends none.</summary>
     public IReadOnlyDictionary<int, decimal>? LanePercents { get; init; }
-
-    public HarvestFields For(Guid order) => this with { Order = order };
 
     public static HarvestFields OfLanes(params int[] lanes) => new() { Lanes = lanes.Select(n => n.ToString()).ToList() };
 
@@ -69,9 +70,20 @@ public sealed record HarvestFields
             form.Add(new StringContent(EstimatedKg), "estimatedKg");
         }
 
-        if (Order is { } order && !WithoutOrder)
+        for (var i = 0; i < ProductLines.Count; i++)
         {
-            form.Add(new StringContent(order.ToString()), "purchaseRequestId");
+            var (productId, cages, kg) = ProductLines[i];
+            form.Add(new StringContent(productId.ToString()), $"productLines[{i}].productId");
+            form.Add(new StringContent(cages.ToString(System.Globalization.CultureInfo.InvariantCulture)), $"productLines[{i}].cageCount");
+            if (kg is { } typed)
+            {
+                form.Add(new StringContent(typed.ToString(System.Globalization.CultureInfo.InvariantCulture)), $"productLines[{i}].kg");
+            }
+        }
+
+        if (PlanLineId is { } planLine)
+        {
+            form.Add(new StringContent(planLine.ToString()), "harvestPlanLineId");
         }
 
         if (LanePercents is not null)
@@ -107,11 +119,6 @@ public static class HarvestTestKit
     public static async Task<HttpResponseMessage> PostHarvestAsync(this HttpClient client, Guid raftId, HarvestFields? fields = null)
     {
         fields ??= new HarvestFields();
-        if (fields.Order is null && !fields.WithoutOrder)
-        {
-            fields = fields.For(await HarvestOrderKit.DefaultOrderAsync(client));
-        }
-
         // A new lot needs 1 to 3 on-site photos (owner decision of 12/11/2026): a test that sends none gets one, unless it asks to see the refusal (<see cref="HarvestFields.NoPhoto"/>).
         if (fields.Photos.Count == 0 && !fields.NoPhoto)
         {

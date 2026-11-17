@@ -131,6 +131,9 @@ public static class StatusIds
         public const int Declined = 3203;
         public const int Cancelled = 3204;
         public const int AwaitingStaff = 3205;
+
+        /// <summary>The Owner turned the request into an order (Đặt hàng): the request is finished and the order carries on.</summary>
+        public const int Ordered = 3206;
     }
 
     /// <summary>STD-QUALITY-CLAIM (BR-CLAIM-02): a response cannot be changed.</summary>
@@ -183,5 +186,32 @@ public static class StatusIds
         public const int Draft = 3901;
         public const int Completed = 3902;
         public const int Cancelled = 3903;
+    }
+
+    /// <summary>A product disposal (XHS): a Draft holds no kg and is removed; Completed writes the product ledger; Cancelled counts nowhere.</summary>
+    public static class ProductDisposal
+    {
+        public const int Draft = 4301;
+        public const int Completed = 4302;
+        public const int Cancelled = 4303;
+    }
+
+    /// <summary>An order of goods (DH): a Draft is being agreed; Delivering once an invoice was saved; Completed or Cancelled end it.</summary>
+    public static class SalesOrder
+    {
+        public const int Draft = 4401;
+        public const int Delivering = 4402;
+        public const int Completed = 4403;
+        public const int Cancelled = 4404;
+    }
+
+    /// <summary>A harvest plan (KHT): a Draft is prepared by the Owner; Assigned once handed to the Zone Managers of its zone; Harvesting from the first lot or the first lane left out; Completed or Cancelled end it.</summary>
+    public static class HarvestPlan
+    {
+        public const int Draft = 4201;
+        public const int Assigned = 4202;
+        public const int Harvesting = 4203;
+        public const int Completed = 4204;
+        public const int Cancelled = 4205;
     }
 }

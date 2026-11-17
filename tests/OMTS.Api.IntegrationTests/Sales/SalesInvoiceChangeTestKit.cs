@@ -14,12 +14,36 @@ using static OMTS.Api.IntegrationTests.Sales.SalesInvoiceTestKit;
 
 namespace OMTS.Api.IntegrationTests.Sales;
 
-/// <summary>SALE-07 and SALE-08: the bodies as the clients send them, and what a correction or a cancellation leaves behind.</summary>
+/// <summary>SALE-07 and SALE-08, and the edit of an invoice: the bodies as the clients send them, and what a correction, an edit or a cancellation leaves behind.</summary>
 public static class SalesInvoiceChangeTestKit
 {
     public const string Reason = "Weighed by mistake";
 
-    public static Task<HttpResponseMessage> CorrectAsync(this HttpClient client, Guid invoiceId, object body) => client.PutAsJsonAsync($"/api/sales-invoices/{invoiceId}/correction", body);
+    /// <summary>
+    /// A price cut goes to the correction endpoint. A data entry body made by <see cref="DataEntry"/> goes to the edit of the invoice (`PUT {id}`), which took its place: the kind and the reason are not
+    /// part of an edit. A body that still names another profile or a price cut with the lines stays on the correction endpoint, which refuses it.
+    /// </summary>
+    public static Task<HttpResponseMessage> CorrectAsync(this HttpClient client, Guid invoiceId, object body)
+    {
+        if (body is Dictionary<string, object?> entry && entry.GetValueOrDefault("kind") as string == "DataEntryError" && !entry.ContainsKey("customerId") && !entry.ContainsKey("priceCutAmount"))
+        {
+            return client.EditAsync(invoiceId, entry.Where(kv => kv.Key is not ("kind" or "reason")).ToDictionary(kv => kv.Key, kv => kv.Value));
+        }
+
+        return client.PutAsJsonAsync($"/api/sales-invoices/{invoiceId}/correction", body);
+    }
+
+    public static Task<HttpResponseMessage> EditAsync(this HttpClient client, Guid invoiceId, object body) => client.PutAsJsonAsync($"/api/sales-invoices/{invoiceId}", body);
+
+    /// <summary>An edit body: every line, with the version of <paramref name="invoice"/>.</summary>
+    public static Dictionary<string, object?> Edit(JsonElement invoice, object[] lines, params Guid[] notSoldWholeLotIds) => new()
+    {
+        ["rowVersion"] = invoice.Text("rowVersion"),
+        ["lines"] = lines,
+        ["notSoldWholeLotIds"] = notSoldWholeLotIds,
+    };
+
+    public static async Task<JsonElement> EditedAsync(this HttpClient client, Guid invoiceId, object body) => await (await client.EditAsync(invoiceId, body)).ReadAsync(HttpStatusCode.OK);
 
     public static Task<HttpResponseMessage> CancelInvoiceAsync(this HttpClient client, Guid invoiceId, object body) => client.PostAsJsonAsync($"/api/sales-invoices/{invoiceId}/cancel", body);
 

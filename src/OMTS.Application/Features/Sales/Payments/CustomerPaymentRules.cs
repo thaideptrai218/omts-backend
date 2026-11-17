@@ -21,6 +21,9 @@ public enum CustomerPaymentMode
 
     /// <summary>A voucher of the cash book that counts in the debt ("Tính vào công nợ"): it has no bank reference and is for a customer whose debt allows it.</summary>
     FromCashVoucher,
+
+    /// <summary>An advance on an order for money that has arrived (cash, or a transfer with its bank reference): it names the order, no invoice, and no discount.</summary>
+    OrderAdvance,
 }
 
 /// <summary>
@@ -38,9 +41,12 @@ public static class CustomerPaymentRules
     /// Every missing or invalid field (MSG-GEN-01), the customer, the person who collected and the invoices of the allocations apart. A payment with no money (all discount) needs
     /// no method. <see cref="CustomerPaymentMode.WaitsForTransfer"/>: a VietQR code is made first, so it needs money, the bank account for the code, and no bank reference yet.
     /// </summary>
+    /// <param name="forOrder">The payment is an advance on an order (<see cref="CustomerPaymentMode.OrderAdvance"/>, or a VietQR code for one): it carries no discount and names no invoice.</param>
     public static List<string> InvalidFields(
-        RecordCustomerPaymentRequest request, DateTimeOffset now, CustomerPaymentKind kind = CustomerPaymentKind.Payment, CustomerPaymentMode mode = CustomerPaymentMode.Direct)
+        RecordCustomerPaymentRequest request, DateTimeOffset now, CustomerPaymentKind kind = CustomerPaymentKind.Payment, CustomerPaymentMode mode = CustomerPaymentMode.Direct,
+        bool forOrder = false)
     {
+        forOrder |= mode == CustomerPaymentMode.OrderAdvance;
         var waitsForTransfer = mode == CustomerPaymentMode.WaitsForTransfer;
         var today = BusinessClock.ToBusinessDate(now);
         var invalid = new List<string>();
@@ -70,7 +76,7 @@ public static class CustomerPaymentRules
         }
 
         var discount = request.DiscountAmount;
-        if (discount < 0 || discount > SupplierPaymentRules.MaxAmount || discount != decimal.Truncate(discount) || (discount > 0 && kind != CustomerPaymentKind.Payment))
+        if (discount < 0 || discount > SupplierPaymentRules.MaxAmount || discount != decimal.Truncate(discount) || (discount > 0 && (kind != CustomerPaymentKind.Payment || forOrder)))
         {
             invalid.Add("Discount amount");
         }
@@ -98,7 +104,7 @@ public static class CustomerPaymentRules
                 invalid.Add("Method");
             }
 
-            if (mode == CustomerPaymentMode.Direct && request.Method == CustomerPaymentMethod.OtherTransfer
+            if (mode is CustomerPaymentMode.Direct or CustomerPaymentMode.OrderAdvance && request.Method == CustomerPaymentMethod.OtherTransfer
                 && Trimmed(request.BankReference)?.Length is null or > SupplierPaymentRules.MaxBankReferenceLength)
             {
                 invalid.Add("Bank reference");
@@ -116,6 +122,11 @@ public static class CustomerPaymentRules
         }
 
         invalid.AddRange(InvalidAllocations(request, kind));
+        if (forOrder && request.Allocations is { Count: > 0 })
+        {
+            invalid.Add("Allocations");
+        }
+
         return invalid;
     }
 

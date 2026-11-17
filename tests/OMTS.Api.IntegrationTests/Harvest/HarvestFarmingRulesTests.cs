@@ -330,17 +330,17 @@ public class HarvestFarmingRulesTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal(125m, closedBody.GetProperty("summary").Kg("kgHarvested"));
     }
 
-    private static async Task<MultipartFormDataContent> WithConfirmationAsync(HttpClient client, HarvestFields fields, string confirm, string? reason)
+    private static Task<MultipartFormDataContent> WithConfirmationAsync(HttpClient client, HarvestFields fields, string confirm, string? reason)
     {
         // A new lot needs 1 to 3 on-site photos (owner decision of 12/11/2026).
-        var form = (fields.Photos.Count == 0 ? fields with { Photos = [FarmingTestKit.Jpeg] } : fields).For(await HarvestOrderKit.DefaultOrderAsync(client)).ToForm();
+        var form = (fields.Photos.Count == 0 ? fields with { Photos = [FarmingTestKit.Jpeg] } : fields).ToForm();
         form.Add(new StringContent(confirm), "confirmOverPlan");
         if (reason is not null)
         {
             form.Add(new StringContent(reason), "overPlanReason");
         }
 
-        return form;
+        return Task.FromResult(form);
     }
 
 }

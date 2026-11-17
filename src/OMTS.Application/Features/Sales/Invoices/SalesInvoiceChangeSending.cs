@@ -47,6 +47,9 @@ public sealed class SalesInvoiceChangeSending(
         return await sending.AnswerAsync(invoiceId, row, notSent, [], CancellationToken.None);
     }
 
+    /// <summary>An edited invoice: nothing is sent to the trader again; the answer carries the sending status the invoice already has.</summary>
+    public Task<SalesInvoiceSent> CurrentAsync(Guid invoiceId) => sending.CurrentAsync(invoiceId, CancellationToken.None);
+
     // The correction is committed: if even this row cannot be saved, the failure is only logged (GFR-06).
     private async Task RecordNotQueuedAsync(Guid invoiceId)
     {

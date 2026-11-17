@@ -18,23 +18,36 @@ namespace OMTS.Api.Controllers;
 [Authorize]
 public sealed class SalesInvoicesController(
     SalesInvoiceService invoices, SalesInvoiceReadService reads, SalesInvoiceSendingService sending, SalesInvoiceSearchService search, SalesInvoiceExportService exports,
-    SalesInvoiceCorrectionService corrections, SalesInvoiceCancellationService cancellations, PendingSaleService pendingSales) : ControllerBase
+    SalesInvoiceCorrectionService corrections, SalesInvoiceCancellationService cancellations, SalesInvoiceEditService edits, SalesInvoiceCodeService codes, PendingSaleService pendingSales)
+    : ControllerBase
 {
     /// <summary>
-    /// SALE-07, Owner only: a correction of a data entry error, or a price cut after a claim. 409 MSG-SALE-17/19 asks a question, answered by the flag in <c>confirmationField</c>;
-    /// 409 MSG-SALE-20 (a sales return), MSG-SALE-21 (walk-in total raised), MSG-GEN-09 (Cancelled or a lot no longer for sale), MSG06 (the row version is stale). The invoice is sent again.
+    /// SALES_INVOICES Edit (the Owner until the right is given to another role): changes a Completed invoice like a purchase receipt: the code, every line, the discount, the other charges and the note;
+    /// the customer and the zone stay. 409 MSG-SALE-17 asks a question (<c>confirmOwedBack</c>); 409 MSG-SALE-20 (a sales return), MSG-SALE-21 (walk-in total raised), MSG-GEN-02 (the code is taken),
+    /// MSG-GEN-09 (Cancelled or a lot no longer for sale), MSG06 (the row version is stale). The invoice is sent again.
+    /// </summary>
+    [HttpPut("{id:guid}")]
+    [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Edit, PermissionScope.AnyZone)]
+    [ProducesResponseType<SalesInvoiceSent>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Edit(Guid id, EditSalesInvoiceRequest request, CancellationToken cancellationToken) =>
+        (await edits.EditAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// SALE-07, SALES_INVOICES Edit: a price cut after a claim (<c>kind</c> PriceCutAfterClaim); a data entry error is changed with PUT of the invoice (400 with a hint). 409 MSG-SALE-17/19 asks a question,
+    /// answered by the flag in <c>confirmationField</c>; 409 MSG-SALE-20 (a sales return), MSG-GEN-09 (Cancelled), MSG06 (the row version is stale). The invoice is sent again.
     /// </summary>
     [HttpPut("{id:guid}/correction")]
-    [RequireCooperativeOwner]
+    [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Edit, PermissionScope.AnyZone)]
     [ProducesResponseType<SalesInvoiceSent>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Correct(Guid id, CorrectSalesInvoiceRequest request, CancellationToken cancellationToken) =>
         (await corrections.CorrectAsync(id, request, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>
-    /// SALE-08, Owner only: cancels the invoice with a reason. 409 MSG-SALE-23/19/17 asks a question, answered by the field in <c>confirmationField</c>; 409 MSG-SALE-20, MSG-GEN-09, MSG06.
+    /// SALE-08, SALES_INVOICES Delete (the Owner until the right is given to another role): cancels the invoice with a reason; the stock goes back, the lots it closed reopen, the advance of its order
+    /// is the order's again and a Completed order is Delivering. 409 MSG-SALE-23/19/17 asks a question, answered by the field in <c>confirmationField</c>; 409 MSG-SALE-20, MSG-GEN-09, MSG06.
     /// </summary>
     [HttpPost("{id:guid}/cancel")]
-    [RequireCooperativeOwner]
+    [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Delete, PermissionScope.AnyZone)]
     [ProducesResponseType<SalesInvoiceSent>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Cancel(Guid id, CancelSalesInvoiceRequest request, CancellationToken cancellationToken) =>
         (await cancellations.CancelAsync(id, request, cancellationToken)).ToActionResult(Ok);
@@ -59,7 +72,8 @@ public sealed class SalesInvoicesController(
         (await exports.PrintAsync(id, cancellationToken)).ToActionResult(f => File(f.Content, f.ContentType, f.FileName));
 
     /// <summary>
-    /// 201 with the Completed invoice, the change and MSG-SALE-06; with <c>payment.rest = VietQr</c> (all, or the rest after a cash part), 202 with the sale awaiting its transfer
+    /// Makes an invoice from an order (<c>salesOrderId</c>, required): its customer and zone are the order's, its lines name the order lines they deliver. 201 with the Completed invoice, the change,
+    /// the order after the save (<c>order</c>, <c>orderCanFinish</c>: the web asks "Kết thúc đơn đặt hàng?" and calls POST sales-orders/{id}/finish) and MSG-SALE-06; with <c>payment.rest = VietQr</c> (all, or the rest after a cash part), 202 with the sale awaiting its transfer
     /// and its VietQR code (poll <c>GET pending/{code}</c>); 409 MSG-SALE-10/11/12 asks a question, answered by the flag named in <c>confirmationField</c> in the same request;
     /// 409 MSG-SALE-13 without a receiving bank account; 409 MSG-GEN-09 names a lot no longer for sale or a request no longer open.
     /// </summary>
@@ -138,10 +152,17 @@ public sealed class SalesInvoicesController(
     public async Task<IActionResult> Resend(Guid id, CancellationToken cancellationToken) =>
         (await sending.ResendAsync(id, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>SALE-05.3: the requests of the profile an invoice can be linked to.</summary>
+    /// <summary>The code the next invoice would get (<c>{ code }</c>), without spending its number.</summary>
+    [HttpGet("next-code")]
+    [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Create, PermissionScope.AnyZone)]
+    public async Task<IActionResult> NextCode(CancellationToken cancellationToken) => Ok(new { code = await codes.PeekAsync(cancellationToken) });
+
+    /// <summary>
+    /// Deprecated: an invoice is made from an order, not from a purchase request, so this answers an empty list (the route stays so an older web does not get 404). The request becomes an order with
+    /// <c>POST api/sales-orders</c> and <c>purchaseRequestId</c>.
+    /// </summary>
     [HttpGet("open-purchase-requests")]
     [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Create, PermissionScope.AnyZone)]
     [ProducesResponseType<IReadOnlyList<OpenPurchaseRequestView>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> OpenPurchaseRequests(Guid customerId, CancellationToken cancellationToken) =>
-        (await reads.OpenRequestsAsync(customerId, cancellationToken)).ToActionResult(Ok);
+    public IActionResult OpenPurchaseRequests(Guid customerId) => Ok(Array.Empty<OpenPurchaseRequestView>());
 }

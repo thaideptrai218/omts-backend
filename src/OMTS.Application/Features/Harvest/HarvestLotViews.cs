@@ -16,6 +16,8 @@ namespace OMTS.Application.Features.Harvest;
 /// <summary>The lot answers, with signed photo links, the figures of the sales port and the commands the caller has. Every caller has already passed the zone check on the record.</summary>
 public sealed class HarvestLotViews(
     IHarvestLotSalesQuery sales,
+    IHarvestPlanRepository harvestPlans,
+    IProductRepository products,
     ProvenanceReadiness readiness,
     IAccountRepository accounts,
     IFileStorage storage,
@@ -86,12 +88,33 @@ public sealed class HarvestLotViews(
             canRemove,
             MayClose(access, lot, raft.ZoneId),
             RowVersionGuard.Encode(lot.RowVersion),
+            ProductLines(lot, await ProductsOfAsync([lot], cancellationToken)),
+            (await PlansOfAsync([lot.Id], cancellationToken)).GetValueOrDefault(lot.Id),
             lot.OverPlanReason,
             lot.PurchaseRequestId,
             lot.PurchaseRequest?.Code,
             HarvestCrewService.ViewOf(lot),
             lot.Lanes.OrderBy(l => l.Lane.LaneNumber).Select(l => new HarvestLanePercentView(l.Lane.LaneNumber, l.HarvestedPercent)).ToList());
     }
+
+    /// <summary>The harvest plan (KHT) each lot was recorded from; a lot outside a plan is absent.</summary>
+    private async Task<IReadOnlyDictionary<Guid, HarvestLotPlanRef>> PlansOfAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) =>
+        (await harvestPlans.PlansOfLotsAsync(lotIds, cancellationToken)).ToDictionary(p => p.LotId, p => new HarvestLotPlanRef(p.PlanId, p.PlanCode));
+
+    /// <summary>The products named by the lines of the lots, read from the catalogue: a line saved in this request names its product by id only.</summary>
+    private async Task<IReadOnlyDictionary<Guid, Domain.Entities.Sales.Product>> ProductsOfAsync(IEnumerable<HarvestLot> lots, CancellationToken cancellationToken)
+    {
+        var ids = lots.SelectMany(l => l.ProductLines).Select(l => l.ProductId).Distinct().ToList();
+        return ids.Count == 0 ? new Dictionary<Guid, Domain.Entities.Sales.Product>() : (await products.GetByIdsAsync(ids, cancellationToken)).ToDictionary(p => p.Id);
+    }
+
+    /// <summary>The products of the lot in line order, with their codes; empty for a lot recorded before products.</summary>
+    private static List<HarvestLotProductLineView> ProductLines(HarvestLot lot, IReadOnlyDictionary<Guid, Domain.Entities.Sales.Product> catalogue) =>
+        lot.ProductLines.OrderBy(l => l.LineNumber).Select(l =>
+        {
+            var product = l.Product ?? catalogue.GetValueOrDefault(l.ProductId);
+            return new HarvestLotProductLineView(l.ProductId, product?.Code ?? string.Empty, product?.Name ?? string.Empty, l.CageCount, l.Kg);
+        }).ToList();
 
     /// <summary>The lots of one cycle with their lanes: lots for sale first, then the latest harvest first (SCR-HARVEST-01). The raft comes with its zone.</summary>
     public async Task<IReadOnlyList<HarvestLotListItem>> ListAsync(IReadOnlyList<HarvestLot> lots, CultivationCycle cycle, Raft raft, CancellationToken cancellationToken)
@@ -103,6 +126,8 @@ public sealed class HarvestLotViews(
         var missing = await readiness.MissingAsync(ids, cancellationToken);
         var editable = CanEdit(cycle, raft);
         var access = await AccessAsync(cancellationToken);
+        var catalogue = await ProductsOfAsync(lots, cancellationToken);
+        var planOf = await PlansOfAsync(ids, cancellationToken);
         return lots
             .OrderByDescending(l => l.IsForSale).ThenByDescending(l => l.HarvestedAt)
             .Select(lot =>
@@ -113,7 +138,7 @@ public sealed class HarvestLotViews(
                     lot.Id, lot.LotCode, lot.HarvestedAt, lot.HarvestDate, LaneNumbers(lot), FinishedLaneNumbers(lot), lot.CageCount, lot.KgPerCage, lot.EstimatedKg,
                     worked.InvoicedKg, worked.RemainingKg, lot.StatusId, statusCatalog.DisplayNameOf(lot.StatusId), lot.OriginState,
                     missing[lot.Id], LotPublishRules.Block(access, lot, raft.ZoneId, onCurrentInvoice.Contains(lot.Id)) is null,
-                    canCorrect, canCorrect && !onInvoice.Contains(lot.Id), MayClose(access, lot, raft.ZoneId), RowVersionGuard.Encode(lot.RowVersion),
+                    canCorrect, canCorrect && !onInvoice.Contains(lot.Id), MayClose(access, lot, raft.ZoneId), RowVersionGuard.Encode(lot.RowVersion), ProductLines(lot, catalogue), planOf.GetValueOrDefault(lot.Id),
                     lot.PurchaseRequestId, lot.PurchaseRequest?.Code, HarvestCrewService.ViewOf(lot));
             })
             .ToList();

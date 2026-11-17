@@ -80,6 +80,12 @@ internal static class PurchaseRequestRules
         _ => (await fulfilment.FulfilledAmongAsync([request.Id], cancellationToken)).Contains(request.Id) ? WrongStatus(FulfilledStatus) : null,
     };
 
+    /// <summary>
+    /// The Owner may make an order from a request that waits for the answer or was accepted (a request accepted before orders existed has no order yet); the caller also refuses a Fulfilled one.
+    /// An Ordered request has its order already, and a Declined or Cancelled one is finished.
+    /// </summary>
+    public static bool AllowsOrder(int statusId) => statusId is StatusIds.PurchaseRequest.AwaitingResponse or StatusIds.PurchaseRequest.Accepted;
+
     /// <summary>SALE-02 step 1, before the Fulfilled check. A request whose staff are being asked is not answered yet.</summary>
     public static bool AllowsCancel(int statusId) =>
         statusId is StatusIds.PurchaseRequest.AwaitingResponse or StatusIds.PurchaseRequest.AwaitingStaff or StatusIds.PurchaseRequest.Accepted;

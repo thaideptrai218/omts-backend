@@ -13,6 +13,8 @@ namespace OMTS.Api.IntegrationTests.Sales;
 /// <summary>The weighing at the port: the staff records it, the trader confirms it, the invoice is made from it.</summary>
 public static class PortWeighingTestKit
 {
+    public const string NeedsRequestLots = "A harvest lot no longer names a purchase request; the port weighing flow is redesigned on the harvest plan.";
+
     public static object WeighedLot(Guid harvestLotId, params decimal[] cageKgs) => new { harvestLotId, cageKgs };
 
     /// <summary>
@@ -27,7 +29,7 @@ public static class PortWeighingTestKit
         var accepted = await SetAcceptedCagesAsync(sale.Owner.Client, request.Id(), atLeast: counts.Sum());
         foreach (var cages in counts)
         {
-            lots.Add((await sale.Owner.Client.HarvestLotAsync(sale.RaftId, new HarvestFields { Lanes = ["3"], Cages = cages.ToString() }.For(request.Id()))).Id());
+            lots.Add((await sale.Owner.Client.HarvestLotAsync(sale.RaftId, new HarvestFields { Lanes = ["3"], Cages = cages.ToString() })).Id());
         }
 
         await SetAcceptedCagesAsync(sale.Owner.Client, request.Id(), exactly: accepted);

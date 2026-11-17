@@ -65,6 +65,28 @@ public sealed class PurchaseRequestNotifications(
             : null;
     }
 
+    /// <summary>
+    /// MSG-ORDER-04 to the trader account and, when the profile has a phone number, the sending row: the request became the order (DH). Sent through the channel of the response to a request
+    /// (<see cref="NotificationTypes.PurchaseRequestResponse"/>); the caller delivers the row after its save, as for a response.
+    /// </summary>
+    public async Task<Notification?> OrderedAsync(PurchaseRequest request, SalesOrder order, CancellationToken cancellationToken)
+    {
+        if (request.Customer.AccountId is not { } accountId)
+        {
+            return null;
+        }
+
+        var cooperative = await cooperatives.GetCurrentAsync(cancellationToken)
+            ?? throw new InvalidOperationException("The cooperative has not been created yet (run the bootstrap command).");
+        var content = new NotificationContent(
+            NotificationTypes.PurchaseRequestResponse,
+            "Your purchase request was ordered",
+            UserMessages.OrderPlacedNotice(cooperative.ShortName ?? cooperative.FullName, order.Code, order.PickupAt),
+            Record(request));
+        await notifications.NotifyAsync([accountId], content, cancellationToken);
+        return request.Customer.PhoneNumber is { } phone ? traderMessages.Queue(accountId, phone, content) : null;
+    }
+
     private static NotificationContent Content(PurchaseRequest request, string cooperativeName, string? note) => new(
         NotificationTypes.PurchaseRequestResponse,
         "Response to your purchase request",

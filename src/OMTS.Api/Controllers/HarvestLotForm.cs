@@ -19,13 +19,22 @@ public class HarvestLotForm
     /// <summary>Cages, a number with a dot and at most 2 decimals (0.5 is half a cage).</summary>
     public string? CageCount { get; set; }
 
+    /// <summary>When recording: the line of a harvest plan (KHT) the lot is recorded from. The raft and lanes then come from the plan and <c>laneNumbers</c> is ignored. Not used by a correction.</summary>
+    public string? HarvestPlanLineId { get; set; }
+
+    /// <summary>
+    /// The share of each product on the lot, one entry per product: <c>productLines[0].productId</c>, <c>productLines[0].cageCount</c> and <c>productLines[0].kg</c> (indexes 0, 1, 2… with no gap). With lines,
+    /// <c>cageCount</c> and <c>estimatedKg</c> of the form are ignored: the lot's cages and kg are the sums of its lines.
+    /// </summary>
+    public List<HarvestLotProductLineForm>? ProductLines { get; set; }
+
     /// <summary>Accepted and ignored: the cycle target is a plan, not a cap (owner decision 12/11/2026), so a harvest above it is never asked about.</summary>
     public bool ConfirmOverPlan { get; set; }
 
     /// <summary>Accepted and ignored, like <see cref="ConfirmOverPlan"/>.</summary>
     public string? OverPlanReason { get; set; }
 
-    /// <summary>When recording: the id of the purchase request the trip harvests for (decision of 11/11/2026). A correction does not read it.</summary>
+    /// <summary>Accepted and ignored: a lot is tied to a line of a harvest plan (<see cref="HarvestPlanLineId"/>), not to a purchase request.</summary>
     public string? PurchaseRequestId { get; set; }
 
     /// <summary>Left out when recording: cages times the average kg per cage. Left out when correcting: it stays, or when the cages changed, cages times the kg per cage of the lot.</summary>
@@ -47,6 +56,14 @@ public class HarvestLotForm
 
     /// <summary>One part per photo, 1 to 3 when recording and for a lot that has photos: JPEG or PNG, at most 10 MB each.</summary>
     public List<IFormFile>? Photos { get; set; }
+}
+
+/// <summary>One product line of a harvest form: the product, its cages (above 0, up to 2 decimals) and its kg (left out: the cages times the kg of a lồng of the product, or the kg per cage of the lot).</summary>
+public sealed class HarvestLotProductLineForm
+{
+    public string? ProductId { get; set; }
+    public string? CageCount { get; set; }
+    public string? Kg { get; set; }
 }
 
 /// <summary>Multipart fields of TRACE-03.2: those of a lot correction and the Zone Manager's answer to MSG-TRACE-04.</summary>

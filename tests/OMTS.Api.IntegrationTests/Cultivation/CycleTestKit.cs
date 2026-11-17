@@ -1,13 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using OMTS.Api.IntegrationTests.Farming;
 
 namespace OMTS.Api.IntegrationTests.Cultivation;
 
-/// <summary>The start (without a row version) and edit body of a cultivation cycle (CYCLE-01).</summary>
+/// <summary>The start (without a row version) and edit body of a cultivation cycle (CYCLE-01). A start without <paramref name="ProductId"/> is sent with the product of <see cref="CycleTestKit.CycleProductAsync"/>.</summary>
 public sealed record CycleBody(
-    DateOnly? StartDate = null, decimal? ExpectedSeedQuantity = null, DateOnly? ExpectedHarvestDate = null, decimal? TargetYieldKg = null, string? RowVersion = null);
+    DateOnly? StartDate = null, decimal? ExpectedSeedQuantity = null, DateOnly? ExpectedHarvestDate = null, decimal? TargetYieldKg = null, string? RowVersion = null, Guid? ProductId = null);
 
 /// <summary>CYCLE-01 and CYCLE-05 calls.</summary>
 public static class CycleTestKit

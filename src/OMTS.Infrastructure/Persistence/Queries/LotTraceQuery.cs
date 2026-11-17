@@ -56,7 +56,8 @@ internal sealed class LotTraceQuery(OmtsDbContext db) : ILotTraceQuery
                 l.LineNumber,
                 l.Product.Name,
                 l.Kg,
-                l.UnitPrice,
+                // The price of a kg: a line counted in another unit (a cage) is priced per unit, so its kg price is the amount over its kg.
+                l.Quantity == l.Kg ? l.UnitPrice : Math.Round(l.Amount / l.Kg, 0),
                 l.Amount,
                 l.Invoice.Customer == null ? null : l.Invoice.Customer.AccountId,
                 l.Invoice.Returns.Any(r => r.StatusId == StatusIds.SalesReturn.Recorded)))

@@ -22,6 +22,12 @@ public static class InvoiceMoney
     /// </summary>
     public static decimal LineAmount(decimal kg, decimal unitPrice) => PurchaseMoney.RoundHalfUp(kg * unitPrice);
 
+    /// <summary>
+    /// The price of one kg of a line, for the stock ledger and the figures per kg: the price of the line when it is counted in kg, else its amount over the kg weighed, rounded half up to the dong.
+    /// </summary>
+    public static decimal PricePerKg(decimal kg, decimal quantity, decimal unitPrice, decimal amount) =>
+        quantity == kg ? unitPrice : PurchaseMoney.RoundHalfUp(amount / kg);
+
     /// <summary>The amount of a line when it fits its column; false when kg × price is too large for an amount of 18 digits, or for a decimal at all (MSG-GEN-01, not a 500).</summary>
     public static bool TryLineAmount(decimal kg, decimal unitPrice, out decimal amount)
     {

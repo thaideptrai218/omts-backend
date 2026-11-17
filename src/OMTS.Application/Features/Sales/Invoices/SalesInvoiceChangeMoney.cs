@@ -10,9 +10,13 @@ namespace OMTS.Application.Features.Sales.Invoices;
 /// </summary>
 public static class SalesInvoiceChangeMoney
 {
-    /// <summary>The payments the invoice brought that are not Cancelled: what is paid of it, and what moves with it to another profile (BR-SALE-10).</summary>
+    /// <summary>
+    /// The payments the invoice brought that are not Cancelled: what is paid of it, and what moves with it to another profile (BR-SALE-10). A payment still waiting for its
+    /// bank transfer changes nothing yet, so it is not paid.
+    /// </summary>
     public static decimal PaidOf(IEnumerable<CustomerPayment> payments) =>
-        payments.Where(p => p.Kind == CustomerPaymentKind.Payment && p.StatusId != StatusIds.CustomerPayment.Cancelled).Sum(p => p.Amount);
+        payments.Where(p => p.Kind == CustomerPaymentKind.Payment && p.StatusId is not (StatusIds.CustomerPayment.Cancelled or StatusIds.CustomerPayment.PendingTransfer))
+            .Sum(p => p.Amount);
 
     /// <summary>The same profile: the invoice counts at its new total.</summary>
     public static decimal AfterCorrection(decimal debtBefore, decimal totalBefore, decimal totalAfter) => debtBefore - totalBefore + totalAfter;

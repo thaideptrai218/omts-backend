@@ -11,6 +11,8 @@ namespace OMTS.Application.Features.Harvest;
 /// <param name="RowVersion">The version of the lot the form was read at (NFR-09).</param>
 /// <param name="EstimatedKgIsUnreadable">A value was sent that is not a number, so it does not mean "leave it".</param>
 /// <param name="OtherFilePart">A file came in a part not named <c>photos</c>: refused after the access check, so no photo is dropped without a word.</param>
+/// <param name="ProductLines">The share of each product on the lot, replacing the lines it has (the cages and kg of the lot are then their sums); null leaves a lot with no lines as it is, and is refused for a lot that has lines.</param>
+/// <param name="ProductLinesAreUnreadable">A line value was sent that is not a number.</param>
 public sealed record CorrectHarvestLotRequest(
     IReadOnlyList<int>? LaneNumbers,
     IReadOnlyList<int>? FinishedLaneNumbers,
@@ -26,7 +28,9 @@ public sealed record CorrectHarvestLotRequest(
     IReadOnlyList<Guid>? Crew = null,
     bool CrewUnreadable = false,
     IReadOnlyDictionary<int, decimal>? LanePercents = null,
-    bool LanePercentsUnreadable = false);
+    bool LanePercentsUnreadable = false,
+    IReadOnlyList<HarvestProductLineInput>? ProductLines = null,
+    bool ProductLinesAreUnreadable = false);
 
 /// <summary>HARVEST-01.1 step 3; the client has asked with MSG-GEN-04.</summary>
 public sealed record RemoveHarvestLotRequest(string? Reason, string? RowVersion);
@@ -34,6 +38,8 @@ public sealed record RemoveHarvestLotRequest(string? Reason, string? RowVersion)
 /// <summary>A lot that can be chosen on a sales invoice (SALE-05 step 1, SCR-SALE-04). The remaining kg is for information only and limits no sale (BR-HARVEST-02).</summary>
 /// <param name="OriginState">For the warning of MSG-SALE-09 when it is Withdrawn.</param>
 /// <param name="WithdrawnAt">The withdrawal time, only while the lot is Withdrawn; the reason stays internal (BR-TRACE-06).</param>
+/// <param name="HarvestPlanCode">The harvest plan (KHT) the lot was recorded from, or null.</param>
+/// <param name="Suggested">The lot comes from a plan serving the order asked for (<c>salesOrderId</c>): the lots are listed with these first.</param>
 public sealed record HarvestLotForSale(
     Guid Id,
     string LotCode,
@@ -47,7 +53,10 @@ public sealed record HarvestLotForSale(
     int StatusId,
     string Status,
     HarvestLotOriginState OriginState,
-    DateTimeOffset? WithdrawnAt);
+    DateTimeOffset? WithdrawnAt,
+    IReadOnlyList<HarvestLotProductStock> Products,
+    string? HarvestPlanCode = null,
+    bool Suggested = false);
 
 /// <summary>The lots for sale in the zones of the caller.</summary>
 /// <param name="Message">MSG-GEN-10 when there is none, else null.</param>

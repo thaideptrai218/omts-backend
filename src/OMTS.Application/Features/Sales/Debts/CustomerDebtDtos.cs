@@ -9,7 +9,8 @@ public sealed record CustomerDebtCustomer(Guid Id, string Name, string? PhoneNum
 /// <param name="Debt">Above 0: what the customer owes; below 0: money owed back to the customer (BR-DEBT-02).</param>
 /// <param name="DebtAgeDays">Days since <paramref name="OldestUnpaidDate"/>; null when the debt is not above 0 (BR-DEBT-05).</param>
 /// <param name="OldestUnpaidDate">The invoice date of the oldest unpaid invoice.</param>
-public sealed record CustomerDebtRow(CustomerDebtCustomer Customer, decimal Debt, int? DebtAgeDays, DateOnly? OldestUnpaidDate);
+/// <param name="ReservedAdvance">What the customer paid in advance on orders that are still open: counted in <paramref name="Debt"/> as paid, but reserved for those orders, not free credit.</param>
+public sealed record CustomerDebtRow(CustomerDebtCustomer Customer, decimal Debt, int? DebtAgeDays, DateOnly? OldestUnpaidDate, decimal ReservedAdvance = 0m);
 
 /// <summary>DEBT-03 step 1.</summary>
 /// <param name="ReceivablesTotal">Σ of the debts above 0 of every customer that matches, not only of the page.</param>
@@ -21,10 +22,11 @@ public sealed record CustomerDebtList(
 
 /// <summary>DEBT-03 step 3: for any profile, also with a zero debt.</summary>
 /// <param name="DebtToday">The debt now, also outside the period.</param>
-/// <param name="UnpaidInvoices">Today, oldest first (BR-DEBT-05).</param>
+/// <param name="UnpaidInvoices">Today, oldest first (BR-DEBT-05); they add up to <paramref name="DebtToday"/> plus the reserved advances, which cover none of them.</param>
+/// <param name="ReservedAdvances">Per open order, what is left of its advances ("Tiền ứng của DH…"); they lower <paramref name="DebtToday"/> but are kept for their orders.</param>
 public sealed record CustomerDebtStatement(
     CustomerDebtCustomer Customer, DateOnly From, DateOnly To, decimal OpeningDebt, IReadOnlyList<CustomerStatementEntry> Entries, decimal ClosingDebt,
-    decimal DebtToday, int? DebtAgeDays, IReadOnlyList<UnpaidInvoice> UnpaidInvoices);
+    decimal DebtToday, int? DebtAgeDays, IReadOnlyList<UnpaidInvoice> UnpaidInvoices, IReadOnlyList<ReservedOrderAdvance>? ReservedAdvances = null);
 
 /// <summary>The debt tab of a customer: all its entries, newest first, or the entries of some kinds.</summary>
 /// <param name="From">Business dates, inclusive; the whole history when neither is given.</param>
@@ -37,9 +39,10 @@ public sealed record CustomerDebtTabQuery(DateOnly? From = null, DateOnly? To = 
 /// <param name="OpeningDebt">The debt before the first entry of the period (0 without one).</param>
 /// <param name="AwaitingConfirmationCount">Payments of this customer Awaiting confirmation (cash at the port).</param>
 /// <param name="PendingTransferCount">Payments of this customer waiting for their transfer (VietQR code made).</param>
+/// <param name="ReservedAdvances">Per open order, what is left of its advances ("Tiền ứng của DH…"): counted in <paramref name="Debt"/> as paid, kept for that order, covering no other invoice.</param>
 public sealed record CustomerDebtTab(
     CustomerDebtCustomer Customer, decimal Debt, int? DebtAgeDays, IReadOnlyList<UnpaidInvoice> UnpaidInvoices, Paged<CustomerStatementEntry> Entries, decimal OpeningDebt,
-    int AwaitingConfirmationCount, int PendingTransferCount);
+    int AwaitingConfirmationCount, int PendingTransferCount, IReadOnlyList<ReservedOrderAdvance>? ReservedAdvances = null);
 
 /// <summary>DEBT-03.2: the debt list, and the statement of the customer when one is chosen.</summary>
 public sealed record CustomerDebtExportQuery(Guid? CustomerId = null, DateOnly? From = null, DateOnly? To = null, string? Search = null);

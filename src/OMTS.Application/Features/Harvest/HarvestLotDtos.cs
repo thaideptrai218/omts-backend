@@ -11,15 +11,29 @@ namespace OMTS.Application.Features.Harvest;
 /// <param name="EstimatedKg">Without it the system works it out: cages times the average kg per cage.</param>
 /// <param name="EstimatedKgIsUnreadable">A value was sent that is not a number, so it does not mean "work it out".</param>
 /// <param name="OtherFilePart">A file came in a part not named <c>photos</c>: refused after the access check, so no photo is dropped without a word.</param>
+/// <param name="ProductLines">The share of each product on the lot (null: the form sent none, the lot is not split per product). With lines, the cages and estimated kg of the lot are their sums and any <c>CageCount</c> or <c>EstimatedKg</c> sent is ignored.</param>
+/// <param name="ProductLinesAreUnreadable">A line value was sent that is not a number.</param>
+/// <param name="HarvestPlanLineId">The line of a harvest plan (KHT) the lot is recorded from: the raft and lanes then come from the plan (the lanes sent are ignored) and the plan moves on with the lot.</param>
+/// <param name="HarvestPlanLineIsUnreadable">A value was sent for the plan line that is not an id.</param>
 /// <param name="ConfirmOverPlan">Kept so older clients still bind: the cycle target is a plan, not a cap (owner decision 12/11/2026), so nothing asks for it and it is ignored.</param>
 /// <param name="OverPlanReason">As <paramref name="ConfirmOverPlan"/>: accepted and ignored.</param>
-/// <param name="PurchaseRequestId">The request the trip harvests for (decision of 11/11/2026): required when recording, never read by a correction; null when no id could be read.</param>
+/// <param name="PurchaseRequestId">Accepted and ignored: a lot is tied to a line of a harvest plan, not to a purchase request.</param>
 /// <param name="Crew">The employees who worked on the trip (decision of 12/11/2026), optional: null when none was sent (a correction then leaves the crew as it is); an empty list clears it.</param>
 /// <param name="CrewUnreadable">An id was sent that is not a GUID.</param>
 public sealed record RecordHarvestRequest(
     IReadOnlyList<int>? LaneNumbers, IReadOnlyList<int>? FinishedLaneNumbers, decimal? CageCount, decimal? EstimatedKg, bool EstimatedKgIsUnreadable = false, bool OtherFilePart = false,
     bool ConfirmOverPlan = false, string? OverPlanReason = null, Guid? PurchaseRequestId = null, IReadOnlyList<Guid>? Crew = null, bool CrewUnreadable = false,
-    IReadOnlyDictionary<int, decimal>? LanePercents = null, bool LanePercentsUnreadable = false);
+    IReadOnlyDictionary<int, decimal>? LanePercents = null, bool LanePercentsUnreadable = false,
+    IReadOnlyList<HarvestProductLineInput>? ProductLines = null, bool ProductLinesAreUnreadable = false, Guid? HarvestPlanLineId = null, bool HarvestPlanLineIsUnreadable = false);
+
+/// <summary>The harvest plan (KHT) a lot was recorded from; the lot code does not change.</summary>
+public sealed record HarvestLotPlanRef(Guid Id, string Code);
+
+/// <summary>A product line of a lot, with the code of the product.</summary>
+public sealed record HarvestLotProductLineView(Guid ProductId, string ProductCode, string ProductName, decimal CageCount, decimal Kg);
+
+/// <summary>The kg of a product on a lot for sale: what the lot gave and what is left on the ledger (sales and disposals taken off).</summary>
+public sealed record HarvestLotProductStock(Guid ProductId, string ProductCode, string ProductName, decimal HarvestedKg, decimal RemainingKg);
 
 /// <summary>A photo of a lot, for staff.</summary>
 /// <param name="Id">The id of the photo row, as on the other steps (<c>photos[{id,url}]</c>).</param>
@@ -58,6 +72,8 @@ public sealed record HarvestLotListItem(
     bool CanRemove,
     bool CanClose,
     string RowVersion,
+    IReadOnlyList<HarvestLotProductLineView> ProductLines,
+    HarvestLotPlanRef? HarvestPlan,
     Guid? PurchaseRequestId = null,
     string? PurchaseRequestCode = null,
     IReadOnlyList<HarvestCrewMemberView>? Crew = null);
@@ -107,6 +123,8 @@ public sealed record HarvestLotView(
     bool CanRemove,
     bool CanClose,
     string RowVersion,
+    IReadOnlyList<HarvestLotProductLineView> ProductLines,
+    HarvestLotPlanRef? HarvestPlan,
     string? OverPlanReason = null,
     Guid? PurchaseRequestId = null,
     string? PurchaseRequestCode = null,
@@ -118,12 +136,12 @@ public sealed record HarvestLotView(
 /// <param name="CycleRowVersion">The new version of the cycle, as every lot moves it.</param>
 /// <param name="Message">MSG-GEN-05 "Harvest lot saved.".</param>
 /// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
-/// <param name="OrderCagesTotal">The cages the purchase request accepted; set when a lot is recorded (null after a correction).</param>
-/// <param name="OrderCagesHarvested">The cages harvested for the request including this lot.</param>
-/// <param name="OrderComplete">This lot brought the request to its accepted cages (e.g. 15/15): the web says so. The harvest is not marked done by it; that stays the Owner's act.</param>
+/// <param name="OrderCagesTotal">The cages the line of the harvest plan expects; set when the lot is recorded from a plan line that expects cages (null otherwise and after a correction).</param>
+/// <param name="OrderCagesHarvested">The cages of this lot, to set against <paramref name="OrderCagesTotal"/>.</param>
+/// <param name="OrderComplete">The lot reaches the cages the plan line expects (e.g. 15/15). Going over is only a warning.</param>
 public sealed record HarvestLotSaved(
     HarvestLotView Lot, bool EverySeededLaneHarvested, string CycleRowVersion, string Message, string MessageCode, IReadOnlyList<Features.Farming.FarmingWarning>? Warnings = null,
-    int? OrderCagesTotal = null, decimal? OrderCagesHarvested = null, bool OrderComplete = false);
+    decimal? OrderCagesTotal = null, decimal? OrderCagesHarvested = null, bool OrderComplete = false);
 
 /// <summary>A lane on the Harvest lots screen, with its state today (BR-FARM-03).</summary>
 /// <param name="CanHarvest">The lane can be chosen for a new lot now: In Use, Growing or Being harvested, on a raft that can record.</param>
@@ -167,7 +185,6 @@ public sealed record HarvestLaneView(
 /// <param name="CanRecordHarvest">Show Record harvest: at least one lane is Growing or Being harvested, and the caller may record.</param>
 /// <param name="Lanes">Lanes In Use, and Removed lanes that have records in the cycle shown, in number order.</param>
 /// <param name="Lots">The lots of the Open cycle: lots for sale first, then the latest harvest first.</param>
-/// <param name="Orders">What a new lot can be recorded for, when the caller may record: see <see cref="HarvestOrderOption"/>.</param>
 /// <param name="CycleProductId">The product the Open cycle farms; null with no Open cycle or a cycle with no product. <paramref name="CycleProductName"/> is its name.</param>
 public sealed record HarvestLotsScreen(
     Guid RaftId,
@@ -177,7 +194,6 @@ public sealed record HarvestLotsScreen(
     bool CanRecordHarvest,
     IReadOnlyList<HarvestLaneView> Lanes,
     IReadOnlyList<HarvestLotListItem> Lots,
-    IReadOnlyList<HarvestOrderOption> Orders,
     decimal HarvestedCages = 0m,
     decimal HarvestedKg = 0m,
     decimal? TargetYieldKg = null,
@@ -186,22 +202,6 @@ public sealed record HarvestLotsScreen(
     bool OverTarget = false,
     Guid? CycleProductId = null,
     string? CycleProductName = null);
-
-/// <summary>
-/// A purchase request a new lot can be recorded for (decision of 11/11/2026): Accepted and its harvest not marked done. The requests whose work plan sends the harvest to this
-/// raft come first, then the earliest agreed pickup.
-/// </summary>
-/// <param name="HarvestedCages">The cages of the lots already recorded for it, on every raft.</param>
-/// <param name="PlannedOnRaft">Its work plan names this raft: the form picks it first.</param>
-/// <param name="ProductId">The product the request asks for.</param>
-/// <param name="MatchesCycleProduct">True when the Open cycle has no product, or this is its product (13/11/2026): a lot is recorded only for such a request, else 400 HARVEST_PRODUCT_MISMATCH. The list keeps every open request; the client filters.</param>
-/// <param name="Trips">Where the harvested cages came from (13/11/2026: one request is often gathered from several rafts, also in other zones): the lots already recorded for it grouped per raft, newest first, at most 10. Empty when nothing was harvested.</param>
-public sealed record HarvestOrderOption(
-    Guid Id, string Code, string CustomerName, string ProductName, int AcceptedCages, decimal HarvestedCages, DateOnly PickupDate, DateOnly? WorkDate, bool PlannedOnRaft,
-    Guid? ProductId = null, bool MatchesCycleProduct = true, IReadOnlyList<HarvestOrderTrip>? Trips = null);
-
-/// <summary>The cages harvested for a request from one raft: the raft, its zone, the total of its lots and the date of the latest one.</summary>
-public sealed record HarvestOrderTrip(string RaftCode, string ZoneCode, decimal Cages, DateOnly RecordedOn);
 
 /// <summary>The harvest settings (HARVEST-03).</summary>
 public sealed record HarvestSettingsView(decimal AverageKgPerCage, int DaysBeforeAutoClose, string RowVersion);

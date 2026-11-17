@@ -18,8 +18,8 @@ public sealed class MessageCatalogueTests
     [Fact]
     public void The_checked_in_catalogue_has_the_codes_of_the_srs()
     {
-        Assert.Equal(150, SrsCodes.Value.Count);
-        Assert.All(SrsCodes.Value, code => Assert.Matches("^MSG-(GEN|FARM|CYCLE|WATER|HARVEST|TRACE|ORIGIN|ACCOUNT|PURCHASE|LABOR|SALE|DEBT|CLAIM|CASH|INPUT|CUSTOMER)-[0-9]{2}$", code));
+        Assert.Equal(162, SrsCodes.Value.Count);
+        Assert.All(SrsCodes.Value, code => Assert.Matches("^MSG-(GEN|FARM|CYCLE|WATER|HARVEST|TRACE|ORIGIN|ACCOUNT|PURCHASE|LABOR|SALE|DEBT|CLAIM|CASH|INPUT|CUSTOMER|ORDER|PLAN)-[0-9]{2}$", code));
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public sealed class MessageCatalogueTests
         { ParameterType: var t } when t == typeof(IReadOnlyList<(string, decimal)>) => new[] { ("Sample", 1_250_500.5m) },
         { ParameterType: var t } when t == typeof(bool) => true,
         { ParameterType: var t } when t == typeof(DateOnly) => new DateOnly(2026, 10, 1),
-        { ParameterType: var t } when t == typeof(DateTimeOffset) => new DateTimeOffset(2026, 10, 1, 1, 0, 0, TimeSpan.Zero),
+        { ParameterType: var t } when t == typeof(DateTimeOffset) || t == typeof(DateTimeOffset?) => new DateTimeOffset(2026, 10, 1, 1, 0, 0, TimeSpan.Zero),
         { ParameterType: var t } when t == typeof(IReadOnlyList<string>) => new[] { "Sample" },
         { ParameterType: var t } when t == typeof(IReadOnlyList<int>) => new[] { 3, 5 },
         { ParameterType: var t } when t == typeof(IReadOnlyList<WaterValueOutside>) =>

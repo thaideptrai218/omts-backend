@@ -106,9 +106,7 @@ public class HarvestLotCorrectionsMigrationAndDemoTests
             Assert.Contains(rerun.Messages, m => m == "Demo harvest lots: already there.");
             Assert.Equal(count - 1, await UseDbAsync(api, db => db.HarvestLots.CountAsync()));
 
-            // A lot is recorded for a request of the product the cycle farms (13/11/2026): the demo raft farms "Hàu béo", so the demo's Accepted request for it, not the kit's default one.
-            var demoOrder = await UseDbAsync(api, db => db.PurchaseRequests.Where(r => r.StatusId == StatusIds.PurchaseRequest.Accepted && r.ProductName == "Hàu béo" && r.AcceptedCages == 100).Select(r => r.Id).FirstAsync());
-            var next = (await client.RecordHarvestAsync(raftId, HarvestFields.OfLanes(1).For(demoOrder))).GetProperty("lot");
+            var next = (await client.RecordHarvestAsync(raftId, HarvestFields.OfLanes(1))).GetProperty("lot");
             Assert.NotEqual(top, next.Text("lotCode"));
         }
         finally

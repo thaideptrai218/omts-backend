@@ -77,6 +77,18 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
 
     // Products and customers
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProductUnit> ProductUnits => Set<ProductUnit>();
+    public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
+    public DbSet<ProductPhoto> ProductPhotos => Set<ProductPhoto>();
+    public DbSet<ProductPriceChange> ProductPriceChanges => Set<ProductPriceChange>();
+    public DbSet<ProductStockMovement> ProductStockMovements => Set<ProductStockMovement>();
+    public DbSet<ProductDisposal> ProductDisposals => Set<ProductDisposal>();
+    public DbSet<ProductDisposalLine> ProductDisposalLines => Set<ProductDisposalLine>();
+    public DbSet<HarvestLotProductLine> HarvestLotProductLines => Set<HarvestLotProductLine>();
+    public DbSet<HarvestPlan> HarvestPlans => Set<HarvestPlan>();
+    public DbSet<HarvestPlanLine> HarvestPlanLines => Set<HarvestPlanLine>();
+    public DbSet<HarvestPlanLane> HarvestPlanLanes => Set<HarvestPlanLane>();
+    public DbSet<SalesOrderHarvestPlan> SalesOrderHarvestPlans => Set<SalesOrderHarvestPlan>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<PurchaseRequest> PurchaseRequests => Set<PurchaseRequest>();
     public DbSet<QualityClaim> QualityClaims => Set<QualityClaim>();
@@ -86,6 +98,8 @@ public sealed class OmtsDbContext(DbContextOptions<OmtsDbContext> options) : DbC
     public DbSet<PortWeighing> PortWeighings => Set<PortWeighing>();
     public DbSet<PortWeighingCage> PortWeighingCages => Set<PortWeighingCage>();
     public DbSet<SalesInvoicePriceCut> SalesInvoicePriceCuts => Set<SalesInvoicePriceCut>();
+    public DbSet<SalesOrder> SalesOrders => Set<SalesOrder>();
+    public DbSet<SalesOrderLine> SalesOrderLines => Set<SalesOrderLine>();
     public DbSet<CustomerPayment> CustomerPayments => Set<CustomerPayment>();
     public DbSet<CustomerPaymentAllocation> CustomerPaymentAllocations => Set<CustomerPaymentAllocation>();
     public DbSet<CustomerDebtAdjustment> CustomerDebtAdjustments => Set<CustomerDebtAdjustment>();

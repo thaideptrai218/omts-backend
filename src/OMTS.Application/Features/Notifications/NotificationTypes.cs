@@ -120,6 +120,12 @@ public static class NotificationTypes
     /// <summary>MSG-CLAIM-02, the response to a quality claim, to the trader account (BR-CLAIM-02); also sent by SMS or Zalo OA.</summary>
     public const string QualityClaimResponse = "QUALITY_CLAIM_RESPONSE";
 
+    /// <summary>MSG-PLAN-05, a harvest plan handed to the Zone Managers of its zone, or to the Owners when the zone has none; not mandatory.</summary>
+    public const string HarvestPlanAssigned = "HARVEST_PLAN_ASSIGNED";
+
+    /// <summary>MSG-PLAN-06, lanes of a harvest plan a Zone Manager will not harvest ("Không thu"), with the reason, to the Owners (not to an Owner who did it); not mandatory.</summary>
+    public const string HarvestPlanLanesSkipped = "HARVEST_PLAN_LANES_SKIPPED";
+
     /// <summary>MSG-CLAIM-05, a new sales return, to the Cooperative Owner (BR-CLAIM-03); to the Accountant the same message goes as <see cref="CustomerMoneyOwedBack"/>, only when money is owed back.</summary>
     public const string SalesReturnRecorded = "SALES_RETURN_RECORDED";
 
@@ -204,6 +210,11 @@ public static class NotificationTypes
             NotificationSmsRule.MoneyToOwnerSplit("amount", "confirmed_amount", "cancelled_amount")),
         // Opens nothing: the trader is asked to call the cooperative, and the list row has no related record (a lot is not the trader's record).
         new(ProvenanceWithdrawn, "Origin information withdrawn", Default, [Trader], NotificationOpenAccess.TraderOfTheRecord),
+        // Opens the plan; a Zone Manager holds the right to view the plans handed to its zones.
+        new(HarvestPlanAssigned, "Harvest plan assigned", Default, [CooperativeOwner, ZoneManager],
+            NotificationOpenAccess.InZone(PermissionFunctions.HarvestPlans, PermissionAction.View)),
+        new(HarvestPlanLanesSkipped, "Harvest plan lanes left out", Default, [CooperativeOwner],
+            NotificationOpenAccess.InZone(PermissionFunctions.HarvestPlans, PermissionAction.View)),
         // Opens the invoice (SALE-09); the money is paid back in DEBT-02.
         new(CustomerMoneyOwedBack, "Money owed back to a customer", Default, [CooperativeOwner, Accountant],
             NotificationOpenAccess.InZone(PermissionFunctions.SalesInvoices, PermissionAction.View)),

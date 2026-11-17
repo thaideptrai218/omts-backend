@@ -19,8 +19,10 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
 
     public async Task<IReadOnlyList<HarvestLot>> ListByCycleAsync(Guid cycleId, CancellationToken cancellationToken) =>
         await db.HarvestLots.AsNoTracking().Include(l => l.Lanes).ThenInclude(l => l.Lane).Include(l => l.PurchaseRequest).Include(l => l.Crew).ThenInclude(c => c.Employee)
+            .Include(l => l.ProductLines).ThenInclude(p => p.Product)
             .Where(l => l.CycleId == cycleId)
             .OrderByDescending(l => l.HarvestedAt)
+            .AsSplitQuery()
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<LaneHarvest>> LaneHarvestsAsync(Guid cycleId, CancellationToken cancellationToken) =>
@@ -66,14 +68,17 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
 
         return await forSale
             .Include(l => l.Raft).ThenInclude(r => r.Zone)
+            .Include(l => l.ProductLines).ThenInclude(p => p.Product)
             .OrderByDescending(l => l.HarvestedAt).ThenBy(l => l.LotCode)
+            .AsSplitQuery()
             .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<HarvestLot>> ListForInvoiceAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken)
     {
         var ids = lotIds.Distinct().ToList();
-        return await db.HarvestLots.Include(l => l.Raft).ThenInclude(r => r.Zone).Where(l => ids.Contains(l.Id)).ToListAsync(cancellationToken);
+        // The product lines say whether the lot was split per product, which decides whether a sale of it writes the product ledger.
+        return await db.HarvestLots.Include(l => l.Raft).ThenInclude(r => r.Zone).Include(l => l.ProductLines).Where(l => ids.Contains(l.Id)).AsSplitQuery().ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<LotLaneSeedLot>> LaneSeedLotsAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken)
@@ -178,9 +183,14 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
     {
         db.HarvestLotLanes.RemoveRange(lot.Lanes);
         db.HarvestLotPhotos.RemoveRange(lot.Photos);
+        db.HarvestLotProductLines.RemoveRange(lot.ProductLines);
         db.HarvestLotCrew.RemoveRange(lot.Crew);
         db.HarvestLots.Remove(lot);
     }
+
+    public void AddProductLine(HarvestLotProductLine line) => db.HarvestLotProductLines.Add(line);
+
+    public void RemoveProductLine(HarvestLotProductLine line) => db.HarvestLotProductLines.Remove(line);
 
     public void AddLane(HarvestLotLane lane) => db.HarvestLotLanes.Add(lane);
 
@@ -203,5 +213,7 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
             .Include(l => l.Crew).ThenInclude(c => c.Employee)
             .Include(l => l.Cycle)
             .Include(l => l.PurchaseRequest)
-            .Include(l => l.Raft).ThenInclude(r => r.Zone);
+            .Include(l => l.ProductLines).ThenInclude(p => p.Product)
+            .Include(l => l.Raft).ThenInclude(r => r.Zone)
+            .AsSplitQuery();
 }

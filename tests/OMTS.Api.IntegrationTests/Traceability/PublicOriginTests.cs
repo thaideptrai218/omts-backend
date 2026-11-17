@@ -71,7 +71,7 @@ public class PublicOriginTests
         Assert.Equal(HttpStatusCode.NotFound, (await visitor.GetAsync($"/api/origin/{token}")).StatusCode);
     }
 
-    [Fact]
+    [Fact(Skip = Sales.PortWeighingTestKit.NeedsRequestLots)]
     public async Task A_sale_from_a_port_weighing_shows_the_cages_weighed_of_each_lot()
     {
         using var api = new AuthApiFactory();

@@ -72,7 +72,7 @@ public sealed class SalesInvoiceSearchService(
         var collector = query.CashCollectedByMe ? currentUser.AccountId : null;
         var keys = await queries.MatchingAsync(
             new SalesInvoiceSearchFilter(
-                from, to, zoneIds, query.CustomerId, query.HarvestLotId, query.RaftId, query.StatusId, query.Code, collector, query.OrderCode, maxMatches is { } max ? max + 1 : null),
+                from, to, zoneIds, query.CustomerId, query.HarvestLotId, query.RaftId, query.StatusId, query.Code, collector, query.SalesOrderId, query.OrderCode, maxMatches is { } max ? max + 1 : null),
             cancellationToken);
         if (maxMatches is { } limit && keys.Count > limit)
         {
@@ -115,7 +115,7 @@ public sealed class SalesInvoiceSearchService(
                 row.Id, row.Code, row.InvoicedAt, row.InvoiceDate, new SalesInvoiceZoneView(row.ZoneId, row.ZoneCode, row.ZoneName),
                 row.CustomerId is { } customerId ? new SalesInvoiceCustomerView(customerId, row.CustomerName!, row.CustomerPhone, row.CustomerCode) : null,
                 row.CustomerId is null, row.Total, row.StatusId, statusCatalog.DisplayNameOf(row.StatusId), row.PaymentTerm, state.IsPaid, state.Unpaid, delivery,
-                statusCatalog.DisplayNameOf(delivery), cash?.GetValueOrDefault(key.Id), row.OrderCode);
+                statusCatalog.DisplayNameOf(delivery), cash?.GetValueOrDefault(key.Id), row.SalesOrderId is { } orderId ? new SalesInvoiceOrderRef(orderId, row.SalesOrderCode ?? string.Empty) : null);
         }).ToList();
     }
 

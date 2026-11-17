@@ -31,8 +31,10 @@ public sealed class HarvestLotsController(
 
     /// <summary>
     /// Records a harvest trip while the raft has an Open cycle. Multipart: one <c>laneNumbers</c> field per lane, one <c>finishedLaneNumbers</c> field per finished lane, <c>cageCount</c>,
-    /// optional <c>estimatedKg</c>, <c>purchaseRequestId</c> of an Accepted request whose harvest is not marked done, and one <c>photos</c> part per photo (none to 10).
-    /// A failed upload answers 502 MSG-GEN-03 and saves nothing. Notifies the Cooperative Owner
+    /// optional <c>estimatedKg</c>, and one <c>photos</c> part per photo (1 to 3). The share of each product is sent as <c>productLines[i].productId</c>, <c>productLines[i].cageCount</c> and
+    /// optional <c>productLines[i].kg</c> (i from 0, no gap): the lot's cages and kg are then the sums of the lines (<c>cageCount</c> and <c>estimatedKg</c> are ignored) and each line adds its kg to the
+    /// stock of its product. <c>harvestPlanLineId</c> records the lot from a line of a harvest plan (KHT): the lanes are then those of the line without the lanes left out (<c>laneNumbers</c> is ignored), the lot
+    /// carries the plan, and the plan moves on (409 MSG-PLAN-03 when the line already has its lot). A failed upload answers 502 MSG-GEN-03 and saves nothing. Notifies the Cooperative Owner
     /// (MSG-HARVEST-01), and when every seeded lane is now Harvested sends the reminder to close the cycle (MSG-CYCLE-08).
     /// </summary>
     [HttpPost("api/rafts/{raftId:guid}/harvest-lots")]
@@ -44,12 +46,16 @@ public sealed class HarvestLotsController(
     {
         TryDecimal(form.CageCount, out var cageCount);
         var estimatedIsRead = TryDecimal(form.EstimatedKg, out var estimatedKg);
+        var (productLines, linesAreUnreadable) = ReadProductLines(form);
+        var planLineGiven = !string.IsNullOrWhiteSpace(form.HarvestPlanLineId);
+        Guid? planLineId = planLineGiven && Guid.TryParse(form.HarvestPlanLineId!.Trim(), out var lineId) ? lineId : null;
         var request = new RecordHarvestRequest(
             Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, !estimatedIsRead, Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)),
             form.ConfirmOverPlan, form.OverPlanReason,
             Guid.TryParse(form.PurchaseRequestId, out var requestId) && requestId != Guid.Empty ? requestId : null,
             ReadCrew(form.Crew, form.ReplaceCrew, out var crewUnreadable), crewUnreadable,
-            LanePercents(form.LanePercents, out var percentsUnreadable), percentsUnreadable);
+            LanePercents(form.LanePercents, out var percentsUnreadable), percentsUnreadable,
+            productLines, linesAreUnreadable, planLineId, planLineGiven && planLineId is null);
         return (await recording.RecordAsync(raftId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
             .ToActionResult(r => StatusCode(StatusCodes.Status201Created, r));
     }
@@ -127,11 +133,39 @@ public sealed class HarvestLotsController(
     {
         TryDecimal(form.CageCount, out var cageCount);
         var estimatedIsRead = TryDecimal(form.EstimatedKg, out var estimatedKg);
+        var (productLines, linesAreUnreadable) = ReadProductLines(form);
         var request = new CorrectHarvestLotRequest(
             Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, form.KeepPhotoKeys, form.Reason, form.RowVersion, !estimatedIsRead,
             Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)), form.ConfirmOverPlan, form.OverPlanReason, ReadCrew(form.Crew, form.ReplaceCrew, out var crewUnreadable), crewUnreadable,
-            LanePercents(form.LanePercents, out var percentsUnreadable), percentsUnreadable);
+            LanePercents(form.LanePercents, out var percentsUnreadable), percentsUnreadable, productLines, linesAreUnreadable);
         return (await corrections.CorrectAsync(lotId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken)).ToActionResult(Ok);
+    }
+
+    /// <summary>The product lines of the form; null when it sent none. A value that cannot be read marks the lines unreadable, so the request is refused, not dropped.</summary>
+    private (List<HarvestProductLineInput>? Lines, bool Unreadable) ReadProductLines(HarvestLotForm form)
+    {
+        // MVC binds the indexes 0, 1, 2… and stops at the first gap: a later index would be dropped without a word, so it makes the lines unreadable.
+        var posted = Request.HasFormContentType
+            ? Request.Form.Keys.Select(k => System.Text.RegularExpressions.Regex.Match(k, @"^productLines\[(\d+)\]\.", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                .Where(m => m.Success).Select(m => int.Parse(m.Groups[1].Value)).Distinct().ToList()
+            : [];
+        if (form.ProductLines is not { Count: > 0 } sent)
+        {
+            return (null, posted.Count > 0);
+        }
+
+        var lines = new List<HarvestProductLineInput>(sent.Count);
+        var unreadable = false;
+        foreach (var line in sent)
+        {
+            Guid? productId = Guid.TryParse(line?.ProductId?.Trim(), out var id) ? id : null;
+            var cagesRead = TryDecimal(line?.CageCount, out var cages);
+            var kgRead = TryDecimal(line?.Kg, out var kg);
+            unreadable |= !cagesRead || !kgRead || (line?.ProductId is { Length: > 0 } && productId is null);
+            lines.Add(new HarvestProductLineInput(productId, cages, kg));
+        }
+
+        return (lines, unreadable || posted.Count != sent.Count);
     }
 
     /// <summary>Removes a lot and its photos while its cycle is Open and it is on no sales invoice; ask with MSG-GEN-04 first. 204; the audit log keeps it with the reason.</summary>
@@ -150,11 +184,14 @@ public sealed class HarvestLotsController(
     public async Task<IActionResult> Close(Guid lotId, CloseHarvestLotRequest request, CancellationToken cancellationToken) =>
         (await closing.CloseAsync(lotId, request, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>The lots for sale in the zones of the caller, the latest harvest first: what a sales invoice chooses from (SALE-05 step 1).</summary>
+    /// <summary>
+    /// The lots for sale in the zones of the caller, the latest harvest first: what a sales invoice chooses from (SALE-05 step 1). With <c>salesOrderId</c> the lots recorded from a harvest plan that serves
+    /// that order are <c>suggested</c> and come first; every lot carries <c>harvestPlanCode</c> when it was recorded from a plan.
+    /// </summary>
     [HttpGet("api/harvest-lots/for-sale")]
     [ProducesResponseType<HarvestLotsForSale>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ForSale([FromQuery] Guid? zoneId, CancellationToken cancellationToken) =>
-        (await forSale.ListAsync(zoneId, cancellationToken)).ToActionResult(Ok);
+    public async Task<IActionResult> ForSale([FromQuery] Guid? zoneId, [FromQuery] Guid? salesOrderId, CancellationToken cancellationToken) =>
+        (await forSale.ListAsync(zoneId, salesOrderId, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>How many lots are for sale now, of one zone or of every zone: the open harvest lots of the operations dashboard, for the Owner alone (FARM-06, BR-FARM-10).</summary>
     [HttpGet("api/harvest-lots/for-sale/count")]

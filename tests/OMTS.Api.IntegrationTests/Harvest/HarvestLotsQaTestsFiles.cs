@@ -110,7 +110,7 @@ public class HarvestLotsQaTestsFiles
     {
         using var api = new AuthApiFactory();
         var raft = await api.SeededRaftAsync();
-        var form = new HarvestFields().For(await api.HarvestOrderAsync()).ToForm();
+        var form = new HarvestFields().ToForm();
         form.Add(FileContent(Jpeg, "image/jpeg"), "photos", fileName);
 
         var lot = (await (await raft.Owner.Client.PostAsync($"/api/rafts/{raft.RaftId}/harvest-lots", form)).ReadAsync(HttpStatusCode.Created)).GetProperty("lot");
@@ -333,7 +333,7 @@ public class HarvestLotsQaTestsKestrel(KestrelApiFactory api) : IClassFixture<Ke
         var photo = Sized(Jpeg, (int)(10 * Megabyte));
         var form = (HarvestFields.OfLanes(1, 2, 3, 4, 5).FinishedLanes(1, 2, 3, 4, 5) with
         {
-            Cages = "100000", EstimatedKg = "1000000", Photos = Enumerable.Repeat(photo, 3).ToList(), Order = await api.HarvestOrderAsync(),
+            Cages = "100000", EstimatedKg = "1000000", Photos = Enumerable.Repeat(photo, 3).ToList(),
         }).ToForm();
 
         using var response = await client.PostAsync($"api/rafts/{raft.RaftId}/harvest-lots", form);

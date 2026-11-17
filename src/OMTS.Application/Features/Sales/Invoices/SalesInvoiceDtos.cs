@@ -18,10 +18,14 @@ public enum SalesInvoiceRestPayment
     VietQr,
 }
 
-/// <summary>One line as the Zone Manager enters it: the unit price is the list price when left out.</summary>
-/// <param name="Kg">May be left out on an invoice made from a weighing, whose kg it takes; sent, it must be the weighed one.</param>
-/// <param name="PriceDecidedByOwner">The answer Yes to MSG-SALE-10 for a price other than the list price; not asked of the Owner.</param>
-public sealed record SalesInvoiceLineEntry(Guid? ProductId, Guid? HarvestLotId, decimal? Kg, decimal? UnitPrice = null, bool PriceDecidedByOwner = false);
+/// <summary>One line as the seller enters it: the unit price is the price of the order line (the sale price of the unit without one) when left out.</summary>
+/// <param name="Kg">The kg weighed, always required: the stock ledger counts kg. For a line in the kg unit it is also the quantity.</param>
+/// <param name="PriceDecidedByOwner">The answer Yes to MSG-SALE-10 for a price other than the order price; not asked of the Owner.</param>
+/// <param name="SalesOrderLineId">The line of the order this line delivers; null adds a line outside the order, which counts in no delivery.</param>
+/// <param name="UnitId">The unit of the line and of its price; the kg unit of the product when left out.</param>
+/// <param name="Quantity">The quantity in the unit; required for a unit other than kg.</param>
+public sealed record SalesInvoiceLineEntry(
+    Guid? ProductId, Guid? HarvestLotId, decimal? Kg, decimal? UnitPrice = null, bool PriceDecidedByOwner = false, Guid? SalesOrderLineId = null, Guid? UnitId = null, decimal? Quantity = null);
 
 /// <summary>The payment taken at the port (SALE-05.6 to SALE-05.8).</summary>
 /// <param name="CashAmount">The cash the trader hands over, 0 for none.</param>
@@ -30,13 +34,18 @@ public sealed record SalesInvoiceLineEntry(Guid? ProductId, Guid? HarvestLotId, 
 /// <param name="PayLaterOwnerAgreed">The answer Yes to MSG-SALE-12 (Owner's agreement outside OMTS); not needed with a linked request that agrees to it.</param>
 public sealed record SalesInvoicePaymentEntry(decimal? CashAmount, SalesInvoiceRestPayment Rest = SalesInvoiceRestPayment.None, bool? SubtractExtraFromDebt = null, bool PayLaterOwnerAgreed = false);
 
-/// <summary>SALE-05: a new invoice. A walk-in customer has no profile and must be chosen as such.</summary>
-/// <param name="ZoneId">The zone the invoice counts in; the zone of the first lot when left out (BR-SALE-08).</param>
+/// <summary>
+/// SALE-05: a new invoice, made from an order (DH). The customer is that of the order: it may be sent, and then must be the same (MSG-ORDER-06). The zone is the zone of the first lot of the invoice.
+/// The request link of the old flow is not accepted for a new invoice; only a sale that was awaiting its transfer before invoices came from orders carries none of them.
+/// </summary>
+/// <param name="SalesOrderId">The order, Draft or Delivering; required for a new invoice.</param>
+/// <param name="Code">1 to 30 of A-Z a-z 0-9 . _ -, unique regardless of letter case; empty takes the next HD code. At most 25 characters when the rest is paid with VietQR (the code is the transfer content).</param>
+/// <param name="Note">At most 1000 characters.</param>
+/// <param name="ZoneId">Ignored for an invoice made from an order (the zone of its first lot is taken).</param>
 /// <param name="TakesRequestInFull">With a linked request; true when left out (BR-SALE-01).</param>
 /// <param name="NotSoldWholeLotIds">The lots whose "sold the whole lot" mark the Zone Manager cleared: every other lot of the invoice is closed (BR-HARVEST-04).</param>
 /// <param name="DiscountDecidedByOwner">The answer Yes to MSG-SALE-10 for the discount; not asked of the Owner.</param>
 /// <param name="DeduplicationKey">The same key again returns the first invoice and creates nothing.</param>
-/// <param name="PortWeighingId">The confirmed weighing of the linked request the kg come from; required with <paramref name="PurchaseRequestId"/> and only with it.</param>
 public sealed record CreateSalesInvoiceRequest(
     Guid? CustomerId,
     bool WalkInCustomer,
@@ -50,16 +59,45 @@ public sealed record CreateSalesInvoiceRequest(
     bool DiscountDecidedByOwner = false,
     decimal? OtherCharges = null,
     string? DeduplicationKey = null,
-    Guid? PortWeighingId = null);
+    Guid? SalesOrderId = null,
+    string? Code = null,
+    string? Note = null);
+
+/// <summary>
+/// PUT: the Owner (SALES_INVOICES Edit) changes a Completed invoice like a purchase receipt: the code, every line, the discount, the other charges and the note. The customer and the zone cannot change.
+/// The debt moves by the difference of the totals; payments stay as they are.
+/// </summary>
+/// <param name="RowVersion">The version read: a parallel change makes this one stale, 409 MSG06.</param>
+/// <param name="NotSoldWholeLotIds">The lots whose "sold the whole lot" mark is cleared (BR-HARVEST-04).</param>
+/// <param name="ConfirmOwedBack">The answer Yes to MSG-SALE-17.</param>
+public sealed record EditSalesInvoiceRequest(
+    string? RowVersion,
+    IReadOnlyList<SalesInvoiceLineEntry?>? Lines,
+    string? Code = null,
+    IReadOnlyList<Guid>? NotSoldWholeLotIds = null,
+    decimal? Discount = null,
+    bool DiscountDecidedByOwner = false,
+    decimal? OtherCharges = null,
+    string? Note = null,
+    bool ConfirmOwedBack = false);
 
 public sealed record SalesInvoiceZoneView(Guid Id, string Code, string Name);
 
 public sealed record SalesInvoiceCustomerView(Guid Id, string Name, string? PhoneNumber, string? Code = null);
 
-/// <param name="CageKgs">The kg of each cage in the order weighed; empty for a line sold by the kg.</param>
+/// <param name="Unit">The unit of the line (the kg unit for a line of kg); <paramref name="Quantity"/> and <paramref name="UnitPrice"/> are in it.</param>
+/// <param name="SalesOrderLineId">The order line the line delivers; null outside an order.</param>
 public sealed record SalesInvoiceLineView(
     Guid Id, int LineNumber, Guid ProductId, string ProductName, Guid HarvestLotId, string LotCode, decimal Kg, decimal UnitPrice, decimal ListPrice, SalesPriceSource PriceSource,
-    decimal Amount, bool SoldWholeLot, IReadOnlyList<decimal> CageKgs);
+    decimal Amount, bool SoldWholeLot, SalesInvoiceUnitView Unit, decimal Quantity, Guid? SalesOrderLineId);
+
+public sealed record SalesInvoiceUnitView(Guid Id, string Code, string Name, decimal Factor);
+
+/// <summary>The order an invoice was made from.</summary>
+public sealed record SalesInvoiceOrderRef(Guid Id, string Code);
+
+/// <summary>The order after the save of an invoice: its status now and whether it still has lines to deliver (the web then asks to finish the order and calls POST sales-orders/{id}/finish).</summary>
+public sealed record SalesInvoiceOrderState(Guid Id, string Code, int StatusId, string Status, bool CanFinish);
 
 public sealed record CustomerPaymentView(
     Guid Id, string Code, CustomerPaymentKind Kind, CustomerPaymentMethod Method, decimal Amount, DateOnly PaymentDate, DateTimeOffset CreatedAt, int StatusId, string Status, AccountRef? CollectedBy);
@@ -80,14 +118,17 @@ public sealed record SalesInvoiceSendingView(string Channel, string? PhoneNumber
 /// <param name="Corrections">Every correction from the audit log, oldest first (SALE-09.1 step 2).</param>
 /// <param name="CancelledAt">Set by SALE-08.</param>
 /// <param name="CancelReason">Set by SALE-08.</param>
+/// <param name="SalesOrder">The order the invoice was made from; null for an invoice saved before invoices came from orders.</param>
+/// <param name="Note">The seller's note.</param>
 public sealed record SalesInvoiceView(
     Guid Id, string Code, DateTimeOffset InvoicedAt, DateOnly InvoiceDate, SalesInvoiceZoneView Zone, SalesInvoiceCustomerView? Customer, bool WalkInCustomer,
     Guid? PurchaseRequestId, bool TakesRequestInFull, IReadOnlyList<SalesInvoiceLineView> Lines, decimal TotalKg, decimal Subtotal, decimal Discount, bool DiscountDecidedByOwner,
     decimal OtherCharges, decimal PriceCutTotal, decimal Total, SalesPaymentTerm PaymentTerm, int StatusId, string Status, IReadOnlyList<CustomerPaymentView> Payments,
     AccountRef CreatedBy, string? QrToken, string? QrUrl, DateTimeOffset? QrDecidedAt, int DeliveryStatusId, string DeliveryStatus,
     IReadOnlyList<SalesInvoiceSendingView> Sendings, string RowVersion, IReadOnlyList<SalesInvoicePriceCutView> PriceCuts, SalesInvoiceDebtEffect DebtEffect,
-    IReadOnlyList<SalesInvoiceAction> AllowedActions, Guid? PortWeighingId, SalesInvoiceCorrectionKind? LastCorrectionKind, DateTimeOffset? LastCorrectedAt, string? LastCorrectionReason,
-    IReadOnlyList<SalesInvoiceCorrectionView> Corrections, DateTimeOffset? CancelledAt, string? CancelReason, IReadOnlyList<SalesInvoiceReturnSummary> SalesReturns);
+    IReadOnlyList<SalesInvoiceAction> AllowedActions, SalesInvoiceCorrectionKind? LastCorrectionKind, DateTimeOffset? LastCorrectedAt, string? LastCorrectionReason,
+    IReadOnlyList<SalesInvoiceCorrectionView> Corrections, DateTimeOffset? CancelledAt, string? CancelReason, IReadOnlyList<SalesInvoiceReturnSummary> SalesReturns,
+    SalesInvoiceOrderRef? SalesOrder = null, string? Note = null);
 
 /// <summary>A sales return in the detail of its invoice (SALE-09.1), cancelled ones included; <c>GET /api/sales-returns/{id}</c> has its lines.</summary>
 public sealed record SalesInvoiceReturnSummary(Guid Id, string Code, DateOnly ReturnDate, decimal Value, int StatusId, string Status);
@@ -126,7 +167,13 @@ public sealed record SalesInvoiceSent(
 
 /// <summary>The answer of SALE-05: the invoice, the change to give back (SALE-05.6 step 2) and MSG-SALE-06.</summary>
 /// <param name="SubtractedFromDebt">The cash above the total that lowered the customer debt (MSG-SALE-11).</param>
-public sealed record SalesInvoiceSaved(SalesInvoiceView Invoice, decimal Change, decimal SubtractedFromDebt, string Message, string MessageCode);
+/// <param name="Order">The order after this save; null for an invoice with no order.</param>
+public sealed record SalesInvoiceSaved(
+    SalesInvoiceView Invoice, decimal Change, decimal SubtractedFromDebt, string Message, string MessageCode, SalesInvoiceOrderState? Order = null)
+{
+    /// <summary>The order is open and still has lines not fully delivered: the web asks whether to finish it.</summary>
+    public bool OrderCanFinish => Order?.CanFinish == true;
+}
 
 /// <summary>The answer of POST: the saved invoice (201), or the sale awaiting the transfer of its VietQR code (202); exactly one is set.</summary>
 public sealed record SalesInvoiceCreated(SalesInvoiceSaved? Saved, PendingSaleView? Pending);

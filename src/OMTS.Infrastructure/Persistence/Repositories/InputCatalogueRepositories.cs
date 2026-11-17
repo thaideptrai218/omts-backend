@@ -81,7 +81,10 @@ internal sealed class InputUnitRepository(OmtsDbContext db) : IInputUnitReposito
 
     public async Task<IReadOnlyDictionary<Guid, InputUnitUsage>> UsageAsync(CancellationToken cancellationToken)
     {
-        var counts = await db.InputItemUnits.AsNoTracking().GroupBy(u => u.UnitId).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(cancellationToken);
+        // The unit list is shared by the input items and the products: a unit either kind counts in cannot be deleted.
+        var itemCounts = await db.InputItemUnits.AsNoTracking().GroupBy(u => u.UnitId).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(cancellationToken);
+        var productCounts = await db.ProductUnits.AsNoTracking().GroupBy(u => u.UnitId).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(cancellationToken);
+        var counts = itemCounts.Concat(productCounts).GroupBy(c => c.Key).Select(g => new { Key = g.Key, Count = g.Sum(c => c.Count) }).ToList();
         var onReceipts = db.PurchaseReceiptLines.Where(l => l.ItemUnitId != null).Select(l => l.ItemUnit!.UnitId);
         var onReturns = db.PurchaseReturnLines.Where(l => l.ItemUnitId != null).Select(l => l.ItemUnit!.UnitId);
         var onLines = (await onReceipts.Union(onReturns).ToListAsync(cancellationToken)).ToHashSet();

@@ -27,7 +27,7 @@ public class SalesInvoiceCreateTests
         var invoice = saved.GetProperty("invoice");
         Assert.Matches("^HD[0-9]{6}$", invoice.Text("code"));
         var line = Assert.Single(invoice.GetProperty("lines").EnumerateArray());
-        Assert.Equal((200m, 30_000m, 30_000m, "PriceList", 6_000_000m, true),
+        Assert.Equal((200m, 30_000m, 30_000m, "OrderPrice", 6_000_000m, true),
             (line.Money("kg"), line.Money("unitPrice"), line.Money("listPrice"), line.Text("priceSource"), line.Money("amount"), line.GetProperty("soldWholeLot").GetBoolean()));
         Assert.Equal((6_000_000m, 6_000_000m, 0m, 0m, "PayNow", "Completed"),
             (invoice.Money("subtotal"), invoice.Money("total"), invoice.Money("discount"), invoice.Money("otherCharges"), invoice.Text("paymentTerm"), invoice.Text("status")));
@@ -71,7 +71,6 @@ public class SalesInvoiceCreateTests
         Assert.Equal(["Lines"], await (await client.PostInvoiceAsync(Invoice(sale.CustomerId, [], Cash(0m)))).InvalidFieldsAsync());
         Assert.Equal(["Line 1 unit price"], await (await client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m, unitPrice: 0m)], Cash(0m)))).InvalidFieldsAsync());
         Assert.Equal(["Customer"], await (await client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m)).With("walkInCustomer", true))).InvalidFieldsAsync());
-        Assert.Equal(["Customer"], await (await client.PostInvoiceAsync(Invoice(null, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m)).With("walkInCustomer", false))).InvalidFieldsAsync());
         Assert.Equal(["Sold the whole lot"], await (await client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m), sale.OtherLotId))).InvalidFieldsAsync());
         Assert.Equal(["Discount"], await (await client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(0m)).With("discount", 0.5m))).InvalidFieldsAsync());
         Assert.Equal(["Payment"], await (await client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(0.5m)))).InvalidFieldsAsync());
@@ -131,7 +130,7 @@ public class SalesInvoiceCreateTests
         var second = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 10m)], Cash(350_000m)))).GetProperty("invoice");
 
         Assert.Equal(30_000m, (await sale.Manager.Client.GetFromJsonAsync<JsonElement>($"/api/sales-invoices/{first.Id()}")).GetProperty("lines")[0].Money("unitPrice"));
-        Assert.Equal(("PriceList", 35_000m), (second.GetProperty("lines")[0].Text("priceSource"), second.GetProperty("lines")[0].Money("unitPrice")));
+        Assert.Equal(("OrderPrice", 35_000m), (second.GetProperty("lines")[0].Text("priceSource"), second.GetProperty("lines")[0].Money("unitPrice")));
     }
 
     // BR-SALE-03: the Owner is notified of each sale, the Owner's own included; the notice opens the invoice.

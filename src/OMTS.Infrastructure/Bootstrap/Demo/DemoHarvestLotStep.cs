@@ -26,21 +26,6 @@ internal sealed class DemoHarvestLotStep : IDemoSeedStep
 
     public async Task<int> RunAsync(DemoSeedContext context, CancellationToken cancellationToken)
     {
-        // A lot is recorded for a purchase request (decision of 11/11/2026): the demo trader's Accepted one, whose harvest is not marked done.
-        var order = await context.Db.PurchaseRequests.AsNoTracking()
-            .Where(r => r.StatusId == StatusIds.PurchaseRequest.Accepted && r.HarvestCompletedAt == null
-                // Only the big order of DemoPurchaseRequestStep holds the lots of the demo rafts. A smaller one that DemoOpenHarvestRequestStep adds is for the Owner to harvest through the API and would refuse
-                // them (product or cages), as on a rerun after a real SMS sender left the first requests unanswered.
-                && r.AcceptedCages >= DemoPurchaseRequestStep.DemoHarvestOrderCages)
-            .OrderBy(r => r.AgreedPickupDate).ThenBy(r => r.SentAt)
-            .Select(r => (Guid?)r.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-        if (order is null)
-        {
-            context.Notes.Add("Demo harvest lots: no Accepted purchase request to harvest for, so no lot was recorded.");
-            return 0;
-        }
-
         var created = 0;
         foreach (var (zoneCode, manager, raftNumbers) in Zones)
         {
@@ -49,7 +34,7 @@ internal sealed class DemoHarvestLotStep : IDemoSeedStep
             using var acting = context.Get<AmbientActor>().Use(actor);
             foreach (var number in raftNumbers)
             {
-                created += await HarvestRaftAsync(context, zoneId, zoneCode, DemoRaftStep.RaftCode(zoneCode, number), number, order.Value, cancellationToken);
+                created += await HarvestRaftAsync(context, zoneId, zoneCode, DemoRaftStep.RaftCode(zoneCode, number), number, cancellationToken);
             }
         }
 
@@ -57,13 +42,13 @@ internal sealed class DemoHarvestLotStep : IDemoSeedStep
     }
 
     private static async Task<int> HarvestRaftAsync(
-        DemoSeedContext context, Guid zoneId, string zoneCode, string raftCode, int number, Guid order, CancellationToken cancellationToken)
+        DemoSeedContext context, Guid zoneId, string zoneCode, string raftCode, int number, CancellationToken cancellationToken)
     {
         var db = context.Db;
         var cycle = await db.CultivationCycles.AsNoTracking()
             .Where(c => c.Raft.ZoneId == zoneId && c.Raft.Code == raftCode && c.StatusId == StatusIds.CultivationCycle.Open
                 && c.Raft.StatusId == StatusIds.Usage.InUse && c.Raft.Zone.StatusId == StatusIds.Usage.InUse)
-            .Select(c => new { c.Id, c.RaftId })
+            .Select(c => new { c.Id, c.RaftId, c.ProductId })
             .FirstOrDefaultAsync(cancellationToken);
         var codesOfRaft = $"{HarvestLotCodes.RaftPart(zoneCode, raftCode)}-";
         if (cycle is null
@@ -80,13 +65,28 @@ internal sealed class DemoHarvestLotStep : IDemoSeedStep
             return 0;
         }
 
+        // The lots of the first raft of the first zone are split per product, so the products have stock; the others stay as lots recorded before products, which count in no stock.
+        // The product of the cycle is the main one of a split lot (the other product comes beside it).
+        var products = await db.Products.AsNoTracking().Where(p => p.Name == "Hàu sữa" || p.Name == "Hàu béo").ToDictionaryAsync(p => p.Name, p => p.Id, cancellationToken);
+        var split = number == 1 && zoneCode == DemoFarmingZoneStep.ZoneOne && products.Count == 2 && (cycle.ProductId is null || products.ContainsValue(cycle.ProductId.Value));
+        // A demo cycle has no product until the last step: the split lots give the cycle theirs (Hàu sữa), which stays its main product.
+        var main = cycle.ProductId ?? products.GetValueOrDefault("Hàu sữa");
+        var other = products.Values.FirstOrDefault(id => id != main);
+        if (split && cycle.ProductId is null)
+        {
+            await db.CultivationCycles.Where(c => c.Id == cycle.Id).ExecuteUpdateAsync(c => c.SetProperty(x => x.ProductId, main), cancellationToken);
+        }
+
         var trips = number == 1
             ? new[]
             {
-                new RecordHarvestRequest(lanes.Take(2).ToList(), [], CagesOfATrip, null, PurchaseRequestId: order),
-                new RecordHarvestRequest([lanes[1]], [lanes[1]], CagesOfATrip / 2, 180m, PurchaseRequestId: order),
+                new RecordHarvestRequest(
+                    lanes.Take(2).ToList(), [], CagesOfATrip, null,
+                    ProductLines: split ? [new(main, 5, null), new(other, CagesOfATrip - 5, null)] : null),
+                new RecordHarvestRequest(
+                    [lanes[1]], [lanes[1]], CagesOfATrip / 2, 180m, ProductLines: split ? [new(main, CagesOfATrip / 2, 180m)] : null),
             }
-            : [new RecordHarvestRequest(lanes, lanes, CagesOfATrip * lanes.Count, null, PurchaseRequestId: order)];
+            : [new RecordHarvestRequest(lanes, lanes, CagesOfATrip * lanes.Count, null)];
         var service = context.Get<HarvestLotRecordingService>();
         for (var trip = 0; trip < trips.Length; trip++)
         {

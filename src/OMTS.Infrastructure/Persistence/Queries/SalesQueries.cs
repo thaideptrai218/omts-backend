@@ -137,7 +137,8 @@ internal sealed class CustomerDebtQuery(OmtsDbContext db) : ICustomerDebtQuery
         var payments = await PaymentsOf(ids)
             .Select(p => new CustomerLedgerPayment(
                 p.CustomerId!.Value, p.Id, p.Code, p.Kind, p.PaymentDate, p.Amount, p.Method, p.InvoiceId, p.Invoice == null ? null : p.Invoice.Code, p.StatusId, p.CancelledAt, null,
-                p.PaidAt, p.DiscountAmount, null))
+                p.PaidAt, p.DiscountAmount, null,
+                p.SalesOrderId, p.SalesOrder == null ? null : p.SalesOrder.Code, p.SalesOrder != null && (p.SalesOrder.StatusId == StatusIds.SalesOrder.Draft || p.SalesOrder.StatusId == StatusIds.SalesOrder.Delivering)))
             .ToListAsync(cancellationToken);
         return new CustomerLedgerRows(invoices, await WithAllocationsAsync(payments, ids, cancellationToken), await AdjustmentsOf(ids, false, cancellationToken));
     }
@@ -152,7 +153,8 @@ internal sealed class CustomerDebtQuery(OmtsDbContext db) : ICustomerDebtQuery
             {
                 Ledger = new CustomerLedgerPayment(
                     p.CustomerId!.Value, p.Id, p.Code, p.Kind, p.PaymentDate, p.Amount, p.Method, p.InvoiceId, p.Invoice == null ? null : p.Invoice.Code, p.StatusId, p.CancelledAt, null,
-                    p.PaidAt, p.DiscountAmount, null),
+                    p.PaidAt, p.DiscountAmount, null,
+                    p.SalesOrderId, p.SalesOrder == null ? null : p.SalesOrder.Code, p.SalesOrder != null && (p.SalesOrder.StatusId == StatusIds.SalesOrder.Draft || p.SalesOrder.StatusId == StatusIds.SalesOrder.Delivering)),
                 p.Note,
                 p.CancelReason,
                 p.RecordedByAccountId,
@@ -184,10 +186,11 @@ internal sealed class CustomerDebtQuery(OmtsDbContext db) : ICustomerDebtQuery
 
     private async Task<IReadOnlyList<CustomerLedgerInvoice>> InvoicesOf(List<Guid> ids, CancellationToken cancellationToken)
     {
+        // The last two arguments are the price cuts (filled below) and the order of the invoice, which lets an advance reserved for an order cover this invoice and no other.
         var invoices = await db.SalesInvoices.AsNoTracking()
             .Where(i => i.CustomerId != null && ids.Contains(i.CustomerId.Value))
             .Select(i => new CustomerLedgerInvoice(i.CustomerId!.Value, i.Id, i.Code, i.InvoicedAt, i.InvoiceDate, i.Total, i.StatusId == StatusIds.SalesInvoice.Cancelled, null, i.CancelledAt, i.CancelReason,
-                i.Returns.Where(r => r.StatusId == StatusIds.SalesReturn.Recorded).Sum(r => r.Value)))
+                i.Returns.Where(r => r.StatusId == StatusIds.SalesReturn.Recorded).Sum(r => r.Value), i.SalesOrderId))
             .ToListAsync(cancellationToken);
         var cuts = await db.SalesInvoicePriceCuts.AsNoTracking()
             .Where(c => c.Invoice.CustomerId != null && ids.Contains(c.Invoice.CustomerId.Value))

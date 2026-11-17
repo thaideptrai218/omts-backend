@@ -39,6 +39,9 @@ public static partial class RelatedRecordTypes
     /// <summary>A harvest lot (HARVEST-01); the code shown is its lot code.</summary>
     public const string HarvestLot = "HarvestLot";
 
+    /// <summary>A harvest plan (KHT); its zone is its own and the code shown is KHT000123.</summary>
+    public const string HarvestPlan = "HarvestPlan";
+
     /// <summary>A nursery batch (ươm giống); its zone is its own, and the code shown is NU000001.</summary>
     public const string NurseryBatch = "NurseryBatch";
 

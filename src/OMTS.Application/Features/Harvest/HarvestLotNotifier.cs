@@ -17,8 +17,8 @@ public sealed class HarvestLotNotifier(IZoneRecipientQuery recipients, OwnerActo
     private const string CloseReminderTitle = "Reminder to close a cultivation cycle";
     private const string AutoCloseWarningTitle = "Harvest lot closing automatically";
 
-    /// <summary>MSG-HARVEST-01 to the Cooperative Owners (BF-03 step 7); not on a correction.</summary>
-    public async Task LotRecordedAsync(HarvestLot lot, Raft raft, Guid recorder, CancellationToken cancellationToken)
+    /// <summary>MSG-HARVEST-01 to the Cooperative Owners (BF-03 step 7); not on a correction. <paramref name="planCode"/> is the harvest plan the lot was recorded from, named in the text.</summary>
+    public async Task LotRecordedAsync(HarvestLot lot, Raft raft, Guid recorder, CancellationToken cancellationToken, string? planCode = null)
     {
         var told = await ownerActorFilter.WithoutOwnerActorAsync(await recipients.GetCooperativeOwnersAsync(cancellationToken), recorder, cancellationToken);
         await notifications.NotifyAsync(
@@ -26,7 +26,7 @@ public sealed class HarvestLotNotifier(IZoneRecipientQuery recipients, OwnerActo
             new NotificationContent(
                 NotificationTypes.HarvestLotRecorded,
                 LotRecordedTitle,
-                UserMessages.HarvestLotRecorded(raft.Code, lot.HarvestDate, lot.LotCode, lot.CageCount, lot.EstimatedKg),
+                UserMessages.HarvestLotRecorded(raft.Code, lot.HarvestDate, lot.LotCode, lot.CageCount, lot.EstimatedKg, planCode),
                 new RelatedRecord(RelatedRecordTypes.HarvestLot, lot.Id, lot.LotCode)),
             cancellationToken);
     }

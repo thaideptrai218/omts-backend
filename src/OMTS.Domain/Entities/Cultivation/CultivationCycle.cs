@@ -29,7 +29,7 @@ public class CultivationCycle : AuditableEntity, IHasStatus
     /// <summary>The nursery batch the cycle takes its seed from (chosen when the cycle is started, v2 13/11/2026; changeable until the first seeding record); null on a cycle started the old way, which keeps its old rules.</summary>
     public Guid? NurseryBatchId { get; set; }
 
-    /// <summary>The product (kind of oyster) the cycle will yield and sell (owner decision of 13/11/2026): required to start a cycle, changeable until the first seeding record; a harvest lot can only be recorded for a purchase request of this product.
+    /// <summary>The product (kind of oyster) the cycle will yield and sell (owner decision of 13/11/2026): required to start a cycle, changeable until the first seeding record; a harvest lot split into products must hold this product, and the harvest plan lines of the raft expect it.
     /// Null on a cycle started before: it keeps no check.</summary>
     public Guid? ProductId { get; set; }
     public Product? Product { get; set; }

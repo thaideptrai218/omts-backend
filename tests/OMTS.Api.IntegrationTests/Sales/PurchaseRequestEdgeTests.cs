@@ -44,7 +44,7 @@ public class PurchaseRequestEdgeTests(AuthApiFactory factory) : IClassFixture<Au
     {
         await using var clocked = new ClockedFactory();
         var (trader, _) = await clocked.LinkedProfileAsync();
-        var product = new Product { Name = NewCode(), UnitPrice = 1 };
+        var product = new Product { Code = Guid.NewGuid().ToString("N")[..12], Name = NewCode(), UnitPrice = 1 };
         await clocked.UseDbAsync(db => db.Products.Add(product));
         var fifth = new DateOnly(2026, 11, 5);
         using var scope = clocked.Services.CreateScope();

@@ -96,7 +96,9 @@ public sealed class NotificationInboxService(
             : rule.OwnTraderRecord
             ? location.TraderAccountId == accountId
             : rule.Function is { } function
-                ? access.Allows(function, rule.Action, PermissionScope.ZoneScoped, location.ZoneId)
+                ? location.ZoneIds is { Count: > 0 } zoneIds
+                    ? zoneIds.Any(zone => access.Allows(function, rule.Action, PermissionScope.ZoneScoped, zone))
+                    : access.Allows(function, rule.Action, PermissionScope.ZoneScoped, location.ZoneId)
                 : access.IsCooperativeOwner);
         return allowed
             ? new OpenedNotificationRecord(notification.Id, recordType, recordId, notification.RelatedRecordCode, location.ZoneId)

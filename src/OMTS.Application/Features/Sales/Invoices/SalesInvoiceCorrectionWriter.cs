@@ -3,17 +3,23 @@ using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
-using OMTS.Application.Features.Harvest;
 using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Application.Features.Sales.Invoices;
 
 /// <summary>
-/// SALE-07 step 8 in the caller's unit of work: the invoice keeps its code, date, QR code and payments; the lines, the money, the profile, the marks and the lots change, and one audit event
-/// holds the kind, the reason and the totals before and after (BR-SALE-10). The invoice is always marked changed, so a parallel correction or cancellation cannot both win.
+/// SALE-07 step 8 in the caller's unit of work, for the price cut after a claim: the invoice keeps its code, date, QR code, lines and payments; the cut is added, the total comes down (what the invoice
+/// can no longer hold of the advance of its order is cut), a walk-in invoice with money to give back gets its profile, and one audit event holds the kind, the reason and the totals before and after
+/// (BR-SALE-10). The product ledger does not change: the lines keep their prices. The invoice is always marked changed, so a parallel change or cancellation cannot both win. The same event name is
+/// written by an edit of the invoice (<see cref="SalesInvoiceEditWriter"/>).
 /// </summary>
 public sealed class SalesInvoiceCorrectionWriter(
-    ISalesInvoiceRepository invoices, HarvestLotStatusService lotStatuses, AuditLogService audit, IUnitOfWork unitOfWork, ICurrentUser currentUser, TimeProvider timeProvider)
+    ISalesInvoiceRepository invoices,
+    SalesInvoiceAdvanceTrimmer trimmer,
+    AuditLogService audit,
+    IUnitOfWork unitOfWork,
+    ICurrentUser currentUser,
+    TimeProvider timeProvider)
 {
     public const string CorrectedAction = "SalesInvoice.Corrected";
 
@@ -22,45 +28,25 @@ public sealed class SalesInvoiceCorrectionWriter(
         var now = timeProvider.GetUtcNow();
         var today = BusinessClock.ToBusinessDate(now);
         var totalBefore = invoice.Total;
-        var before = Snapshot(invoice, invoice.Lines);
+        var before = Snapshot(invoice);
 
         unitOfWork.MarkChanged(invoice);
-        var linesAfter = WriteLines(invoice, plan.Lines);
-        invoice.Subtotal = plan.Subtotal;
-        invoice.DiscountAmount = plan.Discount;
-        invoice.DiscountDecidedByOwner = plan.Discount > 0m;
-        invoice.OtherCharges = plan.OtherCharges;
         invoice.PriceCutTotal = plan.PriceCutTotal;
         invoice.Total = plan.Total;
         invoice.LastCorrectionKind = entries.Kind;
         invoice.LastCorrectedAt = now;
         invoice.LastCorrectionReason = entries.Reason;
-        if (entries.IsPriceCut)
+        invoices.AddPriceCut(new SalesInvoicePriceCut
         {
-            invoices.AddPriceCut(new SalesInvoicePriceCut
-            {
-                InvoiceId = invoice.Id, Amount = entries.PriceCutAmount, CutDate = today, Reason = entries.Reason, EnteredByAccountId = currentUser.AccountId!.Value,
-            });
-        }
+            InvoiceId = invoice.Id, Amount = entries.PriceCutAmount, CutDate = today, Reason = entries.Reason, EnteredByAccountId = currentUser.AccountId!.Value,
+        });
+        trimmer.Apply(plan.Trim);
 
         var movedPayments = plan.CustomerChanged ? MoveToCustomer(invoice, plan.Customer!) : [];
         foreach (var profile in plan.DebtsAfter)
         {
             // Read for the debt, so a parallel payment or merge and this save cannot both win.
             unitOfWork.MarkChanged(profile.Customer);
-        }
-
-        foreach (var lot in plan.LotsToClose)
-        {
-            if (lotStatuses.CloseSoldWholeLot(lot, today, invoice.Id) is { } refused)
-            {
-                throw new InvalidOperationException($"Harvest lot {lot.LotCode} was checked for sale and cannot be closed by invoice {invoice.Code}: {refused.Message.Text}");
-            }
-        }
-
-        foreach (var lot in plan.LotsToReopen)
-        {
-            lotStatuses.Reopen(lot, today, HarvestLotReopenCause.SoldWholeTickRemoved, invoice.Id);
         }
 
         audit.Record(new AuditEntry(CorrectedAction, SalesInvoiceWriter.RecordType)
@@ -76,51 +62,16 @@ public sealed class SalesInvoiceCorrectionWriter(
                 Date = today,
                 TotalBefore = totalBefore,
                 TotalAfter = invoice.Total,
-                PriceCutAmount = entries.IsPriceCut ? entries.PriceCutAmount : (decimal?)null,
+                PriceCutAmount = entries.PriceCutAmount,
+                AdvanceTrimmed = plan.Trim.Trimmed,
                 MovedPayments = movedPayments,
-                Values = Snapshot(invoice, linesAfter),
+                Values = Snapshot(invoice),
             },
         });
     }
 
-    // Row i keeps its number, extra rows go and new rows take the next numbers: the unique line number never collides. Answers the lines as they will be (a price cut changes none).
-    private List<SalesInvoiceLine> WriteLines(SalesInvoice invoice, IReadOnlyList<CorrectedLine> lines)
-    {
-        var existing = invoice.Lines.OrderBy(l => l.LineNumber).ToList();
-        if (lines.Count == 0)
-        {
-            return existing;
-        }
-
-        var written = new List<SalesInvoiceLine>();
-        for (var i = 0; i < lines.Count; i++)
-        {
-            var line = i < existing.Count ? existing[i] : new SalesInvoiceLine { InvoiceId = invoice.Id, LineNumber = i + 1 };
-            written.Add(line);
-            var entry = lines[i];
-            line.ProductId = entry.Entry.ProductId;
-            line.HarvestLotId = entry.Entry.LotId;
-            line.Kg = entry.Entry.Kg;
-            line.UnitPrice = entry.UnitPrice;
-            line.ListPrice = entry.ListPrice;
-            line.PriceSource = entry.PriceSource;
-            line.Amount = entry.Amount;
-            line.SoldWholeLot = entry.SoldWholeLot;
-            if (i >= existing.Count)
-            {
-                invoices.AddLine(line);
-            }
-        }
-
-        foreach (var removed in existing.Skip(lines.Count))
-        {
-            invoices.RemoveLine(removed);
-        }
-
-        return written;
-    }
-
-    // BR-SALE-10 (2) and SALE-07.2: the invoice and the payments that name it; the audit event keeps the earlier profile. A request belongs to a profile, so its link goes (BR-SALE-01).
+    // BR-SALE-10 (2) and SALE-07.2: a walk-in invoice with money to give back gets a profile, and the payments that name it move with it; the audit event keeps the earlier profile. A walk-in invoice has
+    // no payment of a debt allocated to it, so no allocation stays behind with the old profile. A request belongs to a profile, so its link goes (BR-SALE-01).
     private static List<string> MoveToCustomer(SalesInvoice invoice, Customer customer)
     {
         invoice.CustomerId = customer.Id;
@@ -132,7 +83,7 @@ public sealed class SalesInvoiceCorrectionWriter(
         return moved.Select(p => p.Code).ToList();
     }
 
-    private static object Snapshot(SalesInvoice invoice, IEnumerable<SalesInvoiceLine> lines) => new
+    private static object Snapshot(SalesInvoice invoice) => new
     {
         invoice.CustomerId,
         invoice.PurchaseRequestId,
@@ -141,6 +92,6 @@ public sealed class SalesInvoiceCorrectionWriter(
         invoice.OtherCharges,
         invoice.PriceCutTotal,
         invoice.Total,
-        Lines = lines.OrderBy(l => l.LineNumber).Select(l => new { l.LineNumber, l.ProductId, l.HarvestLotId, l.Kg, l.UnitPrice, l.ListPrice, l.PriceSource, l.Amount, l.SoldWholeLot }).ToList(),
+        Lines = invoice.Lines.OrderBy(l => l.LineNumber).Select(l => new { l.LineNumber, l.ProductId, l.HarvestLotId, l.Kg, l.UnitPrice, l.ListPrice, l.PriceSource, l.Amount, l.SoldWholeLot }).ToList(),
     };
 }

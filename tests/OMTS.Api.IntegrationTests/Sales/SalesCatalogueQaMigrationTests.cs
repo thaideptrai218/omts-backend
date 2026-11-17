@@ -144,7 +144,7 @@ public class SalesCatalogueQaMigrationTests
             var merged = new Customer { Code = OMTS.Api.IntegrationTests.Infrastructure.AcsTestKit.NewCustomerCode(), CooperativeId = cooperative, Name = "Merged", PhoneNumber = "0900000093", MergedIntoCustomerId = kept.Id };
             merged.PhoneCheckedByStaff = true;
             db.Customers.AddRange(kept, merged);
-            db.Products.AddRange(new Product { Name = "Hàu sữa", UnitPrice = 60_000 }, new Product { Name = "Hàu béo", UnitPrice = 75_000, StatusId = StatusIds.Usage.Discontinued });
+            db.Products.AddRange(new Product { Code = "SP000001", Name = "Hàu sữa", UnitPrice = 60_000 }, new Product { Code = "SP000002", Name = "Hàu béo", UnitPrice = 75_000, StatusId = StatusIds.Usage.Discontinued });
             await db.SaveChangesAsync();
 
             await migrator.MigrateAsync(MigrationBefore);

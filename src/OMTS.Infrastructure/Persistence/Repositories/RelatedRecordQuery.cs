@@ -39,13 +39,13 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
     {
         if (recordType == nameof(WorkDayPlan))
             return db.Set<WorkDayPlan>().Where(p => p.Id == recordId)
-                .Select(p => new RelatedRecordLocation(p.Raft.ZoneId, null, null, p.ResponsibleAccountId, null)).FirstOrDefaultAsync(cancellationToken);
+                .Select(p => new RelatedRecordLocation(p.Raft.ZoneId, null, null, p.ResponsibleAccountId, null, null)).FirstOrDefaultAsync(cancellationToken);
         if (recordType == nameof(WorkAssignment))
             return db.WorkAssignments.Where(p => p.Id == recordId)
-                .Select(p => new RelatedRecordLocation(p.Raft.ZoneId, null, p.Employee.AccountId, null, null)).FirstOrDefaultAsync(cancellationToken);
+                .Select(p => new RelatedRecordLocation(p.Raft.ZoneId, null, p.Employee.AccountId, null, null, null)).FirstOrDefaultAsync(cancellationToken);
         if (recordType == RelatedRecordTypes.Account)
             return db.Accounts.Where(a => a.Id == recordId)
-                .Select(a => new RelatedRecordLocation(null, a.SubjectType == SubjectType.Trader ? a.Id : null, null, null, null)).FirstOrDefaultAsync(cancellationToken);
+                .Select(a => new RelatedRecordLocation(null, a.SubjectType == SubjectType.Trader ? a.Id : null, null, null, null, null)).FirstOrDefaultAsync(cancellationToken);
         // No zone (PM 03/11): the Owner opens it, and the trader of its customer profile.
         if (recordType == RelatedRecordTypes.PurchaseRequest)
         {
@@ -67,6 +67,12 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
         if (recordType == RelatedRecordTypes.CultivationCycle)
         {
             return FindCultivationCycleAsync(recordId, cancellationToken);
+        }
+
+        // A harvest plan spans the zones of the rafts of its lines.
+        if (recordType == RelatedRecordTypes.HarvestPlan)
+        {
+            return FindHarvestPlanAsync(recordId, cancellationToken);
         }
 
         // A harvest lot's zone is its raft's (HARVEST-01 notice).
@@ -110,6 +116,17 @@ internal sealed class RelatedRecordQuery(OmtsDbContext db) : IRelatedRecordQuery
         var zones = await db.HarvestLots.AsNoTracking().Where(l => l.Id == id)
             .Select(l => l.Raft.ZoneId).ToListAsync(cancellationToken);
         return zones.Count == 0 ? null : new RelatedRecordLocation(zones[0]);
+    }
+
+    private async Task<RelatedRecordLocation?> FindHarvestPlanAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (!await db.HarvestPlans.AsNoTracking().AnyAsync(p => p.Id == id, cancellationToken))
+        {
+            return null;
+        }
+
+        var zones = await db.HarvestPlanLines.AsNoTracking().Where(l => l.PlanId == id).Select(l => l.Raft.ZoneId).Distinct().ToListAsync(cancellationToken);
+        return new RelatedRecordLocation(zones.Count == 1 ? zones[0] : null, ZoneIds: zones);
     }
 
     private async Task<RelatedRecordLocation?> FindPurchaseRequestAsync(Guid id, CancellationToken cancellationToken)

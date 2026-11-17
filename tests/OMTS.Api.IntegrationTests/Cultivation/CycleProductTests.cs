@@ -70,48 +70,23 @@ public sealed class CycleProductTests
         var cleared = await (await owner.PutAsJsonAsync($"/api/farming-input-items/{seed.Id()}", new { name = "Giống B", group = "Seed", unit = "con", rowVersion = await api.IssueRowVersionAsync<FarmingInputItem>(seed.Id()) })).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(JsonValueKind.Null, cleared.GetProperty("productId").ValueKind);
     }
+
     [Fact]
-    public async Task A_lot_is_recorded_only_for_a_request_of_the_product_the_cycle_farms_and_the_screen_says_which_match()
+    public async Task A_lot_split_per_product_must_hold_the_product_the_cycle_farms_and_may_add_others()
     {
         using var api = new AuthApiFactory();
         var raft = await api.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        var other = await HarvestOrderKit.OrderAsync(api.Services);
-        var matching = await HarvestOrderKit.OrderAsync(api.Services);
-
-        // A cycle without a product (started before) is not checked: any open request takes a lot.
-        var screenBefore = await owner.HarvestScreenAsync(raft.RaftId);
-        Assert.Equal(JsonValueKind.Null, screenBefore.GetProperty("cycleProductId").ValueKind);
-        Assert.All(screenBefore.GetProperty("orders").EnumerateArray(), o => Assert.True(o.Flag("matchesCycleProduct")));
-
         var product = await NurseryTestKit.ProductRowAsync(api.Services);
-        using (var scope = api.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
-            var cycle = await db.CultivationCycles.SingleAsync(c => c.Id == raft.CycleId);
-            cycle.ProductId = product;
-            var request = await db.PurchaseRequests.Include(r => r.Product).SingleAsync(r => r.Id == matching);
-            request.ProductId = product;
-            request.ProductName = (await db.Products.SingleAsync(p => p.Id == product)).Name;
-            await db.SaveChangesAsync();
-        }
+        var other = await NurseryTestKit.ProductRowAsync(api.Services);
+        await api.UpdateAsync<CultivationCycle>(raft.CycleId, c => c.ProductId = product);
 
-        var productName = await api.QueryAsync(db => db.Products.Where(p => p.Id == product).Select(p => p.Name).SingleAsync());
-        var screen = await owner.HarvestScreenAsync(raft.RaftId);
-        Assert.Equal((product, productName), (screen.GetProperty("cycleProductId").GetGuid(), screen.Text("cycleProductName")));
-        var orders = screen.GetProperty("orders").EnumerateArray().ToDictionary(o => o.Id());
-        Assert.Equal((true, productName), (orders[matching].Flag("matchesCycleProduct"), orders[matching].Text("productName")));
-        Assert.False(orders[other].Flag("matchesCycleProduct"));
-        Assert.Equal(product, orders[matching].GetProperty("productId").GetGuid());
-
-        var refused = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields().For(other))).ReadAsync(HttpStatusCode.BadRequest);
+        var refused = await (await owner.PostHarvestAsync(raft.RaftId, new HarvestFields().WithProducts((other, 8m, null)))).ReadAsync(HttpStatusCode.BadRequest);
         Assert.Equal(("MSG-GEN-09", "HARVEST_PRODUCT_MISMATCH"), (refused.Text("code"), refused.Text("reasonCode")));
-        Assert.Contains(productName, refused.Text("detail"));
-        Assert.Contains("Chọn đơn mua khớp loại hàu đang nuôi", refused.Text("detail"));
         Assert.Equal(0, await api.LotCountAsync(raft.RaftId));
 
-        var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields().For(matching));
-        Assert.Equal(matching, lot.GetProperty("purchaseRequestId").GetGuid());
+        var lot = await owner.HarvestLotAsync(raft.RaftId, new HarvestFields().WithProducts((product, 5.5m, null), (other, 2.5m, null)));
+        Assert.Equal(8m, lot.Kg("cageCount"));
         Assert.Equal(1, await api.LotCountAsync(raft.RaftId));
     }
 }

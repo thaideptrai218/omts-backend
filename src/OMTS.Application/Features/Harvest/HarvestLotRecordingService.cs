@@ -11,7 +11,7 @@ using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Application.Features.Files;
-using OMTS.Application.Features.Sales.PurchaseRequests;
+using OMTS.Application.Features.Harvest.Plans;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
@@ -24,17 +24,14 @@ namespace OMTS.Application.Features.Harvest;
 /// uploaded nothing is saved and nobody is told (GFR-01). Everything the save decides is read again after the uploads, which can take minutes at sea: the Open cycle, the lane states, the
 /// average kg per cage it copies (BR-HARVEST-02), the harvest time and the lot code. The cycle row is part of the save, so of two parallel saves that change the lane states of a cycle
 /// one answers MSG06 and saves nothing, and a new send is checked against the new states. Two lots that take one code without sharing a cycle lose nothing: the loser takes the next code, with its photos.
-/// The trip harvests for one purchase request (decision of 11/11/2026), read again with the rest: the request row is part of the save too, so a lot and the Owner marking its harvest done
-/// never both pass. Two lots of one request on two rafts both pass: the one that loses on the request row alone tries again.
+/// A lot may be recorded from a line of a harvest plan (read again with the rest and moved on in the same save, so two lots of one line never both pass) and may be split into product lines; its cages
+/// against the cages the line expects only warn.
 /// </summary>
 public sealed class HarvestLotRecordingService(
     IRaftRepository rafts,
     ICultivationCycleRepository cycles,
     ICultivationCycleQuery cycleQuery,
     IHarvestLotRepository lots,
-    IPurchaseRequestRepository requests,
-    IPurchaseRequestFulfilment fulfilment,
-    IStatusCatalog statuses,
     ICooperativeRepository cooperatives,
     RaftViews raftViews,
     LaneStateReader laneStates,
@@ -42,6 +39,8 @@ public sealed class HarvestLotRecordingService(
     RecordPhotoStore photoStore,
     UploadedFileSaver fileSaver,
     HarvestLotNotifier notifier,
+    HarvestLotProductLineService productLines,
+    HarvestPlanProgress planProgress,
     HarvestLotViews views,
     HarvestCrewService crews,
     ZoneAccessGuard zoneAccess,
@@ -54,7 +53,7 @@ public sealed class HarvestLotRecordingService(
 
     private sealed record OpenRaft(CultivationCycle Cycle, IReadOnlyDictionary<Guid, LaneState> States, decimal KgPerCage);
 
-    private sealed record PreparedLot(HarvestLot Lot, CultivationCycle Cycle, Raft Raft, bool EverySeededLaneHarvested, int? OrderCagesTotal, decimal OrderCagesHarvested);
+    private sealed record PreparedLot(HarvestLot Lot, CultivationCycle Cycle, Raft Raft, bool EverySeededLaneHarvested, decimal? PlanCagesExpected, IReadOnlyList<Farming.FarmingWarning> Warnings);
 
     public async Task<Result<HarvestLotSaved>> RecordAsync(Guid raftId, RecordHarvestRequest request, IReadOnlyList<IncomingFile> photos, CancellationToken cancellationToken)
     {
@@ -76,9 +75,22 @@ public sealed class HarvestLotRecordingService(
             return refused;
         }
 
-        // A new lot needs 1 to 3 on-site photos (owner decision of 12/11/2026); a lot recorded before the photos stays valid without.
+        var planned = await ResolvePlanAsync(request, raftId, cancellationToken);
+        if (!planned.IsSuccess)
+        {
+            return planned.Error!;
+        }
+
+        request = WithPlannedLanes(request, planned.Value);
+        // A new lot needs 1 to 3 on-site photos; a lot recorded before the photos stays valid without.
         var (files, photoHint) = HarvestLotFieldReader.ReadPhotos(photos, request.OtherFilePart, minimum: StepPhotoService.MinPhotos);
-        if (HarvestLotFieldReader.Read(request, raft, open!.States, open.KgPerCage, photoHint, out var firstFields) is { } invalid)
+        var (resolvedLines, split, lineError) = await WithProductLinesAsync(request, open!.KgPerCage, open.Cycle.ProductId, cancellationToken);
+        if (lineError is not null)
+        {
+            return lineError;
+        }
+
+        if (HarvestLotFieldReader.Read(split, raft, open.States, open.KgPerCage, photoHint, out var firstFields) is { } invalid)
         {
             return invalid;
         }
@@ -88,20 +100,9 @@ public sealed class HarvestLotRecordingService(
             return wrongPercent;
         }
 
-        var order = await requests.GetForEditAsync(request.PurchaseRequestId!.Value, cancellationToken);
-        if (await PurchaseRequestRules.RefusesHarvestLotAsync(order, statuses, fulfilment, cancellationToken) is { } wrongRequest)
-        {
-            return wrongRequest;
-        }
-
-        if (HarvestProductMatch.Refusal(open.Cycle, order!) is { } wrongProduct)
+        if (HarvestProductMatch.Refusal(open.Cycle, resolvedLines) is { } wrongProduct)
         {
             return wrongProduct;
-        }
-
-        if (HarvestOrderCages.Refusal(order!, await CagesOfOrderAsync(order!.Id, cancellationToken), firstFields!.CageCount) is { } tooManyCages)
-        {
-            return tooManyCages;
         }
 
         if ((await crews.ReadAsync(request.Crew, request.CrewUnreadable, cancellationToken)).Error is { } wrongCrew)
@@ -109,7 +110,7 @@ public sealed class HarvestLotRecordingService(
             return wrongCrew;
         }
 
-        var recorder =currentUser.AccountId ?? throw new InvalidOperationException("A harvest lot needs an authenticated caller.");
+        var recorder = currentUser.AccountId ?? throw new InvalidOperationException("A harvest lot needs an authenticated caller.");
         var uploaded = await photoStore.UploadAllAsync(FileCategories.HarvestLotPhotos, files, cancellationToken);
         if (!uploaded.IsSuccess)
         {
@@ -119,16 +120,12 @@ public sealed class HarvestLotRecordingService(
         return await SaveAsync(raftId, request, uploaded.Value!, recorder, cancellationToken);
     }
 
-    /// <summary>
-    /// One attempt per lot code: a new attempt starts clean, from the database as it now is. The uploads stay until the last attempt fails. A conflict on the
-    /// purchase request alone also gets a new attempt: two people record lots for one request on two rafts at once (decision of 11/11/2026), and the new attempt
-    /// still refuses a request marked harvest done in between. A conflict on the cycle stays MSG06, as the lane states may have changed.
-    /// </summary>
+    /// <summary>One attempt per lot code: a new attempt starts clean, from the database as it now is. The uploads stay until the last attempt fails.</summary>
     private async Task<Result<HarvestLotSaved>> SaveAsync(Guid raftId, RecordHarvestRequest request, IReadOnlyList<string> keys, Guid recorder, CancellationToken cancellationToken)
     {
         for (var attempt = 1; ; attempt++)
         {
-            // Forgets every row read or added and the pushes queued with them, so a new attempt after a lost race reads the database again.
+            // Forgets every row read or added and the pushes queued with them, so a new attempt after a lost race on the lot code reads the database again.
             unitOfWork.DiscardChanges();
             var prepared = await photoStore.PrepareSaveAsync(keys, () => PrepareAsync(raftId, request, keys, recorder, cancellationToken));
             if (!prepared.IsSuccess)
@@ -136,12 +133,10 @@ public sealed class HarvestLotRecordingService(
                 return prepared.Error!;
             }
 
-            var cycleRead = prepared.Value!.Cycle.RowVersion.ToArray();
-            var requestRead = prepared.Value!.Lot.PurchaseRequest!.RowVersion.ToArray();
             try
             {
                 var mayRetry = attempt < MaxCodeAttempts;
-                await fileSaver.SaveAsync(keys, [], cancellationToken, exception => mayRetry && exception is DuplicateRecordException or ConcurrencyConflictException);
+                await fileSaver.SaveAsync(keys, [], cancellationToken, exception => mayRetry && exception is DuplicateRecordException);
             }
             catch (DuplicateRecordException) when (attempt < MaxCodeAttempts)
             {
@@ -150,21 +145,6 @@ public sealed class HarvestLotRecordingService(
             catch (DuplicateRecordException exception)
             {
                 throw new ConcurrencyConflictException(exception);
-            }
-            catch (ConcurrencyConflictException) when (attempt < MaxCodeAttempts)
-            {
-                // Only a conflict that a parallel lot of the same request explains is tried again: the request changed and the cycle did not.
-                unitOfWork.DiscardChanges();
-                var cycleNow = await cycles.GetAsync(prepared.Value!.Cycle.Id, cancellationToken);
-                var requestNow = await requests.GetForEditAsync(prepared.Value!.Lot.PurchaseRequestId!.Value, cancellationToken);
-                if (cycleNow is not null && cycleNow.RowVersion.AsSpan().SequenceEqual(cycleRead)
-                    && requestNow is not null && !requestNow.RowVersion.AsSpan().SequenceEqual(requestRead))
-                {
-                    continue;
-                }
-
-                await fileSaver.DiscardAsync(keys);
-                throw;
             }
 
             var done = prepared.Value!;
@@ -175,10 +155,10 @@ public sealed class HarvestLotRecordingService(
                 Common.Concurrency.RowVersionGuard.Encode(done.Cycle.RowVersion),
                 saved.Text,
                 saved.Code,
-                HarvestQuantityRules.KgWarnings(done.Lot.CageCount, done.Lot.KgPerCage, done.Lot.EstimatedKg),
-                done.OrderCagesTotal,
-                done.OrderCagesHarvested,
-                HarvestOrderCages.Reached(done.OrderCagesTotal, done.OrderCagesHarvested));
+                [.. HarvestQuantityRules.KgWarnings(done.Lot.CageCount, done.Lot.KgPerCage, done.Lot.EstimatedKg), .. done.Warnings],
+                done.PlanCagesExpected,
+                done.PlanCagesExpected is null ? null : done.Lot.CageCount,
+                HarvestPlanCages.Reached(done.PlanCagesExpected, done.Lot.CageCount));
         }
     }
 
@@ -198,7 +178,20 @@ public sealed class HarvestLotRecordingService(
             return refused;
         }
 
-        if (HarvestLotFieldReader.Read(request, raft, open!.States, open.KgPerCage, null, out var fields) is { } invalid)
+        var planned = await ResolvePlanAsync(request, raftId, cancellationToken);
+        if (!planned.IsSuccess)
+        {
+            return planned.Error!;
+        }
+
+        request = WithPlannedLanes(request, planned.Value);
+        var (resolved, split, lineError) = await WithProductLinesAsync(request, open!.KgPerCage, open.Cycle.ProductId, cancellationToken);
+        if (lineError is not null)
+        {
+            return lineError;
+        }
+
+        if (HarvestLotFieldReader.Read(split, raft, open.States, open.KgPerCage, null, out var fields) is { } invalid)
         {
             return invalid;
         }
@@ -209,22 +202,9 @@ public sealed class HarvestLotRecordingService(
             return shares.Error!;
         }
 
-        var order = await requests.GetForEditAsync(request.PurchaseRequestId!.Value, cancellationToken);
-        if (await PurchaseRequestRules.RefusesHarvestLotAsync(order, statuses, fulfilment, cancellationToken) is { } wrongRequest)
-        {
-            return wrongRequest;
-        }
-
-        if (HarvestProductMatch.Refusal(open.Cycle, order!) is { } wrongProduct)
+        if (HarvestProductMatch.Refusal(open.Cycle, resolved) is { } wrongProduct)
         {
             return wrongProduct;
-        }
-
-        // The lots of the request are read again here, after the uploads: a parallel lot of the same request moved the request row, so the new attempt counts it.
-        var harvestedBefore = await CagesOfOrderAsync(order!.Id, cancellationToken);
-        if (HarvestOrderCages.Refusal(order, harvestedBefore, fields!.CageCount) is { } tooManyCages)
-        {
-            return tooManyCages;
         }
 
         var (crew, crewError) = await crews.ReadAsync(request.Crew, request.CrewUnreadable, cancellationToken);
@@ -234,7 +214,7 @@ public sealed class HarvestLotRecordingService(
         }
 
         var cycle = open.Cycle;
-        var baseCode =HarvestLotCodes.Base(raft.Zone.Code, raft.Code, harvestDate);
+        var baseCode = HarvestLotCodes.Base(raft.Zone.Code, raft.Code, harvestDate);
         var lot = new HarvestLot
         {
             LotCode = HarvestLotCodes.Next(baseCode, await lots.CodesFromAsync(baseCode, cancellationToken)),
@@ -248,8 +228,6 @@ public sealed class HarvestLotRecordingService(
             KgPerCage = open.KgPerCage,
             EstimatedKg = fields.EstimatedKg,
             RecordedByAccountId = recorder,
-            PurchaseRequestId = order!.Id,
-            PurchaseRequest = order,
             Lanes = fields.Lanes.Select(l => new HarvestLotLane
             {
                 LaneId = l.Id, Lane = l, IsFinished = fields.FinishedLaneIds.Contains(l.Id), HarvestedPercent = shares.Value![l.Id],
@@ -257,17 +235,26 @@ public sealed class HarvestLotRecordingService(
             Photos = keys.Select((key, index) => new HarvestLotPhoto { SortOrder = index + 1, FileKey = key }).ToList(),
         };
         lots.Add(lot);
+        if (resolved is not null)
+        {
+            productLines.Add(lot, raft.Code, resolved);
+        }
+
         if (crew is not null)
         {
             crews.Apply(lot, crew);
         }
 
+        // The lot carries the link to its line of the plan, and the plan moves on in the same save (Harvesting, then Completed when every line is done).
+        if (planned.Value is { } plannedHarvest)
+        {
+            planProgress.OnLotRecorded(plannedHarvest, lot);
+        }
+
         // The lane states depend on the cycle row: a parallel lot, close, cancel or seeding correction read it before this lot, so one of them fails with MSG06.
         unitOfWork.MarkChanged(cycle);
-        // The harvest of the request is marked done on its row: a parallel mark read it before this lot, so one of the two fails with MSG06.
-        unitOfWork.MarkChanged(order);
         audit.Record(HarvestLotAudit.Entry(HarvestLotAudit.Created, lot, raft.ZoneId) with { After = HarvestLotAudit.Snapshot(lot) });
-        await notifier.LotRecordedAsync(lot, raft, recorder, cancellationToken);
+        await notifier.LotRecordedAsync(lot, raft, recorder, cancellationToken, planned.Value?.Plan.Code);
 
         var everyHarvested = LaneStateRules.EverySeededLaneHarvested(raft.Lanes
             .Where(l => l.StatusId == StatusIds.Lane.InUse)
@@ -278,12 +265,49 @@ public sealed class HarvestLotRecordingService(
             await notifier.CloseReminderAsync(cycle, raft, recorder, cancellationToken);
         }
 
-        return new PreparedLot(lot, cycle, raft, everyHarvested, order.AcceptedCages, harvestedBefore + lot.CageCount);
+        return new PreparedLot(lot, cycle, raft, everyHarvested, planned.Value?.Line.ExpectedCageCount, HarvestPlanCages.Warnings(planned.Value?.Line, fields.CageCount));
     }
 
-    /// <summary>The cages of the lots already recorded for the request, on every raft.</summary>
-    private async Task<decimal> CagesOfOrderAsync(Guid orderId, CancellationToken cancellationToken) =>
-        (await lots.CagesOfPurchaseRequestsAsync([orderId], cancellationToken)).GetValueOrDefault(orderId);
+    /// <summary>The line of the plan the lot is recorded from (none when the form names none); the plan is read again on every attempt, so a line recorded or a lane left out meanwhile is told.</summary>
+    private async Task<Result<PlannedHarvest?>> ResolvePlanAsync(RecordHarvestRequest request, Guid raftId, CancellationToken cancellationToken)
+    {
+        if (request.HarvestPlanLineIsUnreadable)
+        {
+            return AppError.Invalid(HarvestPlanProgress.FieldName);
+        }
+
+        if (request.HarvestPlanLineId is not { } lineId)
+        {
+            return (PlannedHarvest?)null;
+        }
+
+        var resolved = await planProgress.ResolveLineAsync(lineId, raftId, cancellationToken);
+        return resolved.IsSuccess ? resolved.Value : resolved.Error!;
+    }
+
+    /// <summary>A lot recorded from a plan line holds the lanes of the plan without those left out, whatever lanes the form sent.</summary>
+    private static RecordHarvestRequest WithPlannedLanes(RecordHarvestRequest request, PlannedHarvest? planned) =>
+        planned is null ? request : request with { LaneNumbers = planned.LaneNumbers };
+
+    /// <summary>
+    /// The product lines of the form, checked against the catalogue. With lines the cages and estimated kg are their sums, whatever the form sent; without them the form is read as before and the lot is
+    /// not split per product. A line sent without a product takes the product farmed in the Open cycle.
+    /// </summary>
+    private async Task<(IReadOnlyList<ResolvedProductLine>? Resolved, RecordHarvestRequest Request, AppError? Error)> WithProductLinesAsync(
+        RecordHarvestRequest request, decimal kgPerCage, Guid? cycleProductId, CancellationToken cancellationToken)
+    {
+        var inputs = cycleProductId is { } productId
+            ? request.ProductLines?.Select(l => l is { ProductId: null } ? l with { ProductId = productId } : l).ToList()
+            : request.ProductLines;
+        var (resolved, error) = await productLines.ResolveAsync(inputs, request.ProductLinesAreUnreadable, kgPerCage, new HashSet<Guid>(), cancellationToken);
+        if (error is not null || resolved is null)
+        {
+            return (null, request, error);
+        }
+
+        var (cages, kg) = HarvestLotProductLineService.Totals(resolved);
+        return (resolved, request with { CageCount = cages, EstimatedKg = kg, EstimatedKgIsUnreadable = false }, null);
+    }
 
     /// <summary>The share each lane of the new lot takes (<see cref="LanePercentGuard.ForHarvest"/>), checked against what the other lots and the manual changes of the cycle already hold.</summary>
     private async Task<Result<IReadOnlyDictionary<Guid, decimal?>>> SharesAsync(RecordHarvestRequest request, HarvestLotFields fields, Guid cycleId, CancellationToken cancellationToken) =>

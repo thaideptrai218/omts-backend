@@ -40,7 +40,7 @@ public class PurchaseRequestQaBusinessDayTests
     {
         await using var api = new ClockedFactory(new DateTimeOffset(2026, 11, 6, 16, 59, 59, TimeSpan.Zero));
         var (trader, _) = await api.LinkedProfileAsync("Chị Hoa");
-        var product = new Product { Name = NewCode(), UnitPrice = 1 };
+        var product = new Product { Code = Guid.NewGuid().ToString("N")[..12], Name = NewCode(), UnitPrice = 1 };
         await api.UseDbAsync(db => db.Products.Add(product));
         var sixth = new DateOnly(2026, 11, 6);
         using var scope = api.Services.CreateScope();
@@ -62,7 +62,7 @@ public class PurchaseRequestQaBusinessDayTests
         await using var api = new ClockedFactory(new DateTimeOffset(2026, 11, 7, 17, 30, 0, TimeSpan.Zero));
         await api.AddAccountAsync(NewCode(), Password);
         var (trader, _) = await api.LinkedProfileAsync("Chị Hoa");
-        var product = new Product { Name = "Hàu sữa", UnitPrice = 1 };
+        var product = new Product { Code = "SP000001", Name = "Hàu sữa", UnitPrice = 1 };
         await api.UseDbAsync(db => db.Products.Add(product));
         using var scope = api.Services.CreateScope();
         var traders = scope.ServiceProvider.GetRequiredService<TraderPurchaseRequestService>();

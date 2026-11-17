@@ -15,6 +15,7 @@ namespace OMTS.Application.Features.Sales.PurchaseRequests;
 public sealed class PurchaseRequestViews(
     IPurchaseRequestRepository requests,
     IPurchaseRequestFulfilment fulfilment,
+    ISalesOrderRepository orders,
     CustomerDebtReader debts,
     IStatusCatalog statusCatalog)
 {
@@ -24,6 +25,7 @@ public sealed class PurchaseRequestViews(
         var fulfilled = await FulfilledAsync(rows, cancellationToken);
         var sendings = (await requests.ListSendingsAsync(ids, cancellationToken)).ToLookup(s => s.RequestId);
         var owed = await debts.DebtsAsync(rows.Select(r => r.CustomerId).ToList(), cancellationToken);
+        var ordersOf = await OrdersOfAsync(rows, cancellationToken);
         return rows.Select(r =>
         {
             var isFulfilled = fulfilled.Contains(r.Id);
@@ -33,7 +35,7 @@ public sealed class PurchaseRequestViews(
                 r.ProductId, r.Product.Name, r.RequestedCages, r.PickupDate, r.Note, r.SentAt,
                 r.StatusId, StatusName(r, isFulfilled), isFulfilled, Response(r), r.CancelReason, r.CancelledAt,
                 sendings[r.Id].Select(Sending).ToList(),
-                RowVersionGuard.Encode(r.RowVersion),
+                RowVersionGuard.Encode(r.RowVersion), ordersOf.GetValueOrDefault(r.Id)?.Id, ordersOf.GetValueOrDefault(r.Id)?.Code,
                 r.Code, PurchaseStaffingService.Summary(r), r.HarvestCompletedAt);
         }).ToList();
     }
@@ -41,6 +43,7 @@ public sealed class PurchaseRequestViews(
     public async Task<IReadOnlyList<TraderPurchaseRequestView>> ForTraderAsync(IReadOnlyList<PurchaseRequest> rows, CancellationToken cancellationToken)
     {
         var fulfilled = await FulfilledAsync(rows, cancellationToken);
+        var ordersOf = await OrdersOfAsync(rows, cancellationToken);
         return rows.Select(r =>
         {
             var isFulfilled = fulfilled.Contains(r.Id);
@@ -49,8 +52,17 @@ public sealed class PurchaseRequestViews(
                 r.StatusId, StatusName(r, isFulfilled), isFulfilled, PurchaseRequestRules.AllowsCancel(r.StatusId) && !isFulfilled,
                 Response(r), r.CancelReason, r.CancelledAt,
                 RowVersionGuard.Encode(r.RowVersion),
-                r.Code, r.HarvestCompletedAt);
+                r.Code, r.HarvestCompletedAt, ordersOf.GetValueOrDefault(r.Id)?.Code);
         }).ToList();
+    }
+
+    /// <summary>The order of each Ordered request (a request has at most one); one query, and none while no request is Ordered.</summary>
+    private async Task<IReadOnlyDictionary<Guid, SalesOrder>> OrdersOfAsync(IReadOnlyList<PurchaseRequest> rows, CancellationToken cancellationToken)
+    {
+        var ordered = rows.Where(r => r.StatusId == StatusIds.PurchaseRequest.Ordered).Select(r => r.Id).ToList();
+        return ordered.Count == 0
+            ? new Dictionary<Guid, SalesOrder>()
+            : (await orders.FindByPurchaseRequestsAsync(ordered, cancellationToken)).ToDictionary(o => o.PurchaseRequestId!.Value);
     }
 
     private async Task<IReadOnlySet<Guid>> FulfilledAsync(IReadOnlyList<PurchaseRequest> rows, CancellationToken cancellationToken) =>

@@ -76,7 +76,7 @@ public class ProductRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         Assert.Equal(["Product.Created"], await factory.AuditActionsAsync(product.Id()));
     }
 
-    // A long name still fits the 100 characters of the audit record code.
+    // The audit row names the product by its code, so a long name never overflows the record code column.
     [Fact]
     public async Task A_name_of_200_characters_is_saved_and_audited()
     {
@@ -86,7 +86,7 @@ public class ProductRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         var product = await owner.CreateProductAsync(name);
 
         var audit = await factory.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.RecordId == product.Id()));
-        Assert.Equal(name[..100], audit.RecordCode);
+        Assert.Equal(product.Text("code"), audit.RecordCode);
     }
 
     // MSG-GEN-02 + existingId: the Owner may open the existing product, also a Discontinued one to resume it.

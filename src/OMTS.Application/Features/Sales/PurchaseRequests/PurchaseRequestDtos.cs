@@ -30,7 +30,8 @@ public sealed record PurchaseRequestCustomerView(Guid Id, string Name, string? P
 public sealed record PurchaseRequestSendingView(string Channel, string? PhoneNumber, int? DeliveryStatusId, string? DeliveryStatus, DateTimeOffset? DeliveryStatusAt);
 
 /// <summary>A request as staff see it (SCR-SALE-02).</summary>
-/// <param name="Status">"Fulfilled" while <paramref name="Fulfilled"/> is true, with <paramref name="StatusId"/> still Accepted.</param>
+/// <param name="Status">"Fulfilled" while <paramref name="Fulfilled"/> is true, with <paramref name="StatusId"/> still Accepted; "Ordered" once the Owner made an order from it.</param>
+/// <param name="SalesOrderId">The order made from the request (a request placed in the Mini App has one at once, a Draft); <paramref name="SalesOrderCode"/> is its code (DH000123).</param>
 /// <param name="Code">The code the request is named by on the screens, in the harvest and at the port.</param>
 /// <param name="Staffing">The staffing plan the Owner sends before accepting (decision of 31/10/2026); null before it.</param>
 /// <param name="HarvestCompletedAt">When the Cooperative Owner marked the harvest done (decision of 11/11/2026).</param>
@@ -38,7 +39,7 @@ public sealed record PurchaseRequestSendingView(string Channel, string? PhoneNum
 public sealed record PurchaseRequestView(
     Guid Id, PurchaseRequestCustomerView Customer, Guid ProductId, string ProductName, int RequestedCages, DateOnly PickupDate, string? Note, DateTimeOffset SentAt,
     int StatusId, string Status, bool Fulfilled, PurchaseRequestResponseView? Response, string? CancelReason, DateTimeOffset? CancelledAt,
-    IReadOnlyList<PurchaseRequestSendingView> Sendings, string RowVersion,
+    IReadOnlyList<PurchaseRequestSendingView> Sendings, string RowVersion, Guid? SalesOrderId = null, string? SalesOrderCode = null,
     string Code = "", PurchaseStaffingView? Staffing = null, DateTimeOffset? HarvestCompletedAt = null, PurchaseHarvestView? Harvest = null);
 
 /// <summary>A request as its trader sees it (SCR-SALE-01): no other customer's data, no price, no internal field.</summary>
@@ -46,7 +47,7 @@ public sealed record PurchaseRequestView(
 public sealed record TraderPurchaseRequestView(
     Guid Id, Guid ProductId, string ProductName, int RequestedCages, DateOnly PickupDate, string? Note, DateTimeOffset SentAt,
     int StatusId, string Status, bool Fulfilled, bool CanCancel, PurchaseRequestResponseView? Response, string? CancelReason, DateTimeOffset? CancelledAt, string RowVersion,
-    string Code = "", DateTimeOffset? HarvestCompletedAt = null);
+    string Code = "", DateTimeOffset? HarvestCompletedAt = null, string? SalesOrderCode = null);
 
 /// <summary>A sent request with MSG-GEN-05 (SALE-01 step 5). <paramref name="Replayed"/> when a retry answered the request already saved.</summary>
 public sealed record PurchaseRequestSaved(TraderPurchaseRequestView Request, string Message, string MessageCode, bool Replayed = false);
