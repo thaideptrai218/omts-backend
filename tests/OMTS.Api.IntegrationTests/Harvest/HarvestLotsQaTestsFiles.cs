@@ -285,10 +285,13 @@ public class HarvestLotsQaTestsFiles
         var owner = raft.Owner.Client;
         await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1).FinishedLanes(1));
 
+        // The photo of the lot saved above stays; the refused save leaves nothing more.
+        var before = (await api.Services.GetRequiredService<IFileStorage>().ListAsync(Category)).Select(f => f.Key).Order().ToList();
+
         var refused = await owner.PostHarvestAsync(raft.RaftId, HarvestFields.OfLanes(1) with { Photos = [Jpeg] });
 
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
-        Assert.Empty(await api.Services.GetRequiredService<IFileStorage>().ListAsync(Category));
+        Assert.Equal(before, (await api.Services.GetRequiredService<IFileStorage>().ListAsync(Category)).Select(f => f.Key).Order().ToList());
     }
 }
 
