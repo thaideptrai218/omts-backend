@@ -54,16 +54,15 @@ public class SalesInvoiceRulesTests
         Assert.Equal("MSG-GEN-08", await (await outsider.Client.PostInvoiceAsync(body)).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-08", await (await accountant.Client.PostInvoiceAsync(body)).ErrorCodeAsync());
         Assert.Equal("MSG-GEN-08", await (await (await api.TraderAsync()).Client.PostInvoiceAsync(body)).ErrorCodeAsync());
-        Assert.Equal("MSG-GEN-08", await (await sale.Manager.Client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m)).With("zoneId", otherZone))).ErrorCodeAsync());
-        Assert.Equal(["Zone"], await (await sale.Owner.Client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m)).With("zoneId", Guid.NewGuid()))).InvalidFieldsAsync());
+        // Every invoice has an order of its own, which has no zone: the zone of an invoice is the zone of its first lot, and a zone named in the body is ignored (even an unknown one).
+        var named = (await sale.Manager.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m), sale.LotId).With("zoneId", otherZone))).GetProperty("invoice");
+        Assert.NotEqual(otherZone, named.GetProperty("zone").Id());
+        var unknown = await sale.Owner.Client.PostInvoiceAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m)).With("zoneId", Guid.NewGuid()));
+        Assert.Equal(HttpStatusCode.Created, unknown.StatusCode);
 
-        // The Owner may count the sale in another zone (BR-SALE-08); every revenue then counts there.
-        var elsewhere = (await sale.Owner.Client.SellAsync(Invoice(sale.CustomerId, [Line(sale.ProductId, sale.LotId, 1m)], Cash(30_000m), sale.LotId).With("zoneId", otherZone))).GetProperty("invoice");
-        Assert.Equal(otherZone, elsewhere.GetProperty("zone").Id());
-
-        // Viewing follows the zone of the invoice: the Accountant (All zones) yes, the Zone Manager of the lot's zone no.
-        Assert.Equal(HttpStatusCode.OK, (await accountant.Client.GetAsync($"/api/sales-invoices/{elsewhere.Id()}")).StatusCode);
-        Assert.Equal("MSG-GEN-08", await (await sale.Manager.Client.GetAsync($"/api/sales-invoices/{elsewhere.Id()}")).ErrorCodeAsync());
+        // Viewing follows the zone of the invoice: the Accountant (All zones) yes, the Zone Manager of another zone no.
+        Assert.Equal(HttpStatusCode.OK, (await accountant.Client.GetAsync($"/api/sales-invoices/{named.Id()}")).StatusCode);
+        Assert.Equal("MSG-GEN-08", await (await outsider.Client.GetAsync($"/api/sales-invoices/{named.Id()}")).ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.NotFound, (await accountant.Client.GetAsync($"/api/sales-invoices/{Guid.NewGuid()}")).StatusCode);
     }
 

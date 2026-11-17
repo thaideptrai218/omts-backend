@@ -199,7 +199,7 @@ public class SalesInvoiceCancellationTests
         // The invoice entry is what it was worth when saved, and its price cut is an entry of its own beside it (the corrections list holds data-entry corrections only).
         var ofCorrected = entries.Single(e => e.Id() == corrected.Id());
         // The invoice keeps what it was saved at; the price cut is its own entry below it.
-        Assert.Equal((300_000m, "PriceCutAfterClaim"), (ofCorrected.Money("debtChange"), ofCorrected.GetProperty("corrections")[0].Text("kind")));
+        Assert.Equal(300_000m, ofCorrected.Money("debtChange"));
         Assert.Equal(-10_000m, entries.Single(e => e.Text("kind") == "PriceCut" && e.Text("invoiceCode") == ofCorrected.Text("code")).Money("debtChange"));
         var ofCancelled = entries.Single(e => e.Id() == cancelled.Id());
         Assert.Equal((0m, true, "The trader never took the goods"), (ofCancelled.Money("debtChange"), ofCancelled.GetProperty("cancelled").GetBoolean(), ofCancelled.Text("cancelReason")));
