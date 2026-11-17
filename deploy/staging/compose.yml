@@ -1,4 +1,4 @@
-# Staging: the API image from GHCR plus Redis. SQL Server is hosted separately (Azure SQL, free serverless).
+# Staging: the API image from GHCR plus Redis, and SQL Server either on the host (profile localdb) or elsewhere (Azure SQL).
 # This file is the source of truth: the "CD staging" workflow copies it to /opt/omts/compose.yml on every deploy, so an
 # edit made on the server is overwritten. Edit it here, through a pull request.
 # Never put real credentials in this file; they live in the untracked /opt/omts/.env on the staging host. OMTS_IMAGE in
@@ -60,6 +60,36 @@ services:
     logging: *logging
     restart: unless-stopped
 
+  # The staging database on the host itself (SQL Server 2022 Express, free; 10 GB per database). Started only with
+  # COMPOSE_PROFILES=localdb in .env, and OMTS_DB_CONNECTION then names Server=mssql. Without the profile the database
+  # is elsewhere (Azure SQL). Loopback port only, for an SSH-tunnelled import or admin; deploy/staging/backup-db.sh
+  # backs it up every night. The container needs a 2 GB memory limit to start at all; MSSQL_MEMORY_LIMIT_MB caps what
+  # SQL Server really uses inside it. Same collation as the Azure database it replaces.
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-CU28-ubuntu-22.04
+    profiles: ["localdb"]
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Express
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-}
+      MSSQL_MEMORY_LIMIT_MB: ${MSSQL_MEMORY_LIMIT_MB:-1536}
+      MSSQL_COLLATION: SQL_Latin1_General_CP1_CI_AS
+    ports:
+      - "127.0.0.1:1433:1433"
+    volumes:
+      - omts-mssql:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "SQLCMDPASSWORD=\"$$MSSQL_SA_PASSWORD\" /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -b -Q 'SELECT 1' -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    mem_limit: 2200m
+    memswap_limit: 2200m
+    oom_score_adj: 300
+    logging: *logging
+    restart: unless-stopped
+
   api:
     image: ${OMTS_IMAGE:?Set OMTS_IMAGE in .env}
     environment: *api-environment
@@ -71,6 +101,10 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      # Only when the localdb profile runs the database here; otherwise ignored.
+      mssql:
+        condition: service_healthy
+        required: false
     mem_limit: 512m
     memswap_limit: 512m
     oom_score_adj: 500
@@ -128,6 +162,7 @@ services:
 
 volumes:
   omts-files:
+  omts-mssql:
 
 configs:
   # nginx template for the front: "$$" is a literal "$" for compose; the official image's entrypoint fills

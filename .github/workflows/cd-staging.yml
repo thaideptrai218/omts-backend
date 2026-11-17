@@ -148,6 +148,8 @@ jobs:
                     -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=4)
           scp "${ssh_opts[@]}" deploy/staging/compose.yml "$SSH_USER@$HOST:/opt/omts/compose.next.yml"
           scp "${ssh_opts[@]}" deploy/staging/deploy.sh "$SSH_USER@$HOST:/opt/omts/deploy.sh"
+          # Run by the host's nightly cron, not by this job; copied so the host always has the reviewed version.
+          scp "${ssh_opts[@]}" deploy/staging/backup-db.sh "$SSH_USER@$HOST:/opt/omts/backup-db.sh"
           # REF expands here on purpose; the step above allowed only sha-<hex> tags in it.
           # shellcheck disable=SC2029
           ssh "${ssh_opts[@]}" "$SSH_USER@$HOST" bash /opt/omts/deploy.sh "$REF"

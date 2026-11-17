@@ -233,6 +233,19 @@ A CI run that is no longer the tip of `develop` (a newer push, or a re-run of an
 - **Memory:** every long-running staging service has a memory cap with no extra swap (`api` 512 MB, `redis` 160 MB,
   `front` 64 MB), `oom_score_adj: 500` and rotated logs (3 × 10 MB), so on a shared host the kernel stops OMTS before
   the other project and OMTS logs cannot fill the disk.
+- **Database on the host (profile `localdb`):** add `localdb` to `COMPOSE_PROFILES` and set `MSSQL_SA_PASSWORD`; the
+  `mssql` service (SQL Server 2022 Express, same collation as Azure) then runs next to the API, which waits for it, and
+  `OMTS_DB_CONNECTION` names `Server=mssql;Database=OMTS;...;TrustServerCertificate=True`. Its port is bound to
+  `127.0.0.1:1433` only (reach it through an SSH tunnel). The container needs a 2 GB memory limit to start;
+  `MSSQL_MEMORY_LIMIT_MB` (default 1536) is what SQL Server really uses. Express caps a database at 10 GB.
+  A new database must be filled before the first deploy (a bacpac import, or `--profile bootstrap run --rm seed`):
+  a plain `seed --bootstrap` applies the migrations and then refuses an empty database without the bootstrap secrets.
+- **Nightly backup (`deploy/staging/backup-db.sh`, copied by every deploy):** full `BACKUP ... WITH CHECKSUM`, gzip,
+  upload to `BACKUP_S3_URI` with the `BACKUP_AWS_*` key from `.env`, the newest 3 kept in `/opt/omts/backups`. Give
+  that key `s3:PutObject` on the prefix only and let S3 lifecycle rules expire old copies. Run by the host cron
+  (`/etc/cron.d/omts-db-backup`); a failure leaves `/opt/omts/backup.failed` and a line in `/opt/omts/backup.log`.
+  Restore check: gunzip, `docker cp` into any SQL Server 2022 container, `RESTORE VERIFYONLY ... WITH CHECKSUM`, then
+  `RESTORE DATABASE ... WITH MOVE 'OMTS' TO ..., MOVE 'OMTS_log' TO ...`.
 - **Secrets of the `staging` environment** (repository admin; only `develop` may use them): `STAGING_SSH_HOST`,
   `STAGING_SSH_USER`, `STAGING_SSH_KEY` (a key used for deploys only) and `STAGING_SSH_KNOWN_HOSTS` (the host key line).
 - The GHCR package must be public: the host pulls without logging in. GHCR makes a new package private, so the very
