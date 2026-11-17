@@ -201,14 +201,16 @@ the refusal to `DemoSeedGate`.
 
 ## Staging deploy (CD)
 
-The shared staging server (EC2, `/opt/omts`, public URL `https://d2zray6os5wptx.cloudfront.net`) is deployed by
-`.github/workflows/cd-staging.yml`:
+The shared staging server (a VPS in Ho Chi Minh City since 17/11/2026, `/opt/omts`, deploy user `omts-deploy`, public
+URL `https://d2zray6os5wptx.cloudfront.net`) runs the API, Redis, the origin `front` and the database (`mssql`,
+`COMPOSE_PROFILES=origin-front,localdb`). Being in Vietnam, it calls Zalo directly (no `Zalo:ProxyUrl`). It is
+deployed by `.github/workflows/cd-staging.yml`:
 
 1. A push to `develop` runs CI. When CI passes, CD builds the image once and pushes it to GHCR as
    `ghcr.io/thaideptrai218/omts-backend:sha-<7 chars>` (and the moving tag `staging`).
 2. Over SSH it copies `deploy/staging/compose.yml` and `deploy/staging/deploy.sh` to the host and runs
    `deploy.sh <image>`: it sets `OMTS_IMAGE` in `/opt/omts/.env`, pulls, applies migrations with a plain
-   `seed --bootstrap` (retried while the Azure SQL serverless database resumes), restarts the API and waits for
+   `seed --bootstrap` (retried while the database starts or, on Azure SQL serverless, resumes), restarts the API and waits for
    `/health/db`. A failure, or the run being cancelled or cut off, brings back the last compose file that passed and
    the image that ran before, checks the API again, and the run turns red. Seed and API output go to
    `/opt/omts/deploy.log` on the host, not to the public Actions log.
@@ -223,8 +225,8 @@ A CI run that is no longer the tip of `develop` (a newer push, or a re-run of an
   the server. Secrets stay in the server's `.env` (never in the repository); the API listens on `127.0.0.1:8080` only,
   behind nginx.
 - **CloudFront origin:** CloudFront adds a secret `X-Origin-Verify` header and the origin proxies to the API only the
-  requests that carry it. On EC2 that is the host nginx on port 80. On a host whose ports 80/443 belong to another
-  project (the Vietnamese VPS), set `COMPOSE_PROFILES=origin-front`, `ORIGIN_VERIFY_SECRET` (32+ letters and digits,
+  requests that carry it. A host with its own nginx on port 80 can do that check itself (the former EC2 host did). On
+  a host whose ports 80/443 belong to another project (the Vietnamese VPS), set `COMPOSE_PROFILES=origin-front`, `ORIGIN_VERIFY_SECRET` (32+ letters and digits,
   e.g. `openssl rand -hex 32`, the same value as the CloudFront origin header) and optionally `ORIGIN_PORT` (default
   8088) in `.env`: the `front` service (nginx) then publishes that port and answers 403 without the header. Docker-
   published ports bypass ufw, so the header is the only guard of that port: rotate it in `.env` and in CloudFront
