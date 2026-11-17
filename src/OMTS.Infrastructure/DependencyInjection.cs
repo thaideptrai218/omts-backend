@@ -190,6 +190,7 @@ public static class DependencyInjection
         services.AddSingleton<IVerificationCodeHasher, HmacVerificationCodeHasher>();
         services.AddSingleton<IAttendanceQrCodes, HmacAttendanceQrCodes>();
         services.AddOptions<VerificationLimitOptions>().Bind(configuration.GetSection(VerificationLimitOptions.SectionName));
+        services.AddOptions<OMTS.Application.Features.Purchasing.Payments.SupplierSmsBudgetOptions>().Bind(configuration.GetSection(OMTS.Application.Features.Purchasing.Payments.SupplierSmsBudgetOptions.SectionName));
         services.AddSingleton<IPasswordHasher, PasswordHasher>();
 
         services.AddMessaging(configuration);

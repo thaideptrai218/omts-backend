@@ -96,6 +96,9 @@ public static class NotificationTypes
 
     /// <summary>MSG-PURCHASE-04, a supplier payment, money paid back or a cancelled payment, to the Owner (BR-PURCHASE-05); mandatory.</summary>
     public const string SupplierTransaction = "SUPPLIER_TRANSACTION";
+
+    /// <summary>The SMS of supplier payment transactions reached 80 % of the daily budget, to the Owner, once a day (PM decision of 17/11/2026); in the app, no SMS.</summary>
+    public const string SupplierSmsBudget = "SUPPLIER_SMS_BUDGET";
     /// <summary>MSG-CYCLE-04, a new cultivation log to review, to the Cooperative Owner (CYCLE-04); not on a correction.</summary>
     public const string CultivationLogRecorded = "CULTIVATION_LOG_RECORDED";
 
@@ -202,6 +205,7 @@ public static class NotificationTypes
             NotificationOpenAccess.InZone(PermissionFunctions.PurchaseReceipts, PermissionAction.View)),
         new(SupplierTransaction, "Supplier payment transaction", AlwaysPush, [CooperativeOwner], NotificationOpenAccess.OwnerOnly,
             NotificationSmsRule.MoneyToOwner("amount")),
+        new(SupplierSmsBudget, "Supplier payment SMS budget of the day", Default, [CooperativeOwner], NotificationOpenAccess.OwnerOnly),
         new(CultivationLogRecorded, "New cultivation log", Default, [CooperativeOwner],
             NotificationOpenAccess.InZone(PermissionFunctions.CultivationLogs, PermissionAction.View)),
         // Opens the invoice (SALE-09), in the zone of the invoice (BR-SALE-08).

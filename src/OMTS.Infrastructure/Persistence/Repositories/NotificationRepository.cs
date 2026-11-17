@@ -11,6 +11,14 @@ internal sealed class NotificationRepository(OmtsDbContext db) : INotificationRe
 {
     public void Add(Notification notification) => db.Notifications.Add(notification);
 
+    public Task<int> CountRecordsNotifiedSinceAsync(string type, DateTimeOffset since, CancellationToken cancellationToken) =>
+        db.Notifications.AsNoTracking()
+            .Where(n => n.Type == type && n.Channel == NotificationChannel.InApp && n.CreatedAt >= since && n.RelatedRecordId != null)
+            .Select(n => n.RelatedRecordId).Distinct().CountAsync(cancellationToken);
+
+    public Task<bool> AnyOfTypeSinceAsync(string type, DateTimeOffset since, CancellationToken cancellationToken) =>
+        db.Notifications.AsNoTracking().AnyAsync(n => n.Type == type && n.Channel == NotificationChannel.InApp && n.CreatedAt >= since, cancellationToken);
+
     public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<NotificationPreference>>> GetPreferencesAsync(
         IReadOnlyCollection<Guid> accountIds, CancellationToken cancellationToken)
     {

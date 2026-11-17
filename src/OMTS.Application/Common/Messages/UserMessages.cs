@@ -715,6 +715,14 @@ public static class UserMessages
     public static UserMessage ReturnQuantityOutsideLimit(string itemName, string maxQuantity, string unit, string limitExplanation) => new(
         Purchase03, $"{itemName}: enter a quantity greater than 0 and at most {maxQuantity} {unit}. {limitExplanation}".TrimEnd(), Legacy.Msg59);
 
+    /// <summary>MSG-PURCHASE-11 (PM decision of 17/11/2026): to the Owner, once a day, when the SMS of supplier payment transactions reach 80 % of the daily budget. In the app only.</summary>
+    public static UserMessage SupplierSmsBudgetReached(int sent, int budget) =>
+        new(Purchase11, $"{sent} of the {budget} supplier payment SMS planned for today have been sent ({SupplierSmsBudgetPercent} % of the daily budget).")
+        {
+            Parameters = new Dictionary<string, object?> { ["sent_count"] = sent, ["daily_budget"] = budget, ["percent"] = SupplierSmsBudgetPercent },
+        };
+
+    private const int SupplierSmsBudgetPercent = 80;
     /// <summary>MSG-SALE-24 (PM decision of 17/11/2026): to the seller and the Owner, in the app, when the system stopped a sale at the end of the day because its VietQR transfer did not arrive.</summary>
     public static UserMessage PendingSaleStoppedAtEndOfDay(string invoiceCode, decimal total, decimal cash)
     {
