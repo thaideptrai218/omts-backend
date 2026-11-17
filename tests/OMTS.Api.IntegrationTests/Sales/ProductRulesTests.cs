@@ -193,7 +193,7 @@ public class ProductRulesTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
         await (await owner.PostAsync($"/api/products/{product.Id()}/discontinue", null)).ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
         var edit = await owner.PutAsJsonAsync($"/api/products/{product.Id()}", new { name = "New", unitPrice = 1, rowVersion = product.RowVersion() });
         var body = await edit.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
-        Assert.Contains(product.Text("name")!, body.GetProperty("detail").GetString());
+        Assert.Contains(product.Text("code")!, body.GetProperty("detail").GetString());
     }
 
     [Theory]

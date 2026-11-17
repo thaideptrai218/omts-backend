@@ -57,7 +57,9 @@ public class SalesCatalogueSqlServerTests
         await using var host = await FarmingHost.StartAsync();
         var product = await host.Owner.Client.CreateProductAsync(unitPrice: 60_000);
 
-        await Assert.ThrowsAsync<DbUpdateException>(() => host.UseDbAsync(db => db.Products.Add(new Product { Code = Guid.NewGuid().ToString("N")[..12], Name = NewCode(), UnitPrice = 0 })));
+        // A price of zero is allowed only for a product with a code (its units are priced one by one); with no code it is refused, and so is a negative price.
+        await Assert.ThrowsAsync<DbUpdateException>(() => host.UseDbAsync(db => db.Products.Add(new Product { Code = string.Empty, Name = NewCode(), UnitPrice = 0 })));
+        await Assert.ThrowsAsync<DbUpdateException>(() => host.UseDbAsync(db => db.Products.Add(new Product { Code = Guid.NewGuid().ToString("N")[..12], Name = NewCode(), UnitPrice = -1 })));
         await Assert.ThrowsAsync<DbUpdateException>(() => host.UseDbAsync(db => db.Products.Add(new Product { Code = Guid.NewGuid().ToString("N")[..12], Name = product.Text("name")!, UnitPrice = 1 })));
     }
 

@@ -94,14 +94,16 @@ public class SalesCatalogueAccessTests(AuthApiFactory factory) : IClassFixture<A
     }
 
     [Fact]
-    public async Task An_accountant_cannot_read_products()
+    public async Task An_accountant_reads_products_but_cannot_create_one()
     {
         var owner = await factory.PurchasingOwnerAsync();
         var product = await owner.CreateProductAsync();
         var accountant = await factory.AccountantAsync();
 
-        await (await accountant.GetAsync("/api/products")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
-        await (await accountant.GetAsync($"/api/products/{product.Id()}")).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
+        // The accountant views invoices, disposals and lots, so reads the products (read-only reader).
+        await (await accountant.GetAsync("/api/products")).ReadAsync(HttpStatusCode.OK);
+        await (await accountant.GetAsync($"/api/products/{product.Id()}")).ReadAsync(HttpStatusCode.OK);
+        await (await accountant.PostAsJsonAsync("/api/products", new { name = NewCode(), unitPrice = 1 })).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
     }
 
     [Fact]
