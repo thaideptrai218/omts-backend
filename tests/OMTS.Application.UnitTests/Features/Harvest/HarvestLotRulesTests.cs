@@ -59,6 +59,7 @@ public class HarvestLotRulesTests
     }
 
     [Theory]
+    [InlineData(StatusIds.HarvestLot.AwaitingWeighing, false)]
     [InlineData(StatusIds.HarvestLot.Open, true)]
     [InlineData(StatusIds.HarvestLot.Reopened, true)]
     [InlineData(StatusIds.HarvestLot.Closed, false)]
@@ -66,11 +67,12 @@ public class HarvestLotRulesTests
         Assert.Equal(forSale, new HarvestLot { StatusId = statusId }.IsForSale);
 
     [Fact]
-    public void A_new_lot_is_open_and_not_published()
+    public void A_new_lot_awaits_its_weighing_and_is_not_published()
     {
         var lot = new HarvestLot();
 
-        Assert.Equal(StatusIds.HarvestLot.Open, lot.StatusId);
+        Assert.Equal(StatusIds.HarvestLot.AwaitingWeighing, lot.StatusId);
+        Assert.False(lot.IsForSale);
         Assert.Equal(HarvestLotOriginState.NotPublished, lot.OriginState);
     }
 

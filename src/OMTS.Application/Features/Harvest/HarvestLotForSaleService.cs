@@ -46,7 +46,7 @@ public sealed class HarvestLotForSaleService(
             l.OriginState,
             l.OriginState == HarvestLotOriginState.Withdrawn ? l.WithdrawnAt : null,
             l.ProductLines.OrderBy(p => p.LineNumber)
-                .Select(p => new HarvestLotProductStock(p.ProductId, p.Product.Code, p.Product.Name, p.Kg, balances.GetValueOrDefault((p.ProductId, l.Id)))).ToList(),
+                .Select(p => new HarvestLotProductStock(p.ProductId, p.Product.Code, p.Product.Name, p.WeighedKg ?? p.Kg, balances.GetValueOrDefault((p.ProductId, l.Id)))).ToList(),
             planOf.GetValueOrDefault(l.Id)?.PlanCode,
             salesOrderId is { } orderId && planOf.GetValueOrDefault(l.Id) is { } plan && plan.OrderIds.Contains(orderId)))
             // The sort is stable: the suggested lots first, the latest harvest first inside each group as the repository lists them.

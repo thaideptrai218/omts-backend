@@ -161,7 +161,7 @@ public sealed class SalesInvoiceService(
             }
             else
             {
-                var invoice = writer.Write(entries, facts.Value!, decision, code, decision.Cash.Recorded > 0m ? paymentCode : null, key);
+                var invoice = await writer.WriteAsync(entries, facts.Value!, decision, code, decision.Cash.Recorded > 0m ? paymentCode : null, key, cancellationToken);
                 if (pending is not null)
                 {
                     pendingWriter.End(pending, PendingSaleStatus.PaymentChanged, invoice.Id, currentUser.AccountId);

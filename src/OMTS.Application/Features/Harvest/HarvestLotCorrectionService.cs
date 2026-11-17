@@ -201,7 +201,7 @@ public sealed class HarvestLotCorrectionService(
         HarvestLotCorrectionRows.ApplyLanes(lots, lot, fields, shares);
         if (lines is not null)
         {
-            await productLines.ReplaceAsync(lot, raft.Code, lines, cancellationToken);
+            productLines.Replace(lot, lines);
         }
 
         var crewAdded = crew is null ? [] : crews.Apply(lot.Crew, crew, e => new HarvestRecordEmployee { LotId = lot.Id, EmployeeId = e.Id, Employee = e }).Added;

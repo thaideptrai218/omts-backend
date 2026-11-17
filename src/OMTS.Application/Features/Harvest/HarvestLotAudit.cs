@@ -13,6 +13,8 @@ public static class HarvestLotAudit
     public const string Removed = "HarvestLot.Removed";
     public const string Closed = "HarvestLot.Closed";
     public const string Reopened = "HarvestLot.Reopened";
+    public const string Weighed = "HarvestLot.Weighed";
+    public const string Reweighed = "HarvestLot.Reweighed";
     public const string RecordType = nameof(HarvestLot);
 
     /// <param name="zoneId">The zone of the raft of the lot.</param>
@@ -73,6 +75,16 @@ public static class HarvestLotAudit
 
         return changedAfter;
     }
+
+    /// <summary>The weighing of the lot, before and after a weighing: the kg of the lot and of each line, and when.</summary>
+    internal static object WeighingFacts(HarvestLot lot, string status) => new
+    {
+        Status = status,
+        lot.WeighedKg,
+        lot.WeighedAt,
+        lot.WeighedOn,
+        WeighedLines = lot.ProductLines.OrderBy(l => l.LineNumber).Select(l => new { l.ProductId, l.WeighedKg }).ToList(),
+    };
 
     /// <summary>The close facts of the lot, before and after a close or reopen.</summary>
     internal static object CloseFacts(HarvestLot lot, string status) => new

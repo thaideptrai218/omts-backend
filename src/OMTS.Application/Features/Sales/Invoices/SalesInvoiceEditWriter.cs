@@ -64,7 +64,7 @@ public sealed class SalesInvoiceEditWriter(
 
         foreach (var lot in plan.LotsToClose)
         {
-            if (lotStatuses.CloseSoldWholeLot(lot, today, invoice.Id) is { } refused)
+            if (await lotStatuses.CloseSoldWholeLotAsync(lot, today, invoice.Id, cancellationToken) is { } refused)
             {
                 throw new InvalidOperationException($"Harvest lot {lot.LotCode} was checked for sale and cannot be closed by invoice {invoice.Code}: {refused.Message.Text}");
             }
@@ -72,7 +72,7 @@ public sealed class SalesInvoiceEditWriter(
 
         foreach (var lot in plan.LotsToReopen)
         {
-            lotStatuses.Reopen(lot, today, HarvestLotReopenCause.SoldWholeTickRemoved, invoice.Id);
+            await lotStatuses.ReopenAsync(lot, today, HarvestLotReopenCause.SoldWholeTickRemoved, invoice.Id, cancellationToken: cancellationToken);
         }
 
         if (plan.Order is { } order)

@@ -12,6 +12,7 @@ using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Sales.Debts;
 using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Application.Features.Sales.Payments;
+using OMTS.Application.Features.Sales.Products;
 using OMTS.Application.Features.Sales.QualityClaims;
 using OMTS.Domain.Entities.Sales;
 using OMTS.Domain.Enums;
@@ -21,8 +22,9 @@ namespace OMTS.Application.Features.Sales.Returns;
 /// <summary>
 /// CLAIM-03 – all the goods of one invoice come back, each line back for sale or thrown away as the Cooperative Owner decided (BR-CLAIM-03). The value of the return takes the invoice out of the
 /// customer debt; the invoice is locked (SALE-07, SALE-08); a walk-in invoice and its payments first get the profile of the trader. The return row, the lots, the money and the owner's notice are
-/// one save; the push is sent after the commit and never undoes it (GFR-06). A correction or cancellation of the invoice and a payment of the customer change the same rows, so one of them fails
-/// with MSG06 or the unique index, and the debt shown is not stale.
+/// one save; the oysters taken back for sale go back on the product ledger (Return rows) after the lots are reopened, so a reopened lot first gets back what its close took off. The push is sent after
+/// the commit and never undoes it (GFR-06). A correction or cancellation of the invoice and a payment of the customer change the same rows, so one of them fails with MSG06 or the unique index,
+/// and the debt shown is not stale.
 /// </summary>
 public sealed class SalesReturnService(
     ISalesInvoiceRepository invoices,
@@ -31,6 +33,7 @@ public sealed class SalesReturnService(
     IQualityClaimRepository claims,
     SalesReturnGuard guard,
     SalesReturnLots lots,
+    ProductStockLedger productLedger,
     SalesReturnViews views,
     SalesReturnNotifications notifications,
     SalesInvoiceFactsReader factsReader,
@@ -87,6 +90,7 @@ public sealed class SalesReturnService(
 
         var reason = CustomerPaymentRules.Reason(request.Reason)!;
         var (salesReturn, debtAfter) = await RecordAsync(invoice!, reason, outcomes, chosen.Value, cancellationToken);
+        productLedger.PostReturn(salesReturn, invoice!, invoice!.Customer, lotChanges.Value!.Lots);
         audit.Record(new AuditEntry(RecordedAction, SalesReturnRules.RecordType)
         {
             RecordId = salesReturn.Id,

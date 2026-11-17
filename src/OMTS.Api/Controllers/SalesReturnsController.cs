@@ -14,8 +14,26 @@ namespace OMTS.Api.Controllers;
 /// </summary>
 [ApiController]
 [Authorize]
-public sealed class SalesReturnsController(SalesReturnService returns, SalesReturnCancellationService cancellations, SalesReturnViews views) : ControllerBase
+public sealed class SalesReturnsController(
+    SalesReturnService returns, SalesReturnCancellationService cancellations, SalesReturnViews views, SalesReturnListService list, SalesReturnListFileService listFiles) : ControllerBase
 {
+    /// <summary>
+    /// The returns of the zones the caller can view, cancelled ones included. Query: <c>from</c>, <c>to</c> (return date, yyyy-MM-dd), <c>customerId</c>, <c>zoneId</c>, <c>statusId</c>, <c>search</c> (code of the
+    /// return, the invoice or the customer, or the name of the customer), <c>page</c>, <c>pageSize</c> (1 to 100), <c>sort</c> (<c>code</c>, <c>returnDate</c>, <c>value</c>) and <c>sortDir</c> (<c>asc</c>, <c>desc</c>,
+    /// the default). The totals count the returns that stand among every match. 400 MSG-GEN-01 for an invalid sort or period; 403 MSG-GEN-08 for a zone the caller cannot view.
+    /// </summary>
+    [HttpGet("api/sales-returns")]
+    [RequirePermission(PermissionFunctions.SalesReturns, PermissionAction.View, PermissionScope.AnyZone)]
+    [ProducesResponseType<SalesReturnListPage>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Search([FromQuery] SalesReturnListQuery query, CancellationToken cancellationToken) =>
+        (await list.SearchAsync(query, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>The list as filtered and sorted, as .xlsx (at most <see cref="SalesReturnListFileService.MaxRows"/> rows), with the zone rule of the list.</summary>
+    [HttpGet("api/sales-returns/export")]
+    [RequirePermission(PermissionFunctions.SalesReturns, PermissionAction.View, PermissionScope.AnyZone)]
+    public async Task<IActionResult> Export([FromQuery] SalesReturnListQuery query, CancellationToken cancellationToken) =>
+        (await listFiles.ExportAsync(query, cancellationToken)).ToActionResult(f => File(f.Content, f.ContentType, f.FileName));
+
     /// <summary>CLAIM-03 step 1: the invoice lines with their lots, the value, the debt after it; <c>customerId</c> is the profile chosen for a walk-in invoice.</summary>
     [HttpGet("api/sales-invoices/{id:guid}/sales-return/preview")]
     [RequirePermission(PermissionFunctions.SalesReturns, PermissionAction.Create, PermissionScope.AnyZone)]

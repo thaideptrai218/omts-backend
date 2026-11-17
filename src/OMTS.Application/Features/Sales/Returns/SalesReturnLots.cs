@@ -9,12 +9,13 @@ using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Sales.Returns;
 
-/// <summary>What a sales return did to its lots, for the audit row.</summary>
-public sealed record SalesReturnLotChanges(IReadOnlyList<string> Reopened, IReadOnlyList<string> Closed);
+/// <summary>What a sales return did to its lots, for the audit row, and the lots of the invoice with their product lines, tracked, for the Return rows of the product ledger.</summary>
+public sealed record SalesReturnLotChanges(IReadOnlyList<string> Reopened, IReadOnlyList<string> Closed, IReadOnlyDictionary<Guid, HarvestLot> Lots);
 
 /// <summary>
 /// The lots of a sales return (BR-CLAIM-03, BR-HARVEST-04). Back for sale: a Closed lot is Reopened, whatever closed it. Thrown away: when the lot is still for sale, MSG-HARVEST-02 asks whether it
-/// stays for sale; No closes it through HARVEST-02.1. A lot that also takes oysters back for sale on this return stays for sale, so it is not asked. Every lot joins the save (row version), so a
+/// stays for sale; No closes it through HARVEST-02.1. A lot that also takes oysters back for sale on this return stays for sale, so it is not asked. A reopen undoes the LotClose rows of the lot, so the Return rows that the
+/// caller writes next come on top of the stock the close had taken off. Every lot joins the save (row version), so a
 /// sale, a close or the daily check at the same moment makes one side fail.
 /// </summary>
 public sealed class SalesReturnLots(IHarvestLotRepository lots, IHarvestLotSalesQuery sales, HarvestLotStatusService statuses, HarvestLotClosingService closing, IUnitOfWork unitOfWork, TimeProvider timeProvider)
@@ -51,7 +52,7 @@ public sealed class SalesReturnLots(IHarvestLotRepository lots, IHarvestLotSales
             if (backForSale.Contains(lot.Id))
             {
                 // A lot that is already Open or Reopened stays as it is; the kg comes back through the figures.
-                if (statuses.Reopen(lot, today, HarvestLotReopenCause.SalesReturnBackForSale))
+                if (await statuses.ReopenAsync(lot, today, HarvestLotReopenCause.SalesReturnBackForSale, cancellationToken: cancellationToken))
                 {
                     reopened.Add(lot.LotCode);
                 }
@@ -68,7 +69,7 @@ public sealed class SalesReturnLots(IHarvestLotRepository lots, IHarvestLotSales
             }
         }
 
-        return new SalesReturnLotChanges(reopened, closed);
+        return new SalesReturnLotChanges(reopened, closed, rows.ToDictionary(l => l.Id));
     }
 
     private async Task<Result<SalesReturnLotChanges>> QuestionAsync(HarvestLot lot, decimal discardedKg, CancellationToken cancellationToken)

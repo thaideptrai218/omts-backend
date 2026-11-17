@@ -10,7 +10,7 @@ namespace OMTS.Application.Features.Sales.Orders;
 /// How the invoices made from an order move it along: the seam the invoices call, in their own unit of work. The delivered quantities are read through <see cref="DeliveredByLineAsync"/>.
 /// <list type="bullet">
 /// <item>An invoice saved: <see cref="OnInvoiceSaved"/> moves a Draft order to Delivering, or, when the invoice delivers everything (or the seller ends the order), to Completed.</item>
-/// <item>An invoice cancelled: <see cref="OnInvoiceCancelled"/> opens a Completed order again (Delivering).</item>
+/// <item>An invoice cancelled: <see cref="OnInvoiceCancelled"/> sends the order back to Draft when no other invoice of it stands, and opens a Completed order again (Delivering) when one does.</item>
 /// <item>The advance of the order: its payments carry <c>SalesOrderId</c>; saving an invoice of the order writes parts of those payments against it (<c>CustomerPaymentAllocation</c>), which the debt allocator honours
 /// for invoices of that order only (<see cref="Debts.CustomerDebtAllocator"/>). What is left once the order is Completed or Cancelled is general credit.</item>
 /// </list>
@@ -45,15 +45,21 @@ public sealed class SalesOrderProgress(ISalesOrderRepository orders, AuditLogSer
         return true;
     }
 
-    /// <summary>An invoice of the order was cancelled: a Completed order is open again (Delivering), with no completion left on it. Returns whether the status changed. The order is saved by the caller.</summary>
-    public bool OnInvoiceCancelled(SalesOrder order)
+    /// <summary>
+    /// An invoice of the order was cancelled. An order left with no invoice that is not cancelled is a Draft again (from Delivering or Completed); otherwise a Completed order is open again (Delivering) and a
+    /// Delivering one stays. No completion is left on the order. Returns whether the status changed. The order is saved by the caller.
+    /// </summary>
+    /// <param name="otherLiveInvoice">Another invoice of the order that is not cancelled stands.</param>
+    public bool OnInvoiceCancelled(SalesOrder order, bool otherLiveInvoice)
     {
-        if (order.StatusId != StatusIds.SalesOrder.Completed)
+        var target = otherLiveInvoice ? StatusIds.SalesOrder.Delivering : StatusIds.SalesOrder.Draft;
+        var movable = order.StatusId == StatusIds.SalesOrder.Completed || (order.StatusId == StatusIds.SalesOrder.Delivering && target == StatusIds.SalesOrder.Draft);
+        if (!movable)
         {
             return false;
         }
 
-        Move(order, StatusIds.SalesOrder.Delivering, completedManually: false);
+        Move(order, target, completedManually: false);
         return true;
     }
 

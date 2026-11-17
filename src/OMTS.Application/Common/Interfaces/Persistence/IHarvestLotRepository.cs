@@ -2,8 +2,22 @@ using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Domain.Entities.Harvest;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
+
+/// <summary>Filters of the harvest lot list; null means "any". A caller who sees only some zones passes them in <see cref="ZoneIds"/>. The period is on the harvest date.</summary>
+/// <param name="Weighed">True: lots with a weighing; false: lots waiting for it.</param>
+/// <param name="CloseReason">Closed lots with this reason.</param>
+/// <param name="HasPlan">True: lots recorded from a harvest plan; false: lots outside a plan.</param>
+/// <param name="Search">Text in the lot code or the code of its harvest plan.</param>
+public sealed record HarvestLotFilter(
+    DateOnly? From, DateOnly? To, Guid? ZoneId, IReadOnlySet<Guid>? ZoneIds, Guid? RaftId, Guid? ProductId, int? StatusId, bool? Weighed, HarvestLotCloseReason? CloseReason, bool? HasPlan, string? Search);
+
+/// <summary>A lot of the list with the names the list shows; the figures come from the sales side.</summary>
+public sealed record HarvestLotListRow(
+    Guid Id, string LotCode, DateTimeOffset HarvestedAt, DateOnly HarvestDate, Guid ZoneId, string ZoneCode, Guid RaftId, string RaftCode, Guid CycleId, decimal CageCount, decimal EstimatedKg,
+    decimal? WeighedKg, DateTimeOffset? WeighedAt, int StatusId, HarvestLotCloseReason? CloseReason, DateOnly? CloseDate, decimal? LeftoverKg, Guid RecordedByAccountId);
 
 public interface IHarvestLotRepository
 {
@@ -61,7 +75,7 @@ public interface IHarvestLotRepository
     /// <summary>The date of the last harvest lot of the cycle, or null when it has none (BR-CYCLE-06).</summary>
     Task<DateOnly?> LastHarvestDateAsync(Guid cycleId, CancellationToken cancellationToken);
 
-    /// <summary>The lots still for sale whose days count from <paramref name="lastDay"/> or earlier: the day reopened, else the harvest date (GFR-05).</summary>
+    /// <summary>The lots still for sale whose days count from <paramref name="lastDay"/> or earlier: the day reopened, else the day weighed, else the harvest date (GFR-05).</summary>
     Task<int> CountForSaleSinceAtMostAsync(DateOnly lastDay, CancellationToken cancellationToken);
 
     /// <summary>The ids of the same lots, oldest first: what the daily close check looks at (GFR-05).</summary>
@@ -72,6 +86,12 @@ public interface IHarvestLotRepository
 
     /// <summary>How many cages the lots of each request hold; a request with no lot is left out.</summary>
     Task<IReadOnlyDictionary<Guid, decimal>> CagesOfPurchaseRequestsAsync(IReadOnlyCollection<Guid> purchaseRequestIds, CancellationToken cancellationToken);
+
+    /// <summary>Every lot the filters match with its raft and zone, read only, the latest harvest first; the caller sorts and pages them once it knows their figures.</summary>
+    Task<IReadOnlyList<HarvestLotListRow>> SearchAsync(HarvestLotFilter filter, CancellationToken cancellationToken);
+
+    /// <summary>The product lines of these lots with their products, read only, in line order.</summary>
+    Task<IReadOnlyList<HarvestLotProductLine>> ProductLinesOfAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);
 
     /// <summary>Adds the lot with the lanes and photos it holds.</summary>
     void Add(HarvestLot lot);

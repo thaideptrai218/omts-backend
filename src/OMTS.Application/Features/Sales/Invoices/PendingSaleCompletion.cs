@@ -86,7 +86,7 @@ public sealed class PendingSaleCompletion(
         var facts = new SalesInvoiceFacts(customer, request, lineProducts, lineLots, sale.ZoneId, snapshot.ByOwner, 0m, resolved.Value!, orderFacts);
 
         var cashCode = sale.CashAmount > 0m ? await paymentCodes.NextAsync(cancellationToken) : null;
-        var invoice = writer.Write(entries, facts, decision, sale.Code, cashCode, deduplicationKey: null, sellerOnTransfer: sale.CreatedByAccountId);
+        var invoice = await writer.WriteAsync(entries, facts, decision, sale.Code, cashCode, deduplicationKey: null, cancellationToken, sellerOnTransfer: sale.CreatedByAccountId);
         pendingWriter.End(sale, PendingSaleStatus.Completed, invoice.Id, by: null);
         await notifications.SaleAsync(invoice, decision, sale.CreatedByAccountId, cancellationToken);
         return invoice;

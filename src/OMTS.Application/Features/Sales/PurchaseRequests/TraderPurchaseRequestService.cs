@@ -40,7 +40,7 @@ public sealed class TraderPurchaseRequestService(
     /// SALE-01. The profile row is written too (<see cref="ICustomerReferences"/>): a merge at this moment conflicts, and so
     /// does a second tap on Send. A retry with the same client operation answers the request it saved, even on a later day. A
     /// product discontinued in the very moment of the save is not caught: the request names it, reserves nothing, and the Owner
-    /// declines it. The request also makes a Draft order (see <see cref="SalesOrderFromRequestService"/>) and is Ordered when it was made.
+    /// declines it. The request also makes a Draft order (see <see cref="SalesOrderFromRequestService"/>) and stays Awaiting response: the Owner still answers it.
     /// </summary>
     public async Task<Result<PurchaseRequestSaved>> PlaceAsync(Guid accountId, PlacePurchaseRequest entry, CancellationToken cancellationToken)
     {
@@ -99,6 +99,12 @@ public sealed class TraderPurchaseRequestService(
             return AppError.NotUsableChoice($"Product {product.Name}", NotOnSaleStatus, "Product");
         }
 
+        // A product with no price cannot make the order the request makes: refused with the field, not left without an order.
+        if (await orderFromRequest.PriceRefusalAsync(product.Id, entry.RequestedCages!.Value, cancellationToken) is { } unpriced)
+        {
+            return unpriced;
+        }
+
         var request = new PurchaseRequest
         {
             CustomerId = customer.Id,
@@ -132,7 +138,7 @@ public sealed class TraderPurchaseRequestService(
     /// <summary>
     /// SALE-02. The status comes first: a request that can no longer be cancelled answers its status whatever the form holds.
     /// A form read before the Owner answered gets MSG06, so the trader sees the response before cancelling. The shifts the staff
-    /// agreed to are let go, unless one of them already checked in.
+    /// agreed to are let go, unless one of them already checked in. The Draft order the request made is cancelled with it.
     /// </summary>
     public async Task<Result<TraderPurchaseRequestView>> CancelAsync(Guid accountId, Guid requestId, CancelPurchaseRequest entry, CancellationToken cancellationToken)
     {
@@ -173,6 +179,7 @@ public sealed class TraderPurchaseRequestService(
         request.CancelReason = reason;
         request.CancelledAt = timeProvider.GetUtcNow();
         await staffing.ReleaseAsync(request, cancellationToken);
+        await orderFromRequest.CancelDraftAsync(request, accountId, reason, cancellationToken);
         audit.Record(new AuditEntry("PurchaseRequest.Cancelled", PurchaseRequestRules.RecordType)
         {
             RecordId = request.Id,

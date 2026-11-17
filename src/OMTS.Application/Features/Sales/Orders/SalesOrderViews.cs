@@ -16,6 +16,7 @@ public sealed class SalesOrderViews(
     IStatusCatalog statusCatalog,
     ISalesOrderRepository orders,
     IHarvestPlanRepository harvestPlans,
+    ISalesReturnRepository salesReturns,
     SalesOrderAccess access,
     SalesOrderProgress progress,
     TimeProvider timeProvider)
@@ -38,6 +39,7 @@ public sealed class SalesOrderViews(
         var servedBy = (await harvestPlans.PlansOfOrdersAsync([order.Id], cancellationToken))
             .Where(p => caller.IsOwner || p.WasAssigned)
             .Select(p => new SalesOrderHarvestPlanView(p.PlanId, p.PlanCode, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId), p.PlannedAt)).ToList();
+        var returned = (await salesReturns.OfOrdersAsync([order.Id], cancellationToken)).GetValueOrDefault(order.Id) ?? [];
         var ids = new[] { order.ReceivedByAccountId, order.CreatedByAccountId }.Concat(advances.Select(a => a.CollectedByAccountId).OfType<Guid>())
             .Concat(orderInvoices.Select(i => i.CreatedByAccountId)).Distinct().ToList();
         var names = await accounts.GetDisplayNamesAsync(ids, cancellationToken);
@@ -59,6 +61,7 @@ public sealed class SalesOrderViews(
             advanceViews,
             orderInvoices.Select(i => new SalesOrderInvoiceView(i.Id, i.Code, i.InvoicedAt, i.Total, i.StatusId, statusCatalog.DisplayNameOf(i.StatusId), Ref(i.CreatedByAccountId))).ToList(),
             servedBy,
+            returned.Select(r => new SalesOrderReturnView(r.Id, r.Code, r.StatusId)).ToList(),
             order.PurchaseRequest is { } r ? new SalesOrderRequestView(r.Id, r.SentAt, r.StatusId, statusCatalog.DisplayNameOf(r.StatusId)) : null,
             SalesOrderRules.AllowedActions(order.StatusId, caller, hasLiveInvoice, order.CustomerId is not null),
             order.CreatedAt, order.CompletedAt, order.CompletedManually, order.CancelledAt, order.CancelReason, RowVersionGuard.Encode(order.RowVersion));

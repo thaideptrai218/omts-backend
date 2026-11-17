@@ -20,4 +20,7 @@ public class HarvestLotProductLine : Entity
 
     /// <summary>Above 0, at most 3 decimals: what was typed, or the cages times the kg of a cage of the product.</summary>
     public decimal Kg { get; set; }
+
+    /// <summary>The kg of the weighing of this product, above 0 with at most 3 decimals; null until the lot is weighed. It is what the Harvest row of the product ledger holds.</summary>
+    public decimal? WeighedKg { get; set; }
 }

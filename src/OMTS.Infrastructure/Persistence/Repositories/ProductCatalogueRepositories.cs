@@ -39,7 +39,16 @@ internal sealed class ProductStockRepository(OmtsDbContext db) : IProductStockRe
         var lots = lotIds.ToList();
         var sums = await db.ProductStockMovements.AsNoTracking().Where(m => m.HarvestLotId != null && lots.Contains(m.HarvestLotId.Value) && products.Contains(m.ProductId))
             .GroupBy(m => new { m.ProductId, LotId = m.HarvestLotId!.Value }).Select(g => new { g.Key.ProductId, g.Key.LotId, Sum = g.Sum(m => m.QuantityKg) }).ToListAsync(cancellationToken);
-        return sums.ToDictionary(s => (s.ProductId, s.LotId), s => s.Sum);
+        var balances = sums.ToDictionary(s => (s.ProductId, s.LotId), s => s.Sum);
+        // The rows this request has added are not in the database yet.
+        foreach (var added in db.ChangeTracker.Entries<ProductStockMovement>()
+                     .Where(e => e.State == EntityState.Added && e.Entity.HarvestLotId is { } lotId && lots.Contains(lotId) && products.Contains(e.Entity.ProductId)).Select(e => e.Entity))
+        {
+            var key = (added.ProductId, added.HarvestLotId!.Value);
+            balances[key] = balances.GetValueOrDefault(key) + added.QuantityKg;
+        }
+
+        return balances;
     }
 
     public async Task<IReadOnlyList<ProductMovementRow>> ForProductAsync(Guid productId, bool includeReversals, IReadOnlySet<Guid>? zoneIds, CancellationToken cancellationToken)
@@ -66,6 +75,9 @@ internal sealed class ProductStockRepository(OmtsDbContext db) : IProductStockRe
             return new ProductMovementRow(m, balance);
         }).ToList();
     }
+
+    public async Task<IReadOnlyList<ProductStockMovement>> ForLotAsync(Guid lotId, CancellationToken cancellationToken) =>
+        await db.ProductStockMovements.AsNoTracking().Include(m => m.Product).Where(m => m.HarvestLotId == lotId).OrderBy(m => m.OccurredAt).ThenBy(m => m.Sequence).ToListAsync(cancellationToken);
 
     public async Task<bool> HasUnreversedSalesOrDisposalsAsync(Guid lotId, IReadOnlyCollection<Guid> productIds, CancellationToken cancellationToken)
     {

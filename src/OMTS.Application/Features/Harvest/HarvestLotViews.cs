@@ -19,6 +19,7 @@ namespace OMTS.Application.Features.Harvest;
 public sealed class HarvestLotViews(
     IHarvestLotSalesQuery sales,
     IHarvestPlanRepository harvestPlans,
+    HarvestLotReferenceReader referenceReader,
     IProductRepository products,
     ProvenanceReadiness readiness,
     IAccountRepository accounts,
@@ -38,13 +39,25 @@ public sealed class HarvestLotViews(
     public static bool MayClose(AccountAccess? access, HarvestLot lot, Guid zoneId) =>
         lot.IsForSale && access is not null && access.Allows(PermissionFunctions.HarvestLots, PermissionAction.Edit, PermissionScope.ZoneScoped, zoneId);
 
+    /// <summary>The weighing and the manual reopen: a Zone Manager of the zone or the Cooperative Owner, whoever recorded the lot (HarvestLots Edit).</summary>
+    private static bool MayManage(AccountAccess? access, Guid zoneId) =>
+        access is not null && access.Allows(PermissionFunctions.HarvestLots, PermissionAction.Edit, PermissionScope.ZoneScoped, zoneId);
+
+    /// <summary>A lot waiting for its weighing, or for sale, can be weighed (again) by <see cref="MayManage"/>.</summary>
+    public static bool MayWeigh(AccountAccess? access, HarvestLot lot, Guid zoneId) =>
+        lot.StatusId is StatusIds.HarvestLot.AwaitingWeighing or StatusIds.HarvestLot.Open or StatusIds.HarvestLot.Reopened && MayManage(access, zoneId);
+
+    /// <summary>A Closed lot not closed by an invoice can be reopened by hand by <see cref="MayManage"/>.</summary>
+    public static bool MayReopen(AccountAccess? access, HarvestLot lot, Guid zoneId) => HarvestLotStatusService.MayReopenByHand(lot) && MayManage(access, zoneId);
+
     public async Task<AccountAccess?> AccessAsync(CancellationToken cancellationToken) =>
         currentUser.AccountId is { } accountId ? await permissions.GetAccessAsync(accountId, cancellationToken) : null;
 
     /// <summary>One lot with its lanes, photos and cycle; the raft comes with its zone.</summary>
     public async Task<HarvestLotView> ViewAsync(HarvestLot lot, Raft raft, CancellationToken cancellationToken)
     {
-        var names = await accounts.GetDisplayNamesAsync([lot.RecordedByAccountId], cancellationToken);
+        var named = lot.WeighedByAccountId is { } weigher ? new[] { lot.RecordedByAccountId, weigher } : [lot.RecordedByAccountId];
+        var names = await accounts.GetDisplayNamesAsync(named, cancellationToken);
         var figures = await sales.FiguresAsync([lot.Id], cancellationToken);
         var access = await AccessAsync(cancellationToken);
         var canCorrect = CanEdit(lot.Cycle, raft) && MayCorrect(access, lot, raft.ZoneId);
@@ -57,6 +70,8 @@ public sealed class HarvestLotViews(
             photos.Add(new HarvestLotPhotoView(photo.FileKey, photo.SortOrder, await storage.GetReadUrlAsync(photo.FileKey, cancellationToken: cancellationToken), photo.Id));
         }
 
+        var catalogue = await ProductsOfAsync([lot], cancellationToken);
+        var plan = (await harvestPlans.PlansOfLotsAsync([lot.Id], cancellationToken)).FirstOrDefault();
         return new HarvestLotView(
             lot.Id,
             lot.LotCode,
@@ -91,13 +106,20 @@ public sealed class HarvestLotViews(
             canRemove,
             MayClose(access, lot, raft.ZoneId),
             RowVersionGuard.Encode(lot.RowVersion),
-            ProductLines(lot, await ProductsOfAsync([lot], cancellationToken)),
-            (await PlansOfAsync([lot.Id], cancellationToken)).GetValueOrDefault(lot.Id),
+            ProductLines(lot, catalogue),
+            plan is null ? null : new HarvestLotPlanRef(plan.PlanId, plan.PlanCode),
             lot.OverPlanReason,
             lot.PurchaseRequestId,
             lot.PurchaseRequest?.Code,
             await crewAttendance.ViewAsync(lot.Crew, lot.HarvestDate, cancellationToken),
-            lot.Lanes.OrderBy(l => l.Lane.LaneNumber).Select(l => new HarvestLanePercentView(l.Lane.LaneNumber, l.HarvestedPercent)).ToList());
+            lot.Lanes.OrderBy(l => l.Lane.LaneNumber).Select(l => new HarvestLanePercentView(l.Lane.LaneNumber, l.HarvestedPercent)).ToList(),
+            lot.WeighedKg,
+            lot.WeighedAt,
+            lot.WeighedByAccountId is { } by ? names.GetValueOrDefault(by) : null,
+            MayWeigh(access, lot, raft.ZoneId),
+            MayReopen(access, lot, raft.ZoneId),
+            await referenceReader.ReferencesAsync(lot, plan, cancellationToken),
+            await referenceReader.ProductBalancesAsync(lot, catalogue, cancellationToken));
     }
 
     /// <summary>The harvest plan (KHT) each lot was recorded from; a lot outside a plan is absent.</summary>
@@ -116,7 +138,7 @@ public sealed class HarvestLotViews(
         lot.ProductLines.OrderBy(l => l.LineNumber).Select(l =>
         {
             var product = l.Product ?? catalogue.GetValueOrDefault(l.ProductId);
-            return new HarvestLotProductLineView(l.ProductId, product?.Code ?? string.Empty, product?.Name ?? string.Empty, l.CageCount, l.Kg);
+            return new HarvestLotProductLineView(l.ProductId, product?.Code ?? string.Empty, product?.Name ?? string.Empty, l.CageCount, l.Kg, l.WeighedKg);
         }).ToList();
 
     /// <summary>The lots of one cycle with their lanes: lots for sale first, then the latest harvest first (SCR-HARVEST-01). The raft comes with its zone.</summary>

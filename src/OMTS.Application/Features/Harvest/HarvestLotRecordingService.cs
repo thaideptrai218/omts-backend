@@ -242,7 +242,7 @@ public sealed class HarvestLotRecordingService(
         lots.Add(lot);
         if (resolved is not null)
         {
-            productLines.Add(lot, raft.Code, resolved);
+            productLines.Add(lot, resolved);
         }
 
         var crewAdded = crew is null ? [] : crews.Apply(lot.Crew, crew, e => new HarvestRecordEmployee { LotId = lot.Id, EmployeeId = e.Id, Employee = e }).Added;

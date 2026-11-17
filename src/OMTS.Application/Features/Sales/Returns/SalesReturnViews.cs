@@ -39,7 +39,7 @@ public sealed class SalesReturnViews(
         var lines = found.Lines.OrderBy(l => invoiceLines.GetValueOrDefault(l.InvoiceLineId)?.LineNumber ?? int.MaxValue).Select(l =>
         {
             var line = invoiceLines.GetValueOrDefault(l.InvoiceLineId);
-            return new SalesReturnLineView(l.InvoiceLineId, line?.LineNumber, line?.Product.Name, l.HarvestLotId, l.HarvestLot.LotCode, l.ReturnedKg, l.Outcome, l.DiscardedKg);
+            return new SalesReturnLineView(l.InvoiceLineId, line?.LineNumber, line?.Product.Name, l.HarvestLotId, l.HarvestLot.LotCode, l.ReturnedKg, l.Outcome, l.DiscardedKg, line?.Product.Code);
         }).ToList();
 
         var backForSale = found.Lines.Where(l => l.Outcome == SalesReturnOutcome.BackForSale).GroupBy(l => l.HarvestLotId).Select(g => (Lot: g.First().HarvestLot, Kg: g.Sum(l => l.ReturnedKg))).ToList();
@@ -50,9 +50,17 @@ public sealed class SalesReturnViews(
             return new SalesReturnLotFigures(l.Lot.Id, l.Lot.LotCode, HarvestLotFigures.Of(l.Lot, sales).RemainingKg, RemainingAfterCancel(l.Lot, sales, found.IsStanding ? l.Kg : 0m));
         }).ToList();
 
+        var invoice = found.Invoice;
+        var canCancel = SalesInvoiceAllowedActions.CancelReturnRefusal(found.IsStanding, await zoneAccess.IsCooperativeOwnerAsync(cancellationToken)) is null;
         return new SalesReturnView(
-            found.Id, found.Code, found.InvoiceId, found.Invoice.Code, found.ReturnDate, found.Reason, found.Value, found.StatusId, statusCatalog.DisplayNameOf(found.StatusId),
-            new AccountRef(found.RecordedByAccountId, names.GetValueOrDefault(found.RecordedByAccountId) ?? string.Empty), found.CancelledAt, found.CancelReason, lines, lots, RowVersionGuard.Encode(found.RowVersion));
+            found.Id, found.Code, found.InvoiceId, invoice.Code, found.ReturnDate, found.Reason, found.Value, found.StatusId, statusCatalog.DisplayNameOf(found.StatusId),
+            new AccountRef(found.RecordedByAccountId, names.GetValueOrDefault(found.RecordedByAccountId) ?? string.Empty), found.CancelledAt, found.CancelReason, lines, lots, RowVersionGuard.Encode(found.RowVersion),
+            SalesOrder: invoice.SalesOrder is { } order ? new SalesInvoiceOrderRef(order.Id, order.Code) : null,
+            Customer: invoice.Customer is { } customer ? new SalesReturnCustomerRef(customer.Id, customer.Code, customer.Name) : null,
+            ZoneCode: invoice.Zone.Code,
+            BackForSaleKg: found.Lines.Where(l => l.Outcome == SalesReturnOutcome.BackForSale).Sum(l => l.ReturnedKg),
+            DiscardedKg: found.Lines.Sum(l => l.DiscardedKg),
+            CanCancel: canCancel);
     }
 
     /// <summary>The return for whoever views the sales returns of the invoice's zone (Zone Manager, Owner; an Accountant has no access, §I.4.4): another zone answers 403 MSG-GEN-08.</summary>
