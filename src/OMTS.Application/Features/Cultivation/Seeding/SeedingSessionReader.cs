@@ -2,6 +2,7 @@ using OMTS.Application.Common;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Cultivation.Progress;
+using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Purchasing.Receipts;
 using OMTS.Domain.Constants;
@@ -31,6 +32,12 @@ public sealed class SeedingSessionReader(ISeedLotRepository lots, IRaftRepositor
         var today = timeProvider.Today();
         var lot = input.FixedLot ?? await LotAsync(input.SeedLotId, current, cancellationToken);
         var raft = await rafts.GetForEditAsync(cycle.RaftId, cancellationToken) ?? throw new InvalidOperationException($"Raft {cycle.RaftId} not found.");
+
+        // One cycle grows one kind of oyster: a lot the session newly chooses must hold seed of the product of the cycle (the lot a corrected session already has stays allowed).
+        if (lot is not null && (current is null || current.SeedLotLineId != lot.Id) && CycleKindRules.Refusal(cycle.ProductId, lot) is { } otherKind)
+        {
+            return (null, otherKind);
+        }
 
         var check = new FieldCheck();
         check.Check(input.Date is { } date && date >= cycle.StartDate && date <= today && (lot is null || date >= lot.Receipt.ReceiptDate), SeedingValues.DateField);

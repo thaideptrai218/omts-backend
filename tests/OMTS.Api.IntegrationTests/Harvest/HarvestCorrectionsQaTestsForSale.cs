@@ -144,6 +144,8 @@ public class HarvestCorrectionsQaTestsForSale
         api.Sales.Figures[lot.Id()] = new OMTS.Application.Features.Harvest.LotSalesFigures(100m, 0m, 0m, 0m);
 
         await api.CorrectLotAsync(owner, lot.Id(), new HarvestFields { Cages = "6" });
+        // The correction moves the estimate (6 cages of 50 kg); the kg of a weighed lot are the weighing's, so the Owner weighs it again at the corrected kg.
+        (await owner.PostWeighAsync(await owner.GetHarvestLotAsync(lot.Id()), 300m)).EnsureSuccessStatusCode();
 
         var item = (await owner.LotsForSaleAsync(raft.ZoneId)).GetProperty("lots")[0];
         Assert.Equal((200m, "Published"), (item.Kg("remainingKg"), item.Text("originState")));

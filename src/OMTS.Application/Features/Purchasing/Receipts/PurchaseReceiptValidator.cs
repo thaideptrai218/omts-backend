@@ -58,13 +58,22 @@ public sealed class PurchaseReceiptValidator(
     public async Task<bool> ZoneInUseAsync(Guid zoneId, CancellationToken cancellationToken) =>
         (await zones.GetByIdsAsync([zoneId], cancellationToken)).Any(z => z.StatusId == StatusIds.Usage.InUse);
 
-    /// <summary>Checks of every save, Draft or not; returns the items and rafts of the lines.</summary>
-    public async Task<(ReceiptLineRefs Refs, AppError? Error)> CheckDraftAsync(SavePurchaseReceiptRequest request, CancellationToken cancellationToken)
+    /// <summary>
+    /// Checks of every save, Draft or not; returns the items and rafts of the lines. <paramref name="storedKind"/> is the kind of the Draft being saved again: the request may only repeat it, and the lines must
+    /// match it; a new receipt (null) takes the kind sent or that of its first item, and the lines must match that.
+    /// </summary>
+    public async Task<(ReceiptLineRefs Refs, AppError? Error)> CheckDraftAsync(
+        SavePurchaseReceiptRequest request, PurchaseReceiptKind? storedKind, CancellationToken cancellationToken)
     {
         var invalid = new List<string>();
         if (!DocumentCodes.TypedAllowed(request.Code))
         {
             invalid.Add("Code");
+        }
+
+        if (!ReceiptKindRules.IsDefined(request.Kind) || (storedKind is { } stored && request.Kind is { } sent && sent != stored))
+        {
+            invalid.Add(ReceiptKindRules.KindField);
         }
 
         // A Discontinued supplier or item cannot be chosen, not even on a Draft (GBR-01).
@@ -142,6 +151,13 @@ public sealed class PurchaseReceiptValidator(
             return (refs, AppError.InvalidFields(invalid));
         }
 
+        // A seed receipt holds only seed items, a supply receipt none (the kind is fixed when the receipt is created).
+        var groups = lines.Select(l => l.ItemId is { } id && refs.Items.TryGetValue(id, out var found) ? (InputItemGroup?)found.Group : null).ToList();
+        if (ReceiptKindRules.Mismatch(storedKind ?? ReceiptKindRules.ForNew(request.Kind, groups), groups) is { } wrongKind)
+        {
+            return (refs, wrongKind);
+        }
+
         // At most 2 decimals, whole prices stored as decimal(18,0): refuse what the rule forbids or the database would round or overflow.
         var badLine = lines.ToList().FindIndex(l => !LineValuesAllowed(l.Quantity, l.UnitPrice, l.Discount ?? 0));
         return (refs, badLine >= 0 ? InvalidLine(badLine + 1) : null);
@@ -207,6 +223,11 @@ public sealed class PurchaseReceiptValidator(
         if (invalid.Count > 0)
         {
             return AppError.InvalidFields(invalid);
+        }
+
+        if (ReceiptKindRules.Mismatch(receipt.Kind, lines.Select(l => l.ItemId is { } id && refs.Items.TryGetValue(id, out var found) ? (InputItemGroup?)found.Group : null)) is { } wrongKind)
+        {
+            return wrongKind;
         }
 
         // BR-PURCHASE-01: a quantity greater than 0 and a unit price of 0 or more; a Draft saved before the 2-decimal rule is refused here too.

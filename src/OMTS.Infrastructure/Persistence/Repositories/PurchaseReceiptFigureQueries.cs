@@ -99,7 +99,8 @@ internal sealed partial class PurchaseReceiptRepository
                 - (r.Returns.Where(x => x.StatusId == StatusIds.PurchaseReturn.Recorded).Sum(x => (decimal?)x.Discount) ?? 0m),
             r.Discount, r.ZoneId, r.Zone!.Code, r.Zone!.Name, r.Notes, r.CompletedAt, r.CreatedAt, r.UpdatedAt, r.ReceivedAt, r.ReceivedByAccountId,
             // Codes of its Recorded returns, oldest first, for the list's "Mã trả hàng nhập" column.
-            r.Returns.Where(x => x.StatusId == StatusIds.PurchaseReturn.Recorded).OrderBy(x => x.ReturnedAt).Select(x => x.Code).ToList()));
+            r.Returns.Where(x => x.StatusId == StatusIds.PurchaseReturn.Recorded).OrderBy(x => x.ReturnedAt).Select(x => x.Code).ToList(),
+            r.Kind));
     }
 
     private static IQueryable<PurchaseReceiptLine> MatchingLines(PurchaseReceiptFilter filter, IQueryable<PurchaseReceiptLine> lines)
@@ -131,6 +132,11 @@ internal sealed partial class PurchaseReceiptRepository
     private static IQueryable<PurchaseReceiptLine> OfCompletedReceipts(PurchaseReceiptFilter filter, IQueryable<PurchaseReceiptLine> lines)
     {
         lines = lines.Where(l => l.Receipt.StatusId == StatusIds.PurchaseReceipt.Completed);
+        if (filter.Kind is { } kind)
+        {
+            lines = lines.Where(l => l.Receipt.Kind == kind);
+        }
+
         if (filter.SupplierId is { } supplierId)
         {
             lines = lines.Where(l => l.Receipt.SupplierId == supplierId);
@@ -164,6 +170,11 @@ internal sealed partial class PurchaseReceiptRepository
             query = query.Where(r => r.Lines.Any(l =>
                 (group == null || (l.Item != null && l.Item.Group == group)) && (groups == null || (l.Item != null && groups.Contains(l.Item.Group)))
                 && (itemId == null || l.ItemId == itemId) && (raftId == null || l.RaftId == raftId)));
+        }
+
+        if (filter.Kind is { } kind)
+        {
+            query = query.Where(r => r.Kind == kind);
         }
 
         if (filter.SupplierId is { } supplierId)

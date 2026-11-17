@@ -21,8 +21,8 @@ public sealed class FarmingInputItemsController(FarmingInputItemService items, F
     /// <summary>The items that are not deleted, by code; an array for the pickers (no photos). Use <c>/search</c> for the paged list with filters.</summary>
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<FarmingInputItemListItem>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> List(string? search, InputItemGroup? group, int? statusId, CancellationToken cancellationToken) =>
-        (await items.ListAsync(search, group, statusId, cancellationToken)).ToActionResult(Ok);
+    public async Task<IActionResult> List(string? search, InputItemGroup? group, int? statusId, PurchaseReceiptKind? kind, CancellationToken cancellationToken) =>
+        (await items.ListAsync(search, group, statusId, cancellationToken, kind)).ToActionResult(Ok);
 
     /// <summary>The paged list with the quantity on hand, filters, sort and the stock value of every match.</summary>
     [HttpGet("search")]

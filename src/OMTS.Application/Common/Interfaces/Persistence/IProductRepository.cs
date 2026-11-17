@@ -2,8 +2,14 @@ using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
+/// <summary>A Seed item that sells as a product ("Loại hàu bán ra").</summary>
+public sealed record ProductSourceSeed(Guid Id, string Code, string Name);
+
 public interface IProductRepository
 {
+    /// <summary>The Seed items (not deleted, any status) whose product is this one, by code: the seed the product is grown from.</summary>
+    Task<IReadOnlyList<ProductSourceSeed>> SourceSeedsAsync(Guid productId, CancellationToken cancellationToken);
+
     /// <summary>The product with its units (and their catalogue rows), photos and group, tracked.</summary>
     Task<Product?> GetForEditAsync(Guid productId, CancellationToken cancellationToken);
 

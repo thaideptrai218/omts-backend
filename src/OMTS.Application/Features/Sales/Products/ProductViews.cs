@@ -38,7 +38,9 @@ public sealed class ProductViews(IProductRepository products, IAccountRepository
             photos.Add(new ProductPhotoView(photo.Id, await storage.GetReadUrlAsync(photo.StorageKey, cancellationToken: cancellationToken)));
         }
 
-        return ProductDetailView.Of(ViewOf(product, onHand, used, null, names, hidePrice, hideStock), photos);
+        // A trader (who sees no stock) sees no source seed either: it is purchasing data.
+        var seeds = hideStock ? [] : (await products.SourceSeedsAsync(product.Id, cancellationToken)).Select(s => new ProductSourceSeedView(s.Id, s.Code, s.Name)).ToList();
+        return ProductDetailView.Of(ViewOf(product, onHand, used, null, names, hidePrice, hideStock), photos, seeds);
     }
 
     private ProductView ViewOf(Product p, decimal onHand, bool isUsed, string? photoUrl, IReadOnlyDictionary<Guid, string> creatorNames, bool hidePrice, bool hideStock)

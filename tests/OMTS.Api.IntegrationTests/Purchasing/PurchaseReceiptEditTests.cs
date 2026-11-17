@@ -35,12 +35,13 @@ public class PurchaseReceiptEditTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal(130_000m, await world.DebtAsync());
 
         // Down, a line removed and one added: the debt follows the new total; the new line is numbered after every old one.
-        var down = await (await colleague.EditAsync(up, world.Body(Kept(up, world.Other, 5, 10_000), new LineBody(world.Seed, 10, 1_000)) with { Discount = 5_000 }))
+        var down = await (await colleague.EditAsync(up, world.Body(Kept(up, world.Other, 5, 10_000), new LineBody(world.Material, 10, 1_000)) with { Discount = 5_000 }))
             .ReadAsync(HttpStatusCode.OK);
         Assert.Equal((60_000m, 55_000m), (down.Money("total"), down.Money("payable")));
         Assert.Equal(55_000m, await world.DebtAsync());
         Assert.Equal([1, 3], down.GetProperty("lines").EnumerateArray().Select(l => l.GetProperty("lineNumber").GetInt32()));
-        Assert.Equal($"{receipt.GetProperty("code").GetString()}-3", down.SeedLotCodeOf(world.Seed));
+        // A supply line is no seed lot.
+        Assert.Null(down.GetProperty("lines")[1].GetProperty("seedLotCode").GetString());
 
         var audits = await factory.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == receipt.Id() && e.Action == "PurchaseReceipt.Edited").ToListAsync());
         Assert.Equal(2, audits.Count);
@@ -57,20 +58,43 @@ public class PurchaseReceiptEditTests(AuthApiFactory factory) : IClassFixture<Au
     }
 
     [Fact]
+    public async Task An_edit_of_a_completed_receipt_brings_no_line_of_the_other_kind_and_never_changes_the_kind()
+    {
+        var world = await factory.WorldAsync();
+        var supply = await world.CompletedAsync(new LineBody(world.Other, 2, 10_000));
+        var seed = await world.CompletedAsync(new LineBody(world.Seed, 2, 10_000));
+
+        // A seed line on a supply receipt, a supply line on a seed receipt, and the only line swapped for the other kind.
+        Assert.Equal("Lines", await (await world.Owner.EditAsync(supply, world.Body(Kept(supply, world.Other, 2, 10_000), new LineBody(world.Seed, 1, 1_000))))
+            .FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("Lines", await (await world.Owner.EditAsync(seed, world.Body(Kept(seed, world.Seed, 2, 10_000), new LineBody(world.Material, 1, 1_000))))
+            .FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("Lines", await (await world.Owner.EditAsync(supply, world.Body(new LineBody(world.Seed, 2, 10_000)))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        // The kind may be repeated, never changed.
+        Assert.Equal("Kind", await (await world.Owner.EditAsync(supply, world.Body(Kept(supply, world.Other, 2, 10_000)) with { Kind = "Seed" })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        var repeated = await (await world.Owner.EditAsync(supply, world.Body(Kept(supply, world.Other, 3, 10_000)) with { Kind = "Supply" })).ReadAsync(HttpStatusCode.OK);
+
+        Assert.Equal(("Supply", 30_000m), (repeated.GetProperty("kind").GetString(), repeated.Money("total")));
+        Assert.Equal(50_000m, await world.DebtAsync());
+    }
+
+    [Fact]
     public async Task A_seeded_or_returned_line_keeps_its_item_and_at_least_the_quantity_used()
     {
         var world = await factory.WorldAsync();
-        var receipt = await world.CompletedAsync(new LineBody(world.Seed, 100, 1_000), new LineBody(world.Other, 10, 2_000));
+        // A seed receipt never holds a supply item, so the line nothing is taken from is a second seed item.
+        var unused = await world.Owner.CreateItemAsync("Seed", "kg");
+        var receipt = await world.CompletedAsync(new LineBody(world.Seed, 100, 1_000), new LineBody(unused, 10, 2_000));
         await factory.SeedAsync(world.Raft.Id, receipt.LineOf(world.Seed), 30);
         await world.ReturnAsync(receipt.Id(), receipt.LineOf(world.Seed), 20);
         receipt = await world.Owner.GetFromJsonAsync<JsonElement>($"{Receipts}/{receipt.Id()}");
 
-        var below = await (await world.Owner.EditAsync(receipt, world.Body(Kept(receipt, world.Seed, 49, 1_000), Kept(receipt, world.Other, 10, 2_000))))
+        var below = await (await world.Owner.EditAsync(receipt, world.Body(Kept(receipt, world.Seed, 49, 1_000), Kept(receipt, unused, 10, 2_000))))
             .ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-10");
         Assert.Equal(("Line 1", 50m), (below.GetProperty("field").GetString(), below.Money("minQuantity")));
-        await (await world.Owner.EditAsync(receipt, world.Body(Kept(receipt, world.Other, 10, 2_000)))).ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
+        await (await world.Owner.EditAsync(receipt, world.Body(Kept(receipt, unused, 10, 2_000)))).ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
         Assert.Equal("Line 1 item", await (await world.Owner.EditAsync(receipt, world.Body(
-                new LineBody(world.Material, 100, 1_000, LineId: receipt.LineOf(world.Seed)), Kept(receipt, world.Other, 10, 2_000))))
+                new LineBody(world.Material, 100, 1_000, LineId: receipt.LineOf(world.Seed)), Kept(receipt, unused, 10, 2_000))))
             .FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
 
         // Exactly seeded + returned is allowed, and a line nothing was taken from may go.

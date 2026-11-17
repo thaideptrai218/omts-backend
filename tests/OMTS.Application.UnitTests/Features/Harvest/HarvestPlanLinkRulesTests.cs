@@ -34,12 +34,12 @@ public class HarvestPlanLinkRulesTests
     }
 
     [Fact]
-    public void Product_lines_must_hold_the_cycle_product_and_may_add_others()
+    public void A_lot_holds_only_the_cycle_product_and_no_other_beside_it()
     {
         var main = new Product { Name = "Main" };
         var other = new Product { Name = "Other" };
 
-        Assert.True(HarvestProductMatch.Matches(main.Id, [Line(main), Line(other)]));
+        Assert.False(HarvestProductMatch.Matches(main.Id, [Line(main), Line(other)]));
         Assert.True(HarvestProductMatch.Matches(main.Id, [Line(main)]));
         Assert.False(HarvestProductMatch.Matches(main.Id, [Line(other)]));
     }

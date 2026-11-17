@@ -292,14 +292,15 @@ public sealed class HarvestLotRecordingService(
         planned is null ? request : request with { LaneNumbers = planned.LaneNumbers };
 
     /// <summary>
-    /// The product lines of the form, checked against the catalogue. With lines the cages and estimated kg are their sums, whatever the form sent; without them the form is read as before and the lot is
-    /// not split per product. A line sent without a product takes the product farmed in the Open cycle.
+    /// The product lines of the form, checked against the catalogue. A lot holds one product, the one farmed in the Open cycle: a line sent without a product takes it, and when the cycle has a product and the form sends
+    /// no line, the line is built from the cages and kg of the form. With lines the cages and estimated kg are their sums, whatever the form sent; a cycle with no product and a form with no line is read as before and the lot
+    /// is not split per product.
     /// </summary>
     private async Task<(IReadOnlyList<ResolvedProductLine>? Resolved, RecordHarvestRequest Request, AppError? Error)> WithProductLinesAsync(
         RecordHarvestRequest request, decimal kgPerCage, Guid? cycleProductId, CancellationToken cancellationToken)
     {
         var inputs = cycleProductId is { } productId
-            ? request.ProductLines?.Select(l => l is { ProductId: null } ? l with { ProductId = productId } : l).ToList()
+            ? request.ProductLines?.Select(l => l is { ProductId: null } ? l with { ProductId = productId } : l).ToList() ?? WholeLot(request, productId)
             : request.ProductLines;
         var (resolved, error) = await productLines.ResolveAsync(inputs, request.ProductLinesAreUnreadable, kgPerCage, new HashSet<Guid>(), cancellationToken);
         if (error is not null || resolved is null)
@@ -310,6 +311,10 @@ public sealed class HarvestLotRecordingService(
         var (cages, kg) = HarvestLotProductLineService.Totals(resolved);
         return (resolved, request with { CageCount = cages, EstimatedKg = kg, EstimatedKgIsUnreadable = false }, null);
     }
+
+    /// <summary>The one line of the lot when the form sends none: all its cages and kg are the product of the cycle. Nothing when a value could not be read, so the field check names it.</summary>
+    internal static List<HarvestProductLineInput>? WholeLot(RecordHarvestRequest request, Guid cycleProductId) =>
+        request is { ProductLinesAreUnreadable: false, EstimatedKgIsUnreadable: false, CageCount: { } cages } ? [new HarvestProductLineInput(cycleProductId, cages, request.EstimatedKg)] : null;
 
     /// <summary>The share each lane of the new lot takes (<see cref="LanePercentGuard.ForHarvest"/>), checked against what the other lots and the manual changes of the cycle already hold.</summary>
     private async Task<Result<IReadOnlyDictionary<Guid, decimal?>>> SharesAsync(RecordHarvestRequest request, HarvestLotFields fields, Guid cycleId, CancellationToken cancellationToken) =>

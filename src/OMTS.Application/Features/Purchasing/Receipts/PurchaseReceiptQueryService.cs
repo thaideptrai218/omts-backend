@@ -9,7 +9,9 @@ using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Employees;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Application.Features.Purchasing.Payments;
+using OMTS.Application.Features.Purchasing.SeedLots;
 using OMTS.Application.Features.WaterQuality.Dtos;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Purchasing.Receipts;
@@ -19,12 +21,13 @@ namespace OMTS.Application.Features.Purchasing.Receipts;
 /// <paramref name="ItemGroup"/> and <paramref name="StatusId"/> stay valid and add to <paramref name="ItemGroups"/> and <paramref name="StatusIds"/>.
 /// </summary>
 /// <param name="Search">Receipt code or supplier name (contains).</param>
+/// <param name="Kind">Seed or Supply: only the receipts of that kind.</param>
 /// <param name="SortBy">code, date, supplier, total or status; newest first when left out.</param>
 /// <param name="SortDir">asc or desc.</param>
 public sealed record PurchaseReceiptQuery(
     InputItemGroup? ItemGroup = null, Guid? ItemId = null, Guid? RaftId = null, Guid? SupplierId = null,
     int? StatusId = null, DateOnly? From = null, DateOnly? To = null, string? Code = null, int Page = 1, int PageSize = 20,
-    string? Search = null, int[]? StatusIds = null, InputItemGroup[]? ItemGroups = null, Guid[]? ZoneIds = null, string? SortBy = null, string? SortDir = null);
+    string? Search = null, int[]? StatusIds = null, InputItemGroup[]? ItemGroups = null, Guid[]? ZoneIds = null, string? SortBy = null, string? SortDir = null, PurchaseReceiptKind? Kind = null);
 
 /// <param name="LinesTotal">Σ of the lines that match the item group, item and raft filters; the total when none is chosen.</param>
 /// <param name="ItemCount">Number of lines on the receipt.</param>
@@ -33,11 +36,15 @@ public sealed record PurchaseReceiptQuery(
 /// <param name="Paid">What the payments of the supplier cover of this receipt, oldest receipts first; 0 unless Completed.</param>
 /// <param name="ReceivedAt">When the goods were received, at UTC+7.</param>
 /// <param name="ReceivedByName">Who took the goods in; null when the receipt has no receiver.</param>
+/// <param name="Kind">Seed or Supply.</param>
+/// <param name="SeedState">The combined state of the seed lots of a Completed Seed receipt; null otherwise.</param>
 public sealed record PurchaseReceiptRow(
     Guid Id, string Code, DateOnly ReceiptDate, SupplierRef Supplier, int StatusId, string Status, decimal Total, decimal LinesTotal, Guid RecordedByAccountId,
     string SupplierCode, string RecordedByName, int ItemCount, decimal Returned, decimal Discount, decimal Payable, decimal Paid, ZoneRef? Zone,
     string? Notes, DateTimeOffset? CompletedAt, DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt, DateTimeOffset ReceivedAt, string? ReceivedByName,
-    IReadOnlyList<string> ReturnCodes);
+    IReadOnlyList<string> ReturnCodes,
+    PurchaseReceiptKind Kind = PurchaseReceiptKind.Supply,
+    SeedLotState? SeedState = null);
 
 /// <summary>
 /// PURCHASE-03 step 3: the Completed receipts (matching lines only), the returns dated in the period and the net.
@@ -82,6 +89,7 @@ public sealed class PurchaseReceiptQueryService(
     SupplierPaymentAllocationService allocations,
     ISpreadsheetWriter spreadsheets,
     IStatusCatalog statusCatalog,
+    ISeedLotRegisterQuery seedLots,
     TimeProvider timeProvider)
 {
     public async Task<Result<PurchaseReceiptSearchResult>> SearchAsync(PurchaseReceiptQuery query, CancellationToken cancellationToken)
@@ -221,6 +229,11 @@ public sealed class PurchaseReceiptQueryService(
             return AppError.Invalid("Sort direction");
         }
 
+        if (!ReceiptKindRules.IsDefined(query.Kind))
+        {
+            return AppError.Invalid(ReceiptKindRules.KindField);
+        }
+
         var period = PurchasePeriod.Resolve(query.From, query.To, timeProvider.Today());
         if (!period.IsSuccess)
         {
@@ -233,7 +246,7 @@ public sealed class PurchaseReceiptQueryService(
         return new PurchaseReceiptFilter(
             itemGroups is null ? query.ItemGroup : null, query.ItemId, query.RaftId, query.SupplierId, statusIds is null ? query.StatusId : null, from, to, query.Code,
             query.Search, statusIds, itemGroups, query.ZoneIds is { Length: > 0 } ? query.ZoneIds : null,
-            sort, query.SortDir == "desc" || (query.SortDir is null && query.SortBy is null));
+            sort, query.SortDir == "desc" || (query.SortDir is null && query.SortBy is null), query.Kind);
     }
 
     /// <summary>The many-valued filter with the single one added; null when the many-valued filter is not used.</summary>
@@ -245,13 +258,17 @@ public sealed class PurchaseReceiptQueryService(
         var names = await accounts.GetDisplayNamesAsync(
             found.Select(r => r.RecordedByAccountId).Concat(found.Select(r => r.ReceivedByAccountId).OfType<Guid>()).Distinct().ToList(), cancellationToken);
         var paid = await allocations.PaidByReceiptAsync(found.Select(r => r.SupplierId).Distinct().ToList(), cancellationToken);
+        // The state a Completed Seed receipt shows: one read of the seed lots of the receipts of the page.
+        var lotFigures = await seedLots.FiguresOfReceiptsAsync(
+            found.Where(r => r.Kind == PurchaseReceiptKind.Seed && r.StatusId == StatusIds.PurchaseReceipt.Completed).Select(r => r.Id).ToList(), cancellationToken);
         return found.Select(r => new PurchaseReceiptRow(
             r.Id, r.Code, r.ReceiptDate, new SupplierRef(r.SupplierId, r.SupplierName, r.SupplierPhone, r.SupplierCode),
             r.StatusId, statusCatalog.DisplayNameOf(r.StatusId), r.Total, r.LinesTotal, r.RecordedByAccountId,
             r.SupplierCode, names.GetValueOrDefault(r.RecordedByAccountId) ?? string.Empty, r.ItemCount, r.Returned, r.Discount, r.Payable, paid.GetValueOrDefault(r.Id),
             r.ZoneId is { } zoneId ? new ZoneRef(zoneId, r.ZoneCode!, r.ZoneName!) : null,
             r.Notes, r.CompletedAt, r.CreatedAt, r.UpdatedAt,
-            r.ReceivedAt, r.ReceivedByAccountId is { } receiverId ? names.GetValueOrDefault(receiverId) : null, r.ReturnCodes)).ToList();
+            r.ReceivedAt, r.ReceivedByAccountId is { } receiverId ? names.GetValueOrDefault(receiverId) : null, r.ReturnCodes,
+            r.Kind, lotFigures[r.Id].ToList() is { Count: > 0 } figures ? SeedLotStates.Combine(figures.Select(f => f.State).ToList()) : null)).ToList();
     }
 
     private static PurchaseReceiptTotals Totals(ReceiptListTotals t) =>

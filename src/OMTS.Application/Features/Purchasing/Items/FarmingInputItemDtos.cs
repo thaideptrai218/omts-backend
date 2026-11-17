@@ -19,7 +19,7 @@ public sealed record ItemUnitInput(Guid? Id, Guid? UnitId, string? UnitName, dec
 /// <param name="ItemGroupId">A user group, optional.</param>
 /// <param name="OpeningQuantity">Base units on hand when the item is created, or the correction of the opening quantity while it is the item's only movement.</param>
 /// <param name="Unit">The base unit by name when <paramref name="Units"/> is omitted on a create.</param>
-/// <param name="ProductId">Seed items only (ignored for the other types): the product sold when this seed is grown (13/11/2026). Like every field, left out = cleared.</param>
+/// <param name="ProductId">Seed items only (ignored for the other types): the product sold when this seed is grown ("Loại hàu bán ra"). Required for a Seed item (MSG-GEN-01 on <c>Product</c>), cleared on the other types.</param>
 public sealed record SaveFarmingInputItemRequest(
     string? Code,
     string? Name,
@@ -40,6 +40,9 @@ public sealed record SaveFarmingInputItemRequest(
 public sealed record ItemUnitView(Guid Id, Guid UnitId, string Name, decimal Factor, string Code, bool IsBase, bool IsUsed);
 
 public sealed record ItemPhotoView(Guid Id, string Url);
+
+/// <summary>The product a Seed item sells as ("Loại hàu bán ra").</summary>
+public sealed record ItemProductRef(Guid Id, string Code, string Name);
 
 /// <param name="Unit">The name of the base unit.</param>
 /// <param name="PhotoUrl">A temporary address of the first photo; null without one.</param>
@@ -71,11 +74,13 @@ public sealed record FarmingInputItemListItem(
     string? CreatedBy,
     string RowVersion,
     Guid? ProductId = null,
-    string? ProductName = null);
+    string? ProductName = null,
+    ItemProductRef? Product = null);
 
 /// <summary>The detail of an item: every column of the list plus every photo.</summary>
 /// <param name="HasMovements">A receipt, return, material usage or movement names the item: the base unit is then fixed.</param>
 /// <param name="OpeningQuantity">The quantity of the opening movement; null without one.</param>
+/// <param name="ProductLocked">A Seed item on a Completed receipt, a nursery batch or a seeding record: its product ("Loại hàu bán ra") can no longer change.</param>
 public sealed record FarmingInputItemView(
     Guid Id,
     string Code,
@@ -104,11 +109,14 @@ public sealed record FarmingInputItemView(
     bool HasMovements,
     decimal? OpeningQuantity,
     Guid? ProductId = null,
-    string? ProductName = null)
+    string? ProductName = null,
+    ItemProductRef? Product = null,
+    bool ProductLocked = false)
 {
-    public static FarmingInputItemView Of(FarmingInputItemListItem i, IReadOnlyList<ItemPhotoView> photos, bool hasMovements, decimal? openingQuantity) => new(
+    public static FarmingInputItemView Of(
+        FarmingInputItemListItem i, IReadOnlyList<ItemPhotoView> photos, bool hasMovements, decimal? openingQuantity, bool productLocked = false) => new(
         i.Id, i.Code, i.Name, i.Group, i.ItemGroupId, i.ItemGroupName, i.Unit, i.Units, i.Description, i.Notes, photos.Count > 0 ? photos[0].Url : null, i.MinQuantity, i.MaxQuantity,
-        i.CostPrice, i.LastPurchasePrice, i.OnHand, i.StockValue, i.IsUsed, i.StatusId, i.Status, i.CreatedAt, i.CreatedBy, i.RowVersion, photos, hasMovements, openingQuantity, i.ProductId, i.ProductName);
+        i.CostPrice, i.LastPurchasePrice, i.OnHand, i.StockValue, i.IsUsed, i.StatusId, i.Status, i.CreatedAt, i.CreatedBy, i.RowVersion, photos, hasMovements, openingQuantity, i.ProductId, i.ProductName, i.Product, productLocked);
 }
 public enum InputItemStatusFilter
 {
@@ -138,7 +146,8 @@ public sealed record FarmingInputItemListQuery(
     string? SortBy = null,
     string? SortDir = null,
     int Page = 1,
-    int PageSize = 20);
+    int PageSize = 20,
+    PurchaseReceiptKind? Kind = null);
 
 /// <param name="StockValue">Σ on hand × cost price of every match.</param>
 public sealed record FarmingInputItemListSummary(decimal StockValue);

@@ -138,7 +138,7 @@ public class PurchaseReceiptsQaTests(AuthApiFactory factory) : IClassFixture<Aut
         var lines = new[]
         {
             new LineBody(world.Other, 2.5m, 1), new LineBody(world.Other, 0.5m, 1), world.MaterialForRaft(1.5m, 333),
-            new LineBody(world.Seed, 1.5m, 333), new LineBody(world.Other, 1.5m, 333),
+            new LineBody(world.Other, 1.5m, 333), new LineBody(world.Other, 1.5m, 333),
         };
 
         var receipt = await world.CompletedAsync(lines);

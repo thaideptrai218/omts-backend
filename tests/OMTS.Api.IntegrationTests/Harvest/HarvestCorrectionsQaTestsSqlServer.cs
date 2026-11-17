@@ -247,8 +247,9 @@ public class HarvestCorrectionsQaTestsSqlServer(ITestOutputHelper output)
         var byPrefix = await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.RecordCode != null && e.RecordCode.Contains(code)));
         var byZone = await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.ZoneId == zoneId && e.OccurredAt > DateTimeOffset.UtcNow.AddHours(-1) && e.RecordType == HarvestLotAudit.RecordType));
 
-        Assert.Equal([HarvestLotAudit.Created, HarvestLotAudit.Removed], byRecord);
-        Assert.Equal((2, 2, 2), (byCode, byPrefix, byZone));
+        // The kit weighs the lot after recording it, which the audit log keeps as a row of its own.
+        Assert.Equal([HarvestLotAudit.Created, HarvestLotAudit.Weighed, HarvestLotAudit.Removed], byRecord);
+        Assert.Equal((3, 3, 3), (byCode, byPrefix, byZone));
     }
 
     // SALE-05 of a Zone Manager goes through the list of zone ids, which only SQL Server turns into a query of its own.
@@ -278,7 +279,7 @@ public class HarvestCorrectionsQaTestsSqlServer(ITestOutputHelper output)
                 db.HarvestLots.Add(new HarvestLot
                 {
                     LotCode = $"BULK-{i:D5}", RaftId = raftId, CycleId = cycleId, HarvestedAt = DateTimeOffset.UtcNow, HarvestDate = Today, CageCount = 8, KgPerCage = 50m, EstimatedKg = 400m,
-                    RecordedByAccountId = host.Owner.Account.Id,
+                    RecordedByAccountId = host.Owner.Account.Id, StatusId = StatusIds.HarvestLot.Open,
                 });
             }
         });

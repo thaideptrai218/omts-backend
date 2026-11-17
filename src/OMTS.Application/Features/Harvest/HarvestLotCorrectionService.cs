@@ -110,15 +110,22 @@ public sealed class HarvestLotCorrectionService(
             newPhotos, request.OtherFilePart, kept.Count + uploadedCount, kept.Count == keep.Count, lot.Photos.Count > 0 ? StepPhotoService.MinPhotos : 0);
 
         // The product lines replace the lines of the lot, and the cages and kg of the lot are their sums; a lot that has lines is never left without them.
+        // BR-HARVEST-02: left out, the estimate stays, unless the cages changed: then it is worked out again with the kg per cage of the lot, never the current setting.
+        var estimatedKg = request.EstimatedKg ?? (request.CageCount == lot.CageCount ? lot.EstimatedKg : null);
+        // A lot holds one product: a lot that has its line and a form that sends none keeps that product, with the cages and kg of the form.
+        var sentLines = request.ProductLines;
+        if (sentLines is null && lot.ProductLines.Count == 1 && request is { ProductLinesAreUnreadable: false, EstimatedKgIsUnreadable: false, CageCount: { } formCages })
+        {
+            sentLines = [new HarvestProductLineInput(lot.ProductLines.Single().ProductId, formCages, estimatedKg)];
+        }
+
         var (lines, lineError) = await productLines.ResolveAsync(
-            request.ProductLines, request.ProductLinesAreUnreadable, lot.KgPerCage, lot.ProductLines.Select(l => l.ProductId).ToHashSet(), cancellationToken);
+            sentLines, request.ProductLinesAreUnreadable, lot.KgPerCage, lot.ProductLines.Select(l => l.ProductId).ToHashSet(), cancellationToken);
         if (lineError is null && lines is null && lot.ProductLines.Count > 0)
         {
             lineError = AppError.InvalidFields([HarvestLotProductLineService.LinesField]);
         }
 
-        // BR-HARVEST-02: left out, the estimate stays, unless the cages changed: then it is worked out again with the kg per cage of the lot, never the current setting.
-        var estimatedKg = request.EstimatedKg ?? (request.CageCount == lot.CageCount ? lot.EstimatedKg : null);
         var fields = new RecordHarvestRequest(request.LaneNumbers, request.FinishedLaneNumbers, request.CageCount, estimatedKg, request.EstimatedKgIsUnreadable, request.OtherFilePart);
         if (lines is not null)
         {

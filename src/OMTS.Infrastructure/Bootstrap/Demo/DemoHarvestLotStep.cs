@@ -66,13 +66,12 @@ internal sealed class DemoHarvestLotStep : IDemoSeedStep
             return 0;
         }
 
-        // The lots of the first raft of the first zone are split per product, so the products have stock; the others stay as lots recorded before products, which count in no stock.
-        // The product of the cycle is the main one of a split lot (the other product comes beside it).
+        // The lots of the first raft of the first zone carry their product line, so the product has stock; the others stay as lots recorded before products, which count in no stock.
+        // A lot holds one product: the one the cycle farms.
         var products = await db.Products.AsNoTracking().Where(p => p.Name == "Hàu sữa" || p.Name == "Hàu béo").ToDictionaryAsync(p => p.Name, p => p.Id, cancellationToken);
         var split = number == 1 && zoneCode == DemoFarmingZoneStep.ZoneOne && products.Count == 2 && (cycle.ProductId is null || products.ContainsValue(cycle.ProductId.Value));
-        // A demo cycle has no product until the last step: the split lots give the cycle theirs (Hàu sữa), which stays its main product.
+        // A demo cycle has no product until the last step: the first lots give the cycle theirs (Hàu sữa).
         var main = cycle.ProductId ?? products.GetValueOrDefault("Hàu sữa");
-        var other = products.Values.FirstOrDefault(id => id != main);
         if (split && cycle.ProductId is null)
         {
             await db.CultivationCycles.Where(c => c.Id == cycle.Id).ExecuteUpdateAsync(c => c.SetProperty(x => x.ProductId, main), cancellationToken);
@@ -83,7 +82,7 @@ internal sealed class DemoHarvestLotStep : IDemoSeedStep
             {
                 new RecordHarvestRequest(
                     lanes.Take(2).ToList(), [], CagesOfATrip, null,
-                    ProductLines: split ? [new(main, 5, null), new(other, CagesOfATrip - 5, null)] : null),
+                    ProductLines: split ? [new(main, CagesOfATrip, null)] : null),
                 new RecordHarvestRequest(
                     [lanes[1]], [lanes[1]], CagesOfATrip / 2, 180m, ProductLines: split ? [new(main, CagesOfATrip / 2, 180m)] : null),
             }

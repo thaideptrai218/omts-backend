@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using OMTS.Api.IntegrationTests.Cultivation;
 using OMTS.Api.IntegrationTests.Infrastructure;
 using OMTS.Application.Common;
 using OMTS.Application.Features.Authorization;
@@ -32,6 +33,9 @@ public sealed record ReceiptBody
     public DateTimeOffset? ReceivedAt { get; init; }
     public Guid? ReceivedById { get; init; }
     public string? Code { get; init; }
+
+    /// <summary>Seed or Supply; null leaves it to the first item of the lines.</summary>
+    public string? Kind { get; init; }
 }
 
 public sealed record ReturnLineBody(Guid? ReceiptLineId, decimal? Quantity);
@@ -172,13 +176,17 @@ public static class PurchasingTestKit
         return (await response.ReadAsync(HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 
+    /// <summary>A product of the host, In Use: the kind of oyster a Seed item sells as, which every Seed item needs ("Loại hàu bán ra").</summary>
+    public static Task<Guid> SeedProductAsync(this HttpClient owner) => NurseryTestKit.ProductRowAsync(TestHosts.ServicesOf(owner));
+
     /// <summary>
-    /// An item named "{group} item {code}" (names are unique, BR-PURCHASE-10).
+    /// An item named "{group} item {code}" (names are unique, BR-PURCHASE-10). A Seed item sells as <paramref name="productId"/>, a new product of the host when it is not named.
     /// </summary>
-    public static async Task<Guid> CreateItemAsync(this HttpClient owner, string group, string unit = "kg", string? code = null)
+    public static async Task<Guid> CreateItemAsync(this HttpClient owner, string group, string unit = "kg", string? code = null, Guid? productId = null)
     {
         code ??= NewCode();
-        var response = await owner.PostAsJsonAsync("/api/farming-input-items", new { code, name = $"{group} item {code}", group, unit });
+        Guid? product = group == "Seed" ? productId ?? await owner.SeedProductAsync() : null;
+        var response = await owner.PostAsJsonAsync("/api/farming-input-items", new { code, name = $"{group} item {code}", group, unit, productId = product });
         return (await response.ReadAsync(HttpStatusCode.Created)).GetProperty("id").GetGuid();
     }
 

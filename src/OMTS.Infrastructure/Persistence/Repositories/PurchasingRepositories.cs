@@ -202,6 +202,11 @@ internal sealed class FarmingInputItemRepository(OmtsDbContext db) : IFarmingInp
         return (await onReceipts.Union(onUsages).ToListAsync(cancellationToken)).ToHashSet();
     }
 
+    public async Task<bool> IsSeedInUseAsync(Guid itemId, CancellationToken cancellationToken) =>
+        await db.PurchaseReceiptLines.AnyAsync(l => l.ItemId == itemId && l.Receipt.StatusId == StatusIds.PurchaseReceipt.Completed, cancellationToken)
+        || await db.NurseryBatches.AnyAsync(b => b.SeedLotLine.ItemId == itemId, cancellationToken)
+        || await db.SeedingRecords.AnyAsync(r => r.SeedLotLine.ItemId == itemId, cancellationToken);
+
     public async Task<IReadOnlySet<Guid>> UsedUnitsAmongAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken)
     {
         if (itemIds.Count == 0)

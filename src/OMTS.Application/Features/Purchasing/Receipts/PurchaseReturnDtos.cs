@@ -96,7 +96,8 @@ public sealed record PurchaseReturnView(
     IReadOnlyList<PurchaseReturnLineView> Lines,
     IReadOnlyList<ReturnRefundView> Refunds,
     string RowVersion,
-    DateTimeOffset ReturnedAt = default);
+    DateTimeOffset ReturnedAt = default,
+    PurchaseReceiptKind Kind = PurchaseReceiptKind.Supply);
 
 /// <summary>The answer of a cancellation: the receipt when the return has one, otherwise the return itself.</summary>
 public sealed record CancelledPurchaseReturn(PurchaseReceiptView? Receipt, PurchaseReturnView? Return);
@@ -106,9 +107,11 @@ public sealed record CancelledPurchaseReturn(PurchaseReceiptView? Receipt, Purch
 /// <param name="SortBy">code, date, supplier, total or status.</param>
 /// <param name="SortDir">asc or desc.</param>
 /// <param name="Source"><c>receipt</c>: made from a receipt; <c>standalone</c>: without one.</param>
+/// <param name="Kind">Seed or Supply: the returns of that kind (a return takes the kind of its receipt).</param>
 public sealed record PurchaseReturnQuery(
     string? Search = null, DateOnly? From = null, DateOnly? To = null, Guid? SupplierId = null,
-    int[]? StatusIds = null, Guid[]? ZoneIds = null, string? SortBy = null, string? SortDir = null, int Page = 1, int PageSize = 20, string? Source = null);
+    int[]? StatusIds = null, Guid[]? ZoneIds = null, string? SortBy = null, string? SortDir = null, int Page = 1, int PageSize = 20, string? Source = null,
+    PurchaseReceiptKind? Kind = null);
 
 /// <param name="Value">Σ line amounts as recorded.</param>
 /// <param name="NetValue"><paramref name="Value"/> less the discount.</param>
@@ -117,7 +120,8 @@ public sealed record PurchaseReturnQuery(
 public sealed record PurchaseReturnRow(
     Guid Id, string Code, DateOnly ReturnDate, Guid? ReceiptId, string? ReceiptCode, SupplierRef Supplier, string SupplierCode, ZoneRef? Zone, string Reason,
     int StatusId, string Status, AccountRef RecordedBy, decimal Value, decimal Discount, decimal NetValue, int ItemCount, decimal Refunded,
-    DateTimeOffset? CancelledAt, string? CancelReason, DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt, string RowVersion, DateTimeOffset ReturnedAt = default);
+    DateTimeOffset? CancelledAt, string? CancelReason, DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt, string RowVersion, DateTimeOffset ReturnedAt = default,
+    PurchaseReceiptKind Kind = PurchaseReceiptKind.Supply);
 
 /// <param name="TotalValue">Σ net value of the Recorded returns of every match, not only of the page.</param>
 /// <param name="Message">MSG-GEN-10 when no return matches.</param>

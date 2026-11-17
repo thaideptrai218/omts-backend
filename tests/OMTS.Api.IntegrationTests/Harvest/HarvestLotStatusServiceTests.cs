@@ -77,11 +77,12 @@ public class HarvestLotStatusServiceTests(AuthApiFactory factory) : IClassFixtur
         Assert.True(await OnLotAsync(lotId, (s, l) => s.Reopen(l, OnDay, HarvestLotReopenCause.SalesReturnBackForSale)));
 
         var rows = await factory.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == lotId).OrderBy(e => e.OccurredAt).ToListAsync());
-        Assert.Equal(["HarvestLot.Created", "HarvestLot.Closed", "HarvestLot.Reopened"], rows.Select(e => e.Action));
-        using var close = JsonDocument.Parse(rows[1].After!);
+        // The kit weighs the lot after recording it, which the audit log keeps as a row of its own.
+        Assert.Equal(["HarvestLot.Created", "HarvestLot.Weighed", "HarvestLot.Closed", "HarvestLot.Reopened"], rows.Select(e => e.Action));
+        using var close = JsonDocument.Parse(rows[2].After!);
         Assert.Equal((12.5m, "Unsold", "CLOSED"), (close.RootElement.GetProperty("LeftoverKg").GetDecimal(), close.RootElement.Text("CloseReason"), close.RootElement.Text("Status")));
-        Assert.Equal("SalesReturnBackForSale", rows[2].Reason);
-        using var before = JsonDocument.Parse(rows[2].Before!);
+        Assert.Equal("SalesReturnBackForSale", rows[3].Reason);
+        using var before = JsonDocument.Parse(rows[3].Before!);
         Assert.Equal(12.5m, before.RootElement.GetProperty("LeftoverKg").GetDecimal());
 
         // A Reopened lot is closed again in the same ways, and a lot not Closed does not reopen.

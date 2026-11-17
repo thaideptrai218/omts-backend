@@ -19,6 +19,30 @@ public class HarvestLotForSaleTests
         l.LeftoverKg = 0m;
     });
 
+    // A new lot waits for its weighing (2904): it is not for sale and counts nowhere until it is weighed; the weighing makes it Open and for sale with the weighed kg.
+    [Fact]
+    public async Task A_new_lot_waits_for_its_weighing_and_is_for_sale_only_once_weighed()
+    {
+        using var api = new AuthApiFactory();
+        var raft = await api.SeededRaftAsync();
+        var owner = raft.Owner.Client;
+
+        var recorded = await owner.RecordLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+
+        Assert.Equal((2904, "Awaiting weighing"), (recorded.GetProperty("statusId").GetInt32(), recorded.Text("status")));
+        Assert.True(recorded.GetProperty("canWeigh").GetBoolean());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, recorded.GetProperty("weighedKg").ValueKind);
+        Assert.DoesNotContain(recorded.Text("lotCode"), (await owner.LotsForSaleAsync()).ForSaleCodes());
+        Assert.Equal(0, await owner.ForSaleCountAsync());
+
+        var weighed = (await (await owner.PostWeighAsync(recorded, 392.5m)).ReadAsync(HttpStatusCode.OK)).GetProperty("lot");
+
+        Assert.Equal((2901, 392.5m), (weighed.GetProperty("statusId").GetInt32(), weighed.Kg("weighedKg")));
+        Assert.Equal(392.5m, weighed.GetProperty("figures").Kg("remainingKg"));
+        Assert.Contains(recorded.Text("lotCode"), (await owner.LotsForSaleAsync()).ForSaleCodes());
+        Assert.Equal(1, await owner.ForSaleCountAsync());
+    }
+
     [Fact]
     public async Task The_list_holds_the_open_and_reopened_lots_with_what_sale_05_shows_and_the_latest_harvest_first()
     {

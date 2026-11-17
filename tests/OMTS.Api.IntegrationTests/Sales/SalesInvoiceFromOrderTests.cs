@@ -122,14 +122,14 @@ public class SalesInvoiceFromOrderTests
             await StockRowsAsync(api, plan.Product.Id()));
         Assert.Equal(70m, (await owner.GetOrderAsync(plan.OrderId)).GetProperty("lines")[0].Money("deliveredQuantity"));
 
-        // The cancellation takes the part of the advance off, gives the cash back, and reverses the sale; the order is still Delivering and cannot be cancelled before.
+        // The cancellation takes the part of the advance off, gives the cash back, and reverses the sale; the order cannot be cancelled before, and goes back to Draft once its only invoice is cancelled.
         var cancelOrderFirst = await owner.PostAsJsonAsync($"{Route}/{plan.OrderId}/cancel", new { reason = "Customer changed his mind" });
         Assert.Equal("MSG-ORDER-01", (await cancelOrderFirst.ReadAsync(HttpStatusCode.Conflict)).Text("code"));
         var payment = Assert.Single(await api.PaymentsOfAsync(invoice.Id()));
         await owner.CancelledAsync(invoice.Id(), Cancellation(edited).With("cashGivenBack", GivenBack(payment.Id, true)));
 
         var afterCancel = await owner.GetOrderAsync(plan.OrderId);
-        Assert.Equal(("Delivering", 0m, 500_000m), (afterCancel.Text("status"), afterCancel.GetProperty("lines")[0].Money("deliveredQuantity"), afterCancel.Money("advanceLeft")));
+        Assert.Equal(("Draft", 0m, 500_000m), (afterCancel.Text("status"), afterCancel.GetProperty("lines")[0].Money("deliveredQuantity"), afterCancel.Money("advanceLeft")));
         Assert.Empty(await api.QueryAsync(db => db.CustomerPaymentAllocations.AsNoTracking().Where(a => a.InvoiceId == invoice.Id()).ToListAsync()));
         var sold = (await StockRowsAsync(api, plan.Product.Id())).Where(r => r.Kind != ProductStockMovementKind.Harvest).Sum(r => r.Kg);
         Assert.Equal(0m, sold);

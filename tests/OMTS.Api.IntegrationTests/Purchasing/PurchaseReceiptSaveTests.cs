@@ -25,17 +25,20 @@ public class PurchaseReceiptSaveTests(AuthApiFactory factory) : IClassFixture<Au
     {
         var world = await factory.WorldAsync();
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Seed, 10, 900)));
-        var completed = await world.CompletedAsync(
-            new LineBody(world.Other, 1, 1000), new LineBody(world.Seed, 10, 900, " SUP-LOT-7 "), new LineBody(world.Seed, 5, 900));
+        var completed = await world.CompletedAsync(new LineBody(world.Seed, 10, 900, " SUP-LOT-7 "), new LineBody(world.Seed, 5, 900));
+        var supply = await world.CompletedAsync(new LineBody(world.Other, 1, 1000));
 
         var code = completed.GetProperty("code").GetString()!;
         Assert.Matches(@"^PN\d{6}$", code);
         Assert.Matches(@"^PN\d{6}$", draft.GetProperty("code").GetString()!);
         Assert.Equal(Number(draft) + 1, Number(completed));
+        Assert.Equal(Number(completed) + 1, Number(supply));
         var lines = completed.GetProperty("lines").EnumerateArray().ToList();
-        Assert.Equal([1, 2, 3], lines.Select(l => l.GetProperty("lineNumber").GetInt32()));
-        Assert.Equal([null, $"{code}-2", $"{code}-3"], lines.Select(l => l.GetProperty("seedLotCode").GetString()));
-        Assert.Equal("SUP-LOT-7", lines[1].GetProperty("supplierLotCode").GetString());
+        Assert.Equal([1, 2], lines.Select(l => l.GetProperty("lineNumber").GetInt32()));
+        Assert.Equal([$"{code}-1", $"{code}-2"], lines.Select(l => l.GetProperty("seedLotCode").GetString()));
+        Assert.Equal("SUP-LOT-7", lines[0].GetProperty("supplierLotCode").GetString());
+        // A supply line is no seed lot.
+        Assert.Null(supply.GetProperty("lines")[0].GetProperty("seedLotCode").GetString());
         // A Draft creates no seed lot (BR-PURCHASE-03).
         Assert.Null(draft.SeedLotCodeOf(world.Seed));
         Assert.Equal("Completed", completed.GetProperty("status").GetString());
@@ -43,10 +46,50 @@ public class PurchaseReceiptSaveTests(AuthApiFactory factory) : IClassFixture<Au
     }
 
     [Fact]
+    public async Task A_receipt_holds_only_seed_items_or_only_supply_items_whatever_the_order_of_its_lines()
+    {
+        var world = await factory.WorldAsync();
+        var seedFirst = world.Body(new LineBody(world.Seed, 1, 1000), new LineBody(world.Other, 1, 1000));
+        var supplyFirst = world.Body(new LineBody(world.Material, 1, 1000), new LineBody(world.Seed, 1, 1000));
+
+        // Create, as a Draft and Completed: the kind is that of the first item, and a line of the other kind is refused on Lines.
+        foreach (var body in new[] { seedFirst, seedFirst with { Complete = true }, supplyFirst, supplyFirst with { Complete = true } })
+        {
+            Assert.Equal("Lines", await (await world.Owner.PostReceiptAsync(body)).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        }
+
+        // A kind sent wins over the first item.
+        Assert.Equal("Lines", await (await world.Owner.PostReceiptAsync(world.Body(new LineBody(world.Other, 1, 1000)) with { Kind = "Seed" })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal(0, await factory.QueryAsync(db => db.PurchaseReceipts.CountAsync(r => r.SupplierId == world.SupplierId)));
+
+        // The kind of a Draft is fixed: an edit brings no line of the other kind and may only repeat the stored kind.
+        var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Seed, 1, 1000)));
+        Assert.Equal("Seed", draft.GetProperty("kind").GetString());
+        Assert.Equal("Lines", await (await world.Owner.EditAsync(draft, world.Body(new LineBody(world.Other, 1, 1000)))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        Assert.Equal("Kind", await (await world.Owner.EditAsync(draft, world.Body(new LineBody(world.Seed, 1, 1000)) with { Kind = "Supply" })).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        var edited = await (await world.Owner.EditAsync(draft, world.Body(new LineBody(world.Seed, 2, 1000)) with { Kind = "Seed" })).ReadAsync(HttpStatusCode.OK);
+        Assert.Equal("Seed", edited.GetProperty("kind").GetString());
+
+        // A Draft with no item yet is a supply receipt and never turns into a seed receipt.
+        var empty = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(null, 1, 1000)));
+        Assert.Equal("Supply", empty.GetProperty("kind").GetString());
+        Assert.Equal("Lines", await (await world.Owner.EditAsync(empty, world.Body(new LineBody(world.Seed, 1, 1000)))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+
+        // The two kinds list apart.
+        var supply = await world.CompletedAsync(new LineBody(world.Material, 1, 1000), new LineBody(world.Other, 1, 1000));
+        var seed = await world.CompletedAsync(new LineBody(world.Seed, 1, 1000));
+        Assert.Equal(("Supply", "Seed"), (supply.GetProperty("kind").GetString(), seed.GetProperty("kind").GetString()));
+        var listed = await (await world.Owner.GetAsync($"/api/purchase-receipts?supplierId={world.SupplierId}&kind=Seed")).ReadAsync(HttpStatusCode.OK);
+        var ids = listed.GetProperty("page").GetProperty("items").EnumerateArray().Select(r => r.Id()).ToList();
+        Assert.Contains(seed.Id(), ids);
+        Assert.DoesNotContain(supply.Id(), ids);
+    }
+
+    [Fact]
     public async Task Line_amounts_are_quantity_times_unit_price_to_the_dong_and_the_total_is_their_sum()
     {
         var world = await factory.WorldAsync();
-        var receipt = await world.CompletedAsync(new LineBody(world.Seed, 1.5m, 333), new LineBody(world.Other, 2.25m, 1001), new LineBody(world.Other, 3, 0));
+        var receipt = await world.CompletedAsync(new LineBody(world.Material, 1.5m, 333), new LineBody(world.Other, 2.25m, 1001), new LineBody(world.Other, 3, 0));
 
         // 1.5 × 333 = 499.5 → 500; 2.25 × 1,001 = 2,252.25 → 2,252; never to thousands (BR-PURCHASE-02).
         Assert.Equal([500m, 2_252m, 0m], receipt.GetProperty("lines").EnumerateArray().Select(l => l.Money("lineAmount")));
@@ -62,7 +105,7 @@ public class PurchaseReceiptSaveTests(AuthApiFactory factory) : IClassFixture<Au
         var draft = await world.Owner.CreateReceiptAsync(new ReceiptBody
         {
             SupplierId = world.SupplierId, ReceiptDate = null,
-            Lines = [new LineBody(null, 2, 1000), new LineBody(world.Seed, null, null), new LineBody(world.Other, 2, null)],
+            Lines = [new LineBody(null, 2, 1000), new LineBody(world.Material, null, null), new LineBody(world.Other, 2, null)],
         });
 
         Assert.Equal(("Draft", Today.ToString("yyyy-MM-dd")), (draft.GetProperty("status").GetString(), draft.GetProperty("receiptDate").GetString()));
@@ -74,10 +117,10 @@ public class PurchaseReceiptSaveTests(AuthApiFactory factory) : IClassFixture<Au
 
         var refused = await (await world.Owner.CompleteAsync(draft.Id())).ProblemAsync(HttpStatusCode.BadRequest, "MSG-GEN-01");
         Assert.Equal("Line 1 item", refused.GetProperty("field").GetString());
-        var edited = await (await world.Owner.EditAsync(draft, world.Body(new LineBody(world.Seed, 2, null)))).ReadAsync(HttpStatusCode.OK);
+        var edited = await (await world.Owner.EditAsync(draft, world.Body(new LineBody(world.Material, 2, null)))).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("Line 1", await (await world.Owner.CompleteAsync(draft.Id())).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
 
-        var completed = await (await world.Owner.EditAsync(edited, world.Body(new LineBody(world.Seed, 2, 0)) with { Complete = true })).ReadAsync(HttpStatusCode.OK);
+        var completed = await (await world.Owner.EditAsync(edited, world.Body(new LineBody(world.Material, 2, 0)) with { Complete = true })).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(("Completed", 0m), (completed.GetProperty("status").GetString(), completed.Money("total")));
     }
 
@@ -143,11 +186,12 @@ public class PurchaseReceiptSaveTests(AuthApiFactory factory) : IClassFixture<Au
         Assert.Equal("Line 1 raft", await (await manager.PostReceiptAsync(world.Body(new LineBody(null, 1, 1000, RaftId: foreignRaft.Id)))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         Assert.Equal("Line 1 raft", await (await manager.EditAsync(draft, world.Body(new LineBody(world.Other, 1, 1000, RaftId: world.Raft.Id)))).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
 
-        var own = await manager.CreateReceiptAsync(world.Body(world.MaterialForRaft(2, 50_000), new LineBody(world.Seed, 10, 900, RaftId: world.Raft.Id)) with { Complete = true });
+        var own = await manager.CreateReceiptAsync(world.Body(world.MaterialForRaft(2, 50_000)) with { Complete = true });
         var raft = own.LineViewOf(world.Material).GetProperty("raft");
         Assert.Equal((world.Raft.Id, world.Raft.Code, world.Zone.Id, world.Zone.Code),
             (raft.Id(), raft.GetProperty("code").GetString(), raft.GetProperty("zoneId").GetGuid(), raft.GetProperty("zoneCode").GetString()));
-        Assert.Equal(world.Raft.Id, own.LineViewOf(world.Seed).GetProperty("raft").Id());
+        var ownSeed = await manager.CreateReceiptAsync(world.Body(new LineBody(world.Seed, 10, 900, RaftId: world.Raft.Id)) with { Complete = true });
+        Assert.Equal(world.Raft.Id, ownSeed.LineViewOf(world.Seed).GetProperty("raft").Id());
 
         // The Owner names any raft In Use.
         await (await world.Owner.PostReceiptAsync(world.Body(new LineBody(world.Material, 1, 1000, RaftId: foreignRaft.Id)) with { Complete = true })).ReadAsync(HttpStatusCode.Created);
@@ -204,9 +248,9 @@ public class PurchaseReceiptSaveTests(AuthApiFactory factory) : IClassFixture<Au
     public async Task A_draft_edit_replaces_and_renumbers_its_lines_needs_the_row_version_read_and_is_audited()
     {
         var world = await factory.WorldAsync();
-        var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 10_000)));
+        var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Seed, 1, 10_000)));
         var url = $"/api/purchase-receipts/{draft.Id()}";
-        var body = world.Body(new LineBody(world.Seed, 10, 20_000), new LineBody(world.Other, 2, 5_000));
+        var body = world.Body(new LineBody(world.Seed, 10, 20_000), new LineBody(world.Seed, 2, 5_000));
 
         Assert.Equal("RowVersion", await (await world.Owner.PutAsJsonAsync(url, body)).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
         await (await world.Owner.PutAsJsonAsync(url, body with { RowVersion = Convert.ToBase64String([1, 2, 3, 4, 5, 6, 7, 8]) })).ProblemAsync(HttpStatusCode.Conflict, "MSG06");

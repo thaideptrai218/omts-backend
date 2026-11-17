@@ -6,7 +6,7 @@ namespace OMTS.Application.Features.Cultivation.Cycles;
 
 /// <summary>
 /// The product a cycle will yield and sell (owner decision of 13/11/2026, simplified the same day): it is not chosen but DERIVED from the nursed batch. The seed item of the batch's seed lot carries the product it sells
-/// as ("loại hàu bán ra", set once in the catalogue), so the cycle takes it when it is started and whenever its batch is changed (only before the first seeding record). The harvest lot's purchase request must match it.
+/// as ("loại hàu bán ra", set once in the catalogue), so the cycle takes it when it is started. Its batch may later be changed (only before the first seeding record) to another batch of the same product (see CycleKindRules); a cycle that has no product yet takes the one of the new batch. The harvest lot's purchase request must match it.
 /// </summary>
 public sealed partial class CultivationCycleService
 {

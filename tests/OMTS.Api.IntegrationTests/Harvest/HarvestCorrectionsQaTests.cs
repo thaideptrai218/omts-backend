@@ -225,7 +225,8 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
         using var api = new SalesDoubleApiFactory();
         var raft = await api.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        // Not weighed: the figures count from the estimate, which the correction changes (a weighed lot keeps the weighed kg, which only weighing again changes).
+        var lot = await owner.RecordLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
         api.Sales.OnInvoice.Add(lot.Id());
         api.Sales.Figures[lot.Id()] = new LotSalesFigures(350m, 0m, 0m, 0m);
 
@@ -622,7 +623,8 @@ public class HarvestCorrectionsQaTests(AuthApiFactory factory) : IClassFixture<A
     {
         var raft = await factory.SeededRaftAsync();
         var owner = raft.Owner.Client;
-        var lot = await owner.HarvestLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
+        // Not weighed: the figures count from the estimate the correction lowers.
+        var lot = await owner.RecordLotAsync(raft.RaftId, HarvestFields.OfLanes(1));
         await factory.UpdateAsync<HarvestLot>(lot.Id(), l =>
         {
             l.StatusId = StatusIds.HarvestLot.Closed;

@@ -317,22 +317,28 @@ public class PurchaseReturnsQaTests(AuthApiFactory factory) : IClassFixture<Auth
     public async Task One_return_of_several_lines_is_all_or_nothing_and_counts_every_line_it_holds()
     {
         var world = await factory.WorldAsync();
-        var receipt = await world.CompletedAsync(world.MaterialForRaft(10, 10_000), new LineBody(world.Seed, 10, 1_000, RaftId: world.Raft.Id), new LineBody(world.Other, 10, 500));
-        var (material, seed, other) = (receipt.LineOf(world.Material), receipt.LineOf(world.Seed), receipt.LineOf(world.Other));
+        // A supply receipt (a Material line naming the raft and an Other line) and a seed receipt naming the same raft: a receipt never mixes the two kinds.
+        var receipt = await world.CompletedAsync(world.MaterialForRaft(10, 10_000), new LineBody(world.Other, 10, 500));
+        var seedReceipt = await world.CompletedAsync(new LineBody(world.Seed, 10, 1_000, RaftId: world.Raft.Id));
+        var (material, other) = (receipt.LineOf(world.Material), receipt.LineOf(world.Other));
 
         var refused = await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(material, 1), new ReturnLineBody(other, 11)] }))
             .ProblemAsync(HttpStatusCode.BadRequest, "MSG-PURCHASE-03");
         Assert.Equal(("Line 2", other), (refused.GetProperty("field").GetString(), refused.GetProperty("receiptLineId").GetGuid()));
         Assert.Equal(0, await ReturnCountAsync(receipt.Id()));
 
-        var saved = await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(material, 1), new ReturnLineBody(seed, 1), new ReturnLineBody(other, 1)] }))
+        var saved = await (await world.Owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(material, 1), new ReturnLineBody(other, 1)] }))
             .ReadAsync(HttpStatusCode.Created);
+        var savedSeed = await world.ReturnAsync(seedReceipt.Id(), seedReceipt.LineOf(world.Seed), 1);
 
-        Assert.Equal(11_500m, saved.Money("returned"));
+        Assert.Equal((10_500m, 1_000m), (saved.Money("returned"), savedSeed.Money("returned")));
         var filtered = (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-receipts?supplierId={world.SupplierId}&raftId={world.Raft.Id}")).GetProperty("totals");
         Assert.Equal((110_000m, 11_000m), (filtered.Money("receiptsTotal"), filtered.Money("returnsTotal")));
+        // The return of two lines is one entry of the statement.
         var statement = await world.Owner.GetFromJsonAsync<JsonElement>($"{Debts}/{world.SupplierId}/statement");
-        Assert.Equal([("Receipt", 115_000m), ("Return", -11_500m)], statement.GetProperty("entries").EnumerateArray().Select(e => (e.GetProperty("kind").GetString(), e.Money("amount"))).ToList());
+        Assert.Equal(
+            [("Receipt", 10_000m), ("Receipt", 105_000m), ("Return", -10_500m), ("Return", -1_000m)],
+            statement.GetProperty("entries").EnumerateArray().Select(e => (Kind: e.GetProperty("kind").GetString()!, Amount: e.Money("amount"))).OrderBy(e => e.Kind, StringComparer.Ordinal).ThenBy(e => e.Amount).ToList());
     }
 
     // Unspecified: GBR-01 only says a discontinued record is not chosen for new records, and BR-PURCHASE-06 keeps its returns. Pinned as it is; question in the report.

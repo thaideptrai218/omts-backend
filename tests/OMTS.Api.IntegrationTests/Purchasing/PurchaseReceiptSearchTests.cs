@@ -50,8 +50,9 @@ public class PurchaseReceiptSearchTests(AuthApiFactory factory) : IClassFixture<
     public async Task Totals_count_completed_receipts_and_the_returns_dated_in_the_period_and_a_group_or_raft_counts_its_lines_only()
     {
         var world = await factory.WorldAsync();
-        var mixed = await world.CompletedAsync(
-            new LineBody(world.Seed, 10, 9_000, RaftId: world.Raft.Id), world.MaterialForRaft(4, 50_000), new LineBody(world.Other, 1, 7_000));
+        // A receipt holds one kind: the Material line and the Seed line that name the raft are on two receipts.
+        var supply = await world.CompletedAsync(world.MaterialForRaft(4, 50_000), new LineBody(world.Other, 1, 7_000));
+        var seed = await world.CompletedAsync(new LineBody(world.Seed, 10, 9_000, RaftId: world.Raft.Id));
         var other = await world.CompletedAsync(new LineBody(world.Other, 2, 10_000));
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Material, 100, 100_000)));
         var cancelled = await world.CompletedAsync(world.MaterialForRaft(1, 1_000_000));
@@ -65,16 +66,20 @@ public class PurchaseReceiptSearchTests(AuthApiFactory factory) : IClassFixture<
 
         var all = await SearchAsync(world.Owner, period);
         var totals = all.GetProperty("totals");
-        Assert.Equal((4, 2), (totals.GetProperty("count").GetInt32(), totals.GetProperty("completedCount").GetInt32()));
+        Assert.Equal((5, 3), (totals.GetProperty("count").GetInt32(), totals.GetProperty("completedCount").GetInt32()));
         // 90,000 + 200,000 + 7,000 + 20,000 received; 40,000 returned.
         Assert.Equal((317_000m, 40_000m, 277_000m), (totals.Money("receiptsTotal"), totals.Money("returnsTotal"), totals.Money("netTotal")));
         Assert.Equal(JsonValueKind.Null, totals.GetProperty("raftMaterialCost").ValueKind);
 
         var material = await SearchAsync(world.Owner, $"{period}&itemGroup=Material");
-        Assert.Equal(new[] { mixed.Id(), draft.Id(), cancelled.Id() }.Order(), Ids(material).Order());
+        Assert.Equal(new[] { supply.Id(), draft.Id(), cancelled.Id() }.Order(), Ids(material).Order());
         Assert.Equal((200_000m, 40_000m, 160_000m), (material.GetProperty("totals").Money("receiptsTotal"), material.GetProperty("totals").Money("returnsTotal"), material.GetProperty("totals").Money("netTotal")));
-        var mixedRow = material.GetProperty("page").GetProperty("items").EnumerateArray().Single(r => r.Id() == mixed.Id());
-        Assert.Equal((297_000m, 200_000m), (mixedRow.Money("total"), mixedRow.Money("linesTotal")));
+        var supplyRow = material.GetProperty("page").GetProperty("items").EnumerateArray().Single(r => r.Id() == supply.Id());
+        Assert.Equal((207_000m, 200_000m), (supplyRow.Money("total"), supplyRow.Money("linesTotal")));
+
+        var seedReceipts = await SearchAsync(world.Owner, $"{period}&itemGroup=Seed");
+        Assert.Equal([seed.Id()], Ids(seedReceipts));
+        Assert.Equal((90_000m, 0m), (seedReceipts.GetProperty("totals").Money("receiptsTotal"), seedReceipts.GetProperty("totals").Money("returnsTotal")));
 
         // For a raft: its Seed and Material lines. Its material cost comes from the material used on it, not from the list.
         var raft = await SearchAsync(world.Owner, $"{period}&raftId={world.Raft.Id}");
@@ -85,7 +90,7 @@ public class PurchaseReceiptSearchTests(AuthApiFactory factory) : IClassFixture<
         var drafts = await SearchAsync(world.Owner, $"{period}&statusId={StatusIds.PurchaseReceipt.Draft}");
         Assert.Equal((1, 0m, 0m), (drafts.GetProperty("totals").GetProperty("count").GetInt32(), drafts.GetProperty("totals").Money("receiptsTotal"), drafts.GetProperty("totals").Money("returnsTotal")));
         Assert.Equal([cancelled.Id()], Ids(await SearchAsync(world.Owner, $"{period}&statusId={StatusIds.PurchaseReceipt.Cancelled}")));
-        Assert.Equal(new[] { mixed.Id(), other.Id() }.Order(), Ids(await SearchAsync(world.Owner, $"{period}&itemId={world.Other}&statusId={StatusIds.PurchaseReceipt.Completed}")).Order());
+        Assert.Equal(new[] { supply.Id(), other.Id() }.Order(), Ids(await SearchAsync(world.Owner, $"{period}&itemId={world.Other}&statusId={StatusIds.PurchaseReceipt.Completed}")).Order());
     }
 
     [Fact]

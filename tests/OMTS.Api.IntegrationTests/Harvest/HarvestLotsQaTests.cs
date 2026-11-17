@@ -434,7 +434,8 @@ public class HarvestLotsQaTests(AuthApiFactory factory) : IClassFixture<AuthApiF
         var lot = saved.GetProperty("lot");
         Assert.Equal(
             Sorted("id", "lotCode", "cycleId", "raftId", "raftCode", "zoneId", "zoneCode", "harvestedAt", "harvestDate", "laneNumbers", "finishedLaneNumbers", "cageCount", "kgPerCage", "estimatedKg", "figures", "statusId", "status", "reopenedOn", "closeDate", "leftoverKg", "closeReason", "originState", "publishedAt", "withdrawnAt", "originMissing", "canPublish", "photos", "recordedByAccountId", "recordedByName", "canCorrect", "canRemove", "canClose", "rowVersion",
-                "productLines", "harvestPlan", "purchaseRequestId", "purchaseRequestCode", "overPlanReason", "crew", "lanePercents"),
+                "productLines", "harvestPlan", "purchaseRequestId", "purchaseRequestCode", "overPlanReason", "crew", "lanePercents",
+                "weighedKg", "weighedAt", "weighedByName", "canWeigh", "canReopen", "references", "productStocks"),
             Names(lot));
         Assert.Equal(Sorted("invoicedKg", "returnedKg", "soldKg", "remainingKg", "lostKg", "differenceKg", "notFinal"), Names(lot.GetProperty("figures")));
         Assert.Equal(Sorted("id", "key", "sortOrder", "url"), Names(lot.GetProperty("photos")[0]));

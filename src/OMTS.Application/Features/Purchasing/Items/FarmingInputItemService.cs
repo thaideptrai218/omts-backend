@@ -47,16 +47,23 @@ public sealed class FarmingInputItemService(
     private const decimal MaxCost = 1_000_000_000_000m;
     private const string PhotoCategory = "input-item-photos";
 
-    /// <summary>Readable by whoever views receipts, supplier payments or cultivation cycles (pickers, filters). The items that are not deleted, with their units; no photos.</summary>
+    /// <summary>The field MSG-GEN-01 names when a Seed item has no product, or one that is not In Use.</summary>
+    public const string ProductField = "Product";
+
+    /// <summary>
+    /// Readable by whoever views receipts, supplier payments or cultivation cycles (pickers, filters). The items that are not deleted, with their units; no photos.
+    /// <paramref name="kind"/> keeps the seed items (Seed) or every other item (Supply), as a receipt of that kind takes them.
+    /// </summary>
     public async Task<Result<IReadOnlyList<FarmingInputItemListItem>>> ListAsync(
-        string? search, InputItemGroup? group, int? statusId, CancellationToken cancellationToken)
+        string? search, InputItemGroup? group, int? statusId, CancellationToken cancellationToken, PurchaseReceiptKind? kind = null)
     {
         if (!await access.MayReadAsync(cancellationToken))
         {
             return AppError.Forbidden;
         }
 
-        var found = await items.ListAsync(search, group, statusId, cancellationToken);
+        var found = (await items.ListAsync(search, group, statusId, cancellationToken))
+            .Where(i => kind is null || (kind == PurchaseReceiptKind.Seed) == (i.Group == InputItemGroup.Seed)).ToList();
         var onHand = await stock.OnHandAsync(found.Select(i => i.Id).ToList(), cancellationToken);
         return Result<IReadOnlyList<FarmingInputItemListItem>>.Success(
             await ListItemsAsync(found.Select(i => new InputItemRow(i, onHand.GetValueOrDefault(i.Id))).ToList(), withPhotos: false, cancellationToken));
@@ -180,6 +187,12 @@ public sealed class FarmingInputItemService(
         if (item.Group != values.Group && await items.IsUsedAsync(item.Id, cancellationToken))
         {
             return AppError.Invalid("Group", "create a new item instead");
+        }
+
+        if (item.Group == InputItemGroup.Seed && values.Group == InputItemGroup.Seed && item.ProductId is not null && item.ProductId != values.Product?.Id
+            && await items.IsSeedInUseAsync(item.Id, cancellationToken))
+        {
+            return AppError.Invalid(ProductField, "The oyster of a seed in use cannot change");
         }
 
         if (await DuplicateNameAsync(values.Name, item.Id, cancellationToken) is { } duplicateName)
@@ -420,14 +433,14 @@ public sealed class FarmingInputItemService(
             check.Add("Item group");
         }
 
-        // The product sold when this seed is grown (13/11/2026): Seed items only, the other types ignore it; it must be in the catalogue and still sold.
+        // The product sold when this seed is grown ("Loại hàu bán ra"): required for a Seed item, ignored by the other types; it must be in the catalogue and still sold.
         Product? product = null;
-        if (request.Group == InputItemGroup.Seed && request.ProductId is { } productId)
+        if (request.Group == InputItemGroup.Seed)
         {
-            product = await products.GetForEditAsync(productId, cancellationToken);
-            if (product is null || product.StatusId != StatusIds.Usage.InUse)
+            product = request.ProductId is { } productId ? await products.GetForEditAsync(productId, cancellationToken) : null;
+            if (product is null || product.IsHidden || product.StatusId != StatusIds.Usage.InUse)
             {
-                check.Add("ProductId");
+                check.Add(ProductField);
                 product = null;
             }
         }
@@ -679,6 +692,11 @@ public sealed class FarmingInputItemService(
             return AppError.Invalid("Group");
         }
 
+        if (query.Kind is { } kind && !Enum.IsDefined(kind))
+        {
+            return AppError.Invalid("Kind");
+        }
+
         if (!Enum.IsDefined(query.Stock))
         {
             return AppError.Invalid("Stock");
@@ -701,7 +719,7 @@ public sealed class FarmingInputItemService(
             text.Length == 0 ? null : text, query.Group, query.ItemGroupId, query.Stock, query.SupplierId,
             query.CreatedFrom is { } from ? BusinessClock.FromLocal(from.ToDateTime(TimeOnly.MinValue)) : null,
             query.CreatedTo is { } to ? BusinessClock.FromLocal(to.AddDays(1).ToDateTime(TimeOnly.MinValue)) : null,
-            statusId, sort.Value, descending);
+            statusId, sort.Value, descending, query.Kind);
     }
 
     /// <summary>The detail of an item: its list columns, its photos, and whether its base unit is fixed.</summary>
@@ -716,7 +734,8 @@ public sealed class FarmingInputItemService(
         }
 
         return FarmingInputItemView.Of(
-            row, photos, await items.HasMovementsAsync(item.Id, cancellationToken), await stock.OpeningQuantityAsync(item.Id, cancellationToken));
+            row, photos, await items.HasMovementsAsync(item.Id, cancellationToken), await stock.OpeningQuantityAsync(item.Id, cancellationToken),
+            item.Group == InputItemGroup.Seed && await items.IsSeedInUseAsync(item.Id, cancellationToken));
     }
 
     private async Task<IReadOnlyList<FarmingInputItemListItem>> ListItemsAsync(IReadOnlyList<InputItemRow> rows, bool withPhotos, CancellationToken cancellationToken)
@@ -737,7 +756,7 @@ public sealed class FarmingInputItemService(
                 i.Units.OrderByDescending(u => u.IsBase).ThenBy(u => u.Factor).Select(u => new ItemUnitView(u.Id, u.UnitId, u.Unit.Name, u.Factor, u.Code, u.IsBase, usedUnits.Contains(u.Id))).ToList(),
                 i.Description, i.Notes, photo, i.MinQuantity, i.MaxQuantity, i.CostPrice, i.LastPurchasePrice, onHand, onHand * (i.CostPrice ?? 0m),
                 used.Contains(i.Id), i.StatusId, statusCatalog.DisplayNameOf(i.StatusId), i.CreatedAt, i.CreatedBy is { } id ? names.GetValueOrDefault(id) : null,
-                RowVersionGuard.Encode(i.RowVersion), i.ProductId, i.Product?.Name));
+                RowVersionGuard.Encode(i.RowVersion), i.ProductId, i.Product?.Name, i.Product is { } product ? new ItemProductRef(product.Id, product.Code, product.Name) : null));
         }
 
         return result;

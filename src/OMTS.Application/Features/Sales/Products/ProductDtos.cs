@@ -65,7 +65,10 @@ public sealed record ProductView(
     DateTimeOffset CreatedAt,
     string? CreatedBy);
 
-/// <summary>The detail of a product: every field of the list plus every photo.</summary>
+/// <summary>A Seed item the product is grown from; read-only, derived from the seed items that name this product.</summary>
+public sealed record ProductSourceSeedView(Guid Id, string Code, string Name);
+
+/// <summary>The detail of a product: every field of the list plus every photo and the seed items it is grown from.</summary>
 public sealed record ProductDetailView(
     Guid Id,
     string Name,
@@ -87,11 +90,12 @@ public sealed record ProductDetailView(
     bool IsUsed,
     DateTimeOffset CreatedAt,
     string? CreatedBy,
-    IReadOnlyList<ProductPhotoView> Photos)
+    IReadOnlyList<ProductPhotoView> Photos,
+    IReadOnlyList<ProductSourceSeedView> SourceSeeds)
 {
-    public static ProductDetailView Of(ProductView p, IReadOnlyList<ProductPhotoView> photos) => new(
+    public static ProductDetailView Of(ProductView p, IReadOnlyList<ProductPhotoView> photos, IReadOnlyList<ProductSourceSeedView> sourceSeeds) => new(
         p.Id, p.Name, p.UnitPrice, p.StatusId, p.Status, p.RowVersion, p.Code, p.CategoryId, p.CategoryName, p.Unit, p.Units, p.Description, p.Note,
-        photos.Count > 0 ? photos[0].Url : null, p.MinKg, p.MaxKg, p.OnHandKg, p.IsUsed, p.CreatedAt, p.CreatedBy, photos);
+        photos.Count > 0 ? photos[0].Url : null, p.MinKg, p.MaxKg, p.OnHandKg, p.IsUsed, p.CreatedAt, p.CreatedBy, photos, sourceSeeds);
 }
 
 /// <summary>A saved product with MSG-GEN-05 (SALE-11 step 5).</summary>

@@ -66,7 +66,7 @@ public sealed class PurchaseReceiptCopyService(
         // The receiver is left out: the new receipt is taken in by whoever saves it unless they choose someone.
         return new PurchaseReceiptCopy(
             source.Id, source.Code,
-            new SavePurchaseReceiptRequest(supplierId, source.ReceiptDate, null, copied, Discount: source.Discount, ZoneId: zoneId, ReceivedAt: source.ReceivedAt),
+            new SavePurchaseReceiptRequest(supplierId, source.ReceiptDate, null, copied, Discount: source.Discount, ZoneId: zoneId, ReceivedAt: source.ReceivedAt, Kind: source.Kind),
             leftEmpty);
     }
 }

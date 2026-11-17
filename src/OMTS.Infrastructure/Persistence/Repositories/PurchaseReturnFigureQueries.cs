@@ -39,6 +39,14 @@ internal sealed partial class PurchaseReceiptRepository
             query = fromReceipt ? query.Where(r => r.ReceiptId != null) : query.Where(r => r.ReceiptId == null);
         }
 
+        if (filter.Kind is { } kind)
+        {
+            // A return takes the kind of its receipt; one without a receipt has the kind of its items.
+            query = kind == PurchaseReceiptKind.Seed
+                ? query.Where(r => r.Receipt != null ? r.Receipt.Kind == PurchaseReceiptKind.Seed : r.Lines.Any(l => l.Item.Group == InputItemGroup.Seed))
+                : query.Where(r => r.Receipt != null ? r.Receipt.Kind == PurchaseReceiptKind.Supply : r.Lines.All(l => l.Item.Group != InputItemGroup.Seed));
+        }
+
         if (filter.SupplierId is { } supplierId)
         {
             query = query.Where(r => r.SupplierId == supplierId);
@@ -79,5 +87,6 @@ internal sealed partial class PurchaseReceiptRepository
             r.ZoneId, r.Zone!.Code, r.Zone!.Name, r.Reason, r.StatusId, r.RecordedByAccountId,
             r.Lines.Sum(l => (decimal?)l.ReturnValue) ?? 0m, r.Discount, r.Lines.Count,
             r.Refunds.Where(p => p.StatusId == StatusIds.SupplierPayment.Recorded && p.Kind == SupplierPaymentKind.PaidBack).Sum(p => (decimal?)p.Amount) ?? 0m,
-            r.CancelledAt, r.CancelReason, r.CreatedAt, r.UpdatedAt, r.RowVersion, r.ReturnedAt));
+            r.CancelledAt, r.CancelReason, r.CreatedAt, r.UpdatedAt, r.RowVersion, r.ReturnedAt,
+            r.Receipt != null ? r.Receipt.Kind : r.Lines.Any(l => l.Item.Group == InputItemGroup.Seed) ? PurchaseReceiptKind.Seed : PurchaseReceiptKind.Supply));
 }
