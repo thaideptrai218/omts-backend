@@ -9,6 +9,7 @@ using OMTS.Application.Features.Cultivation.Nursery;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Files;
+using OMTS.Application.Features.Workforce;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
 
@@ -32,6 +33,8 @@ public sealed class SeedingRecordCorrectionService(
     LanePercentGuard percents,
     RecordPhotoStore photoStore,
     UploadedFileSaver fileSaver,
+    RecordCrewService crews,
+    RecordCrewAssignmentService crewAssignments,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
@@ -107,6 +110,12 @@ public sealed class SeedingRecordCorrectionService(
                 return overPlan;
             }
         }
+        var (crew, crewError) = await crews.ReadAsync(request.Crew, request.CrewUnreadable, cancellationToken);
+        if (crewError is not null)
+        {
+            return crewError;
+        }
+
         var uploaded = await photoStore.UploadAllAsync(FileCategories.SeedingPhotos, files.Value!, cancellationToken);
         if (!uploaded.IsSuccess)
         {
@@ -131,10 +140,11 @@ public sealed class SeedingRecordCorrectionService(
 
         SeedingRecordRows.Apply(records, record, fields!, shares.Value);
         record.OverPlanReason = overPlanReason ?? record.OverPlanReason;
+        var crewChange = crew is null ? null : crews.Apply(record.Crew, crew, e => new SeedingRecordEmployee { SeedingRecordId = record.Id, EmployeeId = e.Id, Employee = e });
         var photosChanged = request.ChangesPhotos || uploaded.Value!.Count > 0;
         var removedKeys = photosChanged ? SeedingPhotoRows.Replace(records, record, kept, uploaded.Value!) : [];
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, SeedingValues.Snapshot(record));
-        if (changedAfter is not null || removedKeys.Count > 0 || uploaded.Value!.Count > 0)
+        if (changedAfter is not null || removedKeys.Count > 0 || uploaded.Value!.Count > 0 || crewChange?.Changed == true)
         {
             // Lanes and photos are rows of their own: a change of them only must still give the session a new version.
             unitOfWork.MarkChanged(record);
@@ -152,7 +162,11 @@ public sealed class SeedingRecordCorrectionService(
             await fileSaver.SaveAsync(uploaded.Value!, removedKeys, cancellationToken);
         }
 
-        return await views.SavedAsync(record, raft, laneStates, timeProvider.Today(), cancellationToken);
+        var result = await views.SavedAsync(record, raft, laneStates, timeProvider.Today(), cancellationToken);
+        // A separate step after the save: the correction stays saved whatever the assignment does.
+        return crewChange is not { Added.Count: > 0 }
+            ? result
+            : result with { CrewAssignment = await crewAssignments.AssignAsync(record.SeedingDate, raft.ZoneId, raft.Id, RecordCrewJobs.Seeding, crewChange.Added, cancellationToken) };
     }
 
     /// <summary>Removes the session; the audit log keeps it with the reason. Its quantity leaves the seed lot, and with no record left the cycle can be cancelled again.</summary>

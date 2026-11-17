@@ -6,6 +6,7 @@ using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Cultivation.Seeding;
 using OMTS.Application.Features.Files;
+using OMTS.Application.Features.Workforce;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Purchasing;
@@ -47,7 +48,7 @@ public sealed class NurseryBatchViews(
             await PhotosAsync(batch, NurseryPhotoPhase.Start, cancellationToken), await PhotosAsync(batch, NurseryPhotoPhase.Completion, cancellationToken),
             nursing && mayEdit, nursing && mayCreate, completed && mayEdit, RowVersionGuard.Encode(batch.RowVersion),
             seeded, remaining, batch.ClosedOn, batch.CloseLossPieces, batch.CloseReason, completed && mayEdit && remaining > 0, usage,
-            lot.Item?.ProductId, lot.Item?.Product?.Name, lot.Item?.Name);
+            lot.Item?.ProductId, lot.Item?.Product?.Name, lot.Item?.Name, RecordCrewService.ViewOf(batch.Crew));
     }
 
     /// <summary>A row of the list: the batch comes with its zone and seed lot (item, receipt, supplier); <paramref name="seededByBatch"/> holds what every batch of the page had seeded.</summary>

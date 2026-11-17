@@ -7,6 +7,7 @@ using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Domain.Constants;
+using OMTS.Application.Features.Workforce;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Harvest;
@@ -93,7 +94,7 @@ public sealed class HarvestLotViews(
             lot.OverPlanReason,
             lot.PurchaseRequestId,
             lot.PurchaseRequest?.Code,
-            HarvestCrewService.ViewOf(lot),
+            RecordCrewService.ViewOf(lot.Crew),
             lot.Lanes.OrderBy(l => l.Lane.LaneNumber).Select(l => new HarvestLanePercentView(l.Lane.LaneNumber, l.HarvestedPercent)).ToList());
     }
 
@@ -139,7 +140,7 @@ public sealed class HarvestLotViews(
                     worked.InvoicedKg, worked.RemainingKg, lot.StatusId, statusCatalog.DisplayNameOf(lot.StatusId), lot.OriginState,
                     missing[lot.Id], LotPublishRules.Block(access, lot, raft.ZoneId, onCurrentInvoice.Contains(lot.Id)) is null,
                     canCorrect, canCorrect && !onInvoice.Contains(lot.Id), MayClose(access, lot, raft.ZoneId), RowVersionGuard.Encode(lot.RowVersion), ProductLines(lot, catalogue), planOf.GetValueOrDefault(lot.Id),
-                    lot.PurchaseRequestId, lot.PurchaseRequest?.Code, HarvestCrewService.ViewOf(lot));
+                    lot.PurchaseRequestId, lot.PurchaseRequest?.Code, RecordCrewService.ViewOf(lot.Crew));
             })
             .ToList();
     }

@@ -3,6 +3,8 @@ using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Domain.Enums;
 
+using OMTS.Application.Features.Workforce;
+
 namespace OMTS.Application.Features.Harvest;
 
 /// <summary>HARVEST-01.0: the photos come beside it. The harvest date and time are the system's, never sent.</summary>
@@ -76,7 +78,7 @@ public sealed record HarvestLotListItem(
     HarvestLotPlanRef? HarvestPlan,
     Guid? PurchaseRequestId = null,
     string? PurchaseRequestCode = null,
-    IReadOnlyList<HarvestCrewMemberView>? Crew = null);
+    IReadOnlyList<CrewMemberView>? Crew = null);
 
 /// <summary>A harvest lot with its figures (BR-HARVEST-07): the record a notification opens.</summary>
 /// <param name="Photos">In slot order.</param>
@@ -128,7 +130,7 @@ public sealed record HarvestLotView(
     string? OverPlanReason = null,
     Guid? PurchaseRequestId = null,
     string? PurchaseRequestCode = null,
-    IReadOnlyList<HarvestCrewMemberView>? Crew = null,
+    IReadOnlyList<CrewMemberView>? Crew = null,
     IReadOnlyList<HarvestLanePercentView>? LanePercents = null);
 
 /// <summary>Answer of a recorded harvest.</summary>
@@ -139,9 +141,11 @@ public sealed record HarvestLotView(
 /// <param name="OrderCagesTotal">The cages the line of the harvest plan expects; set when the lot is recorded from a plan line that expects cages (null otherwise and after a correction).</param>
 /// <param name="OrderCagesHarvested">The cages of this lot, to set against <paramref name="OrderCagesTotal"/>.</param>
 /// <param name="OrderComplete">The lot reaches the cages the plan line expects (e.g. 15/15). Going over is only a warning.</param>
+/// <param name="CrewAssignment">The automatic work assignment of the crew newly named by this save; null when no employee was added.</param>
 public sealed record HarvestLotSaved(
     HarvestLotView Lot, bool EverySeededLaneHarvested, string CycleRowVersion, string Message, string MessageCode, IReadOnlyList<Features.Farming.FarmingWarning>? Warnings = null,
-    decimal? OrderCagesTotal = null, decimal? OrderCagesHarvested = null, bool OrderComplete = false);
+    decimal? OrderCagesTotal = null, decimal? OrderCagesHarvested = null, bool OrderComplete = false,
+    Workforce.CrewAssignmentResult? CrewAssignment = null);
 
 /// <summary>A lane on the Harvest lots screen, with its state today (BR-FARM-03).</summary>
 /// <param name="CanHarvest">The lane can be chosen for a new lot now: In Use, Growing or Being harvested, on a raft that can record.</param>

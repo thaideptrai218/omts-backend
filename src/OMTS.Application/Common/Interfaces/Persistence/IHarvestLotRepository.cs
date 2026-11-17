@@ -87,7 +87,4 @@ public interface IHarvestLotRepository
     void AddProductLine(HarvestLotProductLine line);
 
     void RemoveProductLine(HarvestLotProductLine line);
-    void AddCrew(HarvestLotCrewMember member);
-
-    void RemoveCrew(HarvestLotCrewMember member);
 }

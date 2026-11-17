@@ -22,6 +22,8 @@ public sealed record NurseryFields
     public string? Note { get; init; }
     public string? RowVersion { get; init; }
     public IReadOnlyList<Guid>? KeepPhotoIds { get; init; }
+    public IReadOnlyList<Guid>? Crew { get; init; }
+    public bool ReplaceCrew { get; init; }
     public IReadOnlyList<byte[]> Photos { get; init; } = [FarmingTestKit.Jpeg];
 
     public MultipartFormDataContent ToForm()
@@ -45,6 +47,12 @@ public sealed record NurseryFields
             form.Add(new StringContent(id.ToString()), "keepPhotoIds");
         }
 
+        foreach (var id in Crew ?? [])
+        {
+            form.Add(new StringContent(id.ToString()), "crew");
+        }
+
+        Add(ReplaceCrew ? "true" : null, "replaceCrew");
         foreach (var photo in Photos)
         {
             form.Add(FarmingTestKit.FileContent(photo, "image/jpeg"), "photos", "nursery.jpg");

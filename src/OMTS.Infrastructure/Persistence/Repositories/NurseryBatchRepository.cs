@@ -178,7 +178,8 @@ internal sealed class NurseryBatchRepository(OmtsDbContext db) : INurseryBatchRe
         .Include(b => b.SeedLotLine).ThenInclude(l => l.Item).ThenInclude(i => i!.Product)
         .Include(b => b.SeedLotLine).ThenInclude(l => l.Receipt).ThenInclude(r => r.Supplier)
         .Include(b => b.Issue)
-        .Include(b => b.Photos);
+        .Include(b => b.Photos)
+        .Include(b => b.Crew).ThenInclude(c => c.Employee);
 
     private static IQueryable<NurseryBatch> Filtered(IQueryable<NurseryBatch> batches, NurseryBatchFilter filter)
     {

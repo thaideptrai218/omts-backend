@@ -53,7 +53,7 @@ public sealed class HarvestLotsController(
             Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, !estimatedIsRead, Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)),
             form.ConfirmOverPlan, form.OverPlanReason,
             Guid.TryParse(form.PurchaseRequestId, out var requestId) && requestId != Guid.Empty ? requestId : null,
-            ReadCrew(form.Crew, form.ReplaceCrew, out var crewUnreadable), crewUnreadable,
+            FormNumbers.Crew(form.Crew, form.ReplaceCrew, out var crewUnreadable), crewUnreadable,
             LanePercents(form.LanePercents, out var percentsUnreadable), percentsUnreadable,
             productLines, linesAreUnreadable, planLineId, planLineGiven && planLineId is null);
         return (await recording.RecordAsync(raftId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
@@ -67,34 +67,6 @@ public sealed class HarvestLotsController(
     [ProducesResponseType<HarvestCrewSuggestions>(StatusCodes.Status200OK)]
     public async Task<IActionResult> CrewSuggestions(Guid raftId, [FromQuery] DateOnly? date, CancellationToken cancellationToken) =>
         (await crews.SuggestAsync(raftId, date, cancellationToken)).ToActionResult(Ok);
-
-    /// <summary>
-    /// The crew of the form: one <c>crew</c> field per employee id. Null when no field was sent (a correction then leaves the crew as it is) unless <c>replaceCrew</c> is true, which makes it an empty crew. An id that is not
-    /// a GUID is reported as unreadable, so it is refused instead of dropped.
-    /// </summary>
-    private static IReadOnlyList<Guid>? ReadCrew(string?[]? values, bool replace, out bool unreadable)
-    {
-        unreadable = false;
-        if (values is null)
-        {
-            return replace ? [] : null;
-        }
-
-        var ids = new List<Guid>(values.Length);
-        foreach (var value in values.Where(v => !string.IsNullOrWhiteSpace(v)))
-        {
-            if (Guid.TryParse(value, out var id) && id != Guid.Empty)
-            {
-                ids.Add(id);
-            }
-            else
-            {
-                unreadable = true;
-            }
-        }
-
-        return ids;
-    }
 
     /// <summary>
     /// Marks a lane Being harvested as finished without editing a lot (PM decision 11/11/2026): same access as recording a harvest, audited. 200 with <c>changed: false</c> when the lane is already
@@ -136,7 +108,7 @@ public sealed class HarvestLotsController(
         var (productLines, linesAreUnreadable) = ReadProductLines(form);
         var request = new CorrectHarvestLotRequest(
             Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, form.KeepPhotoKeys, form.Reason, form.RowVersion, !estimatedIsRead,
-            Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)), form.ConfirmOverPlan, form.OverPlanReason, ReadCrew(form.Crew, form.ReplaceCrew, out var crewUnreadable), crewUnreadable,
+            Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)), form.ConfirmOverPlan, form.OverPlanReason, FormNumbers.Crew(form.Crew, form.ReplaceCrew, out var crewUnreadable), crewUnreadable,
             LanePercents(form.LanePercents, out var percentsUnreadable), percentsUnreadable, productLines, linesAreUnreadable);
         return (await corrections.CorrectAsync(lotId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken)).ToActionResult(Ok);
     }

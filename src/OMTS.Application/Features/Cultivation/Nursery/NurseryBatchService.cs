@@ -11,9 +11,11 @@ using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Cultivation.Seeding;
 using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Files;
+using OMTS.Application.Features.Workforce;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
+using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Purchasing;
 
 namespace OMTS.Application.Features.Cultivation.Nursery;
@@ -34,6 +36,8 @@ public sealed class NurseryBatchService(
     UploadedFileSaver fileSaver,
     NurseryBatchViews views,
     NurseryNotifier notifier,
+    RecordCrewService crews,
+    RecordCrewAssignmentService crewAssignments,
     ZoneAccessGuard zoneAccess,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
@@ -71,6 +75,12 @@ public sealed class NurseryBatchService(
             return check.ToError();
         }
 
+        var (crew, crewError) = await crews.ReadAsync(request.Crew, request.CrewUnreadable, cancellationToken);
+        if (crewError is not null)
+        {
+            return crewError;
+        }
+
         var files = StepPhotoService.Read(photos, otherFilePart: request.OtherFilePart);
         if (!files.IsSuccess)
         {
@@ -90,7 +100,7 @@ public sealed class NurseryBatchService(
             return uploaded.Error!;
         }
 
-        var prepared = await photoStore.PrepareSaveAsync(uploaded.Value!, () => PrepareAsync(zone, lot!, quantity, start, note, uploaded.Value!, actor, cancellationToken));
+        var prepared = await photoStore.PrepareSaveAsync(uploaded.Value!, () => PrepareAsync(zone, lot!, quantity, start, note, crew, uploaded.Value!, actor, cancellationToken));
         if (!prepared.IsSuccess)
         {
             return prepared.Error!;
@@ -98,11 +108,16 @@ public sealed class NurseryBatchService(
 
         await fileSaver.SaveAsync(uploaded.Value!, [], cancellationToken);
         var saved = UserMessages.Saved("Nursery batch");
-        return new NurseryBatchSaved(await views.ViewAsync(prepared.Value!, cancellationToken), saved.Text, saved.Code);
+        var view = await views.ViewAsync(prepared.Value!, cancellationToken);
+        // A separate step after the save: the batch stays saved whatever the assignment does.
+        var assignment = crew is { Count: > 0 }
+            ? await crewAssignments.AssignAsync(prepared.Value!.StartDate, zone.Id, null, RecordCrewJobs.Nursery, crew, cancellationToken)
+            : null;
+        return new NurseryBatchSaved(view, saved.Text, saved.Code, assignment);
     }
 
     private async Task<Result<NurseryBatch>> PrepareAsync(
-        FarmingZone zone, PurchaseReceiptLine lot, decimal quantity, DateOnly start, string? note, IReadOnlyList<string> keys, Guid actor,
+        FarmingZone zone, PurchaseReceiptLine lot, decimal quantity, DateOnly start, string? note, IReadOnlyList<Employee>? crew, IReadOnlyList<string> keys, Guid actor,
         CancellationToken cancellationToken)
     {
         var number = await numbers.NextAsync(DocumentSequenceKeys.NurseryBatch, cancellationToken);
@@ -112,6 +127,11 @@ public sealed class NurseryBatchService(
             ZoneId = zone.Id, Zone = zone, SeedLotLineId = lot.Id, SeedLotLine = lot, QuantityIn = quantity, StartDate = start, Note = note,
         };
         nurseries.Add(batch);
+        if (crew is not null)
+        {
+            crews.Apply(batch.Crew, crew, e => new NurseryRecordEmployee { NurseryBatchId = batch.Id, EmployeeId = e.Id, Employee = e });
+        }
+
         NurseryPhotoRows.Add(nurseries, batch, NurseryPhotoPhase.Start, keys);
         if (await stock.PostAsync(batch, lot, cancellationToken) is { } stockRefused)
         {

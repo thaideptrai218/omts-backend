@@ -59,7 +59,7 @@ public class RaftLanesMigrationSqlServerTests
         Assert.Equal(("decimal", 7, 2), await DecimalOfAsync(db, "Rafts", "LengthM"));
         Assert.Equal(1, await CountColumnsAsync(db, "Lanes", "LineLengthM"));
         Assert.Equal(2, await CountColumnsAsync(db, "Lanes", "IsDamaged", "OutOfServiceOn"));
-        Assert.Equal(1, await CountTablesAsync(db, "LaneIncidents", "LaneIncidentPhotos", "LaneIncidentMaterials", "HarvestLotCrew") / 4);
+        Assert.Equal(1, await CountTablesAsync(db, "LaneIncidents", "LaneIncidentPhotos", "LaneIncidentMaterials", "HarvestRecordEmployees") / 4);
         Assert.Equal(1, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.check_constraints WHERE name = 'CK_Raft_Geometry'"));
         Assert.Equal(1, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.check_constraints WHERE name = 'CK_Lane_LineLength'"));
         Assert.Equal(1, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM sys.check_constraints WHERE name = 'CK_LaneIncidentPhoto_SortOrder'"));
@@ -68,7 +68,7 @@ public class RaftLanesMigrationSqlServerTests
         await migrator.MigrateAsync(Before);
         Assert.Equal(0, await CountColumnsAsync(db, "Rafts", "LengthM", "WidthM"));
         Assert.Equal(0, await CountColumnsAsync(db, "Lanes", "LineLengthM", "IsDamaged", "OutOfServiceOn"));
-        Assert.Equal(0, await CountTablesAsync(db, "LaneIncidents", "LaneIncidentPhotos", "LaneIncidentMaterials", "HarvestLotCrew"));
+        Assert.Equal(0, await CountTablesAsync(db, "LaneIncidents", "LaneIncidentPhotos", "LaneIncidentMaterials", "HarvestRecordEmployees"));
         Assert.Equal(sizes.Length, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM Rafts"));
         Assert.Equal(12, await ScalarAsync(db, "SELECT COUNT(*) AS [Value] FROM Rafts WHERE Size IS NOT NULL"));
 

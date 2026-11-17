@@ -44,4 +44,7 @@ public class SeedingRecord : AuditableEntity
 
     /// <summary>On-site photos, 1 to <see cref="MaxPhotos"/> on a session recorded since 12/11/2026, none on an older one.</summary>
     public ICollection<SeedingRecordPhoto> Photos { get; set; } = [];
+
+    /// <summary>The employees who worked on the session (decision of 17/11/2026): optional, for the record only.</summary>
+    public ICollection<SeedingRecordEmployee> Crew { get; set; } = [];
 }

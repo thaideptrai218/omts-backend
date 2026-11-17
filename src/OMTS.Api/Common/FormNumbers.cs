@@ -22,6 +22,34 @@ internal static class FormNumbers
         return numbers;
     }
 
+    /// <summary>
+    /// The crew of a form: one <c>crew</c> field per employee id. Null when no field was sent (an edit then leaves the crew as it is) unless <c>replaceCrew</c> is true, which makes it an empty crew. An id that is
+    /// not a GUID is reported as unreadable, so it is refused instead of dropped. Shared by the nursery, seeding and harvest forms.
+    /// </summary>
+    public static IReadOnlyList<Guid>? Crew(string?[]? values, bool replace, out bool unreadable)
+    {
+        unreadable = false;
+        if (values is null)
+        {
+            return replace ? [] : null;
+        }
+
+        var ids = new List<Guid>(values.Length);
+        foreach (var value in values.Where(v => !string.IsNullOrWhiteSpace(v)))
+        {
+            if (Guid.TryParse(value, out var id) && id != Guid.Empty)
+            {
+                ids.Add(id);
+            }
+            else
+            {
+                unreadable = true;
+            }
+        }
+
+        return ids;
+    }
+
     private static readonly System.Text.Json.JsonSerializerOptions PercentJson = new(System.Text.Json.JsonSerializerDefaults.Web)
     {
         NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString,
