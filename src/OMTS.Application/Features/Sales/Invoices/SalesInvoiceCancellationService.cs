@@ -23,7 +23,7 @@ namespace OMTS.Application.Features.Sales.Invoices;
 /// SALE-08 – the Owner (SALES_INVOICES Delete) cancels an invoice for a sale that did not happen (BR-SALE-11). A payment is cancelled only when the Owner answers that its cash was given back (MSG-SALE-23);
 /// each lot this invoice closed is reopened, a walk-in invoice with kept payments first gets a profile (MSG-SALE-19), and the trader is told after the commit, whatever the service answers (GFR-06).
 /// A linked request is no longer Fulfilled, and revenue, debt and yield no longer count the invoice, because those are worked out from its status. The parts of the advance of its order set against it are
-/// taken off (the advance is the order's again, and is never cancelled with the invoice), and a Completed order is Delivering again.
+/// taken off (the advance is the order's again, and is never cancelled with the invoice), and the order goes back to Draft when no other invoice of it stands, else a Completed order is Delivering again.
 /// </summary>
 public sealed class SalesInvoiceCancellationService(
     ISalesInvoiceRepository invoices,
@@ -206,13 +206,13 @@ public sealed class SalesInvoiceCancellationService(
         foreach (var lot in await lots.ListForInvoiceAsync(lotIds, cancellationToken))
         {
             // Only the lots this invoice closed (BR-HARVEST-04): Reopen refuses every other one.
-            if (lotStatuses.Reopen(lot, today, HarvestLotReopenCause.SalesInvoiceCancelled, invoice.Id))
+            if (await lotStatuses.ReopenAsync(lot, today, HarvestLotReopenCause.SalesInvoiceCancelled, invoice.Id, cancellationToken: cancellationToken))
             {
                 reopened.Add(lot.LotCode);
             }
         }
 
-        var orderMoved = order is not null && ReleaseOrder(invoice, order, advances);
+        var orderMoved = order is not null && await ReleaseOrderAsync(invoice, order, advances, cancellationToken);
         audit.Record(new AuditEntry(CancelledAction, SalesInvoiceWriter.RecordType)
         {
             RecordId = invoice.Id,
@@ -228,8 +228,8 @@ public sealed class SalesInvoiceCancellationService(
     }
 
     // The parts of the advance of the order set against this invoice are taken off (the advance is never cancelled with the invoice), and the order is marked changed, so a parallel invoice or finish of the
-    // same order and this save cannot both win. A Completed order is Delivering again; the others keep their status. Returns whether the order was reopened.
-    private bool ReleaseOrder(SalesInvoice invoice, SalesOrder order, IReadOnlyList<CustomerPayment> advances)
+    // same order and this save cannot both win. An order left with no invoice is a Draft again; else a Completed order is Delivering again. Returns whether the order was reopened.
+    private async Task<bool> ReleaseOrderAsync(SalesInvoice invoice, SalesOrder order, IReadOnlyList<CustomerPayment> advances, CancellationToken cancellationToken)
     {
         foreach (var allocation in advances.SelectMany(a => a.Allocations).Where(a => a.InvoiceId == invoice.Id).ToList())
         {
@@ -238,6 +238,7 @@ public sealed class SalesInvoiceCancellationService(
         }
 
         unitOfWork.MarkChanged(order);
-        return orderProgress.OnInvoiceCancelled(order);
+        var otherLiveInvoice = (await orders.InvoicesOfAsync(order.Id, cancellationToken)).Any(i => i.Id != invoice.Id && i.StatusId != StatusIds.SalesInvoice.Cancelled);
+        return orderProgress.OnInvoiceCancelled(order, otherLiveInvoice);
     }
 }

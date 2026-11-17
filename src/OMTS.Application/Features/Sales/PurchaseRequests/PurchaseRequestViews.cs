@@ -56,10 +56,10 @@ public sealed class PurchaseRequestViews(
         }).ToList();
     }
 
-    /// <summary>The order of each Ordered request (a request has at most one); one query, and none while no request is Ordered.</summary>
+    /// <summary>The order of each request that has one (a request has at most one): the Draft order a Mini App request made, or the order the Owner made from it; one query for the whole list.</summary>
     private async Task<IReadOnlyDictionary<Guid, SalesOrder>> OrdersOfAsync(IReadOnlyList<PurchaseRequest> rows, CancellationToken cancellationToken)
     {
-        var ordered = rows.Where(r => r.StatusId == StatusIds.PurchaseRequest.Ordered).Select(r => r.Id).ToList();
+        var ordered = rows.Where(r => r.StatusId is StatusIds.PurchaseRequest.Ordered or StatusIds.PurchaseRequest.AwaitingResponse or StatusIds.PurchaseRequest.AwaitingStaff or StatusIds.PurchaseRequest.Accepted).Select(r => r.Id).ToList();
         return ordered.Count == 0
             ? new Dictionary<Guid, SalesOrder>()
             : (await orders.FindByPurchaseRequestsAsync(ordered, cancellationToken)).ToDictionary(o => o.PurchaseRequestId!.Value);

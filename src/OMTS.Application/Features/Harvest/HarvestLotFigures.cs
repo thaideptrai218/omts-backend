@@ -1,3 +1,4 @@
+using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Harvest;
 
 namespace OMTS.Application.Features.Harvest;
@@ -11,22 +12,26 @@ public sealed record LotSalesFigures(decimal InvoicedKg, decimal ReturnedKg, dec
 }
 
 /// <summary>
-/// The figures of a lot (BR-HARVEST-07), worked out each time they are shown, never stored. The estimated kg comes from a cage count, so it need not equal sold plus lost.
-/// While the lot is for sale they are not final.
+/// The figures of a lot (BR-HARVEST-07), worked out each time they are shown, never stored. They count from the weighed kg once the lot is weighed, and from the estimated kg (a cage count, so it need not
+/// equal sold plus lost) before. Until the lot is closed they are not final.
 /// </summary>
 public sealed record HarvestLotFigures(decimal InvoicedKg, decimal ReturnedKg, decimal SoldKg, decimal RemainingKg, decimal LostKg, decimal DifferenceKg, bool NotFinal)
 {
-    public static HarvestLotFigures Of(HarvestLot lot, LotSalesFigures sales)
+    public static HarvestLotFigures Of(HarvestLot lot, LotSalesFigures sales) => Of(lot.EstimatedKg, lot.WeighedKg, lot.LeftoverKg, lot.StatusId != StatusIds.HarvestLot.Closed, sales);
+
+    /// <summary>The figures from the kg of the lot, for a lot read as a list row.</summary>
+    public static HarvestLotFigures Of(decimal estimatedKg, decimal? weighedKg, decimal? leftoverKg, bool notFinal, LotSalesFigures sales)
     {
         var sold = sales.InvoicedKg - sales.ReturnedKg;
-        var lost = (lot.LeftoverKg ?? 0m) + sales.DiscardedKg;
+        var lost = (leftoverKg ?? 0m) + sales.DiscardedKg;
+        var baseKg = weighedKg ?? estimatedKg;
         return new HarvestLotFigures(
             sales.InvoicedKg,
             sales.ReturnedKg,
             sold,
-            Math.Max(0m, lot.EstimatedKg - sales.InvoicedKg + sales.BackForSaleKg),
+            Math.Max(0m, baseKg - sales.InvoicedKg + sales.BackForSaleKg),
             lost,
-            lot.EstimatedKg - sold - lost,
-            lot.IsForSale);
+            baseKg - sold - lost,
+            notFinal);
     }
 }

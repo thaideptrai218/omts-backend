@@ -102,9 +102,10 @@ public static class StatusIds
         public const int Removed = 2002;
     }
 
-    /// <summary>HARVEST_LOT (BR-HARVEST-04): Open and Reopened lots are for sale; a Closed lot can be reopened by the system.</summary>
+    /// <summary>HARVEST_LOT (BR-HARVEST-04): a new lot waits for its weighing; Open and Reopened lots are for sale; a Closed lot can be reopened by the system or, when it was closed by hand or by the time limit, by a Zone Manager or the Owner.</summary>
     public static class HarvestLot
     {
+        public const int AwaitingWeighing = 2904;
         public const int Open = 2901;
         public const int Reopened = 2902;
         public const int Closed = 2903;

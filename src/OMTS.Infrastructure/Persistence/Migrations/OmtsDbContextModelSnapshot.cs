@@ -1877,6 +1877,19 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("WeighedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("WeighedByAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("WeighedKg")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<DateOnly?>("WeighedOn")
+                        .HasColumnType("date");
+
                     b.Property<string>("WithdrawalReason")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
@@ -1901,6 +1914,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RecordedByAccountId");
 
+                    b.HasIndex("WeighedByAccountId");
+
                     b.HasIndex("RaftId", "HarvestDate");
 
                     b.HasIndex("StatusId", "HarvestDate");
@@ -1914,6 +1929,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_HarvestLot_KgPerCage", "[KgPerCage] > 0");
 
                             t.HasCheckConstraint("CK_HarvestLot_LeftoverKg", "[LeftoverKg] IS NULL OR [LeftoverKg] >= 0");
+
+                            t.HasCheckConstraint("CK_HarvestLot_WeighedKg", "[WeighedKg] IS NULL OR [WeighedKg] > 0");
                         });
                 });
 
@@ -2011,6 +2028,10 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("ProductId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal?>("WeighedKg")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ProductId");
@@ -2023,6 +2044,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_HarvestLotProductLine_CageCount", "[CageCount] > 0");
 
                             t.HasCheckConstraint("CK_HarvestLotProductLine_Kg", "[Kg] > 0");
+
+                            t.HasCheckConstraint("CK_HarvestLotProductLine_WeighedKg", "[WeighedKg] IS NULL OR [WeighedKg] > 0");
                         });
                 });
 
@@ -4788,13 +4811,24 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
+                            Id = 2904,
+                            Code = "AWAITING_WEIGHING",
+                            DisplayName = "Awaiting weighing",
+                            Group = "HARVEST_LOT",
+                            IsFinal = false,
+                            IsInitial = true,
+                            Meaning = "Recorded with its estimated kg (Chờ cân); not for sale and in no stock until it is weighed. It can be corrected or removed.",
+                            SortOrder = 4
+                        },
+                        new
+                        {
                             Id = 2901,
                             Code = "OPEN",
                             DisplayName = "Open",
                             Group = "HARVEST_LOT",
                             IsFinal = false,
-                            IsInitial = true,
-                            Meaning = "For sale: it can be chosen on a sales invoice.",
+                            IsInitial = false,
+                            Meaning = "For sale: it can be chosen on a sales invoice. Weighed; it can be weighed again.",
                             SortOrder = 1
                         },
                         new
@@ -4816,7 +4850,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             Group = "HARVEST_LOT",
                             IsFinal = false,
                             IsInitial = false,
-                            Meaning = "No longer for sale; its close reason is kept. The system can reopen it.",
+                            Meaning = "No longer for sale; its close reason is kept and what was left of its products is taken off the stock. The system can reopen it; a lot closed by hand or by the time limit is also reopened by hand.",
                             SortOrder = 3
                         },
                         new
@@ -5494,13 +5528,24 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         new
                         {
                             Id = 152,
-                            AllowedPerformers = "System",
+                            AllowedPerformers = "Cooperative Owner; Zone Manager; System",
                             FromStatusId = 2903,
-                            GuardCondition = "A sales return puts oysters back, or the invoice that closed the lot is cancelled or loses its tick.",
+                            GuardCondition = "A sales return puts oysters back, or the invoice that closed the lot is cancelled or loses its tick (the system); a Zone Manager or the Owner reopens a lot closed Unsold, Spoiled or by the time limit, not by an invoice, with a reason. The kg taken off the stock at the close come back.",
                             ReasonRequired = false,
                             ToStatusId = 2902,
                             TriggerEvent = "System",
-                            UseCases = "CLAIM-03, SALE-07, SALE-08"
+                            UseCases = "CLAIM-03, SALE-07, SALE-08, HARVEST-REOPEN"
+                        },
+                        new
+                        {
+                            Id = 30117,
+                            AllowedPerformers = "Cooperative Owner; Zone Manager",
+                            FromStatusId = 2904,
+                            GuardCondition = "The lot is weighed: each product line has its weighed kg, which go into the stock of the products.",
+                            ReasonRequired = false,
+                            ToStatusId = 2901,
+                            TriggerEvent = "Action",
+                            UseCases = "HARVEST-WEIGH"
                         },
                         new
                         {
@@ -5686,6 +5731,28 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                             GuardCondition = "An invoice of the finished order is cancelled: the order is open again.",
                             ReasonRequired = false,
                             ToStatusId = 4402,
+                            TriggerEvent = "Action",
+                            UseCases = "SALES-ORDER"
+                        },
+                        new
+                        {
+                            Id = 30118,
+                            AllowedPerformers = "System",
+                            FromStatusId = 4402,
+                            GuardCondition = "The only invoice of the order that is not cancelled is cancelled: no invoice is left, so the order is a draft again.",
+                            ReasonRequired = false,
+                            ToStatusId = 4401,
+                            TriggerEvent = "Action",
+                            UseCases = "SALES-ORDER"
+                        },
+                        new
+                        {
+                            Id = 30119,
+                            AllowedPerformers = "System",
+                            FromStatusId = 4403,
+                            GuardCondition = "The only invoice of the finished order that is not cancelled is cancelled: no invoice is left, so the order is a draft again.",
+                            ReasonRequired = false,
+                            ToStatusId = 4401,
                             TriggerEvent = "Action",
                             UseCases = "SALES-ORDER"
                         },
@@ -9675,6 +9742,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("StatusId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Identity.Account", null)
+                        .WithMany()
+                        .HasForeignKey("WeighedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Cycle");
 

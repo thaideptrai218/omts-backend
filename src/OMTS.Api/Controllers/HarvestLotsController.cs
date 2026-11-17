@@ -16,7 +16,8 @@ namespace OMTS.Api.Controllers;
 [Authorize]
 public sealed class HarvestLotsController(
     HarvestLotReadService reads, HarvestLotRecordingService recording, HarvestLotCorrectionService corrections, HarvestLotRemovalService removals, HarvestLotClosingService closing,
-    HarvestLotForSaleService forSale, HarvestLaneFinishService laneFinish, HarvestLanesFinishService lanesFinish, HarvestCrewService crews) : ControllerBase
+    HarvestLotForSaleService forSale, HarvestLaneFinishService laneFinish, HarvestLanesFinishService lanesFinish, HarvestCrewService crews, HarvestLotWeighingService weighing,
+    HarvestLotReopeningService reopening, HarvestLotRegisterService register, HarvestLotRegisterFileService registerFiles) : ControllerBase
 {
     private const string PhotosField = "Photos";
 
@@ -85,6 +86,21 @@ public sealed class HarvestLotsController(
     [ProducesResponseType<LanesHarvestFinished>(StatusCodes.Status200OK)]
     public async Task<IActionResult> FinishLanes(Guid raftId, [FromBody] FinishLanesRequest request, CancellationToken cancellationToken) =>
         (await lanesFinish.FinishAsync(raftId, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// The harvest lot list of the zones the caller can read, any status, with the sums of every match. Query: <c>from</c> and <c>to</c> (harvest date, yyyy-MM-dd), <c>zoneId</c>, <c>raftId</c>, <c>productId</c>,
+    /// <c>statusId</c>, <c>weighed</c> (true: weighed, false: waiting for the weighing), <c>closeReason</c> (Unsold, Spoiled, TimeLimitReached, SoldWholeLot), <c>hasPlan</c>, <c>search</c> (lot code or harvest plan code),
+    /// <c>page</c>, <c>pageSize</c> (1 to 100) and <c>sort</c> (<c>code</c> by default, <c>harvestedAt</c>, <c>remainingKg</c>) with <c>sortDir</c> (<c>desc</c> by default, or <c>asc</c>).
+    /// </summary>
+    [HttpGet("api/harvest-lots")]
+    [ProducesResponseType<HarvestLotRegisterPage>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Search([FromQuery] HarvestLotListQuery query, CancellationToken cancellationToken) =>
+        (await register.SearchAsync(query, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>The list as filtered and sorted, as .xlsx (at most <see cref="HarvestLotRegisterFileService.MaxRows"/> rows), with the list's zone rule.</summary>
+    [HttpGet("api/harvest-lots/export")]
+    public async Task<IActionResult> Export([FromQuery] HarvestLotListQuery query, CancellationToken cancellationToken) =>
+        (await registerFiles.ExportAsync(query, cancellationToken)).ToActionResult(f => File(f.Content, f.ContentType, f.FileName));
 
     /// <summary>One lot with its figures and photos: the record a notification opens.</summary>
     [HttpGet("api/harvest-lots/{lotId:guid}")]
@@ -155,6 +171,32 @@ public sealed class HarvestLotsController(
     [ProducesResponseType<HarvestLotClosed>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Close(Guid lotId, CloseHarvestLotRequest request, CancellationToken cancellationToken) =>
         (await closing.CloseAsync(lotId, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>The product ledger of one lot, oldest first: the harvest at the weighed kg, sales, disposals, the close and the reversals that undid any of them. Harvests View, zone-scoped.</summary>
+    [HttpGet("api/harvest-lots/{lotId:guid}/movements")]
+    [ProducesResponseType<IReadOnlyList<HarvestLotMovementView>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Movements(Guid lotId, CancellationToken cancellationToken) =>
+        (await register.MovementsAsync(lotId, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// Weighs a lot waiting for its weighing (it becomes Open, for sale), or weighs an Open or Reopened lot again: <c>lines</c> holds the <c>weighedKg</c> of each product line by <c>lineNumber</c> (every line once;
+    /// above 0, at most 3 decimals), or <c>weighedKg</c> for a lot with no lines; <c>weighedAt</c> (default now, not before the harvest, not in the future) and <c>rowVersion</c>. The Harvest rows of the product
+    /// ledger are written at the weighed kg (again: the earlier ones undone, nothing else touched) and the figures of the lot count from them. A Zone Manager of the lot's zone or the Cooperative Owner. 200 with the
+    /// lot and MSG-GEN-05; 409 MSG-GEN-09 when the lot is Closed.
+    /// </summary>
+    [HttpPost("api/harvest-lots/{lotId:guid}/weigh")]
+    [ProducesResponseType<HarvestLotChanged>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Weigh(Guid lotId, WeighHarvestLotRequest request, CancellationToken cancellationToken) =>
+        (await weighing.WeighAsync(lotId, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// Reopens a lot closed Unsold, Spoiled, by the time limit or with nothing left, with a <c>reason</c> and <c>rowVersion</c>; the kg the close took off the stock come back. A lot closed by an invoice reopens only
+    /// through that invoice (409 MSG-GEN-09). A Zone Manager of the lot's zone or the Cooperative Owner. 200 with the lot and MSG-GEN-05.
+    /// </summary>
+    [HttpPost("api/harvest-lots/{lotId:guid}/reopen")]
+    [ProducesResponseType<HarvestLotChanged>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Reopen(Guid lotId, ReopenHarvestLotRequest request, CancellationToken cancellationToken) =>
+        (await reopening.ReopenAsync(lotId, request, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>
     /// The lots for sale in the zones of the caller, the latest harvest first: what a sales invoice chooses from (SALE-05 step 1). With <c>salesOrderId</c> the lots recorded from a harvest plan that serves

@@ -12,7 +12,8 @@ using static OMTS.Api.IntegrationTests.Sales.SalesOrderTestKit;
 namespace OMTS.Api.IntegrationTests.Sales;
 
 /// <summary>
-/// A purchase request sent from the Mini App makes a Draft order (App source) for the customer at once and is Ordered: the trader sees the order code, cannot cancel the request, and the Owner cannot order it again.
+/// A purchase request sent from the Mini App makes a Draft order (App source) for the customer at once and stays Awaiting response: the trader sees the order code, the Owner cannot order it again, and the trader
+/// cancelling the request cancels the Draft order too.
 /// </summary>
 public class SalesOrderFromRequestTests(AuthApiFactory factory) : IClassFixture<AuthApiFactory>
 {
@@ -20,7 +21,7 @@ public class SalesOrderFromRequestTests(AuthApiFactory factory) : IClassFixture<
         OrderBody(trader.Profile.Id, sale.ProductId, unit, quantity, source: "App").WithField("purchaseRequestId", request.Id());
 
     [Fact]
-    public async Task Placing_a_request_makes_a_draft_order_of_the_customer_and_turns_the_request_into_ordered()
+    public async Task Placing_a_request_makes_a_draft_order_of_the_customer_and_leaves_the_request_awaiting_response()
     {
         var sale = await factory.SaleSetupAsync();
         var trader = await factory.TraderAsync();
@@ -34,7 +35,7 @@ public class SalesOrderFromRequestTests(AuthApiFactory factory) : IClassFixture<
         Assert.Equal((unit, sale.ProductId), (line.UnitId, line.ProductId));
         Assert.True(line.Quantity > 0m);
         var staff = await sale.Owner.Client.ViewedByStaffAsync(request.Id());
-        Assert.Equal((StatusIds.PurchaseRequest.Ordered, order.Code), (staff.GetProperty("statusId").GetInt32(), staff.Text("salesOrderCode")));
+        Assert.Equal((StatusIds.PurchaseRequest.AwaitingResponse, order.Code), (staff.GetProperty("statusId").GetInt32(), staff.Text("salesOrderCode")));
         Assert.Equal(order.Code, (await trader.Client.MineAsync(request.Id())).Text("salesOrderCode"));
     }
 
@@ -56,16 +57,18 @@ public class SalesOrderFromRequestTests(AuthApiFactory factory) : IClassFixture<
     }
 
     [Fact]
-    public async Task An_ordered_request_cannot_be_cancelled_by_its_trader()
+    public async Task Cancelling_the_request_cancels_its_draft_order()
     {
         var sale = await factory.SaleSetupAsync();
         var trader = await factory.TraderAsync();
         var request = await trader.Client.PlaceAsync(sale.ProductId);
 
         var mine = await trader.Client.MineAsync(request.Id());
-        var cancel = await trader.Client.CancelAsync(mine);
+        var cancel = await trader.Client.CancelAsync(mine, "Changed my mind");
 
-        Assert.False(mine.GetProperty("canCancel").GetBoolean());
-        await cancel.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-09");
+        Assert.True(mine.GetProperty("canCancel").GetBoolean());
+        await cancel.ReadAsync(HttpStatusCode.OK);
+        var order = await factory.QueryAsync(db => db.SalesOrders.AsNoTracking().SingleAsync(o => o.PurchaseRequestId == request.Id()));
+        Assert.Equal((StatusIds.SalesOrder.Cancelled, "Changed my mind"), (order.StatusId, order.CancelReason));
     }
 }

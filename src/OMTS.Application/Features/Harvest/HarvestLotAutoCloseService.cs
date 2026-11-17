@@ -55,7 +55,7 @@ public sealed class HarvestLotAutoCloseService(
             // The kg of a sale awaiting its VietQR transfer are not leftover: the transfer invoices them on the closed lot (SALE-05 step 8), so they are never both lost and sold.
             var awaitingKg = (await pendingSales.AwaitingAsync(lot.Id, cancellationToken)).Kg;
             var remainingKg = Math.Max(0m, HarvestLotFigures.Of(lot, figures[lot.Id]).RemainingKg - awaitingKg);
-            if (statuses.Close(lot, today, remainingKg, HarvestLotCloseReason.TimeLimitReached) is { } refused)
+            if (await statuses.CloseAsync(lot, today, remainingKg, HarvestLotCloseReason.TimeLimitReached, cancellationToken: cancellationToken) is { } refused)
             {
                 throw new InvalidOperationException($"The daily close check could not close lot {lot.LotCode}: {refused.Message.Text}");
             }

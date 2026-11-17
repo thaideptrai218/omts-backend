@@ -136,6 +136,9 @@ public sealed record SalesOrderInvoiceView(Guid Id, string Code, DateTimeOffset 
 /// <summary>A harvest plan (KHT) serving the order. A Zone Manager sees only the plans that were handed over.</summary>
 public sealed record SalesOrderHarvestPlanView(Guid Id, string Code, int StatusId, string Status, DateTimeOffset PlannedAt);
 
+/// <summary>A sales return of an invoice of the order, cancelled ones included, as a link. A return changes nothing on the order.</summary>
+public sealed record SalesOrderReturnView(Guid Id, string Code, int StatusId);
+
 public sealed record SalesOrderView(
     Guid Id,
     string Code,
@@ -162,6 +165,7 @@ public sealed record SalesOrderView(
     IReadOnlyList<SalesOrderAdvanceView> Advances,
     IReadOnlyList<SalesOrderInvoiceView> Invoices,
     IReadOnlyList<SalesOrderHarvestPlanView> HarvestPlans,
+    IReadOnlyList<SalesOrderReturnView> SalesReturns,
     SalesOrderRequestView? PurchaseRequest,
     IReadOnlyList<SalesOrderAction> AllowedActions,
     DateTimeOffset CreatedAt,

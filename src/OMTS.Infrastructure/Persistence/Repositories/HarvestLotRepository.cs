@@ -158,12 +158,12 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
             .FirstOrDefaultAsync(cancellationToken);
 
     public Task<int> CountForSaleSinceAtMostAsync(DateOnly lastDay, CancellationToken cancellationToken) =>
-        ForSale(db.HarvestLots.AsNoTracking()).CountAsync(l => (l.ReopenedOn ?? l.HarvestDate) <= lastDay, cancellationToken);
+        ForSale(db.HarvestLots.AsNoTracking()).CountAsync(l => (l.ReopenedOn ?? l.WeighedOn ?? l.HarvestDate) <= lastDay, cancellationToken);
 
     public async Task<IReadOnlyList<Guid>> ListForSaleSinceAtMostAsync(DateOnly lastDay, CancellationToken cancellationToken) =>
         await ForSale(db.HarvestLots.AsNoTracking())
-            .Where(l => (l.ReopenedOn ?? l.HarvestDate) <= lastDay)
-            .OrderBy(l => l.ReopenedOn ?? l.HarvestDate).ThenBy(l => l.LotCode)
+            .Where(l => (l.ReopenedOn ?? l.WeighedOn ?? l.HarvestDate) <= lastDay)
+            .OrderBy(l => l.ReopenedOn ?? l.WeighedOn ?? l.HarvestDate).ThenBy(l => l.LotCode)
             .Select(l => l.Id)
             .ToListAsync(cancellationToken);
 
@@ -181,6 +181,37 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
             .GroupBy(l => l.PurchaseRequestId!.Value)
             .Select(g => new { Id = g.Key, Cages = g.Sum(l => l.CageCount) })
             .ToDictionaryAsync(g => g.Id, g => g.Cages, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<HarvestLotListRow>> SearchAsync(HarvestLotFilter filter, CancellationToken cancellationToken)
+    {
+        var search = filter.Search?.Trim();
+        var zones = filter.ZoneIds?.ToList();
+        var lots = db.HarvestLots.AsNoTracking().Where(l =>
+            (filter.From == null || l.HarvestDate >= filter.From)
+            && (filter.To == null || l.HarvestDate <= filter.To)
+            && (filter.ZoneId == null || l.Raft.ZoneId == filter.ZoneId)
+            && (zones == null || zones.Contains(l.Raft.ZoneId))
+            && (filter.RaftId == null || l.RaftId == filter.RaftId)
+            && (filter.ProductId == null || l.ProductLines.Any(p => p.ProductId == filter.ProductId))
+            && (filter.StatusId == null || l.StatusId == filter.StatusId)
+            && (filter.Weighed == null || (l.WeighedKg != null) == filter.Weighed)
+            && (filter.CloseReason == null || l.CloseReason == filter.CloseReason)
+            && (filter.HasPlan == null || (l.HarvestPlanLineId != null) == filter.HasPlan)
+            && (string.IsNullOrEmpty(search) || l.LotCode.Contains(search) || (l.HarvestPlanLine != null && l.HarvestPlanLine.Plan.Code.Contains(search))));
+        return await lots.OrderByDescending(l => l.HarvestedAt).ThenByDescending(l => l.LotCode)
+            .Select(l => new HarvestLotListRow(
+                l.Id, l.LotCode, l.HarvestedAt, l.HarvestDate, l.Raft.ZoneId, l.Raft.Zone.Code, l.RaftId, l.Raft.Code, l.CycleId, l.CageCount, l.EstimatedKg,
+                l.WeighedKg, l.WeighedAt, l.StatusId, l.CloseReason, l.CloseDate, l.LeftoverKg, l.RecordedByAccountId))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<HarvestLotProductLine>> ProductLinesOfAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken)
+    {
+        var ids = lotIds.Distinct().ToList();
+        return ids.Count == 0
+            ? []
+            : await db.HarvestLotProductLines.AsNoTracking().Include(p => p.Product).Where(p => ids.Contains(p.LotId)).OrderBy(p => p.LotId).ThenBy(p => p.LineNumber).ToListAsync(cancellationToken);
     }
 
     public void Add(HarvestLot lot) => db.HarvestLots.Add(lot);

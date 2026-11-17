@@ -10,6 +10,7 @@ using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Harvest;
 using OMTS.Application.Features.Sales.Invoices;
 using OMTS.Application.Features.Sales.Payments;
+using OMTS.Application.Features.Sales.Products;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Harvest;
 using OMTS.Domain.Entities.Sales;
@@ -19,12 +20,13 @@ namespace OMTS.Application.Features.Sales.Returns;
 
 /// <summary>
 /// CLAIM-03.3 – the Cooperative Owner cancels a sales return recorded by mistake, with a reason (the API lets the Owner only). It then counts nowhere (BR-CLAIM-03): not in the debt or the reports,
-/// its kg leave the lot figures, the discarded lot is listed on the provenance page again and the invoice can be corrected or cancelled again. Each lot keeps its status, whatever happened to it
-/// since, so nothing is reopened or closed. Before the remaining kg of a lot goes below zero the Owner is warned (MSG-CLAIM-06). A cancellation sends no notification.
+/// its kg leave the lot figures and the product ledger (its Return rows are undone), the discarded lot is listed on the provenance page again and the invoice can be corrected or cancelled again.
+/// Each lot keeps its status, whatever happened to it since, so nothing is reopened or closed; a lot closed since still holds no stock, so its close is written again for the kg the reversal took off. Before the remaining kg of a lot goes below zero the Owner is warned (MSG-CLAIM-06). A cancellation sends no notification.
 /// </summary>
 public sealed class SalesReturnCancellationService(
     ISalesReturnRepository salesReturns,
     IHarvestLotSalesQuery lotSales,
+    ProductStockLedger productLedger,
     SalesReturnViews views,
     ZoneAccessGuard zoneAccess,
     IStatusCatalog statusCatalog,
@@ -79,6 +81,8 @@ public sealed class SalesReturnCancellationService(
             unitOfWork.MarkChanged(customer);
         }
 
+        // The oysters that went back for sale leave the product ledger again.
+        await productLedger.ReverseReturnAsync(salesReturn, cancellationToken);
         salesReturn.StatusId = StatusIds.SalesReturn.Cancelled;
         salesReturn.CancelledAt = timeProvider.GetUtcNow();
         salesReturn.CancelledByAccountId = currentUser.AccountId;

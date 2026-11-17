@@ -28,6 +28,9 @@ public sealed class InMemoryProductStock : IProductStockRepository
     public Task<IReadOnlyList<ProductMovementRow>> ForProductAsync(Guid productId, bool includeReversals, IReadOnlySet<Guid>? zoneIds, CancellationToken cancellationToken) =>
         throw new NotSupportedException();
 
+    public Task<IReadOnlyList<ProductStockMovement>> ForLotAsync(Guid lotId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ProductStockMovement>>(Rows.Where(r => r.HarvestLotId == lotId).OrderBy(r => r.OccurredAt).ThenBy(r => r.Sequence).ToList());
+
     public Task<IReadOnlyList<ProductLotRow>> LotsOfProductAsync(Guid productId, IReadOnlySet<Guid>? zoneIds, CancellationToken cancellationToken) => throw new NotSupportedException();
 
     public Task<bool> HasUnreversedSalesOrDisposalsAsync(Guid lotId, IReadOnlyCollection<Guid> productIds, CancellationToken cancellationToken) =>

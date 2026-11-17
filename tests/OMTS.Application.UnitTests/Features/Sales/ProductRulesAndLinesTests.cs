@@ -161,7 +161,7 @@ public sealed class ProductRulesAndLinesTests
     }
 
     [Fact]
-    public async Task Lines_that_differ_only_in_the_scale_of_the_kg_change_nothing_and_write_no_ledger_row()
+    public void Lines_that_differ_only_in_the_scale_of_the_kg_change_nothing_and_write_no_ledger_row()
     {
         var milky = Guid.NewGuid();
         var stock = new InMemoryProductStock();
@@ -172,26 +172,45 @@ public sealed class ProductRulesAndLinesTests
             ProductLines = [new HarvestLotProductLine { LineNumber = 1, ProductId = milky, CageCount = 4, Kg = 100.000m }],
         };
 
-        var changed = await ServiceOn(stock, false, product).ReplaceAsync(lot, "B01", [new ResolvedProductLine(product, 4, 100m)], CancellationToken.None);
+        var changed = ServiceOn(stock, false, product).Replace(lot, [new ResolvedProductLine(product, 4, 100m)]);
 
         Assert.False(changed);
         Assert.Empty(stock.Rows);
     }
 
     [Fact]
-    public async Task A_changed_kg_reverses_the_rows_of_the_lot_and_writes_the_new_ones()
+    public void A_changed_kg_on_a_lot_not_weighed_replaces_the_lines_and_writes_no_ledger_row()
     {
         var milky = Guid.NewGuid();
         var stock = new InMemoryProductStock();
         var product = Oyster(milky, 25m);
         var lot = new HarvestLot { LotCode = "KV01-B01-20261112", HarvestedAt = DateTimeOffset.UtcNow };
         var service = ServiceOn(stock, false, product);
-        service.Add(lot, "B01", [new ResolvedProductLine(product, 4, 100m)]);
+        service.Add(lot, [new ResolvedProductLine(product, 4, 100m)]);
 
-        var changed = await service.ReplaceAsync(lot, "B01", [new ResolvedProductLine(product, 3, 75m)], CancellationToken.None);
+        var changed = service.Replace(lot, [new ResolvedProductLine(product, 3, 75m)]);
 
         Assert.True(changed);
-        Assert.Equal(75m, stock.Rows.Sum(r => r.QuantityKg));
+        Assert.Equal(75m, Assert.Single(lot.ProductLines).Kg);
+        Assert.Empty(stock.Rows);
+    }
+
+    [Fact]
+    public async Task The_lines_of_a_weighed_lot_cannot_change_but_the_same_lines_pass()
+    {
+        var milky = Guid.NewGuid();
+        var product = Oyster(milky, 25m);
+        var lot = new HarvestLot
+        {
+            LotCode = "KV01-B01-20261112", WeighedKg = 98m, ProductLines = [new HarvestLotProductLine { LineNumber = 1, ProductId = milky, CageCount = 4, Kg = 100m, WeighedKg = 98m }],
+        };
+        var service = ServiceOn(new InMemoryProductStock(), false, product);
+
+        var refused = await service.GuardAsync(lot, [new ResolvedProductLine(product, 4, 90m)], CancellationToken.None);
+
+        Assert.Equal("Product lines", refused!.Details!["field"]);
+        Assert.Null(await service.GuardAsync(lot, [new ResolvedProductLine(product, 4, 100m)], CancellationToken.None));
+        Assert.Throws<InvalidOperationException>(() => service.Replace(lot, [new ResolvedProductLine(product, 4, 90m)]));
     }
 
     [Fact]

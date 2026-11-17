@@ -235,6 +235,7 @@ public static class DependencyInjection
         services.AddScoped<CycleSummaryReader>();
         services.AddScoped<CycleCloseService>();
         // HARVEST-01, HARVEST-03 and what SALE and CLAIM call on a lot
+        services.AddScoped<HarvestLotReferenceReader>();
         services.AddScoped<HarvestLotViews>();
         services.AddScoped<HarvestLotNotifier>();
         services.AddScoped<HarvestCrewService>();
@@ -250,6 +251,10 @@ public static class DependencyInjection
         services.AddScoped<HarvestLotReadService>();
         services.AddScoped<HarvestLotForSaleService>();
         services.AddScoped<HarvestLotStatusService>();
+        services.AddScoped<HarvestLotWeighingService>();
+        services.AddScoped<HarvestLotReopeningService>();
+        services.AddScoped<HarvestLotRegisterService>();
+        services.AddScoped<HarvestLotRegisterFileService>();
         // HARVEST-02 close by hand (also the CLAIM-03 extension point) and GFR-05 the daily close check
         services.AddScoped<HarvestLotClosingService>();
         services.AddScoped<HarvestLotAutoCloseService>();
@@ -353,6 +358,8 @@ public static class DependencyInjection
         services.AddScoped<SalesReturnLots>();
         services.AddScoped<SalesReturnNotifications>();
         services.AddScoped<SalesReturnViews>();
+        services.AddScoped<SalesReturnListService>();
+        services.AddScoped<SalesReturnListFileService>();
         services.AddScoped<SalesReturnService>();
         services.AddScoped<SalesReturnCancellationService>();
         // SALE-05 sales invoices and the customer debt (BR-DEBT-02)

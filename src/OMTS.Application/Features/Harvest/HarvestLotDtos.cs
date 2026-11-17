@@ -31,8 +31,36 @@ public sealed record RecordHarvestRequest(
 /// <summary>The harvest plan (KHT) a lot was recorded from; the lot code does not change.</summary>
 public sealed record HarvestLotPlanRef(Guid Id, string Code);
 
+/// <summary>A seed lot that went into the cycle of a lot: the line of a purchase receipt, with its code (receipt code and line number) and the item.</summary>
+public sealed record HarvestLotSeedLotRef(Guid ReceiptId, string ReceiptCode, int LineNumber, string SeedLotCode, string ItemCode, string ItemName);
+
+/// <summary>A record a lot links to, by id and code: a nursery batch, a sales order or a sales invoice.</summary>
+public sealed record HarvestLotLinkRef(Guid Id, string Code);
+
+/// <summary>Where a lot came from and the documents that touched it, for the links of the lot screen.</summary>
+/// <param name="SeedLots">The seed lots of the seeding records and of the nursery batch of the cycle, each once.</param>
+/// <param name="NurseryBatch">The nursery batch the cycle was started from; null for a cycle started the old way.</param>
+/// <param name="SalesOrders">The orders (DH) the harvest plan of the lot serves, by code; empty for a lot outside a plan.</param>
+/// <param name="ClosedByInvoice">The invoice whose sold-whole-lot tick closed the lot; null otherwise.</param>
+public sealed record HarvestLotReferences(
+    IReadOnlyList<HarvestLotSeedLotRef> SeedLots, HarvestLotLinkRef? NurseryBatch, IReadOnlyList<HarvestLotLinkRef> SalesOrders, HarvestLotLinkRef? ClosedByInvoice)
+{
+    public static readonly HarvestLotReferences None = new([], null, [], null);
+}
+
+/// <summary>
+/// The kg of one product of a lot on the product ledger. A reversal counts under the kind of the row it undoes.
+/// </summary>
+/// <param name="HarvestedKg">What the lot gave of the product: its weighed kg; 0 until the lot is weighed.</param>
+/// <param name="SoldKg">The kg of the product invoiced on the lot (sales that stand).</param>
+/// <param name="RemainingKg">The balance of the product on the lot: harvested, less what was sold and written off, plus what came back, less what the close took off.</param>
+/// <param name="ReturnedKg">The kg of the product that came back for sale through sales returns (already part of <paramref name="RemainingKg"/>).</param>
+public sealed record HarvestLotProductBalance(Guid ProductId, string ProductCode, string ProductName, decimal HarvestedKg, decimal SoldKg, decimal RemainingKg, decimal ReturnedKg);
+
 /// <summary>A product line of a lot, with the code of the product.</summary>
-public sealed record HarvestLotProductLineView(Guid ProductId, string ProductCode, string ProductName, decimal CageCount, decimal Kg);
+/// <param name="Kg">The estimated kg of the line.</param>
+/// <param name="WeighedKg">The kg of the weighing; null until the lot is weighed.</param>
+public sealed record HarvestLotProductLineView(Guid ProductId, string ProductCode, string ProductName, decimal CageCount, decimal Kg, decimal? WeighedKg = null);
 
 /// <summary>The kg of a product on a lot for sale: what the lot gave and what is left on the ledger (sales and disposals taken off).</summary>
 public sealed record HarvestLotProductStock(Guid ProductId, string ProductCode, string ProductName, decimal HarvestedKg, decimal RemainingKg);
@@ -91,6 +119,13 @@ public sealed record HarvestLotListItem(
 /// publish still answers MSG-TRACE-01 while <paramref name="OriginMissing"/> is not empty.
 /// </param>
 /// <param name="PurchaseRequestCode">As on <see cref="HarvestLotListItem"/>.</param>
+/// <param name="WeighedKg">The kg of the weighing (the sum of the weighed kg of the lines); null until the lot is weighed. The figures count from it once it is set.</param>
+/// <param name="WeighedAt">When the lot was weighed.</param>
+/// <param name="WeighedByName">Who weighed it last.</param>
+/// <param name="CanWeigh">The caller may weigh the lot (or weigh it again) now: it is Awaiting weighing, Open or Reopened, and the caller is a Zone Manager of its zone or the Owner.</param>
+/// <param name="CanReopen">The caller may reopen the lot by hand now: it is Closed Unsold, Spoiled, by the time limit or with nothing left (not by an invoice), and the caller is a Zone Manager of its zone or the Owner.</param>
+/// <param name="References">The seed lots, nursery batch, orders and closing invoice the lot links to; read with the lot, so the list rows have none.</param>
+/// <param name="ProductStocks">The kg of each product of the lot on the product ledger, in line order: the lines of the lot first, then any other product the ledger holds on it.</param>
 public sealed record HarvestLotView(
     Guid Id,
     string LotCode,
@@ -131,7 +166,14 @@ public sealed record HarvestLotView(
     Guid? PurchaseRequestId = null,
     string? PurchaseRequestCode = null,
     IReadOnlyList<CrewMemberView>? Crew = null,
-    IReadOnlyList<HarvestLanePercentView>? LanePercents = null);
+    IReadOnlyList<HarvestLanePercentView>? LanePercents = null,
+    decimal? WeighedKg = null,
+    DateTimeOffset? WeighedAt = null,
+    string? WeighedByName = null,
+    bool CanWeigh = false,
+    bool CanReopen = false,
+    HarvestLotReferences? References = null,
+    IReadOnlyList<HarvestLotProductBalance>? ProductStocks = null);
 
 /// <summary>Answer of a recorded harvest.</summary>
 /// <param name="EverySeededLaneHarvested">Every seeded lane of the cycle shows Harvested now: the cycle can be closed normally (BR-CYCLE-07).</param>

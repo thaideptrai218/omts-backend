@@ -133,8 +133,25 @@ public static class HarvestTestKit
         await (await client.PostHarvestAsync(raftId, fields)).ReadAsync(HttpStatusCode.Created);
 
     /// <summary>Records a harvest and returns the saved lot.</summary>
+    /// <summary>Records a lot and weighs it at its estimated kg, so it is Open and for sale as before weighing existed.</summary>
     public static async Task<JsonElement> HarvestLotAsync(this HttpClient client, Guid raftId, HarvestFields? fields = null) =>
-        (await client.RecordHarvestAsync(raftId, fields)).GetProperty("lot");
+        await client.WeighAtEstimateAsync((await client.RecordHarvestAsync(raftId, fields)).GetProperty("lot"));
+
+    /// <summary>Weighs a lot awaiting weighing at the estimated kg of each product line, shown in line order (or of the lot without lines); the weighed lot.</summary>
+    public static async Task<JsonElement> WeighAtEstimateAsync(this HttpClient client, JsonElement lot)
+    {
+        var lines = lot.GetProperty("productLines").EnumerateArray()
+            .Select((l, i) => new { lineNumber = i + 1, weighedKg = l.GetProperty("kg").GetDecimal() })
+            .ToList();
+        var response = await client.PostAsJsonAsync($"/api/harvest-lots/{lot.Text("id")}/weigh", new
+        {
+            rowVersion = lot.Text("rowVersion"),
+            lines,
+            weighedKg = lines.Count == 0 ? lot.GetProperty("estimatedKg").GetDecimal() : (decimal?)null,
+        });
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("lot");
+    }
 
     public static Task<JsonElement> HarvestScreenAsync(this HttpClient client, Guid raftId) =>
         client.GetFromJsonAsync<JsonElement>($"/api/rafts/{raftId}/harvest-lots");

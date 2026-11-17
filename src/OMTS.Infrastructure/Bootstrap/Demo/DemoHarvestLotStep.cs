@@ -9,7 +9,8 @@ namespace OMTS.Infrastructure.Bootstrap.Demo;
 /// <summary>
 /// HARVEST-01: harvest lots on the first raft of each In Use demo zone and the second raft of the first, by the Zone Manager of the zone, dated today as a lot always is. Each first raft has
 /// two trips on one day (lot codes without and with -2): one lane ends Being harvested and one Harvested. The second raft has every seeded lane finished, so its manager has the reminder to close
-/// the cycle (MSG-CYCLE-08), and the Owner has the harvest notifications to review (MSG-HARVEST-01). The third raft of each zone stays Growing, with sessions that can still be corrected. Matched by
+/// the cycle (MSG-CYCLE-08), and the Owner has the harvest notifications to review (MSG-HARVEST-01). Every lot is weighed at once (a little under its estimate), so it is for sale and its products have stock.
+/// The third raft of each zone stays Growing, with sessions that can still be corrected. Matched by
 /// the audit log, as a lot code holds the day it was first run: a rerun adds nothing and does not bring back a lot the user removed. A raft with too little seed on an older database is passed over.
 /// </summary>
 internal sealed class DemoHarvestLotStep : IDemoSeedStep
@@ -90,9 +91,19 @@ internal sealed class DemoHarvestLotStep : IDemoSeedStep
         var service = context.Get<HarvestLotRecordingService>();
         for (var trip = 0; trip < trips.Length; trip++)
         {
-            DemoSeedContext.Ensure(await service.RecordAsync(cycle.RaftId, trips[trip], [DemoFiles.HarvestLotPhoto(number * 10 + trip)], cancellationToken), $"harvest of raft {raftCode}");
+            var recorded = DemoSeedContext.Ensure(
+                await service.RecordAsync(cycle.RaftId, trips[trip], [DemoFiles.HarvestLotPhoto(number * 10 + trip)], cancellationToken), $"harvest of raft {raftCode}");
+            await WeighAsync(context, recorded.Lot, raftCode, cancellationToken);
         }
 
         return trips.Length;
+    }
+
+    /// <summary>The weighing of a recorded lot as the Zone Manager does it: 98 % of the estimate, of each product line or of the lot, so the lot is for sale.</summary>
+    private static async Task WeighAsync(DemoSeedContext context, HarvestLotView lot, string raftCode, CancellationToken cancellationToken)
+    {
+        var lines = lot.ProductLines.Select((line, index) => new WeighedLineInput(index + 1, decimal.Round(line.Kg * 0.98m, 3))).ToList();
+        var request = new WeighHarvestLotRequest(lot.RowVersion, null, lines, decimal.Round(lot.EstimatedKg * 0.98m, 3));
+        DemoSeedContext.Ensure(await context.Get<HarvestLotWeighingService>().WeighAsync(lot.Id, request, cancellationToken), $"weighing of the harvest of raft {raftCode}");
     }
 }

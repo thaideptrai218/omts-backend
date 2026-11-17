@@ -37,8 +37,9 @@ public sealed class SalesInvoiceWriter(
     /// Set when the bank notification saves a sale paid by VietQR (GFR-08): the Zone Manager who sold it, who is then the creator, the collector of the cash part and the actor
     /// of their audit rows. The sale was checked when its code was shown, so a lot closed meanwhile stays as it is instead of refusing money that has arrived.
     /// </param>
-    internal SalesInvoice Write(
-        SalesInvoiceEntries entries, SalesInvoiceFacts facts, SalesInvoiceDecision decision, string code, string? paymentCode, string? deduplicationKey, Guid? sellerOnTransfer = null)
+    internal async Task<SalesInvoice> WriteAsync(
+        SalesInvoiceEntries entries, SalesInvoiceFacts facts, SalesInvoiceDecision decision, string code, string? paymentCode, string? deduplicationKey, CancellationToken cancellationToken,
+        Guid? sellerOnTransfer = null)
     {
         var now = timeProvider.GetUtcNow();
         var today = BusinessClock.ToBusinessDate(now);
@@ -112,7 +113,7 @@ public sealed class SalesInvoiceWriter(
         foreach (var lot in facts.Lots.Where(l => !entries.NotSoldWholeLotIds.Contains(l.Id) && (sellerOnTransfer is null || l.IsForSale)))
         {
             // EnsureForSale (SalesInvoiceFactsReader) refused every lot no longer for sale, so a refusal here is a bug, never an answer.
-            if (lotStatuses.CloseSoldWholeLot(lot, today, invoice.Id) is { } refused)
+            if (await lotStatuses.CloseSoldWholeLotAsync(lot, today, invoice.Id, cancellationToken) is { } refused)
             {
                 throw new InvalidOperationException($"Harvest lot {lot.LotCode} was checked for sale and cannot be closed by invoice {invoice.Code}: {refused.Message.Text}");
             }

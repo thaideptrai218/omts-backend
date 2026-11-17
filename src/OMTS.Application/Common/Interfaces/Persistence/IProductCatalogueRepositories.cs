@@ -12,12 +12,15 @@ public interface IProductStockRepository
     /// <summary>The rows of a document (a lot, an invoice or a disposal) that no reversal row undoes yet, in write order; untracked.</summary>
     Task<IReadOnlyList<ProductStockMovement>> UnreversedOfDocumentAsync(Guid documentId, CancellationToken cancellationToken);
 
-    /// <summary>The ledger of each harvest lot for the products: the key holds the lot; rows with no lot are absent.</summary>
+    /// <summary>The ledger of each harvest lot for the products: the key holds the lot; rows with no lot are absent. Rows added in this request and not saved yet count, so a close in the save of a sale sees the sale.</summary>
     Task<IReadOnlyDictionary<(Guid ProductId, Guid LotId), decimal>> LotBalancesAsync(IReadOnlyCollection<Guid> productIds, IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);
 
     /// <summary>The movements of a product oldest first with the balance after each, in the order of <c>OccurredAt</c> then write order. Without reversals the rows an edit or cancellation undid and the reversal rows are left out together.</summary>
     /// <param name="zoneIds">Only the rows on harvest lots of these zones (a zone-scoped reader); null: every row. The balance is then the balance of those rows.</param>
     Task<IReadOnlyList<ProductMovementRow>> ForProductAsync(Guid productId, bool includeReversals, IReadOnlySet<Guid>? zoneIds, CancellationToken cancellationToken);
+
+    /// <summary>Every ledger row of the harvest lot with its product, reversals and lot closes included, oldest first (time, then write order); untracked.</summary>
+    Task<IReadOnlyList<ProductStockMovement>> ForLotAsync(Guid lotId, CancellationToken cancellationToken);
 
     /// <summary>Every ledger row of the product, with the lot it names (zone, status and harvest date of the lot when it still exists).</summary>
     /// <param name="zoneIds">Only the lots of these zones; null: every lot.</param>

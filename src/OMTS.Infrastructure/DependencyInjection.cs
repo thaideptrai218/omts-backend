@@ -118,6 +118,7 @@ public static class DependencyInjection
         services.AddScoped<IHarvestLotRepository, HarvestLotRepository>();
         services.AddScoped<IRecordEmployeeStore, RecordEmployeeStore>();
         services.AddScoped<IHarvestLotSalesQuery, HarvestLotSalesQuery>();
+        services.AddScoped<IHarvestLotReferenceQuery, HarvestLotReferenceQuery>();
         services.AddScoped<ILotTraceQuery, LotTraceQuery>();
         services.AddScoped<IProvenancePageQuery, ProvenancePageQuery>();
         services.AddScoped<IPublicOriginQuery, PublicOriginQuery>();

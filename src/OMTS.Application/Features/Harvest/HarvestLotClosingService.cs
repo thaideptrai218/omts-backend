@@ -59,7 +59,7 @@ public sealed class HarvestLotClosingService(
             return openAttendance;
         }
 
-        if (statuses.Close(lot, timeProvider.Today(), leftoverKg, reason) is { } notClosed)
+        if (await statuses.CloseAsync(lot, timeProvider.Today(), leftoverKg, reason, cancellationToken: cancellationToken) is { } notClosed)
         {
             return notClosed;
         }
@@ -77,7 +77,7 @@ public sealed class HarvestLotClosingService(
     public async Task<AppError?> CloseWithoutSavingAsync(HarvestLot lot, decimal? leftoverKg, string? reason, CancellationToken cancellationToken)
     {
         var (refused, leftover, chosen) = await ReadAsync(lot, leftoverKg, reason, cancellationToken);
-        return refused ?? statuses.Close(lot, timeProvider.Today(), leftover, chosen);
+        return refused ?? await statuses.CloseAsync(lot, timeProvider.Today(), leftover, chosen, cancellationToken: cancellationToken);
     }
 
     /// <summary>MSG-GEN-08 outside the caller's zones, MSG-GEN-09 when the lot is no longer for sale, MSG-GEN-01 naming each invalid field (HARVEST-02.0.E1); else the values to close with.</summary>

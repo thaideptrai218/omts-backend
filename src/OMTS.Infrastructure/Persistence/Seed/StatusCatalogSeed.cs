@@ -90,9 +90,11 @@ internal static class StatusCatalogSeed
         NewStatus(S.EmployeeRequest.Rejected, G.EmployeeRequest, "REJECTED", "Rejected", "Rejected by the Cooperative Owner with a note.", final: true),
         NewStatus(S.EmployeeRequest.Cancelled, G.EmployeeRequest, "CANCELLED", "Cancelled", "Cancelled by the employee while it was awaiting review; kept in the list.", final: true),
 
-        NewStatus(S.HarvestLot.Open, G.HarvestLot, "OPEN", "Open", "For sale: it can be chosen on a sales invoice.", initial: true),
+        // Chờ cân: a new lot is recorded here and is not for sale until its weighing (decision of 17/11/2026).
+        NewStatus(S.HarvestLot.AwaitingWeighing, G.HarvestLot, "AWAITING_WEIGHING", "Awaiting weighing", "Recorded with its estimated kg (Chờ cân); not for sale and in no stock until it is weighed. It can be corrected or removed.", initial: true),
+        NewStatus(S.HarvestLot.Open, G.HarvestLot, "OPEN", "Open", "For sale: it can be chosen on a sales invoice. Weighed; it can be weighed again."),
         NewStatus(S.HarvestLot.Reopened, G.HarvestLot, "REOPENED", "Reopened", "Closed earlier and for sale again; the days before automatic close count from the day it was reopened."),
-        NewStatus(S.HarvestLot.Closed, G.HarvestLot, "CLOSED", "Closed", "No longer for sale; its close reason is kept. The system can reopen it."),
+        NewStatus(S.HarvestLot.Closed, G.HarvestLot, "CLOSED", "Closed", "No longer for sale; its close reason is kept and what was left of its products is taken off the stock. The system can reopen it; a lot closed by hand or by the time limit is also reopened by hand."),
 
         // STD-SALES-INVOICE: no draft, as an invoice is saved only when paid or put on the debt (BR-SALE-08).
         NewStatus(S.SalesInvoice.Completed, G.SalesInvoice, "COMPLETED", "Completed", "The sale is saved; only the Cooperative Owner corrects or cancels it.", initial: true),
@@ -175,10 +177,11 @@ internal static class StatusCatalogSeed
         NewTransition(223, S.QualityClaim.OfferMade, S.QualityClaim.OfferDeclined, "CLAIM-02", Trader, Action, "The trader of the claim declines the offer; a note is optional.", false),
         NewTransition(240, S.SalesReturn.Recorded, S.SalesReturn.Cancelled, "CLAIM-03", Owner, Action, "A return recorded by mistake; it no longer counts in the customer debt, the lots or the reports, and the invoice can again be corrected or cancelled.", true),
 
-        // BR-HARVEST-04: closed in one of four ways; only the system reopens a lot. 80–140 are taken or reserved on other branches.
+        // BR-HARVEST-04: closed in one of four ways; only the system reopens a lot closed by a sale; a Zone Manager or the Owner reopens one closed otherwise. 80–140 are taken or reserved on other branches.
         NewTransition(150, S.HarvestLot.Open, S.HarvestLot.Closed, "HARVEST-02, GFR-05, SALE-05, SALE-07, CLAIM-03", LotCloser, Action, "Sold whole lot, closed with the leftover kg, or the time limit reached.", false),
         NewTransition(151, S.HarvestLot.Reopened, S.HarvestLot.Closed, "HARVEST-02, GFR-05, SALE-05, SALE-07, CLAIM-03", LotCloser, Action, "Closed again in the same four ways.", false),
-        NewTransition(152, S.HarvestLot.Closed, S.HarvestLot.Reopened, "CLAIM-03, SALE-07, SALE-08", SystemActor, SystemActor, "A sales return puts oysters back, or the invoice that closed the lot is cancelled or loses its tick.", false),
+        NewTransition(152, S.HarvestLot.Closed, S.HarvestLot.Reopened, "CLAIM-03, SALE-07, SALE-08, HARVEST-REOPEN", LotCloser, SystemActor, "A sales return puts oysters back, or the invoice that closed the lot is cancelled or loses its tick (the system); a Zone Manager or the Owner reopens a lot closed Unsold, Spoiled or by the time limit, not by an invoice, with a reason. The kg taken off the stock at the close come back.", false),
+        NewTransition(30117, S.HarvestLot.AwaitingWeighing, S.HarvestLot.Open, "HARVEST-WEIGH", OwnerOrZoneManager, Action, "The lot is weighed: each product line has its weighed kg, which go into the stock of the products.", false),
 
         // STD-SALES-INVOICE and STD-CUSTOMER-PAYMENT; the creation of each is SALE-05 (and GFR-08 for a VietQR payment).
         NewTransition(200, S.SalesInvoice.Completed, S.SalesInvoice.Cancelled, "SALE-08", Owner, Action, "The invoice has no sales return that is not cancelled; a cash payment is cancelled with it only when the cash was given back.", true),
@@ -198,6 +201,8 @@ internal static class StatusCatalogSeed
         NewTransition(30105, S.SalesOrder.Draft, S.SalesOrder.Cancelled, "SALES-ORDER", Owner, Action, "A reason is given.", true),
         NewTransition(30106, S.SalesOrder.Delivering, S.SalesOrder.Cancelled, "SALES-ORDER", Owner, Action, "A reason is given and no invoice of the order is left uncancelled; otherwise the order is finished instead.", true),
         NewTransition(30107, S.SalesOrder.Completed, S.SalesOrder.Delivering, "SALES-ORDER", SystemActor, Action, "An invoice of the finished order is cancelled: the order is open again.", false),
+        NewTransition(30118, S.SalesOrder.Delivering, S.SalesOrder.Draft, "SALES-ORDER", SystemActor, Action, "The only invoice of the order that is not cancelled is cancelled: no invoice is left, so the order is a draft again.", false),
+        NewTransition(30119, S.SalesOrder.Completed, S.SalesOrder.Draft, "SALES-ORDER", SystemActor, Action, "The only invoice of the finished order that is not cancelled is cancelled: no invoice is left, so the order is a draft again.", false),
         NewTransition(30108, S.PurchaseRequest.AwaitingResponse, S.PurchaseRequest.Ordered, "SALES-ORDER", Owner, Action, "The Owner saves an order made from the request.", false),
         NewTransition(30109, S.PurchaseRequest.Accepted, S.PurchaseRequest.Ordered, "SALES-ORDER", Owner, Action, "The request is not Fulfilled and has no order yet; the Owner saves an order made from it.", false),
         NewTransition(30110, S.HarvestPlan.Draft, S.HarvestPlan.Assigned, "HARVEST-PLAN", Owner, Action, "The plan has lines, every raft has an Open cycle and no lane is in another open plan; the Zone Managers of the zone are told.", false),

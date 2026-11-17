@@ -24,7 +24,11 @@ public sealed record CreateSalesReturnRequest(
 /// <param name="ConfirmNegativeRemaining">The answer Yes to MSG-CLAIM-06.</param>
 public sealed record CancelSalesReturnRequest(string? Reason, string? RowVersion, bool ConfirmNegativeRemaining = false);
 
-public sealed record SalesReturnLineView(Guid InvoiceLineId, int? LineNumber, string? ProductName, Guid HarvestLotId, string LotCode, decimal ReturnedKg, SalesReturnOutcome Outcome, decimal DiscardedKg);
+public sealed record SalesReturnLineView(
+    Guid InvoiceLineId, int? LineNumber, string? ProductName, Guid HarvestLotId, string LotCode, decimal ReturnedKg, SalesReturnOutcome Outcome, decimal DiscardedKg, string? ProductCode = null);
+
+/// <summary>The customer of the invoice of a return.</summary>
+public sealed record SalesReturnCustomerRef(Guid Id, string Code, string Name);
 
 /// <summary>The remaining kg of a lot the return put oysters back into: what CLAIM-03.3 step 2 shows.</summary>
 /// <param name="RemainingKg">Now, 0 or more (BR-HARVEST-07).</param>
@@ -32,9 +36,36 @@ public sealed record SalesReturnLineView(Guid InvoiceLineId, int? LineNumber, st
 public sealed record SalesReturnLotFigures(Guid HarvestLotId, string LotCode, decimal RemainingKg, decimal RemainingAfterCancelKg);
 
 /// <param name="Value">The total of the invoice when the return was recorded (BR-CLAIM-03).</param>
+/// <param name="SalesOrder">The order the invoice was made from; null for an invoice without one.</param>
+/// <param name="Customer">The customer of the invoice (the profile chosen when it was a walk-in invoice).</param>
+/// <param name="ZoneCode">The zone of the invoice.</param>
+/// <param name="BackForSaleKg">The kg of the lines taken back for sale.</param>
+/// <param name="DiscardedKg">The kg of the lines thrown away.</param>
+/// <param name="CanCancel">The caller may cancel the return now: it stands and the caller is the Cooperative Owner (CLAIM-03.3).</param>
 public sealed record SalesReturnView(
     Guid Id, string Code, Guid InvoiceId, string InvoiceCode, DateOnly ReturnDate, string Reason, decimal Value, int StatusId, string Status, AccountRef RecordedBy,
-    DateTimeOffset? CancelledAt, string? CancelReason, IReadOnlyList<SalesReturnLineView> Lines, IReadOnlyList<SalesReturnLotFigures> Lots, string RowVersion, string? Message = null, string? MessageCode = null);
+    DateTimeOffset? CancelledAt, string? CancelReason, IReadOnlyList<SalesReturnLineView> Lines, IReadOnlyList<SalesReturnLotFigures> Lots, string RowVersion, string? Message = null, string? MessageCode = null,
+    SalesInvoiceOrderRef? SalesOrder = null, SalesReturnCustomerRef? Customer = null, string ZoneCode = "", decimal BackForSaleKg = 0m, decimal DiscardedKg = 0m, bool CanCancel = false);
+
+/// <summary>The list query of the sales returns. The period is on the return date; <c>Search</c> is text in the code of the return, of the invoice or of the customer, or in the name of the customer.</summary>
+/// <param name="Sort"><c>code</c> (the default), <c>returnDate</c> or <c>value</c>.</param>
+/// <param name="SortDir"><c>asc</c> or <c>desc</c> (the default).</param>
+public sealed record SalesReturnListQuery(
+    DateOnly? From = null, DateOnly? To = null, Guid? CustomerId = null, Guid? ZoneId = null, int? StatusId = null, string? Search = null, int Page = 1, int PageSize = 20, string? Sort = null,
+    string? SortDir = null);
+
+/// <summary>A return of the list.</summary>
+/// <param name="RecordedAt">When the return was saved.</param>
+/// <param name="BackForSaleKg">The kg of the lines taken back for sale.</param>
+/// <param name="DiscardedKg">The kg of the lines thrown away.</param>
+public sealed record SalesReturnListItem(
+    Guid Id, string Code, DateOnly ReturnDate, DateTimeOffset? RecordedAt, Guid InvoiceId, string InvoiceCode, SalesInvoiceOrderRef? SalesOrder, SalesReturnCustomerRef? Customer, string ZoneCode,
+    decimal Value, int StatusId, string Status, string? RecordedByName, int LineCount, decimal BackForSaleKg, decimal DiscardedKg);
+
+/// <summary>The sums of the returns that stand among every match of the list, not only the page.</summary>
+public sealed record SalesReturnListTotals(decimal Value, decimal BackForSaleKg, decimal DiscardedKg);
+
+public sealed record SalesReturnListPage(IReadOnlyList<SalesReturnListItem> Items, int Total, int Page, int PageSize, SalesReturnListTotals Totals);
 
 /// <param name="DebtAfter">The customer debt after the return; below 0 it is money owed back (DEBT-02).</param>
 /// <param name="OwedBack">The money owed back, 0 when none.</param>

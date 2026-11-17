@@ -110,12 +110,14 @@ internal sealed class HarvestLotProductLineConfiguration : IEntityTypeConfigurat
         builder.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(x => x.CageCount).HasPrecision(9, 2);
         builder.Property(x => x.Kg).HasPrecision(18, 3);
+        builder.Property(x => x.WeighedKg).HasPrecision(18, 3);
         builder.HasIndex(x => new { x.LotId, x.LineNumber }).IsUnique();
         builder.HasIndex(x => x.ProductId);
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("CK_HarvestLotProductLine_CageCount", "[CageCount] > 0");
             t.HasCheckConstraint("CK_HarvestLotProductLine_Kg", "[Kg] > 0");
+            t.HasCheckConstraint("CK_HarvestLotProductLine_WeighedKg", "[WeighedKg] IS NULL OR [WeighedKg] > 0");
         });
     }
 }

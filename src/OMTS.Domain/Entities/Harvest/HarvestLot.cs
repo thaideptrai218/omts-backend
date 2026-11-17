@@ -10,7 +10,7 @@ namespace OMTS.Domain.Entities.Harvest;
 
 /// <summary>
 /// The oysters of one harvest trip to one raft (BR-HARVEST-03), with the whole lanes harvested and the estimated kg. Its code and harvest time never change.
-/// It is for sale while Open or Reopened (BR-HARVEST-04). The estimated kg is for following the harvest and limits no sale (BR-HARVEST-02).
+/// It waits for its weighing (AwaitingWeighing), is for sale while Open or Reopened (BR-HARVEST-04) and gives its weighed kg to the product ledger. The estimated kg is for following the harvest and limits no sale (BR-HARVEST-02).
 /// A lot may be recorded from a line of a harvest plan and may be split into the products it holds.
 /// </summary>
 public class HarvestLot : AuditableEntity, IHasStatus
@@ -43,6 +43,18 @@ public class HarvestLot : AuditableEntity, IHasStatus
     /// <summary>Cages times <see cref="KgPerCage"/> unless the Zone Manager changed it (BR-HARVEST-02).</summary>
     public decimal EstimatedKg { get; set; }
 
+    /// <summary>The kg of the weighing: the sum of the weighed kg of the lines, or the kg typed for a lot with no lines; null until the lot is weighed. The figures of the lot count from it once it is set.</summary>
+    public decimal? WeighedKg { get; set; }
+
+    /// <summary>When the lot was weighed (typed, or the time of the weighing); the latest weighing counts.</summary>
+    public DateTimeOffset? WeighedAt { get; set; }
+
+    /// <summary>The business date (UTC+7) of <see cref="WeighedAt"/>: the days before automatic close count from it.</summary>
+    public DateOnly? WeighedOn { get; set; }
+
+    /// <summary>Who weighed the lot last.</summary>
+    public Guid? WeighedByAccountId { get; set; }
+
     /// <summary>Why the cycle harvested kg went above its target yield, when the Zone Manager confirmed it (over 110 % of the target); null otherwise.</summary>
     public string? OverPlanReason { get; set; }
 
@@ -55,7 +67,7 @@ public class HarvestLot : AuditableEntity, IHasStatus
     public Guid? PurchaseRequestId { get; set; }
     public PurchaseRequest? PurchaseRequest { get; set; }
 
-    public int StatusId { get; set; } = StatusIds.HarvestLot.Open;
+    public int StatusId { get; set; } = StatusIds.HarvestLot.AwaitingWeighing;
     public Status Status { get; set; } = null!;
 
     /// <summary>The day the lot was last reopened: the days before automatic close count from it (BR-HARVEST-04).</summary>
