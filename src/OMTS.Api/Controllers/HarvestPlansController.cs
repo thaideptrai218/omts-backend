@@ -15,7 +15,8 @@ namespace OMTS.Api.Controllers;
 [ApiController]
 [Route("api/harvest-plans")]
 [Authorize]
-public sealed class HarvestPlansController(HarvestPlanService plans, HarvestPlanReadService reads, HarvestPlanLaneSkipService skips) : ControllerBase
+public sealed class HarvestPlansController(
+    HarvestPlanService plans, HarvestPlanReadService reads, HarvestPlanLaneSkipService skips, HarvestPlanStaffingService staffing) : ControllerBase
 {
     /// <summary>The plans the caller may see, code descending, with filters and paging. A Zone Manager sees only the plans handed over with a line in its zones (and only those lines).</summary>
     [HttpGet]
@@ -103,6 +104,26 @@ public sealed class HarvestPlansController(HarvestPlanService plans, HarvestPlan
     [ProducesResponseType<HarvestPlanSaved>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Cancel(Guid id, CancelHarvestPlanRequest request, CancellationToken cancellationToken) =>
         (await plans.CancelAsync(id, request, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// The "Nhân công" of a plan: for each line the caller sees (every line for the Owner, the lines of its zones for a Zone Manager) the employees assigned to it, with <c>checkedIn</c> and the <c>assignmentId</c>,
+    /// and <c>canEdit</c>: the caller may choose the crew now (the Owner on a Draft or Assigned plan, a Zone Manager of the line's zone on an Assigned or Harvesting one, nobody on a Completed or Cancelled plan or after the day).
+    /// </summary>
+    [HttpGet("{id:guid}/staffing")]
+    [RequirePermission(PermissionFunctions.HarvestPlans, PermissionAction.View, PermissionScope.AnyZone)]
+    [ProducesResponseType<HarvestPlanStaffing>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Staffing(Guid id, CancellationToken cancellationToken) => (await staffing.GetAsync(id, cancellationToken)).ToActionResult(Ok);
+
+    /// <summary>
+    /// Sets the whole crew of a line (<c>employeeIds</c>, <c>moveExisting</c>, <c>rowVersion</c> of the plan): employees not listed are taken off (409 MSG-LABOR-07 for one already checked in), new ones get a work assignment
+    /// (Thu hoạch, the raft of the line, the day of the plan) by the rules of the work assignments (409 MSG-LABOR-06 for one on another raft that day, unless <c>moveExisting</c>). 409 MSG-GEN-09 once the plan is over, after its day or
+    /// with no job type Thu hoạch in use. Answers the line.
+    /// </summary>
+    [HttpPut("{id:guid}/lines/{lineId:guid}/staffing")]
+    [RequirePermission(PermissionFunctions.WorkAssignments, PermissionAction.Create, PermissionScope.AnyZone)]
+    [ProducesResponseType<HarvestPlanStaffingLine>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> SaveStaffing(Guid id, Guid lineId, SaveHarvestPlanLineStaffingRequest request, CancellationToken cancellationToken) =>
+        (await staffing.SaveLineAsync(id, lineId, request, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>"Không thu": leaves lanes of a line out with a reason (<c>laneNumbers</c>, <c>reason</c>); the Owners are told (MSG-PLAN-06). While the plan is Assigned or Harvesting and the line has no lot (409 MSG-PLAN-03).</summary>
     [HttpPost("{id:guid}/lines/{lineId:guid}/skip-lanes")]

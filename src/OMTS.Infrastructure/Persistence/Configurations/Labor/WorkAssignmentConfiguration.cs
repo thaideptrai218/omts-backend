@@ -12,6 +12,7 @@ internal sealed class WorkAssignmentConfiguration : IEntityTypeConfiguration<Wor
         builder.HasOne(x => x.Zone).WithMany().HasForeignKey(x => x.ZoneId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Raft).WithMany().HasForeignKey(x => x.RaftId);
         builder.HasOne(x => x.JobType).WithMany().HasForeignKey(x => x.JobTypeId);
+        builder.HasOne(x => x.HarvestPlanLine).WithMany().HasForeignKey(x => x.HarvestPlanLineId).OnDelete(DeleteBehavior.Restrict);
         builder.ReferencesAccount(nameof(WorkAssignment.AssignedByAccountId));
         builder.Property(x => x.CorrectionReason).HasMaxLength(Lengths.Reason);
 
@@ -26,5 +27,6 @@ internal sealed class WorkAssignmentConfiguration : IEntityTypeConfiguration<Wor
         builder.HasIndex(x => new { x.Date, x.ZoneId });
         builder.HasIndex(x => x.JobTypeId);
         builder.HasIndex(x => x.AssignedByAccountId);
+        builder.HasIndex(x => x.HarvestPlanLineId);
     }
 }

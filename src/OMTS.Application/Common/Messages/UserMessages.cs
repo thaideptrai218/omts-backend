@@ -1432,6 +1432,41 @@ public static class UserMessages
         Parameters = new Dictionary<string, object?> { ["plan_code"] = planCode, ["raft_code"] = raftCode, ["lane_numbers"] = laneNumbers.ToList(), ["reason"] = reason },
     };
 
+    /// <summary>MSG-GEN-09 in Vietnamese: the plan is over (Completed or Cancelled), so its crew is no longer chosen.</summary>
+    public static UserMessage PlanStaffingClosed(string planCode, string status) => new(
+        Gen09, $"Kế hoạch thu hoạch {planCode} đang ở trạng thái {status} nên không thể chọn hay đổi nhân công.", Legacy.Msg61)
+    {
+        Parameters = new Dictionary<string, object?> { ["plan_code"] = planCode, ["status"] = status },
+    };
+
+    /// <summary>MSG-GEN-09 in Vietnamese: the job type "Thu hoạch" is not in the catalogue of job types or is not in use.</summary>
+    public static UserMessage PlanStaffingJobMissing(string jobName) => new(
+        Gen09, $"Chưa có loại công việc \"{jobName}\" đang sử dụng. Hãy thêm hoặc dùng lại loại công việc này trong Lao động rồi chọn nhân công.", Legacy.Msg61)
+    {
+        Parameters = new Dictionary<string, object?> { ["job_name"] = jobName },
+    };
+
+    /// <summary>MSG-GEN-09 in Vietnamese: the crew of a plan whose harvest day has passed is not changed.</summary>
+    public static UserMessage PlanStaffingPastDate(string planCode, DateOnly date) => new(
+        Gen09, $"Ngày thu hoạch {Date(date)} của kế hoạch {planCode} đã qua nên không thể chọn hay đổi nhân công.", Legacy.Msg61)
+    {
+        Parameters = new Dictionary<string, object?> { ["plan_code"] = planCode, ["date"] = date },
+    };
+
+    /// <summary>MSG-GEN-09 in Vietnamese: a plan with a crew cannot move to a day that has passed.</summary>
+    public static UserMessage PlanStaffingNewDatePast(string planCode, DateOnly date) => new(
+        Gen09, $"Kế hoạch thu hoạch {planCode} đã có nhân công nên không thể chuyển sang ngày {Date(date)} đã qua. Hãy bỏ nhân công khỏi kế hoạch trước.", Legacy.Msg61)
+    {
+        Parameters = new Dictionary<string, object?> { ["plan_code"] = planCode, ["date"] = date },
+    };
+
+    /// <summary>MSG-GEN-09 in Vietnamese: the crew follows the plan to its new day, but an employee already has other work that day.</summary>
+    public static UserMessage PlanStaffingDateTaken(string planCode, string employeeName, DateOnly date) => new(
+        Gen09, $"Không thể chuyển kế hoạch thu hoạch {planCode} sang ngày {Date(date)}: {employeeName} đã có phân công khác vào ngày này. Hãy đổi phân công đó hoặc bỏ nhân viên khỏi kế hoạch trước.", Legacy.Msg61)
+    {
+        Parameters = new Dictionary<string, object?> { ["plan_code"] = planCode, ["employee_name"] = employeeName, ["date"] = date },
+    };
+
     /// <summary>MSG-CLAIM-04 (CLAIM-03 step 4): a Zone Manager confirms the Owner agreed to the return and decided which oysters go back for sale.</summary>
     public static UserMessage SalesReturnOwnerAgreed(string invoiceCode, decimal returnValue) => new(
         Claim04, $"Has the Cooperative Owner agreed to take back all the goods of invoice {invoiceCode} ({Vnd(returnValue)} VND) and decided which oysters go back for sale?")

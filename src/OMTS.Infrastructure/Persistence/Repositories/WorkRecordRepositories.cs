@@ -36,6 +36,14 @@ internal sealed class WorkAssignmentRepository(OmtsDbContext db) : IWorkAssignme
     public async Task<IReadOnlyList<JobType>> GetJobTypesAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
         ids.Count == 0 ? [] : await db.JobTypes.AsNoTracking().Where(j => ids.Contains(j.Id)).ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<WorkAssignment>> ListOfPlanLinesAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken cancellationToken) =>
+        lineIds.Count == 0
+            ? []
+            : await db.WorkAssignments.Include(w => w.Raft).Include(w => w.Zone).Include(w => w.JobType).Include(w => w.Employee)
+                .Where(w => w.HarvestPlanLineId != null && lineIds.Contains(w.HarvestPlanLineId.Value))
+                .OrderBy(w => w.Employee.FullName).ThenBy(w => w.EmployeeId)
+                .ToListAsync(cancellationToken);
+
     public Task<WorkAssignment?> FindFirstAsync(Guid employeeId, DateOnly day, CancellationToken cancellationToken) =>
         db.WorkAssignments.Include(w => w.Raft).Include(w => w.Zone).Include(w => w.JobType).Include(w => w.Employee)
             .FirstOrDefaultAsync(w => w.EmployeeId == employeeId && w.Date == day && w.StartsAt == null, cancellationToken);

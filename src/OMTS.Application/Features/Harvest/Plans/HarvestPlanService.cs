@@ -30,6 +30,7 @@ public sealed class HarvestPlanService(
     HarvestPlanViews views,
     HarvestPlanProgress progress,
     HarvestPlanNotifier notifier,
+    HarvestPlanStaffingService staffing,
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
     AuditLogService audit,
@@ -173,11 +174,19 @@ public sealed class HarvestPlanService(
             orderCodes[order.Id] = order.Code;
         }
 
+        // The crew chosen for the lines goes with them: to the new day, and off a line that is taken out or moved to another raft. Checked before the plan changes.
+        var newDate = BusinessClock.ToBusinessDate(ready.PlannedAt);
+        var leaving = plan.Lines.Where(l => entries.Lines.FirstOrDefault(e => e.Id == l.Id) is not { } kept || kept.RaftId != l.RaftId).Select(l => l.Id).ToHashSet();
+        if (await staffing.FollowAsync(plan, newDate, leaving, cancellationToken) is { } staffingRefused)
+        {
+            return staffingRefused;
+        }
+
         var before = Snapshot(plan, orderCodes);
         var allDoneBefore = HarvestPlanProgress.AllDone(plan);
         plan.Code = code;
         plan.PlannedAt = ready.PlannedAt;
-        plan.PlannedDate = BusinessClock.ToBusinessDate(ready.PlannedAt);
+        plan.PlannedDate = newDate;
         plan.Note = entries.Note;
         ApplyOrders(plan, ready.Orders);
         ApplyLines(plan, entries, ready);
@@ -341,6 +350,11 @@ public sealed class HarvestPlanService(
         if (plan.Lines.Any(l => l.Lot is not null))
         {
             return AppError.Conflict(UserMessages.PlanCannotBeCancelled(plan.Code));
+        }
+
+        if (await staffing.FollowAsync(plan, plan.PlannedDate, plan.Lines.Select(l => l.Id).ToHashSet(), cancellationToken) is { } staffingRefused)
+        {
+            return staffingRefused;
         }
 
         plan.CancelledAt = timeProvider.GetUtcNow();

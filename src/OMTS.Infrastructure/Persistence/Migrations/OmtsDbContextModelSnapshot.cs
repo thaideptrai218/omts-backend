@@ -3939,6 +3939,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("EmployeeId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("HarvestPlanLineId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("JobTypeId")
                         .HasColumnType("uniqueidentifier");
 
@@ -3970,6 +3973,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AssignedByAccountId");
+
+                    b.HasIndex("HarvestPlanLineId");
 
                     b.HasIndex("JobTypeId");
 
@@ -10477,6 +10482,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OMTS.Domain.Entities.Harvest.HarvestPlanLine", "HarvestPlanLine")
+                        .WithMany()
+                        .HasForeignKey("HarvestPlanLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OMTS.Domain.Entities.Labor.JobType", "JobType")
                         .WithMany()
                         .HasForeignKey("JobTypeId")
@@ -10495,6 +10505,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Employee");
+
+                    b.Navigation("HarvestPlanLine");
 
                     b.Navigation("JobType");
 
