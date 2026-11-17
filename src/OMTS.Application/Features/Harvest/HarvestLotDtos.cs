@@ -127,7 +127,7 @@ public sealed record HarvestLotView(
 public sealed record HarvestLotSaved(
     HarvestLotView Lot, bool EverySeededLaneHarvested, string CycleRowVersion, string Message, string MessageCode, IReadOnlyList<Features.Farming.FarmingWarning>? Warnings = null,
     int? OrderCagesTotal = null, decimal? OrderCagesHarvested = null, bool OrderComplete = false,
-    Workforce.CrewAssignmentResult? CrewAssignment = null);
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] Workforce.CrewAssignmentResult? CrewAssignment = null);
 
 /// <summary>A lane on the Harvest lots screen, with its state today (BR-FARM-03).</summary>
 /// <param name="CanHarvest">The lane can be chosen for a new lot now: In Use, Growing or Being harvested, on a raft that can record.</param>

@@ -117,10 +117,57 @@ public sealed class RecordCrewAssignmentTests
 
         var kept = await (await world.Owner.Client.PutNurseryAsync(batch.Id(), new NurseryFields { Note = "x", RowVersion = await api.IssueRowVersionAsync<OMTS.Domain.Entities.Cultivation.NurseryBatch>(batch.Id()) })).ReadAsync(HttpStatusCode.OK);
         Assert.Single(kept.GetProperty("batch").GetProperty("crew").EnumerateArray());
-        Assert.Equal(JsonValueKind.Null, kept.GetProperty("crewAssignment").ValueKind);
+        Assert.False(kept.TryGetProperty("crewAssignment", out _));
 
         var cleared = await (await world.Owner.Client.PutNurseryAsync(batch.Id(), new NurseryFields { ReplaceCrew = true, RowVersion = await api.IssueRowVersionAsync<OMTS.Domain.Entities.Cultivation.NurseryBatch>(batch.Id()) })).ReadAsync(HttpStatusCode.OK);
         Assert.Empty(cleared.GetProperty("batch").GetProperty("crew").EnumerateArray());
         Assert.Equal(0, await api.QueryAsync(db => db.NurseryRecordEmployees.CountAsync()));
+    }
+
+    [Fact]
+    public async Task A_nursery_cannot_be_completed_until_its_assigned_crew_is_checked_out_unless_the_owner_approves_with_a_reason()
+    {
+        using var api = new AuthApiFactory();
+        var world = await api.NurseryWorldAsync();
+        await NurseryJobTypeAsync(api);
+        var hoa = await EmployeeAsync(api, "Hoa");
+        var batch = (await StartAsync(world, new NurseryFields { Crew = [hoa.Id] })).GetProperty("batch");
+        var client = world.Owner.Client;
+
+        var blocked = await client.PostCompleteAsync(api, batch.Id(), "900");
+        var problem = await blocked.ReadAsync(HttpStatusCode.Conflict);
+        Assert.Equal(("MSG-LABOR-37", "ATTENDANCE_OPEN", "ownerApproved"), (problem.Text("code"), problem.Text("reasonCode"), problem.Text("confirmFlag")));
+        var listed = problem.GetProperty("employees").EnumerateArray().Single();
+        Assert.Equal((hoa.Id, false), (listed.Id(), listed.GetProperty("checkedIn").GetBoolean()));
+        var read = await client.GetFromJsonAsync<JsonElement>($"/api/nursery-batches/{batch.Id()}");
+        Assert.Equal("NotCheckedIn", read.GetProperty("crew")[0].Text("attendance"));
+
+        var noReason = await client.PostCompleteAsync(api, batch.Id(), "900", ownerApproved: true);
+        Assert.Equal(["ApprovalReason"], await noReason.InvalidFieldsAsync());
+        var approved = await client.PostCompleteAsync(api, batch.Id(), "900", ownerApproved: true, approvalReason: "Quên bấm ra");
+        await approved.ReadAsync(HttpStatusCode.OK);
+        Assert.Equal(1, await api.QueryAsync(db => db.AuditEvents.CountAsync(e => e.Action == "Record.CompletedWithOpenAttendance" && e.RecordId == batch.Id() && e.Reason == "Quên bấm ra")));
+    }
+
+    [Fact]
+    public async Task A_checked_out_crew_and_a_member_with_no_work_that_day_do_not_block_and_the_view_shows_the_work_time()
+    {
+        using var api = new AuthApiFactory();
+        var world = await api.NurseryWorldAsync();
+        await NurseryJobTypeAsync(api);
+        var hoa = await EmployeeAsync(api, "Hoa");
+        var batch = (await StartAsync(world, new NurseryFields { Crew = [hoa.Id] })).GetProperty("batch");
+        var start = new DateTimeOffset(Today.ToDateTime(new TimeOnly(7, 0)), TimeSpan.FromHours(7));
+        await api.UseDbAsync(db => db.Attendances.Add(new Attendance { EmployeeId = hoa.Id, Date = Today, CheckInAt = start, CheckOutAt = start.AddMinutes(150) }));
+
+        var read = await world.Owner.Client.GetFromJsonAsync<JsonElement>($"/api/nursery-batches/{batch.Id()}");
+        var member = read.GetProperty("crew")[0];
+        Assert.Equal(("Done", 150), (member.Text("attendance"), member.GetProperty("work").GetProperty("minutes").GetInt32()));
+        await (await world.Owner.Client.PostCompleteAsync(api, batch.Id(), "900")).ReadAsync(HttpStatusCode.OK);
+
+        // A back-dated batch gave nobody an assignment, so its crew is NotAssigned and never blocks.
+        var past = (await StartAsync(world, new NurseryFields { Crew = [hoa.Id], StartDate = Today.AddDays(-1).ToString("yyyy-MM-dd") })).GetProperty("batch");
+        Assert.Equal("NotAssigned", past.GetProperty("crew")[0].Text("attendance"));
+        await (await world.Owner.Client.PostCompleteAsync(api, past.Id(), "900")).ReadAsync(HttpStatusCode.OK);
     }
 }

@@ -28,7 +28,9 @@ public sealed record CancelNurseryRequest(string? Reason, string? RowVersion);
 /// <summary>NURSERY-03 (v2, 13/11/2026). The photos (1 to 3) travel as multipart parts apart from these fields. No shares and no cycles: the batch becomes a pool.</summary>
 /// <param name="Survivors">Pieces that survived, counted by eye (an estimate), from 0 to the pieces put in.</param>
 /// <param name="CompletedOn">Not before the start date and not later than today; today when left out.</param>
-public sealed record CompleteNurseryRequest(decimal? Survivors, DateOnly? CompletedOn, string? RowVersion, bool OtherFilePart = false);
+/// <param name="OwnerApproved">Only the Cooperative Owner: complete although an employee of the batch with work that day is not checked out (MSG-LABOR-37); needs <paramref name="ApprovalReason"/> (1 to 1000 characters).</param>
+public sealed record CompleteNurseryRequest(
+    decimal? Survivors, DateOnly? CompletedOn, string? RowVersion, bool OtherFilePart = false, bool OwnerApproved = false, string? ApprovalReason = null);
 
 /// <summary>NURSERY-04 (v2): the survivors as they should be, old to new in the history, with a reason. Not below what was seeded.</summary>
 public sealed record CorrectSurvivorsRequest(decimal? Survivors, string? Reason, string? RowVersion);
@@ -75,7 +77,7 @@ public sealed record NurseryBatchView(
 
 /// <param name="Message">MSG-GEN-05 "Nursery batch saved.".</param>
 /// <param name="CrewAssignment">The automatic work assignment of the employees newly named by this save (decision of 17/11/2026); null when none was added.</param>
-public sealed record NurseryBatchSaved(NurseryBatchView Batch, string Message, string MessageCode, CrewAssignmentResult? CrewAssignment = null);
+public sealed record NurseryBatchSaved(NurseryBatchView Batch, string Message, string MessageCode, [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] CrewAssignmentResult? CrewAssignment = null);
 
 public sealed record NurseryListSummary(
     decimal QuantityIn, decimal NursingQuantityIn, decimal CompletedQuantityIn, decimal Survivors, decimal LossPieces, decimal? LossPercent, int NursingCount, int CompletedCount, int ClosedCount = 0);

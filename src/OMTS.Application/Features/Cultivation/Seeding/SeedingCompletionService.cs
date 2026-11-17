@@ -22,6 +22,8 @@ namespace OMTS.Application.Features.Cultivation.Seeding;
 /// </summary>
 public sealed class SeedingCompletionService(
     ICultivationCycleRepository cycles,
+    ISeedingRecordRepository seedingRecords,
+    Workforce.RecordCrewAttendance crewAttendance,
     IRaftRepository rafts,
     CycleWriteGuard writes,
     LaneStateReader laneStates,
@@ -73,6 +75,15 @@ public sealed class SeedingCompletionService(
             return AppError.Conflict(
                 UserMessages.FinishEmptySeedingQuestion(raft.Code),
                 new Dictionary<string, object?> { ["confirmFlag"] = "confirmEmpty", ["laneNumbers"] = figures.NotSeededLanes });
+        }
+
+        // Decision of 17/11/2026: the employees named on the seeding sessions with work on the day of their session are checked out first (MSG-LABOR-37), or the Owner completes with a reason.
+        var sessions = await seedingRecords.ListByCycleAsync(cycle!.Id, cancellationToken);
+        if (await crewAttendance.CheckCompletionAsync(
+                sessions.SelectMany(r => r.Crew.Select(c => new Workforce.CrewDay(c.EmployeeId, r.SeedingDate))), new Workforce.CompletionApproval(request.OwnerApproved, request.ApprovalReason),
+                new Workforce.RecordRef(nameof(CultivationCycle), cycle.Id, raft.Code, raft.ZoneId), cancellationToken) is { } openAttendance)
+        {
+            return openAttendance;
         }
 
         cycle!.SeedingCompletedOn = timeProvider.Today();

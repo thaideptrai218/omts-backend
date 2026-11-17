@@ -68,8 +68,8 @@ public sealed class HarvestLotsController(
     /// </summary>
     [HttpPost("api/rafts/{raftId:guid}/lanes/{laneNumber:int}/finish-harvest")]
     [ProducesResponseType<LaneHarvestFinished>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> FinishLane(Guid raftId, int laneNumber, CancellationToken cancellationToken) =>
-        (await laneFinish.FinishAsync(raftId, laneNumber, cancellationToken)).ToActionResult(Ok);
+    public async Task<IActionResult> FinishLane(Guid raftId, int laneNumber, [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] FinishLaneRequest? request, CancellationToken cancellationToken) =>
+        (await laneFinish.FinishAsync(raftId, laneNumber, cancellationToken, request is null ? null : new OMTS.Application.Features.Workforce.CompletionApproval(request.OwnerApproved, request.ApprovalReason))).ToActionResult(Ok);
 
     /// <summary>
     /// Finishes several lanes in one transaction (owner decision 12/11/2026). Body <c>{ laneNumbers: [1..200 distinct], rowVersion? }</c>. 200 lists <c>finished</c> and <c>alreadyFinished</c>;

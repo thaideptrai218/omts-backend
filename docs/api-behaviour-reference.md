@@ -460,8 +460,20 @@ Zone Manager (in the zone of the raft) and Owner, except where marked Owner:
   optional, at most 100, each an Employed employee of the cooperative (else 400 on `Crew`). Absent = the crew is unchanged (none on a new record); `replaceCrew=true` with no `crew` field clears it.
   Every read and save answer has `crew: [{id, code, name}]` on the nursery batch, the seeding record and the harvest lot view. Tables `NurseryRecordEmployees`, `SeedingRecordEmployees`, `HarvestRecordEmployees` hold only the ids.
 - Automatic work assignment: after a save that names new employees, the saved answer (`NurseryBatchSaved`, `SeedingRecordSaved`, `HarvestLotSaved`) carries `crewAssignment: { created, skipped: [{ employeeId, reason }] }`
-  (null when no employee was added). It is a step after the save, so a record stays saved whatever happens. Job type by name: nursery `Ươm` in the zone of the batch, seeding `Treo giống` on the raft, harvest `Thu hoạch` on the raft; date = today, only
+  (absent when no employee was added). It is a step after the save, so a record stays saved whatever happens. Job type by name: nursery `Ươm` in the zone of the batch, seeding `Treo giống` on the raft, harvest `Thu hoạch` on the raft; date = today, only
   when the record is of today. `reason`: `PastDate`, `AlreadyAssigned` (never moved), `NoPermission` (no work-assignment Create in the zone), `JobTypeNotInUse`, `Left`, `Failed` (locked pay period, raft no longer In Use, lost race). No attendance is created.
+
+#### Completing the records with a crew, and the crew's work time (OMTS-227, 17/11/2026)
+
+- Gated completions: `POST /api/nursery-batches/{id}/complete` (day = start date of the batch), `POST /api/cultivation-cycles/{cycleId}/seeding-complete` (day = date of each seeding session of the cycle),
+  `POST /api/rafts/{raftId}/lanes/{n}/finish-harvest` and `POST /api/rafts/{raftId}/finish-harvest` (the crews of the lots that include the lanes, day = harvest date of each lot) and `POST /api/harvest-lots/{id}/close`.
+- Rule (`RecordCrewAttendance`, one service for all): an employee of the crew who HAS a work assignment (zone or raft) on the day of the record must have `CheckOutAt` set. No assignment that day (back-dated record, skipped when saved) never blocks.
+- Refusal: 409 `MSG-LABOR-37` with `reasonCode: "ATTENDANCE_OPEN"`, `confirmFlag: "ownerApproved"` and `employees: [{ id, code, name, checkedIn }]`. Override, Cooperative Owner only (403 for anyone else): resend with `ownerApproved: true` and
+  `approvalReason` (1-1000 characters, else 400 on `ApprovalReason`); the audit log gets `Record.CompletedWithOpenAttendance` with the reason and the employees left open. Nursery: form fields; the others: JSON body
+  (the single-lane finish takes an optional body; `approvalReason` is apart from the leftover `reason` of the lot close).
+- Views: each `crew` member of the nursery batch, seeding record and harvest lot gets `work: { checkedInAt, checkedOutAt, minutes } | null` (the attendance of the record's day; minutes = raw time between check-in and check-out, no break, no rounding, null until the
+  check-out) and `attendance`: `NotAssigned` | `NotCheckedIn` | `Working` | `Done`. `GET /api/workforce/lookups` employees get `assignment: { zoneId, raftId, raftCode, jobTypeId, job } | null` (the latest job period of the day).
+- Pay: a zone-level assignment is paid like any other: hours come from Attendances x job periods (`WorkHoursCalculator`, no raft needed) at the rate of the job type in force.
 
 ### Audit log
 

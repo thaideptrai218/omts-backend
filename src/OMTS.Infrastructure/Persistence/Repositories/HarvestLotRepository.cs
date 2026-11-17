@@ -35,6 +35,12 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
             .OrderByDescending(l => l.Lot.HarvestedAt)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<OMTS.Application.Features.Workforce.CrewDay>> ListCrewDaysAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) =>
+        lotIds.Count == 0
+            ? []
+            : await db.HarvestRecordEmployees.AsNoTracking().Where(c => lotIds.Contains(c.LotId))
+                .Select(c => new OMTS.Application.Features.Workforce.CrewDay(c.EmployeeId, c.Lot.HarvestDate)).ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<LotLaneFact>> LaneFactsAsync(Guid cycleId, CancellationToken cancellationToken) =>
         await db.HarvestLotLanes.AsNoTracking()
             .Where(l => l.Lot.CycleId == cycleId)

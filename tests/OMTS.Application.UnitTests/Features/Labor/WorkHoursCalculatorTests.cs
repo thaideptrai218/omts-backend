@@ -133,4 +133,16 @@ public sealed class WorkHoursCalculatorTests
         Assert.Equal([Hanging, Harvest], hours.Periods.Select(p => p.JobTypeId));
         Assert.Equal([180, 180], hours.Periods.Select(p => p.Minutes));
     }
+
+    [Fact]
+    public void A_period_of_work_in_a_zone_with_no_raft_counts_its_hours_like_any_other()
+    {
+        // Decision of 17/11/2026: the nursery is a zone, so its assignment has no raft; the hours (and the pay of the job type) do not depend on one.
+        var nursery = new WorkAssignment { JobTypeId = Harvest, RaftId = null, ZoneId = Guid.NewGuid() };
+
+        var hours = WorkHoursCalculator.Calculate(At("07:00"), At("11:00"), [nursery], null);
+
+        Assert.Equal(240, MinutesOf(hours, Harvest));
+        Assert.Null(hours.Periods.Single().RaftId);
+    }
 }

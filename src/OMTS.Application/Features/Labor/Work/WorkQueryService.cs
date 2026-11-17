@@ -59,9 +59,9 @@ public sealed class WorkQueryService(
         var people = await employeeReader.ListEmployedAsync(permitted.AllZones ? null : permitted.ZoneIds.ToList(), day, cancellationToken);
         var ids = people.Select(e => e.Id).ToList();
         var leave = (await requests.ListApprovedLeaveAsync(ids, day, cancellationToken)).Select(l => l.EmployeeId).ToHashSet();
-        var raftOf = (await assignments.ListDayAsync(day, cancellationToken))
+        var latestOf = (await assignments.ListDayAsync(day, cancellationToken))
             .GroupBy(p => p.EmployeeId)
-            .ToDictionary(g => g.Key, g => g.OrderBy(p => p.StartsAt is null ? 0 : 1).ThenBy(p => p.StartsAt).Last().Raft?.Code);
+            .ToDictionary(g => g.Key, g => g.OrderBy(p => p.StartsAt is null ? 0 : 1).ThenBy(p => p.StartsAt).Last());
         var checkedIn = (await attendances.ListDayAsync(day, cancellationToken)).Where(a => a.CheckInAt is not null).Select(a => a.EmployeeId).ToHashSet();
         var options = people.Select(e => new WorkEmployeeOption(e.Id, e.FullName, leave.Contains(e.Id))
         {
@@ -69,7 +69,8 @@ public sealed class WorkQueryService(
             PhoneNumber = e.PhoneNumber,
             Type = WorkRules.TypeOn(e, day),
             JobTypeIds = e.JobTypes.Select(j => j.JobTypeId).ToList(),
-            RaftCode = raftOf.GetValueOrDefault(e.Id),
+            RaftCode = latestOf.GetValueOrDefault(e.Id)?.Raft?.Code,
+            Assignment = latestOf.GetValueOrDefault(e.Id) is { } w ? new WorkAssignmentRef(w.ZoneId, w.RaftId, w.Raft?.Code, w.JobTypeId, w.JobType.Name) : null,
             CheckedIn = checkedIn.Contains(e.Id),
         }).ToList();
         return new WorkLookups(jobs, options);

@@ -64,7 +64,12 @@ public sealed record WorkEmployeeOption(Guid Id, string Name, bool OnLeave)
     public IReadOnlyList<Guid> JobTypeIds { get; init; } = [];
     public string? RaftCode { get; init; }
     public bool CheckedIn { get; init; }
+
+    /// <summary>The work of the day (the latest job period): where and which job; null when the employee has none that day.</summary>
+    public WorkAssignmentRef? Assignment { get; init; }
 }
+
+public sealed record WorkAssignmentRef(Guid ZoneId, Guid? RaftId, string? RaftCode, Guid JobTypeId, string Job);
 
 /// <summary>What the Work and attendance screen picks from (SCR-LABOR-02): the job types In Use and the Employed employees of the caller's zones.</summary>
 public sealed record WorkLookups(IReadOnlyList<WorkJobOption> Jobs, IReadOnlyList<WorkEmployeeOption> Employees);

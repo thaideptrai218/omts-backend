@@ -38,7 +38,7 @@ public sealed record RemoveSeedingRequest(string? Reason, string? RowVersion);
 /// <summary>CYCLE-02.1.</summary>
 /// <param name="RowVersion">The version of the cycle.</param>
 /// <param name="ConfirmEmpty">The Zone Manager confirms finishing a seeding with no seeded lane (409 with <c>confirmFlag: "confirmEmpty"</c> otherwise).</param>
-public sealed record MarkSeedingCompleteRequest(string? RowVersion, bool ConfirmEmpty = false);
+public sealed record MarkSeedingCompleteRequest(string? RowVersion, bool ConfirmEmpty = false, bool OwnerApproved = false, string? ApprovalReason = null);
 
 /// <summary>A seed lot on a session: traced to its receipt and supplier (BR-FARM-03). It holds no price.</summary>
 public sealed record SeedLotRef(
@@ -93,7 +93,7 @@ public sealed record SeedingRecordView(
 /// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
 /// <param name="CrewAssignment">The automatic work assignment of the employees newly named by this save (decision of 17/11/2026); null when none was added.</param>
 public sealed record SeedingRecordSaved(
-    SeedingRecordView Record, bool OfferMarkComplete, string CycleRowVersion, string Message, string MessageCode, Workforce.CrewAssignmentResult? CrewAssignment = null);
+    SeedingRecordView Record, bool OfferMarkComplete, string CycleRowVersion, string Message, string MessageCode, [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] Workforce.CrewAssignmentResult? CrewAssignment = null);
 
 /// <summary>A lane on the Seeding screen.</summary>
 /// <param name="CanSeed">The lane can be chosen for a new session now (BR-CYCLE-02): not damaged and not out of service (decision of 12/11/2026).</param>

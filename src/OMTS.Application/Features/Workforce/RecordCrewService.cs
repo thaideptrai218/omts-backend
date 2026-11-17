@@ -9,7 +9,12 @@ namespace OMTS.Application.Features.Workforce;
 
 /// <summary>An employee on a nursery, seeding or harvest record.</summary>
 /// <param name="Code">The employee code (NV000001); null for a row older than the column.</param>
-public sealed record CrewMemberView(Guid Id, string? Code, string Name);
+/// <param name="Work">The attendance of the day of the record; null when there is none (and always null in the suggestions).</param>
+/// <param name="Attendance"><c>NotAssigned</c>, <c>NotCheckedIn</c>, <c>Working</c> or <c>Done</c> on the day of the record; null in the suggestions.</param>
+public sealed record CrewMemberView(Guid Id, string? Code, string Name, CrewWorkView? Work = null, string? Attendance = null);
+
+/// <summary>Check-in, check-out and the minutes between them (raw: no break taken off, no rounding); minutes are null until the check-out.</summary>
+public sealed record CrewWorkView(DateTimeOffset? CheckedInAt, DateTimeOffset? CheckedOutAt, int? Minutes);
 
 /// <summary>What <see cref="RecordCrewService.Apply{TRow}"/> did to the rows of a record: the employees newly named (the ones the work assignment is made for) and whether anything changed.</summary>
 public sealed record CrewChange(IReadOnlyList<Employee> Added, bool Changed);

@@ -4,7 +4,8 @@ namespace OMTS.Application.Features.Harvest;
 /// <param name="LeftoverKg">The kg of the lot that will not be sold: 0 or more, with at most 2 decimals.</param>
 /// <param name="Reason"><c>Unsold</c> or <c>Spoiled</c>, required when <paramref name="LeftoverKg"/> is above 0; with 0 it is not kept.</param>
 /// <param name="RowVersion">The version of the lot the form was read at (NFR-09).</param>
-public sealed record CloseHarvestLotRequest(decimal? LeftoverKg, string? Reason, string? RowVersion);
+/// <param name="OwnerApproved">Only the Cooperative Owner: close although an employee of the lot with work that day is not checked out (MSG-LABOR-37); needs <paramref name="ApprovalReason"/> (1 to 1000 characters; apart from <paramref name="Reason"/>, the reason of the leftover).</param>
+public sealed record CloseHarvestLotRequest(decimal? LeftoverKg, string? Reason, string? RowVersion, bool OwnerApproved = false, string? ApprovalReason = null);
 
 /// <summary>Answer of a closed lot.</summary>
 /// <param name="Message">MSG-GEN-05 "Harvest lot saved.".</param>
