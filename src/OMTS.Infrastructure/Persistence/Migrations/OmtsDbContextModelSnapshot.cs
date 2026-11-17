@@ -983,6 +983,21 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.NurseryRecordEmployee", b =>
+                {
+                    b.Property<Guid>("NurseryBatchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("NurseryBatchId", "EmployeeId");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("NurseryRecordEmployees");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1049,6 +1064,21 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_SeedingRecord_Quantity", "[Quantity] > 0");
                         });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingRecordEmployee", b =>
+                {
+                    b.Property<Guid>("SeedingRecordId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("SeedingRecordId", "EmployeeId");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("SeedingRecordEmployees");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingRecordLane", b =>
@@ -1880,21 +1910,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestLotCrewMember", b =>
-                {
-                    b.Property<Guid>("LotId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("EmployeeId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("LotId", "EmployeeId");
-
-                    b.HasIndex("EmployeeId");
-
-                    b.ToTable("HarvestLotCrew");
-                });
-
             modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestLotLane", b =>
                 {
                     b.Property<Guid>("LotId")
@@ -1964,6 +1979,21 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_HarvestLotPhoto_SortOrder", "[SortOrder] BETWEEN 1 AND 10");
                         });
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestRecordEmployee", b =>
+                {
+                    b.Property<Guid>("LotId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("LotId", "EmployeeId");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("HarvestRecordEmployees");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Identity.AccessGrant", b =>
@@ -3693,7 +3723,7 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<Guid>("RaftId")
+                    b.Property<Guid?>("RaftId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<byte[]>("RowVersion")
@@ -3711,6 +3741,9 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid>("ZoneId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AssignedByAccountId");
@@ -3719,7 +3752,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RaftId");
 
+                    b.HasIndex("ZoneId");
+
                     b.HasIndex("Date", "RaftId");
+
+                    b.HasIndex("Date", "ZoneId");
 
                     b.HasIndex("EmployeeId", "Date")
                         .IsUnique()
@@ -8141,6 +8178,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("NurseryBatch");
                 });
 
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.NurseryRecordEmployee", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.NurseryBatch", "NurseryBatch")
+                        .WithMany("Crew")
+                        .HasForeignKey("NurseryBatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("NurseryBatch");
+                });
+
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingRecord", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Cultivation.CultivationCycle", "Cycle")
@@ -8176,6 +8232,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Issue");
 
                     b.Navigation("SeedLotLine");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingRecordEmployee", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Cultivation.SeedingRecord", "SeedingRecord")
+                        .WithMany("Crew")
+                        .HasForeignKey("SeedingRecordId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("SeedingRecord");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingRecordLane", b =>
@@ -8437,25 +8512,6 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("Status");
                 });
 
-            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestLotCrewMember", b =>
-                {
-                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
-                        .WithMany()
-                        .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("OMTS.Domain.Entities.Harvest.HarvestLot", "Lot")
-                        .WithMany("Crew")
-                        .HasForeignKey("LotId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Employee");
-
-                    b.Navigation("Lot");
-                });
-
             modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestLotLane", b =>
                 {
                     b.HasOne("OMTS.Domain.Entities.Farming.Lane", "Lane")
@@ -8482,6 +8538,25 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("LotId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Lot");
+                });
+
+            modelBuilder.Entity("OMTS.Domain.Entities.Harvest.HarvestRecordEmployee", b =>
+                {
+                    b.HasOne("OMTS.Domain.Entities.Identity.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OMTS.Domain.Entities.Harvest.HarvestLot", "Lot")
+                        .WithMany("Crew")
+                        .HasForeignKey("LotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
 
                     b.Navigation("Lot");
                 });
@@ -9058,6 +9133,11 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.HasOne("OMTS.Domain.Entities.Farming.Raft", "Raft")
                         .WithMany()
                         .HasForeignKey("RaftId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OMTS.Domain.Entities.Farming.FarmingZone", "Zone")
+                        .WithMany()
+                        .HasForeignKey("ZoneId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -9066,6 +9146,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                     b.Navigation("JobType");
 
                     b.Navigation("Raft");
+
+                    b.Navigation("Zone");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Labor.WorkDayPlan", b =>
@@ -10009,11 +10091,15 @@ namespace OMTS.Infrastructure.Persistence.Migrations
                 {
                     b.Navigation("Allocations");
 
+                    b.Navigation("Crew");
+
                     b.Navigation("Photos");
                 });
 
             modelBuilder.Entity("OMTS.Domain.Entities.Cultivation.SeedingRecord", b =>
                 {
+                    b.Navigation("Crew");
+
                     b.Navigation("Lanes");
 
                     b.Navigation("Photos");
