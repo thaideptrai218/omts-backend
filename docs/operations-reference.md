@@ -201,14 +201,16 @@ the refusal to `DemoSeedGate`.
 
 ## Staging deploy (CD)
 
-The shared staging server (EC2, `/opt/omts`, public URL `https://d2zray6os5wptx.cloudfront.net`) is deployed by
-`.github/workflows/cd-staging.yml`:
+The shared staging server (a VPS in Ho Chi Minh City since 17/11/2026, `/opt/omts`, deploy user `omts-deploy`, public
+URL `https://d2zray6os5wptx.cloudfront.net`) runs the API, Redis, the origin `front` and the database (`mssql`,
+`COMPOSE_PROFILES=origin-front,localdb`). Being in Vietnam, it calls Zalo directly (no `Zalo:ProxyUrl`). It is
+deployed by `.github/workflows/cd-staging.yml`:
 
 1. A push to `develop` runs CI. When CI passes, CD builds the image once and pushes it to GHCR as
    `ghcr.io/thaideptrai218/omts-backend:sha-<7 chars>` (and the moving tag `staging`).
 2. Over SSH it copies `deploy/staging/compose.yml` and `deploy/staging/deploy.sh` to the host and runs
    `deploy.sh <image>`: it sets `OMTS_IMAGE` in `/opt/omts/.env`, pulls, applies migrations with a plain
-   `seed --bootstrap` (retried while the Azure SQL serverless database resumes), restarts the API and waits for
+   `seed --bootstrap` (retried while the database starts or, on Azure SQL serverless, resumes), restarts the API and waits for
    `/health/db`. A failure, or the run being cancelled or cut off, brings back the last compose file that passed and
    the image that ran before, checks the API again, and the run turns red. Seed and API output go to
    `/opt/omts/deploy.log` on the host, not to the public Actions log.
@@ -223,16 +225,33 @@ A CI run that is no longer the tip of `develop` (a newer push, or a re-run of an
   the server. Secrets stay in the server's `.env` (never in the repository); the API listens on `127.0.0.1:8080` only,
   behind nginx.
 - **CloudFront origin:** CloudFront adds a secret `X-Origin-Verify` header and the origin proxies to the API only the
-  requests that carry it. On EC2 that is the host nginx on port 80. On a host whose ports 80/443 belong to another
-  project (the Vietnamese VPS), set `COMPOSE_PROFILES=origin-front`, `ORIGIN_VERIFY_SECRET` (32+ letters and digits,
+  requests that carry it. A host with its own nginx on port 80 can do that check itself (the former EC2 host did). On
+  a host whose ports 80/443 belong to another project (the Vietnamese VPS), set `COMPOSE_PROFILES=origin-front`, `ORIGIN_VERIFY_SECRET` (32+ letters and digits,
   e.g. `openssl rand -hex 32`, the same value as the CloudFront origin header) and optionally `ORIGIN_PORT` (default
   8088) in `.env`: the `front` service (nginx) then publishes that port and answers 403 without the header. Docker-
   published ports bypass ufw, so the header is the only guard of that port: rotate it in `.env` and in CloudFront
   together, then `docker compose up -d --force-recreate front`. A bad secret makes `front` exit in a loop while the
   deploy still passes (it checks the API directly): `docker compose logs front` says why.
 - **Memory:** every long-running staging service has a memory cap with no extra swap (`api` 512 MB, `redis` 160 MB,
-  `front` 64 MB), `oom_score_adj: 500` and rotated logs (3 × 10 MB), so on a shared host the kernel stops OMTS before
-  the other project and OMTS logs cannot fill the disk.
+  `front` 64 MB, `mssql` 2200 MB), a raised `oom_score_adj` (500; `mssql` 300) and rotated logs (3 × 10 MB), so on a
+  shared host the kernel stops OMTS before the other project and OMTS logs cannot fill the disk.
+- **Database on the host (profile `localdb`):** add `localdb` to `COMPOSE_PROFILES` and set `MSSQL_SA_PASSWORD`
+  (unquoted, no `$`, 3 of upper/lower/digit/symbol, e.g. `openssl rand -base64 24`); the `mssql` service (SQL Server
+  2022 Express, same collation as Azure) then runs next to the API, which waits for it, and `OMTS_DB_CONNECTION` names
+  `Server=mssql;Database=OMTS;...;TrustServerCertificate=True`. Its port is bound to `127.0.0.1:1433` only (reach it
+  through an SSH tunnel). The container needs a 2 GB memory limit to start; `MSSQL_MEMORY_LIMIT_MB` (default 1024) is
+  what SQL Server really uses. Express caps a database at 10 GB. A new database must be filled before the first
+  deploy (a bacpac import, or `docker compose --profile bootstrap run --rm seed`): a plain `seed --bootstrap` applies
+  the migrations and then refuses an empty database without the bootstrap secrets. The backup sets the database to
+  SIMPLE recovery (only full backups are taken; a FULL-recovery log would grow until the disk is full).
+- **Nightly backup (`deploy/staging/backup-db.sh`, copied by every deploy):** full `BACKUP ... WITH CHECKSUM`, gzip,
+  upload to `BACKUP_S3_URI` with the `BACKUP_AWS_*` key from `.env` (values unquoted), the newest 3 kept in
+  `/opt/omts/backups`. Give that key `s3:PutObject` on the prefix only; bucket versioning keeps an overwritten object,
+  and lifecycle rules expire old copies and abort unfinished uploads. Run by the host cron
+  (`/etc/cron.d/omts-db-backup`); a failure leaves `/opt/omts/backup.failed` (the next deploy warns about it) and the
+  error in `/opt/omts/backup.log`. Restore check: gunzip, `docker cp` into any SQL Server 2022 container,
+  `RESTORE VERIFYONLY ... WITH CHECKSUM`, `RESTORE FILELISTONLY` for the logical names, then
+  `RESTORE DATABASE ... WITH MOVE '<data>' TO ..., MOVE '<log>' TO ...`.
 - **Secrets of the `staging` environment** (repository admin; only `develop` may use them): `STAGING_SSH_HOST`,
   `STAGING_SSH_USER`, `STAGING_SSH_KEY` (a key used for deploys only) and `STAGING_SSH_KNOWN_HOSTS` (the host key line).
 - The GHCR package must be public: the host pulls without logging in. GHCR makes a new package private, so the very
