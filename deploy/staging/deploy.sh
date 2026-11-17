@@ -46,6 +46,10 @@ main() {
   trap 'rollback "interrupted"' HUP INT TERM
 
   log "deploying $image (previous: ${PREVIOUS_IMAGE:-none}); details in $LOG on the host"
+  # Left by backup-db.sh when the last nightly database backup failed: nobody reads the host, everyone reads this log.
+  if [ -f "$dir/backup.failed" ]; then
+    log "WARNING: the last database backup failed, see $dir/backup.log on the host"
+  fi
   echo "===== $(date -u +%FT%TZ) deploy $image" >> "$LOG"
 
   if [ -f compose.next.yml ]; then

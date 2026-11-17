@@ -72,7 +72,9 @@ services:
       ACCEPT_EULA: "Y"
       MSSQL_PID: Express
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-}
-      MSSQL_MEMORY_LIMIT_MB: ${MSSQL_MEMORY_LIMIT_MB:-1536}
+      # 1024 leaves room for the API on a ~3 GB host (Express caps its buffer pool near 1410 MB anyway); raise it
+      # only after watching docker stats.
+      MSSQL_MEMORY_LIMIT_MB: ${MSSQL_MEMORY_LIMIT_MB:-1024}
       MSSQL_COLLATION: SQL_Latin1_General_CP1_CI_AS
     ports:
       - "127.0.0.1:1433:1433"
@@ -149,6 +151,10 @@ services:
     image: ${OMTS_IMAGE:?Set OMTS_IMAGE in .env}
     profiles: ["bootstrap"]
     command: ["seed", "--bootstrap", "--demo"]
+    depends_on:
+      mssql:
+        condition: service_healthy
+        required: false
     environment:
       <<: *api-environment
       Bootstrap__Cooperative__FullName: ${BOOTSTRAP_COOPERATIVE_NAME:-}
