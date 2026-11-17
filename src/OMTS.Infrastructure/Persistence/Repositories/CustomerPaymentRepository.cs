@@ -77,16 +77,27 @@ internal sealed class CustomerPaymentRepository(OmtsDbContext db) : ICustomerPay
     }
 
     public async Task<(IReadOnlyList<CustomerPayment> Items, int Total, decimal TotalAmount)> AwaitingConfirmationAsync(
-        int page, int pageSize, CancellationToken cancellationToken)
+        int page, int pageSize, DateTimeOffset? paidBefore, CancellationToken cancellationToken)
     {
         var awaiting = db.CustomerPayments.AsNoTracking().Where(p => p.StatusId == StatusIds.CustomerPayment.AwaitingConfirmation);
-        var total = await awaiting.CountAsync(cancellationToken);
-        var amount = total == 0 ? 0m : await awaiting.SumAsync(p => p.Amount, cancellationToken);
-        var items = await With(awaiting)
+        var amount = await awaiting.SumAsync(p => (decimal?)p.Amount, cancellationToken) ?? 0m;
+        var listed = paidBefore is { } before ? awaiting.Where(p => p.PaidAt < before) : awaiting;
+        var total = await listed.CountAsync(cancellationToken);
+        var items = await With(listed)
             .OrderBy(p => p.PaymentDate).ThenBy(p => p.Code)
             .Skip((page - 1) * pageSize).Take(pageSize)
             .ToListAsync(cancellationToken);
         return (items, total, amount);
+    }
+
+    public async Task<AwaitingCashSummary> AwaitingCashOfAsync(Guid collectorAccountId, DateTimeOffset overdueBefore, CancellationToken cancellationToken)
+    {
+        var cash = db.CustomerPayments.AsNoTracking().Where(p =>
+            p.StatusId == StatusIds.CustomerPayment.AwaitingConfirmation && p.Method == CustomerPaymentMethod.Cash && p.Kind == CustomerPaymentKind.Payment && p.CollectedByAccountId == collectorAccountId);
+        var summary = await cash.GroupBy(_ => 1)
+            .Select(g => new { Count = g.Count(), Overdue = g.Count(p => p.PaidAt < overdueBefore), Amount = g.Sum(p => p.Amount), Oldest = g.Min(p => p.PaidAt) })
+            .FirstOrDefaultAsync(cancellationToken);
+        return summary is null ? new AwaitingCashSummary(0, 0, 0m, null) : new AwaitingCashSummary(summary.Count, summary.Overdue, summary.Amount, summary.Oldest);
     }
 
     public Task<bool> HasMoneyPaidBackAsync(Guid paymentId, CancellationToken cancellationToken) =>
