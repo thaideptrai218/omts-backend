@@ -10,8 +10,10 @@ using OMTS.Application.Features.Authorization;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Files;
+using OMTS.Application.Features.Workforce;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
+using OMTS.Domain.Entities.Identity;
 
 namespace OMTS.Application.Features.Cultivation.Nursery;
 
@@ -28,6 +30,8 @@ public sealed class NurseryBatchEditService(
     UploadedFileSaver fileSaver,
     NurseryBatchViews views,
     NurseryNotifier notifier,
+    RecordCrewService crews,
+    RecordCrewAssignmentService crewAssignments,
     ZoneAccessGuard zoneAccess,
     RowVersionGuard rowVersions,
     AuditLogService audit,
@@ -57,6 +61,12 @@ public sealed class NurseryBatchEditService(
             return check.ToError();
         }
 
+        var (crew, crewError) = await crews.ReadAsync(request.Crew, request.CrewUnreadable, cancellationToken);
+        if (crewError is not null)
+        {
+            return crewError;
+        }
+
         var keep = (request.KeepPhotoIds ?? []).ToHashSet();
         var kept = request.ReplacePhotos ? batch.Photos.Where(p => p.Phase == NurseryPhotoPhase.Start && keep.Contains(p.Id)).ToList() : batch.Photos.Where(p => p.Phase == NurseryPhotoPhase.Start).ToList();
         var files = StepPhotoService.Read(request.ReplacePhotos ? newPhotos : [], kept.Count, request.OtherFilePart, kept.Count == keep.Count || !request.ReplacePhotos);
@@ -77,6 +87,7 @@ public sealed class NurseryBatchEditService(
         }
 
         var removed = new List<string>();
+        IReadOnlyList<Employee> crewAdded = [];
         var applied = await photoStore.PrepareSaveAsync<NurseryBatch>(uploaded.Value!, async () =>
         {
             var before = NurseryValues.Snapshot(batch);
@@ -92,12 +103,14 @@ public sealed class NurseryBatchEditService(
                 return stockRefused;
             }
 
+            var crewChange = crew is null ? null : crews.Apply(batch.Crew, crew, e => new NurseryRecordEmployee { NurseryBatchId = batch.Id, EmployeeId = e.Id, Employee = e });
+            crewAdded = crewChange?.Added ?? [];
             var (changedBefore, changedAfter) = AuditDiff.Changed(before, NurseryValues.Snapshot(batch));
-            if (changedAfter is not null || request.ReplacePhotos)
+            if (changedAfter is not null || request.ReplacePhotos || crewChange?.Changed == true)
             {
                 unitOfWork.MarkChanged(batch);
                 unitOfWork.MarkChanged(lot.Receipt);
-                audit.Record(NurseryValues.Entry(NurseryValues.Edited, batch) with { Before = changedBefore, After = changedAfter ?? new JsonObject { ["Photos"] = "Đã đổi ảnh" } });
+                audit.Record(NurseryValues.Entry(NurseryValues.Edited, batch) with { Before = changedBefore, After = changedAfter ?? new JsonObject { [request.ReplacePhotos ? "Photos" : "Crew"] = request.ReplacePhotos ? "Đã đổi ảnh" : "Đã đổi nhân viên" } });
                 await notifier.EditedAsync(batch, Actor, cancellationToken);
             }
 
@@ -110,7 +123,12 @@ public sealed class NurseryBatchEditService(
 
         await fileSaver.SaveAsync(uploaded.Value!, removed, cancellationToken);
         var saved = UserMessages.Saved("Nursery batch");
-        return new NurseryBatchSaved(await views.ViewAsync(batch, cancellationToken), saved.Text, saved.Code);
+        var view = await views.ViewAsync(batch, cancellationToken);
+        // A separate step after the save: the edit stays saved whatever the assignment does.
+        var assignment = crewAdded.Count == 0
+            ? null
+            : await crewAssignments.AssignAsync(batch.StartDate, batch.ZoneId, null, RecordCrewJobs.Nursery, crewAdded, cancellationToken);
+        return new NurseryBatchSaved(view, saved.Text, saved.Code, assignment);
     }
 
     public async Task<Result<NurseryBatchSaved>> CancelAsync(Guid batchId, CancelNurseryRequest request, CancellationToken cancellationToken)

@@ -12,6 +12,8 @@ using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Farming.Rafts;
 using OMTS.Application.Features.Files;
 using OMTS.Application.Features.Sales.PurchaseRequests;
+using OMTS.Application.Features.Workforce;
+using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
@@ -43,7 +45,8 @@ public sealed class HarvestLotRecordingService(
     UploadedFileSaver fileSaver,
     HarvestLotNotifier notifier,
     HarvestLotViews views,
-    HarvestCrewService crews,
+    RecordCrewService crews,
+    RecordCrewAssignmentService crewAssignments,
     ZoneAccessGuard zoneAccess,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
@@ -54,7 +57,7 @@ public sealed class HarvestLotRecordingService(
 
     private sealed record OpenRaft(CultivationCycle Cycle, IReadOnlyDictionary<Guid, LaneState> States, decimal KgPerCage);
 
-    private sealed record PreparedLot(HarvestLot Lot, CultivationCycle Cycle, Raft Raft, bool EverySeededLaneHarvested, int? OrderCagesTotal, decimal OrderCagesHarvested);
+    private sealed record PreparedLot(HarvestLot Lot, CultivationCycle Cycle, Raft Raft, bool EverySeededLaneHarvested, int? OrderCagesTotal, decimal OrderCagesHarvested, IReadOnlyList<Employee> CrewAdded);
 
     public async Task<Result<HarvestLotSaved>> RecordAsync(Guid raftId, RecordHarvestRequest request, IReadOnlyList<IncomingFile> photos, CancellationToken cancellationToken)
     {
@@ -178,7 +181,9 @@ public sealed class HarvestLotRecordingService(
                 HarvestQuantityRules.KgWarnings(done.Lot.CageCount, done.Lot.KgPerCage, done.Lot.EstimatedKg),
                 done.OrderCagesTotal,
                 done.OrderCagesHarvested,
-                HarvestOrderCages.Reached(done.OrderCagesTotal, done.OrderCagesHarvested));
+                HarvestOrderCages.Reached(done.OrderCagesTotal, done.OrderCagesHarvested),
+                // A separate step after the save: the lot stays saved whatever the assignment does.
+                done.CrewAdded.Count == 0 ? null : await crewAssignments.AssignAsync(done.Lot.HarvestDate, done.Raft.ZoneId, done.Raft.Id, RecordCrewJobs.Harvest, done.CrewAdded, cancellationToken));
         }
     }
 
@@ -257,10 +262,7 @@ public sealed class HarvestLotRecordingService(
             Photos = keys.Select((key, index) => new HarvestLotPhoto { SortOrder = index + 1, FileKey = key }).ToList(),
         };
         lots.Add(lot);
-        if (crew is not null)
-        {
-            crews.Apply(lot, crew);
-        }
+        var crewAdded = crew is null ? [] : crews.Apply(lot.Crew, crew, e => new HarvestRecordEmployee { LotId = lot.Id, EmployeeId = e.Id, Employee = e }).Added;
 
         // The lane states depend on the cycle row: a parallel lot, close, cancel or seeding correction read it before this lot, so one of them fails with MSG06.
         unitOfWork.MarkChanged(cycle);
@@ -278,7 +280,7 @@ public sealed class HarvestLotRecordingService(
             await notifier.CloseReminderAsync(cycle, raft, recorder, cancellationToken);
         }
 
-        return new PreparedLot(lot, cycle, raft, everyHarvested, order.AcceptedCages, harvestedBefore + lot.CageCount);
+        return new PreparedLot(lot, cycle, raft, everyHarvested, order.AcceptedCages, harvestedBefore + lot.CageCount, crewAdded);
     }
 
     /// <summary>The cages of the lots already recorded for the request, on every raft.</summary>

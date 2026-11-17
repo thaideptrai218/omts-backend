@@ -10,9 +10,12 @@ namespace OMTS.Application.Features.Cultivation.Seeding;
 /// <param name="LanePercents">The share of each lane the session hangs (lane number to percent, owner decision of 12/11/2026); a lane left out takes 100. Null when none was sent.</param>
 /// <param name="LanePercentsUnreadable"><c>lanePercents</c> was sent but is not a JSON object of numbers: refused on <c>LanePercent</c>.</param>
 /// <param name="OtherFilePart">A file came in a part not named <c>photos</c>: refused, so no photo is dropped without a word.</param>
+/// <param name="Crew">The employees who worked on the session (decision of 17/11/2026), optional: null when none was sent (a correction then leaves the crew as it is); an empty list clears it.</param>
+/// <param name="CrewUnreadable">An id was sent that is not a GUID.</param>
 public sealed record RecordSeedingRequest(
     DateOnly? SeedingDate, Guid? SeedLotId, IReadOnlyList<int>? LaneNumbers, decimal? Quantity, bool ConfirmOverPlan = false, string? OverPlanReason = null,
-    IReadOnlyDictionary<int, decimal>? LanePercents = null, bool LanePercentsUnreadable = false, bool OtherFilePart = false);
+    IReadOnlyDictionary<int, decimal>? LanePercents = null, bool LanePercentsUnreadable = false, bool OtherFilePart = false,
+    IReadOnlyList<Guid>? Crew = null, bool CrewUnreadable = false);
 
 /// <summary>
 /// CYCLE-02.2: the session as it should be, with the reason and the version read (NFR-09). <paramref name="ChangesPhotos"/> is true when the form sent <c>keepPhotoIds</c> or <c>photos</c>: the photos then become exactly the ones
@@ -20,7 +23,8 @@ public sealed record RecordSeedingRequest(
 /// </summary>
 public sealed record CorrectSeedingRequest(
     DateOnly? SeedingDate, Guid? SeedLotId, IReadOnlyList<int>? LaneNumbers, decimal? Quantity, string? Reason, string? RowVersion, bool ConfirmOverPlan = false, string? OverPlanReason = null,
-    IReadOnlyDictionary<int, decimal>? LanePercents = null, bool LanePercentsUnreadable = false, bool OtherFilePart = false, bool ChangesPhotos = false, IReadOnlyList<Guid>? KeepPhotoIds = null);
+    IReadOnlyDictionary<int, decimal>? LanePercents = null, bool LanePercentsUnreadable = false, bool OtherFilePart = false, bool ChangesPhotos = false, IReadOnlyList<Guid>? KeepPhotoIds = null,
+    IReadOnlyList<Guid>? Crew = null, bool CrewUnreadable = false);
 
 /// <summary>A photo of a session: <paramref name="Url"/> is a signed link that expires.</summary>
 public sealed record SeedingPhotoView(Guid Id, int SortOrder, string Url);
@@ -79,14 +83,17 @@ public sealed record SeedingRecordView(
     string? IssueCode = null,
     string? OverPlanReason = null,
     IReadOnlyList<SeedingPhotoView>? Photos = null,
-    IReadOnlyList<SeedingLanePercentView>? LanePercents = null);
+    IReadOnlyList<SeedingLanePercentView>? LanePercents = null,
+    IReadOnlyList<Workforce.CrewMemberView>? Crew = null);
 
 /// <summary>Answer of a saved session.</summary>
 /// <param name="OfferMarkComplete">No lane In Use is left Not seeded and the seeding is not yet marked complete (CYCLE-02.0 step 7).</param>
 /// <param name="CycleRowVersion">The new version of the cycle, as every session moves it: send it to mark the seeding complete.</param>
 /// <param name="Message">MSG-GEN-05 "Seeding session saved.".</param>
 /// <param name="MessageCode">The code of <paramref name="Message"/>.</param>
-public sealed record SeedingRecordSaved(SeedingRecordView Record, bool OfferMarkComplete, string CycleRowVersion, string Message, string MessageCode);
+/// <param name="CrewAssignment">The automatic work assignment of the employees newly named by this save (decision of 17/11/2026); null when none was added.</param>
+public sealed record SeedingRecordSaved(
+    SeedingRecordView Record, bool OfferMarkComplete, string CycleRowVersion, string Message, string MessageCode, Workforce.CrewAssignmentResult? CrewAssignment = null);
 
 /// <summary>A lane on the Seeding screen.</summary>
 /// <param name="CanSeed">The lane can be chosen for a new session now (BR-CYCLE-02): not damaged and not out of service (decision of 12/11/2026).</param>

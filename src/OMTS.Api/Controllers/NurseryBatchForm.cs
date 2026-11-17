@@ -28,20 +28,28 @@ public sealed class NurseryBatchForm
     /// <summary>When editing: one field per start photo to keep (its id); a photo left out is removed. Sending this or <c>photos</c> replaces the photos.</summary>
     public string?[]? KeepPhotoIds { get; set; }
 
+    /// <summary>The employees who worked on it (decision of 17/11/2026): one field per employee id, none is fine. Not sent when editing: the crew stays, unless <see cref="ReplaceCrew"/> is true.</summary>
+    public string?[]? Crew { get; set; }
+
+    /// <summary>Send true to make the crew exactly the <c>crew</c> fields, none meaning an empty crew: a form cannot send an empty list, so this is how a crew is cleared.</summary>
+    public bool ReplaceCrew { get; set; }
+
     /// <summary>One part per photo, 1 to 3 when starting or completing: JPEG or PNG, at most 10 MB each.</summary>
     public List<IFormFile>? Photos { get; set; }
 
     public StartNurseryRequest ToStart(bool otherFilePart)
     {
         FormNumbers.TryDecimal(Quantity, out var quantity);
-        return new StartNurseryRequest(Guid.TryParse(SeedLotId, out var lot) ? lot : null, quantity, Date(StartDate), Note, otherFilePart);
+        var crew = FormNumbers.Crew(Crew, ReplaceCrew, out var crewUnreadable);
+        return new StartNurseryRequest(Guid.TryParse(SeedLotId, out var lot) ? lot : null, quantity, Date(StartDate), Note, otherFilePart, crew, crewUnreadable);
     }
 
     public EditNurseryRequest ToEdit(bool otherFilePart)
     {
         FormNumbers.TryDecimal(Quantity, out var quantity);
         var keep = KeepPhotoIds?.Select(k => Guid.TryParse(k, out var id) ? id : Guid.Empty).ToList();
-        return new EditNurseryRequest(quantity, Date(StartDate), Note, RowVersion, keep is not null || Photos is { Count: > 0 }, keep, otherFilePart);
+        var crew = FormNumbers.Crew(Crew, ReplaceCrew, out var crewUnreadable);
+        return new EditNurseryRequest(quantity, Date(StartDate), Note, RowVersion, keep is not null || Photos is { Count: > 0 }, keep, otherFilePart, crew, crewUnreadable);
     }
 
     public CompleteNurseryRequest ToComplete(bool otherFilePart)

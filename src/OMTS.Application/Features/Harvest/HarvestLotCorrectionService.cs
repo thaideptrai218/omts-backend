@@ -7,6 +7,7 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Files;
+using OMTS.Application.Features.Workforce;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Harvest;
 
@@ -25,7 +26,8 @@ public sealed class HarvestLotCorrectionService(
     RowVersionGuard rowVersions,
     HarvestLotNotifier notifier,
     HarvestLotViews views,
-    HarvestCrewService crews,
+    RecordCrewService crews,
+    RecordCrewAssignmentService crewAssignments,
     LanePercentGuard percents,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
@@ -36,7 +38,7 @@ public sealed class HarvestLotCorrectionService(
         HarvestLot Lot, Raft Raft, HarvestLotFields Fields, HarvestLotLaneFacts Facts, List<HarvestLotPhoto> Kept, IReadOnlyList<ValidatedFile> Files, IReadOnlyList<Domain.Entities.Identity.Employee>? Crew,
         IReadOnlyDictionary<Guid, decimal?> Shares);
 
-    private sealed record Applied(HarvestLot Lot, Raft Raft, List<string> RemovedKeys, bool Changed, bool EveryHarvested);
+    private sealed record Applied(HarvestLot Lot, Raft Raft, List<string> RemovedKeys, bool Changed, bool EveryHarvested, IReadOnlyList<Domain.Entities.Identity.Employee> CrewAdded);
 
     public async Task<Result<HarvestLotSaved>> CorrectAsync(Guid lotId, CorrectHarvestLotRequest request, IReadOnlyList<IncomingFile> newPhotos, CancellationToken cancellationToken)
     {
@@ -71,7 +73,8 @@ public sealed class HarvestLotCorrectionService(
         }
 
         var saved = UserMessages.Saved("Harvest lot");
-        return new HarvestLotSaved(await views.ViewAsync(done.Lot, done.Raft, cancellationToken), done.EveryHarvested, RowVersionGuard.Encode(done.Lot.Cycle.RowVersion), saved.Text, saved.Code, HarvestQuantityRules.KgWarnings(done.Lot.CageCount, done.Lot.KgPerCage, done.Lot.EstimatedKg));
+        return new HarvestLotSaved(await views.ViewAsync(done.Lot, done.Raft, cancellationToken), done.EveryHarvested, RowVersionGuard.Encode(done.Lot.Cycle.RowVersion), saved.Text, saved.Code, HarvestQuantityRules.KgWarnings(done.Lot.CageCount, done.Lot.KgPerCage, done.Lot.EstimatedKg),
+            CrewAssignment: done.CrewAdded.Count == 0 ? null : await crewAssignments.AssignAsync(done.Lot.HarvestDate, done.Raft.ZoneId, done.Raft.Id, RecordCrewJobs.Harvest, done.CrewAdded, cancellationToken));
     }
 
     /// <summary>
@@ -163,16 +166,13 @@ public sealed class HarvestLotCorrectionService(
         var before = HarvestLotAudit.Snapshot(lot, alwaysNameCrew: true);
         (lot.CageCount, lot.EstimatedKg) = (fields.CageCount, fields.EstimatedKg);
         HarvestLotCorrectionRows.ApplyLanes(lots, lot, fields, shares);
-        if (crew is not null)
-        {
-            crews.Apply(lot, crew);
-        }
+        var crewAdded = crew is null ? [] : crews.Apply(lot.Crew, crew, e => new HarvestRecordEmployee { LotId = lot.Id, EmployeeId = e.Id, Employee = e }).Added;
 
         var removedKeys = HarvestLotCorrectionRows.ApplyPhotos(lots, lot, kept, newKeys);
         var (changedBefore, changedAfter) = AuditDiff.Changed(before, HarvestLotAudit.Snapshot(lot, alwaysNameCrew: true));
         if (changedAfter is null)
         {
-            return new Applied(lot, raft, removedKeys, false, everyAfter);
+            return new Applied(lot, raft, removedKeys, false, everyAfter, crewAdded);
         }
 
         // Lanes and photos are rows of their own: a change of them only must still give the lot a new version.
@@ -180,7 +180,7 @@ public sealed class HarvestLotCorrectionService(
         unitOfWork.MarkChanged(lot.Cycle);
         audit.Record(HarvestLotAudit.Entry(HarvestLotAudit.Corrected, lot, raft.ZoneId) with { Before = changedBefore, After = HarvestLotAudit.WithAffectedPublishedLot(changedAfter, lot), Reason = request.Reason!.Trim() });
         await RemindAsync(lot, raft, takesALaneBack, !everyBefore && everyAfter, cancellationToken);
-        return new Applied(lot, raft, removedKeys, true, everyAfter);
+        return new Applied(lot, raft, removedKeys, true, everyAfter, crewAdded);
     }
 
     /// <summary>

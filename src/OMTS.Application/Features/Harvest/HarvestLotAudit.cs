@@ -39,7 +39,7 @@ public static class HarvestLotAudit
                 lot.EstimatedKg,
                 lot.OverPlanReason,
                 Photos = lot.Photos.OrderBy(p => p.SortOrder).Select(p => p.FileKey).ToList(),
-                Crew = HarvestCrewService.AuditNames(lot),
+                Crew = Workforce.RecordCrewService.AuditNames(lot.Crew),
             }
             : new
             {

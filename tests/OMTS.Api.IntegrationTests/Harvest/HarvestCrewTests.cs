@@ -51,7 +51,7 @@ public class HarvestCrewTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
         Assert.Equal(2, read.GetProperty("crew").GetArrayLength());
         var listed = (await owner.HarvestScreenAsync(raft.RaftId)).GetProperty("lots").EnumerateArray().Single();
         Assert.Equal(["An", "Hoa"], listed.GetProperty("crew").EnumerateArray().Select(c => c.Text("name")).ToList());
-        Assert.Equal(2, await factory.QueryAsync(db => db.HarvestLotCrew.CountAsync(c => c.LotId == lot.Id())));
+        Assert.Equal(2, await factory.QueryAsync(db => db.HarvestRecordEmployees.CountAsync(c => c.LotId == lot.Id())));
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public class HarvestCrewTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
 
         var cleared = await factory.CorrectLotAsync(owner, lot.Id(), new HarvestFields { Cages = "9", ReplaceCrew = true });
         Assert.Equal(0, cleared.GetProperty("lot").GetProperty("crew").GetArrayLength());
-        Assert.Equal(0, await factory.QueryAsync(db => db.HarvestLotCrew.CountAsync(c => c.LotId == lot.Id())));
+        Assert.Equal(0, await factory.QueryAsync(db => db.HarvestRecordEmployees.CountAsync(c => c.LotId == lot.Id())));
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public class HarvestCrewTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
 
         Assert.Equal(1, lotA.GetProperty("crew").GetArrayLength());
         Assert.Equal(1, lotB.GetProperty("crew").GetArrayLength());
-        Assert.Equal(2, await factory.QueryAsync(db => db.HarvestLotCrew.CountAsync(c => c.EmployeeId == hoa.Id)));
+        Assert.Equal(2, await factory.QueryAsync(db => db.HarvestRecordEmployees.CountAsync(c => c.EmployeeId == hoa.Id)));
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public class HarvestCrewTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
 
         await factory.RemoveLotAsync(owner, lot.Id());
 
-        Assert.Equal(0, await factory.QueryAsync(db => db.HarvestLotCrew.CountAsync(c => c.LotId == lot.Id())));
+        Assert.Equal(0, await factory.QueryAsync(db => db.HarvestRecordEmployees.CountAsync(c => c.LotId == lot.Id())));
         Assert.Equal(1, await factory.QueryAsync(db => db.Employees.CountAsync(e => e.Id == hoa.Id)));
     }
 
@@ -180,7 +180,7 @@ public class HarvestCrewTests(AuthApiFactory factory) : IClassFixture<AuthApiFac
             db.JobTypes.Add(job);
             foreach (var (employee, raftId) in new[] { (hoa, raft.RaftId), (an, raft.RaftId), (left, raft.RaftId), (elsewhere, otherRaft) })
             {
-                db.WorkAssignments.Add(new WorkAssignment { EmployeeId = employee.Id, RaftId = raftId, JobTypeId = job.Id, Date = Today, AssignedByAccountId = recorder });
+                db.WorkAssignments.Add(new WorkAssignment { EmployeeId = employee.Id, RaftId = raftId, ZoneId = raft.ZoneId, JobTypeId = job.Id, Date = Today, AssignedByAccountId = recorder });
             }
         });
 

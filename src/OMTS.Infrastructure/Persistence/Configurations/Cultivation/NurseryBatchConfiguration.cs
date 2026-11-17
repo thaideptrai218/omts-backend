@@ -61,3 +61,15 @@ internal sealed class NurseryBatchPhotoConfiguration : IEntityTypeConfiguration<
         builder.ToTable(t => t.HasCheckConstraint("CK_NurseryBatchPhoto_SortOrder", $"[SortOrder] BETWEEN 1 AND {NurseryBatch.MaxPhotos}"));
     }
 }
+
+internal sealed class NurseryRecordEmployeeConfiguration : IEntityTypeConfiguration<NurseryRecordEmployee>
+{
+    public void Configure(EntityTypeBuilder<NurseryRecordEmployee> builder)
+    {
+        // One row per employee on the batch (decision of 17/11/2026); the table holds nothing else.
+        builder.HasKey(x => new { x.NurseryBatchId, x.EmployeeId });
+        builder.HasOne(x => x.NurseryBatch).WithMany(b => b.Crew).HasForeignKey(x => x.NurseryBatchId);
+        builder.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(x => x.EmployeeId);
+    }
+}

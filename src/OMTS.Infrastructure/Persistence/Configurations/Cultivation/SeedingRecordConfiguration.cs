@@ -77,3 +77,15 @@ internal sealed class LaneProgressChangeConfiguration : IEntityTypeConfiguration
         builder.HasIndex(x => new { x.CycleId, x.LaneId, x.OccurredAt });
     }
 }
+
+internal sealed class SeedingRecordEmployeeConfiguration : IEntityTypeConfiguration<SeedingRecordEmployee>
+{
+    public void Configure(EntityTypeBuilder<SeedingRecordEmployee> builder)
+    {
+        // One row per employee on the session (decision of 17/11/2026); the table holds nothing else.
+        builder.HasKey(x => new { x.SeedingRecordId, x.EmployeeId });
+        builder.HasOne(x => x.SeedingRecord).WithMany(r => r.Crew).HasForeignKey(x => x.SeedingRecordId);
+        builder.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(x => x.EmployeeId);
+    }
+}

@@ -66,9 +66,9 @@ internal sealed class HarvestLotPhotoConfiguration : IEntityTypeConfiguration<Ha
     }
 }
 
-internal sealed class HarvestLotCrewMemberConfiguration : IEntityTypeConfiguration<HarvestLotCrewMember>
+internal sealed class HarvestRecordEmployeeConfiguration : IEntityTypeConfiguration<HarvestRecordEmployee>
 {
-    public void Configure(EntityTypeBuilder<HarvestLotCrewMember> builder)
+    public void Configure(EntityTypeBuilder<HarvestRecordEmployee> builder)
     {
         // One row per employee on the lot; the same employee may be on lots of other rafts the same day (decision of 12/11/2026).
         builder.HasKey(x => new { x.LotId, x.EmployeeId });
