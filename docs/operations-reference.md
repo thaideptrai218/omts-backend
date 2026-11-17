@@ -222,6 +222,17 @@ A CI run that is no longer the tip of `develop` (a newer push, or a re-run of an
 - **Configuration:** edit `deploy/staging/compose.yml` here, through a pull request. Each deploy overwrites the copy on
   the server. Secrets stay in the server's `.env` (never in the repository); the API listens on `127.0.0.1:8080` only,
   behind nginx.
+- **CloudFront origin:** CloudFront adds a secret `X-Origin-Verify` header and the origin proxies to the API only the
+  requests that carry it. On EC2 that is the host nginx on port 80. On a host whose ports 80/443 belong to another
+  project (the Vietnamese VPS), set `COMPOSE_PROFILES=origin-front`, `ORIGIN_VERIFY_SECRET` (32+ letters and digits,
+  e.g. `openssl rand -hex 32`, the same value as the CloudFront origin header) and optionally `ORIGIN_PORT` (default
+  8088) in `.env`: the `front` service (nginx) then publishes that port and answers 403 without the header. Docker-
+  published ports bypass ufw, so the header is the only guard of that port: rotate it in `.env` and in CloudFront
+  together, then `docker compose up -d --force-recreate front`. A bad secret makes `front` exit in a loop while the
+  deploy still passes (it checks the API directly): `docker compose logs front` says why.
+- **Memory:** every long-running staging service has a memory cap with no extra swap (`api` 512 MB, `redis` 160 MB,
+  `front` 64 MB), `oom_score_adj: 500` and rotated logs (3 × 10 MB), so on a shared host the kernel stops OMTS before
+  the other project and OMTS logs cannot fill the disk.
 - **Secrets of the `staging` environment** (repository admin; only `develop` may use them): `STAGING_SSH_HOST`,
   `STAGING_SSH_USER`, `STAGING_SSH_KEY` (a key used for deploys only) and `STAGING_SSH_KNOWN_HOSTS` (the host key line).
 - The GHCR package must be public: the host pulls without logging in. GHCR makes a new package private, so the very
