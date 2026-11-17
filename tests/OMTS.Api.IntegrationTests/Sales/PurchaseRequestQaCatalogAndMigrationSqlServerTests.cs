@@ -83,14 +83,16 @@ public class PurchaseRequestQaCatalogAndMigrationSqlServerTests
         Assert.Equal(
             // Awaiting staff is the staffing step before the response (decision of 31/10/2026); the SRS has to add it.
             [(3201, "AWAITING_RESPONSE", "Awaiting response", true, false), (3202, "ACCEPTED", "Accepted", false, false), (3203, "DECLINED", "Declined", false, true), (3204, "CANCELLED", "Cancelled", false, true),
-                (3205, "AWAITING_STAFF", "Awaiting staff confirmation", false, false)],
+                (3205, "AWAITING_STAFF", "Awaiting staff confirmation", false, false), (3206, "ORDERED", "Ordered", false, true)],
             statuses.Select(s => (s.Id, s.Code, s.DisplayName, s.IsInitial, s.IsFinal)).ToList());
 
         var ids = statuses.Select(s => s.Id).ToList();
         var transitions = await host.Api.DbAsync(db => db.StatusTransitions.AsNoTracking().Where(t => ids.Contains(t.FromStatusId) || ids.Contains(t.ToStatusId)).OrderBy(t => t.Id).ToListAsync());
         Assert.Equal(
             [(3201, 3202, "Cooperative Owner", false), (3201, 3203, "Cooperative Owner", true), (3201, 3204, "Trader", false), (3202, 3204, "Trader", false),
-                (3201, 3205, "Cooperative Owner", false), (3205, 3203, "Cooperative Owner", true), (3205, 3204, "Trader", false), (3205, 3202, "Cooperative Owner", false)],
+                (3201, 3205, "Cooperative Owner", false), (3205, 3203, "Cooperative Owner", true), (3205, 3204, "Trader", false), (3205, 3202, "Cooperative Owner", false),
+                // The Owner's order made from the request (sales orders).
+                (3201, 3206, "Cooperative Owner", false), (3202, 3206, "Cooperative Owner", false)],
             transitions.Select(t => (t.FromStatusId, t.ToStatusId, t.AllowedPerformers, t.ReasonRequired)).ToList());
     }
 
@@ -120,7 +122,7 @@ public class PurchaseRequestQaCatalogAndMigrationSqlServerTests
         await db.Database.MigrateAsync();
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
         Assert.False(db.Database.HasPendingModelChanges());
-        // Awaiting response, Accepted, Declined, Cancelled and Awaiting staff (cage orders, OMTS-223).
-        Assert.Equal(5, await db.Statuses.CountAsync(s => s.Group == StatusGroups.PurchaseRequest));
+        // Awaiting response, Accepted, Declined, Cancelled, Awaiting staff (cage orders, OMTS-223) and Ordered (sales orders).
+        Assert.Equal(6,await db.Statuses.CountAsync(s => s.Group == StatusGroups.PurchaseRequest));
     }
 }
