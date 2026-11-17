@@ -7,6 +7,7 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.Workforce;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Cultivation.Progress;
@@ -18,7 +19,7 @@ using OMTS.Domain.Entities.Harvest;
 namespace OMTS.Application.Features.Harvest;
 
 /// <summary>Body of "finish harvest" on many lanes. <c>RowVersion</c> is the cycle version the screen read; optional, as the single-lane call has none.</summary>
-public sealed record FinishLanesRequest(IReadOnlyList<int>? LaneNumbers, string? RowVersion);
+public sealed record FinishLanesRequest(IReadOnlyList<int>? LaneNumbers, string? RowVersion, bool OwnerApproved = false, string? ApprovalReason = null);
 
 /// <summary>One lane that blocks the whole call.</summary>
 public sealed record LaneFinishProblem(int LaneNumber, string ReasonCode, string Message);
@@ -42,6 +43,7 @@ public sealed class HarvestLanesFinishService(
     LaneStateReader laneStates,
     ILaneProgressRepository progress,
     HarvestLotNotifier notifier,
+    RecordCrewAttendance crewAttendance,
     ZoneAccessGuard zoneAccess,
     RowVersionGuard rowVersions,
     AuditLogService audit,
@@ -126,6 +128,13 @@ public sealed class HarvestLanesFinishService(
             return AppError.Conflict(
                 UserMessages.HarvestRefused($"Bè {raft.Code} chưa sẵn sàng: có làn chưa thể hoàn tất thu hoạch. Không có làn nào được lưu."),
                 new Dictionary<string, object?> { ["lanes"] = problems });
+        }
+
+        // Decision of 17/11/2026: the crew of the lots of the lanes to finish with work on their harvest day is checked out first (MSG-LABOR-37), or the Owner finishes with a reason.
+        var crew = await lots.ListCrewDaysAsync(toFinish.SelectMany(t => t.InLots.Select(l => l.LotId)).Distinct().ToList(), cancellationToken);
+        if (await crewAttendance.CheckCompletionAsync(crew, new CompletionApproval(request.OwnerApproved, request.ApprovalReason), new RecordRef(nameof(Raft), raft.Id, raft.Code, raft.ZoneId), cancellationToken) is { } openAttendance)
+        {
+            return openAttendance;
         }
 
         var after = new Dictionary<Guid, LaneState>(states);

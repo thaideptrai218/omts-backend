@@ -22,6 +22,8 @@ public sealed record NurseryFields
     public string? Note { get; init; }
     public string? RowVersion { get; init; }
     public IReadOnlyList<Guid>? KeepPhotoIds { get; init; }
+    public IReadOnlyList<Guid>? Crew { get; init; }
+    public bool ReplaceCrew { get; init; }
     public IReadOnlyList<byte[]> Photos { get; init; } = [FarmingTestKit.Jpeg];
 
     public MultipartFormDataContent ToForm()
@@ -45,6 +47,12 @@ public sealed record NurseryFields
             form.Add(new StringContent(id.ToString()), "keepPhotoIds");
         }
 
+        foreach (var id in Crew ?? [])
+        {
+            form.Add(new StringContent(id.ToString()), "crew");
+        }
+
+        Add(ReplaceCrew ? "true" : null, "replaceCrew");
         foreach (var photo in Photos)
         {
             form.Add(FarmingTestKit.FileContent(photo, "image/jpeg"), "photos", "nursery.jpg");
@@ -121,7 +129,7 @@ public static class NurseryTestKit
 
     /// <summary>The completion form of v2 (survivors, photos, date; no shares); the version is the one the test issued on the row, as the in-memory database issues none.</summary>
     public static async Task<HttpResponseMessage> PostCompleteAsync(
-        this HttpClient client, AuthApiFactory factory, Guid batchId, string? survivors, IReadOnlyList<byte[]>? photos = null, string? completedOn = null)
+        this HttpClient client, AuthApiFactory factory, Guid batchId, string? survivors, IReadOnlyList<byte[]>? photos = null, string? completedOn = null, bool ownerApproved = false, string? approvalReason = null)
     {
         var form = new MultipartFormDataContent
         {
@@ -135,6 +143,16 @@ public static class NurseryTestKit
         if (completedOn is not null)
         {
             form.Add(new StringContent(completedOn), "completedOn");
+        }
+
+        if (ownerApproved)
+        {
+            form.Add(new StringContent("true"), "ownerApproved");
+        }
+
+        if (approvalReason is not null)
+        {
+            form.Add(new StringContent(approvalReason), "approvalReason");
         }
 
         foreach (var photo in photos ?? [FarmingTestKit.Jpeg])

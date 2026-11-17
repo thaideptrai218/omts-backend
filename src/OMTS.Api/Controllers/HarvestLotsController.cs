@@ -53,7 +53,7 @@ public sealed class HarvestLotsController(
             Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, !estimatedIsRead, Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)),
             form.ConfirmOverPlan, form.OverPlanReason,
             Guid.TryParse(form.PurchaseRequestId, out var requestId) && requestId != Guid.Empty ? requestId : null,
-            ReadCrew(form.Crew, form.ReplaceCrew, out var crewUnreadable), crewUnreadable,
+            FormNumbers.Crew(form.Crew, form.ReplaceCrew, out var crewUnreadable), crewUnreadable,
             LanePercents(form.LanePercents, out var percentsUnreadable), percentsUnreadable,
             productLines, linesAreUnreadable, planLineId, planLineGiven && planLineId is null);
         return (await recording.RecordAsync(raftId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken))
@@ -69,41 +69,13 @@ public sealed class HarvestLotsController(
         (await crews.SuggestAsync(raftId, date, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>
-    /// The crew of the form: one <c>crew</c> field per employee id. Null when no field was sent (a correction then leaves the crew as it is) unless <c>replaceCrew</c> is true, which makes it an empty crew. An id that is not
-    /// a GUID is reported as unreadable, so it is refused instead of dropped.
-    /// </summary>
-    private static IReadOnlyList<Guid>? ReadCrew(string?[]? values, bool replace, out bool unreadable)
-    {
-        unreadable = false;
-        if (values is null)
-        {
-            return replace ? [] : null;
-        }
-
-        var ids = new List<Guid>(values.Length);
-        foreach (var value in values.Where(v => !string.IsNullOrWhiteSpace(v)))
-        {
-            if (Guid.TryParse(value, out var id) && id != Guid.Empty)
-            {
-                ids.Add(id);
-            }
-            else
-            {
-                unreadable = true;
-            }
-        }
-
-        return ids;
-    }
-
-    /// <summary>
     /// Marks a lane Being harvested as finished without editing a lot (PM decision 11/11/2026): same access as recording a harvest, audited. 200 with <c>changed: false</c> when the lane is already
     /// Harvested; 409 MSG-GEN-09 when it has no harvest lot to finish or the raft has no Open cycle. No body.
     /// </summary>
     [HttpPost("api/rafts/{raftId:guid}/lanes/{laneNumber:int}/finish-harvest")]
     [ProducesResponseType<LaneHarvestFinished>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> FinishLane(Guid raftId, int laneNumber, CancellationToken cancellationToken) =>
-        (await laneFinish.FinishAsync(raftId, laneNumber, cancellationToken)).ToActionResult(Ok);
+    public async Task<IActionResult> FinishLane(Guid raftId, int laneNumber, [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] FinishLaneRequest? request, CancellationToken cancellationToken) =>
+        (await laneFinish.FinishAsync(raftId, laneNumber, cancellationToken, request is null ? null : new OMTS.Application.Features.Workforce.CompletionApproval(request.OwnerApproved, request.ApprovalReason))).ToActionResult(Ok);
 
     /// <summary>
     /// Finishes several lanes in one transaction (owner decision 12/11/2026). Body <c>{ laneNumbers: [1..200 distinct], rowVersion? }</c>. 200 lists <c>finished</c> and <c>alreadyFinished</c>;
@@ -136,7 +108,7 @@ public sealed class HarvestLotsController(
         var (productLines, linesAreUnreadable) = ReadProductLines(form);
         var request = new CorrectHarvestLotRequest(
             Numbers(form.LaneNumbers), Numbers(form.FinishedLaneNumbers), cageCount, estimatedKg, form.KeepPhotoKeys, form.Reason, form.RowVersion, !estimatedIsRead,
-            Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)), form.ConfirmOverPlan, form.OverPlanReason, ReadCrew(form.Crew, form.ReplaceCrew, out var crewUnreadable), crewUnreadable,
+            Request.Form.Files.HasPartOtherThan(nameof(HarvestLotForm.Photos)), form.ConfirmOverPlan, form.OverPlanReason, FormNumbers.Crew(form.Crew, form.ReplaceCrew, out var crewUnreadable), crewUnreadable,
             LanePercents(form.LanePercents, out var percentsUnreadable), percentsUnreadable, productLines, linesAreUnreadable);
         return (await corrections.CorrectAsync(lotId, request, await form.Photos.ToIncomingFilesAsync(cancellationToken), cancellationToken)).ToActionResult(Ok);
     }

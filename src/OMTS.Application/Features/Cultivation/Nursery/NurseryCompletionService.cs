@@ -6,6 +6,7 @@ using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.Workforce;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Files;
@@ -25,6 +26,7 @@ public sealed class NurseryCompletionService(
     RecordPhotoStore photoStore,
     UploadedFileSaver fileSaver,
     NurseryBatchViews views,
+    RecordCrewAttendance crewAttendance,
     NurseryNotifier notifier,
     ZoneAccessGuard zoneAccess,
     RowVersionGuard rowVersions,
@@ -50,6 +52,14 @@ public sealed class NurseryCompletionService(
         if (!check.IsValid)
         {
             return check.ToError();
+        }
+
+        // Decision of 17/11/2026: the employees of the batch with work on the day it started are checked out first (MSG-LABOR-37), or the Owner completes with a reason.
+        if (await crewAttendance.CheckCompletionAsync(
+                batch.Crew.Select(c => new CrewDay(c.EmployeeId, batch.StartDate)), new CompletionApproval(request.OwnerApproved, request.ApprovalReason),
+                new RecordRef(nameof(NurseryBatch), batch.Id, batch.Code, batch.ZoneId), cancellationToken) is { } openAttendance)
+        {
+            return openAttendance;
         }
 
         var files = StepPhotoService.Read(photos, otherFilePart: request.OtherFilePart);

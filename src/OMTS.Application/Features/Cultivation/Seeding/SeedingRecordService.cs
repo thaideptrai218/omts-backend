@@ -9,6 +9,7 @@ using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Cultivation.Nursery;
 using OMTS.Application.Features.Cultivation.Progress;
 using OMTS.Application.Features.Files;
+using OMTS.Application.Features.Workforce;
 using OMTS.Domain.Entities.Cultivation;
 
 namespace OMTS.Application.Features.Cultivation.Seeding;
@@ -32,6 +33,8 @@ public sealed class SeedingRecordService(
     RecordPhotoStore photoStore,
     UploadedFileSaver fileSaver,
     ZoneAccessGuard zoneAccess,
+    RecordCrewService crews,
+    RecordCrewAssignmentService crewAssignments,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
@@ -74,6 +77,12 @@ public sealed class SeedingRecordService(
         if (invalid is not null)
         {
             return invalid;
+        }
+
+        var (crew, crewError) = await crews.ReadAsync(request.Crew, request.CrewUnreadable, cancellationToken);
+        if (crewError is not null)
+        {
+            return crewError;
         }
 
         var files = StepPhotoService.Read(photos, otherFilePart: request.OtherFilePart, minimum: photosRequired ? StepPhotoService.MinPhotos : 0);
@@ -136,6 +145,7 @@ public sealed class SeedingRecordService(
 
         SeedingPhotoRows.Add(records, record, uploaded.Value!);
         records.Add(record);
+        var crewAdded = crew is null ? [] : crews.Apply(record.Crew, crew, e => new SeedingRecordEmployee { SeedingRecordId = record.Id, EmployeeId = e.Id, Employee = e }).Added;
         unitOfWork.MarkChanged(cycle);
         if (fromNursery)
         {
@@ -151,6 +161,10 @@ public sealed class SeedingRecordService(
         await fileSaver.SaveAsync(uploaded.Value!, [], cancellationToken);
 
         var raft = await rafts.GetForEditAsync(cycle.RaftId, cancellationToken) ?? cycle.Raft;
-        return await views.SavedAsync(record, raft, laneStates, timeProvider.Today(), cancellationToken);
+        var result = await views.SavedAsync(record, raft, laneStates, timeProvider.Today(), cancellationToken);
+        // A separate step after the save: the session stays saved whatever the assignment does.
+        return crewAdded.Count == 0
+            ? result
+            : result with { CrewAssignment = await crewAssignments.AssignAsync(record.SeedingDate, cycle.Raft.ZoneId, cycle.RaftId, RecordCrewJobs.Seeding, crewAdded, cancellationToken) };
     }
 }

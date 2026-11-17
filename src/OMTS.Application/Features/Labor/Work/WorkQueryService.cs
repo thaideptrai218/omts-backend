@@ -39,7 +39,7 @@ public sealed class WorkQueryService(
     public async Task<Result<IReadOnlyList<AssignmentView>>> ListAssignmentsAsync(DateOnly day, CancellationToken cancellationToken)
     {
         var permitted = await zones.PermittedZonesAsync(PermissionFunctions.WorkAssignments, PermissionAction.View, cancellationToken);
-        var periods = (await assignments.ListDayAsync(day, cancellationToken)).Where(p => permitted.Allows(p.Raft.ZoneId)).ToList();
+        var periods = (await assignments.ListDayAsync(day, cancellationToken)).Where(p => permitted.Allows(p.ZoneId)).ToList();
         var ids = periods.Select(p => p.EmployeeId).Distinct().ToList();
         var attended = (await attendances.ListOfEmployeesAsync(ids, day, cancellationToken)).ToDictionary(a => a.EmployeeId);
         var leave = (await requests.ListApprovedLeaveAsync(ids, day, cancellationToken)).Select(l => l.EmployeeId).ToHashSet();
@@ -59,9 +59,9 @@ public sealed class WorkQueryService(
         var people = await employeeReader.ListEmployedAsync(permitted.AllZones ? null : permitted.ZoneIds.ToList(), day, cancellationToken);
         var ids = people.Select(e => e.Id).ToList();
         var leave = (await requests.ListApprovedLeaveAsync(ids, day, cancellationToken)).Select(l => l.EmployeeId).ToHashSet();
-        var raftOf = (await assignments.ListDayAsync(day, cancellationToken))
+        var latestOf = (await assignments.ListDayAsync(day, cancellationToken))
             .GroupBy(p => p.EmployeeId)
-            .ToDictionary(g => g.Key, g => g.OrderBy(p => p.StartsAt is null ? 0 : 1).ThenBy(p => p.StartsAt).Last().Raft.Code);
+            .ToDictionary(g => g.Key, g => g.OrderBy(p => p.StartsAt is null ? 0 : 1).ThenBy(p => p.StartsAt).Last());
         var checkedIn = (await attendances.ListDayAsync(day, cancellationToken)).Where(a => a.CheckInAt is not null).Select(a => a.EmployeeId).ToHashSet();
         var options = people.Select(e => new WorkEmployeeOption(e.Id, e.FullName, leave.Contains(e.Id))
         {
@@ -69,7 +69,8 @@ public sealed class WorkQueryService(
             PhoneNumber = e.PhoneNumber,
             Type = WorkRules.TypeOn(e, day),
             JobTypeIds = e.JobTypes.Select(j => j.JobTypeId).ToList(),
-            RaftCode = raftOf.GetValueOrDefault(e.Id),
+            RaftCode = latestOf.GetValueOrDefault(e.Id)?.Raft?.Code,
+            Assignment = latestOf.GetValueOrDefault(e.Id) is { } w ? new WorkAssignmentRef(w.ZoneId, w.RaftId, w.Raft?.Code, w.JobTypeId, w.JobType.Name) : null,
             CheckedIn = checkedIn.Contains(e.Id),
         }).ToList();
         return new WorkLookups(jobs, options);
@@ -166,10 +167,10 @@ public sealed class WorkQueryService(
 
         var hours = WorkHoursCalculator.Calculate(record.CheckInAt, record.CheckOutAt, periods, AttendanceSettingsVersion.EffectiveOn(versions, record.Date));
         var names = periods.GroupBy(p => p.JobTypeId).ToDictionary(g => g.Key, g => g.First().JobType.Name);
-        var rafts = periods.GroupBy(p => p.RaftId).ToDictionary(g => g.Key, g => g.First().Raft.Code);
+        var rafts = periods.Where(p => p.Raft is not null).GroupBy(p => p.RaftId!.Value).ToDictionary(g => g.Key, g => g.First().Raft!.Code);
         return new MyAttendanceDayView(
             record.Date, record.CheckInAt, record.CheckOutAt,
-            hours.Periods.Select(p => new MyPeriodView(p.JobTypeId, names[p.JobTypeId], rafts[p.RaftId], p.StartsAt, p.EndsAt, p.Minutes)).ToList(),
+            hours.Periods.Select(p => new MyPeriodView(p.JobTypeId, names[p.JobTypeId], p.RaftId is { } raftId ? rafts[raftId] : null, p.StartsAt, p.EndsAt, p.Minutes)).ToList(),
             hours.Jobs.Select(j => new MyJobHoursView(j.JobTypeId, names[j.JobTypeId], j.Hours)).ToList(),
             true);
     }

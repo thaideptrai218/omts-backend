@@ -7,6 +7,8 @@ using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Traceability.Publishing;
 using OMTS.Domain.Constants;
+using OMTS.Application.Features.Workforce;
+using OMTS.Domain.Common;
 using OMTS.Domain.Entities.Cultivation;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Harvest;
@@ -20,6 +22,7 @@ public sealed class HarvestLotViews(
     IProductRepository products,
     ProvenanceReadiness readiness,
     IAccountRepository accounts,
+    RecordCrewAttendance crewAttendance,
     IFileStorage storage,
     IStatusCatalog statusCatalog,
     PermissionService permissions,
@@ -93,7 +96,7 @@ public sealed class HarvestLotViews(
             lot.OverPlanReason,
             lot.PurchaseRequestId,
             lot.PurchaseRequest?.Code,
-            HarvestCrewService.ViewOf(lot),
+            await crewAttendance.ViewAsync(lot.Crew, lot.HarvestDate, cancellationToken),
             lot.Lanes.OrderBy(l => l.Lane.LaneNumber).Select(l => new HarvestLanePercentView(l.Lane.LaneNumber, l.HarvestedPercent)).ToList());
     }
 
@@ -128,6 +131,7 @@ public sealed class HarvestLotViews(
         var access = await AccessAsync(cancellationToken);
         var catalogue = await ProductsOfAsync(lots, cancellationToken);
         var planOf = await PlansOfAsync(ids, cancellationToken);
+        var crews = await crewAttendance.ViewsAsync(lots.Select(l => (l.Id, (IEnumerable<IRecordEmployee>)l.Crew, l.HarvestDate)), cancellationToken);
         return lots
             .OrderByDescending(l => l.IsForSale).ThenByDescending(l => l.HarvestedAt)
             .Select(lot =>
@@ -139,7 +143,7 @@ public sealed class HarvestLotViews(
                     worked.InvoicedKg, worked.RemainingKg, lot.StatusId, statusCatalog.DisplayNameOf(lot.StatusId), lot.OriginState,
                     missing[lot.Id], LotPublishRules.Block(access, lot, raft.ZoneId, onCurrentInvoice.Contains(lot.Id)) is null,
                     canCorrect, canCorrect && !onInvoice.Contains(lot.Id), MayClose(access, lot, raft.ZoneId), RowVersionGuard.Encode(lot.RowVersion), ProductLines(lot, catalogue), planOf.GetValueOrDefault(lot.Id),
-                    lot.PurchaseRequestId, lot.PurchaseRequest?.Code, HarvestCrewService.ViewOf(lot));
+                    lot.PurchaseRequestId, lot.PurchaseRequest?.Code, crews[lot.Id]);
             })
             .ToList();
     }

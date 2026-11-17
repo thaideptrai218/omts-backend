@@ -85,7 +85,8 @@ public sealed class AttendanceCorrectionService(
 
         var existing = (await assignments.ListOfEmployeesAsync([employee.Id], day, cancellationToken))
             .OrderBy(p => p.StartsAt is null ? 0 : 1).ThenBy(p => p.StartsAt).ToList();
-        if (await RefuseChoicesAsync(inputs, existing, cancellationToken) is { } refused)
+        var (refused, zoneOfRaft) = await RefuseChoicesAsync(inputs, existing, cancellationToken);
+        if (refused is not null)
         {
             return refused;
         }
@@ -93,7 +94,7 @@ public sealed class AttendanceCorrectionService(
         var account = currentUser.AccountId ?? throw new InvalidOperationException("Attendance is corrected by a logged-in user.");
         var before = Snapshot(record, existing);
         record = ApplyTimes(employee, day, record, request, reason, account);
-        ApplyPeriods(employee, day, existing, inputs, reason, account);
+        ApplyPeriods(employee, day, existing, inputs, zoneOfRaft, reason, account);
         audit.Record(new AuditEntry("Attendance.Corrected", nameof(Attendance))
         {
             RecordId = record.Id, RecordCode = employee.Code, Before = before, After = Snapshot(record, inputs), Reason = reason,
@@ -120,7 +121,8 @@ public sealed class AttendanceCorrectionService(
 
         check.Check(inputs.Count >= 1, "Job periods");
         check.Check(inputs.All(p => p.JobTypeId is { } j && j != Guid.Empty), "Job type");
-        check.Check(inputs.All(p => p.RaftId is { } r && r != Guid.Empty), "Raft");
+        // A period is on a raft, or in a zone the day already has when it has no raft (nursery).
+        check.Check(inputs.All(p => p.RaftId is { } r ? r != Guid.Empty : p.ZoneId is { } z && z != Guid.Empty), "Raft");
         check.Check(inputs.Count(p => p.StartsAt is null) <= 1, "Job periods");
         check.Check(inputs.Count == 0 || inputs[0].StartsAt is null, "Job periods");
         var starts = inputs.Where(p => p.StartsAt is not null).Select(p => p.StartsAt!.Value).ToList();
@@ -131,39 +133,51 @@ public sealed class AttendanceCorrectionService(
     }
 
     /// <summary>A job type or raft that is new on the day must be In Use (GBR-01); one the day already has stays, as an assignment keeps it.</summary>
-    private async Task<AppError?> RefuseChoicesAsync(IReadOnlyList<DayPeriodInput> inputs, IReadOnlyList<WorkAssignment> existing, CancellationToken cancellationToken)
+    private async Task<(AppError? Refused, Dictionary<Guid, Guid> ZoneOfRaft)> RefuseChoicesAsync(
+        IReadOnlyList<DayPeriodInput> inputs, IReadOnlyList<WorkAssignment> existing, CancellationToken cancellationToken)
     {
+        var zoneOfRaft = new Dictionary<Guid, Guid>();
         var jobTypeIds = inputs.Select(p => p.JobTypeId!.Value).Distinct().ToList();
         var jobTypes = (await assignments.GetJobTypesAsync(jobTypeIds, cancellationToken)).ToDictionary(j => j.Id);
         foreach (var id in jobTypeIds)
         {
             if (!jobTypes.TryGetValue(id, out var jobType))
             {
-                return AppError.Invalid("Job type");
+                return (AppError.Invalid("Job type"), zoneOfRaft);
             }
 
             if (jobType.StatusId != StatusIds.Usage.InUse && existing.All(p => p.JobTypeId != id))
             {
-                return AppError.NotUsableChoice($"Job type {jobType.Name}", statusCatalog.DisplayNameOf(jobType.StatusId), "Job type");
+                return (AppError.NotUsableChoice($"Job type {jobType.Name}", statusCatalog.DisplayNameOf(jobType.StatusId), "Job type"), zoneOfRaft);
             }
         }
 
-        var raftIds = inputs.Select(p => p.RaftId!.Value).Distinct().ToList();
+        foreach (var zone in inputs.Where(p => p.RaftId is null).Select(p => p.ZoneId!.Value).Distinct())
+        {
+            if (existing.All(p => p.RaftId is not null || p.ZoneId != zone))
+            {
+                return (AppError.Invalid("Raft"), zoneOfRaft);
+            }
+        }
+
+        var raftIds = inputs.Where(p => p.RaftId is not null).Select(p => p.RaftId!.Value).Distinct().ToList();
         var found = (await rafts.GetByIdsAsync(raftIds, cancellationToken)).ToDictionary(r => r.Id);
         foreach (var id in raftIds)
         {
             if (!found.TryGetValue(id, out var raft))
             {
-                return AppError.Invalid("Raft");
+                return (AppError.Invalid("Raft"), zoneOfRaft);
             }
 
             if (raft.StatusId != StatusIds.Usage.InUse && existing.All(p => p.RaftId != id))
             {
-                return AppError.NotUsableChoice($"Raft {raft.Code}", statusCatalog.DisplayNameOf(raft.StatusId), "Raft");
+                return (AppError.NotUsableChoice($"Raft {raft.Code}", statusCatalog.DisplayNameOf(raft.StatusId), "Raft"), zoneOfRaft);
             }
+
+            zoneOfRaft[id] = raft.ZoneId;
         }
 
-        return null;
+        return (null, zoneOfRaft);
     }
 
     private Attendance ApplyTimes(Employee employee, DateOnly day, Attendance? record, CorrectAttendanceRequest request, string reason, Guid account)
@@ -190,29 +204,30 @@ public sealed class AttendanceCorrectionService(
     }
 
     /// <summary>The periods are matched in time order: a period that changes is marked Correction with the reason, extra ones are added and surplus ones removed.</summary>
-    private void ApplyPeriods(Employee employee, DateOnly day, IReadOnlyList<WorkAssignment> existing, IReadOnlyList<DayPeriodInput> inputs, string reason, Guid account)
+    private void ApplyPeriods(Employee employee, DateOnly day, IReadOnlyList<WorkAssignment> existing, IReadOnlyList<DayPeriodInput> inputs, IReadOnlyDictionary<Guid, Guid> zoneOfRaft, string reason, Guid account)
     {
         for (var i = 0; i < inputs.Count; i++)
         {
             var input = inputs[i];
+            var zoneId = input.RaftId is { } raftOfInput ? zoneOfRaft[raftOfInput] : input.ZoneId!.Value;
             if (i >= existing.Count)
             {
                 assignments.Add(new WorkAssignment
                 {
-                    EmployeeId = employee.Id, Date = day, RaftId = input.RaftId!.Value, JobTypeId = input.JobTypeId!.Value, StartsAt = input.StartsAt,
+                    EmployeeId = employee.Id, Date = day, RaftId = input.RaftId, ZoneId = zoneId, JobTypeId = input.JobTypeId!.Value, StartsAt = input.StartsAt,
                     AssignedByAccountId = account, Method = AttendanceMethod.Correction, CorrectionReason = reason,
                 });
                 continue;
             }
 
             var period = existing[i];
-            if (period.RaftId == input.RaftId && period.JobTypeId == input.JobTypeId && period.StartsAt == input.StartsAt)
+            if (period.RaftId == input.RaftId && period.ZoneId == zoneId && period.JobTypeId == input.JobTypeId && period.StartsAt == input.StartsAt)
             {
                 continue;
             }
 
-            (period.RaftId, period.JobTypeId, period.StartsAt, period.Method, period.CorrectionReason) =
-                (input.RaftId!.Value, input.JobTypeId!.Value, input.StartsAt, AttendanceMethod.Correction, reason);
+            (period.RaftId, period.ZoneId, period.JobTypeId, period.StartsAt, period.Method, period.CorrectionReason) =
+                (input.RaftId, zoneId, input.JobTypeId!.Value, input.StartsAt, AttendanceMethod.Correction, reason);
         }
 
         foreach (var surplus in existing.Skip(inputs.Count))
@@ -232,7 +247,7 @@ public sealed class AttendanceCorrectionService(
             employee.Id, employee.FullName, WorkRules.TypeOn(employee, day), day, record?.CheckInAt, record?.CheckOutAt,
             record?.CheckInMethod, record?.CheckOutMethod, record?.IsComplete == true,
             periods.OrderBy(p => p.StartsAt is null ? 0 : 1).ThenBy(p => p.StartsAt)
-                .Select(p => new DayPeriodView(p.Id, p.JobTypeId, p.JobType.Name, p.RaftId, p.Raft.Code, p.StartsAt)).ToList(),
+                .Select(p => new DayPeriodView(p.Id, p.JobTypeId, p.JobType.Name, p.RaftId, p.Raft?.Code, p.StartsAt, p.ZoneId)).ToList(),
             hours.Jobs.Select(j => new DayJobHoursView(j.JobTypeId, names[j.JobTypeId], j.Hours)).ToList(),
             record is null ? null : RowVersionGuard.Encode(record.RowVersion));
     }

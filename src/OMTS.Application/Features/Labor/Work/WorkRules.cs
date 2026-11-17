@@ -56,7 +56,7 @@ internal static class WorkRules
                 var current = ordered[^1];
                 attendance.TryGetValue(first.EmployeeId, out var record);
                 return new AssignmentView(
-                    first.Id, first.EmployeeId, first.Employee.FullName, current.Raft.ZoneId, current.RaftId, current.Raft.Code,
+                    first.Id, first.EmployeeId, first.Employee.FullName, current.ZoneId, current.RaftId, current.Raft?.Code,
                     current.JobTypeId, current.JobType.Name, first.Date, record?.CheckInAt, record?.CheckOutAt)
                 {
                     EmployeeCode = first.Employee.Code,

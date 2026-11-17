@@ -61,7 +61,7 @@ public sealed class AttendanceRecordingService(
             return AppError.NotFound;
         }
 
-        if (!await zones.AllowsAsync(PermissionFunctions.Attendance, PermissionAction.Create, assignment.Raft.ZoneId, cancellationToken))
+        if (!await zones.AllowsAsync(PermissionFunctions.Attendance, PermissionAction.Create, assignment.ZoneId, cancellationToken))
         {
             return AppError.Forbidden;
         }
@@ -73,7 +73,7 @@ public sealed class AttendanceRecordingService(
         }
 
         var employee = (await employeeReader.GetForWorkAsync([assignment.EmployeeId], cancellationToken))[0];
-        var recorded = await RecordAsync(employee, today, isCheckIn, request, assignment.Raft.ZoneId, cancellationToken);
+        var recorded = await RecordAsync(employee, today, isCheckIn, request, assignment.ZoneId, cancellationToken);
         if (!recorded.IsSuccess)
         {
             return recorded.Error!;
@@ -128,7 +128,9 @@ public sealed class AttendanceRecordingService(
         var today = timeProvider.Today();
         var now = WorkRules.Now(timeProvider);
         var check = new FieldCheck();
-        check.Check(request.RaftId is { } r && r != Guid.Empty, "Raft");
+        // A crew works on a raft, or in a zone when it has no raft (nursery): exactly one of the two is sent.
+        var onZone = request.RaftId is null && request.ZoneId is { } z && z != Guid.Empty;
+        check.Check(onZone || request.RaftId is { } r && r != Guid.Empty, "Raft");
         var reason = check.Required(request.Reason, "Reason", WorkRules.MaxReason);
         var startsAt = WorkRules.ParseTime(request.StartTime) is { } time ? WorkRules.At(today, time) : (DateTimeOffset?)null;
         check.Check(startsAt is { } s && s <= now, "Start time");
@@ -139,17 +141,18 @@ public sealed class AttendanceRecordingService(
             return AppError.InvalidFields(check.Invalid);
         }
 
-        var raftId = request.RaftId!.Value;
+        var raftId = request.RaftId;
         var crew = await assignments.ListOfEmployeesAsync(ids, today, cancellationToken);
         var onRaft = crew.GroupBy(p => p.EmployeeId)
-            .Where(g => g.OrderBy(p => p.StartsAt is null ? 0 : 1).ThenBy(p => p.StartsAt).Last().RaftId == raftId)
+            .Where(g => g.OrderBy(p => p.StartsAt is null ? 0 : 1).ThenBy(p => p.StartsAt).Last() is var last
+                && (onZone ? last.RaftId is null && last.ZoneId == request.ZoneId : last.RaftId == raftId))
             .Select(g => g.Key).ToHashSet();
         if (ids.Any(i => !onRaft.Contains(i)))
         {
             return AppError.Invalid("Employees");
         }
 
-        var zoneId = crew.First(p => p.RaftId == raftId).Raft.ZoneId;
+        var zoneId = onZone ? request.ZoneId!.Value : crew.First(p => p.RaftId == raftId).ZoneId;
         if (!await zones.AllowsAsync(PermissionFunctions.Attendance, PermissionAction.Create, zoneId, cancellationToken))
         {
             return AppError.Forbidden;

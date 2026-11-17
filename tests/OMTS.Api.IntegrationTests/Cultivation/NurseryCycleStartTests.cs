@@ -74,7 +74,21 @@ public sealed class NurseryCycleStartTests
     }
 
     [Fact]
-    public async Task A_start_refuses_a_missing_batch_a_bad_yield_a_bad_date_a_long_note_and_too_few_or_many_photos_and_saves_nothing()
+    public async Task A_cycle_starts_without_plan_photos()
+    {
+        using var api = new AuthApiFactory();
+        var world = await api.NurseryWorldAsync();
+        var client = world.Owner.Client;
+        var batch = await client.ReadyNurseryAsync(api, world.ZoneId, world.Lot, "10000", "9500");
+
+        var started = await (await client.PostNurseryCycleAsync(world.Raft1, batch.Id(), photos: 0)).ReadAsync(HttpStatusCode.Created);
+
+        Assert.Equal(0, started.GetProperty("cycle").GetProperty("planPhotos").GetArrayLength());
+        Assert.Empty(api.StoredFiles(FileCategories.CyclePlanPhotos));
+    }
+
+    [Fact]
+    public async Task A_start_refuses_a_missing_batch_a_bad_yield_a_bad_date_a_long_note_and_too_many_photos_and_saves_nothing()
     {
         using var api = new AuthApiFactory();
         var world = await api.NurseryWorldAsync();
@@ -87,7 +101,6 @@ public sealed class NurseryCycleStartTests
         Assert.Equal(["Target yield"], await (await client.PostNurseryCycleAsync(world.Raft1, batch.Id(), "abc")).InvalidFieldsAsync());
         Assert.Equal(["Start date"], await (await client.PostNurseryCycleAsync(world.Raft1, batch.Id(), startDate: Today.AddDays(1).ToString("yyyy-MM-dd"))).InvalidFieldsAsync());
         Assert.Equal(["Note"], await (await client.PostNurseryCycleAsync(world.Raft1, batch.Id(), note: new string('x', 1001))).InvalidFieldsAsync());
-        Assert.Equal(["Photos"], await (await client.PostNurseryCycleAsync(world.Raft1, batch.Id(), photos: 0)).InvalidFieldsAsync());
         Assert.Equal(["Photos"], await (await client.PostNurseryCycleAsync(world.Raft1, batch.Id(), photos: 4)).InvalidFieldsAsync());
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostNurseryCycleAsync(world.Raft1, Guid.NewGuid())).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostNurseryCycleAsync(Guid.NewGuid(), batch.Id())).StatusCode);

@@ -1,5 +1,6 @@
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Cultivation.Seeding;
+using OMTS.Application.Features.Workforce;
 
 namespace OMTS.Application.Features.Cultivation.Nursery;
 
@@ -8,14 +9,18 @@ namespace OMTS.Application.Features.Cultivation.Nursery;
 /// <param name="Quantity">Pieces put into the nursery, above 0, not above what is on hand in the lot.</param>
 /// <param name="StartDate">Not later than today and not before the lot was received; today when left out.</param>
 /// <param name="OtherFilePart">The request carried a file part not named <c>photos</c>.</param>
-public sealed record StartNurseryRequest(Guid? SeedLotId, decimal? Quantity, DateOnly? StartDate, string? Note, bool OtherFilePart = false);
+/// <param name="Crew">The employees who worked on the batch (decision of 17/11/2026), optional: null when none was sent (an edit then leaves the crew as it is); an empty list clears it.</param>
+/// <param name="CrewUnreadable">An id was sent that is not a GUID.</param>
+public sealed record StartNurseryRequest(Guid? SeedLotId, decimal? Quantity, DateOnly? StartDate, string? Note, bool OtherFilePart = false,
+    IReadOnlyList<Guid>? Crew = null, bool CrewUnreadable = false);
 
 /// <summary>
 /// NURSERY-02 edit while Nursing: a field left out stays as it is; a note sent empty is cleared. The photos change only when <paramref name="ReplacePhotos"/> is true (the form sent
 /// <c>photos</c> or <c>keepPhotoIds</c>): then the batch keeps exactly <paramref name="KeepPhotoIds"/> and adds the new parts, in all 1 to 3.
 /// </summary>
 public sealed record EditNurseryRequest(
-    decimal? Quantity, DateOnly? StartDate, string? Note, string? RowVersion, bool ReplacePhotos = false, IReadOnlyList<Guid>? KeepPhotoIds = null, bool OtherFilePart = false);
+    decimal? Quantity, DateOnly? StartDate, string? Note, string? RowVersion, bool ReplacePhotos = false, IReadOnlyList<Guid>? KeepPhotoIds = null, bool OtherFilePart = false,
+    IReadOnlyList<Guid>? Crew = null, bool CrewUnreadable = false);
 
 /// <summary>NURSERY-02 cancel while Nursing: the reason is required and the pieces go back in the stock.</summary>
 public sealed record CancelNurseryRequest(string? Reason, string? RowVersion);
@@ -23,7 +28,9 @@ public sealed record CancelNurseryRequest(string? Reason, string? RowVersion);
 /// <summary>NURSERY-03 (v2, 13/11/2026). The photos (1 to 3) travel as multipart parts apart from these fields. No shares and no cycles: the batch becomes a pool.</summary>
 /// <param name="Survivors">Pieces that survived, counted by eye (an estimate), from 0 to the pieces put in.</param>
 /// <param name="CompletedOn">Not before the start date and not later than today; today when left out.</param>
-public sealed record CompleteNurseryRequest(decimal? Survivors, DateOnly? CompletedOn, string? RowVersion, bool OtherFilePart = false);
+/// <param name="OwnerApproved">Only the Cooperative Owner: complete although an employee of the batch with work that day is not checked out (MSG-LABOR-37); needs <paramref name="ApprovalReason"/> (1 to 1000 characters).</param>
+public sealed record CompleteNurseryRequest(
+    decimal? Survivors, DateOnly? CompletedOn, string? RowVersion, bool OtherFilePart = false, bool OwnerApproved = false, string? ApprovalReason = null);
 
 /// <summary>NURSERY-04 (v2): the survivors as they should be, old to new in the history, with a reason. Not below what was seeded.</summary>
 public sealed record CorrectSurvivorsRequest(decimal? Survivors, string? Reason, string? RowVersion);
@@ -65,10 +72,12 @@ public sealed record NurseryBatchView(
     bool CanEdit, bool CanComplete, bool CanCorrectSurvivors, string RowVersion,
     decimal? Seeded = null, decimal? Remaining = null, DateOnly? ClosedOn = null, decimal? CloseLossPieces = null, string? CloseReason = null, bool CanClose = false,
     IReadOnlyList<NurseryUsageView>? Usage = null,
-    Guid? ProductId = null, string? ProductName = null, string? SeedItemName = null);
+    Guid? ProductId = null, string? ProductName = null, string? SeedItemName = null,
+    IReadOnlyList<CrewMemberView>? Crew = null);
 
 /// <param name="Message">MSG-GEN-05 "Nursery batch saved.".</param>
-public sealed record NurseryBatchSaved(NurseryBatchView Batch, string Message, string MessageCode);
+/// <param name="CrewAssignment">The automatic work assignment of the employees newly named by this save (decision of 17/11/2026); null when none was added.</param>
+public sealed record NurseryBatchSaved(NurseryBatchView Batch, string Message, string MessageCode, [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] CrewAssignmentResult? CrewAssignment = null);
 
 public sealed record NurseryListSummary(
     decimal QuantityIn, decimal NursingQuantityIn, decimal CompletedQuantityIn, decimal Survivors, decimal LossPieces, decimal? LossPercent, int NursingCount, int CompletedCount, int ClosedCount = 0);

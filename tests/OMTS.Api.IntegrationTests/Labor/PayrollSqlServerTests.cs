@@ -89,7 +89,7 @@ public class PayrollSqlServerTests
             var account = db.Accounts.Select(a => a.Id).First();
             foreach (var day in days)
             {
-                db.WorkAssignments.Add(new WorkAssignment { EmployeeId = employee, Date = day, JobTypeId = s.Harvest, RaftId = s.Raft.Id, AssignedByAccountId = account });
+                db.WorkAssignments.Add(new WorkAssignment { EmployeeId = employee, Date = day, JobTypeId = s.Harvest, RaftId = s.Raft.Id, ZoneId = s.Zone.Id, AssignedByAccountId = account });
                 db.Attendances.Add(new Attendance
                 {
                     EmployeeId = employee, Date = day,

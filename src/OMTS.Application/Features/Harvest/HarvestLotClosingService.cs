@@ -4,6 +4,7 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.Workforce;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Farming;
 using OMTS.Application.Features.Purchasing.Receipts;
@@ -22,6 +23,7 @@ public sealed class HarvestLotClosingService(
     IHarvestLotRepository lots,
     HarvestLotStatusService statuses,
     HarvestLotViews views,
+    RecordCrewAttendance crewAttendance,
     ZoneAccessGuard zoneAccess,
     RowVersionGuard rowVersions,
     IUnitOfWork unitOfWork,
@@ -47,6 +49,14 @@ public sealed class HarvestLotClosingService(
         if (await rowVersions.CheckAsync(lot, request.RowVersion, cancellationToken) is { } conflict)
         {
             return conflict;
+        }
+
+        // Decision of 17/11/2026: the employees of the lot with work on its harvest day are checked out first (MSG-LABOR-37), or the Owner closes with a reason.
+        if (await crewAttendance.CheckCompletionAsync(
+                lot.Crew.Select(c => new CrewDay(c.EmployeeId, lot.HarvestDate)), new CompletionApproval(request.OwnerApproved, request.ApprovalReason),
+                new RecordRef(nameof(HarvestLot), lot.Id, lot.LotCode, lot.Raft.ZoneId), cancellationToken) is { } openAttendance)
+        {
+            return openAttendance;
         }
 
         if (statuses.Close(lot, timeProvider.Today(), leftoverKg, reason) is { } notClosed)

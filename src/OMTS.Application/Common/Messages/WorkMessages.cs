@@ -79,6 +79,13 @@ public static class WorkMessages
         Parameters = new Dictionary<string, object?> { ["result"] = result },
     };
 
+    /// <summary>MSG-LABOR-37 (decision of 17/11/2026): a nursery, seeding or harvest record cannot be completed while an employee named on it, with work that day, is not checked out. The Cooperative Owner may complete it with a reason.</summary>
+    public static UserMessage AttendanceOpen(IReadOnlyList<string> names) => new(
+        MessageCodes.Labor37, $"{string.Join(", ", names)} not checked out yet. Check them out before completing, or the Cooperative Owner can complete with a reason.")
+    {
+        Parameters = new Dictionary<string, object?> { ["employee_names"] = string.Join(", ", names) },
+    };
+
     /// <summary>How a request is named in messages, e.g. "for leave from 01/10/2026 to 03/10/2026".</summary>
     public static string RequestText(Domain.Enums.EmployeeRequestType type, DateOnly from, DateOnly to, TimeOnly? time) => type switch
     {

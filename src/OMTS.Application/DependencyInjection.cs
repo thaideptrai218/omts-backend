@@ -238,6 +238,9 @@ public static class DependencyInjection
         services.AddScoped<HarvestLotViews>();
         services.AddScoped<HarvestLotNotifier>();
         services.AddScoped<HarvestCrewService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.RecordCrewService>();
+        services.AddScoped<OMTS.Application.Features.Workforce.RecordCrewAttendance>();
+        services.AddScoped<OMTS.Application.Features.Workforce.RecordCrewAssignmentService>();
         services.AddScoped<HarvestLotRecordingService>();
         services.AddScoped<HarvestLaneFinishService>();
         services.AddScoped<HarvestLanesFinishService>();

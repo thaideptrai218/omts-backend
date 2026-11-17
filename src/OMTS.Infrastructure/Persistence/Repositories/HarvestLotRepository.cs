@@ -37,6 +37,12 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
             .OrderByDescending(l => l.Lot.HarvestedAt)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<OMTS.Application.Features.Workforce.CrewDay>> ListCrewDaysAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) =>
+        lotIds.Count == 0
+            ? []
+            : await db.HarvestRecordEmployees.AsNoTracking().Where(c => lotIds.Contains(c.LotId))
+                .Select(c => new OMTS.Application.Features.Workforce.CrewDay(c.EmployeeId, c.Lot.HarvestDate)).ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<LotLaneFact>> LaneFactsAsync(Guid cycleId, CancellationToken cancellationToken) =>
         await db.HarvestLotLanes.AsNoTracking()
             .Where(l => l.Lot.CycleId == cycleId)
@@ -184,7 +190,7 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
         db.HarvestLotLanes.RemoveRange(lot.Lanes);
         db.HarvestLotPhotos.RemoveRange(lot.Photos);
         db.HarvestLotProductLines.RemoveRange(lot.ProductLines);
-        db.HarvestLotCrew.RemoveRange(lot.Crew);
+        db.HarvestRecordEmployees.RemoveRange(lot.Crew);
         db.HarvestLots.Remove(lot);
     }
 
@@ -199,10 +205,6 @@ internal sealed class HarvestLotRepository(OmtsDbContext db) : IHarvestLotReposi
     public void AddPhoto(HarvestLotPhoto photo) => db.HarvestLotPhotos.Add(photo);
 
     public void RemovePhoto(HarvestLotPhoto photo) => db.HarvestLotPhotos.Remove(photo);
-
-    public void AddCrew(HarvestLotCrewMember member) => db.HarvestLotCrew.Add(member);
-
-    public void RemoveCrew(HarvestLotCrewMember member) => db.HarvestLotCrew.Remove(member);
 
     private static IQueryable<HarvestLot> ForSale(IQueryable<HarvestLot> lots) =>
         lots.Where(l => l.StatusId == StatusIds.HarvestLot.Open || l.StatusId == StatusIds.HarvestLot.Reopened);

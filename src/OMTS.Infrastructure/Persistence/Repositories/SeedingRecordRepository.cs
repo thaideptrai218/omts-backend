@@ -47,6 +47,7 @@ internal sealed class SeedingRecordRepository(OmtsDbContext db) : ISeedingRecord
 
     public void Remove(SeedingRecord record)
     {
+        db.SeedingRecordEmployees.RemoveRange(record.Crew);
         db.SeedingRecordPhotos.RemoveRange(record.Photos);
         db.SeedingRecordLanes.RemoveRange(record.Lanes);
         db.SeedingRecords.Remove(record);
@@ -54,6 +55,7 @@ internal sealed class SeedingRecordRepository(OmtsDbContext db) : ISeedingRecord
 
     private static IQueryable<SeedingRecord> WithLot(IQueryable<SeedingRecord> records) =>
         records.Include(r => r.Issue).Include(r => r.Lanes).ThenInclude(l => l.Lane).Include(r => r.Photos)
+            .Include(r => r.Crew).ThenInclude(c => c.Employee)
             .Include(r => r.SeedLotLine).ThenInclude(l => l.Item)
             .Include(r => r.SeedLotLine).ThenInclude(l => l.Receipt).ThenInclude(r => r.Supplier);
 
