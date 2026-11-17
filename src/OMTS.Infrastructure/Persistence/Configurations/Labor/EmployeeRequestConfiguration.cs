@@ -15,15 +15,15 @@ internal sealed class EmployeeRequestConfiguration : IEntityTypeConfiguration<Em
         builder.Property(x => x.ReviewNote).HasMaxLength(Lengths.Reason);
 
         // One submit of the client is saved once (a retry returns it), and an employee has at most one request Awaiting review for the same
-        // day and missed time (BR-LABOR-08); overlapping leave is checked by the service. Parallel saves cannot both pass the pre-check.
+        // day and missed time (BR-LABOR-08), and at most one leave starting on the same day (a parallel submit loses, 17/11/2026); the rest of overlapping leave is checked by the service.
         builder.HasIndex(x => new { x.EmployeeId, x.ClientOperationId })
             .IsUnique()
             .HasDatabaseName("UX_EmployeeRequests_Employee_ClientOperation")
             .HasFilter("[ClientOperationId] IS NOT NULL");
         builder.HasIndex(x => new { x.EmployeeId, x.Type, x.FromDate })
             .IsUnique()
-            .HasDatabaseName("UX_EmployeeRequests_Awaiting_MissedTime")
-            .HasFilter($"[StatusId] = {StatusIds.EmployeeRequest.AwaitingReview} AND [Type] <> N'Leave'");
+            .HasDatabaseName("UX_EmployeeRequests_Awaiting_FirstDay")
+            .HasFilter($"[StatusId] = {StatusIds.EmployeeRequest.AwaitingReview}");
         builder.HasIndex(x => new { x.StatusId, x.SentAt });
         builder.HasIndex(x => new { x.EmployeeId, x.FromDate });
         builder.HasIndex(x => x.ReviewedByAccountId);

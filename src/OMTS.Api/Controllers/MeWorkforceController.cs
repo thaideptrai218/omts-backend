@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OMTS.Api.Common;
+using OMTS.Api.Extensions;
 using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Labor.Work;
 
@@ -9,11 +10,11 @@ namespace OMTS.Api.Controllers;
 /// <summary>
 /// LABOR-07, LABOR-08, LABOR-10 – the own work of the employee whose profile is linked to the caller's account: attendance QR code, own
 /// assignments, attendance and requests, and sending or cancelling a request. Only the caller's own records are ever read or changed
-/// (BR-LABOR-09). The employee app login with a login code (LABOR-03, LABOR-06) is not here yet.
+/// (BR-LABOR-09). Called with the employee app token (login code and linked device, LABOR-03 and LABOR-06), not with an account token.
 /// </summary>
 [ApiController]
 [Route("api/me")]
-[Authorize]
+[Authorize(AuthenticationSchemes = EmployeeAppAuthentication.Scheme)]
 public sealed class MeWorkforceController(WorkQueryService queries, EmployeeRequestService requests) : ControllerBase
 {
     /// <summary>LABOR-08: own assignments, attendance days with the hours of each job type, and requests from <c>from</c> to <c>to</c> (at most 62 days).</summary>
