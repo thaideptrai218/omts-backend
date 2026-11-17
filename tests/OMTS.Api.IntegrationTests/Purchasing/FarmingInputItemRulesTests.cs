@@ -23,7 +23,8 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
     public async Task Missing_name_group_or_unit_return_MSG01(string? code, string? name, string? group, string? unit, string field)
     {
         var owner = await factory.PurchasingOwnerAsync();
-        var response = await owner.PostAsJsonAsync("/api/farming-input-items", new { code = code is null ? null : $"{code}{NewCode()}", name, group, unit });
+        // A seed item also names the product it grows into, so the product is given: the missing field is the one under test.
+        var response = await owner.PostAsJsonAsync("/api/farming-input-items", new { code = code is null ? null : $"{code}{NewCode()}", name, group, unit, productId = await owner.SeedProductAsync() });
         Assert.Equal(field, await response.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
     }
 
@@ -90,6 +91,7 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
             name = renamed,
             group = change == "group" ? "Other" : "Seed",
             unit = change == "unit" ? "piece" : "kg",
+            productId = view.TryGetProperty("productId", out var product) && product.ValueKind == JsonValueKind.String ? product.GetGuid() : (Guid?)null,
             rowVersion = view.GetProperty("rowVersion").GetString(),
         });
 

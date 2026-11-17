@@ -111,7 +111,8 @@ public sealed class FarmingRemovalAndHistoryTests
         await (await owner.PostAsync($"/api/rafts/{raft.RaftId}/lanes/1/finish-harvest", null)).ReadAsync(HttpStatusCode.OK);
         var lotHistory = await owner.GetFromJsonAsync<JsonElement>($"/api/harvest-lots/{lot.Id()}/history");
         var lotEntries = lotHistory.GetProperty("entries").EnumerateArray().ToList();
-        Assert.Equal(["Created", "LaneFinished"], lotEntries.Select(e => e.Text("action")).ToList());
+        // The lot is weighed before its lane is finished (harvest weighing, #102).
+        Assert.Equal(["Created", "Weighed", "LaneFinished"], lotEntries.Select(e => e.Text("action")).ToList());
         var cages = lotEntries[0].GetProperty("changes").EnumerateArray().Single(c => c.Text("field") == "CageCount");
         Assert.Equal(("Số lồng", "lồng", "2"), (cages.Text("label"), cages.Text("unit"), cages.Text("to")));
     }
