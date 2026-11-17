@@ -28,6 +28,7 @@ public sealed class WorkAssignmentService(
     IEmployeeRepository employees,
     IEmployeeRequestRepository requests,
     IRaftRepository rafts,
+    IFarmingZoneRepository farmingZones,
     ZoneAccessGuard zones,
     PayPeriodLock payPeriods,
     IStatusCatalog statusCatalog,
@@ -43,7 +44,7 @@ public sealed class WorkAssignmentService(
     {
         var today = timeProvider.Today();
         var check = new FieldCheck();
-        check.Check(request.RaftId is { } r && r != Guid.Empty, "Raft");
+        check.Check(HasPlace(request.RaftId, request.ZoneId), "Raft");
         check.Check(request.JobTypeId is { } j && j != Guid.Empty, "Job type");
         check.Check(request.Date is { } d && d >= today, "Date (today or later)");
         var ids = request.EmployeeIds ?? [];
@@ -54,13 +55,13 @@ public sealed class WorkAssignmentService(
         }
 
         var date = request.Date!.Value;
-        var chosen = await ChooseAsync(request.RaftId!.Value, request.JobTypeId!.Value, PermissionAction.Create, cancellationToken);
+        var chosen = await ChooseAsync(request.RaftId, request.ZoneId, request.JobTypeId!.Value, PermissionAction.Create, cancellationToken);
         if (!chosen.IsSuccess)
         {
             return chosen.Error!;
         }
 
-        var (raft, jobType) = chosen.Value;
+        var (place, jobType) = chosen.Value;
         var people = await employeeReader.GetForWorkAsync(ids, cancellationToken);
         if (people.Count != ids.Count)
         {
@@ -86,13 +87,13 @@ public sealed class WorkAssignmentService(
 
         var elsewhere = people
             .Select(e => (Employee: e, First: existing[e.Id].FirstOrDefault(w => w.StartsAt is null)))
-            .Where(x => x.First is not null && x.First.RaftId != raft.Id)
+            .Where(x => x.First is not null && !place.Holds(x.First))
             .ToList();
         if (elsewhere.Count > 0 && !request.MoveExisting)
         {
             var (employee, first) = elsewhere[0];
             return AppError.Conflict(
-                WorkMessages.MoveToRaft(employee.FullName, first!.Raft.Code, date, raft.Code),
+                WorkMessages.MoveToRaft(employee.FullName, PlaceOf(first!).Code, date, place.Code),
                 new Dictionary<string, object?> { ["employeeIds"] = elsewhere.Select(x => x.Employee.Id).ToList() });
         }
 
@@ -102,27 +103,27 @@ public sealed class WorkAssignmentService(
             var first = existing[employee.Id].FirstOrDefault(w => w.StartsAt is null);
             if (first is null)
             {
-                var created = new WorkAssignment { EmployeeId = employee.Id, Date = date, RaftId = raft.Id, JobTypeId = jobType.Id, AssignedByAccountId = account };
+                var created = new WorkAssignment { EmployeeId = employee.Id, Date = date, RaftId = place.Raft?.Id, ZoneId = place.ZoneId, JobTypeId = jobType.Id, AssignedByAccountId = account };
                 assignments.Add(created);
                 audit.Record(new AuditEntry("WorkAssignment.Created", nameof(WorkAssignment))
                 {
-                    RecordId = created.Id, RecordCode = employee.Code, ZoneId = raft.ZoneId, After = Snapshot(employee, date, raft, jobType),
+                    RecordId = created.Id, RecordCode = employee.Code, ZoneId = place.ZoneId, After = Snapshot(employee, date, place, jobType),
                 });
             }
-            else if (first.RaftId != raft.Id || first.JobTypeId != jobType.Id)
+            else if (!place.Holds(first) || first.JobTypeId != jobType.Id)
             {
-                var before = Snapshot(employee, date, first.Raft, first.JobType);
-                var moved = first.RaftId != raft.Id;
-                first.RaftId = raft.Id;
+                var before = Snapshot(employee, date, PlaceOf(first), first.JobType);
+                var moved = !place.Holds(first);
+                (first.RaftId, first.ZoneId) = (place.Raft?.Id, place.ZoneId);
                 first.JobTypeId = jobType.Id;
                 first.AssignedByAccountId = account;
                 audit.Record(new AuditEntry(moved ? "WorkAssignment.Moved" : "WorkAssignment.Updated", nameof(WorkAssignment))
                 {
-                    RecordId = first.Id, RecordCode = employee.Code, ZoneId = raft.ZoneId, Before = before, After = Snapshot(employee, date, raft, jobType),
+                    RecordId = first.Id, RecordCode = employee.Code, ZoneId = place.ZoneId, Before = before, After = Snapshot(employee, date, place, jobType),
                 });
             }
 
-            AddZoneOfRaft(employee, raft);
+            AddWorkingZone(employee, place.ZoneId);
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -133,7 +134,7 @@ public sealed class WorkAssignmentService(
     public async Task<Result<AssignmentView>> EditAsync(Guid id, EditAssignmentRequest request, CancellationToken cancellationToken)
     {
         var check = new FieldCheck();
-        check.Check(request.RaftId is { } r && r != Guid.Empty, "Raft");
+        check.Check(HasPlace(request.RaftId, request.ZoneId), "Raft");
         check.Check(request.JobTypeId is { } j && j != Guid.Empty, "Job type");
         if (!check.IsValid)
         {
@@ -146,7 +147,7 @@ public sealed class WorkAssignmentService(
             return AppError.NotFound;
         }
 
-        if (!await zones.AllowsAsync(PermissionFunctions.WorkAssignments, PermissionAction.Edit, assignment.Raft.ZoneId, cancellationToken))
+        if (!await zones.AllowsAsync(PermissionFunctions.WorkAssignments, PermissionAction.Edit, assignment.ZoneId, cancellationToken))
         {
             return AppError.Forbidden;
         }
@@ -156,26 +157,27 @@ public sealed class WorkAssignmentService(
             return refused;
         }
 
-        var unchanged = assignment.RaftId == request.RaftId && assignment.JobTypeId == request.JobTypeId;
+        var unchanged = assignment.JobTypeId == request.JobTypeId
+            && (request.RaftId is null ? assignment.RaftId is null && assignment.ZoneId == request.ZoneId : assignment.RaftId == request.RaftId);
         if (!unchanged)
         {
-            var chosen = await ChooseAsync(request.RaftId!.Value, request.JobTypeId!.Value, PermissionAction.Edit, cancellationToken);
+            var chosen = await ChooseAsync(request.RaftId, request.ZoneId, request.JobTypeId!.Value, PermissionAction.Edit, cancellationToken);
             if (!chosen.IsSuccess)
             {
                 return chosen.Error!;
             }
 
-            var (raft, jobType) = chosen.Value;
-            var before = Snapshot(assignment.Employee, assignment.Date, assignment.Raft, assignment.JobType);
-            assignment.RaftId = raft.Id;
+            var (place, jobType) = chosen.Value;
+            var before = Snapshot(assignment.Employee, assignment.Date, PlaceOf(assignment), assignment.JobType);
+            (assignment.RaftId, assignment.ZoneId) = (place.Raft?.Id, place.ZoneId);
             assignment.JobTypeId = jobType.Id;
             assignment.AssignedByAccountId = currentUser.AccountId ?? throw new InvalidOperationException("Work is assigned by a logged-in user.");
             audit.Record(new AuditEntry("WorkAssignment.Updated", nameof(WorkAssignment))
             {
-                RecordId = assignment.Id, RecordCode = assignment.Employee.Code, ZoneId = raft.ZoneId, Before = before, After = Snapshot(assignment.Employee, assignment.Date, raft, jobType),
+                RecordId = assignment.Id, RecordCode = assignment.Employee.Code, ZoneId = place.ZoneId, Before = before, After = Snapshot(assignment.Employee, assignment.Date, place, jobType),
             });
             var employee = (await employeeReader.GetForWorkAsync([assignment.EmployeeId], cancellationToken))[0];
-            AddZoneOfRaft(employee, raft);
+            AddWorkingZone(employee, place.ZoneId);
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
@@ -191,7 +193,7 @@ public sealed class WorkAssignmentService(
             return AppError.NotFound;
         }
 
-        if (!await zones.AllowsAsync(PermissionFunctions.WorkAssignments, PermissionAction.Delete, assignment.Raft.ZoneId, cancellationToken))
+        if (!await zones.AllowsAsync(PermissionFunctions.WorkAssignments, PermissionAction.Delete, assignment.ZoneId, cancellationToken))
         {
             return AppError.Forbidden;
         }
@@ -204,8 +206,8 @@ public sealed class WorkAssignmentService(
         assignments.Remove(assignment);
         audit.Record(new AuditEntry("WorkAssignment.Removed", nameof(WorkAssignment))
         {
-            RecordId = assignment.Id, RecordCode = assignment.Employee.Code, ZoneId = assignment.Raft.ZoneId,
-            Before = Snapshot(assignment.Employee, assignment.Date, assignment.Raft, assignment.JobType),
+            RecordId = assignment.Id, RecordCode = assignment.Employee.Code, ZoneId = assignment.ZoneId,
+            Before = Snapshot(assignment.Employee, assignment.Date, PlaceOf(assignment), assignment.JobType),
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return Done.Value;
@@ -219,7 +221,7 @@ public sealed class WorkAssignmentService(
     {
         var today = timeProvider.Today();
         var check = new FieldCheck();
-        check.Check(request.RaftId is { } r && r != Guid.Empty, "Raft");
+        check.Check(HasPlace(request.RaftId, request.ZoneId), "Raft");
         check.Check(request.JobTypeId is { } j && j != Guid.Empty, "Job type");
         var ids = request.EmployeeIds ?? [];
         check.Check(ids.Count is >= 1 and <= MaxEmployees && ids.Distinct().Count() == ids.Count && ids.All(i => i != Guid.Empty), "Employees");
@@ -228,13 +230,13 @@ public sealed class WorkAssignmentService(
             return AppError.InvalidFields(check.Invalid);
         }
 
-        var chosen = await ChooseAsync(request.RaftId!.Value, request.JobTypeId!.Value, PermissionAction.Edit, cancellationToken);
+        var chosen = await ChooseAsync(request.RaftId, request.ZoneId, request.JobTypeId!.Value, PermissionAction.Edit, cancellationToken);
         if (!chosen.IsSuccess)
         {
             return chosen.Error!;
         }
 
-        var (raft, jobType) = chosen.Value;
+        var (place, jobType) = chosen.Value;
         if (await payPeriods.CheckAsync(today, cancellationToken) is { } locked)
         {
             return locked;
@@ -256,31 +258,31 @@ public sealed class WorkAssignmentService(
             }
 
             var current = ordered[^1];
-            if (!await zones.AllowsAsync(PermissionFunctions.WorkAssignments, PermissionAction.Edit, current.Raft.ZoneId, cancellationToken))
+            if (!await zones.AllowsAsync(PermissionFunctions.WorkAssignments, PermissionAction.Edit, current.ZoneId, cancellationToken))
             {
                 return AppError.Forbidden;
             }
 
-            if (current.RaftId == raft.Id && current.JobTypeId == jobType.Id)
+            if (place.Holds(current) && current.JobTypeId == jobType.Id)
             {
                 continue;
             }
 
-            var before = Snapshot(current.Employee, today, current.Raft, current.JobType);
+            var before = Snapshot(current.Employee, today, PlaceOf(current), current.JobType);
             if (record?.CheckInAt is null)
             {
-                current.RaftId = raft.Id;
+                (current.RaftId, current.ZoneId) = (place.Raft?.Id, place.ZoneId);
                 current.JobTypeId = jobType.Id;
                 current.AssignedByAccountId = account;
             }
             else
             {
-                assignments.Add(new WorkAssignment { EmployeeId = id, Date = today, RaftId = raft.Id, JobTypeId = jobType.Id, StartsAt = now, AssignedByAccountId = account });
+                assignments.Add(new WorkAssignment { EmployeeId = id, Date = today, RaftId = place.Raft?.Id, ZoneId = place.ZoneId, JobTypeId = jobType.Id, StartsAt = now, AssignedByAccountId = account });
             }
 
             audit.Record(new AuditEntry("WorkAssignment.JobChanged", nameof(WorkAssignment))
             {
-                RecordId = current.Id, RecordCode = current.Employee.Code, ZoneId = raft.ZoneId, Before = before, After = Snapshot(current.Employee, today, raft, jobType),
+                RecordId = current.Id, RecordCode = current.Employee.Code, ZoneId = place.ZoneId, Before = before, After = Snapshot(current.Employee, today, place, jobType),
                 Reason = record?.CheckInAt is null ? null : $"New job period from {BusinessClock.Format(now)}.",
             });
             changed++;
@@ -290,23 +292,62 @@ public sealed class WorkAssignmentService(
         return changed;
     }
 
-    /// <summary>The raft In Use of a zone the caller may act in, and the job type In Use (GBR-01, BR-FARM-08).</summary>
-    private async Task<Result<(Raft Raft, JobType JobType)>> ChooseAsync(Guid raftId, Guid jobTypeId, PermissionAction action, CancellationToken cancellationToken)
+    /// <summary>Where the work is: a raft, or a whole zone when it has no raft (nursery). <see cref="Code"/> names it in messages.</summary>
+    private sealed record Place(Guid ZoneId, Raft? Raft, string Code)
     {
-        var raft = (await rafts.GetByIdsAsync([raftId], cancellationToken)).FirstOrDefault();
-        if (raft is null)
-        {
-            return AppError.Invalid("Raft");
-        }
+        /// <summary>Whether the assignment is already there.</summary>
+        public bool Holds(WorkAssignment a) => Raft is null ? a.RaftId is null && a.ZoneId == ZoneId : a.RaftId == Raft.Id;
+    }
 
-        if (!await zones.AllowsAsync(PermissionFunctions.WorkAssignments, action, raft.ZoneId, cancellationToken))
-        {
-            return AppError.Forbidden;
-        }
+    private static bool HasPlace(Guid? raftId, Guid? zoneId) =>
+        raftId is { } r ? r != Guid.Empty : zoneId is { } z && z != Guid.Empty;
 
-        if (raft.StatusId != StatusIds.Usage.InUse)
+    private static Place PlaceOf(WorkAssignment a) =>
+        new(a.ZoneId, a.Raft, a.Raft?.Code ?? $"{a.Zone.Code} (zone)");
+
+    /// <summary>The raft In Use (or, with no raft, the zone In Use) the caller may act in, and the job type In Use (GBR-01, BR-FARM-08).</summary>
+    private async Task<Result<(Place Place, JobType JobType)>> ChooseAsync(Guid? raftId, Guid? zoneId, Guid jobTypeId, PermissionAction action, CancellationToken cancellationToken)
+    {
+        Place place;
+        if (raftId is { } rid)
         {
-            return AppError.NotUsableChoice($"Raft {raft.Code}", statusCatalog.DisplayNameOf(raft.StatusId), "Raft");
+            var raft = (await rafts.GetByIdsAsync([rid], cancellationToken)).FirstOrDefault();
+            if (raft is null)
+            {
+                return AppError.Invalid("Raft");
+            }
+
+            if (!await zones.AllowsAsync(PermissionFunctions.WorkAssignments, action, raft.ZoneId, cancellationToken))
+            {
+                return AppError.Forbidden;
+            }
+
+            if (raft.StatusId != StatusIds.Usage.InUse)
+            {
+                return AppError.NotUsableChoice($"Raft {raft.Code}", statusCatalog.DisplayNameOf(raft.StatusId), "Raft");
+            }
+
+            place = new Place(raft.ZoneId, raft, raft.Code);
+        }
+        else
+        {
+            var zone = (await farmingZones.GetByIdsAsync([zoneId!.Value], cancellationToken)).FirstOrDefault();
+            if (zone is null)
+            {
+                return AppError.Invalid("Raft");
+            }
+
+            if (!await zones.AllowsAsync(PermissionFunctions.WorkAssignments, action, zone.Id, cancellationToken))
+            {
+                return AppError.Forbidden;
+            }
+
+            if (zone.StatusId != StatusIds.Usage.InUse)
+            {
+                return AppError.NotUsableChoice($"Zone {zone.Code}", statusCatalog.DisplayNameOf(zone.StatusId), "Zone");
+            }
+
+            place = new Place(zone.Id, null, $"{zone.Code} (zone)");
         }
 
         var jobType = (await assignments.GetJobTypesAsync([jobTypeId], cancellationToken)).FirstOrDefault();
@@ -316,7 +357,7 @@ public sealed class WorkAssignmentService(
         }
 
         return jobType.StatusId == StatusIds.Usage.InUse
-            ? (raft, jobType)
+            ? (place, jobType)
             : AppError.NotUsableChoice($"Job type {jobType.Name}", statusCatalog.DisplayNameOf(jobType.StatusId), "Job type");
     }
 
@@ -336,17 +377,17 @@ public sealed class WorkAssignmentService(
         return await payPeriods.CheckAsync(assignment.Date, cancellationToken);
     }
 
-    /// <summary>The zone of the raft joins the working zones of an employee who does not have it (LABOR-02 step 9, BR-LABOR-01).</summary>
-    private void AddZoneOfRaft(Employee employee, Raft raft)
+    /// <summary>The zone of the work joins the working zones of an employee who does not have it (LABOR-02 step 9, BR-LABOR-01).</summary>
+    private void AddWorkingZone(Employee employee, Guid zoneId)
     {
-        if (employee.WorkingZones.Any(w => w.ZoneId == raft.ZoneId))
+        if (employee.WorkingZones.Any(w => w.ZoneId == zoneId))
         {
             return;
         }
 
-        employees.AddWorkingZone(new EmployeeWorkingZone { EmployeeId = employee.Id, ZoneId = raft.ZoneId });
+        employees.AddWorkingZone(new EmployeeWorkingZone { EmployeeId = employee.Id, ZoneId = zoneId });
         unitOfWork.MarkChanged(employee);
-        audit.Record(new AuditEntry("Employee.WorkingZoneAdded", nameof(Employee)) { RecordId = employee.Id, ZoneId = raft.ZoneId, After = new { raft.ZoneId } });
+        audit.Record(new AuditEntry("Employee.WorkingZoneAdded", nameof(Employee)) { RecordId = employee.Id, ZoneId = zoneId, After = new { ZoneId = zoneId } });
     }
 
     private async Task<Result<IReadOnlyList<AssignmentView>>> RowsAsync(IReadOnlyCollection<Guid> employeeIds, DateOnly date, CancellationToken cancellationToken)
@@ -360,8 +401,8 @@ public sealed class WorkAssignmentService(
     private static AppError AlreadyCheckedIn(Employee employee) => AppError.Conflict(
         WorkMessages.AlreadyCheckedIn(employee.FullName), new Dictionary<string, object?> { ["employeeId"] = employee.Id });
 
-    private static object Snapshot(Employee employee, DateOnly date, Raft raft, JobType jobType) => new
+    private static object Snapshot(Employee employee, DateOnly date, Place place, JobType jobType) => new
     {
-        EmployeeId = employee.Id, Employee = employee.FullName, Date = date, RaftId = raft.Id, Raft = raft.Code, JobTypeId = jobType.Id, JobType = jobType.Name,
+        EmployeeId = employee.Id, Employee = employee.FullName, Date = date, RaftId = place.Raft?.Id, Raft = place.Raft?.Code, place.ZoneId, JobTypeId = jobType.Id, JobType = jobType.Name,
     };
 }

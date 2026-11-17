@@ -22,6 +22,7 @@ internal sealed class DemoLaborSettingsStep : IDemoSeedStep
 {
     public const string Harvesting = "Thu hoạch";
     public const string HangingSeed = "Treo giống";
+    public const string Nursery = "Ươm";
     public const string CleaningLines = "Vệ sinh dây giàn";
     private const string OldPacking = "Đóng gói tại bè";
 
@@ -33,6 +34,8 @@ internal sealed class DemoLaborSettingsStep : IDemoSeedStep
         var created = 0;
         created += await AddJobTypeAsync(context, Harvesting, 38_000, thisMonth.AddMonths(-6), (40_000, thisMonth.AddMonths(-3)), cancellationToken);
         created += await AddJobTypeAsync(context, HangingSeed, 35_000, thisMonth.AddMonths(-6), (36_000, thisMonth.AddMonths(1)), cancellationToken);
+        // Placeholder rate: the owner or the accountant sets the real one (the Nursery job type is also added by a migration to an existing database).
+        created += await AddJobTypeAsync(context, Nursery, 30_000, thisMonth.AddMonths(-6), null, cancellationToken);
         created += await AddJobTypeAsync(context, CleaningLines, 30_000, thisMonth.AddMonths(-6), null, cancellationToken);
         created += await AddOldJobTypeAsync(context, thisMonth, cancellationToken);
         created += await AddAttendanceSettingsAsync(context, thisMonth, cancellationToken);

@@ -9,6 +9,7 @@ internal sealed class WorkAssignmentConfiguration : IEntityTypeConfiguration<Wor
     public void Configure(EntityTypeBuilder<WorkAssignment> builder)
     {
         builder.HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId);
+        builder.HasOne(x => x.Zone).WithMany().HasForeignKey(x => x.ZoneId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Raft).WithMany().HasForeignKey(x => x.RaftId);
         builder.HasOne(x => x.JobType).WithMany().HasForeignKey(x => x.JobTypeId);
         builder.ReferencesAccount(nameof(WorkAssignment.AssignedByAccountId));
@@ -22,6 +23,7 @@ internal sealed class WorkAssignmentConfiguration : IEntityTypeConfiguration<Wor
             .HasFilter("[StartsAt] IS NULL");
         builder.HasIndex(x => new { x.Date, x.RaftId });
         builder.HasIndex(x => x.RaftId);
+        builder.HasIndex(x => new { x.Date, x.ZoneId });
         builder.HasIndex(x => x.JobTypeId);
         builder.HasIndex(x => x.AssignedByAccountId);
     }

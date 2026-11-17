@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OMTS.Application.Features.Labor.Payrolls;
+using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Labor;
@@ -119,7 +120,7 @@ internal sealed class DemoPayrollStep : IDemoSeedStep
                     continue;
                 }
 
-                AddDay(context, employee, raft.Id, jobs, day, seed);
+                AddDay(context, employee, raft, jobs, day, seed);
                 created++;
             }
         }
@@ -128,7 +129,7 @@ internal sealed class DemoPayrollStep : IDemoSeedStep
         return created > 0 ? 1 : 0;
     }
 
-    private static void AddDay(DemoSeedContext context, Employee employee, Guid raftId, IReadOnlyList<Guid> jobs, DateOnly day, int seed)
+    private static void AddDay(DemoSeedContext context, Employee employee, Raft raft, IReadOnlyList<Guid> jobs, DateOnly day, int seed)
     {
         var morning = seed % 5 == 1;
         var checkIn = At(day, 7, 0);
@@ -141,13 +142,13 @@ internal sealed class DemoPayrollStep : IDemoSeedStep
         });
         context.Db.WorkAssignments.Add(new WorkAssignment
         {
-            EmployeeId = employee.Id, Date = day, RaftId = raftId, JobTypeId = jobs[seed % jobs.Count], AssignedByAccountId = context.OwnerId,
+            EmployeeId = employee.Id, Date = day, RaftId = raft.Id, ZoneId = raft.ZoneId, JobTypeId = jobs[seed % jobs.Count], AssignedByAccountId = context.OwnerId,
         });
         if (jobs.Count > 1 && !morning && seed % 4 == 0)
         {
             context.Db.WorkAssignments.Add(new WorkAssignment
             {
-                EmployeeId = employee.Id, Date = day, RaftId = raftId, JobTypeId = jobs[(seed + 1) % jobs.Count], AssignedByAccountId = context.OwnerId, StartsAt = At(day, 13, 30),
+                EmployeeId = employee.Id, Date = day, RaftId = raft.Id, ZoneId = raft.ZoneId, JobTypeId = jobs[(seed + 1) % jobs.Count], AssignedByAccountId = context.OwnerId, StartsAt = At(day, 13, 30),
             });
         }
     }

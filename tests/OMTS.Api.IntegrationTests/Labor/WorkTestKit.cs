@@ -97,7 +97,7 @@ internal static class WorkTestKit
             {
                 db.WorkAssignments.Add(new WorkAssignment
                 {
-                    EmployeeId = employeeId, Date = day, JobTypeId = jobTypeId, RaftId = raftId, AssignedByAccountId = account,
+                    EmployeeId = employeeId, Date = day, JobTypeId = jobTypeId, RaftId = raftId, ZoneId = db.Rafts.Single(r => r.Id == raftId).ZoneId, AssignedByAccountId = account,
                     StartsAt = startsAt is null ? null : DateTimeOffset.Parse(Time(day, startsAt)),
                 });
             }

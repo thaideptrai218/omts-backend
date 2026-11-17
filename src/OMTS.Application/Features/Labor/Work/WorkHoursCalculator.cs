@@ -5,7 +5,7 @@ using OMTS.Domain.Enums;
 namespace OMTS.Application.Features.Labor.Work;
 
 /// <summary>One job period of a day as worked: its start and end, and its minutes after the break (BR-LABOR-05).</summary>
-public sealed record WorkedPeriod(Guid JobTypeId, Guid RaftId, DateTimeOffset StartsAt, DateTimeOffset EndsAt, int Minutes);
+public sealed record WorkedPeriod(Guid JobTypeId, Guid? RaftId, DateTimeOffset StartsAt, DateTimeOffset EndsAt, int Minutes);
 
 /// <summary>The hours of one job type on a day: the minutes of its periods on every raft, rounded down to the rounding unit.</summary>
 public sealed record JobHours(Guid JobTypeId, int Minutes)
