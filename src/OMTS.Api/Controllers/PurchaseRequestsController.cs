@@ -51,8 +51,7 @@ public sealed class PurchaseRequestsController(
         (await responses.DeclineAsync(id, request, cancellationToken)).ToActionResult(Ok);
 
     /// <summary>
-    /// The Owner marks the harvest of an Accepted request done once it has a lot: no lot is recorded for it after this, and the port
-    /// weighing starts only then. Body: <c>rowVersion</c> of the request.
+    /// The Owner marks the harvest of an Accepted request done once it has a lot: no lot is recorded for it after this. Body: <c>rowVersion</c> of the request.
     /// </summary>
     [HttpPost("{id:guid}/harvest-done")]
     [RequireCooperativeOwner]
@@ -60,7 +59,7 @@ public sealed class PurchaseRequestsController(
     public async Task<IActionResult> MarkHarvestDone(Guid id, MarkHarvestDone request, CancellationToken cancellationToken) =>
         (await harvests.MarkDoneAsync(id, request, cancellationToken)).ToActionResult(Ok);
 
-    /// <summary>Clears the mark while the request has no weighing, for a raft still to harvest. Body: <c>rowVersion</c> of the request.</summary>
+    /// <summary>Clears the mark, for a raft still to harvest. Body: <c>rowVersion</c> of the request.</summary>
     [HttpPost("{id:guid}/harvest-done/clear")]
     [RequireCooperativeOwner]
     [ProducesResponseType<PurchaseRequestView>(StatusCodes.Status200OK)]

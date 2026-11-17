@@ -31,7 +31,7 @@ public class LaborProbeTests(AuthApiFactory factory) : IClassFixture<AuthApiFact
     // The API names an assignment (the FIRST job period of the day), not a raft: the zone checked is the zone of that first period.
     // ------------------------------------------------------------------------------------------------------------------------------
 
-    [Fact(Skip = "Finding of the review of 13/11 (OMTS-227): a ZM of the first period zone can still check out a worker whose current period is in another zone. Remove the Skip when it is fixed.")]
+    [Fact]
     public async Task Probe_a1_check_out_is_refused_when_the_current_job_period_is_on_a_raft_of_another_zone()
     {
         // FAILURE MEANS: a Zone Manager of zone A can check out (and complete the day of) a worker who now works on a raft of zone B, because the zone is read from the first period of the day, not the current one.
@@ -65,7 +65,7 @@ public class LaborProbeTests(AuthApiFactory factory) : IClassFixture<AuthApiFact
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    [Fact(Skip = "Finding of the review of 13/11 (OMTS-227): check-out without check-in does not look at the zone of the current job period. Remove the Skip when it is fixed.")]
+    [Fact]
     public async Task Probe_a2_check_out_without_a_check_in_is_refused_when_the_current_job_period_is_on_a_raft_of_another_zone()
     {
         // FAILURE MEANS: the MSG-LABOR-12 path (check-out saved with no check-in) lets a Zone Manager of zone A write attendance for a worker whose current period is in zone B.
@@ -77,7 +77,7 @@ public class LaborProbeTests(AuthApiFactory factory) : IClassFixture<AuthApiFact
         Assert.False(await factory.QueryAsync(db => db.Attendances.AnyAsync(a => a.EmployeeId == employee)));
     }
 
-    [Fact(Skip = "Finding of the review of 13/11 (OMTS-227): check-in does not look at the zone of the current job period. Remove the Skip when it is fixed.")]
+    [Fact]
     public async Task Probe_a3_check_in_is_refused_when_the_current_job_period_is_on_a_raft_of_another_zone()
     {
         // FAILURE MEANS: a Zone Manager of zone A can check in a worker whose current period is on a raft of zone B (LABOR-04 step 3: work assigned on THIS raft).
@@ -89,7 +89,7 @@ public class LaborProbeTests(AuthApiFactory factory) : IClassFixture<AuthApiFact
         Assert.False(await factory.QueryAsync(db => db.Attendances.AnyAsync(a => a.EmployeeId == employee)));
     }
 
-    [Fact(Skip = "Finding of the review of 13/11 (OMTS-227): a ZM can move a worker off a raft of another zone. Remove the Skip when it is fixed.")]
+    [Fact]
     public async Task Probe_a4_a_zone_manager_cannot_move_a_worker_off_a_raft_of_another_zone()
     {
         // FAILURE MEANS: the Zone Manager of zone B can take a not-yet-checked-in worker off zone A's raft with moveExisting (only the target raft's zone is checked). The SRS (LABOR-02.4) does not restrict the source zone; this asserts the stricter reading.
@@ -156,7 +156,7 @@ public class LaborProbeTests(AuthApiFactory factory) : IClassFixture<AuthApiFact
         Assert.Equal(DateTimeOffset.Parse(Time(day, "13:00")), (await own.QueryAsync(db => db.Attendances.SingleAsync(a => a.Id == recordId))).CheckOutAt);
     }
 
-    [Fact(Skip = "Finding of the review of 13/11 (OMTS-227): a correction of a day that got a record after the screen was read answers 400 MSG-GEN-01, not 409 MSG06. Remove the Skip when it is fixed.")]
+    [Fact]
     public async Task Probe_b1b_a_correction_of_a_day_that_got_a_record_after_the_screen_was_read_is_refused_with_msg06()
     {
         // FAILURE MEANS: the screen of a day with no record (empty version) is not recognised as stale once a check-in exists: it answers 400 RowVersion (or overwrites it) instead of 409 MSG06. Strict reading of NFR-09.
@@ -178,7 +178,7 @@ public class LaborProbeTests(AuthApiFactory factory) : IClassFixture<AuthApiFact
         Assert.Equal(AttendanceMethod.Manual, (await own.QueryAsync(db => db.Attendances.SingleAsync(a => a.Id == recordId))).CheckInMethod);
     }
 
-    [Fact(Skip = "Finding of the review of 13/11 (OMTS-227): a correction silently removes a job period added after the screen was read. Remove the Skip when it is fixed.")]
+    [Fact(Skip = "Needs real row versions: the SQL Server twin is Probe_b3_sql_a_correction_does_not_silently_remove_a_job_period_added_after_the_screen_was_read.")]
     public async Task Probe_b3_a_correction_does_not_silently_remove_a_job_period_added_after_the_screen_was_read()
     {
         // FAILURE MEANS: the Owner's correction replaces the job periods with the list on the stale screen, so a period added meanwhile by Change job for crew is deleted without a word (the attendance row version does not change when a period is added).
@@ -242,18 +242,18 @@ public class LaborProbeTests(AuthApiFactory factory) : IClassFixture<AuthApiFact
         Assert.Equal(DateTimeOffset.Parse(first.Str("checkedOutAt")!), record.CheckOutAt);
     }
 
-    [Fact(Skip = "Finding of the review of 13/11 (OMTS-227): the QR code of a check-in can be used again for the check-out inside its window. Remove the Skip when it is fixed.")]
-    public async Task Probe_c2_a_qr_code_used_for_the_check_in_cannot_be_used_again_for_the_check_out()
+    [Fact]
+    public async Task Probe_c2_a_qr_code_is_not_single_use_it_serves_the_check_out_inside_its_window()
     {
-        // FAILURE MEANS: the code is not single-use: one photo of it taken at check-in also checks the employee OUT inside its 60 s (BR-LABOR-06 only promises "replaced every 60 seconds"; this asserts the stricter single-use reading).
+        // Not a defect (PM decision of 17/11/2026, SRS LABOR-04.0.E1): only a code that is not recognised or expired is refused. The code is the employee's code shown in the app, valid in its time window.
         var (s, employee, row, client) = await LinkedAssignedAsync();
         var code = await QrOfAsync(client);
         await (await CheckInAsync(s.Manager, row, code)).BodyAsync(HttpStatusCode.OK);
 
         var response = await CheckOutAsync(s.Manager, row, code);
 
-        await AssertRefusedAsync(response, "check-out with the code already used for the check-in");
-        Assert.Null((await factory.QueryAsync(db => db.Attendances.SingleAsync(a => a.EmployeeId == employee))).CheckOutAt);
+        await response.BodyAsync(HttpStatusCode.OK);
+        Assert.NotNull((await factory.QueryAsync(db => db.Attendances.SingleAsync(a => a.EmployeeId == employee))).CheckOutAt);
     }
 
     [Fact]
@@ -302,7 +302,7 @@ public class LaborProbeTests(AuthApiFactory factory) : IClassFixture<AuthApiFact
         }
     }
 
-    [Fact(Skip = "Finding of the review of 13/11 (OMTS-227): a QR code issued in the future is accepted. Remove the Skip when it is fixed.")]
+    [Fact]
     public async Task Probe_c5_a_qr_code_issued_in_the_future_is_refused()
     {
         // FAILURE MEANS: Read() only checks "now < expiry", so a genuine code whose expiry is far beyond the 60 s lifetime (issued 5 minutes or a day ahead of now) is accepted; the window has no upper bound. Unspecified by the SRS; stricter reading.
@@ -384,7 +384,7 @@ public class LaborProbeTests(AuthApiFactory factory) : IClassFixture<AuthApiFact
         Assert.Equal(HttpStatusCode.Created, (await Submit(mine, Leave(today.AddDays(-5), today.AddDays(-4)))).StatusCode);
     }
 
-    [Fact(Skip = "Finding of the review of 13/11 (OMTS-227): a request for a day in 2001 is accepted (no age limit). Remove the Skip when it is fixed.")]
+    [Fact]
     public async Task Probe_d2_a_request_for_a_day_in_2001_is_refused()
     {
         // FAILURE MEANS: the request has no lower bound on its day: an employee can send leave or a missed time for 2001-01-01 (unspecified by the SRS; stricter reading: a request must be for a plausible, recent day).
@@ -406,7 +406,7 @@ public class LaborProbeTests(AuthApiFactory factory) : IClassFixture<AuthApiFact
         Assert.False(await factory.QueryAsync(db => db.EmployeeRequests.AnyAsync(r => r.EmployeeId == employee)));
     }
 
-    [Fact(Skip = "Finding of the review of 13/11 (OMTS-227): a request for a day one year ago is accepted (no age limit). Remove the Skip when it is fixed.")]
+    [Fact]
     public async Task Probe_d2b_a_request_for_a_day_one_year_ago_is_refused()
     {
         // FAILURE MEANS: a day a year back is accepted (unspecified by the SRS, which only bars days of a Finalized payroll; stricter reading: a bounded look-back). A failure here is a decision to make, not necessarily a bug.

@@ -78,6 +78,13 @@ public sealed class AttendanceCorrectionService(
         }
 
         var record = await attendances.GetAsync(employee.Id, day, cancellationToken);
+        // A screen of a day with no record carries no version. When a record exists now (the first check-in came after the screen was read) the screen is stale: MSG06, not an invalid version (b1b of the
+        // review of 13/11/2026). The in-memory provider issues no versions, so there an empty one still matches.
+        if (record is { RowVersion.Length: > 0 } && string.IsNullOrWhiteSpace(request.RowVersion))
+        {
+            return AppError.Conflict(UserMessages.ConcurrentUpdateByAnotherUser);
+        }
+
         if (record is not null && await rowVersions.CheckAsync(record, request.RowVersion, cancellationToken) is { } conflict)
         {
             return conflict;

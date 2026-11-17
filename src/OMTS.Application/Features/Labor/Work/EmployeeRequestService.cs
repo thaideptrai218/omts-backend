@@ -38,6 +38,7 @@ public sealed class EmployeeRequestService(
     RowVersionGuard rowVersions,
     IStatusCatalog statusCatalog,
     ICurrentUser currentUser,
+    ICurrentEmployee currentEmployee,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
@@ -70,13 +71,15 @@ public sealed class EmployeeRequestService(
         {
             (from, to) = (request.From ?? default, request.To ?? default);
             check.Check(request.From is not null && request.To is not null && to >= from && to.DayNumber - from.DayNumber < MaxLeaveDays, "Days");
+            // Not older than the 366 days a leave may span (PM decision of 17/11/2026, d2 of the review of 13/11/2026).
+            check.Check(request.From is null || from >= today.AddDays(-MaxLeaveDays), "Days");
         }
         else
         {
             // A missed check-in or check-out is for one day, today or earlier, and the requested time is not in the future.
             from = to = request.Day ?? request.From ?? default;
             time = WorkRules.ParseTime(request.RequestedTime);
-            check.Check((request.Day ?? request.From) is not null && from <= today, "Day (today or earlier)");
+            check.Check((request.Day ?? request.From) is not null && from <= today && from >= today.AddDays(-MaxLeaveDays), "Day (today or earlier)");
             check.Check(time is not null && (from < today || WorkRules.At(from, time.Value) <= timeProvider.GetUtcNow()), "Requested time");
         }
 
@@ -120,7 +123,23 @@ public sealed class EmployeeRequestService(
                 NotificationTypes.EmployeeRequestNew, "New employee request", WorkMessages.RequestNotice(employee.FullName, text, reason),
                 new RelatedRecord(nameof(EmployeeRequest), saved.Id)),
             cancellationToken);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DuplicateRecordException)
+        {
+            // A parallel submit of the same employee, type and first day was saved first (d7 of the review of 13/11/2026): the unique index lets one of them through, and the other gets the answer of the pre-check.
+            unitOfWork.DiscardChanges();
+            if (request.ClientOperationId is { } operation && await requests.FindByClientOperationAsync(employee.Id, operation, cancellationToken) is { } retried)
+            {
+                return EmployeeRequestViews.Of(retried, statusCatalog);
+            }
+
+            return await requests.FindAwaitingAsync(employee.Id, type, from, to, cancellationToken) is { } winner
+                ? AppError.AlreadyExists("Employee request", winner.Id)
+                : AppError.Conflict(UserMessages.ConcurrentUpdateByAnotherUser);
+        }
 
         saved.Employee = employee;
         var sentMessage = WorkMessages.RequestSent("Your request");
@@ -324,7 +343,7 @@ public sealed class EmployeeRequestService(
     }
 
     private async Task<Employee?> OwnEmployeeAsync(CancellationToken cancellationToken) =>
-        currentUser.AccountId is { } accountId ? await employees.GetByAccountIdAsync(accountId, cancellationToken) : null;
+        currentEmployee.EmployeeId is { } employeeId ? await employees.GetByIdAsync(employeeId, cancellationToken) : null;
 
     private AppError AlreadyReviewed(EmployeeRequest request) => AppError.Conflict(
         WorkMessages.AlreadyReviewed(request.StatusId == StatusIds.EmployeeRequest.Approved ? "approved" : "rejected"),

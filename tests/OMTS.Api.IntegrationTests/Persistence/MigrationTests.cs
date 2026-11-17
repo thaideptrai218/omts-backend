@@ -16,7 +16,7 @@ namespace OMTS.Api.IntegrationTests.Persistence;
 public class MigrationTests
 {
     // Tables of the SRS 22/10 order, harvest, traceability, claim, finance and pay model (OMTS-216). QualityClaims came back with the claims of SRS 27/10 (a new table of the same name),
-    // and PortWeighings with the weighing at the port of a request in cages (09/11/2026, a new table of the same name).
+    // and the table of the weighing at the port of a request in cages (09/11/2026, a new table of the same name, dropped again by a later migration).
     private static readonly string[] LegacyTables =
     [
         "SalesOrders", "SaleTransactions", "PortHandovers",

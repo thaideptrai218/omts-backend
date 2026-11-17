@@ -179,5 +179,4 @@ public sealed record SalesInvoiceSaved(
 public sealed record SalesInvoiceCreated(SalesInvoiceSaved? Saved, PendingSaleView? Pending);
 
 /// <summary>A purchase request the invoice can be linked to (SALE-05.3): Accepted, not Fulfilled, pickup not more than 3 days ago.</summary>
-/// <param name="DeliveredCages">The cages of the weighings already on Completed invoices of the request, to compare with <paramref name="AcceptedCages"/>.</param>
-public sealed record OpenPurchaseRequestView(Guid Id, Guid ProductId, string ProductName, int RequestedCages, int AcceptedCages, DateOnly PickupDate, bool PayLaterAgreed, string? ResponseNote, int DeliveredCages);
+public sealed record OpenPurchaseRequestView(Guid Id, Guid ProductId, string ProductName, int RequestedCages, int AcceptedCages, DateOnly PickupDate, bool PayLaterAgreed, string? ResponseNote);

@@ -50,7 +50,6 @@ internal sealed class SalesInvoiceRepository(OmtsDbContext db) : ISalesInvoiceRe
             .Include(i => i.SalesOrder)
             .Include(i => i.Lines).ThenInclude(l => l.Product)
             .Include(i => i.Lines).ThenInclude(l => l.HarvestLot)
-            .Include(i => i.PortWeighing).ThenInclude(w => w!.Cages)
             .Include(i => i.PriceCuts)
             .Include(i => i.Payments)
             .Include(i => i.Returns)
@@ -65,17 +64,10 @@ internal sealed class SalesInvoiceRepository(OmtsDbContext db) : ISalesInvoiceRe
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(i => new CustomerInvoiceRow(
                 i.Id, i.Code, i.InvoicedAt, i.InvoiceDate, i.Zone.Name, i.PurchaseRequest != null ? i.PurchaseRequest.Code : null,
-                i.PortWeighing != null ? i.PortWeighing.Cages.Count : 0, i.Lines.Sum(l => l.Kg), i.Total, i.StatusId, i.PaymentTerm))
+                i.Lines.Sum(l => l.Kg), i.Total, i.StatusId, i.PaymentTerm))
             .ToListAsync(cancellationToken);
         return (rows, total);
     }
-
-    public async Task<IReadOnlyDictionary<Guid, int>> DeliveredCagesAsync(IReadOnlyCollection<Guid> requestIds, CancellationToken cancellationToken) =>
-        await db.PortWeighingCages.AsNoTracking()
-            .Where(c => requestIds.Contains(c.PortWeighing.PurchaseRequestId) && c.PortWeighing.Invoices.Any(i => i.StatusId == StatusIds.SalesInvoice.Completed))
-            .GroupBy(c => c.PortWeighing.PurchaseRequestId)
-            .Select(g => new { RequestId = g.Key, Cages = g.Count() })
-            .ToDictionaryAsync(x => x.RequestId, x => x.Cages, cancellationToken);
 
     public Task<SalesInvoice?> GetForSendingAsync(Guid invoiceId, CancellationToken cancellationToken) =>
         db.SalesInvoices.AsSplitQuery()
