@@ -106,24 +106,25 @@ public class PurchaseCatalogueSqlServerQaTests
         var owner = host.Owner.Client;
         var tag = NewCode();
         var name = $"Hàu giống Thái Bình Dương {tag}";
-        var first = (await (await owner.PostAsJsonAsync(Items, new { code = "vt120", name, group = "Seed", unit = "con" })).ReadAsync(HttpStatusCode.Created)).Id();
+        var productId = await owner.SeedProductAsync();
+        var first = (await (await owner.PostAsJsonAsync(Items, new { code = "vt120", name, group = "Seed", unit = "con", productId })).ReadAsync(HttpStatusCode.Created)).Id();
         await (await owner.PostAsync($"{Items}/{first}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
 
-        var sameName = await owner.PostAsJsonAsync(Items, new { code = "VT200", name = $"HÀU GIỐNG THÁI BÌNH DƯƠNG {tag.ToUpperInvariant()}", group = "Seed", unit = "con" });
+        var sameName = await owner.PostAsJsonAsync(Items, new { code = "VT200", name = $"HÀU GIỐNG THÁI BÌNH DƯƠNG {tag.ToUpperInvariant()}", group = "Seed", unit = "con", productId });
         var nameProblem = await sameName.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02");
         Assert.Equal((first, "Name"), (nameProblem.GetProperty("existingId").GetGuid(), nameProblem.GetProperty("field").GetString()));
-        var sameCode = await owner.PostAsJsonAsync(Items, new { code = " VT120 ", name = $"Hàu giống khác {tag}", group = "Seed", unit = "con" });
+        var sameCode = await owner.PostAsJsonAsync(Items, new { code = " VT120 ", name = $"Hàu giống khác {tag}", group = "Seed", unit = "con", productId });
         var codeProblem = await sameCode.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02");
         Assert.Equal((first, "Code"), (codeProblem.GetProperty("existingId").GetGuid(), codeProblem.GetProperty("field").GetString()));
 
         // The proposal skips a generated code that a discontinued item holds (typed in lower case here, which SQL Server compares without case). Seed items may count in different units since
         // 13/11/2026 (units with factors), so a second seed item in kg is saved and the proposal has no seed unit any more.
-        var held = await owner.PostAsJsonAsync(Items, new { code = "gi000001", name = $"Hàu giống giữ mã {tag}", group = "Seed", unit = "con" });
+        var held = await owner.PostAsJsonAsync(Items, new { code = "gi000001", name = $"Hàu giống giữ mã {tag}", group = "Seed", unit = "con", productId });
         var heldId = (await held.ReadAsync(HttpStatusCode.Created)).Id();
         await (await owner.PostAsync($"{Items}/{heldId}/discontinue", null)).ReadAsync(HttpStatusCode.OK);
         var proposal = await (await owner.GetAsync($"{Items}/next-code?group=Seed")).ReadAsync(HttpStatusCode.OK);
         Assert.Equal("GI000002", proposal.GetProperty("code").GetString());
-        await (await owner.PostAsJsonAsync(Items, new { code = "VT121", name = $"Hàu giống Cổ Trai {tag}", group = "Seed", unit = "kg" })).ReadAsync(HttpStatusCode.Created);
+        await (await owner.PostAsJsonAsync(Items, new { code = "VT121", name = $"Hàu giống Cổ Trai {tag}", group = "Seed", unit = "kg", productId })).ReadAsync(HttpStatusCode.Created);
     }
 
     // BR-PURCHASE-10: "All seed items use one unit: the Cooperative Owner chooses it with the first seed item". The check
@@ -134,10 +135,11 @@ public class PurchaseCatalogueSqlServerQaTests
     {
         await using var host = await FarmingHost.StartAsync();
         var owner = host.Owner.Client;
+        var productId = await owner.SeedProductAsync();
 
         var responses = await InParallelAsync(6, i => owner.PostAsJsonAsync(Items, new
         {
-            code = $"S{i}-{NewCode()}", name = $"Hàu giống {i} {NewCode()}", group = "Seed", unit = i % 2 == 0 ? "con" : "kg",
+            code = $"S{i}-{NewCode()}", name = $"Hàu giống {i} {NewCode()}", group = "Seed", unit = i % 2 == 0 ? "con" : "kg", productId,
         }));
 
         Assert.Single(await host.QueryAsync(db => db.FarmingInputItems.Where(i => i.Group == InputItemGroup.Seed).Select(i => i.Unit).Distinct().ToListAsync()));

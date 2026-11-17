@@ -21,9 +21,10 @@ public class PurchaseReceiptsMigrationSqlServerTests
     {
         await using var host = await FarmingHost.StartAsync();
         var world = await host.WorldAsync();
-        var receipt = await world.CompletedAsync(
-            new LineBody(world.Other, 1, 1_000), world.MaterialForRaft(2, 50_000), new LineBody(world.Seed, 10, 9_000, "LOT-1", world.Raft.Id));
-        var seedLine = receipt.LineOf(world.Seed);
+        // A receipt holds one kind: the supply lines and the seed lot are on two receipts.
+        var receipt = await world.CompletedAsync(new LineBody(world.Other, 1, 1_000), world.MaterialForRaft(2, 50_000));
+        var seedReceipt = await world.CompletedAsync(new LineBody(world.Seed, 10, 9_000, "LOT-1", world.Raft.Id));
+        var seedLine = seedReceipt.LineOf(world.Seed);
         var cycle = new CultivationCycle { RaftId = world.Raft.Id, StartDate = Today };
         await host.UseDbAsync(db => db.CultivationCycles.Add(cycle));
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 1_000), new LineBody(null, null, null)));
@@ -42,7 +43,7 @@ public class PurchaseReceiptsMigrationSqlServerTests
 
         Assert.Equal(world.Raft.Id, await db.Database.SqlQuery<Guid>($"SELECT RaftId AS [Value] FROM PurchaseReceipts WHERE Id = {receipt.Id()}").SingleAsync());
         Assert.Equal(world.Zone.Id, await db.Database.SqlQuery<Guid>($"SELECT ZoneId AS [Value] FROM PurchaseReceipts WHERE Id = {receipt.Id()}").SingleAsync());
-        Assert.Equal($"{receipt.GetProperty("code").GetString()}-S1",
+        Assert.Equal($"{seedReceipt.GetProperty("code").GetString()}-S1",
             await db.Database.SqlQuery<string>($"SELECT InternalCode AS [Value] FROM SeedReceiptLots WHERE Id = {seedLine}").SingleAsync());
         Assert.Equal(seedLine, await db.Database.SqlQuery<Guid>($"SELECT SeedLotId AS [Value] FROM SeedingEvents WHERE CycleId = {cycle.Id}").SingleAsync());
         // A draft line without an item cannot exist in the old model.
@@ -56,8 +57,9 @@ public class PurchaseReceiptsMigrationSqlServerTests
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
         Assert.False(db.Database.HasPendingModelChanges());
         var lines = await db.PurchaseReceiptLines.AsNoTracking().Include(l => l.Item).Where(l => l.ReceiptId == receipt.Id()).ToListAsync();
-        Assert.Equal([1, 2, 3], lines.OrderBy(l => l.Item!.Code, StringComparer.Ordinal).Select(l => l.LineNumber));
-        Assert.Equal(world.Raft.Id, lines.Single(l => l.Id == seedLine).RaftId);
+        Assert.Equal([1, 2], lines.OrderBy(l => l.Item!.Code, StringComparer.Ordinal).Select(l => l.LineNumber));
+        var seedLines = await db.PurchaseReceiptLines.AsNoTracking().Where(l => l.ReceiptId == seedReceipt.Id()).ToListAsync();
+        Assert.Equal((1, world.Raft.Id), (seedLines.Single(l => l.Id == seedLine).LineNumber, seedLines.Single(l => l.Id == seedLine).RaftId));
         Assert.Equal(world.Raft.Id, lines.Single(l => l.ItemId == world.Material).RaftId);
         Assert.Null(lines.Single(l => l.ItemId == world.Other).RaftId);
 

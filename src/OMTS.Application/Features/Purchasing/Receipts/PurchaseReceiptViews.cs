@@ -3,6 +3,7 @@ using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Employees;
 using OMTS.Application.Features.Purchasing.Payments;
+using OMTS.Application.Features.Purchasing.SeedLots;
 using OMTS.Application.Features.WaterQuality.Dtos;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Purchasing;
@@ -12,12 +13,15 @@ namespace OMTS.Application.Features.Purchasing.Receipts;
 
 /// <summary>Builds the PURCHASE-03.1 receipt detail: lines with rafts, seed lot codes, seeded/returned/returnable quantities, returns.</summary>
 public sealed class PurchaseReceiptViews(
-    IPurchaseReceiptRepository receipts, ISeedLotUsageQuery seedUsage, IAccountRepository accounts, IStatusCatalog statusCatalog, SupplierPaymentAllocationService allocations)
+    IPurchaseReceiptRepository receipts, ISeedLotUsageQuery seedUsage, ISeedLotRegisterQuery seedLots, IAccountRepository accounts, IStatusCatalog statusCatalog, SupplierPaymentAllocationService allocations)
 {
     public async Task<PurchaseReceiptView> ViewAsync(Guid receiptId, CancellationToken cancellationToken)
     {
         var r = await receipts.GetForEditAsync(receiptId, cancellationToken) ?? throw new InvalidOperationException($"Receipt {receiptId} not found.");
         var seeded = await seedUsage.SeededAsync(r.Lines.Select(l => l.Id).ToList(), cancellationToken);
+        var lots = r.Kind == PurchaseReceiptKind.Seed && r.StatusId == StatusIds.PurchaseReceipt.Completed
+            ? await seedLots.FiguresAsync(r.Lines.Where(l => IsSeedLot(r, l)).Select(l => l.Id).ToList(), cancellationToken)
+            : new Dictionary<Guid, SeedLotFigures>();
         var returned = ReturnedQuantities(r);
         var accountIds = r.Returns.Select(rt => rt.RecordedByAccountId).Append(r.RecordedByAccountId);
         if (r.ReceivedByAccountId is { } receiverId)
@@ -54,7 +58,8 @@ public sealed class PurchaseReceiptViews(
                     IsSeedLot(r, l) ? DocumentCodes.SeedLotCode(r.Code, l.LineNumber) : null,
                     seededQuantity, lineReturned, Returnable(l, seededQuantity, lineReturned), l.EnteredDiscount,
                     l.EnteredUnitPrice is null ? null : PurchaseMoney.ReturnPriceInLineUnit(r, l),
-                    l.ItemUnitId, l.UnitFactor, l.Quantity, l.Item?.Unit);
+                    l.ItemUnitId, l.UnitFactor, l.Quantity, l.Item?.Unit,
+                    lots.TryGetValue(l.Id, out var lot) ? new ReceiptLineSeedLot(lot.State, lot.Remaining) : null);
             }).ToList(),
             r.Returns.Where(rt => rt.StatusId != StatusIds.PurchaseReturn.Draft).OrderBy(rt => rt.ReturnedAt).ThenBy(rt => rt.Code).Select(rt => new ReceiptReturnView(
                 rt.Id, rt.Code, rt.ReturnDate, rt.Reason, rt.Lines.Sum(l => l.ReturnValue), rt.StatusId, statusCatalog.DisplayNameOf(rt.StatusId),
@@ -66,7 +71,9 @@ public sealed class PurchaseReceiptViews(
             paid,
             r.Zone is { } zone ? new ZoneRef(zone.Id, zone.Code, zone.Name) : null,
             r.ReceivedAt,
-            r.ReceivedByAccountId is { } receivedBy ? new AccountRef(receivedBy, names.GetValueOrDefault(receivedBy) ?? string.Empty) : null);
+            r.ReceivedByAccountId is { } receivedBy ? new AccountRef(receivedBy, names.GetValueOrDefault(receivedBy) ?? string.Empty) : null,
+            r.Kind,
+            lots.Count > 0 ? SeedLotStates.Combine(lots.Values.Select(f => f.State).ToList()) : null);
     }
 
     /// <summary>GBR-04: only the Seed lines of a Completed receipt are seed lots.</summary>

@@ -33,7 +33,7 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
     public async Task A_missing_code_is_generated_from_the_sequence_of_the_type(string? code)
     {
         var owner = await factory.PurchasingOwnerAsync();
-        var created = await (await owner.PostAsJsonAsync("/api/farming-input-items", new { code, name = $"Item {NewCode()}", group = "Seed", unit = "kg" })).ReadAsync(HttpStatusCode.Created);
+        var created = await (await owner.PostAsJsonAsync("/api/farming-input-items", new { code, name = $"Item {NewCode()}", group = "Seed", unit = "kg", productId = await owner.SeedProductAsync() })).ReadAsync(HttpStatusCode.Created);
         Assert.Matches("^GI[0-9]{6,}$", created.GetProperty("code").GetString());
     }
 
@@ -41,12 +41,13 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
     public async Task Too_long_values_return_MSG01()
     {
         var owner = await factory.PurchasingOwnerAsync();
+        var productId = await owner.SeedProductAsync();
         foreach (var (body, field) in new (object, string)[]
         {
-            (new { code = new string('c', 51), name = "N", group = "Seed", unit = "kg" }, "Code"),
-            (new { code = NewCode(), name = new string('n', 201), group = "Seed", unit = "kg" }, "Name"),
-            (new { code = NewCode(), name = "N", group = "Seed", unit = new string('u', 31) }, "Units"),
-            (new { code = NewCode(), name = "N", group = "Seed", unit = "kg", description = new string('d', 2001) }, "Description"),
+            (new { code = new string('c', 51), name = "N", group = "Seed", unit = "kg", productId }, "Code"),
+            (new { code = NewCode(), name = new string('n', 201), group = "Seed", unit = "kg", productId }, "Name"),
+            (new { code = NewCode(), name = "N", group = "Seed", unit = new string('u', 31), productId }, "Units"),
+            (new { code = NewCode(), name = "N", group = "Seed", unit = "kg", description = new string('d', 2001), productId }, "Description"),
         })
         {
             Assert.Equal(field, await (await owner.PostAsJsonAsync("/api/farming-input-items", body)).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
@@ -59,7 +60,7 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
         var owner = await factory.PurchasingOwnerAsync();
         var code = $"Seed-{NewCode()}";
         var first = await owner.CreateItemAsync("Seed", code: code);
-        var duplicate = await owner.PostAsJsonAsync("/api/farming-input-items", new { code = code.ToUpperInvariant(), name = "Again", group = "Seed", unit = "kg" });
+        var duplicate = await owner.PostAsJsonAsync("/api/farming-input-items", new { code = code.ToUpperInvariant(), name = "Again", group = "Seed", unit = "kg", productId = await owner.SeedProductAsync() });
         Assert.Equal(first, (await duplicate.ProblemAsync(HttpStatusCode.Conflict, "MSG-GEN-02")).GetProperty("existingId").GetGuid());
 
         var second = await owner.CreateItemAsync("Other");
@@ -101,7 +102,7 @@ public class FarmingInputItemRulesTests(AuthApiFactory factory) : IClassFixture<
         // The code (GBR-03), the name and the description can still change.
         var edited = await (await world.Owner.PutAsJsonAsync($"/api/farming-input-items/{world.Seed}", new
         {
-            code = $"{code}-NEW", name = renamed, group = "Seed", unit = "kg", description = "Hàu Thái Bình Dương", rowVersion = view.GetProperty("rowVersion").GetString(),
+            code = $"{code}-NEW", name = renamed, group = "Seed", unit = "kg", description = "Hàu Thái Bình Dương", productId = view.GetProperty("productId").GetGuid(), rowVersion = view.GetProperty("rowVersion").GetString(),
         })).ReadAsync(HttpStatusCode.OK);
         Assert.Equal(($"{code}-NEW", renamed), (edited.GetProperty("code").GetString(), edited.GetProperty("name").GetString()));
     }

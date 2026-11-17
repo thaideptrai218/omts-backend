@@ -2,6 +2,7 @@ using OMTS.Domain.Common;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
 using OMTS.Domain.Entities.Platform;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Domain.Entities.Purchasing;
 
@@ -18,6 +19,9 @@ public class PurchaseReceipt : AuditableEntity, IHasStatus
     public string Code { get; set; } = string.Empty;
     public Guid SupplierId { get; set; }
     public Supplier Supplier { get; set; } = null!;
+
+    /// <summary>Seed (only Seed items, each line a seed lot) or Supply (Material and Other items, no seed): set when the receipt is created and never changed.</summary>
+    public PurchaseReceiptKind Kind { get; set; } = PurchaseReceiptKind.Supply;
 
     /// <summary>The business date (UTC+7) of <see cref="ReceivedAt"/>; every period filter reads it (BR-PURCHASE-01).</summary>
     public DateOnly ReceiptDate { get; set; }

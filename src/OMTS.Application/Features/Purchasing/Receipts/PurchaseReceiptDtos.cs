@@ -1,4 +1,5 @@
 using OMTS.Application.Features.Employees;
+using OMTS.Application.Features.Purchasing.SeedLots;
 using OMTS.Application.Features.WaterQuality.Dtos;
 using OMTS.Domain.Enums;
 
@@ -26,6 +27,8 @@ public sealed record ReceiptLineInput(
 /// <see cref="Code"/> is the code the user types (1–30 ASCII letters, digits, "-", "_" or "."; unique regardless of case); left
 /// empty, a new receipt gets the next PN code and a Draft keeps its own. It may change while the receipt is a Draft; once Completed
 /// only the stored code (or none) may be sent, since its seed lot codes are printed.
+/// <see cref="Kind"/> (Seed or Supply) is set when the receipt is created and never changes: left out, a new receipt takes the kind of its first line's item (Supply when it has none yet); a Draft saved again
+/// may send it only as it is stored. Every item of the lines must match it (MSG-GEN-01 on <c>Lines</c>): a seed receipt holds only seed items, a supply receipt holds none.
 /// </summary>
 public sealed record SavePurchaseReceiptRequest(
     Guid? SupplierId,
@@ -38,7 +41,8 @@ public sealed record SavePurchaseReceiptRequest(
     Guid? ZoneId = null,
     DateTimeOffset? ReceivedAt = null,
     Guid? ReceivedById = null,
-    string? Code = null);
+    string? Code = null,
+    PurchaseReceiptKind? Kind = null);
 
 public sealed record CompleteReceiptRequest(string? RowVersion);
 
@@ -62,6 +66,7 @@ public sealed record LineRaftRef(Guid Id, string Code, Guid ZoneId, string ZoneC
 /// <param name="Unit">The name of the unit the line was entered in; <paramref name="Quantity"/>, <paramref name="UnitPrice"/>, <paramref name="Discount"/> and <paramref name="NetUnitPrice"/> are per unit of the line.</param>
 /// <param name="BaseQuantity">Quantity × unit factor, in the base unit <paramref name="BaseUnit"/>; seeded, returned and returnable are in base units too.</param>
 /// <param name="SeedLotCode">PN000123-1 on a Seed line of a Completed receipt (GBR-04); null otherwise.</param>
+/// <param name="SeedLot">The state and the quantity left of the seed lot of a Seed line of a Completed receipt; null otherwise.</param>
 /// <param name="Seeded">Quantity seeded from the seed lot (0 for other lines).</param>
 /// <param name="ReturnedQuantity">Quantity on its Recorded returns.</param>
 /// <param name="Returnable">Received − seeded − already returned (0 on a Draft line without quantity).</param>
@@ -93,7 +98,11 @@ public sealed record ReceiptLineView(
     Guid? ItemUnitId = null,
     decimal UnitFactor = 1,
     decimal? BaseQuantity = null,
-    string? BaseUnit = null);
+    string? BaseUnit = null,
+    ReceiptLineSeedLot? SeedLot = null);
+
+/// <summary>Where a seed lot stands (derived from its quantities, never stored) and what is left of it in the base unit of the seed item.</summary>
+public sealed record ReceiptLineSeedLot(SeedLotState State, decimal RemainingQty);
 
 /// <summary>A purchase return of the receipt, Cancelled ones included (with their reason) and Drafts left out; <paramref name="ReturnValue"/> is the amount as recorded.</summary>
 /// <param name="ReturnedAt">When the goods went back, at UTC+7; <paramref name="ReturnDate"/> is its date.</param>
@@ -120,6 +129,8 @@ public sealed record ReceiptReturnView(
 /// <param name="Paid">What the payments of the supplier cover of this receipt: the parts set against it first, then the rest oldest receipts first.</param>
 /// <param name="ReceivedAt">When the goods were received, at UTC+7; <paramref name="ReceiptDate"/> is its date.</param>
 /// <param name="ReceivedBy">Who took the goods in; null only on a receipt that has no receiver.</param>
+/// <param name="Kind">Seed (only seed items) or Supply (Material and Other items); set when the receipt was created.</param>
+/// <param name="SeedState">The combined state of the seed lots of a Completed Seed receipt; null otherwise.</param>
 public sealed record PurchaseReceiptView(
     Guid Id,
     string Code,
@@ -142,7 +153,9 @@ public sealed record PurchaseReceiptView(
     decimal Paid = 0,
     ZoneRef? Zone = null,
     DateTimeOffset ReceivedAt = default,
-    AccountRef? ReceivedBy = null);
+    AccountRef? ReceivedBy = null,
+    PurchaseReceiptKind Kind = PurchaseReceiptKind.Supply,
+    SeedLotState? SeedState = null);
 
 /// <summary>
 /// PURCHASE-01.4: a new receipt filled from another one, line discounts included and the receiver left for the caller; nothing is saved until Save draft or Complete. A supplier, a zone, an

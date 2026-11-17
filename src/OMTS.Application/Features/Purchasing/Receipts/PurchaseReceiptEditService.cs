@@ -69,6 +69,12 @@ public sealed class PurchaseReceiptEditService(
             return AppError.InvalidFields(invalidLines);
         }
 
+        // A seed receipt holds only seed items, a supply receipt none: an edit never mixes them.
+        if (ReceiptKindRules.Mismatch(receipt.Kind, inputs.Select(l => l.ItemId is { } id ? (InputItemGroup?)refs.Items[id].Group : null)) is { } wrongKind)
+        {
+            return wrongKind;
+        }
+
         if (inputs.Select((input, i) => (input, i)).FirstOrDefault(x => !ValuesAllowed(x.input, existing)) is { input: not null } badValues)
         {
             return PurchaseReceiptValidator.InvalidLine(badValues.i + 1);
@@ -139,6 +145,12 @@ public sealed class PurchaseReceiptEditService(
         if (request.SupplierId is { } supplierId && supplierId != receipt.SupplierId)
         {
             invalid.Add("Supplier");
+        }
+
+        // The kind is fixed when the receipt is created: the edit may only repeat it.
+        if (!ReceiptKindRules.IsDefined(request.Kind) || (request.Kind is { } kind && kind != receipt.Kind))
+        {
+            invalid.Add(ReceiptKindRules.KindField);
         }
 
         if (request.ReceiptDate is { } date && date > timeProvider.Today())

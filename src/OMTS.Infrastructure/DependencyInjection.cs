@@ -146,6 +146,7 @@ public static class DependencyInjection
         services.AddScoped<SeedLotRepository>();
         services.AddScoped<ISeedLotRepository>(provider => provider.GetRequiredService<SeedLotRepository>());
         services.AddScoped<ISeedLotUsageQuery>(provider => provider.GetRequiredService<SeedLotRepository>());
+        services.AddScoped<ISeedLotRegisterQuery, SeedLotRegisterQuery>();
         services.AddScoped<ICultivationCycleQuery, CultivationCycleQuery>();
         services.AddScoped<IZoneLicenseRepository, ZoneLicenseRepository>();
         services.AddScoped<IRaftMaterialCostQuery, RaftMaterialCostQuery>();

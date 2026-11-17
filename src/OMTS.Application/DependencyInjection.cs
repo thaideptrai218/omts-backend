@@ -38,6 +38,7 @@ using OMTS.Application.Features.Labor.Work;
 using OMTS.Application.Features.Purchasing;
 using OMTS.Application.Features.Purchasing.Issues;
 using OMTS.Application.Features.Purchasing.Items;
+using OMTS.Application.Features.Purchasing.SeedLots;
 using OMTS.Application.Features.Purchasing.Payments;
 using OMTS.Application.Features.Purchasing.Receipts;
 using OMTS.Application.Features.Purchasing.Suppliers;
@@ -425,6 +426,8 @@ public static class DependencyInjection
         services.AddScoped<PurchaseReceiptAccess>();
         services.AddScoped<PurchaseReceiptValidator>();
         services.AddScoped<PurchaseReceiptViews>();
+        services.AddScoped<SeedLotService>();
+        services.AddScoped<SeedLotFileService>();
         services.AddScoped<PurchaseReceiptNotifications>();
         services.AddScoped<PurchaseDocumentCodeService>();
         services.AddScoped<PurchaseReceiptService>();

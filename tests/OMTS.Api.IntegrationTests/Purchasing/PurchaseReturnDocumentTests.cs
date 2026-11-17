@@ -144,6 +144,34 @@ public class PurchaseReturnDocumentTests(AuthApiFactory factory) : IClassFixture
     }
 
     [Fact]
+    public async Task A_return_has_the_kind_of_its_receipt_and_one_without_a_receipt_never_mixes_seed_and_supply_items()
+    {
+        var world = await factory.WorldAsync();
+        var seedReceipt = await world.CompletedAsync(new LineBody(world.Seed, 10, 100_000));
+        var supplyReceipt = await world.CompletedAsync(new LineBody(world.Other, 10, 100_000));
+
+        var ofSeed = await SaveAsync(world, DraftOf(world, seedReceipt.Id(), seedReceipt.LineOf(world.Seed), 1, complete: true));
+        var ofSupply = await SaveAsync(world, DraftOf(world, supplyReceipt.Id(), supplyReceipt.LineOf(world.Other), 1, complete: true));
+        Assert.Equal(("Seed", "Supply"), (ofSeed.GetProperty("kind").GetString(), ofSupply.GetProperty("kind").GetString()));
+        var seedReturns = await world.Owner.GetFromJsonAsync<JsonElement>($"/api/purchase-returns?SupplierId={world.SupplierId}&kind=Seed");
+        Assert.Equal([ofSeed.Id()], seedReturns.GetProperty("page").GetProperty("items").EnumerateArray().Select(r => r.Id()));
+
+        // Without a receipt a return has no kind of its own, so it holds seed items only or supply items only.
+        var mixed = new
+        {
+            supplierId = world.SupplierId, zoneId = world.Zone.Id, reason = "Damaged", complete = true,
+            lines = new[] { new { itemId = (Guid?)world.Seed, unitPrice = (decimal?)1_000m, quantity = 1m }, new { itemId = (Guid?)world.Other, unitPrice = (decimal?)1_000m, quantity = 1m } },
+        };
+        Assert.Equal("Lines", await (await world.Owner.PostAsJsonAsync("/api/purchase-returns", mixed)).FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+        var standaloneSeed = await SaveAsync(world, new
+        {
+            supplierId = world.SupplierId, zoneId = world.Zone.Id, reason = "Damaged", complete = true,
+            lines = new[] { new { itemId = (Guid?)world.Seed, unitPrice = (decimal?)1_000m, quantity = 1m } },
+        });
+        Assert.Equal("Seed", standaloneSeed.GetProperty("kind").GetString());
+    }
+
+    [Fact]
     public async Task The_list_totals_recorded_returns_only()
     {
         var world = await factory.WorldAsync();

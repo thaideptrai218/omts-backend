@@ -23,7 +23,7 @@ public class PurchaseReceiptCancelTests(AuthApiFactory factory) : IClassFixture<
         var world = await factory.WorldAsync();
         var author = await factory.ZoneManagerAsync(world.Zone);
         var colleague = await factory.ZoneManagerAsync(world.Zone);
-        var draft = await author.CreateReceiptAsync(world.Body(new LineBody(world.Seed, 10, 900), new LineBody(world.Other, 1, 1000)));
+        var draft = await author.CreateReceiptAsync(world.Body(new LineBody(world.Seed, 10, 900), new LineBody(world.Seed, 1, 1000)));
         var url = $"/api/purchase-receipts/{draft.Id()}";
 
         await (await colleague.DeleteAsync(url)).ProblemAsync(HttpStatusCode.Forbidden, "MSG-GEN-08");
@@ -51,7 +51,8 @@ public class PurchaseReceiptCancelTests(AuthApiFactory factory) : IClassFixture<
         var world = await factory.WorldAsync();
         var author = await factory.ZoneManagerAsync(world.Zone);
         var colleague = await factory.ZoneManagerAsync(world.Zone);
-        var receipt = await author.CreateReceiptAsync(world.Body(world.MaterialForRaft(2, 50_000), new LineBody(world.Seed, 10, 900)) with { Complete = true });
+        var receipt = await author.CreateReceiptAsync(world.Body(world.MaterialForRaft(2, 50_000)) with { Complete = true });
+        var seedReceipt = await author.CreateReceiptAsync(world.Body(new LineBody(world.Seed, 10, 900)) with { Complete = true });
         // The raft cost prices the material used on it at its latest purchase: the receipt, until it is cancelled.
         await factory.UseMaterialAsync(world.Raft.Id, world.Material, 2);
 
@@ -63,8 +64,10 @@ public class PurchaseReceiptCancelTests(AuthApiFactory factory) : IClassFixture<
         var cancelled = await (await author.CancelAsync(receipt.Id(), "Wrong supplier")).ReadAsync(HttpStatusCode.OK);
 
         Assert.Equal(("Cancelled", "Wrong supplier"), (cancelled.GetProperty("status").GetString(), cancelled.GetProperty("cancelReason").GetString()));
-        Assert.Null(cancelled.SeedLotCodeOf(world.Seed));
         Assert.Equal(0m, await MaterialCostAsync(world));
+        // A cancelled seed receipt has no seed lot any more.
+        var cancelledSeed = await (await author.CancelAsync(seedReceipt.Id(), "Wrong supplier")).ReadAsync(HttpStatusCode.OK);
+        Assert.Null(cancelledSeed.SeedLotCodeOf(world.Seed));
         Assert.Equal(0m, await world.DebtAsync());
         var audit = await factory.QueryAsync(db => db.AuditEvents.SingleAsync(e => e.RecordId == receipt.Id() && e.Action == "PurchaseReceipt.Cancelled"));
         Assert.Equal("Wrong supplier", audit.Reason);
@@ -78,7 +81,7 @@ public class PurchaseReceiptCancelTests(AuthApiFactory factory) : IClassFixture<
     public async Task A_seeded_seed_lot_or_a_purchase_return_blocks_the_cancellation_and_MSG_PURCHASE_09_names_the_cause()
     {
         var world = await factory.WorldAsync();
-        var seeded = await world.CompletedAsync(new LineBody(world.Other, 1, 1000), new LineBody(world.Seed, 100, 9_000));
+        var seeded = await world.CompletedAsync(new LineBody(world.Seed, 100, 9_000));
         await factory.SeedAsync(world.Raft.Id, seeded.LineOf(world.Seed), 5);
         var lot = seeded.SeedLotCodeOf(world.Seed);
 

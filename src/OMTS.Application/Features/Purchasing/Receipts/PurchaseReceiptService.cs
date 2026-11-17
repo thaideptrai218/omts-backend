@@ -58,13 +58,18 @@ public sealed class PurchaseReceiptService(
         string? generatedCode = null;
         for (var attempt = 1; ; attempt++)
         {
-            var (refs, invalid) = await validator.CheckDraftAsync(request, cancellationToken);
+            var (refs, invalid) = await validator.CheckDraftAsync(request, storedKind: null, cancellationToken);
             if (invalid is not null)
             {
                 return invalid;
             }
 
-            var receipt = new PurchaseReceipt { RecordedByAccountId = currentUser.AccountId!.Value };
+            var receipt = new PurchaseReceipt
+            {
+                RecordedByAccountId = currentUser.AccountId!.Value,
+                // Fixed here for good: the kind sent, else that of the first item (the validator has checked every line against it).
+                Kind = ReceiptKindRules.ForNew(request.Kind, (request.Lines ?? []).Select(l => l.ItemId is { } id ? (InputItemGroup?)refs.Items[id].Group : null)),
+            };
             Apply(receipt, request, refs, kept: null);
             if (request.Complete && await validator.CheckCompleteAsync(receipt, refs, cancellationToken) is { } error)
             {
@@ -133,7 +138,7 @@ public sealed class PurchaseReceiptService(
             return refused;
         }
 
-        var (refs, invalid) = await validator.CheckDraftAsync(request, cancellationToken);
+        var (refs, invalid) = await validator.CheckDraftAsync(request, receipt.Kind, cancellationToken);
         if (invalid is not null)
         {
             return invalid;
@@ -295,7 +300,7 @@ public sealed class PurchaseReceiptService(
 
     public static object Snapshot(PurchaseReceipt r) => new
     {
-        r.Code, r.SupplierId, r.ReceiptDate, r.ReceivedAt, r.ReceivedByAccountId, r.Notes, r.Discount, r.ZoneId,
+        r.Code, r.Kind, r.SupplierId, r.ReceiptDate, r.ReceivedAt, r.ReceivedByAccountId, r.Notes, r.Discount, r.ZoneId,
         Lines = r.Lines.OrderBy(l => l.LineNumber)
             .Select(l => new { l.LineNumber, l.ItemId, l.ItemUnitId, Quantity = l.EnteredQuantity, UnitPrice = l.EnteredUnitPrice, Discount = l.EnteredDiscount, l.LineAmount, l.SupplierLotCode, l.RaftId }).ToList(),
     };

@@ -392,7 +392,7 @@ public class PurchaseReturnsQaSqlServerTests
     {
         await using var host = await FarmingHost.StartAsync();
         var world = await host.WorldAsync();
-        var receipt = await world.CompletedAsync(new LineBody(world.Other, 1, 499), new LineBody(world.Material, 1, 500), new LineBody(world.Seed, 1, 999), new LineBody(world.Other, 1, 1_001));
+        var receipt = await world.CompletedAsync(new LineBody(world.Other, 1, 499), new LineBody(world.Material, 1, 500), new LineBody(world.Other, 1, 999), new LineBody(world.Other, 1, 1_001));
         var lines = receipt.GetProperty("lines").EnumerateArray().OrderBy(l => l.GetProperty("lineNumber").GetInt32()).Select(l => l.Id()).ToList();
         var ids = new List<Guid>();
         foreach (var line in lines)

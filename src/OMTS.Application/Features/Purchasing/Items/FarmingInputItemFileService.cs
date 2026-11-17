@@ -124,7 +124,8 @@ public sealed class FarmingInputItemFileService(
             var invalid = new List<string>();
             var typeText = Cell(Type);
             InputItemGroup? type = typeText is not null && Types.TryGetValue(typeText, out var t) ? t : null;
-            if (type is null)
+            // A Seed item needs the product it sells as, which the file has no column for: seed items are added one by one in the Giống screen.
+            if (type is null or InputItemGroup.Seed)
             {
                 invalid.Add(Type);
             }

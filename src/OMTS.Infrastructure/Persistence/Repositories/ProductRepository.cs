@@ -7,6 +7,13 @@ namespace OMTS.Infrastructure.Persistence.Repositories;
 
 internal sealed class ProductRepository(OmtsDbContext db) : IProductRepository
 {
+    public async Task<IReadOnlyList<ProductSourceSeed>> SourceSeedsAsync(Guid productId, CancellationToken cancellationToken) =>
+        await db.FarmingInputItems.AsNoTracking()
+            .Where(i => i.ProductId == productId && i.Group == InputItemGroup.Seed && !i.IsHidden)
+            .OrderBy(i => i.Code)
+            .Select(i => new ProductSourceSeed(i.Id, i.Code, i.Name))
+            .ToListAsync(cancellationToken);
+
     public Task<Product?> GetForEditAsync(Guid productId, CancellationToken cancellationToken) =>
         db.Products
             .Include(p => p.Units).ThenInclude(u => u.Unit)

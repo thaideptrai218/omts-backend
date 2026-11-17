@@ -30,7 +30,7 @@ public class SupplierDebtSqlServerTests
         var tag = NewCode();
         world = world with { SupplierId = await owner.CreateSupplierAsync(name: $"{tag} NCC") };
 
-        var old = await owner.CreateReceiptAsync(world.Body(new LineBody(world.Seed, 12.5m, 45_501), new LineBody(world.Other, 1.5m, 333)) with { ReceiptDate = Today.AddDays(-20), Complete = true });
+        var old = await owner.CreateReceiptAsync(world.Body(new LineBody(world.Material, 12.5m, 45_501), new LineBody(world.Other, 1.5m, 333)) with { ReceiptDate = Today.AddDays(-20), Complete = true });
         Assert.Equal(568_763m + 500m, old.Money("total"));
         await world.PayAsync(100_001, Today.AddDays(-18));
         var recent = await owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 2, 250_000)) with { ReceiptDate = Today.AddDays(-5), Complete = true });

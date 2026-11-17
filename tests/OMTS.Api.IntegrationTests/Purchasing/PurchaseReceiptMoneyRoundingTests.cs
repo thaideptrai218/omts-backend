@@ -43,13 +43,13 @@ public class PurchaseReceiptMoneyRoundingTests(AuthApiFactory factory) : IClassF
         var world = await factory.WorldAsync();
 
         // 12.5 × 45,501 = 568,762.5 (to even: 568,762); 1.230 is 1.23; 1.23 × 1,000 = 1,230.
-        var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 12.5m, 45_501), new LineBody(world.Seed, 1.230m, 1_000)));
+        var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 12.5m, 45_501), new LineBody(world.Material, 1.230m, 1_000)));
 
         Assert.Equal([568_763m, 1_230m], draft.GetProperty("lines").EnumerateArray().Select(l => l.Money("lineAmount")));
         Assert.Equal(569_993m, draft.Money("total"));
 
         // 0.5 × 1 three times: 1 + 1 + 1, never the 2 of the rounded sum, also when a Draft is edited and completed.
-        var completed = await (await world.Owner.EditAsync(draft, world.Body(new LineBody(world.Other, 0.5m, 1), new LineBody(world.Seed, 0.5m, 1), new LineBody(world.Other, 0.5m, 1)) with { Complete = true }))
+        var completed = await (await world.Owner.EditAsync(draft, world.Body(new LineBody(world.Other, 0.5m, 1), new LineBody(world.Material, 0.5m, 1), new LineBody(world.Other, 0.5m, 1)) with { Complete = true }))
             .ReadAsync(HttpStatusCode.OK);
         Assert.Equal(3m, completed.Money("total"));
     }

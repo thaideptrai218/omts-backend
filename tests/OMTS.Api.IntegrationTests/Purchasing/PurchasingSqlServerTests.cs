@@ -45,9 +45,10 @@ public class PurchasingSqlServerTests
         }
 
         var code = $"Seed-{NewCode()}";
+        var productId = await owner.SeedProductAsync();
         var items = await InParallelAsync(6, i => owner.PostAsJsonAsync("/api/farming-input-items", new
         {
-            code = i % 2 == 0 ? code : code.ToUpperInvariant(), name = "Hàu giống", group = "Seed", unit = "kg",
+            code = i % 2 == 0 ? code : code.ToUpperInvariant(), name = "Hàu giống", group = "Seed", unit = "kg", productId,
         }));
         Assert.Single(items, r => r.StatusCode == HttpStatusCode.Created);
         await AssertLosersAsync(items.Where(r => r.StatusCode != HttpStatusCode.Created), "409 MSG-GEN-02");
@@ -87,7 +88,7 @@ public class PurchasingSqlServerTests
         var first = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 1000)));
 
         var creates = await InParallelAsync(8, i => (i % 2 == 0 ? world.Owner : manager).PostReceiptAsync(
-            world.Body(new LineBody(world.Seed, 10, 10_000), new LineBody(world.Other, 1, 1000)) with { Complete = i % 3 != 0 }));
+            world.Body(new LineBody(world.Seed, 10, 10_000), new LineBody(world.Seed, 1, 1000)) with { Complete = i % 3 != 0 }));
         var receipts = new List<JsonElement>();
         foreach (var response in creates)
         {
@@ -147,7 +148,7 @@ public class PurchasingSqlServerTests
         var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1, 10_000), new LineBody(null, null, null)));
 
         var edited = await (await world.Owner.EditAsync(draft, world.Body(
-            new LineBody(world.Seed, 10, 20_000, RaftId: world.Raft.Id), new LineBody(world.Other, 2, null), new LineBody(world.Material, 1.5m, 333)))).ReadAsync(HttpStatusCode.OK);
+            new LineBody(world.Material, 10, 20_000, RaftId: world.Raft.Id), new LineBody(world.Other, 2, null), new LineBody(world.Material, 1.5m, 333)))).ReadAsync(HttpStatusCode.OK);
         Assert.Equal([1, 2, 3], edited.GetProperty("lines").EnumerateArray().Select(l => l.GetProperty("lineNumber").GetInt32()));
         Assert.Equal(200_500m, edited.Money("total"));
         // A lines-only edit bumps the receipt version: an editor still holding the first one gets MSG06.
@@ -269,10 +270,10 @@ public class PurchasingSqlServerTests
     {
         await using var host = await FarmingHost.StartAsync();
         var world = await host.WorldAsync();
-        var receipt = await world.PaidAsync(100_000, new LineBody(world.Seed, 10, 100_000), new LineBody(world.Other, 1.5m, 333));
+        var receipt = await world.PaidAsync(100_000, new LineBody(world.Material, 10, 100_000), new LineBody(world.Other, 1.5m, 333));
         var returned = await world.ReturnAsync(receipt.Id(), receipt.LineOf(world.Other), 0.5m);
         var returnId = returned.GetProperty("returns")[0].Id();
-        var lineId = receipt.LineOf(world.Seed);
+        var lineId = receipt.LineOf(world.Material);
 
         // BR-PURCHASE-02: line amounts keep their dongs, and so do return amounts (166.5 → 167), and return codes are unique;
         // line numbers are unique on a receipt (the seed lot code).
@@ -315,9 +316,14 @@ public class PurchasingSqlServerTests
         var receipt = await owner.CreateReceiptAsync(new ReceiptBody
         {
             SupplierId = supplier.Id(), Notes = new string('ả', 1000), Complete = true,
-            Lines = [new LineBody(item.Id(), 999_999.99m, 1000), new LineBody(world.Seed, 1, 10, new string('ừ', 100), world.Raft.Id)],
+            Lines = [new LineBody(item.Id(), 999_999.99m, 1000), new LineBody(item.Id(), 1, 10)],
         });
         Assert.Equal(1_000_000_000m, receipt.Money("total"));
+        // The longest supplier lot code is on a seed receipt of its own: a receipt holds seed items or supply items, never both.
+        await owner.CreateReceiptAsync(new ReceiptBody
+        {
+            SupplierId = supplier.Id(), Complete = true, Lines = [new LineBody(world.Seed, 1, 10, new string('ừ', 100), world.Raft.Id)],
+        });
 
         await (await owner.PostReturnAsync(receipt.Id(), new ReturnBody
         {
@@ -341,8 +347,8 @@ public class PurchasingSqlServerTests
         var foundSuppliers = await owner.GetFromJsonAsync<JsonElement>($"/api/suppliers?search=HAU GIONG CAT BA {tag.ToUpperInvariant()}");
         Assert.Equal([named], foundSuppliers.GetProperty("items").EnumerateArray().Select(s => s.Id()));
 
-        var receipt = await world.PaidAsync(200_000,
-            new LineBody(world.Seed, 100, 10_000, RaftId: world.Raft.Id), world.MaterialForRaft(10, 10_000), new LineBody(world.Other, 1.5m, 333));
+        await world.CompletedAsync(new LineBody(world.Seed, 100, 10_000, RaftId: world.Raft.Id));
+        var receipt = await world.PaidAsync(200_000, world.MaterialForRaft(10, 10_000), new LineBody(world.Other, 1.5m, 333));
         await (await owner.PostReturnAsync(receipt.Id(), new ReturnBody { Lines = [new ReturnLineBody(receipt.LineOf(world.Material), 1)] }))
             .ReadAsync(HttpStatusCode.Created);
         var draft = await owner.CreateReceiptAsync(world.Body(new LineBody(null, 1, 1000)));
@@ -369,7 +375,7 @@ public class PurchasingSqlServerTests
         Assert.Equal((100_000m, 10_000m, 90_000m), (totals.Money("receiptsTotal"), totals.Money("returnsTotal"), totals.Money("netTotal")));
         Assert.Equal(JsonValueKind.Null, totals.GetProperty("raftMaterialCost").ValueKind);
         var row = all.GetProperty("page").GetProperty("items")[0];
-        Assert.Equal((1_100_500m, 100_000m), (row.Money("total"), row.Money("linesTotal")));
+        Assert.Equal((100_500m, 100_000m), (row.Money("total"), row.Money("linesTotal")));
         // The price of a usage is a subquery per usage: the latest Completed line of the item received by its date.
         await host.UseMaterialAsync(world.Raft.Id, world.Material, 3);
         var costs = await (await owner.GetAsync($"/api/purchase-receipts/raft-material-costs?{period}&raftId={world.Raft.Id}")).ReadAsync(HttpStatusCode.OK);

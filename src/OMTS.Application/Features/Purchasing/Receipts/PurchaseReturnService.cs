@@ -459,6 +459,11 @@ public sealed class PurchaseReturnService(
             return AppError.InvalidFields(invalid);
         }
 
+        if (ReceiptKindRules.MixesKinds(inputs.Select(l => l.ItemId is { } id ? (InputItemGroup?)found[id].Group : null)))
+        {
+            return ReceiptKindRules.MixedReturn();
+        }
+
         foreach (var line in purchaseReturn.Lines.ToList())
         {
             purchaseReturn.Lines.Remove(line);
@@ -630,6 +635,11 @@ public sealed class PurchaseReturnService(
         {
             invalid.Add("Returned at");
         }
+        if (invalid.Count == 0 && receipt is null && ReceiptKindRules.MixesKinds(lines.Select(l => l?.ItemId is { } id && found.TryGetValue(id, out var item) ? (InputItemGroup?)item.Group : null)))
+        {
+            return (null, ReceiptKindRules.MixedReturn());
+        }
+
         return invalid.Count > 0
             ? (null, AppError.InvalidFields(invalid.Distinct().ToList()))
             : (new ReturnSources(receipt, supplier!, zone, found), null);

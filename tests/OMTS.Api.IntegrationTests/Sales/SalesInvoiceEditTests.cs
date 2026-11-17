@@ -73,13 +73,15 @@ public class SalesInvoiceEditTests
         var sale = await api.SaleSetupAsync();
         var owner = sale.Owner.Client;
         var second = (await owner.CreateProductAsync(unitPrice: 40_000m)).Id();
-        var lot = (await owner.HarvestLotAsync(sale.RaftId, HarvestFields.OfLanes(3).WithProducts((sale.ProductId, 8, 400m), (second, 4, 100m)))).Id();
-        Dictionary<string, object?> Other(decimal kg) => new() { ["productId"] = second, ["harvestLotId"] = lot, ["kg"] = kg };
-        var sold = (await owner.SellAsync(Invoice(sale.CustomerId, [KgLine(sale, lot, 5m), Other(3m)], Cash(0m, "PayLater", payLaterOwnerAgreed: true), lot))).GetProperty("invoice");
+        // A lot holds one product, so the two products of the invoice come from two lots.
+        var lot = (await owner.HarvestLotAsync(sale.RaftId, HarvestFields.OfLanes(3).WithProducts((sale.ProductId, 8, 400m)))).Id();
+        var secondLot = (await owner.HarvestLotAsync(sale.RaftId, HarvestFields.OfLanes(4).WithProducts((second, 4, 100m)))).Id();
+        Dictionary<string, object?> Other(decimal kg) => new() { ["productId"] = second, ["harvestLotId"] = secondLot, ["kg"] = kg };
+        var sold = (await owner.SellAsync(Invoice(sale.CustomerId, [KgLine(sale, lot, 5m), Other(3m)], Cash(0m, "PayLater", payLaterOwnerAgreed: true), lot, secondLot))).GetProperty("invoice");
         Assert.Equal([(ProductStockMovementKind.Harvest, 400m), (ProductStockMovementKind.Sale, -5m)], await StockRowsAsync(api, sale.ProductId));
 
         // The same lines again: no row is written.
-        var same = (await owner.EditedAsync(sold.Id(), Edit(sold, [KgLine(sale, lot, 5m), Other(3m)], lot))).GetProperty("invoice");
+        var same = (await owner.EditedAsync(sold.Id(), Edit(sold, [KgLine(sale, lot, 5m), Other(3m)], lot, secondLot))).GetProperty("invoice");
         Assert.Equal(2, (await StockRowsAsync(api, sale.ProductId)).Count);
         Assert.Equal(2, (await StockRowsAsync(api, second)).Count);
 
@@ -90,7 +92,7 @@ public class SalesInvoiceEditTests
         Assert.Equal(1, shorter.GetProperty("lines").GetArrayLength());
 
         // A line added posts a Sale row for its product, and a change of kg is reversed and posted again.
-        var longer = (await owner.EditedAsync(sold.Id(), Edit(shorter, [KgLine(sale, lot, 6m), Other(2m)], lot))).GetProperty("invoice");
+        var longer = (await owner.EditedAsync(sold.Id(), Edit(shorter, [KgLine(sale, lot, 6m), Other(2m)], lot, secondLot))).GetProperty("invoice");
         Assert.Equal((-6m, -2m), (SoldKg(await StockRowsAsync(api, sale.ProductId)), SoldKg(await StockRowsAsync(api, second))));
         Assert.Equal(2, longer.GetProperty("lines").GetArrayLength());
 
@@ -159,9 +161,9 @@ public class SalesInvoiceEditTests
         Assert.Equal("Completed", (await owner.GetOrderAsync(orderId)).Text("status"));
     }
 
-    // The invoice of a Completed order is cancelled: the order is Delivering again, the advance is the order's again and held for it.
+    // The only invoice of a Completed order is cancelled: the order goes back to Draft (it has no live invoice), the advance is the order's again and held for it.
     [Fact]
-    public async Task Cancelling_the_invoice_of_a_completed_order_reopens_it_and_holds_the_advance_for_it_again()
+    public async Task Cancelling_the_only_invoice_of_a_completed_order_sends_it_back_to_draft_and_holds_the_advance_for_it_again()
     {
         using var api = new AuthApiFactory();
         var sale = await api.SaleSetupAsync();
@@ -176,7 +178,7 @@ public class SalesInvoiceEditTests
         await owner.CancelledAsync(sold.Id(), Cancellation(sold));
 
         var reopened = await owner.GetOrderAsync(orderId);
-        Assert.Equal(("Delivering", 300_000m, 0m), (reopened.Text("status"), reopened.Money("advanceLeft"), reopened.GetProperty("lines")[0].Money("deliveredQuantity")));
+        Assert.Equal(("Draft", 300_000m, 0m), (reopened.Text("status"), reopened.Money("advanceLeft"), reopened.GetProperty("lines")[0].Money("deliveredQuantity")));
         Assert.Empty(await api.QueryAsync(db => db.CustomerPaymentAllocations.AsNoTracking().ToListAsync()));
         // The customer paid the advance: his debt is -300,000, all of it held for the order.
         Assert.Equal(-300_000m, await owner.CustomerDebtAsync(sale.CustomerId));

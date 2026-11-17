@@ -1,3 +1,5 @@
+using OMTS.Domain.Enums;
+
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
 /// <summary>One receipt with its money figures summed in the database, so lists and totals never load the receipt graph.</summary>
@@ -6,7 +8,7 @@ public sealed record ReceiptFigureRow(
     Guid Id, string Code, DateOnly ReceiptDate, Guid SupplierId, string SupplierName, string SupplierPhone, int StatusId,
     Guid RecordedByAccountId, decimal Total, decimal LinesTotal, string SupplierCode, int ItemCount, decimal Returned, decimal Discount,
     Guid? ZoneId, string? ZoneCode, string? ZoneName, string? Notes, DateTimeOffset? CompletedAt, DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt,
-    DateTimeOffset ReceivedAt, Guid? ReceivedByAccountId, IReadOnlyList<string> ReturnCodes)
+    DateTimeOffset ReceivedAt, Guid? ReceivedByAccountId, IReadOnlyList<string> ReturnCodes, PurchaseReceiptKind Kind = PurchaseReceiptKind.Supply)
 {
     /// <summary>What the receipt costs before returns: its total less its discount.</summary>
     public decimal Payable => Total - Discount;
@@ -16,7 +18,8 @@ public sealed record ReceiptFigureRow(
 public sealed record PurchaseReturnFigureRow(
     Guid Id, string Code, DateOnly ReturnDate, Guid? ReceiptId, string? ReceiptCode, Guid SupplierId, string SupplierCode, string SupplierName, string SupplierPhone,
     Guid? ZoneId, string? ZoneCode, string? ZoneName, string Reason, int StatusId, Guid RecordedByAccountId, decimal Value, decimal Discount, int LineCount, decimal Refunded,
-    DateTimeOffset? CancelledAt, string? CancelReason, DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt, byte[] RowVersion, DateTimeOffset ReturnedAt);
+    DateTimeOffset? CancelledAt, string? CancelReason, DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt, byte[] RowVersion, DateTimeOffset ReturnedAt,
+    PurchaseReceiptKind Kind = PurchaseReceiptKind.Supply);
 
 /// <summary>
 /// PURCHASE-03 step 3: <see cref="Count"/> is every matching receipt; the money counts Completed receipts only (BR-PURCHASE-03),

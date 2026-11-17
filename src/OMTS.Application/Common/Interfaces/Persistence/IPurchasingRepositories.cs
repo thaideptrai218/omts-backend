@@ -97,6 +97,9 @@ public interface IFarmingInputItemRepository
     /// <summary>Which of the items are on a receipt line or a material usage record (one query for a whole list).</summary>
     Task<IReadOnlySet<Guid>> UsedAmongAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken);
 
+    /// <summary>True when the item is on a line of a Completed receipt, or in a nursery batch or a seeding record (through a seed lot): the product of a seed is then fixed.</summary>
+    Task<bool> IsSeedInUseAsync(Guid itemId, CancellationToken cancellationToken);
+
     /// <summary>The item units of these items that a receipt or return line names: their factor and unit are then fixed.</summary>
     Task<IReadOnlySet<Guid>> UsedUnitsAmongAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken);
 
@@ -143,7 +146,8 @@ public sealed record PurchaseReceiptFilter(
     IReadOnlyList<InputItemGroup>? ItemGroups = null,
     IReadOnlyList<Guid>? ZoneIds = null,
     PurchaseReceiptSort Sort = PurchaseReceiptSort.Date,
-    bool Descending = true);
+    bool Descending = true,
+    PurchaseReceiptKind? Kind = null);
 
 public enum PurchaseReceiptSort
 {
@@ -166,7 +170,7 @@ public enum PurchaseReturnSort
 /// <summary>The purchase return list filters; null means "any". The period is on the return date.</summary>
 public sealed record PurchaseReturnFilter(
     string? Search, DateOnly From, DateOnly To, Guid? SupplierId, IReadOnlyList<int>? StatusIds, IReadOnlyList<Guid>? ZoneIds,
-    PurchaseReturnSort Sort, bool Descending, bool? FromReceipt = null);
+    PurchaseReturnSort Sort, bool Descending, bool? FromReceipt = null, PurchaseReceiptKind? Kind = null);
 
 public interface IPurchaseReceiptRepository
 {

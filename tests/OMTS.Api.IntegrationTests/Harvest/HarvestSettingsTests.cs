@@ -137,7 +137,8 @@ public class HarvestSettingsTests
         foreach (var age in new[] { 3, 2, 1, 0 })
         {
             var lot = await owner.HarvestLotAsync(raft.RaftId);
-            await factory.UpdateAsync<HarvestLot>(lot.Id(), l => l.HarvestDate = today.AddDays(-age));
+            // The days before the automatic close count from the weighing day, which the kit does on the day of the record: the lot is dated back on both.
+            await factory.UpdateAsync<HarvestLot>(lot.Id(), l => (l.HarvestDate, l.WeighedOn) = (today.AddDays(-age), today.AddDays(-age)));
             ofDays[age] = lot.Id();
         }
 

@@ -72,6 +72,12 @@ internal sealed class InputItemListReader(OmtsDbContext db) : IInputItemListQuer
             items = items.Where(i => i.Group == group);
         }
 
+        // The kind of receipt the item goes on: Seed is the seed catalogue, Supply every other item.
+        if (filter.Kind is { } kind)
+        {
+            items = kind == PurchaseReceiptKind.Seed ? items.Where(i => i.Group == InputItemGroup.Seed) : items.Where(i => i.Group != InputItemGroup.Seed);
+        }
+
         if (filter.ItemGroupId is { } itemGroupId)
         {
             // A parent group also lists the items of its child groups.

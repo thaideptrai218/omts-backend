@@ -113,22 +113,22 @@ public class HarvestLotsQaTestsSqlServer
         public void DiscardChanges() => inner.DiscardChanges();
     }
 
-    // BR-HARVEST-04: the catalog holds three statuses and only the three moves.
+    // BR-HARVEST-04: the catalog holds four statuses (a new lot waits for its weighing) and only the four moves.
     [SqlServerFact]
-    public async Task The_catalog_holds_the_three_statuses_and_only_the_three_moves()
+    public async Task The_catalog_holds_the_four_statuses_and_only_the_four_moves()
     {
         var (host, _, _) = await StartAsync();
         await using var _host = host;
 
         var statuses = await host.QueryAsync(db => db.Statuses.Where(s => s.Group == StatusGroups.HarvestLot).OrderBy(s => s.Id).Select(s => new { s.Id, s.Code, s.IsInitial, s.IsFinal }).ToListAsync());
         Assert.Equal(
-            [(2901, "OPEN", true, false), (2902, "REOPENED", false, false), (2903, "CLOSED", false, false)],
+            [(2901, "OPEN", false, false), (2902, "REOPENED", false, false), (2903, "CLOSED", false, false), (2904, "AWAITING_WEIGHING", true, false)],
             statuses.Select(s => (s.Id, s.Code, s.IsInitial, s.IsFinal)));
 
         var moves = await host.QueryAsync(db => db.StatusTransitions
-            .Where(t => (t.FromStatusId >= 2901 && t.FromStatusId <= 2903) || (t.ToStatusId >= 2901 && t.ToStatusId <= 2903))
+            .Where(t => (t.FromStatusId >= 2901 && t.FromStatusId <= 2904) || (t.ToStatusId >= 2901 && t.ToStatusId <= 2904))
             .Select(t => new { t.FromStatusId, t.ToStatusId }).ToListAsync());
-        Assert.Equal(new[] { (2901, 2903), (2902, 2903), (2903, 2902) }.Order(), moves.Select(m => (m.FromStatusId, m.ToStatusId)).Order());
+        Assert.Equal(new[] { (2901, 2903), (2902, 2903), (2903, 2902), (2904, 2901) }.Order(), moves.Select(m => (m.FromStatusId, m.ToStatusId)).Order());
     }
 
     // BR-HARVEST-03 "the raft code and the harvest date, with the zone code put first": every code the zone and raft columns accept must make a lot. Raft 50 + zone 50 give 110 characters; the lot code column holds 120.

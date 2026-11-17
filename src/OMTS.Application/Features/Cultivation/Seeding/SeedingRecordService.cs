@@ -107,6 +107,8 @@ public sealed class SeedingRecordService(
             return overPlan;
         }
 
+        // A cycle with no product yet takes it from the seed of its first seeding.
+        cycle.ProductId = CycleKindRules.ProductFromFirstSeeding(cycle.ProductId, fields!.Lot);
         var recorder = currentUser.AccountId ?? throw new InvalidOperationException("A seeding session needs an authenticated caller.");
         var record = new SeedingRecord
         {

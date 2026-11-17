@@ -42,7 +42,7 @@ public class SupplierPaymentsDebtsQaSqlServerTests
 
         // 568,762.5 → 568,763; 499.5 → 500; 330.33 → 330; 0: the total is the sum of the rounded lines, 569,593.
         var first = await owner.CreateReceiptAsync(Receipt(40, true,
-            new LineBody(world.Seed, 12.5m, 45_501), new LineBody(world.Other, 1.5m, 333), new LineBody(world.Material, 0.33m, 1_001), new LineBody(world.Other, 5, 0)));
+            new LineBody(world.Material, 12.5m, 45_501), new LineBody(world.Other, 1.5m, 333), new LineBody(world.Material, 0.33m, 1_001), new LineBody(world.Other, 5, 0)));
         Assert.Equal(569_593m, first.Money("total"));
         var second = await owner.CreateReceiptAsync(Receipt(40, true, new LineBody(world.Other, 1, 1_000_000)));
         await owner.CreateReceiptAsync(Receipt(39, true, new LineBody(world.Other, 1, 0)));

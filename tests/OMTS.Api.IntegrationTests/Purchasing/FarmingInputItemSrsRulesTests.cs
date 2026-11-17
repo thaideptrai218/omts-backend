@@ -54,8 +54,9 @@ public class FarmingInputItemSrsRulesTests(AuthApiFactory factory) : IClassFixtu
         using var api = new AuthApiFactory();
         var owner = await api.PurchasingOwnerAsync();
 
-        var con = await (await owner.PostAsJsonAsync(Items, new { code = "VT001", name = "Hàu giống 3 cm", group = "Seed", unit = "con" })).ReadAsync(HttpStatusCode.Created);
-        var kg = await (await owner.PostAsJsonAsync(Items, new { code = "VT002", name = "Hàu giống 5 cm", group = "Seed", unit = "kg" })).ReadAsync(HttpStatusCode.Created);
+        var productId = await owner.SeedProductAsync();
+        var con = await (await owner.PostAsJsonAsync(Items, new { code = "VT001", name = "Hàu giống 3 cm", group = "Seed", unit = "con", productId })).ReadAsync(HttpStatusCode.Created);
+        var kg = await (await owner.PostAsJsonAsync(Items, new { code = "VT002", name = "Hàu giống 5 cm", group = "Seed", unit = "kg", productId })).ReadAsync(HttpStatusCode.Created);
 
         Assert.Equal("con", con.GetProperty("unit").GetString());
         Assert.Equal("kg", kg.GetProperty("unit").GetString());
@@ -69,12 +70,13 @@ public class FarmingInputItemSrsRulesTests(AuthApiFactory factory) : IClassFixtu
     {
         using var api = new AuthApiFactory();
         var owner = await api.PurchasingOwnerAsync();
-        var seed = await CreatedAsync(owner, new { code = "VT001", name = "Hàu giống", group = "Seed", unit = "kg" });
+        var productId = await owner.SeedProductAsync();
+        var seed = await CreatedAsync(owner, new { code = "VT001", name = "Hàu giống", group = "Seed", unit = "kg", productId });
         var view = await owner.GetFromJsonAsync<JsonElement>($"{Items}/{seed}");
 
         var edited = await (await owner.PutAsJsonAsync($"{Items}/{seed}", new
         {
-            code = "VT001", name = "Hàu giống", group = "Seed", unit = "con",
+            code = "VT001", name = "Hàu giống", group = "Seed", unit = "con", productId,
             units = new[] { new { id = (Guid?)null, unitId = (Guid?)null, unitName = "con", factor = 1m, code = (string?)null, isBase = true } },
             rowVersion = view.GetProperty("rowVersion").GetString(),
         })).ReadAsync(HttpStatusCode.OK);

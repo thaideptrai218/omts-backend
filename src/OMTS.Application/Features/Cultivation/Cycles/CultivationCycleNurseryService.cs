@@ -156,11 +156,16 @@ public sealed partial class CultivationCycleService
                 return batchError;
             }
 
-            // The product follows the batch: the one the new batch's seed item sells as.
+            // One cycle grows one kind of oyster: the new batch must hold seed of the cycle's product; a cycle that has none yet takes the one the batch's seed item sells as.
             var (batchProduct, productError) = ProductOfBatch(batch!);
             if (productError is not null)
             {
                 return productError;
+            }
+
+            if (!CycleKindRules.Matches(cycle.ProductId, batchProduct!.Id))
+            {
+                return AppError.Invalid(CycleKindRules.SeedLotField, CycleKindRules.Hint);
             }
 
             newBatch = batch;

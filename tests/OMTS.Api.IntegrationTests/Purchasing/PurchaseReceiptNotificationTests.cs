@@ -30,7 +30,7 @@ public class PurchaseReceiptNotificationTests(AuthApiFactory factory) : IClassFi
         await factory.GrantAsync(managerAccount, StaffRole.ZoneManager, world.Zone);
         var manager = await factory.LoginAsync(managerAccount.Username);
 
-        var draft = await manager.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1.5m, 333), new LineBody(world.Seed, 2, 1_000)));
+        var draft = await manager.CreateReceiptAsync(world.Body(new LineBody(world.Other, 1.5m, 333), new LineBody(world.Material, 2, 1_000)));
         Assert.Empty(Completed(await world.Owner.NotificationPageAsync()));
         Assert.False(await factory.QueryAsync(db => db.Notifications.AnyAsync(n => n.RelatedRecordId == draft.Id())));
 

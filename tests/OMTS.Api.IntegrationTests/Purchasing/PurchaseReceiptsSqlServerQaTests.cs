@@ -35,7 +35,7 @@ public class PurchaseReceiptsSqlServerQaTests
 
         for (var round = 0; round < 4; round++)
         {
-            var draft = await author.CreateReceiptAsync(world.Body(new LineBody(world.Seed, 10, 1_000), new LineBody(world.Other, 1, 1_000)));
+            var draft = await author.CreateReceiptAsync(world.Body(new LineBody(world.Seed, 10, 1_000), new LineBody(world.Seed, 1, 1_000)));
             var responses = await InParallelAsync(2, i => i == 0 ? author.CompleteAsync(draft.Id()) : world.Owner.DeleteAsync($"{Receipts}/{draft.Id()}"));
 
             Assert.All(responses, r => Assert.NotEqual(HttpStatusCode.InternalServerError, r.StatusCode));
@@ -132,11 +132,14 @@ public class PurchaseReceiptsSqlServerQaTests
     {
         await using var host = await FarmingHost.StartAsync();
         var world = await host.WorldAsync();
-        var completed = await world.CompletedAsync(new LineBody(world.Other, 1.5m, 333), new LineBody(world.Seed, 2, 1_000, "L1", world.Raft.Id));
+        // A receipt holds one kind: the fractional supply line, the seed lot and the draft are on separate receipts.
+        var supply = await world.CompletedAsync(new LineBody(world.Other, 1.5m, 333));
+        var completed = await world.CompletedAsync(new LineBody(world.Seed, 2, 1_000, "L1", world.Raft.Id));
         var cancelled = await world.CompletedAsync(new LineBody(world.Seed, 3, 1_000));
         await (await world.Owner.CancelAsync(cancelled.Id(), "Wrong")).ReadAsync(HttpStatusCode.OK);
-        var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Seed, null, null), new LineBody(world.Other, 2, null), new LineBody(null, 1, 1_000)));
-        var (completedSeed, cancelledSeed, fractional) = (completed.LineOf(world.Seed), cancelled.LineOf(world.Seed), completed.LineOf(world.Other));
+        var secondSeed = await world.Owner.CreateItemAsync("Seed", "kg");
+        var draft = await world.Owner.CreateReceiptAsync(world.Body(new LineBody(world.Seed, null, null), new LineBody(secondSeed, 2, null), new LineBody(null, 1, 1_000)));
+        var (completedSeed, cancelledSeed, fractional) = (completed.LineOf(world.Seed), cancelled.LineOf(world.Seed), supply.LineOf(world.Other));
 
         await using var db = host.Database.CreateContext();
         var migrator = db.GetService<IMigrator>();

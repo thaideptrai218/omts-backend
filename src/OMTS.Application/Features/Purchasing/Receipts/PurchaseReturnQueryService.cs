@@ -9,6 +9,7 @@ using OMTS.Application.Features.AccessManagement.Dtos;
 using OMTS.Application.Features.Employees;
 using OMTS.Application.Features.WaterQuality.Dtos;
 using OMTS.Domain.Constants;
+using OMTS.Domain.Enums;
 
 namespace OMTS.Application.Features.Purchasing.Receipts;
 
@@ -40,7 +41,8 @@ public sealed class PurchaseReturnQueryService(
             found.Lines.Select(l => new PurchaseReturnLineView(l.ReceiptLineId, l.ItemId, l.Item.Code, l.Item.Name, l.Unit, l.EnteredQuantity, l.EnteredUnitPrice, l.ReturnValue, l.ItemUnitId, l.UnitFactor, l.Quantity)).ToList(),
             refunds.Select(p => new ReturnRefundView(p.Id, p.Code, p.PaymentDate, p.Amount, p.Method, p.BankReference, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId), p.CancelledAt)).ToList(),
             RowVersionGuard.Encode(found.RowVersion),
-            found.ReturnedAt);
+            found.ReturnedAt,
+            found.Receipt?.Kind ?? (found.Lines.Any(l => l.Item.Group == InputItemGroup.Seed) ? PurchaseReceiptKind.Seed : PurchaseReceiptKind.Supply));
     }
 
     public async Task<Result<PurchaseReturnSearchResult>> SearchAsync(PurchaseReturnQuery query, CancellationToken cancellationToken)
@@ -112,6 +114,11 @@ public sealed class PurchaseReturnQueryService(
             return AppError.Invalid("Source");
         }
 
+        if (!ReceiptKindRules.IsDefined(query.Kind))
+        {
+            return AppError.Invalid(ReceiptKindRules.KindField);
+        }
+
         var period = PurchasePeriod.Resolve(query.From, query.To, timeProvider.Today());
         if (!period.IsSuccess)
         {
@@ -122,7 +129,7 @@ public sealed class PurchaseReturnQueryService(
         return new PurchaseReturnFilter(
             query.Search, from, to, query.SupplierId, NullIfEmpty(query.StatusIds), NullIfEmpty(query.ZoneIds), sort,
             query.SortDir == "desc" || (query.SortDir is null && query.SortBy is null),
-            query.Source is null ? null : query.Source == "receipt");
+            query.Source is null ? null : query.Source == "receipt", query.Kind);
     }
 
     private static IReadOnlyList<T>? NullIfEmpty<T>(T[]? values) => values is { Length: > 0 } ? values : null;
@@ -137,7 +144,7 @@ public sealed class PurchaseReturnQueryService(
             r.Reason, r.StatusId, statusCatalog.DisplayNameOf(r.StatusId),
             new AccountRef(r.RecordedByAccountId, names.GetValueOrDefault(r.RecordedByAccountId) ?? string.Empty),
             r.Value, r.Discount, r.Value - r.Discount, r.LineCount, r.Refunded, r.CancelledAt, r.CancelReason, r.CreatedAt, r.UpdatedAt,
-            RowVersionGuard.Encode(r.RowVersion), r.ReturnedAt)).ToList();
+            RowVersionGuard.Encode(r.RowVersion), r.ReturnedAt, r.Kind)).ToList();
     }
 }
 

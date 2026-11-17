@@ -31,18 +31,21 @@ public class ProductStockFlowTests(AuthApiFactory factory) : IClassFixture<AuthA
     }
 
     [Fact]
-    public async Task A_harvest_split_per_product_raises_each_stock_and_the_lot_cages_and_kg_are_the_sums_of_its_lines()
+    public async Task A_harvest_with_a_product_line_raises_the_stock_of_that_product_and_the_lot_cages_and_kg_are_those_of_its_line()
     {
         var sale = await factory.SaleSetupAsync();
         var client = sale.Owner.Client;
         var cage = await NewProductWithCageAsync(client);
 
-        var lot = await client.HarvestLotAsync(sale.RaftId, HarvestFields.OfLanes(3).WithProducts((sale.ProductId, 4, 100m), (cage.Id(), 3, null)));
+        // A lot holds one product: the kg of a line with none typed come from the lồng unit of its product (3 cages of 25 kg).
+        var lot = await client.HarvestLotAsync(sale.RaftId, HarvestFields.OfLanes(3).WithProducts((sale.ProductId, 4, 100m)));
+        var cageLot = await client.HarvestLotAsync(sale.RaftId, HarvestFields.OfLanes(4).WithProducts((cage.Id(), 3, null)));
 
-        Assert.Equal((7, 175m), (lot.GetProperty("cageCount").GetInt32(), lot.Kg("estimatedKg")));
-        var lines = lot.GetProperty("productLines").EnumerateArray().ToList();
-        Assert.Equal([100m, 75m], lines.Select(l => l.Kg("kg")));
-        Assert.Equal(cage.Text("code"), lines[1].Text("productCode"));
+        Assert.Equal((4, 100m), (lot.GetProperty("cageCount").GetInt32(), lot.Kg("estimatedKg")));
+        Assert.Equal((3, 75m), (cageLot.GetProperty("cageCount").GetInt32(), cageLot.Kg("estimatedKg")));
+        var line = Assert.Single(lot.GetProperty("productLines").EnumerateArray());
+        Assert.Equal(100m, line.Kg("kg"));
+        Assert.Equal(cage.Text("code"), Assert.Single(cageLot.GetProperty("productLines").EnumerateArray()).Text("productCode"));
         Assert.Equal((100m, 75m), (await OnHandAsync(client, sale.ProductId), await OnHandAsync(client, cage.Id())));
         var movement = (await MovementsAsync(client, sale.ProductId)).GetProperty("items").EnumerateArray().Single();
         Assert.Equal(("Harvest", "HarvestLot", lot.Text("lotCode"), lot.Text("lotCode"), 100m), (movement.Text("kind"), movement.Text("documentKind"), movement.Text("documentCode"), movement.Text("lotCode"), movement.Kg("quantityKg")));
@@ -74,21 +77,34 @@ public class ProductStockFlowTests(AuthApiFactory factory) : IClassFixture<AuthA
     }
 
     [Fact]
-    public async Task A_correction_undoes_the_rows_of_the_lot_and_writes_the_new_ones_and_a_removal_gives_the_kg_back()
+    public async Task The_weighing_writes_the_rows_of_the_lot_weighing_again_undoes_and_replaces_them_and_a_removal_gives_the_kg_back()
     {
         var sale = await factory.SaleSetupAsync();
         var client = sale.Owner.Client;
-        var lot = await client.HarvestLotAsync(sale.RaftId, HarvestFields.OfLanes(3).WithProducts((sale.ProductId, 4, 100m)));
+        var recorded = (await client.RecordHarvestAsync(sale.RaftId, HarvestFields.OfLanes(3).WithProducts((sale.ProductId, 4, 100m)))).GetProperty("lot");
 
-        await factory.CorrectLotAsync(client, lot.Id(), HarvestFields.OfLanes(3).WithProducts((sale.ProductId, 3, 60m)));
+        // Until it is weighed the lot has no kg on the stock, and a correction of its line writes no row.
+        Assert.Equal(0m, await OnHandAsync(client, sale.ProductId));
+        await factory.CorrectLotAsync(client, recorded.Id(), HarvestFields.OfLanes(3).WithProducts((sale.ProductId, 3, 60m)));
+        Assert.Equal(0m, await OnHandAsync(client, sale.ProductId));
+        Assert.Empty((await MovementsAsync(client, sale.ProductId, "?includeReversals=true")).GetProperty("items").EnumerateArray());
+
+        // The weighing writes the Harvest row with the weighed kg; weighing again undoes only that row and writes a new one.
+        (await client.PostWeighAsync(await client.GetHarvestLotAsync(recorded.Id()), 58.5m)).EnsureSuccessStatusCode();
+        Assert.Equal(58.5m, await OnHandAsync(client, sale.ProductId));
+        (await client.PostWeighAsync(await client.GetHarvestLotAsync(recorded.Id()), 60m)).EnsureSuccessStatusCode();
 
         Assert.Equal(60m, await OnHandAsync(client, sale.ProductId));
         Assert.Equal(["Harvest"], (await MovementsAsync(client, sale.ProductId)).GetProperty("items").EnumerateArray().Select(i => i.Text("kind")));
         var withReversals = (await MovementsAsync(client, sale.ProductId, "?includeReversals=true")).GetProperty("items").EnumerateArray().ToList();
         Assert.Equal(3, withReversals.Count);
-        Assert.Contains(withReversals, i => i.Text("kind") == "Reversal" && i.Kg("quantityKg") == -100m);
+        Assert.Contains(withReversals, i => i.Text("kind") == "Reversal" && i.Kg("quantityKg") == -58.5m);
 
-        await factory.RemoveLotAsync(client, lot.Id());
+        // A weighed lot keeps its line: the kg are corrected by weighing again.
+        var refused = await factory.SendCorrectionAsync(client, recorded.Id(), HarvestFields.OfLanes(3).WithProducts((sale.ProductId, 3, 70m)));
+        Assert.Equal("Product lines", await refused.FieldAsync(HttpStatusCode.BadRequest, "MSG-GEN-01"));
+
+        await factory.RemoveLotAsync(client, recorded.Id());
 
         Assert.Equal(0m, await OnHandAsync(client, sale.ProductId));
     }

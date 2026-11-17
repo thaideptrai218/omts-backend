@@ -20,11 +20,15 @@ public sealed record SeedLotMade(Guid LineId, Guid ReceiptId, string Code, Guid 
 /// <summary>CYCLE-02 calls and the seed lots they need.</summary>
 public static class SeedingTestKit
 {
-    /// <summary>A Seed line of a Completed receipt, by the caller, received ten days ago unless the test says otherwise. A cycle of <see cref="CultivationLogTestKit.CycleAsync"/> starts on that day too.</summary>
-    public static async Task<SeedLotMade> SeedLotAsync(this HttpClient client, decimal quantity = 100m, DateOnly? received = null, Guid? raftId = null, bool complete = true)
+    /// <summary>
+    /// A Seed line of a Completed receipt, by the caller, received ten days ago unless the test says otherwise. A cycle of <see cref="CultivationLogTestKit.CycleAsync"/> starts on that day too.
+    /// The seed item sells as <paramref name="productId"/>; left out, it sells as no product, like the seed of a cycle started before the products: the cycle then farms no product (it takes none from the first seeding),
+    /// its harvest lots hold no product line and the seed of any other lot may still be hung on it. A test of the one-kind-per-cycle rule names the product.
+    /// </summary>
+    public static async Task<SeedLotMade> SeedLotAsync(this HttpClient client, decimal quantity = 100m, DateOnly? received = null, Guid? raftId = null, bool complete = true, Guid? productId = null)
     {
         var supplierId = await client.CreateSupplierAsync();
-        var itemId = await client.CreateItemAsync("Seed", "kg");
+        var itemId = await client.CreateItemAsync("Seed", "kg", productId: productId);
         var receipt = await client.CreateReceiptAsync(new ReceiptBody
         {
             SupplierId = supplierId,
@@ -32,7 +36,13 @@ public static class SeedingTestKit
             Lines = [new LineBody(itemId, quantity, 1_000m, RaftId: raftId)],
             Complete = complete,
         });
-        return new SeedLotMade(receipt.LineOf(itemId), receipt.Id(), $"{receipt.Text("code")}-1", itemId, supplierId, receipt);
+        var lineId = receipt.LineOf(itemId);
+        if (productId is null)
+        {
+            await NurseryTestKit.ClearSeedItemProductAsync(TestHosts.ServicesOf(client), lineId);
+        }
+
+        return new SeedLotMade(lineId, receipt.Id(), $"{receipt.Text("code")}-1", itemId, supplierId, receipt);
     }
 
     /// <summary>A session yesterday of ten of the lot on lanes 1 and 2, unless the test says otherwise.</summary>

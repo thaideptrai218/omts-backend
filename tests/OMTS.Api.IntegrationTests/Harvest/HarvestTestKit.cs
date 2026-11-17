@@ -132,7 +132,12 @@ public static class HarvestTestKit
     public static async Task<JsonElement> RecordHarvestAsync(this HttpClient client, Guid raftId, HarvestFields? fields = null) =>
         await (await client.PostHarvestAsync(raftId, fields)).ReadAsync(HttpStatusCode.Created);
 
-    /// <summary>Records a harvest and returns the saved lot.</summary>
+    /// <summary>
+    /// Records a lot and returns it as it is saved: awaiting weighing, so not for sale yet, with no kg on the ledger, its figures counting from its estimated kg and its estimate and lines still corrected by a correction.
+    /// </summary>
+    public static async Task<JsonElement> RecordLotAsync(this HttpClient client, Guid raftId, HarvestFields? fields = null) =>
+        (await client.RecordHarvestAsync(raftId, fields)).GetProperty("lot");
+
     /// <summary>Records a lot and weighs it at its estimated kg, so it is Open and for sale as before weighing existed.</summary>
     public static async Task<JsonElement> HarvestLotAsync(this HttpClient client, Guid raftId, HarvestFields? fields = null) =>
         await client.WeighAtEstimateAsync((await client.RecordHarvestAsync(raftId, fields)).GetProperty("lot"));
@@ -151,6 +156,20 @@ public static class HarvestTestKit
         });
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("lot");
+    }
+
+    /// <summary>
+    /// Weighs a lot, or weighs it again, at <paramref name="weighedKg"/> for each of its product lines in line order (for the lot itself when it has no lines), with the version the lot view carries; the whole answer.
+    /// </summary>
+    public static Task<HttpResponseMessage> PostWeighAsync(this HttpClient client, JsonElement lot, params decimal[] weighedKg)
+    {
+        var hasLines = lot.GetProperty("productLines").GetArrayLength() > 0;
+        return client.PostAsJsonAsync($"/api/harvest-lots/{lot.Text("id")}/weigh", new
+        {
+            rowVersion = lot.Text("rowVersion"),
+            lines = hasLines ? weighedKg.Select((kg, i) => (object)new { lineNumber = i + 1, weighedKg = kg }).ToList() : new List<object>(),
+            weighedKg = hasLines ? (decimal?)null : weighedKg[0],
+        });
     }
 
     public static Task<JsonElement> HarvestScreenAsync(this HttpClient client, Guid raftId) =>

@@ -206,11 +206,12 @@ public class PurchaseCatalogueQaTests(AuthApiFactory factory) : IClassFixture<Au
         await world.CompletedAsync(new LineBody(world.Seed, 1, 10_000));
         var view = await world.Owner.GetFromJsonAsync<JsonElement>($"{Items}/{world.Seed}");
         var (code, name) = (view.GetProperty("code").GetString()!, view.GetProperty("name").GetString()!);
+        var productId = view.GetProperty("productId").GetGuid();
 
         // The uniqueness checks leave the item itself out (GBR-03, BR-PURCHASE-10).
         var recased = await (await world.Owner.PutAsJsonAsync($"{Items}/{world.Seed}", new
         {
-            code = code.ToUpperInvariant(), name = name.ToUpperInvariant(), group = "Seed", unit = "kg", rowVersion = view.GetProperty("rowVersion").GetString(),
+            code = code.ToUpperInvariant(), name = name.ToUpperInvariant(), group = "Seed", unit = "kg", productId, rowVersion = view.GetProperty("rowVersion").GetString(),
         })).ReadAsync(HttpStatusCode.OK);
         Assert.Equal((code.ToUpperInvariant(), name.ToUpperInvariant(), true), (recased.GetProperty("code").GetString(), recased.GetProperty("name").GetString(), recased.GetProperty("isUsed").GetBoolean()));
 
@@ -218,7 +219,7 @@ public class PurchaseCatalogueQaTests(AuthApiFactory factory) : IClassFixture<Au
         var newCode = $"VT-{NewCode()}";
         await (await world.Owner.PutAsJsonAsync($"{Items}/{world.Seed}", new
         {
-            code = newCode, name = name.ToUpperInvariant(), group = "Seed", unit = "kg", rowVersion = recased.GetProperty("rowVersion").GetString(),
+            code = newCode, name = name.ToUpperInvariant(), group = "Seed", unit = "kg", productId, rowVersion = recased.GetProperty("rowVersion").GetString(),
         })).ReadAsync(HttpStatusCode.OK);
         var updates = await factory.QueryAsync(db => db.AuditEvents.Where(e => e.RecordId == world.Seed && e.Action == "FarmingInputItem.Updated").OrderBy(e => e.OccurredAt).ToListAsync());
         Assert.Equal(2, updates.Count);
