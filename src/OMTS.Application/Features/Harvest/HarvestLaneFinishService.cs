@@ -7,6 +7,7 @@ using OMTS.Application.Common.Results;
 using OMTS.Application.Features.Audit;
 using OMTS.Application.Features.Audit.Models;
 using OMTS.Application.Features.Authorization;
+using OMTS.Application.Features.Workforce;
 using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Cultivation.Cycles;
 using OMTS.Application.Features.Cultivation.Progress;
@@ -32,6 +33,9 @@ public sealed record LaneHarvestFinished(
 /// A lane already Harvested answers 200 with <c>changed: false</c>; a lane that is not Being harvested answers 409 MSG-GEN-09 (in Vietnamese). A lane Being harvested only by a share entered by hand, with no
 /// harvest lot (QA of 13/11/2026), is finished by one more manual change to harvested 100 (reason "Hoàn tất thu hoạch"), with no lot: <c>lotCode</c> is then empty.
 /// </summary>
+/// <summary>Optional body of the single-lane finish: the Owner's answer to MSG-LABOR-37.</summary>
+public sealed record FinishLaneRequest(bool OwnerApproved = false, string? ApprovalReason = null);
+
 public sealed class HarvestLaneFinishService(
     IRaftRepository rafts,
     ICultivationCycleRepository cycles,
@@ -41,6 +45,7 @@ public sealed class HarvestLaneFinishService(
     LaneStateReader laneStates,
     ILaneProgressRepository progress,
     HarvestLotNotifier notifier,
+    RecordCrewAttendance crewAttendance,
     ZoneAccessGuard zoneAccess,
     AuditLogService audit,
     IUnitOfWork unitOfWork,
@@ -49,7 +54,7 @@ public sealed class HarvestLaneFinishService(
 {
     public const string LaneFinished = "HarvestLot.LaneFinished";
 
-    public async Task<Result<LaneHarvestFinished>> FinishAsync(Guid raftId, int laneNumber, CancellationToken cancellationToken)
+    public async Task<Result<LaneHarvestFinished>> FinishAsync(Guid raftId, int laneNumber, CancellationToken cancellationToken, CompletionApproval? approval = null)
     {
         var raft = await rafts.GetForEditAsync(raftId, cancellationToken);
         if (raft is null)
@@ -95,6 +100,13 @@ public sealed class HarvestLaneFinishService(
         {
             var finishedBy = inLots.FirstOrDefault(l => l.IsFinished) ?? latest;
             return new LaneHarvestFinished(laneNumber, LaneState.Harvested, false, finishedBy?.Lot.LotCode ?? string.Empty, EveryHarvested(raft, states), RowVersionGuard.Encode(cycle.RowVersion), saved.Text, saved.Code);
+        }
+
+        // Decision of 17/11/2026: the crew of the lots of the lane with work on their harvest day is checked out first (MSG-LABOR-37), or the Owner finishes with a reason.
+        var crew = await lots.ListCrewDaysAsync(inLots.Select(l => l.LotId).Distinct().ToList(), cancellationToken);
+        if (await crewAttendance.CheckCompletionAsync(crew, approval, new RecordRef(nameof(Raft), raft.Id, raft.Code, raft.ZoneId), cancellationToken) is { } openAttendance)
+        {
+            return openAttendance;
         }
 
         var finisher = currentUser.AccountId ?? throw new InvalidOperationException("A lane finish needs an authenticated caller.");

@@ -20,6 +20,7 @@ public sealed record SeedingFigures(int LaneCount, int SeededCount, IReadOnlyLis
 /// <summary>The session answers, with the commands the caller has. Every caller has already passed the zone check on the record.</summary>
 public sealed class SeedingViews(
     IAccountRepository accounts,
+    Workforce.RecordCrewAttendance crewAttendance,
     PermissionService permissions,
     ICurrentUser currentUser,
     IFileStorage storage)
@@ -97,7 +98,7 @@ public sealed class SeedingViews(
             record.OverPlanReason,
             photos,
             record.Lanes.OrderBy(l => l.Lane.LaneNumber).Select(l => new SeedingLanePercentView(l.Lane.LaneNumber, l.SeededPercent)).ToList(),
-            Workforce.RecordCrewService.ViewOf(record.Crew));
+            await crewAttendance.ViewAsync(record.Crew, record.SeedingDate, cancellationToken));
     }
 
     /// <summary>MSG-GEN-05 "Seeding session saved.", and the offer to mark the seeding complete when no lane is left Not seeded (CYCLE-02.0 step 7).</summary>

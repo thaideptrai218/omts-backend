@@ -25,6 +25,12 @@ public sealed class NurseryBatchForm
 
     public string? CompletedOn { get; set; }
 
+    /// <summary>When completing, Owner only: complete although a crew member with work that day is not checked out (MSG-LABOR-37).</summary>
+    public bool OwnerApproved { get; set; }
+
+    /// <summary>With <see cref="OwnerApproved"/>: why, 1 to 1000 characters.</summary>
+    public string? ApprovalReason { get; set; }
+
     /// <summary>When editing: one field per start photo to keep (its id); a photo left out is removed. Sending this or <c>photos</c> replaces the photos.</summary>
     public string?[]? KeepPhotoIds { get; set; }
 
@@ -55,7 +61,7 @@ public sealed class NurseryBatchForm
     public CompleteNurseryRequest ToComplete(bool otherFilePart)
     {
         FormNumbers.TryDecimal(Survivors, out var survivors);
-        return new CompleteNurseryRequest(survivors, Date(CompletedOn), RowVersion, otherFilePart);
+        return new CompleteNurseryRequest(survivors, Date(CompletedOn), RowVersion, otherFilePart, OwnerApproved, ApprovalReason);
     }
 
     /// <summary>A blank date is none (the service takes today); one that cannot be read is the smallest date, which no check accepts.</summary>

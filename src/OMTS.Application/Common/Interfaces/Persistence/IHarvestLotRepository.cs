@@ -22,6 +22,9 @@ public interface IHarvestLotRepository
     /// <summary>The lots of the cycle that include the lane (CYCLE-05.0 step 3), each with its lot, read only, the latest harvest first.</summary>
     Task<IReadOnlyList<HarvestLotLane>> ListOfLaneAsync(Guid cycleId, Guid laneId, CancellationToken cancellationToken);
 
+    /// <summary>The employees named on these lots, each with the harvest date of its lot, read only.</summary>
+    Task<IReadOnlyList<Features.Workforce.CrewDay>> ListCrewDaysAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);
+
     /// <summary>Each lane of each lot of the cycle with its lot and time: what a correction of one of the lots is checked against (BR-HARVEST-01).</summary>
     Task<IReadOnlyList<LotLaneFact>> LaneFactsAsync(Guid cycleId, CancellationToken cancellationToken);
 

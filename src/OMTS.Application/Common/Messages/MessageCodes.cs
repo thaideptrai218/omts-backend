@@ -111,6 +111,7 @@ public static class MessageCodes
     public const string Labor31 = "MSG-LABOR-31";
     public const string Labor34 = "MSG-LABOR-34";
     public const string Labor36 = "MSG-LABOR-36";
+    public const string Labor37 = "MSG-LABOR-37";
 
     public const string Debt01 = "MSG-DEBT-01";
     public const string Debt02 = "MSG-DEBT-02";
@@ -206,7 +207,7 @@ public static class MessageCodes
     public static readonly IReadOnlySet<string> NewWithoutLegacyCode = new HashSet<string>(StringComparer.Ordinal)
     {
         Account01, Account22, Cycle01, Cycle02, Cycle03, Cycle04, Cycle05, Cycle06, Cycle07, Cycle08, Harvest01, Harvest02, Harvest03, Harvest04, Harvest05, Trace01, Trace02, Trace03, Trace04, Trace05, Trace06,
-        Origin01, Origin02, Origin03, Origin04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor06, Labor07, Labor12, Labor13, Labor14, Labor16, Labor22, Labor23, Labor25, Labor26, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04, Claim01, Claim02, Claim03, Claim04, Claim05, Claim06, Cash01, Cash02, Input01, Input02, Customer01, Sale17, Sale18, Sale19, Sale20, Sale21, Sale22, Sale23, Labor08, Labor09, Labor17, Labor18, Labor19, Order01, Order02, Order03, Order04, Order05, Order06, Plan01, Plan02, Plan03, Plan04, Plan05, Plan06,
+        Origin01, Origin02, Origin03, Origin04, Gen11, Purchase01, Purchase02, Purchase04, Purchase05, Purchase06, Purchase07, Purchase08, Purchase10, Labor01, Labor02, Labor04, Labor06, Labor07, Labor12, Labor13, Labor14, Labor16, Labor22, Labor23, Labor25, Labor26, Labor36, Sale01, Sale02, Sale03, Sale04, Sale05, Sale06, Sale07, Sale08, Sale10, Sale11, Sale12, Sale13, Sale14, Sale15, Sale16, Debt01, Debt02, Debt03, Debt04, Debt05, Debt06, Water02, Water04, Claim01, Claim02, Claim03, Claim04, Claim05, Claim06, Cash01, Cash02, Input01, Input02, Customer01, Sale17, Sale18, Sale19, Sale20, Sale21, Sale22, Sale23, Labor08, Labor09, Labor17, Labor18, Labor19, Order01, Order02, Order03, Order04, Order05, Order06, Plan01, Plan02, Plan03, Plan04, Plan05, Plan06, Labor37,
     };
 
     /// <summary>
