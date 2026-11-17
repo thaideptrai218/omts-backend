@@ -39,7 +39,7 @@ public sealed class MyInvoiceService(
         {
             var state = SalesInvoicePaidState.Of(row.Id, row.StatusId, row.Total, customer.Id, ownPayments: 0m, allocation);
             return new MyInvoiceRow(
-                row.Id, row.Code, row.InvoicedAt, row.InvoiceDate, row.ZoneName, row.PurchaseRequestCode, row.CageCount, row.TotalKg, row.Total, row.StatusId,
+                row.Id, row.Code, row.InvoicedAt, row.InvoiceDate, row.ZoneName, row.PurchaseRequestCode, row.TotalKg, row.Total, row.StatusId,
                 statusCatalog.DisplayNameOf(row.StatusId), row.PaymentTerm, state.IsPaid, state.Unpaid);
         }).ToList();
         var empty = total == 0 ? UserMessages.NothingToShowYet : null;
@@ -62,13 +62,13 @@ public sealed class MyInvoiceService(
         var allocation = await debts.AllocationAsync(customer.Id, cancellationToken);
         var state = SalesInvoicePaidState.Of(invoice.Id, invoice.StatusId, invoice.Total, customer.Id, ownPayments: 0m, allocation);
         var lines = invoice.Lines.OrderBy(l => l.LineNumber).Select(l => new MyInvoiceLineView(
-            l.LineNumber, l.Product.Name, l.HarvestLot.LotCode, l.Kg, l.UnitPrice, l.Amount, SalesInvoiceViews.CageKgsOf(invoice, l.HarvestLotId))).ToList();
+            l.LineNumber, l.Product.Name, l.HarvestLot.LotCode, l.Kg, l.UnitPrice, l.Amount)).ToList();
         var payments = invoice.Payments.Where(p => p.Kind == CustomerPaymentKind.Payment).OrderBy(p => p.CreatedAt).ThenBy(p => p.Code).Select(p => new MyInvoicePaymentView(
             p.Code, p.Kind, p.Method, p.Amount, p.PaymentDate, p.StatusId, statusCatalog.DisplayNameOf(p.StatusId))).ToList();
         return new MyInvoiceView(
             invoice.Id, invoice.Code, invoice.InvoicedAt, invoice.InvoiceDate, invoice.Zone.Name, invoice.PurchaseRequestId, invoice.PurchaseRequest?.Code, lines,
-            lines.Sum(l => l.CageKgs.Count), lines.Sum(l => l.Kg), invoice.Subtotal, invoice.DiscountAmount, invoice.OtherCharges, invoice.PriceCutTotal, invoice.Total, invoice.PaymentTerm,
-            invoice.StatusId, statusCatalog.DisplayNameOf(invoice.StatusId), state.IsPaid, state.Covered, state.Unpaid, payments, views.QrUrlOf(invoice), invoice.PortWeighingId);
+            lines.Sum(l => l.Kg), invoice.Subtotal, invoice.DiscountAmount, invoice.OtherCharges, invoice.PriceCutTotal, invoice.Total, invoice.PaymentTerm,
+            invoice.StatusId, statusCatalog.DisplayNameOf(invoice.StatusId), state.IsPaid, state.Covered, state.Unpaid, payments, views.QrUrlOf(invoice));
     }
 
     /// <summary>The profile linked to the trader's account; a merged profile holds nothing any more.</summary>

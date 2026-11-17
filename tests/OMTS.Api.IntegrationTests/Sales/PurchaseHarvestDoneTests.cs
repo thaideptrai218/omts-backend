@@ -1,13 +1,15 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using OMTS.Api.IntegrationTests.Farming;
 using OMTS.Api.IntegrationTests.Harvest;
 using OMTS.Api.IntegrationTests.Infrastructure;
-using static OMTS.Api.IntegrationTests.Sales.PortWeighingTestKit;
+using OMTS.Infrastructure.Persistence;
 
 namespace OMTS.Api.IntegrationTests.Sales;
 
-/// <summary>Decision of 11/11/2026: the Cooperative Owner marks the harvest of an Accepted request done once its lots are in, and clears the mark while it has no weighing.</summary>
+/// <summary>Decision of 11/11/2026: the Cooperative Owner marks the harvest of an Accepted request done once its lots are in, and clears the mark again.</summary>
 public class PurchaseHarvestDoneTests
 {
     private static async Task<(AuthApiFactory Api, SaleSetup Sale, TraderActor Trader, JsonElement Request)> AcceptedAsync()
@@ -20,9 +22,11 @@ public class PurchaseHarvestDoneTests
         return (api, sale, trader, request);
     }
 
+    private const string NeedsRequestLots = "A harvest lot no longer names a purchase request.";
+
     private static bool Flag(JsonElement detail, string name) => detail.GetProperty("harvest").GetProperty(name).GetBoolean();
 
-    [Fact(Skip = PortWeighingTestKit.NeedsRequestLots)]
+    [Fact(Skip = NeedsRequestLots)]
     public async Task The_owner_marks_the_harvest_done_with_its_lots_and_no_lot_is_added_after()
     {
         var (api, sale, trader, request) = await AcceptedAsync();
@@ -61,14 +65,14 @@ public class PurchaseHarvestDoneTests
         }
     }
 
-    [Fact(Skip = PortWeighingTestKit.NeedsRequestLots)]
-    public async Task The_mark_is_cleared_for_a_raft_still_to_harvest_until_the_request_is_weighed()
+    [Fact(Skip = NeedsRequestLots)]
+    public async Task The_mark_is_cleared_for_a_raft_still_to_harvest()
     {
         var (api, sale, _, request) = await AcceptedAsync();
         using (api)
         {
             var owner = sale.Owner.Client;
-            var harvested = await sale.HarvestedForAsync(request);
+            await HarvestedForAsync(sale, request);
             var done = await owner.RequestDetailAsync(request.Id());
             Assert.Equal("MSG-GEN-08", await (await sale.Manager.Client.PostClearHarvestDoneAsync(request.Id(), done.RowVersion())).ErrorCodeAsync());
 
@@ -76,16 +80,43 @@ public class PurchaseHarvestDoneTests
             Assert.Equal(JsonValueKind.Null, cleared.GetProperty("harvestCompletedAt").ValueKind);
             Assert.True(Flag(cleared, "canMarkDone"));
             Assert.Equal("MSG-GEN-09", await (await owner.PostClearHarvestDoneAsync(request.Id(), cleared.RowVersion())).ErrorCodeAsync());
-            Assert.Equal("MSG-GEN-09", await (await sale.Manager.Client.PostWeighingAsync(request.Id(), WeighedLot(harvested.LotId, 10m))).ErrorCodeAsync());
 
-            // The forgotten trip, the mark again, and the weighing: the mark then stays.
+            // The forgotten trip, then the mark again.
             await owner.HarvestLotAsync(sale.RaftId, (HarvestFields.OfLanes(5) with { Cages = "4" }));
             Assert.Equal(3, (await owner.MarkHarvestDoneAsync(request.Id())).GetProperty("harvest").GetProperty("lots").GetArrayLength());
-            await sale.Manager.Client.WeighAsync(request.Id(), WeighedLot(harvested.LotId, 10m));
-
-            var weighed = await owner.RequestDetailAsync(request.Id());
-            Assert.False(Flag(weighed, "canUnmarkDone"));
-            Assert.Equal("MSG-GEN-09", await (await owner.PostClearHarvestDoneAsync(request.Id(), weighed.RowVersion())).ErrorCodeAsync());
+            Assert.True(Flag(await owner.RequestDetailAsync(request.Id()), "canUnmarkDone"));
         }
+    }
+
+    /// <summary>
+    /// Records lots on the sale's raft for the request, one per number of cages (two of eight when none are given), and marks its harvest done. Answers the setup with the first lots
+    /// in place of the sale's own.
+    /// </summary>
+    private static async Task<SaleSetup> HarvestedForAsync(SaleSetup sale, JsonElement request, params int[] cagesOfLots)
+    {
+        int[] counts = cagesOfLots.Length == 0 ? [8, 8] : cagesOfLots;
+        var lots = new List<Guid>();
+        // The lots of a request never exceed its accepted cages (13/11/2026): a small request is given room while the lots are recorded, then back its own cages.
+        var accepted = await SetAcceptedCagesAsync(sale.Owner.Client, request.Id(), atLeast: counts.Sum());
+        foreach (var cages in counts)
+        {
+            lots.Add((await sale.Owner.Client.HarvestLotAsync(sale.RaftId, new HarvestFields { Lanes = ["3"], Cages = cages.ToString() })).Id());
+        }
+
+        await SetAcceptedCagesAsync(sale.Owner.Client, request.Id(), exactly: accepted);
+        await sale.Owner.Client.MarkHarvestDoneAsync(request.Id());
+        return sale with { LotId = lots[0], OtherLotId = lots.Count > 1 ? lots[1] : sale.OtherLotId };
+    }
+
+    /// <summary>Writes the accepted cages of a request straight to the database: at least <paramref name="atLeast"/>, or exactly <paramref name="exactly"/>. Answers what it was before.</summary>
+    private static async Task<int?> SetAcceptedCagesAsync(HttpClient client, Guid requestId, int? atLeast = null, int? exactly = null)
+    {
+        using var scope = TestHosts.ServicesOf(client).CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OmtsDbContext>();
+        var row = await db.PurchaseRequests.SingleAsync(r => r.Id == requestId);
+        var before = row.AcceptedCages;
+        row.AcceptedCages = atLeast is { } least ? Math.Max(before ?? 0, least) : exactly;
+        await db.SaveChangesAsync();
+        return before;
     }
 }

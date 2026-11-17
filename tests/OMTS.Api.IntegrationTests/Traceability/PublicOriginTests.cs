@@ -3,7 +3,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using OMTS.Api.IntegrationTests.Farming;
 using OMTS.Api.IntegrationTests.Infrastructure;
-using static OMTS.Api.IntegrationTests.Sales.PortWeighingTestKit;
 using static OMTS.Api.IntegrationTests.Sales.PurchaseRequestTestKit;
 using static OMTS.Api.IntegrationTests.Sales.SalesInvoiceSendingTestKit;
 using static OMTS.Api.IntegrationTests.Sales.SalesInvoiceTestKit;
@@ -35,7 +34,7 @@ public class PublicOriginTests
         var lot = Assert.Single(page.GetProperty("lots").EnumerateArray());
         Assert.Equal(("Published", JsonValueKind.Null), (lot.Text("originState"), lot.GetProperty("withdrawnAt").ValueKind));
         var detail = lot.GetProperty("detail");
-        Assert.Equal((12.5m, 0, 1), (detail.Money("soldKg"), detail.GetProperty("weighedCages").GetInt32(), detail.GetProperty("laneCount").GetInt32()));
+        Assert.Equal((12.5m, 1), (detail.Money("soldKg"), detail.GetProperty("laneCount").GetInt32()));
         Assert.Equal(invoice.Text("invoiceDate"), detail.Text("soldOn"));
         Assert.Single(detail.GetProperty("productNames").EnumerateArray());
         Assert.NotEmpty(detail.GetProperty("seedLots").EnumerateArray());
@@ -69,23 +68,5 @@ public class PublicOriginTests
         // A lot published and then never again: only the publish makes the page.
         await api.UpdateAsync<OMTS.Domain.Entities.Harvest.HarvestLot>(sale.LotId, l => (l.PublishedAt, l.WithdrawnAt) = (null, null));
         Assert.Equal(HttpStatusCode.NotFound, (await visitor.GetAsync($"/api/origin/{token}")).StatusCode);
-    }
-
-    [Fact(Skip = Sales.PortWeighingTestKit.NeedsRequestLots)]
-    public async Task A_sale_from_a_port_weighing_shows_the_cages_weighed_of_each_lot()
-    {
-        using var api = new AuthApiFactory();
-        var sale = await api.SaleSetupAsync();
-        var trader = await Sales.PurchaseRequestTestKit.TraderAsync(api);
-        var request = await trader.Client.PlaceAsync(sale.ProductId, 2);
-        await (await sale.Owner.Client.AcceptAsync(request, payLater: true)).ReadAsync(HttpStatusCode.OK);
-        sale = await sale.HarvestedForAsync(request);
-        var weighing = await sale.Manager.Client.ConfirmedWeighingAsync(trader.Client, request.Id(), WeighedLot(sale.LotId, 20m, 22.5m));
-        var invoice = (await sale.Manager.Client.SellAsync(Invoice(trader.Profile.Id, [WeighedLine(sale.ProductId, sale.LotId)], Cash(1_275_000m), sale.LotId)
-            .FromWeighing(weighing))).GetProperty("invoice");
-        var token = TokenOf(await sale.Manager.Client.FinishedAsync(invoice.Id(), wantsQrCode: true));
-
-        var detail = Assert.Single((await api.CreateClient().GetFromJsonAsync<JsonElement>($"/api/origin/{token}")).GetProperty("lots").EnumerateArray()).GetProperty("detail");
-        Assert.Equal((42.5m, 2), (detail.Money("soldKg"), detail.GetProperty("weighedCages").GetInt32()));
     }
 }

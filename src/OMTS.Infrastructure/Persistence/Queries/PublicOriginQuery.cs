@@ -16,7 +16,6 @@ internal sealed class PublicOriginQuery(OmtsDbContext db) : IPublicOriginQuery
             .Select(i => new
             {
                 i.InvoiceDate,
-                i.PortWeighingId,
                 Lines = i.Lines.OrderBy(l => l.LineNumber).Select(l => new PublicOriginSaleLine(l.HarvestLotId, l.Product.Name, l.Kg)).ToList(),
             })
             .FirstOrDefaultAsync(cancellationToken);
@@ -25,15 +24,8 @@ internal sealed class PublicOriginQuery(OmtsDbContext db) : IPublicOriginQuery
             return null;
         }
 
-        var cages = invoice.PortWeighingId is { } weighingId
-            ? await db.PortWeighingCages.AsNoTracking()
-                .Where(c => c.PortWeighingId == weighingId)
-                .GroupBy(c => c.HarvestLotId)
-                .Select(g => new { LotId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(g => g.LotId, g => g.Count, cancellationToken)
-            : [];
         var cooperative = await db.Cooperatives.AsNoTracking().OrderBy(c => c.CreatedAt).Select(c => c.FullName).FirstOrDefaultAsync(cancellationToken);
-        return new PublicOriginSale(cooperative ?? string.Empty, invoice.InvoiceDate, invoice.Lines, cages);
+        return new PublicOriginSale(cooperative ?? string.Empty, invoice.InvoiceDate, invoice.Lines);
     }
 
     public async Task<IReadOnlyList<PublicOriginLotFacts>> LotsAsync(IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken)
