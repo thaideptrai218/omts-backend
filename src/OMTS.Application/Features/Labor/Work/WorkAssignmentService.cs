@@ -10,10 +10,14 @@ using OMTS.Application.Features.Authorization.Models;
 using OMTS.Application.Features.Farming;
 using OMTS.Domain.Constants;
 using OMTS.Domain.Entities.Farming;
+using OMTS.Domain.Entities.Harvest;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Entities.Labor;
 
 namespace OMTS.Application.Features.Labor.Work;
+
+/// <summary>The employee codes a harvest plan line's crew gained and lost.</summary>
+public sealed record LineCrewChange(IReadOnlyList<string> Added, IReadOnlyList<string> Removed);
 
 /// <summary>
 /// LABOR-02: a Zone Manager assigns employees a job type and a raft for a date, edits or removes an assignment until the employee is
@@ -73,11 +77,117 @@ public sealed class WorkAssignmentService(
             return AppError.NotUsableChoice($"Employee {left.FullName}", statusCatalog.DisplayNameOf(StatusIds.Employee.Left), "Employees");
         }
 
+        if (await PlaceAsync(people, date, place, jobType, request.MoveExisting, null, cancellationToken) is { } refused)
+        {
+            return refused;
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return await RowsAsync(ids, date, cancellationToken);
+    }
+
+    /// <summary>
+    /// The crew of one harvest plan line (the Nhân công of a plan), all or none: the employees named get the first assignment of the day on the line's raft with the job type, as
+    /// <see cref="AssignAsync"/> gives it, and are linked to the line; the employees linked to the line and not named are taken off it, as <see cref="RemoveAsync"/> does, which refuses one who is checked in.
+    /// Nothing is saved: the caller adds its own audit record and saves once. The plan's own rules (who may staff in which status) are the caller's.
+    /// </summary>
+    /// <param name="line">The line, with its raft and zone.</param>
+    /// <param name="date">The business date of the plan.</param>
+    /// <param name="jobTypeId">The job type of the work (Thu hoạch).</param>
+    /// <param name="employeeIds">The whole crew wanted, at most 100, each once; empty takes everyone off.</param>
+    /// <param name="moveExisting">Moves an employee who is already on another raft that day (LABOR-02.4); without it that is a conflict.</param>
+    public async Task<Result<LineCrewChange>> StageLineCrewAsync(
+        HarvestPlanLine line, DateOnly date, Guid jobTypeId, IReadOnlyList<Guid> employeeIds, bool moveExisting, CancellationToken cancellationToken)
+    {
+        if (employeeIds.Count > MaxEmployees || employeeIds.Distinct().Count() != employeeIds.Count || employeeIds.Any(i => i == Guid.Empty))
+        {
+            return AppError.InvalidFields(["Employees"]);
+        }
+
+        var linked = await assignments.ListOfPlanLinesAsync([line.Id], cancellationToken);
+        var wanted = employeeIds.ToHashSet();
+        var removing = linked.Where(a => !wanted.Contains(a.EmployeeId)).ToList();
+        var have = linked.Select(a => a.EmployeeId).ToHashSet();
+        var adding = employeeIds.Where(e => !have.Contains(e)).ToList();
+        if (removing.Count == 0 && adding.Count == 0)
+        {
+            return new LineCrewChange([], []);
+        }
+
+        if (date < timeProvider.Today())
+        {
+            return AppError.Invalid("Date (today or later)");
+        }
+
+        foreach (var assignment in removing)
+        {
+            if (!await zones.AllowsAsync(PermissionFunctions.WorkAssignments, PermissionAction.Delete, assignment.ZoneId, cancellationToken))
+            {
+                return AppError.Forbidden;
+            }
+
+            if (await RefuseChangeAsync(assignment, cancellationToken) is { } refused)
+            {
+                return refused;
+            }
+        }
+
+        IReadOnlyList<Employee> added = [];
+        if (adding.Count > 0)
+        {
+            var chosen = await ChooseAsync(line.RaftId, null, jobTypeId, PermissionAction.Create, cancellationToken);
+            if (!chosen.IsSuccess)
+            {
+                return chosen.Error!;
+            }
+
+            var (place, jobType) = chosen.Value;
+            var people = await employeeReader.GetForWorkAsync(adding, cancellationToken);
+            if (people.Count != adding.Count)
+            {
+                return AppError.Invalid("Employees");
+            }
+
+            if (people.FirstOrDefault(e => !WorkRules.IsEmployedOn(e, date)) is { } left)
+            {
+                return AppError.NotUsableChoice($"Employee {left.FullName}", statusCatalog.DisplayNameOf(StatusIds.Employee.Left), "Employees");
+            }
+
+            if (await PlaceAsync(people, date, place, jobType, moveExisting, line.Id, cancellationToken) is { } placed)
+            {
+                return placed;
+            }
+
+            added = people;
+        }
+
+        foreach (var assignment in removing)
+        {
+            assignments.Remove(assignment);
+            audit.Record(new AuditEntry("WorkAssignment.Removed", nameof(WorkAssignment))
+            {
+                RecordId = assignment.Id, RecordCode = assignment.Employee.Code, ZoneId = assignment.ZoneId,
+                Before = Snapshot(assignment.Employee, assignment.Date, PlaceOf(assignment), assignment.JobType),
+            });
+        }
+
+        return new LineCrewChange(added.Select(e => e.Code ?? e.FullName).Order().ToList(), removing.Select(a => a.Employee.Code ?? a.Employee.FullName).Order().ToList());
+    }
+
+    /// <summary>
+    /// The rules every first assignment of a day follows (LABOR-02.0), checked for all the employees before anything changes: the pay period is open, no one is checked in, and an employee on another raft is moved only
+    /// with <paramref name="moveExisting"/>. Then each gets the assignment or has it changed, and the zone joins the working zones. Nothing is saved: the caller saves. <paramref name="planLineId"/> links the
+    /// assignments to a harvest plan line; a plain assignment that moves one to another raft clears the link.
+    /// </summary>
+    private async Task<AppError?> PlaceAsync(
+        IReadOnlyList<Employee> people, DateOnly date, Place place, JobType jobType, bool moveExisting, Guid? planLineId, CancellationToken cancellationToken)
+    {
         if (await payPeriods.CheckAsync(date, cancellationToken) is { } locked)
         {
             return locked;
         }
 
+        var ids = people.Select(e => e.Id).ToList();
         var existing = (await assignments.ListOfEmployeesAsync(ids, date, cancellationToken)).ToLookup(w => w.EmployeeId);
         var attended = (await attendances.ListOfEmployeesAsync(ids, date, cancellationToken)).ToDictionary(a => a.EmployeeId);
         if (people.FirstOrDefault(e => attended.TryGetValue(e.Id, out var a) && a.CheckInAt is not null) is { } checkedIn)
@@ -89,7 +199,7 @@ public sealed class WorkAssignmentService(
             .Select(e => (Employee: e, First: existing[e.Id].FirstOrDefault(w => w.StartsAt is null)))
             .Where(x => x.First is not null && !place.Holds(x.First))
             .ToList();
-        if (elsewhere.Count > 0 && !request.MoveExisting)
+        if (elsewhere.Count > 0 && !moveExisting)
         {
             var (employee, first) = elsewhere[0];
             return AppError.Conflict(
@@ -103,31 +213,38 @@ public sealed class WorkAssignmentService(
             var first = existing[employee.Id].FirstOrDefault(w => w.StartsAt is null);
             if (first is null)
             {
-                var created = new WorkAssignment { EmployeeId = employee.Id, Date = date, RaftId = place.Raft?.Id, ZoneId = place.ZoneId, JobTypeId = jobType.Id, AssignedByAccountId = account };
+                var created = new WorkAssignment
+                {
+                    EmployeeId = employee.Id, Date = date, RaftId = place.Raft?.Id, ZoneId = place.ZoneId, JobTypeId = jobType.Id, AssignedByAccountId = account, HarvestPlanLineId = planLineId,
+                };
                 assignments.Add(created);
                 audit.Record(new AuditEntry("WorkAssignment.Created", nameof(WorkAssignment))
                 {
                     RecordId = created.Id, RecordCode = employee.Code, ZoneId = place.ZoneId, After = Snapshot(employee, date, place, jobType),
                 });
             }
-            else if (!place.Holds(first) || first.JobTypeId != jobType.Id)
+            else
             {
-                var before = Snapshot(employee, date, PlaceOf(first), first.JobType);
                 var moved = !place.Holds(first);
-                (first.RaftId, first.ZoneId) = (place.Raft?.Id, place.ZoneId);
-                first.JobTypeId = jobType.Id;
-                first.AssignedByAccountId = account;
-                audit.Record(new AuditEntry(moved ? "WorkAssignment.Moved" : "WorkAssignment.Updated", nameof(WorkAssignment))
+                var link = planLineId ?? (moved ? null : first.HarvestPlanLineId);
+                if (moved || first.JobTypeId != jobType.Id || link != first.HarvestPlanLineId)
                 {
-                    RecordId = first.Id, RecordCode = employee.Code, ZoneId = place.ZoneId, Before = before, After = Snapshot(employee, date, place, jobType),
-                });
+                    var before = Snapshot(employee, date, PlaceOf(first), first.JobType);
+                    (first.RaftId, first.ZoneId) = (place.Raft?.Id, place.ZoneId);
+                    first.JobTypeId = jobType.Id;
+                    first.HarvestPlanLineId = link;
+                    first.AssignedByAccountId = account;
+                    audit.Record(new AuditEntry(moved ? "WorkAssignment.Moved" : "WorkAssignment.Updated", nameof(WorkAssignment))
+                    {
+                        RecordId = first.Id, RecordCode = employee.Code, ZoneId = place.ZoneId, Before = before, After = Snapshot(employee, date, place, jobType),
+                    });
+                }
             }
 
             AddWorkingZone(employee, place.ZoneId);
         }
 
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return await RowsAsync(ids, date, cancellationToken);
+        return null;
     }
 
     /// <summary>LABOR-02.2: the raft or the job type of an assignment of today or later, before the employee is checked in.</summary>
@@ -169,6 +286,11 @@ public sealed class WorkAssignmentService(
 
             var (place, jobType) = chosen.Value;
             var before = Snapshot(assignment.Employee, assignment.Date, PlaceOf(assignment), assignment.JobType);
+            if (!place.Holds(assignment))
+            {
+                assignment.HarvestPlanLineId = null;
+            }
+
             (assignment.RaftId, assignment.ZoneId) = (place.Raft?.Id, place.ZoneId);
             assignment.JobTypeId = jobType.Id;
             assignment.AssignedByAccountId = currentUser.AccountId ?? throw new InvalidOperationException("Work is assigned by a logged-in user.");
@@ -271,6 +393,11 @@ public sealed class WorkAssignmentService(
             var before = Snapshot(current.Employee, today, PlaceOf(current), current.JobType);
             if (record?.CheckInAt is null)
             {
+                if (!place.Holds(current))
+                {
+                    current.HarvestPlanLineId = null;
+                }
+
                 (current.RaftId, current.ZoneId) = (place.Raft?.Id, place.ZoneId);
                 current.JobTypeId = jobType.Id;
                 current.AssignedByAccountId = account;

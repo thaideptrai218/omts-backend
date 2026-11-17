@@ -1,5 +1,6 @@
 using OMTS.Domain.Common;
 using OMTS.Domain.Entities.Farming;
+using OMTS.Domain.Entities.Harvest;
 using OMTS.Domain.Entities.Identity;
 using OMTS.Domain.Enums;
 
@@ -39,4 +40,11 @@ public class WorkAssignment : AuditableEntity
     public AttendanceMethod? Method { get; set; }
 
     public string? CorrectionReason { get; set; }
+
+    /// <summary>
+    /// The harvest plan line this assignment was made for (the Nhân công of a plan); null for work assigned on its own. The assignment follows the plan's date, goes when the employee is taken off the line,
+    /// and the link is cleared when the work is moved to another raft.
+    /// </summary>
+    public Guid? HarvestPlanLineId { get; set; }
+    public HarvestPlanLine? HarvestPlanLine { get; set; }
 }
