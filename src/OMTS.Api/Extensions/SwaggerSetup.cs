@@ -3,7 +3,7 @@ using Microsoft.OpenApi.Models;
 namespace OMTS.Api.Extensions;
 
 /// <summary>
-/// Swagger (Development only, see Program): bearer login, and the XML comments of the controllers and of the request
+/// Swagger (served by SwaggerPipeline: open in Development, elsewhere off or behind a Basic login): bearer login, and the XML comments of the controllers and of the request
 /// and response types, with their <c>&lt;example&gt;</c> values (e.g. the multipart license forms).
 /// </summary>
 public static class SwaggerSetup
