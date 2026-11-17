@@ -29,21 +29,45 @@ public sealed class CustomerPaymentStatusService(
     IStatusCatalog statusCatalog,
     RowVersionGuard rowVersions,
     ICashBookQuery cashBook,
+    ICurrentUser currentUser,
+    TimeProvider timeProvider,
     IUnitOfWork unitOfWork)
 {
     /// <summary>A lost race reads again once; a second loss is MSG06.</summary>
     public const int MaxAttempts = 2;
 
+    /// <summary>Cash that waits for the Accountant longer than this is overdue (the 2-day warning [1.5], in the app only).</summary>
+    public const int OverdueDays = 2;
+
+    private const int MaxFilterDays = 3660;
+
     private const int MaxPageSize = 100;
 
     /// <summary>DEBT-02.2 step 2: oldest first, those without a customer included and marked <c>needsSettlement</c>; MSG-GEN-11 when there is none (DEBT-02.2.E1).</summary>
-    public async Task<AwaitingCustomerPayments> AwaitingAsync(int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<AwaitingCustomerPayments> AwaitingAsync(int page, int pageSize, int? olderThanDays, CancellationToken cancellationToken)
     {
         (page, pageSize) = (Math.Clamp(page, 1, int.MaxValue / MaxPageSize), Math.Clamp(pageSize, 1, MaxPageSize));
-        var (items, total, amount) = await payments.AwaitingConfirmationAsync(page, pageSize, cancellationToken);
+        var now = timeProvider.GetUtcNow();
+        // The filter "waiting more than N days" (PM decision of 17/11/2026): paid before now less N whole days.
+        DateTimeOffset? paidBefore = olderThanDays is { } days ? now.AddDays(-Math.Clamp(days, 0, MaxFilterDays)) : null;
+        var (items, total, amount) = await payments.AwaitingConfirmationAsync(page, pageSize, paidBefore, cancellationToken);
         var empty = total == 0 ? UserMessages.NothingToShowYet : null;
-        return new AwaitingCustomerPayments(
-            new Paged<CustomerPaymentDetails>(await views.ViewAsync(items, cancellationToken), page, pageSize, total), amount, empty?.Text, empty?.Code);
+        var overdueBefore = now.AddDays(-OverdueDays);
+        var rows = (await views.ViewAsync(items, cancellationToken))
+            .Select(v => v with { Overdue = v.Method == CustomerPaymentMethod.Cash && v.PaidAt < overdueBefore })
+            .ToList();
+        return new AwaitingCustomerPayments(new Paged<CustomerPaymentDetails>(rows, page, pageSize, total), amount, empty?.Text, empty?.Code);
+    }
+
+    /// <summary>
+    /// The badge of the person who collected cash at the port and still holds it: how many of their payments wait for the Accountant, how many of those for more than <see cref="OverdueDays"/> days (BR-SALE-07 (3)).
+    /// In the app only: no SMS and no push.
+    /// </summary>
+    public async Task<MyAwaitingCash> MyAwaitingCashAsync(CancellationToken cancellationToken)
+    {
+        var account = currentUser.AccountId ?? throw new InvalidOperationException("The cash of the caller needs a logged-in user.");
+        var summary = await payments.AwaitingCashOfAsync(account, timeProvider.GetUtcNow().AddDays(-OverdueDays), cancellationToken);
+        return new MyAwaitingCash(summary.Count, summary.OverdueCount, summary.Amount, summary.OldestPaidAt, OverdueDays);
     }
 
     /// <summary>DEBT-02.2 steps 3-6 and DEBT-02.6: every payment named must still be Awaiting confirmation; one notice to the Owner lists what was confirmed, cancelled and settled.</summary>

@@ -29,8 +29,18 @@ public sealed class CustomerPaymentsController(CustomerPaymentService payments, 
     [HttpGet("awaiting-confirmation")]
     [RequirePermission(PermissionFunctions.CustomerPayments, PermissionAction.View, PermissionScope.NoZone)]
     [ProducesResponseType<AwaitingCustomerPayments>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Awaiting(int page = 1, int pageSize = 50, CancellationToken cancellationToken = default) =>
-        Ok(await statuses.AwaitingAsync(page, pageSize, cancellationToken));
+    public async Task<IActionResult> Awaiting(int page = 1, int pageSize = 50, int? olderThanDays = null, CancellationToken cancellationToken = default) =>
+        Ok(await statuses.AwaitingAsync(page, pageSize, olderThanDays, cancellationToken));
+
+    /// <summary>
+    /// The badge of the Zone Manager (or anyone who sells at the port): the cash they collected that still waits for the Accountant, and how much of it waits more than 2 days. In the app only, no SMS.
+    /// The list above takes <c>olderThanDays</c> for the filter "waiting more than 2 days", and marks each overdue cash payment (<c>overdue</c>).
+    /// </summary>
+    [HttpGet("my-awaiting-cash")]
+    [RequirePermission(PermissionFunctions.SalesInvoices, PermissionAction.Create, PermissionScope.AnyZone)]
+    [ProducesResponseType<MyAwaitingCash>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> MyAwaitingCash(CancellationToken cancellationToken) =>
+        Ok(await statuses.MyAwaitingCashAsync(cancellationToken));
 
     [HttpGet("{id:guid}")]
     [RequirePermission(PermissionFunctions.CustomerPayments, PermissionAction.View, PermissionScope.NoZone)]

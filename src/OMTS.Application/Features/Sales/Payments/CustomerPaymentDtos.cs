@@ -93,7 +93,7 @@ public sealed record CustomerPaymentDetails(
     int StatusId, string Status, AccountRef? ConfirmedBy, DateTimeOffset? ConfirmedAt, AccountRef? CancelledBy, DateTimeOffset? CancelledAt, string? CancelReason,
     string RowVersion, string? TransferInvoiceCode = null, DateTimeOffset? TransferredAt = null,
     DateTimeOffset PaidAt = default, decimal DiscountAmount = 0m, CashAccountRef? CashAccount = null, IReadOnlyList<CustomerPaymentAllocationView>? Allocations = null,
-    bool NeedsSettlement = false, Guid? PaidBackForPaymentId = null, CustomerPaymentOrderRef? SalesOrder = null);
+    bool NeedsSettlement = false, Guid? PaidBackForPaymentId = null, CustomerPaymentOrderRef? SalesOrder = null, bool Overdue = false);
 
 /// <summary>The order of an advance: <paramref name="Reserved"/> is true while the order is Draft or Delivering, the time its money covers no invoice but the order's own.</summary>
 public sealed record CustomerPaymentOrderRef(Guid Id, string Code, int StatusId, string Status, bool Reserved);
@@ -120,6 +120,12 @@ public sealed record CustomerPaymentBankAccount(Guid Id, string BankBin, string 
 public sealed record CustomerPaymentForm(
     CustomerDebtCustomer Customer, decimal Debt, decimal OwedBack, int? DebtAgeDays, IReadOnlyList<UnpaidInvoice> UnpaidInvoices, IReadOnlyList<AccountRef> CashCollectors,
     IReadOnlyList<CustomerPaymentBankAccount> BankAccounts, IReadOnlyList<ReservedOrderAdvance>? ReservedAdvances = null);
+
+/// <summary>
+/// The cash a person collected that still waits for the Accountant (the badge of the Zone Manager, PM decision of 17/11/2026, in the app only): <paramref name="Count"/> payments, <paramref name="OverdueCount"/>
+/// of them waiting more than <paramref name="OverdueDays"/> days, their sum and when the oldest was paid.
+/// </summary>
+public sealed record MyAwaitingCash(int Count, int OverdueCount, decimal Amount, DateTimeOffset? OldestPaidAt, int OverdueDays);
 
 /// <summary>DEBT-02.2 step 2: oldest first.</summary>
 /// <param name="TotalAmount">Σ of every payment Awaiting confirmation, not only of the page.</param>

@@ -2,6 +2,9 @@ using OMTS.Domain.Entities.Sales;
 
 namespace OMTS.Application.Common.Interfaces.Persistence;
 
+/// <summary>The cash a collector holds that is still Awaiting confirmation: <paramref name="Count"/> payments, <paramref name="OverdueCount"/> of them older than the limit, their sum and the oldest time.</summary>
+public sealed record AwaitingCashSummary(int Count, int OverdueCount, decimal Amount, DateTimeOffset? OldestPaidAt);
+
 /// <summary>The customer payments of DEBT-02 (BR-DEBT-03), with their customer profile and the invoice they came with.</summary>
 public interface ICustomerPaymentRepository
 {
@@ -45,8 +48,17 @@ public interface ICustomerPaymentRepository
     /// </summary>
     Task<IReadOnlyDictionary<string, decimal>> ReceivedWithoutInvoiceAsync(IReadOnlyCollection<string> invoiceCodes, CancellationToken cancellationToken);
 
-    /// <summary>The payments Awaiting confirmation, oldest first (payment date, then code), and their number and sum.</summary>
-    Task<(IReadOnlyList<CustomerPayment> Items, int Total, decimal TotalAmount)> AwaitingConfirmationAsync(int page, int pageSize, CancellationToken cancellationToken);
+    /// <summary>
+    /// The payments Awaiting confirmation, oldest first (payment date, then code), and their number and sum. With <paramref name="paidBefore"/> only those paid before that time (the filter
+    /// "waiting more than N days"); the sum is always that of every payment Awaiting confirmation.
+    /// </summary>
+    Task<(IReadOnlyList<CustomerPayment> Items, int Total, decimal TotalAmount)> AwaitingConfirmationAsync(int page, int pageSize, DateTimeOffset? paidBefore, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The cash Awaiting confirmation that <paramref name="collectorAccountId"/> collected (BR-SALE-07 (3): the Zone Manager hands it to the Accountant): how many payments, how many of them were paid
+    /// before <paramref name="overdueBefore"/>, their sum and the time of the oldest.
+    /// </summary>
+    Task<AwaitingCashSummary> AwaitingCashOfAsync(Guid collectorAccountId, DateTimeOffset overdueBefore, CancellationToken cancellationToken);
 
     /// <summary>True when money paid back that is not cancelled stands for this payment (it settled the payment, DEBT-02.6).</summary>
     Task<bool> HasMoneyPaidBackAsync(Guid paymentId, CancellationToken cancellationToken);
