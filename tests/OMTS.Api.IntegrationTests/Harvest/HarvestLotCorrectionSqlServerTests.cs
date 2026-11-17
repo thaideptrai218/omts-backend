@@ -12,6 +12,7 @@ using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Features.Files;
 using OMTS.Application.Features.Harvest;
 using OMTS.Domain.Common;
+using OMTS.Domain.Constants;
 using OMTS.Domain.Enums;
 using OMTS.Infrastructure.Persistence;
 using static OMTS.Api.IntegrationTests.Farming.FarmingTestKit;
@@ -235,7 +236,8 @@ public class HarvestLotCorrectionSqlServerTests
 
         await AssertAnsweredAsync(answers);
         var count = await owner.ForSaleCountAsync(zoneId);
-        Assert.Equal(await host.QueryAsync(db => db.HarvestLots.CountAsync()), count);
+        // A lot is for sale once it is weighed (Open or Reopened); one Awaiting weighing is not listed.
+        Assert.Equal(await host.QueryAsync(db => db.HarvestLots.CountAsync(l => l.StatusId == StatusIds.HarvestLot.Open || l.StatusId == StatusIds.HarvestLot.Reopened)), count);
         Assert.Equal(count, (await owner.LotsForSaleAsync(zoneId)).ForSaleCodes().Count);
     }
 }
