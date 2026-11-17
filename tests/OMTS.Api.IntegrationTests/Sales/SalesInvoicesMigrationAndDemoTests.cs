@@ -69,7 +69,7 @@ public class SalesInvoicesMigrationAndDemoTests
         var invoice = new SalesInvoice
         {
             Code = "HD000001", InvoicedAt = DateTimeOffset.UtcNow, InvoiceDate = new DateOnly(2026, 1, 2), Zone = zone, Subtotal = 6_000_000m, Total = 6_000_000m, CreatedByAccountId = account.Id,
-            Lines = [new SalesInvoiceLine { LineNumber = 1, Product = product, HarvestLot = lot, Kg = 200m, UnitPrice = 30_000m, ListPrice = 30_000m, Amount = 6_000_000m, SoldWholeLot = true }],
+            Lines = [new SalesInvoiceLine { LineNumber = 1, Product = product, HarvestLot = lot, Kg = 200m, Quantity = 200m, UnitPrice = 30_000m, ListPrice = 30_000m, Amount = 6_000_000m, SoldWholeLot = true }],
         };
         invoice.Payments.Add(new CustomerPayment { Code = "PT000001", PaymentDate = invoice.InvoiceDate, Amount = 6_000_000m, Method = CustomerPaymentMethod.Cash, CollectedByAccountId = account.Id, RecordedByAccountId = account.Id });
         db.AddRange(cycle, account, lot, product, invoice);
