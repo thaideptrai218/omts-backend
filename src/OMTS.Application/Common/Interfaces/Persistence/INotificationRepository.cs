@@ -21,6 +21,12 @@ public interface INotificationRepository
 
     Task<int> CountUnreadAsync(Guid recipientAccountId, CancellationToken cancellationToken);
 
+    /// <summary>How many different records got a notification of <paramref name="type"/> in the list since <paramref name="since"/> (one transaction notifies every Owner, so the owners count once).</summary>
+    Task<int> CountRecordsNotifiedSinceAsync(string type, DateTimeOffset since, CancellationToken cancellationToken);
+
+    /// <summary>True when a notification of <paramref name="type"/> was made in the list since <paramref name="since"/>.</summary>
+    Task<bool> AnyOfTypeSinceAsync(string type, DateTimeOffset since, CancellationToken cancellationToken);
+
     /// <summary>A notification of the account's list, tracked; null for a row of another account.</summary>
     Task<Notification?> GetAsync(Guid recipientAccountId, Guid notificationId, CancellationToken cancellationToken);
 

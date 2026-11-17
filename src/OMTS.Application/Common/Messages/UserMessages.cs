@@ -715,6 +715,15 @@ public static class UserMessages
     public static UserMessage ReturnQuantityOutsideLimit(string itemName, string maxQuantity, string unit, string limitExplanation) => new(
         Purchase03, $"{itemName}: enter a quantity greater than 0 and at most {maxQuantity} {unit}. {limitExplanation}".TrimEnd(), Legacy.Msg59);
 
+    /// <summary>MSG-PURCHASE-11 (PM decision of 17/11/2026): to the Owner, once a day, when the SMS of supplier payment transactions reach 80 % of the daily budget. In the app only.</summary>
+    public static UserMessage SupplierSmsBudgetReached(int sent, int budget) =>
+        new(Purchase11, $"{sent} of the {budget} supplier payment SMS planned for today have been sent ({SupplierSmsBudgetPercent} % of the daily budget).")
+        {
+            Parameters = new Dictionary<string, object?> { ["sent_count"] = sent, ["daily_budget"] = budget, ["percent"] = SupplierSmsBudgetPercent },
+        };
+
+    private const int SupplierSmsBudgetPercent = 80;
+
     /// <summary>MSG-PURCHASE-04 (BR-PURCHASE-05): notification to the Owner of a payment, money paid back or a cancelled payment; always pushed.</summary>
     /// <param name="transaction">The English {transaction_text}: what was recorded, up to the code ("the cancellation of payment"), from which the text is built.</param>
     /// <param name="transactionKind">The atomic parameter clients word it from: Payment, PaidBack, PaymentCancelled or PaidBackCancelled.</param>
