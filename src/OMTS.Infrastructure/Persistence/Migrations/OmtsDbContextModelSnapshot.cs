@@ -3358,8 +3358,8 @@ namespace OMTS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("EmployeeId", "Type", "FromDate")
                         .IsUnique()
-                        .HasDatabaseName("UX_EmployeeRequests_Awaiting_MissedTime")
-                        .HasFilter("[StatusId] = 3801 AND [Type] <> N'Leave'");
+                        .HasDatabaseName("UX_EmployeeRequests_Awaiting_FirstDay")
+                        .HasFilter("[StatusId] = 3801");
 
                     b.ToTable("EmployeeRequests", t =>
                         {
