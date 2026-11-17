@@ -225,10 +225,10 @@ public class DemoDataSeedTests
     // them, two versions of the settings, and last month locked. A rerun moves none of it, whichever day it runs.
     private static async Task AssertLaborSettingsAsync(OmtsDbContext db, DateOnly today)
     {
-        Assert.Equal(4, await db.JobTypes.CountAsync());
+        Assert.Equal(5, await db.JobTypes.CountAsync());
         Assert.Equal(1, await db.JobTypes.CountAsync(j => j.StatusId == StatusIds.Usage.Discontinued));
         Assert.True(await db.JobTypes.AllAsync(j => j.Rates.Any()));
-        Assert.Equal(6, await db.PayRates.CountAsync());
+        Assert.Equal(7, await db.PayRates.CountAsync());
         Assert.Equal(6, await db.EmployeeJobTypes.CountAsync());
         var seasonal = await db.EmployeeTypePeriods.Where(p => p.Type == OMTS.Domain.Enums.EmployeeType.SeasonalWorker).Select(p => p.EmployeeId).ToListAsync();
         // The demo also gives job types to the employees of the employee app (OMTS-227), so not only the seasonal workers have them.
