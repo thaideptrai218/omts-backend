@@ -111,8 +111,7 @@ public class PurchaseReceiptsSqlServerQaTests
     }
 
     // GBR-04 code race: every create of a burst gets its own PN code from the document sequence.
-    // Pending a decision of the PM, see Parallel_creates_take_distinct_consecutive_PN_codes_and_their_seed_lot_codes_follow: some creates of the burst answer 409 MSG06 (3 of 16).
-    [SqlServerFact(Skip = "Finding: parallel creates of completed receipts of the same items answer 409 MSG06 since the quantity ledger; waiting for the PM")]
+    [SqlServerFact]
     public async Task A_burst_of_sixteen_parallel_creates_gives_each_receipt_its_own_PN_code()
     {
         await using var host = await FarmingHost.StartAsync();

@@ -32,6 +32,20 @@ public sealed class InputStockLedger(
     private InputCostMethod? costMethod;
     private bool? allowNegative;
 
+    /// <summary>
+    /// Forgets what this request read and posted (quantities on hand, bucket balances, the items and the settings). A request that drops its unsaved changes and starts again must call it, or the
+    /// next round would add to quantities that were never saved.
+    /// </summary>
+    public void Reset()
+    {
+        onHand.Clear();
+        buckets.Clear();
+        issued.Clear();
+        known.Clear();
+        costMethod = null;
+        allowNegative = null;
+    }
+
     /// <summary>Writes the rows of a Completed receipt: every line with an item and a quantity; a Seed line names its seed lot.</summary>
     public async Task PostReceiptAsync(PurchaseReceipt receipt, CancellationToken cancellationToken)
     {

@@ -54,11 +54,31 @@ public class PurchasingSqlServerTests
         Assert.Equal(1, await host.QueryAsync(db => db.FarmingInputItems.CountAsync(i => i.Code == code)));
     }
 
-    // GBR-04 code allocation race: parallel first saves take the next PN numbers, one each, and the seed lots follow.
-    // Pending a decision of the PM (finding of 17/11/2026): since the quantity ledger (11/11/2026) a completed receipt writes the stock and the cost of its items, so receipts of the same items created
-    // at the same moment lose the row version of an item and some answer 409 MSG06 instead of 201 (3 of 16 in a burst). Skipped until the PM says whether the create runs again on fresh reads, as the
-    // sales do, or the 409 is accepted; remove the Skip then.
-    [SqlServerFact(Skip = "Finding: parallel creates of completed receipts of the same items answer 409 MSG06 since the quantity ledger; waiting for the PM")]
+    // A create that loses the row version of an item to a parallel receipt runs again on fresh reads (17/11/2026): every receipt is created, and each posts its stock, audit row and notice once.
+    [SqlServerFact]
+    public async Task Parallel_completed_receipts_of_one_item_all_save_and_each_posts_its_stock_once()
+    {
+        await using var host = await FarmingHost.StartAsync();
+        var world = await host.WorldAsync();
+
+        var creates = await InParallelAsync(10, _ => world.Owner.PostReceiptAsync(world.Body(new LineBody(world.Other, 2, 1000)) with { Complete = true }));
+
+        var receipts = new List<JsonElement>();
+        foreach (var response in creates)
+        {
+            receipts.Add(await response.ReadAsync(HttpStatusCode.Created));
+        }
+
+        Assert.Equal(10, receipts.Select(r => r.GetProperty("code").GetString()).Distinct().Count());
+        Assert.Equal(20m, (await world.Owner.GetFromJsonAsync<JsonElement>($"/api/farming-input-items/{world.Other}")).Money("onHand"));
+        Assert.Equal(10, await host.QueryAsync(db => db.InputStockMovements.CountAsync(m => m.ItemId == world.Other && m.Quantity == 2m)));
+        Assert.Equal(10, await host.QueryAsync(db => db.AuditEvents.CountAsync(e => e.Action == "PurchaseReceipt.Created" && receipts.Select(r => r.GetProperty("code").GetString()).Contains(e.RecordCode))));
+        var notified = await host.QueryAsync(db => db.Notifications.Where(n => n.Type == NotificationTypes.PurchaseReceiptCompleted).Select(n => n.RelatedRecordCode).ToListAsync());
+        Assert.Equal(receipts.Select(r => r.GetProperty("code").GetString()).Order(), notified.Distinct().Order());
+    }
+
+    // GBR-04 code allocation race:parallel first saves take the next PN numbers, one each, and the seed lots follow.
+    [SqlServerFact]
     public async Task Parallel_creates_take_distinct_consecutive_PN_codes_and_their_seed_lot_codes_follow()
     {
         await using var host = await FarmingHost.StartAsync();

@@ -1,6 +1,7 @@
 using OMTS.Application.Common;
 using OMTS.Application.Common.Concurrency;
 using OMTS.Application.Common.Constants;
+using OMTS.Application.Common.Exceptions;
 using OMTS.Application.Common.Interfaces;
 using OMTS.Application.Common.Interfaces.Persistence;
 using OMTS.Application.Common.Messages;
@@ -39,6 +40,9 @@ public sealed class PurchaseReceiptService(
 {
     private const string RecordType = nameof(PurchaseReceipt);
 
+    // Each lost round means another save of the same items or code went through, so a create loses at most once per parallel create.
+    private const int MaxCreateAttempts = 20;
+
     public async Task<Result<PurchaseReceiptView>> GetAsync(Guid receiptId, CancellationToken cancellationToken) =>
         await receipts.GetForEditAsync(receiptId, cancellationToken) is { } receipt
             ? await views.ViewAsync(receipt.Id, cancellationToken)
@@ -50,37 +54,61 @@ public sealed class PurchaseReceiptService(
     /// </summary>
     public async Task<Result<PurchaseReceiptView>> CreateAsync(SavePurchaseReceiptRequest request, CancellationToken cancellationToken)
     {
-        var (refs, invalid) = await validator.CheckDraftAsync(request, cancellationToken);
-        if (invalid is not null)
+        // The PN number a generated code took stays with the request over the rounds below: a lost round spends no further number, so the codes of parallel receipts stay consecutive.
+        string? generatedCode = null;
+        for (var attempt = 1; ; attempt++)
         {
-            return invalid;
-        }
+            var (refs, invalid) = await validator.CheckDraftAsync(request, cancellationToken);
+            if (invalid is not null)
+            {
+                return invalid;
+            }
 
-        var receipt = new PurchaseReceipt { RecordedByAccountId = currentUser.AccountId!.Value };
-        Apply(receipt, request, refs, kept: null);
-        if (request.Complete && await validator.CheckCompleteAsync(receipt, refs, cancellationToken) is { } error)
-        {
-            return error;
-        }
+            var receipt = new PurchaseReceipt { RecordedByAccountId = currentUser.AccountId!.Value };
+            Apply(receipt, request, refs, kept: null);
+            if (request.Complete && await validator.CheckCompleteAsync(receipt, refs, cancellationToken) is { } error)
+            {
+                return error;
+            }
 
-        // The typed code, or one taken once the receipt is valid, so a refused save spends no number; never given twice (GBR-04).
-        var (code, duplicate) = await codes.ForNewAsync(PurchaseDocumentKind.Receipt, request.Code, cancellationToken);
-        if (duplicate is not null)
-        {
-            return duplicate;
-        }
+            // The typed code, or one taken once the receipt is valid, so a refused save spends no number; never given twice (GBR-04). A typed code is checked again every round: the parallel save may have taken it.
+            if (generatedCode is null)
+            {
+                var (code, duplicate) = await codes.ForNewAsync(PurchaseDocumentKind.Receipt, request.Code, cancellationToken);
+                if (duplicate is not null)
+                {
+                    return duplicate;
+                }
 
-        receipt.Code = code;
-        receipts.Add(receipt);
-        audit.Record(new AuditEntry("PurchaseReceipt.Created", RecordType) { RecordId = receipt.Id, RecordCode = receipt.Code, After = Snapshot(receipt) });
-        if (request.Complete)
-        {
-            await MarkCompletedAsync(receipt, cancellationToken);
-            await notifications.CompletedAsync(receipt, cancellationToken);
-        }
+                generatedCode = DocumentCodes.Typed(request.Code) is null ? code : null;
+                receipt.Code = code;
+            }
+            else
+            {
+                receipt.Code = generatedCode;
+            }
 
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return await views.ViewAsync(receipt.Id, cancellationToken);
+            receipts.Add(receipt);
+            audit.Record(new AuditEntry("PurchaseReceipt.Created", RecordType) { RecordId = receipt.Id, RecordCode = receipt.Code, After = Snapshot(receipt) });
+            if (request.Complete)
+            {
+                await MarkCompletedAsync(receipt, cancellationToken);
+                await notifications.CompletedAsync(receipt, cancellationToken);
+            }
+
+            try
+            {
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+                return await views.ViewAsync(receipt.Id, cancellationToken);
+            }
+            catch (Exception exception) when ((exception is ConcurrencyConflictException or DuplicateRecordException) && attempt < MaxCreateAttempts)
+            {
+                // A parallel receipt of the same items saved first and moved their stock or cost, or took the code. Nothing of this round was saved (one save), so it runs again on fresh reads: the ledger rows, the
+                // audit row and the notice are made again and never twice. Dropping the round drops its audit, notification and message rows too.
+                unitOfWork.DiscardChanges();
+                ledger.Reset();
+            }
+        }
     }
 
     /// <summary>
